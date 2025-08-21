@@ -320,6 +320,28 @@ struct sc_button_info {
 	/* Disband */    { .command = UCV_Disband        , .kind = SCK_UNIT_MGMT, .tile_sheet_column = 3, .tile_sheet_row = 0 },
 };
 
+struct dc_button_info {
+	enum Unit_Command_Values command;
+	char const * tooltip;
+	int tile_sheet_column,
+	    tile_sheet_row;
+} const dc_button_infos[2] = {
+	/* Encampment */     { .command = UCV_Build_Encampment           , .tooltip = "Build Encampment", .tile_sheet_column = 0, .tile_sheet_row = 0 },
+	/* Campus */         { .command = UCV_Build_Campus               , .tooltip = "Build Campus"    , .tile_sheet_column = 1, .tile_sheet_row = 0 },
+	/* Theater */        //{ .command = UCV_Build_Theater              , .tile_sheet_column = 5, .tile_sheet_row = 4 },
+	/* Holy Site */      //{ .command = UCV_Build_HolySite             , .tile_sheet_column = 0, .tile_sheet_row = 3 },
+	/* Commercial Hub */ //{ .command = UCV_Build_CommercialHub        , .tile_sheet_column = 2, .tile_sheet_row = 3 },
+	/* Harbor */         //{ .command = UCV_Build_Harbor               , .tile_sheet_column = 3, .tile_sheet_row = 3 },
+	/* Indust. Zone */   //{ .command = UCV_Build_IndustrialZone       , .tile_sheet_column = 4, .tile_sheet_row = 3 },
+	/* Enter. Com. */    //{ .command = UCV_Build_EntertainmentComplex , .tile_sheet_column = 5, .tile_sheet_row = 3 },
+	/* Water Park */     //{ .command = UCV_Build_WaterPark            , .tile_sheet_column = 6, .tile_sheet_row = 3 },
+	/* Neigh. */         //{ .command = UCV_Build_Neighborhood         , .tile_sheet_column = 6, .tile_sheet_row = 2 },
+	/* Canal */          //{ .command = UCV_Build_Canal                , .tile_sheet_column = 7, .tile_sheet_row = 2 },
+	/* Dam */            //{ .command = UCV_Build_Dam                  , .tile_sheet_column = 2, .tile_sheet_row = 0 },
+	/* Aerodrome */      //{ .command = UCV_Build_Aerodrome            , .tile_sheet_column = 7, .tile_sheet_row = 1 },
+	/* Spaceport */      //{ .command = UCV_Build_Spaceport            , .tile_sheet_column = 3, .tile_sheet_row = 0 },
+};
+
 enum init_state {
 	IS_UNINITED = 0,
 	IS_OK,
@@ -447,6 +469,7 @@ struct injected_state {
 	char mod_rel_dir[MAX_PATH];
 
 	enum init_state sc_img_state;
+	enum init_state dc_img_state;
 	enum init_state tile_highlight_state;
 	enum init_state mod_info_button_images_state;
 	enum init_state disabled_command_img_state;
@@ -675,6 +698,10 @@ struct injected_state {
 	// mode action, the cursor is cleared before the action is carried out. So we have to intercept that map click as well for
 	// a total of 4 UI functions patched to make this damn button work. I doubt this is optimal but it works and I've wasted
 	// enough time on this already. That click interceptor sets a flag value of 2 to indicate this annoying state.
+
+	struct dc_button_image_set {
+		Sprite imgs[4];
+	} dc_button_image_sets[2];
 
 	// ==========
 	// } This field is only valid after init_disabled_command_buttons has been called and disabled_command_img_state equals IS_OK {
