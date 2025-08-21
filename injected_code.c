@@ -4385,7 +4385,7 @@ init_district_command_buttons ()
 
 	is->dc_img_state = IS_INIT_FAILED;
 
-	char const * filenames[4] = {"WorkerDistrictButtonsNorm.pcx", "WorkerDistrictButtonsRollover.pcx", "WorkerDistrictButtonsHighlighted.pcx", "WorkerDistrictButtonsAlpha.pcx"};
+	char const * filenames[4] = {"WorkerDistrictButtonsNorm2.pcx", "WorkerDistrictButtonsRollover2.pcx", "WorkerDistrictButtonsHighlighted2.pcx", "WorkerDistrictButtonsAlpha.pcx"};
 	for (int n = 0; n < 4; n++) {
 		get_mod_art_path (filenames[n], temp_path, sizeof temp_path);
 		PCX_Image_read_file (&pcx, __, temp_path, NULL, 0, 0x100, 2);
@@ -4400,7 +4400,7 @@ init_district_command_buttons ()
 			return;
 		}
 
-		for (int dc = 0; dc < 2; dc++) {
+		for (int dc = 0; dc < COUNT_DISTRICT_COMMANDS; dc++) {
 			int x = 32 * dc_button_infos[dc].tile_sheet_column,
 			    y = 32 * dc_button_infos[dc].tile_sheet_row;
 			Sprite_slice_pcx (&is->dc_button_image_sets[dc].imgs[n], __, &pcx, x, y, 32, 32, 1, 0);
@@ -4455,7 +4455,7 @@ set_up_district_buttons (Main_GUI * this)
 		return;
 
 	// For each district type
-	for (int dc = 0; dc < 2; dc++) {
+	for (int dc = 0; dc < COUNT_DISTRICT_COMMANDS; dc++) {
 
 		Command_Button * free_button = NULL; {
 			for (int n = i_starting_button + 1; n < 42; n++)
