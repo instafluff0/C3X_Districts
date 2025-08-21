@@ -320,6 +320,33 @@ struct sc_button_info {
 	/* Disband */    { .command = UCV_Disband        , .kind = SCK_UNIT_MGMT, .tile_sheet_column = 3, .tile_sheet_row = 0 },
 };
 
+
+const COUNT_DISTRICT_COMMANDS = 10;
+
+struct dc_button_info {
+	enum Unit_Command_Values command;
+	char const * tooltip;
+	char const * prerequisite;
+	int tile_sheet_column,
+	    tile_sheet_row,
+		allow_multiple;
+} const dc_button_infos[10] = {
+	/* Encampment */     { .command = UCV_Build_Encampment           , .tooltip = "Build Encampment"           , .tile_sheet_column = 0, .tile_sheet_row = 0, .prerequisite = "Bronze Working"   , .allow_multiple = 0 },
+	/* Campus */         { .command = UCV_Build_Campus               , .tooltip = "Build Campus"               , .tile_sheet_column = 1, .tile_sheet_row = 0, .prerequisite = "Literature"       , .allow_multiple = 0 },
+	/* Holy Site */      { .command = UCV_Build_HolySite             , .tooltip = "Build Holy Site"            , .tile_sheet_column = 2, .tile_sheet_row = 0, .prerequisite = "Ceremonial Burial", .allow_multiple = 0 },
+	/* Commercial Hub */ { .command = UCV_Build_CommercialHub        , .tooltip = "Build Commercial Hub"       , .tile_sheet_column = 3, .tile_sheet_row = 0, .prerequisite = "Currency"         , .allow_multiple = 0 },
+	/* Enter. Com. */    { .command = UCV_Build_EntertainmentComplex , .tooltip = "Build Entertainment Complex", .tile_sheet_column = 4, .tile_sheet_row = 0, .prerequisite = "Construction"     , .allow_multiple = 0 },
+	/* Harbor */         { .command = UCV_Build_Harbor               , .tooltip = "Build Harbor"               , .tile_sheet_column = 5, .tile_sheet_row = 0, .prerequisite = "Map Making"       , .allow_multiple = 0 },
+	/* Indust. Zone */   { .command = UCV_Build_IndustrialZone       , .tooltip = "Build Industrial Zone"      , .tile_sheet_column = 6, .tile_sheet_row = 0, .prerequisite = "Industrialization", .allow_multiple = 0 },
+	/* Aerodrome */      { .command = UCV_Build_Aerodrome            , .tooltip = "Build Aerodrome"            , .tile_sheet_column = 7, .tile_sheet_row = 0, .prerequisite = "Flight"           , .allow_multiple = 0 },
+
+	/* Neigh. */         { .command = UCV_Build_Neighborhood         , .tooltip = "Build Neighborhood"         , .tile_sheet_column = 0, .tile_sheet_row = 1, .prerequisite = "Construction"     , .allow_multiple = 1 },
+	/* Spaceport */      { .command = UCV_Build_Spaceport            , .tooltip = "Build Spaceport"            , .tile_sheet_column = 1, .tile_sheet_row = 1, .prerequisite = "Space Flight"     , .allow_multiple = 0 },
+	/* Canal */          //{ .command = UCV_Build_Canal                , .tooltip = "Build Canal"                , .tile_sheet_column = 2, .tile_sheet_row = 1 },
+	/* Dam */            //{ .command = UCV_Build_Dam                  , .tooltip = "Build Dam"                  , .tile_sheet_column = 3, .tile_sheet_row = 1 },
+	/* Water Park */     //{ .command = UCV_Build_WaterPark            , .tooltip = "Build Water Park"           , .tile_sheet_column = 4, .tile_sheet_row = 1 },
+};
+
 enum init_state {
 	IS_UNINITED = 0,
 	IS_OK,
@@ -447,6 +474,7 @@ struct injected_state {
 	char mod_rel_dir[MAX_PATH];
 
 	enum init_state sc_img_state;
+	enum init_state dc_img_state;
 	enum init_state tile_highlight_state;
 	enum init_state mod_info_button_images_state;
 	enum init_state disabled_command_img_state;
@@ -675,6 +703,10 @@ struct injected_state {
 	// mode action, the cursor is cleared before the action is carried out. So we have to intercept that map click as well for
 	// a total of 4 UI functions patched to make this damn button work. I doubt this is optimal but it works and I've wasted
 	// enough time on this already. That click interceptor sets a flag value of 2 to indicate this annoying state.
+
+	struct dc_button_image_set {
+		Sprite imgs[4];
+	} dc_button_image_sets[2];
 
 	// ==========
 	// } This field is only valid after init_disabled_command_buttons has been called and disabled_command_img_state equals IS_OK {

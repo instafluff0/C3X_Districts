@@ -766,6 +766,22 @@ enum Unit_Command_Values
   UCV_Rename		      = 0x40010000,
 
   UCV_Stack_Bombard = 0x80000001,
+
+  // Special Worker/Engineer District Actions
+  UCV_Build_Encampment = -10000001,
+  UCV_Build_Campus = -10000002,
+  UCV_Build_Theater = -10000003,
+  UCV_Build_HolySite = -10000004,
+  UCV_Build_CommercialHub = -10000005,
+  UCV_Build_Harbor = -10000006,
+  UCV_Build_IndustrialZone = -10000007,
+  UCV_Build_EntertainmentComplex = -10000008,
+  UCV_Build_WaterPark = -10000009,
+  UCV_Build_Neighborhood = -10000010,
+  UCV_Build_Canal = -10000011,
+  UCV_Build_Dam = -10000012,
+  UCV_Build_Aerodrome = -10000013,
+  UCV_Build_Spaceport = -10000014,
 };
 
 enum Unit_Mode_Actions

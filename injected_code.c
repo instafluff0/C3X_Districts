@@ -4370,6 +4370,126 @@ set_up_stack_bombard_buttons (Main_GUI * this)
 }
 
 void
+init_district_command_buttons ()
+{
+	if (is_online_game () || is->dc_img_state != IS_UNINITED)
+		return;
+
+	PCX_Image pcx;
+	PCX_Image_construct (&pcx);
+	for (int dc = 0; dc < 2; dc++)
+		for (int n = 0; n < 4; n++)
+			Sprite_construct (&is->dc_button_image_sets[dc].imgs[n]);
+
+	char temp_path[2*MAX_PATH];
+
+	is->dc_img_state = IS_INIT_FAILED;
+
+	char const * filenames[4] = {"WorkerDistrictButtonsNorm.pcx", "WorkerDistrictButtonsRollover.pcx", "WorkerDistrictButtonsHighlighted.pcx", "WorkerDistrictButtonsAlpha.pcx"};
+	for (int n = 0; n < 4; n++) {
+		get_mod_art_path (filenames[n], temp_path, sizeof temp_path);
+		PCX_Image_read_file (&pcx, __, temp_path, NULL, 0, 0x100, 2);
+		if (pcx.JGL.Image == NULL) {
+			(*p_OutputDebugStringA) ("[C3X] Failed to load work district command buttons sprite sheet.");
+			for (int dc = 0; dc < 2; dc++)
+				for (int k = 0; k < 4; k++) {
+					Sprite * sprite = &is->dc_button_image_sets[dc].imgs[k];
+					sprite->vtable->destruct (sprite, __, 0);
+				}
+			pcx.vtable->destruct (&pcx, __, 0);
+			return;
+		}
+
+		for (int dc = 0; dc < COUNT_DISTRICT_COMMANDS; dc++) {
+			int x = 32 * dc_button_infos[dc].tile_sheet_column,
+			    y = 32 * dc_button_infos[dc].tile_sheet_row;
+			Sprite_slice_pcx (&is->dc_button_image_sets[dc].imgs[n], __, &pcx, x, y, 32, 32, 1, 0);
+		}
+
+		pcx.vtable->clear_JGL (&pcx);
+	}
+
+	is->dc_img_state = IS_OK;
+	pcx.vtable->destruct (&pcx, __, 0);
+}
+
+void
+set_up_district_buttons (Main_GUI * this)
+{
+
+	if (is_online_game ()) // is online game
+		return;
+
+	init_district_command_buttons ();
+
+	// Debug: output dc_img_state
+	char ss[200];
+	//snprintf (ss, sizeof ss, "dc_img_state: %d", is->dc_img_state);
+	//pop_up_in_game_error (ss);
+
+	if (is->dc_img_state != IS_OK)
+		return;
+
+	// Not sure this is necessary, but try to recreate the bombard example,
+	// for which we need some active button. This will allow these lines:
+	//
+	// free_button->field_6D8 = bombard_button->field_6D8;
+	// free_button->Button.field_664 = bombard_button->Button.field_664;
+	//
+	// No idea if these are necessary.
+	Command_Button * road_button = NULL; int i_starting_button; {
+		for (int n = 0; n < 42; n++)
+			if (((this->Unit_Command_Buttons[n].Button.Base_Data.Status2 & 1) != 0) &&
+				(this->Unit_Command_Buttons[n].Command == UCV_Build_Road)) {
+				road_button = &this->Unit_Command_Buttons[n];
+				i_starting_button = n;
+				break;
+			}
+	}
+
+	// Debug: output road_button
+	//snprintf (ss, sizeof ss, "road_button: %p", road_button);
+	//pop_up_in_game_error (ss);
+
+	if (road_button == NULL)
+		return;
+
+	// For each district type
+	for (int dc = 0; dc < COUNT_DISTRICT_COMMANDS; dc++) {
+
+		Command_Button * free_button = NULL; {
+			for (int n = i_starting_button + 1; n < 42; n++)
+				if ((this->Unit_Command_Buttons[n].Button.Base_Data.Status2 & 1) == 0) {
+					free_button = &this->Unit_Command_Buttons[n];
+					i_starting_button = n;
+					break;
+				}
+
+			// Debug: output free_button
+			//snprintf (ss, sizeof ss, "free_button: %p", free_button);
+			//pop_up_in_game_error (ss);
+
+			if (free_button == NULL)
+				return;
+
+			// Set up free button for creating district
+			free_button->Command = dc_button_infos[dc].command;
+
+			// Replace the button's image with the district image. Disabling & re-enabling and
+			// clearing field_5FC[13] are all necessary to trigger a redraw.
+			free_button->Button.vtable->m02_Show_Disabled ((Base_Form *)&free_button->Button);
+			free_button->field_6D8 = road_button->field_6D8;
+			for (int k = 0; k < 4; k++)
+				free_button->Button.Images[k] = &is->dc_button_image_sets[dc].imgs[k];
+			free_button->Button.field_664 = road_button->Button.field_664;
+			Button_set_tooltip (&free_button->Button, __, (char *)dc_button_infos[dc].tooltip);
+			free_button->Button.field_5FC[13] = 0;
+			free_button->Button.vtable->m01_Show_Enabled ((Base_Form *)&free_button->Button, __, 0);
+		}
+	}
+}
+
+void
 set_up_stack_worker_buttons (Main_GUI * this)
 {
 	if ((((*p_GetAsyncKeyState) (VK_CONTROL)) >> 8 == 0) ||  // (control key is not down OR
@@ -4422,6 +4542,7 @@ patch_Main_GUI_set_up_unit_command_buttons (Main_GUI * this)
 	Main_GUI_set_up_unit_command_buttons (this);
 	set_up_stack_bombard_buttons (this);
 	set_up_stack_worker_buttons (this);
+	set_up_district_buttons (this);
 
 	// If the minimum city separation is increased, then gray out the found city button if we're too close to another city.
 	if ((is->current_config.minimum_city_separation > 1) && (p_main_screen_form->Current_Unit != NULL) && (is->disabled_command_img_state == IS_OK)) {
