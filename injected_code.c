@@ -4385,7 +4385,7 @@ init_district_command_buttons ()
 
 	is->dc_img_state = IS_INIT_FAILED;
 
-	char const * filenames[4] = {"WorkerDistrictButtonsNorm2.pcx", "WorkerDistrictButtonsRollover2.pcx", "WorkerDistrictButtonsHighlighted2.pcx", "WorkerDistrictButtonsAlpha.pcx"};
+	char const * filenames[4] = {"WorkerDistrictButtonsNorm.pcx", "WorkerDistrictButtonsRollover.pcx", "WorkerDistrictButtonsHighlighted.pcx", "WorkerDistrictButtonsAlpha.pcx"};
 	for (int n = 0; n < 4; n++) {
 		get_mod_art_path (filenames[n], temp_path, sizeof temp_path);
 		PCX_Image_read_file (&pcx, __, temp_path, NULL, 0, 0x100, 2);
