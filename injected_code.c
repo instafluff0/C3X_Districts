@@ -4401,9 +4401,9 @@ init_district_command_buttons ()
 		}
 
 		for (int dc = 0; dc < 2; dc++) {
-			int x = 30 * dc_button_infos[dc].tile_sheet_column,
-			    y = 30 * dc_button_infos[dc].tile_sheet_row;
-			Sprite_slice_pcx (&is->dc_button_image_sets[dc].imgs[n], __, &pcx, x, y, 30, 30, 1, 0);
+			int x = 32 * dc_button_infos[dc].tile_sheet_column,
+			    y = 32 * dc_button_infos[dc].tile_sheet_row;
+			Sprite_slice_pcx (&is->dc_button_image_sets[dc].imgs[n], __, &pcx, x, y, 32, 32, 1, 0);
 		}
 
 		pcx.vtable->clear_JGL (&pcx);
