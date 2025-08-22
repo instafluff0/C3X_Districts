@@ -1,14 +1,16 @@
 ## TODO
-- [ ] Workers see district buttons
+- [x] Workers see district buttons
 - [ ] District built by workers
 - [ ] Districts drawn on map
 - [ ] Districts drawn very by era / culture / buildings present
 - [ ] Districts limited by tech
 - [ ] Districts limited by distance to cities
-- [ ] City buildings limited by districts
+- [ ] City buildings limited by Districts
 - [ ] Districts give yields to cities
 - [ ] Districts can be pillaged
-- [ ] AI builds districts
+- [ ] Naval districts built by workers
+- [ ] AI builds Districts
+- [ ] (maybe?) show Wonders on tile (as small, in corner part) nearby city, though creation doesn't change, and tile not consumed
 
 
 ## Districts

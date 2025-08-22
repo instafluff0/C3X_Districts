@@ -4830,6 +4830,28 @@ compare_helpers (void const * vp_a, void const * vp_b)
 }
 
 void
+issue_district_worker_command (Unit * unit, int command)
+{
+	Tile * tile = tile_at (unit->Body.X, unit->Body.Y);
+	int unit_type_id = unit->Body.UnitTypeID;
+	int unit_id = unit->Body.ID;
+
+	// TODO Check if requisite tech available
+	// TODO make sure not on mountain
+	// TODO make sure on water if water-based district
+	// TODO patch_Unit_can_perform_command ?
+	// TODO Track tile and command type
+
+	int pseudo_command = UCV_Build_Mine;
+	// Main_Screen_Form_issue_command (p_main_screen_form, __, pseudo_command, unit);
+
+	// TODO Factor in turns to completion - patch_Unit_work_simple_job ?
+	// TODO Patch m41_Draw_Mines ?
+	// TODO Patch City::can_build_improvement at 0x4BFF80
+
+}
+
+void
 issue_stack_worker_command (Unit * unit, int command)
 {
 	Tile * tile = tile_at (unit->Body.X, unit->Body.Y);
@@ -4978,7 +5000,18 @@ patch_Main_GUI_handle_button_press (Main_GUI * this, int edx, int button_id)
 			is->sb_activated_by_button = 0;
 	}
 
+	Button * button = &this->Unit_Command_Buttons[button_id].Button;
 	int command = this->Unit_Command_Buttons[button_id].Command;
+
+	// Debug: output button_id, command and tooltip
+	char ss[200];
+	//snprintf (ss, sizeof ss, "button_id: %d, command: %d, tooltip: %s", button_id, command, button->ToolTip);
+	//pop_up_in_game_error (ss);
+
+	// Encampment is highest district int, all of which are negative
+	if (command <= UCV_Build_Encampment) {
+		
+	}
 
 	struct sc_button_info const * stack_button_info; {
 		stack_button_info = NULL;
@@ -5986,7 +6019,7 @@ patch_Unit_ai_move_artillery (Unit * this)
 	UnitType const * this_type = &p_bic_data->UnitTypes[this->Body.UnitTypeID];
 	int num_escorters_req = this->vtable->eval_escort_requirement (this);
 
-	if ((in_city == NULL) || (count_escorters (this) >= num_escorters_req))
+	if ((in_city == NULL) || (count_escorters (this) >= num_escorters_req)) 
 		goto base_impl;
 
 	// Don't assign escort if there are any enemies around because in that case it might be a serious mistake to take a defender out of the city
