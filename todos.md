@@ -1,8 +1,8 @@
 ## TODO
 - [x] Workers see district buttons
-- [ ] District built by workers
-- [ ] Districts drawn on map
-- [ ] Districts drawn very by era / culture / buildings present
+- [x] District built by workers
+- [x] Districts drawn on map
+- [ ] Districts drawn vary by era / culture / buildings present
 - [ ] Districts limited by tech
 - [ ] Districts limited by distance to cities
 - [ ] City buildings limited by Districts
@@ -57,8 +57,3 @@
 
 ## Limiting to tech/advances
 - Use same strategy as C3X config for units/buildings (find_game_object_id_by_name to find tech IDs)
-
-
-param_1: 0000023C
-param_2: 23
-param_3: 10253728

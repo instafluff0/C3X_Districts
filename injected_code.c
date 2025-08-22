@@ -4442,6 +4442,9 @@ set_up_district_buttons (Main_GUI * this)
 	if (is->dc_img_state != IS_OK)
 		return;
 
+	// TODO: confirm whether to proceed based on if this is worker or not, as well as tile conditions
+	// p_main_screen_form->Current_Unit
+
 	// Not sure this is necessary, but try to recreate the bombard example,
 	// for which we need some active button. This will allow these lines:
 	//
@@ -4847,32 +4850,16 @@ issue_district_worker_command (Unit * unit, int command)
 
 	// Debug: print "issue_district_worker_command"
 	char ss[200];
-	snprintf (ss, sizeof ss, "issue_district_worker_command: tile(%d, %d), command: %d, district: %d",
-		unit->Body.X, unit->Body.Y, command, tile->District_TypeID);
-	pop_up_in_game_error (ss);
+	//snprintf (ss, sizeof ss, "issue_district_worker_command: tile(%d, %d), command: %d, district: %d",
+	//	unit->Body.X, unit->Body.Y, command, tile->District_TypeID);
+	//pop_up_in_game_error (ss);
 
-	// UPDATE - this may not be necessary, just track by new field in Tile
-	// Track tile and command type
-	/*
-	reserve (
-		sizeof is->district_tiles[0],
-		(void **)&is->district_tiles,
-		&is->district_tiles_capacity,
-		is->count_district_tiles
-	);
-	is->district_tiles[is->count_district_tiles++] = (struct district_tile) {
-		.tile = tile,
-		.x = unit->Body.X,
-		.y = unit->Body.Y,
-		.command = command
-	};
-	*/
-
+	// Tile now tracks the district type, so track everything as a mine behind the scenes.
+	// 
 	int pseudo_command = UCV_Build_Mine;
-	// Main_Screen_Form_issue_command (p_main_screen_form, __, pseudo_command, unit);
+	Main_Screen_Form_issue_command (p_main_screen_form, __, pseudo_command, unit);
 
 	// TODO Factor in turns to completion - patch_Unit_work_simple_job ?
-	// TODO Patch m41_Draw_Mines ?
 	// TODO Patch City::can_build_improvement at 0x4BFF80
 
 }
@@ -5036,7 +5023,11 @@ patch_Main_GUI_handle_button_press (Main_GUI * this, int edx, int button_id)
 
 	// Encampment is highest district int, all of which are negative
 	if (command <= UCV_Build_Encampment) {
+		// Replicate behavior of function we're replacing
+		clear_something_1 ();
+		Timer_clear (&this->timer_1);
 		issue_district_worker_command (p_main_screen_form->Current_Unit, command);
+		return;
 	}
 
 	struct sc_button_info const * stack_button_info; {
@@ -7399,31 +7390,6 @@ patch_City_compute_corrupted_yield (City * this, int edx, int gross_yield, bool 
 	}
 
 	return tr;
-}
-
-void __fastcall
-patch_Map_Renderer_m12_Draw_Tile_Buildings(Map_Renderer * this, int edx, int param_1, int tile_x, int tile_y, Map_Renderer * map_renderer, int pixel_x,int pixel_y)
-{	
-	Map_Renderer_m12_Draw_Tile_Buildings(this, __, param_1, tile_x, tile_y, map_renderer, pixel_x, pixel_y);
-	return;
-
-	// Debug: print params
-	/*
-	char ss[200];
-	snprintf (ss, sizeof ss, "patch_Map_m21_Draw_Tile_Buildings: param_1: %d, tile_x: %d, tile_y: %d, pixel_x: %d, pixel_y: %d",
-		param_1, tile_x, tile_y, pixel_x, pixel_y);
-	pop_up_in_game_error (ss);
-
-	Tile * tile = tile_at (tile_x, tile_y);
-	if (tile->District_TypeID != NULL) {
-		// Draw district
-		Sprite_draw_on_map (&this->Terrain_Buldings_Barbarian_Camp, __, this, pixel_x, pixel_y, 1, 1, 1, 0);
-		return;
-	}
-	else {
-		Map_m21_Draw_Tile_Buildings(this, __, param_1, tile_x, tile_y, map_renderer, pixel_x, pixel_y);
-	}
-	*/
 }
 
 void __fastcall
@@ -12367,6 +12333,55 @@ patch_Civilopedia_Form_m68_Show_Dialog (Civilopedia_Form * this, int edx, int pa
 		}
 
 	return tr;
+}
+
+void __fastcall
+patch_Map_Renderer_m12_Draw_Tile_Buildings(Map_Renderer * this, int edx, int param_1, int tile_x, int tile_y, Map_Renderer * map_renderer, int pixel_x,int pixel_y)
+{	
+	// Debug: print params
+	char ss[200];
+
+	Tile * tile = tile_at (tile_x, tile_y);
+	if (tile->District_TypeID != NULL) {
+
+		// Check if job is complete
+		unsigned overlays = patch_Tile_m42_Get_Overlays(tile, __, 1);
+		unsigned int done = overlays >> 2 & 1 | (overlays >> 10) << 8;
+
+		if (done) {
+			Sprite district_sprite;
+			// Need to find era
+			// Need to find culture
+
+			// Should probably be based on whose territory tile is in
+			int territory_owner_id = tile->Territory_OwnerID;
+			// TODO: check if in a territory
+			//Leader * leader = &leaders[territory_owner_id];
+			//int era = leader->Era;
+			//int culture = leader->RaceID;
+
+			switch (tile->District_TypeID) {
+			case UCV_Build_Encampment:
+				district_sprite = this->Terrain_Buldings_Barbarian_Camp;
+				break;
+			case UCV_Build_Campus:
+				district_sprite = this->Terrain_Buldings_Barbarian_Camp;
+				break;
+			case UCV_Build_HolySite:
+				district_sprite = this->Terrain_Buldings_Barbarian_Camp;
+				break;
+			default:
+				district_sprite = this->Terrain_Buldings_Barbarian_Camp;
+				break;
+			}
+
+			// Draw district
+			Sprite_draw_on_map (&district_sprite, __, this, pixel_x, pixel_y, 1, 1, 1, 0);
+		}
+	}
+	else {
+		Map_Renderer_m12_Draw_Tile_Buildings(this, __, param_1, tile_x, tile_y, map_renderer, pixel_x, pixel_y);
+	}
 }
 
 // TCC requires a main function be defined even though it's never used.

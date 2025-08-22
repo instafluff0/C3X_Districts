@@ -328,19 +328,20 @@ struct dc_button_info {
 	char const * prerequisite;
 	int tile_sheet_column,
 	    tile_sheet_row,
-		allow_multiple;
+		allow_multiple,
+		index;
 } const dc_button_infos[3] = {
 	{ 
 		.command = UCV_Build_Encampment, .tooltip = "Build Encampment", .tile_sheet_column = 0, .tile_sheet_row = 0, 
-		.prerequisite = "", .allow_multiple = 0 
+		.prerequisite = "", .allow_multiple = 0, .index = 0
 	},
 	{ 
 		.command = UCV_Build_Campus, .tooltip = "Build Campus", .tile_sheet_column = 1, .tile_sheet_row = 0, 
-		.prerequisite = "Literature", .allow_multiple = 0 
+		.prerequisite = "Literature", .allow_multiple = 0, .index = 1
 	},
 	{ 
 		.command = UCV_Build_HolySite, .tooltip = "Build Holy Site", .tile_sheet_column = 2, .tile_sheet_row = 0, 
-		.prerequisite = "Ceremonial Burial", .allow_multiple = 0 
+		.prerequisite = "Ceremonial Burial", .allow_multiple = 0, .index = 2
 	},
 	//{ 
 	//	.command = UCV_Build_CommercialHub, .tooltip = "Build Commercial Hub", .tile_sheet_column = 3, .tile_sheet_row = 0, 
