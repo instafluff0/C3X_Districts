@@ -1034,6 +1034,15 @@ struct injected_state {
 		int shown_page; // zero-based
 	} cmpd;
 
+	struct district_tile {
+		Tile * tile;
+		int x;
+		int y;
+		int command;
+	} * district_tiles;
+	int count_district_tiles;
+	int district_tiles_capacity;
+
 	// ==========
 	// }
 	// ==========

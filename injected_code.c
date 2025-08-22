@@ -3649,6 +3649,10 @@ patch_init_floating_point ()
 	is->saved_improv_counts = NULL;
 	is->saved_improv_counts_capacity = 0;
 
+	is->district_tiles = NULL;
+	is->count_district_tiles = 0;
+	is->district_tiles_capacity = 0;
+
 	memset (&is->cmpd, 0, sizeof is->cmpd);
 
 	is->loaded_config_names = NULL;
@@ -4840,7 +4844,31 @@ issue_district_worker_command (Unit * unit, int command)
 	// TODO make sure not on mountain
 	// TODO make sure on water if water-based district
 	// TODO patch_Unit_can_perform_command ?
-	// TODO Track tile and command type
+	
+	// Set tile DistrictID
+	tile->DistrictID = command;
+
+	// Debug: print "issue_district_worker_command"
+	char ss[200];
+	snprintf (ss, sizeof ss, "issue_district_worker_command: tile(%d, %d), command: %d, district: %d",
+		unit->Body.X, unit->Body.Y, command, tile->DistrictID);
+	pop_up_in_game_error (ss);
+
+	
+
+	// Track tile and command type
+	reserve (
+		sizeof is->district_tiles[0],
+		(void **)&is->district_tiles,
+		&is->district_tiles_capacity,
+		is->count_district_tiles
+	);
+	is->district_tiles[is->count_district_tiles++] = (struct district_tile) {
+		.tile = tile,
+		.x = unit->Body.X,
+		.y = unit->Body.Y,
+		.command = command
+	};
 
 	int pseudo_command = UCV_Build_Mine;
 	// Main_Screen_Form_issue_command (p_main_screen_form, __, pseudo_command, unit);
@@ -5010,7 +5038,7 @@ patch_Main_GUI_handle_button_press (Main_GUI * this, int edx, int button_id)
 
 	// Encampment is highest district int, all of which are negative
 	if (command <= UCV_Build_Encampment) {
-		
+		issue_district_worker_command (p_main_screen_form->Current_Unit, command);
 	}
 
 	struct sc_button_info const * stack_button_info; {

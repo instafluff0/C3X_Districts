@@ -5049,6 +5049,8 @@ struct Tile
   int field_34;
   int field_38;
   Tile_Body Body;
+
+  int DistrictID;
 };
 
 struct Map
