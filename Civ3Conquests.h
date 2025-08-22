@@ -2429,7 +2429,7 @@ struct Map_Renderer_vtable
   void *m39_Draw_Grassland_Jungles_Large;
 //  int (__thiscall *m40_Draw_Grassland_Jungles_Small)(Map_Renderer *, signed int, int, int, int, int);
   void *m40_Draw_Grassland_Jungles_Small;
-//  void (__thiscall *m41_Draw_Mines)(Map_Renderer *, int, int, int);
+//void (__fastcall * m41_Draw_Mines) (Map_Renderer *, Map_Renderer * param_1, int param_2, int param_3);
   void *m41_Draw_Mines;
   int m42_Draw_Mountains;
 //  int (__thiscall *m43_Draw_Marsh_Large)(Map_Renderer *, signed int, int, int, int, int);
@@ -5050,7 +5050,7 @@ struct Tile
   int field_38;
   Tile_Body Body;
 
-  int DistrictID;
+  int District_TypeID;
 };
 
 struct Map

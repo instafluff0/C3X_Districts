@@ -4427,6 +4427,11 @@ set_up_district_buttons (Main_GUI * this)
 	if (is_online_game ()) // is online game
 		return;
 
+	//Unit * unit = this->Current_Unit;
+	//int unit_type_id = unit->Body.UnitTypeID;
+	// p_main_screen_form->Current_Unit?
+
+
 	init_district_command_buttons ();
 
 	// Debug: output dc_img_state
@@ -4444,21 +4449,17 @@ set_up_district_buttons (Main_GUI * this)
 	// free_button->Button.field_664 = bombard_button->Button.field_664;
 	//
 	// No idea if these are necessary.
-	Command_Button * road_button = NULL; int i_starting_button; {
+	Command_Button * automate_button = NULL; int i_starting_button; {
 		for (int n = 0; n < 42; n++)
 			if (((this->Unit_Command_Buttons[n].Button.Base_Data.Status2 & 1) != 0) &&
-				(this->Unit_Command_Buttons[n].Command == UCV_Build_Road)) {
-				road_button = &this->Unit_Command_Buttons[n];
+				(this->Unit_Command_Buttons[n].Command == UCV_Automate)) {
+				automate_button = &this->Unit_Command_Buttons[n];
 				i_starting_button = n;
 				break;
 			}
 	}
 
-	// Debug: output road_button
-	//snprintf (ss, sizeof ss, "road_button: %p", road_button);
-	//pop_up_in_game_error (ss);
-
-	if (road_button == NULL)
+	if (automate_button == NULL)
 		return;
 
 	// For each district type
@@ -4472,10 +4473,6 @@ set_up_district_buttons (Main_GUI * this)
 					break;
 				}
 
-			// Debug: output free_button
-			//snprintf (ss, sizeof ss, "free_button: %p", free_button);
-			//pop_up_in_game_error (ss);
-
 			if (free_button == NULL)
 				return;
 
@@ -4485,10 +4482,10 @@ set_up_district_buttons (Main_GUI * this)
 			// Replace the button's image with the district image. Disabling & re-enabling and
 			// clearing field_5FC[13] are all necessary to trigger a redraw.
 			free_button->Button.vtable->m02_Show_Disabled ((Base_Form *)&free_button->Button);
-			free_button->field_6D8 = road_button->field_6D8;
+			free_button->field_6D8 = automate_button->field_6D8;
 			for (int k = 0; k < 4; k++)
 				free_button->Button.Images[k] = &is->dc_button_image_sets[dc].imgs[k];
-			free_button->Button.field_664 = road_button->Button.field_664;
+			free_button->Button.field_664 = automate_button->Button.field_664;
 			Button_set_tooltip (&free_button->Button, __, (char *)dc_button_infos[dc].tooltip);
 			free_button->Button.field_5FC[13] = 0;
 			free_button->Button.vtable->m01_Show_Enabled ((Base_Form *)&free_button->Button, __, 0);
@@ -4844,19 +4841,19 @@ issue_district_worker_command (Unit * unit, int command)
 	// TODO make sure not on mountain
 	// TODO make sure on water if water-based district
 	// TODO patch_Unit_can_perform_command ?
-	
-	// Set tile DistrictID
-	tile->DistrictID = command;
+
+	// Set tile District_TypeID
+	tile->District_TypeID = command;
 
 	// Debug: print "issue_district_worker_command"
 	char ss[200];
 	snprintf (ss, sizeof ss, "issue_district_worker_command: tile(%d, %d), command: %d, district: %d",
-		unit->Body.X, unit->Body.Y, command, tile->DistrictID);
+		unit->Body.X, unit->Body.Y, command, tile->District_TypeID);
 	pop_up_in_game_error (ss);
 
-	
-
+	// UPDATE - this may not be necessary, just track by new field in Tile
 	// Track tile and command type
+	/*
 	reserve (
 		sizeof is->district_tiles[0],
 		(void **)&is->district_tiles,
@@ -4869,6 +4866,7 @@ issue_district_worker_command (Unit * unit, int command)
 		.y = unit->Body.Y,
 		.command = command
 	};
+	*/
 
 	int pseudo_command = UCV_Build_Mine;
 	// Main_Screen_Form_issue_command (p_main_screen_form, __, pseudo_command, unit);
@@ -7401,6 +7399,31 @@ patch_City_compute_corrupted_yield (City * this, int edx, int gross_yield, bool 
 	}
 
 	return tr;
+}
+
+void __fastcall
+patch_Map_Renderer_m12_Draw_Tile_Buildings(Map_Renderer * this, int edx, int param_1, int tile_x, int tile_y, Map_Renderer * map_renderer, int pixel_x,int pixel_y)
+{	
+	Map_Renderer_m12_Draw_Tile_Buildings(this, __, param_1, tile_x, tile_y, map_renderer, pixel_x, pixel_y);
+	return;
+
+	// Debug: print params
+	/*
+	char ss[200];
+	snprintf (ss, sizeof ss, "patch_Map_m21_Draw_Tile_Buildings: param_1: %d, tile_x: %d, tile_y: %d, pixel_x: %d, pixel_y: %d",
+		param_1, tile_x, tile_y, pixel_x, pixel_y);
+	pop_up_in_game_error (ss);
+
+	Tile * tile = tile_at (tile_x, tile_y);
+	if (tile->District_TypeID != NULL) {
+		// Draw district
+		Sprite_draw_on_map (&this->Terrain_Buldings_Barbarian_Camp, __, this, pixel_x, pixel_y, 1, 1, 1, 0);
+		return;
+	}
+	else {
+		Map_m21_Draw_Tile_Buildings(this, __, param_1, tile_x, tile_y, map_renderer, pixel_x, pixel_y);
+	}
+	*/
 }
 
 void __fastcall

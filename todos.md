@@ -7,10 +7,11 @@
 - [ ] Districts limited by distance to cities
 - [ ] City buildings limited by Districts
 - [ ] Districts give yields to cities
-- [ ] Districts can be pillaged
+- [ ] Districts can be pillaged, buildings lost, ruins shown
+- [ ] Workers can enter coastal sea tiles
 - [ ] Naval districts built by workers
 - [ ] AI builds Districts
-- [ ] (maybe?) show Wonders on tile (as small, in corner part) nearby city, though creation doesn't change, and tile not consumed
+- [ ] (maybe?) show Wonders on tile (as small, in corner part) nearby city, though creation process doesn't change, and tile not consumed
 
 
 ## Districts
@@ -56,3 +57,8 @@
 
 ## Limiting to tech/advances
 - Use same strategy as C3X config for units/buildings (find_game_object_id_by_name to find tech IDs)
+
+
+param_1: 0000023C
+param_2: 23
+param_3: 10253728
