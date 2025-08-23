@@ -326,54 +326,53 @@ struct dc_button_info {
 	enum Unit_Command_Values command;
 	char const * tooltip;
 	char const * prerequisite;
-	int tile_sheet_column,
-	    tile_sheet_row,
-		allow_multiple,
+	char const * img_path;
+	int allow_multiple,
 		index;
 } const dc_button_infos[3] = {
 	{ 
-		.command = UCV_Build_Encampment, .tooltip = "Build Encampment", .tile_sheet_column = 0, .tile_sheet_row = 0, 
+		.command = UCV_Build_Encampment, .tooltip = "Build Encampment", .img_path = "DistrictEncampment.pcx", 
 		.prerequisite = "", .allow_multiple = 0, .index = 0
 	},
 	{ 
-		.command = UCV_Build_Campus, .tooltip = "Build Campus", .tile_sheet_column = 1, .tile_sheet_row = 0, 
+		.command = UCV_Build_Campus, .tooltip = "Build Campus", .img_path = "DistrictCampus.pcx",
 		.prerequisite = "Literature", .allow_multiple = 0, .index = 1
 	},
 	{ 
-		.command = UCV_Build_HolySite, .tooltip = "Build Holy Site", .tile_sheet_column = 2, .tile_sheet_row = 0, 
+		.command = UCV_Build_HolySite, .tooltip = "Build Holy Site", .img_path = "DistrictHolySite.pcx", 
 		.prerequisite = "Ceremonial Burial", .allow_multiple = 0, .index = 2
 	},
 	//{ 
-	//	.command = UCV_Build_CommercialHub, .tooltip = "Build Commercial Hub", .tile_sheet_column = 3, .tile_sheet_row = 0, 
+	//	.command = UCV_Build_CommercialHub, .tooltip = "Build Commercial Hub", 
 	//	.prerequisite = "Currency", .allow_multiple = 0 
 	//},
 	//{ 
-	//	.command = UCV_Build_EntertainmentComplex, .tooltip = "Build Entertainment Complex", .tile_sheet_column = 4, .tile_sheet_row = 0, 
+	//	.command = UCV_Build_EntertainmentComplex, .tooltip = "Build Entertainment Complex",
 	//	.prerequisite = "Construction", .allow_multiple = 0 
 	//},
 	//{ 
-	//	.command = UCV_Build_Harbor, .tooltip = "Build Harbor", .tile_sheet_column = 5, .tile_sheet_row = 0, 
+	//	.command = UCV_Build_Port, .tooltip = "Build Port", 
 	//	.prerequisite = "Map Making", .allow_multiple = 0 
 	//},
 	//{ 
-	//	.command = UCV_Build_IndustrialZone, .tooltip = "Build Industrial Zone", .tile_sheet_column = 6, .tile_sheet_row = 0, 
+	//	.command = UCV_Build_IndustrialZone, .tooltip = "Build Industrial Zone", 
 	//	.prerequisite = "Industrialization", .allow_multiple = 0 
 	//},
 	//{ 
-	//	.command = UCV_Build_Aerodrome, .tooltip = "Build Aerodrome", .tile_sheet_column = 7, .tile_sheet_row = 0, 
+	//	.command = UCV_Build_Aerodrome, .tooltip = "Build Aerodrome", 
 	//	.prerequisite = "Flight", .allow_multiple = 0 
 	//},
 	//{ 
-	//	.command = UCV_Build_Neighborhood, .tooltip = "Build Neighborhood", .tile_sheet_column = 0, .tile_sheet_row = 1, 
+	//	.command = UCV_Build_Borough, .tooltip = "Build Borough", 
 	//	.prerequisite = "Construction", .allow_multiple = 1 
 	//},
 	//{ 
-	//	.command = UCV_Build_Spaceport, .tooltip = "Build Spaceport", .tile_sheet_column = 1, .tile_sheet_row = 1, 
+	//	.command = UCV_Build_Spaceport, .tooltip = "Build Spaceport",
 	//	.prerequisite = "Space Flight", .allow_multiple = 0 
 	//},
-	/* Canal */          //{ .command = UCV_Build_Canal                , .tooltip = "Build Canal"                , .tile_sheet_column = 2, .tile_sheet_row = 1 },
-	/* Dam */            //{ .command = UCV_Build_Dam                  , .tooltip = "Build Dam"                  , .tile_sheet_column = 3, .tile_sheet_row = 1 },
-	/* Water Park */     //{ .command = UCV_Build_WaterPark            , .tooltip = "Build Water Park"           , .tile_sheet_column = 4, .tile_sheet_row = 1 },
+	/* Canal */          //{ .command = UCV_Build_Canal                , .tooltip = "Build Canal"        },
+	/* Dam */            //{ .command = UCV_Build_Dam                  , .tooltip = "Build Dam"          },
+	/* Water Park */     //{ .command = UCV_Build_WaterPark            , .tooltip = "Build Water Park"   },
 };
 
 enum init_state {

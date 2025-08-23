@@ -29,7 +29,7 @@
   - Marketplace
   - Bank
   - Stock Exchange
-- Harbor
+- Port
   - Harbor (?)
   - Commercial Dock
   - Offshort Platform
@@ -43,7 +43,7 @@
   - Colosseum
 - Aerodrome
   - Airport
-- Neighborhood
+- Borough
 
 - Water Park (?)
 - Aquaduct (?)

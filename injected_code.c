@@ -12355,10 +12355,13 @@ patch_Map_Renderer_m12_Draw_Tile_Buildings(Map_Renderer * this, int edx, int par
 
 			// Should probably be based on whose territory tile is in
 			int territory_owner_id = tile->Territory_OwnerID;
-			// TODO: check if in a territory
+			
+			// TODO: check if in a territory, may not be
 			//Leader * leader = &leaders[territory_owner_id];
 			//int era = leader->Era;
 			//int culture = leader->RaceID;
+
+			// TODO: find nearest city; buildings present will influence sprite selection
 
 			switch (tile->District_TypeID) {
 			case UCV_Build_Encampment:
