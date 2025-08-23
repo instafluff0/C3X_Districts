@@ -4379,44 +4379,46 @@ set_up_stack_bombard_buttons (Main_GUI * this)
 void
 init_district_command_buttons ()
 {
-	if (is_online_game () || is->dc_img_state != IS_UNINITED)
+	if (is_online_game () || is->dc_btn_img_state != IS_UNINITED)
 		return;
 
 	PCX_Image pcx;
 	PCX_Image_construct (&pcx);
-	for (int dc = 0; dc < 2; dc++)
+	for (int dc = 0; dc < COUNT_DISTRICT_TYPES; dc++)
 		for (int n = 0; n < 4; n++)
-			Sprite_construct (&is->dc_button_image_sets[dc].imgs[n]);
+			Sprite_construct (&is->district_btn_img_sets[dc].imgs[n]);
 
 	char temp_path[2*MAX_PATH];
 
-	is->dc_img_state = IS_INIT_FAILED;
+	is->dc_btn_img_state = IS_INIT_FAILED;
 
+	// For each button sprite type (normal, rollover, highlighted, alpha)
 	char const * filenames[4] = {"WorkerDistrictButtonsNorm.pcx", "WorkerDistrictButtonsRollover.pcx", "WorkerDistrictButtonsHighlighted.pcx", "WorkerDistrictButtonsAlpha.pcx"};
 	for (int n = 0; n < 4; n++) {
 		get_mod_art_path (filenames[n], temp_path, sizeof temp_path);
 		PCX_Image_read_file (&pcx, __, temp_path, NULL, 0, 0x100, 2);
 		if (pcx.JGL.Image == NULL) {
 			(*p_OutputDebugStringA) ("[C3X] Failed to load work district command buttons sprite sheet.");
-			for (int dc = 0; dc < 2; dc++)
+			for (int dc = 0; dc < COUNT_DISTRICT_TYPES; dc++)
 				for (int k = 0; k < 4; k++) {
-					Sprite * sprite = &is->dc_button_image_sets[dc].imgs[k];
+					Sprite * sprite = &is->district_btn_img_sets[dc].imgs[k];
 					sprite->vtable->destruct (sprite, __, 0);
 				}
 			pcx.vtable->destruct (&pcx, __, 0);
 			return;
 		}
 
-		for (int dc = 0; dc < COUNT_DISTRICT_COMMANDS; dc++) {
-			int x = 32 * dc_button_infos[dc].tile_sheet_column,
-			    y = 32 * dc_button_infos[dc].tile_sheet_row;
-			Sprite_slice_pcx (&is->dc_button_image_sets[dc].imgs[n], __, &pcx, x, y, 32, 32, 1, 0);
+		// For each district type
+		for (int dc = 0; dc < COUNT_DISTRICT_TYPES; dc++) {
+			int x = 32 * district_infos[dc].btn_tile_sheet_column,
+			    y = 32 * district_infos[dc].btn_tile_sheet_row;
+			Sprite_slice_pcx (&is->district_btn_img_sets[dc].imgs[n], __, &pcx, x, y, 32, 32, 1, 0);
 		}
 
 		pcx.vtable->clear_JGL (&pcx);
 	}
 
-	is->dc_img_state = IS_OK;
+	is->dc_btn_img_state = IS_OK;
 	pcx.vtable->destruct (&pcx, __, 0);
 }
 
@@ -4439,7 +4441,7 @@ set_up_district_buttons (Main_GUI * this)
 	//snprintf (ss, sizeof ss, "dc_img_state: %d", is->dc_img_state);
 	//pop_up_in_game_error (ss);
 
-	if (is->dc_img_state != IS_OK)
+	if (is->dc_btn_img_state != IS_OK)
 		return;
 
 	// TODO: confirm whether to proceed based on if this is worker or not, as well as tile conditions
@@ -4466,7 +4468,7 @@ set_up_district_buttons (Main_GUI * this)
 		return;
 
 	// For each district type
-	for (int dc = 0; dc < COUNT_DISTRICT_COMMANDS; dc++) {
+	for (int dc = 0; dc < COUNT_DISTRICT_TYPES; dc++) {
 
 		Command_Button * free_button = NULL; {
 			for (int n = i_starting_button + 1; n < 42; n++)
@@ -4480,16 +4482,16 @@ set_up_district_buttons (Main_GUI * this)
 				return;
 
 			// Set up free button for creating district
-			free_button->Command = dc_button_infos[dc].command;
+			free_button->Command = district_infos[dc].command;
 
 			// Replace the button's image with the district image. Disabling & re-enabling and
 			// clearing field_5FC[13] are all necessary to trigger a redraw.
 			free_button->Button.vtable->m02_Show_Disabled ((Base_Form *)&free_button->Button);
 			free_button->field_6D8 = automate_button->field_6D8;
 			for (int k = 0; k < 4; k++)
-				free_button->Button.Images[k] = &is->dc_button_image_sets[dc].imgs[k];
+				free_button->Button.Images[k] = &is->district_btn_img_sets[dc].imgs[k];
 			free_button->Button.field_664 = automate_button->Button.field_664;
-			Button_set_tooltip (&free_button->Button, __, (char *)dc_button_infos[dc].tooltip);
+			Button_set_tooltip (&free_button->Button, __, (char *)district_infos[dc].tooltip);
 			free_button->Button.field_5FC[13] = 0;
 			free_button->Button.vtable->m01_Show_Enabled ((Base_Form *)&free_button->Button, __, 0);
 		}
@@ -4834,37 +4836,6 @@ compare_helpers (void const * vp_a, void const * vp_b)
 }
 
 void
-issue_district_worker_command (Unit * unit, int command)
-{
-	Tile * tile = tile_at (unit->Body.X, unit->Body.Y);
-	int unit_type_id = unit->Body.UnitTypeID;
-	int unit_id = unit->Body.ID;
-
-	// TODO Check if requisite tech available
-	// TODO make sure not on mountain
-	// TODO make sure on water if water-based district
-	// TODO patch_Unit_can_perform_command ?
-
-	// Set tile District_TypeID
-	tile->District_TypeID = command;
-
-	// Debug: print "issue_district_worker_command"
-	char ss[200];
-	//snprintf (ss, sizeof ss, "issue_district_worker_command: tile(%d, %d), command: %d, district: %d",
-	//	unit->Body.X, unit->Body.Y, command, tile->District_TypeID);
-	//pop_up_in_game_error (ss);
-
-	// Tile now tracks the district type, so track everything as a mine behind the scenes.
-	// 
-	int pseudo_command = UCV_Build_Mine;
-	Main_Screen_Form_issue_command (p_main_screen_form, __, pseudo_command, unit);
-
-	// TODO Factor in turns to completion - patch_Unit_work_simple_job ?
-	// TODO Patch City::can_build_improvement at 0x4BFF80
-
-}
-
-void
 issue_stack_worker_command (Unit * unit, int command)
 {
 	Tile * tile = tile_at (unit->Body.X, unit->Body.Y);
@@ -4906,6 +4877,40 @@ issue_stack_worker_command (Unit * unit, int command)
 		while ((i_next_helper < is->memo_len) && (next_up == NULL))
 			next_up = get_unit_ptr (is->memo[i_next_helper++]);
 	} while ((next_up != NULL) && (! last_action_didnt_happen));
+}
+
+void
+issue_district_worker_command (Unit * unit, int command)
+{
+	char ss[200];
+	//snprintf (ss, sizeof ss, "issue_district_worker_command");
+	//pop_up_in_game_error (ss);
+
+	Tile * tile = tile_at (unit->Body.X, unit->Body.Y);
+	int unit_type_id = unit->Body.UnitTypeID;
+	int unit_id = unit->Body.ID;
+
+	// TODO Check if requisite tech available
+	// TODO make sure not on mountain
+	// TODO make sure on water if water-based district
+	// TODO patch_Unit_can_perform_command ?
+
+	// Set tile District_Command
+	tile->District_Command = command;
+
+	// Debug: print "issue_district_worker_command"
+	//snprintf (ss, sizeof ss, "issue_district_worker_command: tile(%d, %d), command: %d, district: %d",
+	//	unit->Body.X, unit->Body.Y, command, tile->District_Command);
+	//pop_up_in_game_error (ss);
+
+	// Tile now tracks the district type, so track everything as a mine behind the scenes.
+	// 
+	int pseudo_command = UCV_Build_Mine;
+	Main_Screen_Form_issue_command (p_main_screen_form, __, pseudo_command, unit);
+
+	// TODO Factor in turns to completion - patch_Unit_work_simple_job ?
+	// TODO Patch City::can_build_improvement at 0x4BFF80
+
 }
 
 void
@@ -5023,6 +5028,8 @@ patch_Main_GUI_handle_button_press (Main_GUI * this, int edx, int button_id)
 
 	// Encampment is highest district int, all of which are negative
 	if (command <= UCV_Build_Encampment) {
+		//snprintf (ss, sizeof ss, "Is district command: %d", command);
+		//pop_up_in_game_error (ss);
 		// Replicate behavior of function we're replacing
 		clear_something_1 ();
 		Timer_clear (&this->timer_1);
@@ -12335,37 +12342,159 @@ patch_Civilopedia_Form_m68_Show_Dialog (Civilopedia_Form * this, int edx, int pa
 	return tr;
 }
 
+void
+init_district_images ()
+{
+	char ss[200];
+	//snprintf (ss, sizeof ss, "init_district_images");
+	//pop_up_in_game_error (ss);
+
+	if (is_online_game () || is->dc_img_state != IS_UNINITED)
+		return;
+
+	char temp_path[2*MAX_PATH];
+
+	is->dc_img_state = IS_INIT_FAILED;
+
+	PCX_Image pcx;
+	PCX_Image_construct (&pcx);
+
+	// For each district type
+	for (int dc = 0; dc < COUNT_DISTRICT_TYPES; dc++) {
+
+		// Debug: print dc
+		//snprintf (ss, sizeof ss, "init_district_images: %d", dc);
+		//pop_up_in_game_error (ss);
+
+		// For each image file with this district
+		for (int img_path_i = 0; img_path_i < 4; img_path_i++) {
+
+			if (district_infos[dc].img_paths[img_path_i] == NULL)
+				break;
+
+			// Debug: print img_path_i and district_infos[dc].img_paths[img_path_i]
+			//snprintf (ss, sizeof ss, "init_district_images: %d, %s", img_path_i, district_infos[dc].img_paths[img_path_i]);
+			//pop_up_in_game_error (ss);
+
+			// Read PCX file
+			get_mod_art_path (district_infos[dc].img_paths[img_path_i], temp_path, sizeof temp_path);
+			PCX_Image_read_file (&pcx, __, temp_path, NULL, 0, 0x100, 2);
+
+			if (pcx.JGL.Image == NULL) {
+
+				// Debug: print img_path_i and district_infos[dc].img_paths[img_path_i]
+				//snprintf (ss, sizeof ss, "loading failed: %d, %s", img_path_i, district_infos[dc].img_paths[img_path_i]);
+				//pop_up_in_game_error (ss);
+
+				(*p_OutputDebugStringA) ("[C3X] Failed to load districts sprite sheet.");
+				for (int dc = 0; dc < COUNT_DISTRICT_TYPES; dc++)
+					for (int era_i = 0; era_i < 4; era_i++) {
+						for (int col = 0; col < district_infos[dc].total_img_columns; col++) {
+							Sprite * sprite = &is->district_img_sets[dc].imgs[era_i][col];
+							sprite->vtable->destruct (sprite, __, 0);
+						}
+					}
+				pcx.vtable->destruct (&pcx, __, 0);
+				return;
+			}
+
+			// For each era
+			for (int era_i = 0; era_i < 4; era_i++) {
+
+				// Debug: print dc, img_path_i and era_i
+				//snprintf (ss, sizeof ss, "init_district_images: %d, %d, %d", dc, img_path_i, era_i);
+				//pop_up_in_game_error (ss);
+
+				// For each column in the image (variations on the district image for that era)
+				for (int col = 0; col < district_infos[dc].total_img_columns; col++) {
+
+					// Debug: print dc, img_path_i, era_i and col
+					//snprintf (ss, sizeof ss, "init_district_images: %d, %d, %d, %d", dc, img_path_i, era_i, col);
+					//pop_up_in_game_error (ss);
+
+					Sprite_construct (&is->district_img_sets[dc].imgs[era_i][col]);
+
+					int x = 128 * col,
+						y = 64 * era_i;
+					Sprite_slice_pcx (&is->district_img_sets[dc].imgs[era_i][col], __, &pcx, x, y, 128, 64, 1, 1);
+				}
+			}
+
+			pcx.vtable->clear_JGL (&pcx);
+		}
+	}
+	is->dc_img_state = IS_OK;
+	pcx.vtable->destruct (&pcx, __, 0);
+}
+
 void __fastcall
 patch_Map_Renderer_m12_Draw_Tile_Buildings(Map_Renderer * this, int edx, int param_1, int tile_x, int tile_y, Map_Renderer * map_renderer, int pixel_x,int pixel_y)
-{	
-	// Debug: print params
+{
 	char ss[200];
 
 	Tile * tile = tile_at (tile_x, tile_y);
-	if (tile->District_TypeID != NULL) {
+
+	if (tile->District_Command != NULL) {
 
 		// Check if job is complete
 		unsigned overlays = patch_Tile_m42_Get_Overlays(tile, __, 1);
 		unsigned int done = overlays >> 2 & 1 | (overlays >> 10) << 8;
 
 		if (done) {
+
+			if (is->dc_img_state == IS_UNINITED)
+				init_district_images ();
+
+			if (is->dc_img_state != IS_OK) {
+				return;
+			}
+
+			int idx = -1;
+			for (int i = 0; i < COUNT_DISTRICT_TYPES; i++) {
+				if (district_infos[i].command == tile->District_Command) {
+					idx = i;
+					break;
+				}
+			}
+			if (idx == -1) {
+				snprintf (ss, sizeof ss, "Unknown district command: %d", tile->District_Command);
+				pop_up_in_game_error (ss);
+				return;
+			}
+
 			Sprite district_sprite;
 			// Need to find era
 			// Need to find culture
 
 			// Should probably be based on whose territory tile is in
 			int territory_owner_id = tile->Territory_OwnerID;
+
+			// Debug: territory_owner_id
+			//snprintf (ss, sizeof ss, "territory_owner_id: %d", territory_owner_id);
+			//pop_up_in_game_error (ss);
 			
-			// TODO: check if in a territory, may not be
-			//Leader * leader = &leaders[territory_owner_id];
-			//int era = leader->Era;
-			//int culture = leader->RaceID;
+			int era = 0;
+			int culture = 0;
+			if (territory_owner_id) {
+				Leader * leader = &leaders[territory_owner_id];
+				era = leader->Era;
+				culture = leader->RaceID;
+
+				// Debug: territory_owner_id, leader, era, culture
+				//snprintf (ss, sizeof ss, "territory_owner_id: %d, leader: %d, era: %d, culture: %d", territory_owner_id, leader, era, culture);
+				//pop_up_in_game_error (ss);
+			}
+
+			// Debug: find lengths of is->district_img_sets[idx].imgs
+			//int img_count = sizeof(is->district_img_sets[idx].imgs) / sizeof(is->district_img_sets[idx].imgs[0]);
+			//snprintf(ss, sizeof ss, "is->district_img_sets[%d].imgs length: %d", idx, img_count);
+			//pop_up_in_game_error(ss);
 
 			// TODO: find nearest city; buildings present will influence sprite selection
 
-			switch (tile->District_TypeID) {
+			switch (tile->District_Command) {
 			case UCV_Build_Encampment:
-				district_sprite = this->Terrain_Buldings_Barbarian_Camp;
+				district_sprite = is->district_img_sets[idx].imgs[era][0];
 				break;
 			case UCV_Build_Campus:
 				district_sprite = this->Terrain_Buldings_Barbarian_Camp;

@@ -320,60 +320,40 @@ struct sc_button_info {
 	/* Disband */    { .command = UCV_Disband        , .kind = SCK_UNIT_MGMT, .tile_sheet_column = 3, .tile_sheet_row = 0 },
 };
 
-const COUNT_DISTRICT_COMMANDS = 3;
+// ==========
+// Districts
+// ==========
 
-struct dc_button_info {
+const int COUNT_DISTRICT_TYPES = 1;
+
+struct district_info {
 	enum Unit_Command_Values command;
 	char const * tooltip;
 	char const * prerequisite;
-	char const * img_path;
+	char const * img_paths[4];
 	int allow_multiple,
-		index;
-} const dc_button_infos[3] = {
+		index,
+		btn_tile_sheet_column,
+	    btn_tile_sheet_row,
+		total_img_columns;
+} const district_infos[1] = {
 	{ 
-		.command = UCV_Build_Encampment, .tooltip = "Build Encampment", .img_path = "DistrictEncampment.pcx", 
-		.prerequisite = "", .allow_multiple = 0, .index = 0
-	},
-	{ 
-		.command = UCV_Build_Campus, .tooltip = "Build Campus", .img_path = "DistrictCampus.pcx",
-		.prerequisite = "Literature", .allow_multiple = 0, .index = 1
-	},
-	{ 
-		.command = UCV_Build_HolySite, .tooltip = "Build Holy Site", .img_path = "DistrictHolySite.pcx", 
-		.prerequisite = "Ceremonial Burial", .allow_multiple = 0, .index = 2
+		.command = UCV_Build_Encampment, .tooltip = "Build Encampment", .img_paths = {"DistrictEncampment.pcx"},
+		.prerequisite = "", .allow_multiple = 0, .index = 0, .btn_tile_sheet_column = 0, .btn_tile_sheet_row = 0, .total_img_columns = 4
 	},
 	//{ 
-	//	.command = UCV_Build_CommercialHub, .tooltip = "Build Commercial Hub", 
-	//	.prerequisite = "Currency", .allow_multiple = 0 
+	//	.command = UCV_Build_Campus, .tooltip = "Build Campus", .img_paths = {"DistrictCampus.pcx"}, 
+	//	.prerequisite = "Literature", .allow_multiple = 0, .index = 1, .btn_tile_sheet_column = 1, .btn_tile_sheet_row = 0, .total_img_columns = 4
 	//},
 	//{ 
-	//	.command = UCV_Build_EntertainmentComplex, .tooltip = "Build Entertainment Complex",
-	//	.prerequisite = "Construction", .allow_multiple = 0 
-	//},
-	//{ 
-	//	.command = UCV_Build_Port, .tooltip = "Build Port", 
-	//	.prerequisite = "Map Making", .allow_multiple = 0 
-	//},
-	//{ 
-	//	.command = UCV_Build_IndustrialZone, .tooltip = "Build Industrial Zone", 
-	//	.prerequisite = "Industrialization", .allow_multiple = 0 
-	//},
-	//{ 
-	//	.command = UCV_Build_Aerodrome, .tooltip = "Build Aerodrome", 
-	//	.prerequisite = "Flight", .allow_multiple = 0 
-	//},
-	//{ 
-	//	.command = UCV_Build_Borough, .tooltip = "Build Borough", 
-	//	.prerequisite = "Construction", .allow_multiple = 1 
-	//},
-	//{ 
-	//	.command = UCV_Build_Spaceport, .tooltip = "Build Spaceport",
-	//	.prerequisite = "Space Flight", .allow_multiple = 0 
-	//},
-	/* Canal */          //{ .command = UCV_Build_Canal                , .tooltip = "Build Canal"        },
-	/* Dam */            //{ .command = UCV_Build_Dam                  , .tooltip = "Build Dam"          },
-	/* Water Park */     //{ .command = UCV_Build_WaterPark            , .tooltip = "Build Water Park"   },
+	//	.command = UCV_Build_HolySite, .tooltip = "Build Holy Site", .img_paths = {"DistrictHolySite.pcx"}, 
+	//	.prerequisite = "Ceremonial Burial", .allow_multiple = 0, .index = 2, .btn_tile_sheet_column = 2, .btn_tile_sheet_row = 0, .total_img_columns = 4
+	//}
 };
+
+// ==========
+// End Districts
+// ==========
 
 enum init_state {
 	IS_UNINITED = 0,
@@ -503,6 +483,7 @@ struct injected_state {
 
 	enum init_state sc_img_state;
 	enum init_state dc_img_state;
+	enum init_state dc_btn_img_state;
 	enum init_state tile_highlight_state;
 	enum init_state mod_info_button_images_state;
 	enum init_state disabled_command_img_state;
@@ -731,10 +712,6 @@ struct injected_state {
 	// mode action, the cursor is cleared before the action is carried out. So we have to intercept that map click as well for
 	// a total of 4 UI functions patched to make this damn button work. I doubt this is optimal but it works and I've wasted
 	// enough time on this already. That click interceptor sets a flag value of 2 to indicate this annoying state.
-
-	struct dc_button_image_set {
-		Sprite imgs[4];
-	} dc_button_image_sets[2];
 
 	// ==========
 	// } This field is only valid after init_disabled_command_buttons has been called and disabled_command_img_state equals IS_OK {
@@ -1042,6 +1019,14 @@ struct injected_state {
 	} * district_tiles;
 	int count_district_tiles;
 	int district_tiles_capacity;
+
+	struct district_image_set {
+		Sprite imgs[4][10]; // 1st dimension = era, 2nd dimension = district image variant
+	} district_img_sets[1];
+
+	struct district_button_image_set {
+		Sprite imgs[4];
+	} district_btn_img_sets[1];
 
 	// ==========
 	// }
