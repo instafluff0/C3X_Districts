@@ -3,7 +3,7 @@
 - [x] District built by workers
 - [x] Districts drawn on map
 - [ ] Districts drawn vary by era / culture / buildings present
-- [ ] Districts limited by tech
+- [?] Districts limited by tech
 - [ ] Districts limited by distance to cities
 - [ ] City buildings limited by Districts
 - [ ] Districts give yields to cities
@@ -12,6 +12,9 @@
 - [ ] Naval districts built by workers
 - [ ] AI builds Districts
 - [ ] (maybe?) show Wonders on tile (as small, in corner part) nearby city, though creation process doesn't change, and tile not consumed
+
+## Known bugs/issues
+- [ ] Can't build on floodplains (as it's a mine, behind the scenes)
 
 
 ## Districts

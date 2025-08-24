@@ -329,7 +329,8 @@ const int COUNT_DISTRICT_TYPES = 1;
 struct district_info {
 	enum Unit_Command_Values command;
 	char const * tooltip;
-	char const * prerequisite;
+	char const * advance_prereq;
+	char const * dependent_improvements[5];
 	char const * img_paths[4];
 	int allow_multiple,
 		index,
@@ -339,7 +340,8 @@ struct district_info {
 } const district_infos[1] = {
 	{ 
 		.command = UCV_Build_Encampment, .tooltip = "Build Encampment", .img_paths = {"DistrictEncampment.pcx"},
-		.prerequisite = "", .allow_multiple = 0, .index = 0, .btn_tile_sheet_column = 0, .btn_tile_sheet_row = 0, .total_img_columns = 4
+		.advance_prereq = "Bronze Working", .dependent_improvements = {"Barracks", "SAM Missile Battery"},
+		.allow_multiple = 0, .index = 0, .btn_tile_sheet_column = 0, .btn_tile_sheet_row = 0, .total_img_columns = 4
 	},
 	//{ 
 	//	.command = UCV_Build_Campus, .tooltip = "Build Campus", .img_paths = {"DistrictCampus.pcx"}, 
@@ -1011,15 +1013,7 @@ struct injected_state {
 		int shown_page; // zero-based
 	} cmpd;
 
-	struct district_tile {
-		Tile * tile;
-		int x;
-		int y;
-		int command;
-	} * district_tiles;
-	int count_district_tiles;
-	int district_tiles_capacity;
-
+	// Districts data
 	struct district_image_set {
 		Sprite imgs[4][10]; // 1st dimension = era, 2nd dimension = district image variant
 	} district_img_sets[1];
@@ -1027,6 +1021,14 @@ struct injected_state {
 	struct district_button_image_set {
 		Sprite imgs[4];
 	} district_btn_img_sets[1];
+
+	struct district_prereq {
+		int advance_id;
+	} * district_prereqs[1];
+
+	struct district_improv {
+		int improv_ids[1][5];
+	} * district_improvs[1];
 
 	// ==========
 	// }

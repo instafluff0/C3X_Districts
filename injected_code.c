@@ -1590,6 +1590,25 @@ handle_config_error (struct config_parsing * p, enum config_parse_error err)
 	handle_config_error_at (p, p->cursor, err);
 }
 
+void 
+load_district_advance_prereqs ()
+{
+	char err_msg[1000];
+	struct error_line * unrecognized_lines = NULL;
+	struct string_slice value;
+	int recog_err_offset;
+
+	for (int i = 0; i < COUNT_DISTRICT_TYPES; i++) {
+		int tech_id;
+		find_game_object_id_by_name (GOK_TECHNOLOGY, &district_infos[i].advance_prereq, 0, &tech_id);
+		if (tech_id >= 0) {
+			&is->district_prereqs[i].advance_id = tech_id;
+		} else {
+			add_unrecognized_line (&unrecognized_lines, &district_infos[i].advance_prereq);
+		}
+	}
+}
+
 // Loads a config from the given file, layering it on top of is->current_config and appending its name to the list of loaded configs. Does NOT
 // re-apply machine code edits.
 void
@@ -3649,10 +3668,6 @@ patch_init_floating_point ()
 	is->saved_improv_counts = NULL;
 	is->saved_improv_counts_capacity = 0;
 
-	is->district_tiles = NULL;
-	is->count_district_tiles = 0;
-	is->district_tiles_capacity = 0;
-
 	memset (&is->cmpd, 0, sizeof is->cmpd);
 
 	is->loaded_config_names = NULL;
@@ -4793,8 +4808,23 @@ patch_Unit_can_perform_command (Unit * this, int edx, int unit_command_value)
 		enum UnitTypeClasses class = p_bic_data->UnitTypes[this->Body.UnitTypeID].Unit_Class;
 		return ((class != UTC_Land) || (! tile->vtable->m35_Check_Is_Water (tile))) &&
 			Unit_can_perform_command (this, __, unit_command_value);
+	} else if (unit_command_value <= UCV_Build_Encampment) {
+		// Check if requisite tech is present
+		int district_id = get_district_id_from_command_id (unit_command_value);
+		if (district_id != -1 && district_prereqs[district_id])
+			return Leader_has_tech (this->Body.CivID, __, district_prereqs[district_id]);
 	} else
 		return Unit_can_perform_command (this, __, unit_command_value);
+}
+
+int
+get_district_id_from_command_id (int command_id)
+{
+	for (int i = 0; i < COUNT_DISTRICT_TYPES; i++) {
+		if (district_infos[i].command == command_id)
+			return i;
+	}
+	return -1;
 }
 
 bool __fastcall
@@ -5701,6 +5731,9 @@ patch_load_scenario (void * this, int edx, char * param_1, unsigned * param_2)
 	load_config ("custom.c3x_config.ini", 1);
 	apply_machine_code_edits (&is->current_config, false);
 
+	// Load district prerequisites
+	load_district_advance_prereqs ();
+
 	// Initialize Trade Net X
 	if (is->current_config.enable_trade_net_x && (is->tnx_init_state == IS_UNINITED)) {
 		char path[MAX_PATH];
@@ -6417,6 +6450,27 @@ patch_City_can_build_unit (City * this, int edx, int unit_type_id, bool exclude_
 		int available;
 		if (get_available_unit_count (&leaders[this->Body.CivID], unit_type_id, &available) && (available <= 0))
 			return false;
+	}
+
+	return base;
+}
+
+bool __fastcall
+patch_City_can_build_improvement (City * this, int edx, int i_improv, bool param_2)
+{
+	bool base = City_can_build_improvement (this, __, i_improv, param_2);
+
+	if (base) {
+		// Check if improvement depends on any district
+		for (int i = 0; i < COUNT_DISTRICT_TYPES; i++) {
+			for (int j = 0; j < district_improvs[i]; j++) {
+				if (is->district_improv_requirements[i][j] == i_improv) {
+					
+					// Check if City has district within radius
+					
+				}
+			}
+		}
 	}
 
 	return base;
