@@ -5,6 +5,7 @@
 - [ ] Districts drawn vary by era / culture / buildings present
 - [?] Districts limited by tech
 - [ ] Districts limited by distance to cities
+  - Can probably use `unsigned char const workable_tile_counts[8] = {1, 9, 21, 37, 61, 89, 137, 193};` and `config.city_work_radius`
 - [ ] City buildings limited by Districts
 - [ ] Districts give yields to cities
 - [ ] Districts can be pillaged, buildings lost, ruins shown

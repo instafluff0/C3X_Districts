@@ -1594,18 +1594,15 @@ void
 load_district_advance_prereqs ()
 {
 	char err_msg[1000];
-	struct error_line * unrecognized_lines = NULL;
-	struct string_slice value;
 	int recog_err_offset;
 
 	for (int i = 0; i < COUNT_DISTRICT_TYPES; i++) {
 		int tech_id;
-		find_game_object_id_by_name (GOK_TECHNOLOGY, &district_infos[i].advance_prereq, 0, &tech_id);
-		if (tech_id >= 0) {
-			&is->district_prereqs[i].advance_id = tech_id;
-		} else {
-			add_unrecognized_line (&unrecognized_lines, &district_infos[i].advance_prereq);
-		}
+		Advance * adv;
+		for (int n = 0; n < p_bic_data->AdvanceCount; n++)
+			if (district_infos[i].advance_prereq == p_bic_data->Advances[n].Name) {
+				is->district_prereqs[i]->tech_id = n;
+			}
 	}
 }
 
@@ -4795,6 +4792,16 @@ patch_Unit_can_upgrade (Unit * this)
 		return base;
 }
 
+int
+get_district_id_from_command_id (int command_id)
+{
+	for (int i = 0; i < COUNT_DISTRICT_TYPES; i++) {
+		if (district_infos[i].command == command_id)
+			return i;
+	}
+	return -1;
+}
+
 bool __fastcall
 patch_Unit_can_perform_command (Unit * this, int edx, int unit_command_value)
 {
@@ -4811,20 +4818,11 @@ patch_Unit_can_perform_command (Unit * this, int edx, int unit_command_value)
 	} else if (unit_command_value <= UCV_Build_Encampment) {
 		// Check if requisite tech is present
 		int district_id = get_district_id_from_command_id (unit_command_value);
-		if (district_id != -1 && district_prereqs[district_id])
-			return Leader_has_tech (this->Body.CivID, __, district_prereqs[district_id]);
+		if (district_id != -1 && &is->district_prereqs[district_id]->tech_id)
+			return Leader_has_tech (this->Body.CivID, __, &is->district_prereqs[district_id]->tech_id);
+		return false;
 	} else
 		return Unit_can_perform_command (this, __, unit_command_value);
-}
-
-int
-get_district_id_from_command_id (int command_id)
-{
-	for (int i = 0; i < COUNT_DISTRICT_TYPES; i++) {
-		if (district_infos[i].command == command_id)
-			return i;
-	}
-	return -1;
 }
 
 bool __fastcall
@@ -6461,13 +6459,14 @@ patch_City_can_build_improvement (City * this, int edx, int i_improv, bool param
 	bool base = City_can_build_improvement (this, __, i_improv, param_2);
 
 	if (base) {
-		// Check if improvement depends on any district
+		// For each district type
 		for (int i = 0; i < COUNT_DISTRICT_TYPES; i++) {
-			for (int j = 0; j < district_improvs[i]; j++) {
-				if (is->district_improv_requirements[i][j] == i_improv) {
+			// For each improvement that belongs to this district type
+			for (int j = 0; j < 5; j++) {
+				if (is->district_improvs[i]->improv_ids[j] != NULL && is->district_improvs[i]->improv_ids[j] == i_improv) {
 					
 					// Check if City has district within radius
-					
+
 				}
 			}
 		}

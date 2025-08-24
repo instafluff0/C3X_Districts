@@ -1023,11 +1023,11 @@ struct injected_state {
 	} district_btn_img_sets[1];
 
 	struct district_prereq {
-		int advance_id;
+		int tech_id;
 	} * district_prereqs[1];
 
 	struct district_improv {
-		int improv_ids[1][5];
+		int improv_ids[5];
 	} * district_improvs[1];
 
 	// ==========
