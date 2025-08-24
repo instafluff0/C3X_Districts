@@ -8,7 +8,7 @@
   - Can probably use `unsigned char const workable_tile_counts[8] = {1, 9, 21, 37, 61, 89, 137, 193};` and `config.city_work_radius`
 - [ ] City buildings limited by Districts
 - [ ] Districts give yields to cities
-- [ ] Districts can be pillaged, buildings lost, ruins shown
+- [ ] Districts can be pillaged & bombed, buildings lost, ruins shown
 - [ ] Workers can enter coastal sea tiles
 - [ ] Naval districts built by workers
 - [ ] AI builds Districts

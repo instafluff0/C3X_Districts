@@ -4819,7 +4819,8 @@ patch_Unit_can_perform_command (Unit * this, int edx, int unit_command_value)
 		// Check if requisite tech is present
 		int district_id = get_district_id_from_command_id (unit_command_value);
 		if (district_id != -1 && &is->district_prereqs[district_id]->tech_id)
-			return Leader_has_tech (this->Body.CivID, __, &is->district_prereqs[district_id]->tech_id);
+			if (Leader_has_tech (&leaders[this->Body.CivID], __, is->district_prereqs[district_id]->tech_id))
+				return true;
 		return false;
 	} else
 		return Unit_can_perform_command (this, __, unit_command_value);
