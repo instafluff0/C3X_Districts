@@ -2,13 +2,16 @@
 # -*- coding: utf-8 -*-
 
 """
-Civ 3 day-night PCX transformer (SIMPLE)
+Civ 3 day-night PCX transformer (SIMPLE, split blue controls)
 - Reads PCX from Terrain/1200 and writes 100..2400 siblings.
 - Preserves #ff00ff and #00ff00 exactly.
-- Three controls only:
-    --night  (0..1)  midnight darkness amount
-    --blue   (0..1)  blue emphasis strength (teal->blue + blue sat boost)
-    --sunset (0..1)  evening warmth around ~19:00 (7pm)
+- Controls:
+    --night       (0..1)  midnight darkness amount
+    --blue-water  (0..1)  ocean/shoreline blue emphasis & blue-sector boost
+    --blue-land   (0..1)  land/greens cooling toward dusk blue
+    --sunset      (0..1)  evening warmth around ~19:00 (7pm)
+- Legacy:
+    --blue        (0..1)  alias for setting both blue-water and blue-land
 
 Defaults tuned for a cool dusk with readable terrain.
 """
@@ -88,13 +91,21 @@ def _hue_in_range(h01: float, start_deg: float, end_deg: float) -> bool:
 
 # --------- color grading (simple) ---------
 
-def transform_rgb_triplet(r: int, g: int, b: int, hour_1_24: int, night: float, blue: float, sunset: float) -> Tuple[int,int,int]:
+def transform_rgb_triplet(
+    r: int, g: int, b: int,
+    hour_1_24: int,
+    night: float,
+    blue_water: float,
+    blue_land: float,
+    sunset: float
+) -> Tuple[int,int,int]:
     import colorsys
 
     # clamp controls
-    night  = max(0.0, min(1.0, night))
-    blue   = max(0.0, min(1.0, blue))
-    sunset = max(0.0, min(1.0, sunset))
+    night      = max(0.0, min(1.0, night))
+    blue_water = max(0.0, min(1.0, blue_water))
+    blue_land  = max(0.0, min(1.0, blue_land))
+    sunset     = max(0.0, min(1.0, sunset))
 
     # global curves
     f  = hour_factor(hour_1_24)                  # 0 at noon, 1 at midnight
@@ -103,14 +114,17 @@ def transform_rgb_triplet(r: int, g: int, b: int, hour_1_24: int, night: float, 
     h0, s0, v0 = colorsys.rgb_to_hsv(r/255.0, g/255.0, b/255.0)
     h,  s,  v  = h0, s0, v0
 
+    # Precompute loose categories from original hue
+    is_greenish = _hue_in_range(h0, 95, 140) and s0 > 0.12
+    is_waterish = (_hue_in_range(h0, 140, 215) or _hue_in_range(h0, 190, 260)) and s0 > 0.12
+
     # 1) DARKNESS: deeper than before + gentle gamma for midtone roll-off
-    max_darken = 0.78          # was 0.60 → allows darker nights at --night 1.0
-    floor_at_midnight = 0.02   # was 0.03 → slightly lower floor
+    max_darken = 0.78
+    floor_at_midnight = 0.02
     v = v * (1 - (max_darken*night)*f) + (floor_at_midnight*night)*f
-    # Night gamma (darkens midtones without crushing highlights)
     v = pow(max(0.0, min(1.0, v)), 1.0 + 0.25*night*f)
 
-    # 2) Mild global cool-down for non-warm hues (sky/water), gated by s & v
+    # 2) Mild global cool-down for non-warm hues (sky/water/greens), gated by s & v
     warm_min, warm_max = 10/360.0, 75/360.0       # protect browns/oranges
     is_warm = warm_min <= h <= warm_max
     if not is_warm and s > 0.20 and v > 0.20:
@@ -118,43 +132,40 @@ def transform_rgb_triplet(r: int, g: int, b: int, hour_1_24: int, night: float, 
         delta = target_cool - h
         if delta > 0.5: delta -= 1.0
         elif delta < -0.5: delta += 1.0
-        h = (h + (0.40*blue)*f * delta) % 1.0     # slightly softened from 0.45
 
-    # 3) WATER CONTINUUM (teal ↔ ocean) with a gentle feathered blend
+        # choose which blue knob to use based on hue family
+        local_blue = blue_water if is_waterish else (blue_land if is_greenish else 0.5*(blue_water + blue_land))
+        h = (h + (0.40*local_blue)*f * delta) % 1.0
+
+    # 3) WATER CONTINUUM (teal ↔ ocean) with a gentle feathered blend (uses blue_water)
     if _hue_in_range(h0, 140, 215) and s0 > 0.12:
         # t = 0 at 140° (teal) … 1 at 215° (ocean), smoothed
         h0deg = h0 * 360.0
         t_lin = max(0.0, min(1.0, (h0deg - 140.0) / (215.0 - 140.0)))
         t = t_lin * t_lin * (3 - 2*t_lin)  # smoothstep
 
-        # Interpolate targets & strengths so there’s no “edge” between bands
-        target = ((232.0/360.0) * (1 - t)) + ((238.0/360.0) * t)         # 232° → 238°
-        pull   = ((0.55)          * (1 - t)) + ((0.95)          * t)      # 0.55 → 0.95
-        satb   = ((0.35)          * (1 - t)) + ((0.60)          * t)      # 0.35 → 0.60
+        target = ((232.0/360.0) * (1 - t)) + ((238.0/360.0) * t)       # 232° → 238°
+        pull   = ((0.55)          * (1 - t)) + ((0.95)          * t)   # 0.55 → 0.95
+        satb   = ((0.35)          * (1 - t)) + ((0.60)          * t)   # 0.35 → 0.60
 
-        # Apply hue shift toward blended target
         d = target - h
         if d > 0.5: d -= 1.0
         elif d < -0.5: d += 1.0
-        h = (h + (pull * blue * f) * d) % 1.0
+        h = (h + (pull * blue_water * f) * d) % 1.0
+        s = s + (1.0 - s) * (satb * blue_water * f)
 
-        # Apply saturation boost (also blended)
-        s = s + (1.0 - s) * (satb * blue * f)
-
-
-    # 4) GREEN LAND → cooler/blue: original hue in 95–140°
-    if _hue_in_range(h0, 95, 140) and s0 > 0.18:
+    # 4) GREEN LAND → cooler/blue (uses blue_land)
+    if is_greenish:
         green_target = 232/360.0
         d3 = green_target - h
         if d3 > 0.5: d3 -= 1.0
         elif d3 < -0.5: d3 += 1.0
-        h = (h + (0.95*blue)*(f**1.20) * d3) % 1.0   # CHANGED: stronger + midnight-biased
-        s = s + (1.0 - s) * (0.40*blue)*(f**1.10)    # CHANGED: slightly higher sat, midnight-biased
+        h = (h + (0.95*blue_land)*(f**1.20) * d3) % 1.0
+        s = s + (1.0 - s) * (0.40*blue_land)*(f**1.10)
 
-
-    # 5) Blue-sector chroma boost (after shifts)
+    # 5) Blue-sector chroma boost (after shifts) — mostly ocean/sky (uses blue_water)
     if _hue_in_range(h, 190, 260):
-        s = s + (1.0 - s) * (0.35*blue)*f         # was 0.30 → slightly up
+        s = s + (1.0 - s) * (0.35*blue_water)*f
 
     # 6) Sunset warmth (evenings only), skip warm hues to avoid reddening mountains
     if ew > 0 and not is_warm:
@@ -173,7 +184,8 @@ def transform_rgb_triplet(r: int, g: int, b: int, hour_1_24: int, night: float, 
 
 # --------- processing ---------
 
-def process_indexed_pcx(in_path: str, out_path: str, hour_1_24: int, night: float, blue: float, sunset: float) -> None:
+def process_indexed_pcx(in_path: str, out_path: str, hour_1_24: int,
+                        night: float, blue_water: float, blue_land: float, sunset: float) -> None:
     print(f"Processing {in_path} for hour {hour_1_24}")
     im = Image.open(in_path)
     # quantize to palette if needed
@@ -192,7 +204,7 @@ def process_indexed_pcx(in_path: str, out_path: str, hour_1_24: int, night: floa
         r,g,b = palette[3*i], palette[3*i+1], palette[3*i+2]
         if (r,g,b) == MAGENTA or (r,g,b) == GREEN:
             continue
-        nr,ng,nb = transform_rgb_triplet(r,g,b, hour_1_24, night, blue, sunset)
+        nr,ng,nb = transform_rgb_triplet(r,g,b, hour_1_24, night, blue_water, blue_land, sunset)
         new_palette[3*i:3*i+3] = [nr,ng,nb]
 
     put_palette(im, new_palette)
@@ -223,7 +235,8 @@ def process_indexed_pcx(in_path: str, out_path: str, hour_1_24: int, night: floa
 
     im.save(out_path, format='PCX')
 
-def process_folder(terrain_dir: str, noon_subfolder: str, night: float, blue: float, sunset: float,
+def process_folder(terrain_dir: str, noon_subfolder: str, night: float,
+                   blue_water: float, blue_land: float, sunset: float,
                    only_hour: int = None, only_file: str = None) -> None:
     base_dir = os.path.join(terrain_dir, noon_subfolder)
     if not os.path.isdir(base_dir): raise SystemExit(f"No such folder: {base_dir}")
@@ -250,20 +263,36 @@ def process_folder(terrain_dir: str, noon_subfolder: str, night: float, blue: fl
             process_indexed_pcx(
                 os.path.join(base_dir, name),
                 os.path.join(out_dir, name),
-                hour_1_24, night, blue, sunset
+                hour_1_24, night, blue_water, blue_land, sunset
             )
 
 def main():
-    ap = argparse.ArgumentParser(description="Civ 3 day-night (SIMPLE)")
+    ap = argparse.ArgumentParser(description="Civ 3 day-night (SIMPLE, split blue controls)")
     ap.add_argument("--terrain", required=True, help="Path to Terrain folder (parent of noon subfolder)")
     ap.add_argument("--noon", default="1200", help="Name of noon subfolder (default: 1200)")
     ap.add_argument("--only-hour", type=int, help="Process a single hour (e.g., 2400)")
     ap.add_argument("--only-file", help="Process a single PCX filename from the noon folder")
     ap.add_argument("--night",  type=float, default=0.60, help="Midnight darkness strength (0..1). Default: 0.60")
-    ap.add_argument("--blue",   type=float, default=0.85, help="Blue emphasis strength (0..1). Default: 0.85")
+    # New split controls
+    ap.add_argument("--blue-water", type=float, default=0.85, help="Blue emphasis for ocean/shoreline (0..1). Default: 0.85")
+    ap.add_argument("--blue-land",  type=float, default=0.85, help="Blue emphasis for land/greens (0..1). Default: 0.85")
+    # Legacy alias (optional)
+    ap.add_argument("--blue", type=float, default=None, help="[Deprecated] Sets both --blue-water and --blue-land if they are not provided.")
     ap.add_argument("--sunset", type=float, default=0.12, help="Evening warmth at ~19:00 (0..1). Default: 0.12")
     args = ap.parse_args()
-    process_folder(args.terrain, args.noon, args.night, args.blue, args.sunset, args.only_hour, args.only_file)
+
+    # Backward-compat: if --blue is given, fill any unset split knobs
+    bw = args.blue_water
+    bl = args.blue_land
+    if args.blue is not None:
+        # only override ones the user did not explicitly set
+        if "blue_water" not in vars(args) or (vars(args)["blue_water"] == ap.get_default("blue_water")):
+            bw = args.blue
+        if "blue_land" not in vars(args) or (vars(args)["blue_land"] == ap.get_default("blue_land")):
+            bl = args.blue
+        print("Note: --blue is deprecated; prefer --blue-water and --blue-land.")
+
+    process_folder(args.terrain, args.noon, args.night, bw, bl, args.sunset, args.only_hour, args.only_file)
 
 if __name__ == "__main__":
     main()
