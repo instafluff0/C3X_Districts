@@ -337,7 +337,7 @@ def main():
     ap.add_argument("--core-gain", type=float, default=0.95, help="Inner glow strength (0..1). Default: 0.95")
     ap.add_argument("--halo-gain", type=float, default=0.55, help="Halo strength (0..1). Default: 0.55")
     ap.add_argument("--core-color", type=str, default="#fff87a", help="Core window color (lit). Default: #ffd27a")
-    ap.add_argument("--glow-color", type=str, default="#ffae4a", help="Glow tint color. Default: #ffae4a")
+    ap.add_argument("--glow-color", type=str, default="#e78e21", help="Glow tint color. Default: #e78e21")
     ap.add_argument("--shadow", type=str, default="auto", help="Shadow fill when lights off: 'auto' to sample surrounding ring, or a color (#rrggbb). Default: auto")
     ap.add_argument("--shadow-fallback", type=str, default="#5a4e44", help="Fallback shadow color if sampling fails. Default: #5a4e44")
 
