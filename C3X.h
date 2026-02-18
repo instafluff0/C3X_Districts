@@ -263,6 +263,9 @@ struct c3x_config {
 	bool city_icons_show_unit_effects_not_trade;
 	bool ignore_king_ability_for_defense_priority;
 	bool show_untradable_techs_on_trade_screen;
+	bool enable_vassals;
+	int ruler_vassal_city_threshold; // Percent, 0-100
+	int min_vassal_duration_before_rebellion; // Turns
 	bool disallow_useless_bombard_vs_airfields;
 	enum line_drawing_override draw_lines_using_gdi_plus;
 	bool compact_luxury_display_on_city_screen;
@@ -1547,6 +1550,13 @@ struct injected_state {
 	// Records the turn number on which each player has most recently founded a city. This is intended to be used for the temp settler perfume
 	// after founding feature so it may not be set if that feature is not activated or applicable. Defaults to -1.
 	int turn_no_of_last_founding_for_settler_perfume[32];
+
+	// Tracks vassalage state. vassal_of[x] gives x's ruler or -1 if independent.
+	int vassal_of[32];
+	int vassal_since_turn[32];
+	int vassal_sync_depth;
+	char * peace_treaty_label;
+	char vassal_peace_treaty_label[64];
 
 	// Stores the byte offsets into the c3x_config struct of all boolean/integer config options, accessible using the options' names as
 	// strings. Used when reading in a config INI file.

@@ -85,6 +85,7 @@ struct injected_state * is = ADDR_INJECTED_STATE;
 #define MAX_DISTRICT_VARIANT_COUNT 5
 #define MAX_DISTRICT_ERA_COUNT     4
 #define MAX_DISTRICT_COLUMN_COUNT  10
+#define VASSAL_DIPLO_SUBTYPE       3
 
 // Max grid of tiles that an AI will evaluate a candidate bridge or canal for, 
 // used to limit computational complexity
@@ -246,6 +247,14 @@ void get_neighbor_coords (Map * map, int x, int y, int neighbor_index, int * out
 void wrap_tile_coords (Map * map, int * x, int * y);
 int count_neighborhoods_in_city_radius (City * city);
 int count_utilized_neighborhoods_in_city_radius (City * city);
+bool is_valid_vassal_civ (int civ_id);
+int get_vassal_offer_civ_for_pair (int civ_a, int civ_b);
+void establish_vassalage (int vassal_id, int ruler_id);
+void break_vassalage (int vassal_id, bool trigger_rebellion);
+void maintain_vassalage_for_leader (Leader * this);
+void propagate_vassal_peace (Leader * this, int civ_id);
+void transfer_sub_vassals_to_new_ruler (int old_ruler_id, int new_ruler_id);
+int get_foreign_advisor_draw_index_for_civ (Advisor_Foreign_Form * form, int civ_id);
 
 struct pause_for_popup {
 	bool done; // Set to true to exit for loop
@@ -17360,6 +17369,7 @@ patch_init_floating_point ()
 		{"city_icons_show_unit_effects_not_trade"                , true , offsetof (struct c3x_config, city_icons_show_unit_effects_not_trade)},
 		{"ignore_king_ability_for_defense_priority"              , false, offsetof (struct c3x_config, ignore_king_ability_for_defense_priority)},
 		{"show_untradable_techs_on_trade_screen"                 , false, offsetof (struct c3x_config, show_untradable_techs_on_trade_screen)},
+		{"enable_vassals"                                        , false, offsetof (struct c3x_config, enable_vassals)},
 		{"disallow_useless_bombard_vs_airfields"                 , true , offsetof (struct c3x_config, disallow_useless_bombard_vs_airfields)},
 		{"compact_luxury_display_on_city_screen"                 , false, offsetof (struct c3x_config, compact_luxury_display_on_city_screen)},
 		{"compact_strategic_resource_display_on_city_screen"     , false, offsetof (struct c3x_config, compact_strategic_resource_display_on_city_screen)},
@@ -17483,6 +17493,8 @@ patch_init_floating_point ()
 		{"ai_bridge_eval_lake_tile_threshold"                ,     6, offsetof (struct c3x_config, ai_bridge_eval_lake_tile_threshold)},
 		{"ai_city_district_max_build_wait_turns"             ,    20, offsetof (struct c3x_config, ai_city_district_max_build_wait_turns)},
 		{"per_extraterritorial_colony_relation_penalty"      ,     0, offsetof (struct c3x_config, per_extraterritorial_colony_relation_penalty)},
+		{"ruler_vassal_city_threshold"                        ,    50, offsetof (struct c3x_config, ruler_vassal_city_threshold)},
+		{"min_vassal_duration_before_rebellion"               ,    20, offsetof (struct c3x_config, min_vassal_duration_before_rebellion)},
 	};
 
 	is->kernel32 = (*p_GetModuleHandleA) ("kernel32.dll");
@@ -17775,6 +17787,13 @@ patch_init_floating_point ()
 
 	is->waiting_units = (struct table) {0};
 	is->have_loaded_waiting_units = false;
+	for (int civ_id = 0; civ_id < 32; civ_id++) {
+		is->vassal_of[civ_id] = -1;
+		is->vassal_since_turn[civ_id] = -1;
+	}
+	is->vassal_sync_depth = 0;
+	is->peace_treaty_label = NULL;
+	strcpy (is->vassal_peace_treaty_label, "Peace Treaty (Vassalage)");
 
 	is->extra_capture_despawns = NULL;
 	is->count_extra_capture_despawns = 0;
@@ -21009,6 +21028,14 @@ patch_load_scenario (void * this, int edx, char * param_1, unsigned * param_2)
 	// Clear last city founding turn numbers
 	for (int n = 0; n < 32; n++)
 		is->turn_no_of_last_founding_for_settler_perfume[n] = -1;
+
+	// Clear vassal state
+	for (int n = 0; n < 32; n++) {
+		is->vassal_of[n] = -1;
+		is->vassal_since_turn[n] = -1;
+	}
+	is->vassal_sync_depth = 0;
+	is->peace_treaty_label = NULL;
 
 	// Load resources.pcx
 	{
@@ -25692,6 +25719,9 @@ remove_unit_id_entries_owned_by (struct table * t, int owner_id)
 void __fastcall
 patch_Leader_begin_turn (Leader * this)
 {
+	if (is->current_config.enable_vassals)
+		maintain_vassalage_for_leader (this);
+
 	if (is->aerodrome_airlift_usage.len > 0) {
 		int civ_bit = 1 << this->ID;
 		clear_memo ();
@@ -26273,6 +26303,32 @@ patch_DiploForm_assemble_tradable_items (DiploForm * this)
 				this->tradable_technologies[n].can_be_bought = 0;
 				this->tradable_technologies[n].can_be_sold   = 0;
 			}
+
+	if ((this->tradable_diplo_agreements != NULL) && (this->other_party_civ_id >= 0) && (this->other_party_civ_id < 32)) {
+		if (is->peace_treaty_label == NULL)
+			is->peace_treaty_label = this->tradable_diplo_agreements[0].label;
+
+		this->tradable_diplo_agreements[0].label = is->peace_treaty_label;
+		int our_id = p_main_screen_form->Player_CivID;
+		int their_id = this->other_party_civ_id;
+		int vassal_offer_civ = -1;
+		if (is->current_config.enable_vassals) {
+			vassal_offer_civ = get_vassal_offer_civ_for_pair (our_id, their_id);
+			if (vassal_offer_civ >= 0)
+				this->tradable_diplo_agreements[0].label = is->vassal_peace_treaty_label;
+		}
+
+		// Mark peace offers from the candidate side with the candidate civ ID in param_2.
+		// This marker is later converted to a custom diplo subtype at deal-application time.
+		TradeOfferList * our_list = &this->our_offer_lists[their_id];
+		TradeOfferList * their_list = &this->their_offer_lists[their_id];
+		for (TradeOffer * offer = our_list->first; offer != NULL; offer = offer->next)
+			if ((offer->kind == 0) && (offer->param_1 == 0))
+				offer->param_2 = (vassal_offer_civ == our_id) ? our_id : 0;
+		for (TradeOffer * offer = their_list->first; offer != NULL; offer = offer->next)
+			if ((offer->kind == 0) && (offer->param_1 == 0))
+				offer->param_2 = (vassal_offer_civ == their_id) ? their_id : 0;
+	}
 }
 
 bool __fastcall
@@ -29016,6 +29072,27 @@ patch_MappedFile_create_file_to_save_game (MappedFile * this, int edx, LPCSTR fi
 		serialize_aligned_text ("current_day_night_cycle", &mod_data);
 		int_to_bytes (buffer_allocate (&mod_data, sizeof is->current_day_night_cycle), is->current_day_night_cycle);
 	}
+	{
+		int vassal_count = 0;
+		for (int civ_id = 1; civ_id < 32; civ_id++)
+			if ((is->vassal_of[civ_id] > 0) && (is->vassal_of[civ_id] < 32))
+				vassal_count++;
+		if (vassal_count > 0) {
+			serialize_aligned_text ("vassalage", &mod_data);
+			int * chunk = (int *)buffer_allocate (&mod_data, sizeof(int) * (1 + 3 * vassal_count));
+			int * out = chunk + 1;
+			chunk[0] = vassal_count;
+			for (int civ_id = 1; civ_id < 32; civ_id++) {
+				int ruler_id = is->vassal_of[civ_id];
+				if ((ruler_id <= 0) || (ruler_id >= 32))
+					continue;
+				out[0] = civ_id;
+				out[1] = ruler_id;
+				out[2] = is->vassal_since_turn[civ_id];
+				out += 3;
+			}
+		}
+	}
 	if (is->current_config.enable_districts && (is->district_count > 0)) {
 		serialize_aligned_text ("district_config_names", &mod_data);
 		int * entry_count = (int *)buffer_allocate (&mod_data, sizeof(int));
@@ -29371,6 +29448,12 @@ patch_move_game_data (byte * buffer, bool save_else_load)
 		table_deinit (&is->named_tile_map);
 		clear_all_tracked_workers ();
 		reset_ai_candidate_bridge_or_canals ();
+		for (int civ_id = 0; civ_id < 32; civ_id++) {
+			is->vassal_of[civ_id] = -1;
+			is->vassal_since_turn[civ_id] = -1;
+		}
+		is->vassal_sync_depth = 0;
+		is->peace_treaty_label = NULL;
 	}
 
 	// Check for a mod save data section and load it if present
@@ -29495,6 +29578,37 @@ patch_move_game_data (byte * buffer, bool save_else_load)
 			} else if (match_save_chunk_name (&cursor, "turn_no_of_last_founding_for_settler_perfume")) {
 				for (int n = 0; n < 32; n++)
 					is->turn_no_of_last_founding_for_settler_perfume[n] = *((int *)cursor)++;
+
+			} else if (match_save_chunk_name (&cursor, "vassalage")) {
+				bool success = false;
+				int remaining_bytes = (seg + seg_size) - cursor;
+				if (remaining_bytes >= (int)sizeof(int)) {
+					int * ints = (int *)cursor;
+					int entry_count = *ints++;
+					cursor = (byte *)ints;
+					remaining_bytes -= (int)sizeof(int);
+					if ((entry_count >= 0) &&
+					    (remaining_bytes >= entry_count * 3 * (int)sizeof(int))) {
+						success = true;
+						for (int n = 0; n < entry_count; n++) {
+							int vassal_id = *ints++;
+							int ruler_id = *ints++;
+							int since_turn = *ints++;
+							cursor = (byte *)ints;
+							remaining_bytes -= 3 * (int)sizeof(int);
+							if ((vassal_id > 0) && (vassal_id < 32) &&
+							    (ruler_id > 0) && (ruler_id < 32) &&
+							    (vassal_id != ruler_id)) {
+								is->vassal_of[vassal_id] = ruler_id;
+								is->vassal_since_turn[vassal_id] = since_turn;
+							}
+						}
+					}
+				}
+				if (! success) {
+					error_chunk_name = "vassalage";
+					break;
+				}
 
 			} else if (match_save_chunk_name (&cursor, "current_day_night_cycle")) {
 				is->current_day_night_cycle = *((int *)cursor)++;
@@ -31316,6 +31430,7 @@ patch_Unit_is_visible_to_civ_for_bouncing (Unit * this, int edx, int civ_id, int
 void __fastcall
 patch_Leader_make_peace (Leader * this, int edx, int civ_id)
 {
+	bool was_at_war = this->At_War[civ_id];
 	Leader_make_peace (this, __, civ_id);
 
 	if (is->current_config.disallow_trespassing &&
@@ -31325,6 +31440,18 @@ patch_Leader_make_peace (Leader * this, int edx, int civ_id)
 		Leader_bounce_trespassing_units (&leaders[civ_id], __, this->ID);
 		is->do_not_bounce_invisible_units = false;
 	}
+
+	if (is->current_config.enable_vassals &&
+	    (is->vassal_sync_depth == 0) &&
+	    was_at_war &&
+	    (! this->At_War[civ_id])) {
+		int vassal_id = get_vassal_offer_civ_for_pair (this->ID, civ_id);
+		if (vassal_id >= 0)
+			establish_vassalage (vassal_id, (vassal_id == this->ID) ? civ_id : this->ID);
+	}
+
+	if (is->current_config.enable_vassals)
+		propagate_vassal_peace (this, civ_id);
 }
 
 // This patch function replaces calls to Leader::count_wonders_with_flag but is only valid in cases where it only matters whether the return value is
@@ -35771,6 +35898,334 @@ patch_Unit_select_army_member_for_combat (Unit * this, int edx, int param_1, cha
 
 	return Unit_select_army_member_for_combat (this, __, param_1, param_2);
 }
+
+bool
+is_valid_vassal_civ (int civ_id)
+{
+	return (civ_id > 0) && (civ_id < 32) && ((*p_player_bits & (1 << civ_id)) != 0);
+}
+
+int
+get_vassal_offer_civ_for_pair (int civ_a, int civ_b)
+{
+	if (! is_valid_vassal_civ (civ_a) || ! is_valid_vassal_civ (civ_b))
+		return -1;
+	if (! leaders[civ_a].At_War[civ_b])
+		return -1;
+
+	int threshold = clamp (0, 100, is->current_config.ruler_vassal_city_threshold);
+	int a_cities = not_below (0, leaders[civ_a].Cities_Count);
+	int b_cities = not_below (0, leaders[civ_b].Cities_Count);
+	if ((a_cities <= 0) || (b_cities <= 0))
+		return -1;
+
+	bool a_can_vassal = (a_cities * 100 <= b_cities * threshold) && (is->vassal_of[civ_b] < 0);
+	bool b_can_vassal = (b_cities * 100 <= a_cities * threshold) && (is->vassal_of[civ_a] < 0);
+	if (a_can_vassal && b_can_vassal)
+		return (a_cities <= b_cities) ? civ_a : civ_b;
+	else if (a_can_vassal)
+		return civ_a;
+	else if (b_can_vassal)
+		return civ_b;
+	else
+		return -1;
+}
+
+void
+break_vassalage (int vassal_id, bool trigger_rebellion)
+{
+	if ((vassal_id <= 0) || (vassal_id >= 32))
+		return;
+
+	int ruler_id = is->vassal_of[vassal_id];
+	if ((ruler_id <= 0) || (ruler_id >= 32) || (ruler_id == vassal_id)) {
+		is->vassal_of[vassal_id] = -1;
+		is->vassal_since_turn[vassal_id] = -1;
+		return;
+	}
+
+	is->vassal_of[vassal_id] = -1;
+	is->vassal_since_turn[vassal_id] = -1;
+	leaders[vassal_id].Relation_Treaties[ruler_id] &= ~4; // Remove MPP
+	leaders[ruler_id].Relation_Treaties[vassal_id] &= ~4;
+
+	if (trigger_rebellion &&
+	    is_valid_vassal_civ (vassal_id) &&
+	    is_valid_vassal_civ (ruler_id) &&
+	    (! leaders[vassal_id].At_War[ruler_id])) {
+		Leader_declare_war (&leaders[vassal_id], __, ruler_id, 0);
+	}
+}
+
+void
+establish_vassalage (int vassal_id, int ruler_id)
+{
+	if (! is_valid_vassal_civ (vassal_id) ||
+	    ! is_valid_vassal_civ (ruler_id) ||
+	    (vassal_id == ruler_id))
+		return;
+	if (is->vassal_of[vassal_id] == ruler_id)
+		return;
+	if (is->vassal_of[ruler_id] >= 0)
+		return; // Don't allow vassal chains
+
+	if (is->vassal_of[vassal_id] >= 0)
+		break_vassalage (vassal_id, false);
+
+	is->vassal_of[vassal_id] = ruler_id;
+	is->vassal_since_turn[vassal_id] = *p_current_turn_no;
+
+	leaders[vassal_id].At_War[ruler_id] = 0;
+	leaders[ruler_id].At_War[vassal_id] = 0;
+	leaders[vassal_id].Relation_Treaties[ruler_id] |= 1 | 4; // Peace + MPP
+	leaders[ruler_id].Relation_Treaties[vassal_id] |= 1 | 4;
+
+	transfer_sub_vassals_to_new_ruler (vassal_id, ruler_id);
+}
+
+void
+propagate_vassal_peace (Leader * this, int civ_id)
+{
+	if (! is_valid_vassal_civ (this->ID) ||
+	    ! is_valid_vassal_civ (civ_id) ||
+	    (is->vassal_sync_depth > 4))
+		return;
+
+	is->vassal_sync_depth++;
+
+	int ruler_id = is->vassal_of[this->ID];
+	if ((ruler_id > 0) && (ruler_id < 32) && (ruler_id != civ_id) && leaders[ruler_id].At_War[civ_id])
+		Leader_make_peace (&leaders[ruler_id], __, civ_id);
+
+	for (int other_id = 1; other_id < 32; other_id++)
+		if ((is->vassal_of[other_id] == this->ID) && (other_id != civ_id) && leaders[other_id].At_War[civ_id])
+			Leader_make_peace (&leaders[other_id], __, civ_id);
+
+	is->vassal_sync_depth--;
+}
+
+void
+maintain_vassalage_for_leader (Leader * this)
+{
+	if (! is_valid_vassal_civ (this->ID))
+		return;
+
+	int ruler_id = is->vassal_of[this->ID];
+	if (ruler_id < 0)
+		return;
+
+	// Flatten any chain from old/loaded states so vassals-of-vassals do not persist.
+	int top_ruler_id = ruler_id;
+	for (int depth = 0; depth < 32; depth++) {
+		int next = is->vassal_of[top_ruler_id];
+		if ((next <= 0) || (next >= 32) || (next == top_ruler_id))
+			break;
+		top_ruler_id = next;
+	}
+	if (top_ruler_id != ruler_id) {
+		is->vassal_of[this->ID] = top_ruler_id;
+		ruler_id = top_ruler_id;
+	}
+
+	if (! is_valid_vassal_civ (ruler_id) || (ruler_id == this->ID) || this->At_War[ruler_id]) {
+		break_vassalage (this->ID, false);
+		return;
+	}
+
+	this->Relation_Treaties[ruler_id] |= 1 | 4;
+	leaders[ruler_id].Relation_Treaties[this->ID] |= 1 | 4;
+
+	if (is->vassal_sync_depth <= 4) {
+		is->vassal_sync_depth++;
+		for (int n = 1; n < 32; n++) {
+			if (! is_valid_vassal_civ (n) || (n == this->ID) || (n == ruler_id))
+				continue;
+			if (leaders[ruler_id].At_War[n] && ! this->At_War[n])
+				Leader_declare_war (this, __, n, 0);
+			else if ((! leaders[ruler_id].At_War[n]) && this->At_War[n])
+				Leader_make_peace (this, __, n);
+		}
+		is->vassal_sync_depth--;
+	}
+
+	int min_turns = not_below (0, is->current_config.min_vassal_duration_before_rebellion);
+	int turns_as_vassal = (*p_current_turn_no) - is->vassal_since_turn[this->ID];
+	int threshold = clamp (0, 100, is->current_config.ruler_vassal_city_threshold);
+	int our_cities = not_below (0, this->Cities_Count);
+	int ruler_cities = not_below (1, leaders[ruler_id].Cities_Count);
+	if ((turns_as_vassal >= min_turns) && (our_cities * 100 > ruler_cities * threshold))
+		break_vassalage (this->ID, true);
+}
+
+void
+transfer_sub_vassals_to_new_ruler (int old_ruler_id, int new_ruler_id)
+{
+	if (! is_valid_vassal_civ (old_ruler_id) ||
+	    ! is_valid_vassal_civ (new_ruler_id) ||
+	    (old_ruler_id == new_ruler_id))
+		return;
+
+	for (int civ_id = 1; civ_id < 32; civ_id++) {
+		if ((civ_id == old_ruler_id) || (civ_id == new_ruler_id))
+			continue;
+		if (is->vassal_of[civ_id] != old_ruler_id)
+			continue;
+
+		is->vassal_of[civ_id] = new_ruler_id;
+		if (is->vassal_since_turn[civ_id] < 0)
+			is->vassal_since_turn[civ_id] = *p_current_turn_no;
+
+		leaders[civ_id].Relation_Treaties[old_ruler_id] &= ~4;
+		leaders[old_ruler_id].Relation_Treaties[civ_id] &= ~4;
+		leaders[civ_id].Relation_Treaties[new_ruler_id] |= 1 | 4;
+		leaders[new_ruler_id].Relation_Treaties[civ_id] |= 1 | 4;
+	}
+}
+
+void __fastcall
+patch_Leader_declare_war (Leader * this, int edx, int target_civ_id, int param_2)
+{
+	if (is->current_config.enable_vassals && (target_civ_id > 0) && (target_civ_id < 32)) {
+		if (is->vassal_of[this->ID] == target_civ_id)
+			break_vassalage (this->ID, false);
+		if (is->vassal_of[target_civ_id] == this->ID)
+			break_vassalage (target_civ_id, false);
+	}
+
+	bool was_at_war = this->At_War[target_civ_id];
+	Leader_declare_war (this, __, target_civ_id, param_2);
+
+	if (! is->current_config.enable_vassals ||
+	    was_at_war ||
+	    (! this->At_War[target_civ_id]) ||
+	    (is->vassal_sync_depth > 4))
+		return;
+
+	is->vassal_sync_depth++;
+
+	int this_id = this->ID;
+	int ruler_id = is->vassal_of[this_id];
+	if ((ruler_id > 0) && (ruler_id < 32) && (ruler_id != target_civ_id) && ! leaders[ruler_id].At_War[target_civ_id])
+		Leader_declare_war (&leaders[ruler_id], __, target_civ_id, 0);
+
+	for (int civ_id = 1; civ_id < 32; civ_id++)
+		if ((is->vassal_of[civ_id] == this_id) && (civ_id != target_civ_id) && ! leaders[civ_id].At_War[target_civ_id])
+			Leader_declare_war (&leaders[civ_id], __, target_civ_id, 0);
+
+	int target_ruler_id = is->vassal_of[target_civ_id];
+	if ((target_ruler_id > 0) && (target_ruler_id < 32) && (target_ruler_id != this_id) && ! leaders[target_ruler_id].At_War[this_id])
+		Leader_declare_war (&leaders[target_ruler_id], __, this_id, 0);
+
+	is->vassal_sync_depth--;
+}
+
+void __fastcall
+patch_apply_accepted_trade_offer_lists (void * this, int edx, int param_1, int param_2, int param_3)
+{
+	if (is->current_config.enable_vassals) {
+		TradeOfferList * receiving = (TradeOfferList *)param_2;
+		TradeOfferList * paying = (TradeOfferList *)param_3;
+		if (receiving != NULL)
+			for (TradeOffer * offer = receiving->first; offer != NULL; offer = offer->next)
+				if ((offer->kind == 0) &&
+				    (offer->param_1 == 0) &&
+				    is_valid_vassal_civ (offer->param_2))
+					offer->param_1 = VASSAL_DIPLO_SUBTYPE;
+
+		if (paying != NULL)
+			for (TradeOffer * offer = paying->first; offer != NULL; offer = offer->next)
+				if ((offer->kind == 0) &&
+				    (offer->param_1 == 0) &&
+				    is_valid_vassal_civ (offer->param_2))
+					offer->param_1 = VASSAL_DIPLO_SUBTYPE;
+	}
+
+	Leader_apply_trade_offer_lists ((Leader *)this, __, param_1, (TradeOfferList *)param_2, (TradeOfferList *)param_3);
+}
+
+void __fastcall
+patch_apply_single_trade_offer_item (void * this, int edx, int param_1, unsigned int param_2, int param_3, int param_4)
+{
+	if (is->current_config.enable_vassals &&
+	    (param_2 == 0) &&
+	    (param_3 == VASSAL_DIPLO_SUBTYPE)) {
+		Leader_apply_trade_offer_item ((Leader *)this, __, param_1, 0, 0, 0);
+
+		int vassal_id = is_valid_vassal_civ (param_4) ? param_4 : -1;
+		int ruler_id = -1;
+		if ((vassal_id >= 0) && (vassal_id == ((Leader *)this)->ID))
+			ruler_id = param_1;
+		else if (vassal_id == param_1)
+			ruler_id = ((Leader *)this)->ID;
+		else {
+			int inferred = get_vassal_offer_civ_for_pair (((Leader *)this)->ID, param_1);
+			if (inferred >= 0) {
+				vassal_id = inferred;
+				ruler_id = (inferred == ((Leader *)this)->ID) ? param_1 : ((Leader *)this)->ID;
+			}
+		}
+		if ((vassal_id >= 0) && (ruler_id >= 0))
+			establish_vassalage (vassal_id, ruler_id);
+		return;
+	}
+
+	Leader_apply_trade_offer_item ((Leader *)this, __, param_1, param_2, param_3, param_4);
+}
+
+int
+get_foreign_advisor_draw_index_for_civ (Advisor_Foreign_Form * form, int civ_id)
+{
+	if ((form == NULL) || (civ_id < 0) || (civ_id >= 32))
+		return -1;
+	if (civ_id == p_main_screen_form->Player_CivID)
+		return 0;
+	for (int i = 0; i < 8; i++)
+		if (form->Report_Civ_List[i] == civ_id)
+			return i;
+	return -1;
+}
+
+/*
+void __fastcall
+patch_Advisor_Foreign_Form_draw_relation_lines (Advisor_Foreign_Form * this)
+{
+	Advisor_Foreign_Form_draw_relation_lines (this);
+
+	if (! is->current_config.enable_vassals ||
+	    (this == NULL) ||
+	    (this->Relation_CheckBoxes_Values[4] == 0))
+		return;
+
+	OpenGLRenderer_set_line_width (&opengl_renderer, __, 3);
+	OpenGLRenderer_set_color (&opengl_renderer, __, 0x001f);
+	OpenGLRenderer_enable_line_dashing (&opengl_renderer);
+
+	for (int vassal_id = 1; vassal_id < 32; vassal_id++) {
+		int ruler_id = is->vassal_of[vassal_id];
+		if (! is_valid_vassal_civ (vassal_id) ||
+		    ! is_valid_vassal_civ (ruler_id) ||
+		    (vassal_id == ruler_id))
+			continue;
+
+		int a = get_foreign_advisor_draw_index_for_civ (this, vassal_id);
+		int b = get_foreign_advisor_draw_index_for_civ (this, ruler_id);
+		if ((a < 0) || (a >= 8) || (b < 0) || (b >= 8) || (a == b))
+			continue;
+		if ((this->Draw_Civ_Index_List[a] == 0) && (this->Draw_Civ_Index_List[b] == 0))
+			continue;
+
+		OpenGLRenderer_draw_line (
+			&opengl_renderer,
+			__,
+			this->Leaders_X_Positions[a],
+			this->Leaders_Y_Positions[a],
+			this->Leaders_X_Positions[b],
+			this->Leaders_Y_Positions[b]);
+	}
+
+	OpenGLRenderer_disable_line_dashing (&opengl_renderer);
+}
+*/
 
 // TCC requires a main function be defined even though it's never used.
 int main () { return 0; }
