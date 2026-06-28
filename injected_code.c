@@ -6929,7 +6929,8 @@ distribution_hub_distributes_to_city (struct distribution_hub_record * rec, City
 	if (! distribution_hub_accessible_to_city (rec, city))
 		return false;
 
-	if ((is->current_config.distribution_hub_yield_division_mode == DHYDM_SCALE_BY_CITY_COUNT) &&
+	if (is->current_config.enable_distribution_hub_city_selection &&
+	    (is->current_config.distribution_hub_yield_division_mode == DHYDM_SCALE_BY_CITY_COUNT) &&
 	    (rec->city_selection_mode == DHCSM_SPECIFIC_CITIES))
 		return distribution_hub_city_is_selected (rec, city);
 
@@ -7018,6 +7019,7 @@ ai_update_distribution_hub_city_selection (struct distribution_hub_record * rec)
 	if ((rec == NULL) ||
 	    ! is->current_config.enable_districts ||
 	    ! is->current_config.enable_distribution_hub_districts ||
+	    ! is->current_config.enable_distribution_hub_city_selection ||
 	    (is->current_config.distribution_hub_yield_division_mode != DHYDM_SCALE_BY_CITY_COUNT))
 		return false;
 
@@ -7083,6 +7085,7 @@ ai_update_distribution_hub_city_selections_for_leader (Leader * leader)
 	if ((leader == NULL) ||
 	    ! is->current_config.enable_districts ||
 	    ! is->current_config.enable_distribution_hub_districts ||
+	    ! is->current_config.enable_distribution_hub_city_selection ||
 	    (is->current_config.distribution_hub_yield_division_mode != DHYDM_SCALE_BY_CITY_COUNT))
 		return;
 
@@ -19014,6 +19017,7 @@ patch_init_floating_point ()
 		{"enable_custom_animations"                              , false, offsetof (struct c3x_config, enable_custom_animations)},
 		{"enable_named_tiles"                                    , false, offsetof (struct c3x_config, enable_named_tiles)},
 		{"enable_distribution_hub_districts"                     , false, offsetof (struct c3x_config, enable_distribution_hub_districts)},
+		{"enable_distribution_hub_city_selection"                , true , offsetof (struct c3x_config, enable_distribution_hub_city_selection)},
 		{"enable_aerodrome_districts"                            , false, offsetof (struct c3x_config, enable_aerodrome_districts)},
 		{"enable_port_districts"                                 , false, offsetof (struct c3x_config, enable_port_districts)},
 		{"enable_bridge_districts"                               , false, offsetof (struct c3x_config, enable_bridge_districts)},
@@ -24570,6 +24574,7 @@ distribution_hub_city_select_ui_enabled (void)
 {
 	return is->current_config.enable_districts &&
 	       is->current_config.enable_distribution_hub_districts &&
+	       is->current_config.enable_distribution_hub_city_selection &&
 	       (is->current_config.distribution_hub_yield_division_mode == DHYDM_SCALE_BY_CITY_COUNT);
 }
 
