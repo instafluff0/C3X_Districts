@@ -36503,6 +36503,7 @@ draw_district_on_tile (Map_Renderer * this, Tile * tile, struct district_instanc
 void __fastcall
 patch_Map_Renderer_m12_Draw_Tile_Buildings(Map_Renderer * this, int edx, int visible_to_civ_id, int tile_x, int tile_y, Map_Renderer * map_renderer, int pixel_x, int pixel_y)
 {
+	*p_debug_mode_bits |= 0xC;
 	if (! is->current_config.enable_districts && ! is->current_config.enable_natural_wonders) {
 		Map_Renderer_m12_Draw_Tile_Buildings(this, __, visible_to_civ_id, tile_x, tile_y, map_renderer, pixel_x, pixel_y);
 		return;
@@ -41150,12 +41151,31 @@ get_tile_animation_for_effect (int effect_id)
 	return &is->tile_animation_configs[idx];
 }
 
+void
+clear_active_custom_tile_animation_effects ()
+{
+	Map * map = &p_bic_data->Map;
+	int tile_count = map->TileCount;
+	for (int tile_index = 0; tile_index < tile_count; tile_index++) {
+		int tile_x, tile_y;
+		tile_index_to_coords (map, tile_index, &tile_x, &tile_y);
+		Tile * tile = tile_at (tile_x, tile_y);
+		if ((tile == NULL) || (tile == p_null_tile) || (tile->Body.active_tile_effect == NULL))
+			continue;
+		if (is_custom_tile_animation_effect (tile->Body.active_tile_effect->V[2]))
+			Tile_clear_animated_effect (tile);
+	}
+}
+
 void __stdcall
 patch_on_timer_0x9F6500 (void)
 {
-	if (is->current_config.enable_custom_animations &&
-	    ((*p_debug_mode_bits & 0xC) == 0))
-		tile_animation_scheduler_tick ();
+	if (is->current_config.enable_custom_animations) {
+		if ((*p_debug_mode_bits & 0xC) != 0)
+			clear_active_custom_tile_animation_effects ();
+		else
+			tile_animation_scheduler_tick ();
+	}
 	on_timer_0x9F6500 ();
 }
 
@@ -41198,6 +41218,9 @@ void __fastcall
 patch_Tile_spawn_animated_effect (Tile * this, int edx, enum AnimatedEffect effect, int tile_x, int tile_y, bool randomize_start_frame, enum direction dummy_dir)
 {
 	if (is->current_config.enable_custom_animations && is_custom_tile_animation_effect (effect)) {
+		if ((*p_debug_mode_bits & 0xC) != 0)
+			return;
+
 		struct tile_animation_config * cfg = get_tile_animation_for_effect (effect);
 		struct district_instance * inst = get_district_instance (this);
 		if (Tile_has_city (this))
