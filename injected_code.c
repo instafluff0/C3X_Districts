@@ -31623,21 +31623,17 @@ patch_Unit_score_kill (Unit * this, int edx, Unit * victim, bool was_attacking)
 void __fastcall
 patch_Fighter_do_cruise_missile_strike (Fighter * this, int edx, Unit * unit, int neighbor_index)
 {
-	pop_up_in_game_error ("patch_Fighter_do_cruise_missile_strike");
 	is->war_weariness_subject_unit_type_id = unit_has_valid_type_id (unit) ? unit->Body.UnitTypeID : -1;
 	Fighter_do_cruise_missile_strike (this, __, unit, neighbor_index);
 	is->war_weariness_subject_unit_type_id = -1;
-	pop_up_in_game_error ("patch_Fighter_do_cruise_missile_strike done");
 }
 
 void __fastcall
 patch_Fighter_damage_by_defensive_bombard (Fighter * this, int edx, Unit * bombarder, Unit * defender)
 {
-	pop_up_in_game_error ("patch_Fighter_damage_by_defensive_bombard");
 	is->war_weariness_subject_unit_type_id = unit_has_valid_type_id (defender) ? defender->Body.UnitTypeID : -1;
 	Fighter_damage_by_defensive_bombard (this, __, bombarder, defender);
 	is->war_weariness_subject_unit_type_id = -1;
-	pop_up_in_game_error ("patch_Fighter_damage_by_defensive_bombard done");
 }
 
 // Checks unit's HP after it was possibly hit by ZoC and deals with the consequences if it's dead. Does nothing if config option to make ZoC lethal
