@@ -42725,7 +42725,7 @@ clear_stale_custom_tile_animation_effects ()
 			continue;
 
 		struct tile_animation_config * cfg = get_tile_animation_for_effect (effect_id);
-		if ((cfg != NULL) && (cfg->type == TAT_RESOURCE))
+		if ((cfg != NULL) && (cfg->type == TAT_RESOURCE) && (! Tile_has_city (tile)) && (get_district_instance (tile) == NULL))
 			continue;
 
 		int animation_index = effect_id - is->tile_animation_effect_base;
@@ -43085,8 +43085,14 @@ tile_has_matching_resource_animation_for_draw_with_resource (Tile * tile, int ti
 		return false;
 	if ((resource_id < 0) || (resource_id >= p_bic_data->ResourceTypeCount))
 		return false;
-	if (Tile_has_city (tile))
+	if (Tile_has_city (tile) || (get_district_instance (tile) != NULL)) {
+		if (tile->Body.active_tile_effect != NULL) {
+			struct tile_animation_config * cfg = get_tile_animation_for_effect (tile->Body.active_tile_effect->V[2]);
+			if ((cfg != NULL) && (cfg->type == TAT_RESOURCE))
+				Tile_clear_animated_effect (tile);
+		}
 		return false;
+	}
 
 	int matched_animation_index = -1;
 	for (int i = 0; i < is->tile_animation_count; i++) {
@@ -44208,9 +44214,8 @@ patch_Tile_spawn_animated_effect (Tile * this, int edx, enum AnimatedEffect effe
 			bool allow_district_tile = (cfg != NULL) && (cfg->type == TAT_DISTRICT) &&
 				(inst->district_id != NATURAL_WONDER_DISTRICT_ID) &&
 				((cfg->district_id < 0) || (inst->district_id == cfg->district_id));
-			bool allow_resource_on_district_tile = (cfg != NULL) && (cfg->type == TAT_RESOURCE);
 			bool allow_destruct_tile = (cfg != NULL) && is_tile_destruct_animation_type (cfg->type);
-			if (! allow_natural_wonder_tile && ! allow_district_tile && ! allow_resource_on_district_tile && ! allow_destruct_tile)
+			if (! allow_natural_wonder_tile && ! allow_district_tile && ! allow_destruct_tile)
 				return;
 		}
 		enum direction effective_direction = DIR_ZERO;
