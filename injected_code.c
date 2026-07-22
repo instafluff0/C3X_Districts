@@ -221,6 +221,7 @@ int __cdecl patch_get_building_defense_bonus_at (int x, int y, int param_3);
 
 // Declare various functions needed for districts and hard to untangle and reorder here
 void __fastcall patch_City_recompute_yields_and_happiness (City * this);
+void __fastcall patch_City_manage_by_governor (City * this, int edx, bool manage_professions);
 void __fastcall patch_Map_build_trade_network (Map * this);
 bool __fastcall patch_Unit_can_perform_command (Unit * this, int edx, int unit_command_value);
 bool __fastcall patch_Unit_can_pillage (Unit * this, int edx, int tile_x, int tile_y);
@@ -7049,8 +7050,8 @@ set_tile_unworkable_for_all_cities (Tile * tile, int tile_x, int tile_y)
 			removed_assignment = City_stop_working_tile (assigned_city, __, neighbor_index);
 		if (! removed_assignment)
 			tile->Body.CityAreaID = -1;
-		if (! removed_assignment)
-			recompute_city_yields_with_districts (assigned_city);
+		recompute_city_yields_with_districts (assigned_city);
+		patch_City_manage_by_governor (assigned_city, __, false);
 	} else
 		tile->Body.CityAreaID = -1;
 
@@ -7067,6 +7068,7 @@ set_tile_unworkable_for_all_cities (Tile * tile, int tile_x, int tile_y)
 			if ((work_radius < 0) || (work_radius > is->current_config.city_work_radius))
 				continue;
 			recompute_city_yields_with_districts (city);
+			patch_City_manage_by_governor (city, __, false);
 		}
 	}
 }
@@ -7212,8 +7214,10 @@ recompute_distribution_hub_cities_for_civ (int civ_id)
 
 	for (int city_index = 0; city_index <= p_cities->LastIndex; city_index++) {
 		City * city = get_city_ptr (city_index);
-		if ((city != NULL) && (city->Body.CivID == civ_id))
+		if ((city != NULL) && (city->Body.CivID == civ_id)) {
 			recompute_city_yields_with_districts (city);
+			patch_City_manage_by_governor (city, __, false);
+		}
 	}
 }
 
@@ -27748,10 +27752,6 @@ auto_build_great_wall_districts_for_civ (int civ_id)
 
 	is->focused_tile = NULL;
 }
-
-//We need to forwards-declare this
-void __fastcall
-patch_City_manage_by_governor (City * this, int edx, bool manage_professions);
 
 void __fastcall
 patch_City_add_or_remove_improvement (City * this, int edx, int improv_id, int add, bool param_3)
