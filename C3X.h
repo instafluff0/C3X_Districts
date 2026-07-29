@@ -910,6 +910,7 @@ enum tile_ambience_type {
 	TAMB_TERRAIN = 0,
 	TAMB_RESOURCE,
 	TAMB_NATURAL_WONDER,
+	TAMB_WONDER_DISTRICT,
 	TAMB_DISTRICT,
 	TAMB_CITY,
 	TAMB_COASTAL_WAVE
@@ -1079,6 +1080,8 @@ struct wonder_district_config {
 	bool is_dynamic;
 	bool has_buildable_adjacent_to;
 	bool has_buildable_adjacent_to_overlays;
+	struct tile_ambience_inline_config sounds[8];
+	int sound_count;
 };
 
 enum square_type_extras {
@@ -1252,13 +1255,24 @@ struct tile_ambience_config {
 	bool terrain_types_include_land;
 	int resource_id;
 	int natural_wonder_id;
+	int wonder_index;
 	int district_id;
+	char const * city_civs[32];
+	int city_civ_count;
+	int city_culture_ids[5];
+	int city_culture_id_count;
+	unsigned int city_population_mask[8]; // bits 0..255
+	unsigned int city_era_mask; // bits 0..3
 	int weight;
 	int volume;
 	int fade_ms;
 	int min_interval_seconds;
 	int group_min_interval_seconds;
 	bool loop;
+	bool has_city_civs;
+	bool has_city_cultures;
+	bool has_city_population_mask;
+	bool has_city_era_mask;
 	struct tile_animation_adjacent_requirement adjacent_to[MAX_TILE_ANIMATION_ADJACENCY];
 	int adjacent_to_count;
 	unsigned int day_night_hour_mask; // bits 0..23
@@ -1600,6 +1614,8 @@ struct parsed_wonder_definition {
 	bool has_buildable_by_civ_traits;
 	bool has_buildable_by_civ_govs;
 	bool has_buildable_by_civ_cultures;
+	struct tile_ambience_inline_config sounds[8];
+	int sound_count;
 };
 
 struct parsed_natural_wonder_definition {
@@ -1682,10 +1698,18 @@ struct parsed_tile_ambience_definition {
 	char * sound_path;
 	char * group;
 	char * resource_type;
+	char * city_civs[32];
+	int city_civ_count;
+	char * city_cultures[5];
+	int city_culture_count;
+	int city_culture_ids[5];
+	int city_culture_id_count;
 	enum tile_ambience_mode mode;
 	enum tile_ambience_type type;
 	unsigned int terrain_types_mask;
 	bool terrain_types_include_land;
+	unsigned int city_population_mask[8];
+	unsigned int city_era_mask;
 	int weight;
 	int volume;
 	int fade_ms;
@@ -1702,6 +1726,10 @@ struct parsed_tile_ambience_definition {
 	bool has_type;
 	bool has_terrain_types;
 	bool has_resource_type;
+	bool has_city_civs;
+	bool has_city_cultures;
+	bool has_city_population_mask;
+	bool has_city_era_mask;
 	bool has_loop;
 };
 

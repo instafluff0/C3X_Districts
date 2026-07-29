@@ -30,6 +30,12 @@
   ;  - img_alt_dir_column             : Number. Column index for alternate completed art (0-based).
   ;  - custom_width                   : Number (pixels). Override wonder sprite width. (default: 128)
   ;  - custom_height                  : Number (pixels). Override wonder sprite height. (default: 64)
+  ;  - sound                          : Custom ambience for this completed wonder district. May be repeated; requires enable_custom_ambience in C3X config.
+  ;                                     Syntax: path=<sound>; mode=<bed|stinger>; volume=<0..127>; loop=<true|false>; hours=<0..23 list>; seasons=<season list>; fade_ms=<ms>; weight=<number>; min_interval_seconds=<seconds>; group_min_interval_seconds=<seconds>; group=<name>
+  ;                                     path may point to either a WAV or AMB file using a Civ3 asset path.
+  ;                                     Use mode=bed for quiet continuous layers and mode=stinger for occasional details. Beds default to loop=true; stingers default to loop=false.
+  ;                                     Example: sound = path=Sounds\Ambience\Wonders\PyramidsWind.wav; mode=bed; volume=22; loop=true; hours=0-23; fade_ms=3000
+  ;                                     Example: sound = path=Sounds\Ambience\Wonders\OracleChime.amb; mode=stinger; volume=35; hours=6-18; min_interval_seconds=240
 ]
 
 #Wonder

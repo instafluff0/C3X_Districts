@@ -16,7 +16,7 @@
   ;  - type                     : Text (required). "terrain", "resource", "city", or "coastal_wave".
   ;                               - terrain:         Matches map terrain. Use terrain_types to narrow it.
   ;                               - resource:        Matches visible resources. Use resource_type to narrow it.
-  ;                               - city:            Matches city tiles.
+  ;                               - city:            Matches city tiles. Use civs, cultures, city_sizes, and/or eras to narrow it.
   ;                               - coastal_wave:    Matches coast tiles where the coastal-wave animation logic finds a wave edge.
   ;  - terrain_types            : Comma-delimited terrain types. Optional filter for type = terrain.
   ;                               Valid values: desert, plains, grassland, jungle, tundra, floodplain, swamp, hills, mountains,
@@ -24,6 +24,17 @@
   ;                               Singular/plural forms are both accepted (for example, volcano/volcanoes).
   ;                               "land" means any non-water tile.
   ;  - resource_type            : Resource name. Optional filter for type = resource.
+  ;  - civs                     : Comma-delimited civilization names. Optional owner/territory filter for terrain, resource, coastal_wave,
+  ;                               and city rules. Country, singular, adjective, and leader names are accepted, for example Rome, Romans,
+  ;                               Roman, or Caesar. For non-city tiles, this matches the tile's territory owner; unowned tiles do not match.
+  ;  - cultures                 : Comma-delimited culture groups. Optional owner/territory filter for terrain, resource, coastal_wave,
+  ;                               and city rules. For non-city tiles, this matches the tile's territory owner's culture.
+  ;                               Valid values: American/AMER, European/EURO, Roman, Mid East/Mideast/MIDEAST, Asian.
+  ;  - city_sizes               : Comma-delimited city size filters. Optional filter for type = city.
+  ;                               Valid named values: town, city, metropolis. These use the scenario's configured city-size thresholds.
+  ;                               Numeric values and ranges are also accepted, for example 1-6, 7-12, 13+.
+  ;  - eras                     : Comma-delimited era filters. Optional filter for type = city.
+  ;                               Valid values: ancient, middle, industrial, modern, or 0..3.
   ;  - adjacent_to              : Text. Optional adjacency requirements, using the same syntax as tile animations.
   ;                               Comma-delimited values using:
   ;                                 <terrain_or_land>
@@ -38,35 +49,53 @@
   ;  - loop                     : true/false. Defaults to true for beds and false for stingers.
   ;  - min_interval_seconds     : Integer. Minimum seconds before this exact stinger can play again. (default: 90)
   ;  - group_min_interval_seconds : Integer. Minimum seconds before any stinger in the same group can play again. (default: 30)
-  ;  - show_in_day_night_hours  : Comma-delimited numbers [0..23] and/or inclusive ranges like 6-17.
+  ;  - day_night_hours          : Comma-delimited numbers [0..23] and/or inclusive ranges like 6-17.
   ;                               Optional allowed day/night cycle hours. Example: 0-5,19-23
-  ;  - show_in_seasons          : Comma-delimited seasons. Optional allowed seasons: spring, summer, fall, winter.
+  ;  - seasons                  : Comma-delimited seasons. Optional allowed seasons: spring, summer, fall, winter.
   ;
-  ;  Runtime behavior:
+  ;  Runtime behavior notes:
   ;  - enable_custom_ambience must be true in C3X config.
   ;  - When custom ambience is enabled, Civ3's native random map chirps are suppressed.
   ;  - Candidate rules are sampled around the screen center, so borders and mixed terrain can contribute naturally.
-  ;  - District and natural wonder ambience is defined with sound entries in the district and natural wonder config files, not here.
+  ;  - District, wonder district, and natural wonder ambience is defined with sound entries in their respective config files, not here.
   ;  - Beds should be subtle and loop cleanly. Stingers should be rare enough that repeated calls do not become irritating.
   ;  - If custom ambience is enabled but no active ambience rules match, no ambient map sound will play.
-  ;
-  ;  The examples below are commented out because C3X does not ship terrain ambience WAV/AMB assets. Copy them to user.tile_ambience.txt or
-  ;  scenario.tile_ambience.txt, add the referenced sound files, then remove the leading semicolons.
 ]
 
 #Sound
+name                    = ModernCity
+sound_path              = Sounds\Ambience\Cities\ModernCity.wav
+mode                    = bed
+type                    = city
+fade_ms                 = 1500
+loop                    = true
+day_night_hours         = 0-23
+seasons                 = spring,summer,fall,winter
+
+#Sound
 name                    = CoastSurf
-sound_path              = Sounds\Ambience\Terrain\coast_waves.wav
+sound_path              = Sounds\Ambience\Terrain\Water\CoastSurf.wav
 mode                    = bed
 type                    = terrain
 terrain_types           = coast
-group                   = coast_water
-weight                  = 80
-volume                  = 28
-fade_ms                 = 3000
+adjacent_to             = sea
+group                   = coast-surf
+volume                  = 15
+fade_ms                 = 1500
 loop                    = true
-show_in_day_night_hours = 0-23
-show_in_seasons         = spring,summer,fall,winter
+day_night_hours         = 0-23
+seasons                 = spring,summer,fall,winter
+
+#Sound
+name                    = Cow
+sound_path              = Sounds\Ambience\Resources\Cow\Cow.wav
+mode                    = bed
+type                    = resource
+resource_type           = Cattle
+fade_ms                 = 1500
+loop                    = true
+day_night_hours         = 0-23
+seasons                 = spring,summer,fall,winter
 
 ; #Sound
 ; name                       = MorningGrasslandBirds
@@ -80,8 +109,23 @@ show_in_seasons         = spring,summer,fall,winter
 ; loop                       = false
 ; min_interval_seconds       = 180
 ; group_min_interval_seconds = 75
-; show_in_day_night_hours    = 6-11
-; show_in_seasons            = spring,summer
+; day_night_hours            = 6-11
+; seasons                    = spring,summer
+
+; #Sound
+; name                    = JapaneseSummerGrasslandCicadas
+; sound_path              = Sounds\Ambience\Terrain\Grassland\JapanSummerCicadas.wav
+; mode                    = bed
+; type                    = terrain
+; terrain_types           = grassland
+; civs                    = Japan
+; group                   = grassland-insects
+; weight                  = 35
+; volume                  = 24
+; fade_ms                 = 3000
+; loop                    = true
+; day_night_hours         = 8-18
+; seasons                 = summer
 
 ; #Sound
 ; name                       = EveningCrickets
@@ -95,8 +139,8 @@ show_in_seasons         = spring,summer,fall,winter
 ; loop                       = false
 ; min_interval_seconds       = 120
 ; group_min_interval_seconds = 60
-; show_in_day_night_hours    = 18-5
-; show_in_seasons            = spring,summer,fall
+; day_night_hours            = 18-5
+; seasons                    = spring,summer,fall
 
 ; #Sound
 ; name                       = HarborGulls
@@ -110,5 +154,36 @@ show_in_seasons         = spring,summer,fall,winter
 ; loop                       = false
 ; min_interval_seconds       = 210
 ; group_min_interval_seconds = 90
-; show_in_day_night_hours    = 7-18
-; show_in_seasons            = spring,summer,fall,winter
+; day_night_hours            = 7-18
+; seasons                    = spring,summer,fall,winter
+
+; #Sound
+; name                       = HorsesPasture
+; sound_path                 = Sounds\Ambience\Resources\Horses.wav
+; mode                       = stinger
+; type                       = resource
+; resource_type              = Horses
+; group                      = livestock
+; weight                     = 20
+; volume                     = 34
+; loop                       = false
+; min_interval_seconds       = 180
+; group_min_interval_seconds = 90
+; day_night_hours            = 6-19
+; seasons                    = spring,summer,fall
+
+; #Sound
+; name                    = RomanMetroHum
+; sound_path              = Sounds\Ambience\Cities\RomanMetro.wav
+; mode                    = bed
+; type                    = city
+; cultures                = Roman
+; city_sizes              = metropolis
+; eras                    = industrial,modern
+; group                   = city_hum
+; weight                  = 35
+; volume                  = 24
+; fade_ms                 = 3000
+; loop                    = true
+; day_night_hours         = 0-23
+; seasons                 = spring,summer,fall,winter
