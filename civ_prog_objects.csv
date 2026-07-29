@@ -1014,3 +1014,28 @@ inlead,    0x4069E0,    0x0,        0x0,        "Units_Image_Data_load_animated_
 inlead,    0x5DA5E0,    0x0,        0x0,        "Tile_spawn_animated_effect",			"void (__fastcall *) (Tile * this, int edx, enum AnimatedEffect effect, int tile_x, int tile_y, bool randomize_start_frame, enum direction dummy_dir)"
 define,    0x5DA7A0,    0x0,        0x0,        "Tile_clear_animated_effect",			"void * (__fastcall *) (Tile * this)"
 inlead,	   0x61B320,	0x0,	    0x0,	    "Context_Menu_draw_item",			"void (__fastcall *) (Context_Menu * this, int edx, int item_index, int redraw)"
+
+inlead,    0x4D7EC0,    0x0,        0x0,        "Main_Screen_Form_play_ambient_sound",      "void (__fastcall *) (Main_Screen_Form * this, int edx)"
+define,    0x6205D0,    0x0,        0x0,        "Timer_reset_and_activate",                 "void (__fastcall *) (Timer * this, int edx, void * callback_fn, void * callback_param, int duration, int resolution)"
+define,    0x4EE790,    0x0,        0x0,        "on_ambient_sound_timer",                   "void (__cdecl *) (void * vp_main_screen_form)"
+define,    0x5FA5C0,    0x0,        0x0,        "Sound_Info_construct",                     "Sound_Info * (__fastcall *) (Sound_Info * this)"
+define,    0x5FA640,    0x0,        0x0,        "Sound_Info_destroy",                       "void (__fastcall *) (Sound_Info * this)"
+define,    0x5FABB0,    0x0,        0x0,        "Sound_Info_load",                          "int (__fastcall *) (Sound_Info * this, int edx, char * file_path, unsigned flags)"
+define,    0x5FA6E0,    0x0,        0x0,        "Sound_Info_play",                          "int (__fastcall *) (Sound_Info * this)"
+define,    0x5FAC80,    0x0,        0x0,        "Sound_Info_stop_and_release_core",         "int (__fastcall *) (Sound_Info * this)"
+define,    0x5FAD00,    0x0,        0x0,        "Sound_Info_set_playback_flags",            "int (__fastcall *) (Sound_Info * this, int edx, int flags)"
+define,    0x5FAE00,    0x0,        0x0,        "Sound_Info_is_playing",                    "int (__fastcall *) (Sound_Info * this)"
+define,    0x5FB250,    0x0,        0x0,        "Sound_Info_set_volume",                     "void (__fastcall *) (Sound_Info * this, int edx, unsigned volume)"
+
+define,    0x5FBA60,    0x0,        0x0,       "AMB_construct",                            "AMB * (__fastcall *) (AMB * this)"
+define,    0x5FBAB0,    0x0,        0x0,       "AMB_load",                                 "void (__fastcall *) (AMB * this, int edx, char * file_path, unsigned char flags)"
+define,    0x5FBA80,    0x0,        0x0,       "AMB_destruct",                              "AMB * (__fastcall *) (AMB * this, int edx, unsigned char deallocate)"
+
+define,    0x5FA330,    0x0,        0x0,       "Sound_play",                               "int (__fastcall *) (Sound * this)"
+define,    0x5FA370,    0x0,        0x0,       "Sound_is_playing",                         "int (__fastcall *) (Sound * this)"
+define,    0x5FA2F0,    0x0,        0x0,       "Sound_stop_and_unload",                    "int (__fastcall *) (Sound * this)"
+define,    0x5FA3C0,    0x0,        0x0,       "Sound_set_volume",                         "void (__fastcall *) (Sound * this, int edx, int volume)"
+
+define,    0x5F9200,    0x0,        0x0,       "AudioOutput_assign_to_channel",             "int (__fastcall *) (AudioOutput * this, int edx, int channel, Sound * sound)"
+define,    0x5F9260,    0x0,        0x0,       "AudioOutput_unassign_sound",                "int * (__fastcall *) (AudioOutput * this, int edx, int sound)"
+define,    0x5F9C92,    0x0,        0x0,       "p_audio_output",                           "AudioOutput *"

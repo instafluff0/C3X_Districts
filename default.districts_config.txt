@@ -64,6 +64,12 @@
   ;                                       Optional eras: ancient, middle, industrial, modern, or 0..3. Optional frame_time_seconds controls playback speed.
   ;                                       Optional offsets shift the animation in pixels.
   ;                                       Example: animation = ini=Districts\Smoke.INI; hours=7-17; seasons=spring,summer; cultures=AMER,EURO; eras=industrial,modern; frame_time_seconds=0.12; offsets=0,-10
+  ;  - sound                           : Custom ambience for completed districts. May be repeated; requires enable_custom_ambience in C3X config.
+  ;                                      Syntax: path=<sound>; mode=<bed|stinger>; volume=<0..127>; loop=<true|false>; hours=<0..23 list>; seasons=<season list>; fade_ms=<ms>; weight=<number>; min_interval_seconds=<seconds>; group_min_interval_seconds=<seconds>; group=<name>
+  ;                                      path may point to either a WAV or AMB file using a Civ3 asset path, for example Sounds\Ambience\Districts\WindFarmHum.wav.
+  ;                                      Use mode=bed for quiet continuous layers and mode=stinger for occasional details. Beds default to loop=true; stingers default to loop=false.
+  ;                                      Example: sound = path=Sounds\Ambience\Districts\WindFarmHum.wav; mode=bed; volume=25; loop=true; hours=0-23; fade_ms=3000
+  ;                                      Example: sound = path=Sounds\Ambience\Districts\WindFarmCreak.amb; mode=stinger; volume=35; loop=false; hours=7-17; min_interval_seconds=180
   ;  - align_to_coast                  : 0 or 1. Aligns art to coastline, slightly adjusting x & y pixels. (default: 0)
   ;  - auto_add_road                   : 0 or 1. Auto-add road on completion. (default: 0)
   ;  - auto_add_railroad               : 0 or 1. Auto-add railroad on completion. (default: 0)

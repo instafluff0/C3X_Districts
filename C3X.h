@@ -527,6 +527,7 @@ struct c3x_config {
 	bool enable_named_tiles;
 
 	bool enable_custom_animations;
+	bool enable_custom_ambience;
 	char * aircraft_victory_animation; // NULL if set to "none" in config
 	int show_tile_destruct_animation_after;
 	int show_tile_destruction_animation_for_turns;
@@ -900,6 +901,46 @@ struct natural_wonder_animation_config {
 	bool has_offsets;
 };
 
+enum tile_ambience_mode {
+	TAM_BED = 0,
+	TAM_STINGER
+};
+
+enum tile_ambience_type {
+	TAMB_TERRAIN = 0,
+	TAMB_RESOURCE,
+	TAMB_NATURAL_WONDER,
+	TAMB_DISTRICT,
+	TAMB_CITY,
+	TAMB_COASTAL_WAVE
+};
+
+enum tile_ambience_sound_format {
+	TASF_UNKNOWN = 0,
+	TASF_WAV,
+	TASF_AMB
+};
+
+struct tile_ambience_inline_config {
+	char const * sound_path;
+	char const * group;
+	enum tile_ambience_mode mode;
+	unsigned int day_night_hour_mask; // bits 0..23
+	unsigned int season_mask; // bits 0..3
+	int weight;
+	int volume;
+	int fade_ms;
+	int min_interval_seconds;
+	int group_min_interval_seconds;
+	bool loop;
+	bool has_loop;
+	bool has_weight;
+	bool has_volume;
+	bool has_fade_ms;
+	bool has_min_interval_seconds;
+	bool has_group_min_interval_seconds;
+};
+
 struct district_config {
 	enum Unit_Command_Values command;
 	char const * name;
@@ -950,6 +991,8 @@ struct district_config {
 	int img_path_count;
 	struct natural_wonder_animation_config animations[8];
 	int animation_count;
+	struct tile_ambience_inline_config sounds[8];
+	int sound_count;
 	int img_column_count;
 	bool has_img_column_count_override;
 	int btn_tile_sheet_column;
@@ -1080,6 +1123,8 @@ struct natural_wonder_district_config {
 	bool is_dynamic;
 	struct natural_wonder_animation_config animations[8];
 	int animation_count;
+	struct tile_ambience_inline_config sounds[8];
+	int sound_count;
 };
 
 struct natural_wonder_candidate {
@@ -1178,6 +1223,71 @@ struct tile_animation_config {
 	unsigned int era_mask; // bits 0..3
 	int effect_id;
 	bool in_use;
+};
+
+#define MAX_TILE_AMBIENCE_CONFIGS 128
+#define MAX_TILE_AMBIENCE_ACTIVE_BEDS 2
+#define MAX_TILE_AMBIENCE_GROUPS 64
+#define TILE_AMBIENCE_SAMPLE_INTERVAL_MS 1000
+#define TILE_AMBIENCE_TIMER_TICK_MS 66
+#define TILE_AMBIENCE_SCORE_HYSTERESIS_PERCENT 70
+
+typedef struct Sound Sound;
+typedef struct AudioOutput AudioOutput;
+typedef struct AMB AMB;
+
+struct AMB {
+	int vtable;
+	int field_4[23];
+};
+
+struct tile_ambience_config {
+	char const * name;
+	char const * sound_path;
+	char const * group;
+	enum tile_ambience_mode mode;
+	enum tile_ambience_type type;
+	enum tile_ambience_sound_format format;
+	unsigned int terrain_types_mask;
+	bool terrain_types_include_land;
+	int resource_id;
+	int natural_wonder_id;
+	int district_id;
+	int weight;
+	int volume;
+	int fade_ms;
+	int min_interval_seconds;
+	int group_min_interval_seconds;
+	bool loop;
+	struct tile_animation_adjacent_requirement adjacent_to[MAX_TILE_ANIMATION_ADJACENCY];
+	int adjacent_to_count;
+	unsigned int day_night_hour_mask; // bits 0..23
+	unsigned int season_mask; // bits 0..3
+	bool in_use;
+};
+
+struct tile_ambience_handle {
+	Sound_Info wav;
+	struct AMB amb;
+	bool constructed;
+	bool loaded;
+	bool playing;
+};
+
+struct tile_ambience_active_bed {
+	int config_index;
+	int score;
+	int current_volume;
+	int target_volume;
+	int fade_start_volume;
+	int fade_start_ms;
+	int fade_duration_ms;
+	bool active;
+};
+
+struct tile_ambience_group_cooldown {
+	char const * group;
+	int last_played_ms;
 };
 
 struct wonder_location {
@@ -1314,6 +1424,8 @@ struct parsed_district_definition {
 	int img_path_count;
 	struct natural_wonder_animation_config animations[8];
 	int animation_count;
+	struct tile_ambience_inline_config sounds[8];
+	int sound_count;
 	int img_column_count;
 	bool allow_multiple;
 	bool vary_img_by_era;
@@ -1508,6 +1620,8 @@ struct parsed_natural_wonder_definition {
 	bool impassable_to_wheeled;
 	struct natural_wonder_animation_config animations[8];
 	int animation_count;
+	struct tile_ambience_inline_config sounds[8];
+	int sound_count;
 	bool has_name;
 	bool has_img_path;
 	bool has_img_row;
@@ -1561,6 +1675,34 @@ struct parsed_tile_animation_definition {
 	bool has_adjacent_to;
 	bool has_day_night_hour_mask;
 	bool has_season_mask;
+};
+
+struct parsed_tile_ambience_definition {
+	char * name;
+	char * sound_path;
+	char * group;
+	char * resource_type;
+	enum tile_ambience_mode mode;
+	enum tile_ambience_type type;
+	unsigned int terrain_types_mask;
+	bool terrain_types_include_land;
+	int weight;
+	int volume;
+	int fade_ms;
+	int min_interval_seconds;
+	int group_min_interval_seconds;
+	bool loop;
+	struct tile_animation_adjacent_requirement adjacent_to[MAX_TILE_ANIMATION_ADJACENCY];
+	int adjacent_to_count;
+	unsigned int day_night_hour_mask;
+	unsigned int season_mask;
+	bool has_name;
+	bool has_sound_path;
+	bool has_mode;
+	bool has_type;
+	bool has_terrain_types;
+	bool has_resource_type;
+	bool has_loop;
 };
 
 struct scenario_district_entry {
@@ -1834,6 +1976,7 @@ struct injected_state {
 
 	char current_districts_config_path[MAX_PATH];
 	char current_tile_animations_config_path[MAX_PATH];
+	char current_tile_ambience_config_path[MAX_PATH];
 
 	char mod_script_path[MAX_PATH];
 
@@ -2602,6 +2745,23 @@ struct district_button_image_set {
 	unsigned int tile_animation_pcx_word_mask[(MAX_TILE_ANIMATION_CONFIGS + 31) / 32];
 	unsigned int tile_animation_pcx_active_word_mask[(MAX_TILE_ANIMATION_CONFIGS + 31) / 32];
 	bool tile_animation_has_pcx_rules;
+
+	// Tile ambience definitions and runtime sound state.
+	struct tile_ambience_config tile_ambience_configs[MAX_TILE_AMBIENCE_CONFIGS];
+	struct tile_ambience_handle tile_ambience_handles[MAX_TILE_AMBIENCE_CONFIGS];
+	int tile_ambience_scores[MAX_TILE_AMBIENCE_CONFIGS];
+	int tile_ambience_last_played_ms[MAX_TILE_AMBIENCE_CONFIGS];
+	int tile_ambience_count;
+	int tile_ambience_clock_ms;
+	int tile_ambience_last_sample_ms;
+	int tile_ambience_last_center_x;
+	int tile_ambience_last_center_y;
+	int tile_ambience_last_sample_hour;
+	int tile_ambience_last_sample_season;
+	bool tile_ambience_scores_valid;
+	struct tile_ambience_active_bed tile_ambience_active_beds[MAX_TILE_AMBIENCE_ACTIVE_BEDS];
+	struct tile_ambience_group_cooldown tile_ambience_group_cooldowns[MAX_TILE_AMBIENCE_GROUPS];
+	int tile_ambience_group_cooldown_count;
 
 	struct ai_candidate_bridge_or_canal_entry * ai_candidate_bridge_or_canals;
 	int ai_candidate_bridge_or_canals_count;

@@ -264,9 +264,12 @@ int count_utilized_neighborhoods_in_city_radius (City * city);
 char * copy_trimmed_string_or_null (struct string_slice const * slice, int remove_quotes);
 bool city_has_resource_r (City * city, int resource_id, int max_generated_resource_id);
 void load_tile_animation_configs ();
+void load_tile_ambience_configs ();
 bool tile_has_matching_resource_animation_for_draw (Tile * tile, int tile_x, int tile_y);
 bool tile_has_matching_resource_animation_for_draw_with_resource (Tile * tile, int tile_x, int tile_y, int resource_id, int * out_effect_id);
 void tile_animation_scheduler_tick ();
+void tile_ambience_scheduler_tick ();
+void reset_tile_ambience_runtime_state ();
 void rebuild_tile_animation_rule_match_cache ();
 void free_tile_animation_selected_matrix ();
 void clear_tile_animation_pcx_sprite_lookup ();
@@ -296,6 +299,7 @@ bool parse_tile_animation_season_list (struct string_slice const * value, unsign
 bool parse_tile_animation_culture_group_list (struct string_slice const * value, unsigned int * out_mask);
 bool parse_tile_animation_era_list (struct string_slice const * value, unsigned int * out_mask);
 bool parse_natural_wonder_animation_entry (struct string_slice const * value, struct natural_wonder_animation_config * out_cfg);
+bool parse_tile_ambience_inline_entry (struct string_slice const * value, struct tile_ambience_inline_config * out_cfg);
 struct tile_animation_config * get_tile_animation_for_effect (int effect_id);
 int calc_max_visibility_range ();
 bool read_unit_type_list (struct string_slice const * s, struct error_line ** p_unrecognized_lines, struct table * unit_types);
@@ -7996,6 +8000,46 @@ move_animation_config_entries (struct natural_wonder_animation_config * dest,
 }
 
 void
+free_tile_ambience_inline_entries (struct tile_ambience_inline_config * sounds, int * sound_count)
+{
+	if ((sounds == NULL) || (sound_count == NULL))
+		return;
+
+	for (int i = 0; i < *sound_count; i++) {
+		if (sounds[i].sound_path != NULL) {
+			free ((void *)sounds[i].sound_path);
+			sounds[i].sound_path = NULL;
+		}
+		if (sounds[i].group != NULL) {
+			free ((void *)sounds[i].group);
+			sounds[i].group = NULL;
+		}
+	}
+	*sound_count = 0;
+}
+
+void
+move_tile_ambience_inline_entries (struct tile_ambience_inline_config * dest,
+				   int * dest_count,
+				   struct tile_ambience_inline_config * src,
+				   int * src_count,
+				   int dest_capacity)
+{
+	if ((dest == NULL) || (dest_count == NULL) || (src == NULL) || (src_count == NULL))
+		return;
+
+	*dest_count = *src_count;
+	if (*dest_count > dest_capacity)
+		*dest_count = dest_capacity;
+	for (int i = 0; i < *dest_count; i++) {
+		dest[i] = src[i];
+		src[i].sound_path = NULL;
+		src[i].group = NULL;
+	}
+	*src_count = 0;
+}
+
+void
 free_dynamic_district_config (struct district_config * cfg)
 {
 	if (cfg == NULL)
@@ -8121,6 +8165,7 @@ free_dynamic_district_config (struct district_config * cfg)
 	free_bonus_entry_list (&cfg->happiness_bonus_extras);
 	free_bonus_entry_list (&cfg->defense_bonus_extras);
 	free_animation_config_entries (cfg->animations, &cfg->animation_count);
+	free_tile_ambience_inline_entries (cfg->sounds, &cfg->sound_count);
 
 	memset (cfg, 0, sizeof *cfg);
 }
@@ -8187,6 +8232,7 @@ free_dynamic_natural_wonder_config (struct natural_wonder_district_config * cfg)
 		cfg->img_path = NULL;
 	}
 	free_animation_config_entries (cfg->animations, &cfg->animation_count);
+	free_tile_ambience_inline_entries (cfg->sounds, &cfg->sound_count);
 
 	memset (cfg, 0, sizeof *cfg);
 	cfg->adjacent_to = (enum SquareTypes)SQ_INVALID;
@@ -8345,6 +8391,7 @@ free_special_district_override_strings (struct district_config * cfg, struct dis
 	free_bonus_entry_list_override (&cfg->happiness_bonus_extras, &defaults->happiness_bonus_extras);
 	free_bonus_entry_list_override (&cfg->defense_bonus_extras, &defaults->defense_bonus_extras);
 	free_animation_config_entries (cfg->animations, &cfg->animation_count);
+	free_tile_ambience_inline_entries (cfg->sounds, &cfg->sound_count);
 }
 
 void
@@ -8559,6 +8606,7 @@ free_parsed_district_definition (struct parsed_district_definition * def)
 	free_bonus_entry_list (&def->happiness_bonus_extras);
 	free_bonus_entry_list (&def->defense_bonus_extras);
 	free_animation_config_entries (def->animations, &def->animation_count);
+	free_tile_ambience_inline_entries (def->sounds, &def->sound_count);
 
 	init_parsed_district_definition (def);
 }
@@ -9993,6 +10041,12 @@ override_special_district_from_definition (struct parsed_district_definition * d
 					       def->animations, &def->animation_count,
 					       ARRAY_LEN (cfg->animations));
 	}
+	if (def->sound_count > 0) {
+		free_tile_ambience_inline_entries (cfg->sounds, &cfg->sound_count);
+		move_tile_ambience_inline_entries (cfg->sounds, &cfg->sound_count,
+						   def->sounds, &def->sound_count,
+						   ARRAY_LEN (cfg->sounds));
+	}
 	if (def->has_buildable_on)
 		cfg->buildable_square_types_mask = def->buildable_square_types_mask;
 	if (def->has_buildable_adjacent_to) {
@@ -10300,6 +10354,9 @@ add_dynamic_district_from_definition (struct parsed_district_definition * def, i
 	move_animation_config_entries (new_cfg.animations, &new_cfg.animation_count,
 				       def->animations, &def->animation_count,
 				       ARRAY_LEN (new_cfg.animations));
+	move_tile_ambience_inline_entries (new_cfg.sounds, &new_cfg.sound_count,
+					   def->sounds, &def->sound_count,
+					   ARRAY_LEN (new_cfg.sounds));
 
 	if (def->has_generated_resource) {
 		new_cfg.generated_resource = def->generated_resource;
@@ -10996,6 +11053,17 @@ handle_district_definition_key (struct parsed_district_definition * def,
 				def->animations[def->animation_count++] = anim;
 			else
 				add_key_parse_error (parse_errors, line_number, key, value, "(expected \"ini:<path>; hours:<0..23 list>; seasons:<season list>; cultures:<culture list>; eras:<era list>\")");
+		}
+
+	} else if (slice_matches_str (key, "sound")) {
+		if (def->sound_count >= ARRAY_LEN (def->sounds))
+			add_key_parse_error (parse_errors, line_number, key, value, "(too many ambient sounds for one district)");
+		else {
+			struct tile_ambience_inline_config sound = {0};
+			if (parse_tile_ambience_inline_entry (value, &sound))
+				def->sounds[def->sound_count++] = sound;
+			else
+				add_key_parse_error (parse_errors, line_number, key, value, "(expected \"path:<sound>; mode:<bed|stinger>; hours:<0..23 list>; seasons:<season list>\")");
 		}
 
 	} else if (slice_matches_str (key, "custom_width")) {
@@ -12149,6 +12217,7 @@ free_parsed_natural_wonder_definition (struct parsed_natural_wonder_definition *
 		}
 	}
 	def->animation_count = 0;
+	free_tile_ambience_inline_entries (def->sounds, &def->sound_count);
 
 	if (def->name != NULL) {
 		free (def->name);
@@ -12226,6 +12295,9 @@ add_natural_wonder_from_definition (struct parsed_natural_wonder_definition * de
 			new_cfg.animations[i].y_offset = src_anim->y_offset;
 			new_cfg.animations[i].has_offsets = src_anim->has_offsets;
 		}
+	move_tile_ambience_inline_entries (new_cfg.sounds, &new_cfg.sound_count,
+					   def->sounds, &def->sound_count,
+					   ARRAY_LEN (new_cfg.sounds));
 	new_cfg.culture_bonus = def->has_culture_bonus ? def->culture_bonus : 0;
 	new_cfg.science_bonus = def->has_science_bonus ? def->science_bonus : 0;
 	new_cfg.food_bonus = def->has_food_bonus ? def->food_bonus : 0;
@@ -12625,6 +12697,17 @@ handle_natural_wonder_definition_key (struct parsed_natural_wonder_definition * 
 				def->animations[def->animation_count++] = anim;
 			else
 				add_key_parse_error (parse_errors, line_number, key, value, "(expected \"ini:<path>; hours:<0..23 list>; seasons:<season list>\")");
+		}
+
+	} else if (slice_matches_str (key, "sound")) {
+		if (def->sound_count >= ARRAY_LEN (def->sounds))
+			add_key_parse_error (parse_errors, line_number, key, value, "(too many ambient sounds for one wonder)");
+		else {
+			struct tile_ambience_inline_config sound = {0};
+			if (parse_tile_ambience_inline_entry (value, &sound))
+				def->sounds[def->sound_count++] = sound;
+			else
+				add_key_parse_error (parse_errors, line_number, key, value, "(expected \"path:<sound>; mode:<bed|stinger>; hours:<0..23 list>; seasons:<season list>\")");
 		}
 
 	} else
@@ -19913,6 +19996,7 @@ patch_init_floating_point ()
 		{"enable_natural_wonders"                                , false, offsetof (struct c3x_config, enable_natural_wonders)},
 		{"add_natural_wonders_to_scenarios_if_none"              , false, offsetof (struct c3x_config, add_natural_wonders_to_scenarios_if_none)},
 		{"enable_custom_animations"                              , false, offsetof (struct c3x_config, enable_custom_animations)},
+		{"enable_custom_ambience"                                , false, offsetof (struct c3x_config, enable_custom_ambience)},
 		{"enable_named_tiles"                                    , false, offsetof (struct c3x_config, enable_named_tiles)},
 		{"enable_distribution_hub_districts"                     , false, offsetof (struct c3x_config, enable_distribution_hub_districts)},
 		{"enable_distribution_hub_city_selection"                , true , offsetof (struct c3x_config, enable_distribution_hub_city_selection)},
@@ -23817,6 +23901,7 @@ patch_load_scenario (BIC * this, int edx, char * param_1, unsigned * param_2)
 		is->tnx_cache = NULL;
 	}
 	reset_tile_animation_runtime_state ();
+	reset_tile_ambience_runtime_state ();
 
 	unsigned tr = load_scenario (this, __, param_1, param_2);
 	char * scenario_path = param_1;
@@ -23845,6 +23930,7 @@ patch_load_scenario (BIC * this, int edx, char * param_1, unsigned * param_2)
 		load_districts_config ();
 	}
 	load_tile_animation_configs ();
+	load_tile_ambience_configs ();
 
 	// Initialize Trade Net X
 	if (is->current_config.enable_trade_net_x && (is->tnx_init_state == IS_UNINITED)) {
@@ -43964,6 +44050,1282 @@ load_tile_animation_configs ()
 	rebuild_tile_animation_rule_match_cache ();
 }
 
+void
+init_parsed_tile_ambience_definition (struct parsed_tile_ambience_definition * def)
+{
+	memset (def, 0, sizeof *def);
+	def->mode = TAM_STINGER;
+	def->type = TAMB_TERRAIN;
+	def->resource_type = NULL;
+	def->weight = 10;
+	def->volume = 35;
+	def->fade_ms = 3000;
+	def->min_interval_seconds = 90;
+	def->group_min_interval_seconds = 30;
+	def->loop = false;
+}
+
+void
+free_parsed_tile_ambience_definition (struct parsed_tile_ambience_definition * def)
+{
+	if (def->name != NULL)
+		free (def->name);
+	if (def->sound_path != NULL)
+		free (def->sound_path);
+	if (def->group != NULL)
+		free (def->group);
+	if (def->resource_type != NULL)
+		free (def->resource_type);
+	init_parsed_tile_ambience_definition (def);
+}
+
+bool
+read_tile_ambience_bool (struct string_slice const * value, bool * out)
+{
+	if ((value == NULL) || (out == NULL))
+		return false;
+	struct string_slice v = trim_string_slice (value, 1);
+	if (slice_matches_str (&v, "true") || slice_matches_str (&v, "yes") || slice_matches_str (&v, "on")) {
+		*out = true;
+		return true;
+	}
+	if (slice_matches_str (&v, "false") || slice_matches_str (&v, "no") || slice_matches_str (&v, "off")) {
+		*out = false;
+		return true;
+	}
+	int ival = 0;
+	struct string_slice int_slice = v;
+	if (read_int (&int_slice, &ival)) {
+		*out = ival != 0;
+		return true;
+	}
+	return false;
+}
+
+enum tile_ambience_sound_format
+tile_ambience_format_from_path (char const * path)
+{
+	if (path == NULL)
+		return TASF_UNKNOWN;
+	char const * ext = NULL;
+	for (char const * p = path; *p != '\0'; p++)
+		if (*p == '.')
+			ext = p + 1;
+	if (ext == NULL)
+		return TASF_UNKNOWN;
+	if (_stricmp (ext, "wav") == 0)
+		return TASF_WAV;
+	if (_stricmp (ext, "amb") == 0)
+		return TASF_AMB;
+	return TASF_UNKNOWN;
+}
+
+void
+tile_ambience_stop_sound (int config_index)
+{
+	if ((config_index < 0) || (config_index >= MAX_TILE_AMBIENCE_CONFIGS))
+		return;
+	struct tile_ambience_config * cfg = &is->tile_ambience_configs[config_index];
+	struct tile_ambience_handle * handle = &is->tile_ambience_handles[config_index];
+	if (! handle->constructed)
+		return;
+
+	AudioOutput_unassign_sound (p_audio_output, __, (int)(cfg->format == TASF_WAV ? (Sound *)&handle->wav : (Sound *)&handle->amb));
+	if (cfg->format == TASF_WAV)
+		Sound_Info_stop_and_release_core (&handle->wav);
+	else if (cfg->format == TASF_AMB)
+		Sound_stop_and_unload ((Sound *)&handle->amb);
+	handle->loaded = false;
+	handle->playing = false;
+}
+
+void
+tile_ambience_destroy_sound (int config_index)
+{
+	if ((config_index < 0) || (config_index >= MAX_TILE_AMBIENCE_CONFIGS))
+		return;
+	struct tile_ambience_config * cfg = &is->tile_ambience_configs[config_index];
+	struct tile_ambience_handle * handle = &is->tile_ambience_handles[config_index];
+	if (! handle->constructed)
+		return;
+
+	tile_ambience_stop_sound (config_index);
+	if (cfg->format == TASF_WAV)
+		Sound_Info_destroy (&handle->wav);
+	else if (cfg->format == TASF_AMB)
+		AMB_destruct (&handle->amb, __, 0);
+	memset (handle, 0, sizeof *handle);
+}
+
+void
+reset_tile_ambience_runtime_state ()
+{
+	for (int i = 0; i < is->tile_ambience_count; i++)
+		tile_ambience_destroy_sound (i);
+	memset (is->tile_ambience_scores, 0, sizeof is->tile_ambience_scores);
+	for (int i = 0; i < MAX_TILE_AMBIENCE_CONFIGS; i++)
+		is->tile_ambience_last_played_ms[i] = -0x3fffffff;
+	memset (is->tile_ambience_active_beds, 0, sizeof is->tile_ambience_active_beds);
+	memset (is->tile_ambience_group_cooldowns, 0, sizeof is->tile_ambience_group_cooldowns);
+	is->tile_ambience_clock_ms = 0;
+	is->tile_ambience_last_sample_ms = -TILE_AMBIENCE_SAMPLE_INTERVAL_MS;
+	is->tile_ambience_last_center_x = -1;
+	is->tile_ambience_last_center_y = -1;
+	is->tile_ambience_last_sample_hour = -1;
+	is->tile_ambience_last_sample_season = -1;
+	is->tile_ambience_scores_valid = false;
+	is->tile_ambience_group_cooldown_count = 0;
+}
+
+void
+clear_tile_ambience_configs ()
+{
+	reset_tile_ambience_runtime_state ();
+	for (int i = 0; i < is->tile_ambience_count; i++) {
+		struct tile_ambience_config * cfg = &is->tile_ambience_configs[i];
+		if (cfg->name != NULL)
+			free ((void *)cfg->name);
+		if (cfg->sound_path != NULL)
+			free ((void *)cfg->sound_path);
+		if (cfg->group != NULL)
+			free ((void *)cfg->group);
+		memset (cfg, 0, sizeof *cfg);
+	}
+	is->tile_ambience_count = 0;
+}
+
+int
+find_tile_ambience_index_by_name (char const * name)
+{
+	if ((name == NULL) || (name[0] == '\0'))
+		return -1;
+	for (int i = 0; i < is->tile_ambience_count; i++) {
+		char const * existing = is->tile_ambience_configs[i].name;
+		if ((existing != NULL) && (strcmp (existing, name) == 0))
+			return i;
+	}
+	return -1;
+}
+
+bool
+copy_parsed_tile_ambience_to_config (struct tile_ambience_config * cfg,
+				     struct parsed_tile_ambience_definition * def)
+{
+	memset (cfg, 0, sizeof *cfg);
+	cfg->name = strdup (def->name);
+	cfg->sound_path = strdup (def->sound_path);
+	cfg->group = strdup ((def->group != NULL) ? def->group : def->name);
+	if ((cfg->name == NULL) || (cfg->sound_path == NULL) || (cfg->group == NULL))
+		return false;
+	cfg->mode = def->mode;
+	cfg->type = def->type;
+	cfg->format = tile_ambience_format_from_path (cfg->sound_path);
+	cfg->terrain_types_mask = def->terrain_types_mask;
+	cfg->terrain_types_include_land = def->terrain_types_include_land;
+	cfg->resource_id = -1;
+	cfg->natural_wonder_id = -1;
+	cfg->district_id = -1;
+	cfg->weight = not_below (1, def->weight);
+	cfg->volume = clamp (0, 127, def->volume);
+	cfg->fade_ms = not_below (1, def->fade_ms);
+	cfg->min_interval_seconds = not_below (0, def->min_interval_seconds);
+	cfg->group_min_interval_seconds = not_below (0, def->group_min_interval_seconds);
+	cfg->loop = def->has_loop ? def->loop : (cfg->mode == TAM_BED);
+	cfg->day_night_hour_mask = def->day_night_hour_mask;
+	cfg->season_mask = def->season_mask;
+	cfg->adjacent_to_count = def->adjacent_to_count;
+	for (int i = 0; i < def->adjacent_to_count; i++)
+		cfg->adjacent_to[i] = def->adjacent_to[i];
+
+	if (cfg->format == TASF_UNKNOWN)
+		return false;
+	if ((cfg->type == TAMB_RESOURCE) && def->has_resource_type) {
+		struct string_slice resource_name = {.str = def->resource_type, .len = strlen (def->resource_type)};
+		if (! find_resource_id_by_name (&resource_name, &cfg->resource_id))
+			return false;
+	}
+
+	cfg->in_use = true;
+	return true;
+}
+
+bool
+add_tile_ambience_from_definition (struct parsed_tile_ambience_definition * def)
+{
+	if ((def == NULL) || (! def->has_name) || (def->name == NULL))
+		return false;
+
+	int existing = find_tile_ambience_index_by_name (def->name);
+	int dest = (existing >= 0) ? existing : is->tile_ambience_count;
+	if ((dest < 0) || (dest >= MAX_TILE_AMBIENCE_CONFIGS))
+		return false;
+
+	struct tile_ambience_config cfg;
+	if (! copy_parsed_tile_ambience_to_config (&cfg, def)) {
+		if (cfg.name != NULL) free ((void *)cfg.name);
+		if (cfg.sound_path != NULL) free ((void *)cfg.sound_path);
+		if (cfg.group != NULL) free ((void *)cfg.group);
+		return false;
+	}
+
+	if (existing >= 0) {
+		tile_ambience_destroy_sound (existing);
+		struct tile_ambience_config * old = &is->tile_ambience_configs[existing];
+		if (old->name != NULL) free ((void *)old->name);
+		if (old->sound_path != NULL) free ((void *)old->sound_path);
+		if (old->group != NULL) free ((void *)old->group);
+		*old = cfg;
+	} else {
+		is->tile_ambience_configs[dest] = cfg;
+		is->tile_ambience_count = dest + 1;
+	}
+	is->tile_ambience_scores_valid = false;
+	return true;
+}
+
+void
+finalize_parsed_tile_ambience_definition (struct parsed_tile_ambience_definition * def,
+					  int section_start_line,
+					  struct error_line ** parse_errors)
+{
+	bool ok = true;
+	if (! def->has_name) {
+		ok = false;
+		struct error_line * e = add_error_line (parse_errors);
+		snprintf (e->text, sizeof e->text, "^  Line %d: name (value is required)", section_start_line);
+	}
+	if (! def->has_sound_path) {
+		ok = false;
+		struct error_line * e = add_error_line (parse_errors);
+		snprintf (e->text, sizeof e->text, "^  Line %d: sound_path (value is required)", section_start_line);
+	}
+	if (! def->has_mode) {
+		ok = false;
+		struct error_line * e = add_error_line (parse_errors);
+		snprintf (e->text, sizeof e->text, "^  Line %d: mode (value is required)", section_start_line);
+	}
+	if (! def->has_type) {
+		ok = false;
+		struct error_line * e = add_error_line (parse_errors);
+		snprintf (e->text, sizeof e->text, "^  Line %d: type (value is required)", section_start_line);
+	}
+	if (ok && ! add_tile_ambience_from_definition (def)) {
+		struct error_line * e = add_error_line (parse_errors);
+		snprintf (e->text, sizeof e->text, "^  Line %d: failed to add ambience entry", section_start_line);
+	}
+	free_parsed_tile_ambience_definition (def);
+}
+
+void
+handle_tile_ambience_definition_key (struct parsed_tile_ambience_definition * def,
+				     struct string_slice const * key,
+				     struct string_slice const * value,
+				     int line_number,
+				     struct error_line ** parse_errors,
+				     struct error_line ** unrecognized_keys)
+{
+	if (slice_matches_str (key, "name")) {
+		if (def->name != NULL) free (def->name);
+		struct string_slice v = trim_string_slice (value, 1);
+		def->name = extract_slice (&v);
+		def->has_name = (def->name != NULL) && (def->name[0] != '\0');
+		if (! def->has_name)
+			add_key_parse_error (parse_errors, line_number, key, value, "(value is required)");
+	} else if (slice_matches_str (key, "sound_path") || slice_matches_str (key, "path")) {
+		if (def->sound_path != NULL) free (def->sound_path);
+		struct string_slice v = trim_string_slice (value, 1);
+		def->sound_path = extract_slice (&v);
+		def->has_sound_path = (def->sound_path != NULL) && (def->sound_path[0] != '\0');
+		if (! def->has_sound_path)
+			add_key_parse_error (parse_errors, line_number, key, value, "(value is required)");
+	} else if (slice_matches_str (key, "group")) {
+		if (def->group != NULL) free (def->group);
+		struct string_slice v = trim_string_slice (value, 1);
+		def->group = extract_slice (&v);
+	} else if (slice_matches_str (key, "mode")) {
+		struct string_slice v = trim_string_slice (value, 1);
+		if (slice_matches_str (&v, "bed")) {
+			def->mode = TAM_BED;
+			def->has_mode = true;
+		} else if (slice_matches_str (&v, "stinger")) {
+			def->mode = TAM_STINGER;
+			def->has_mode = true;
+		} else {
+			def->has_mode = false;
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected \"bed\" or \"stinger\")");
+		}
+	} else if (slice_matches_str (key, "type")) {
+		struct string_slice v = trim_string_slice (value, 1);
+		if (slice_matches_str (&v, "terrain")) {
+			def->type = TAMB_TERRAIN;
+			def->has_type = true;
+		} else if (slice_matches_str (&v, "resource")) {
+			def->type = TAMB_RESOURCE;
+			def->has_type = true;
+		} else if (slice_matches_str (&v, "city")) {
+			def->type = TAMB_CITY;
+			def->has_type = true;
+		} else if (slice_matches_str (&v, "coastal_wave") || slice_matches_str (&v, "coastal-wave")) {
+			def->type = TAMB_COASTAL_WAVE;
+			def->has_type = true;
+		} else {
+			def->has_type = false;
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected \"terrain\", \"resource\", \"city\", or \"coastal_wave\")");
+		}
+	} else if (slice_matches_str (key, "terrain_types")) {
+		if (read_tile_animation_terrain_types (value, &def->terrain_types_mask, &def->terrain_types_include_land))
+			def->has_terrain_types = true;
+		else
+			add_key_parse_error (parse_errors, line_number, key, value, "(unrecognized terrain type list)");
+	} else if (slice_matches_str (key, "resource_type")) {
+		if (def->resource_type != NULL) free (def->resource_type);
+		struct string_slice v = trim_string_slice (value, 1);
+		def->resource_type = extract_slice (&v);
+		def->has_resource_type = (def->resource_type != NULL) && (def->resource_type[0] != '\0');
+	} else if (slice_matches_str (key, "weight")) {
+		if (! read_int (value, &def->weight))
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected integer)");
+	} else if (slice_matches_str (key, "volume")) {
+		if (! read_int (value, &def->volume))
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected integer)");
+	} else if (slice_matches_str (key, "fade_ms")) {
+		if (! read_int (value, &def->fade_ms))
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected integer)");
+	} else if (slice_matches_str (key, "min_interval_seconds")) {
+		if (! read_int (value, &def->min_interval_seconds))
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected integer)");
+	} else if (slice_matches_str (key, "group_min_interval_seconds")) {
+		if (! read_int (value, &def->group_min_interval_seconds))
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected integer)");
+	} else if (slice_matches_str (key, "loop")) {
+		if (read_tile_ambience_bool (value, &def->loop))
+			def->has_loop = true;
+		else
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected true/false or 1/0)");
+	} else if (slice_matches_str (key, "adjacent_to")) {
+		if (! parse_tile_animation_adjacent_to (value, def->adjacent_to, &def->adjacent_to_count))
+			add_key_parse_error (parse_errors, line_number, key, value, "(unrecognized adjacent_to value)");
+	} else if (slice_matches_str (key, "show_in_day_night_hours") || slice_matches_str (key, "hours")) {
+		unsigned int mask = 0;
+		if (parse_tile_animation_hour_list (value, &mask))
+			def->day_night_hour_mask = mask;
+		else
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected comma-delimited 0..23 hour list)");
+	} else if (slice_matches_str (key, "show_in_seasons") || slice_matches_str (key, "seasons")) {
+		unsigned int mask = 0;
+		if (parse_tile_animation_season_list (value, &mask))
+			def->season_mask = mask;
+		else
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected comma-delimited season list)");
+	} else
+		add_unrecognized_key_error (unrecognized_keys, line_number, key);
+}
+
+bool
+parse_tile_ambience_inline_entry (struct string_slice const * value, struct tile_ambience_inline_config * out_cfg)
+{
+	if ((value == NULL) || (out_cfg == NULL))
+		return false;
+
+	memset (out_cfg, 0, sizeof *out_cfg);
+	out_cfg->weight = 10;
+	out_cfg->volume = 35;
+	out_cfg->fade_ms = 3000;
+	out_cfg->min_interval_seconds = 90;
+	out_cfg->group_min_interval_seconds = 30;
+
+	struct string_slice trimmed_value = trim_string_slice (value, 1);
+	char * text = extract_slice (&trimmed_value);
+	if (text == NULL)
+		return false;
+
+	bool ok = true;
+	bool has_path = false;
+	bool has_mode = false;
+	char * cursor = text;
+	while (ok && (*cursor != '\0')) {
+		char * token_start = cursor;
+		while ((*cursor != '\0') && (*cursor != ';'))
+			cursor++;
+		char saved = *cursor;
+		*cursor = '\0';
+
+		struct string_slice token = {.str = token_start, .len = strlen (token_start)};
+		token = trim_string_slice (&token, 0);
+		if (token.len > 0) {
+			char * sep = NULL;
+			for (int i = 0; i < token.len; i++) {
+				if ((token.str[i] == ':') || (token.str[i] == '=')) {
+					sep = token.str + i;
+					break;
+				}
+			}
+			if (sep == NULL)
+				ok = false;
+			else {
+				struct string_slice k = {.str = token.str, .len = sep - token.str};
+				struct string_slice v = {.str = sep + 1, .len = strlen (sep + 1)};
+				k = trim_string_slice (&k, 0);
+				v = trim_string_slice (&v, 0);
+				if (slice_matches_str (&k, "path") || slice_matches_str (&k, "sound_path")) {
+					if (out_cfg->sound_path != NULL)
+						free ((void *)out_cfg->sound_path);
+					out_cfg->sound_path = extract_slice (&v);
+					has_path = (out_cfg->sound_path != NULL) && (out_cfg->sound_path[0] != '\0');
+					ok = has_path;
+				} else if (slice_matches_str (&k, "group")) {
+					if (out_cfg->group != NULL)
+						free ((void *)out_cfg->group);
+					out_cfg->group = extract_slice (&v);
+				} else if (slice_matches_str (&k, "mode")) {
+					if (slice_matches_str (&v, "bed")) {
+						out_cfg->mode = TAM_BED;
+						has_mode = true;
+					} else if (slice_matches_str (&v, "stinger")) {
+						out_cfg->mode = TAM_STINGER;
+						has_mode = true;
+					} else
+						ok = false;
+				} else if (slice_matches_str (&k, "hours")) {
+					ok = parse_tile_animation_hour_list (&v, &out_cfg->day_night_hour_mask);
+				} else if (slice_matches_str (&k, "seasons")) {
+					ok = parse_tile_animation_season_list (&v, &out_cfg->season_mask);
+				} else if (slice_matches_str (&k, "weight")) {
+					ok = read_int (&v, &out_cfg->weight);
+					out_cfg->has_weight = ok;
+				} else if (slice_matches_str (&k, "volume")) {
+					ok = read_int (&v, &out_cfg->volume);
+					out_cfg->has_volume = ok;
+				} else if (slice_matches_str (&k, "fade_ms")) {
+					ok = read_int (&v, &out_cfg->fade_ms);
+					out_cfg->has_fade_ms = ok;
+				} else if (slice_matches_str (&k, "min_interval_seconds")) {
+					ok = read_int (&v, &out_cfg->min_interval_seconds);
+					out_cfg->has_min_interval_seconds = ok;
+				} else if (slice_matches_str (&k, "group_min_interval_seconds")) {
+					ok = read_int (&v, &out_cfg->group_min_interval_seconds);
+					out_cfg->has_group_min_interval_seconds = ok;
+				} else if (slice_matches_str (&k, "loop")) {
+					ok = read_tile_ambience_bool (&v, &out_cfg->loop);
+					out_cfg->has_loop = ok;
+				} else
+					ok = false;
+			}
+		}
+
+		*cursor = saved;
+		if (saved == ';')
+			cursor++;
+	}
+
+	free (text);
+	if (! ok) {
+		if (out_cfg->sound_path != NULL)
+			free ((void *)out_cfg->sound_path);
+		if (out_cfg->group != NULL)
+			free ((void *)out_cfg->group);
+		memset (out_cfg, 0, sizeof *out_cfg);
+		return false;
+	}
+	if (! has_path || ! has_mode) {
+		if (out_cfg->sound_path != NULL)
+			free ((void *)out_cfg->sound_path);
+		if (out_cfg->group != NULL)
+			free ((void *)out_cfg->group);
+		memset (out_cfg, 0, sizeof *out_cfg);
+		return false;
+	}
+	if (! out_cfg->has_loop)
+		out_cfg->loop = out_cfg->mode == TAM_BED;
+	return true;
+}
+
+void
+load_tile_ambience_config_file (char const * file_path, int path_is_relative_to_mod_dir, int log_missing, int drop_existing_configs)
+{
+	char path[MAX_PATH];
+	if (path_is_relative_to_mod_dir) {
+		if (is->mod_rel_dir == NULL)
+			return;
+		snprintf (path, sizeof path, "%s\\%s", is->mod_rel_dir, file_path);
+	} else
+		strncpy (path, file_path, sizeof path);
+	path[(sizeof path) - 1] = '\0';
+
+	char * text = file_to_string (path);
+	if (text == NULL) {
+		if (log_missing) {
+			char ss[256];
+			snprintf (ss, sizeof ss, "[C3X] Tile ambience config file not found: %s", path);
+			(*p_OutputDebugStringA) (ss);
+		}
+		return;
+	}
+
+	if (drop_existing_configs)
+		clear_tile_ambience_configs ();
+	snprintf (is->current_tile_ambience_config_path, sizeof is->current_tile_ambience_config_path, path);
+
+	struct parsed_tile_ambience_definition def;
+	init_parsed_tile_ambience_definition (&def);
+	bool in_section = false;
+	int section_start_line = 0;
+	int line_number = 0;
+	struct error_line * parse_errors = NULL;
+	struct error_line * unrecognized_keys = NULL;
+
+	char * cursor = text;
+	while (*cursor != '\0') {
+		line_number++;
+		char * line_start = cursor;
+		char * line_end = cursor;
+		while ((*line_end != '\0') && (*line_end != '\n'))
+			line_end++;
+		bool has_newline = (*line_end == '\n');
+		if (has_newline)
+			*line_end = '\0';
+		struct string_slice line = { .str = line_start, .len = line_end - line_start };
+		struct string_slice trimmed = trim_string_slice (&line, 0);
+		if (line_is_empty_or_comment (&trimmed)) {
+			cursor = has_newline ? line_end + 1 : line_end;
+			continue;
+		}
+
+		if (trimmed.str[0] == '#') {
+			struct string_slice directive = trimmed;
+			directive.str++;
+			directive.len--;
+			directive = trim_string_slice (&directive, 0);
+			if ((directive.len > 0) && slice_matches_str (&directive, "Sound")) {
+				if (in_section)
+					finalize_parsed_tile_ambience_definition (&def, section_start_line, &parse_errors);
+				in_section = true;
+				section_start_line = line_number;
+			}
+			cursor = has_newline ? line_end + 1 : line_end;
+			continue;
+		}
+
+		if (! in_section) {
+			cursor = has_newline ? line_end + 1 : line_end;
+			continue;
+		}
+
+		struct string_slice key = {0}, value = {0};
+		enum key_value_parse_status status = parse_trimmed_key_value (&trimmed, &key, &value);
+		if (status == KVP_NO_EQUALS) {
+			char * line_text = extract_slice (&trimmed);
+			struct error_line * err = add_error_line (&parse_errors);
+			snprintf (err->text, sizeof err->text, "^  Line %d: %s (expected '=')", line_number, line_text);
+			free (line_text);
+			cursor = has_newline ? line_end + 1 : line_end;
+			continue;
+		} else if (status == KVP_EMPTY_KEY) {
+			struct error_line * err = add_error_line (&parse_errors);
+			snprintf (err->text, sizeof err->text, "^  Line %d: (missing key)", line_number);
+			cursor = has_newline ? line_end + 1 : line_end;
+			continue;
+		}
+
+		handle_tile_ambience_definition_key (&def, &key, &value, line_number, &parse_errors, &unrecognized_keys);
+		cursor = has_newline ? line_end + 1 : line_end;
+	}
+
+	if (in_section)
+		finalize_parsed_tile_ambience_definition (&def, section_start_line, &parse_errors);
+	free_parsed_tile_ambience_definition (&def);
+	free (text);
+
+	struct loaded_config_name * top_lcn = is->loaded_config_names;
+	while (top_lcn->next != NULL)
+		top_lcn = top_lcn->next;
+	struct loaded_config_name * new_lcn = malloc (sizeof *new_lcn);
+	new_lcn->name = strdup (path);
+	new_lcn->next = NULL;
+	top_lcn->next = new_lcn;
+
+	if ((parse_errors != NULL) || (unrecognized_keys != NULL)) {
+		PopupForm * popup = get_popup_form ();
+		popup->vtable->set_text_key_and_flags (popup, __, is->mod_script_path, "C3X_WARNING", -1, 0, 0, 0);
+		char s[200];
+		snprintf (s, sizeof s, "Tile ambience config errors in %s:", path);
+		PopupForm_add_text (popup, __, s, false);
+		for (struct error_line * line = parse_errors; line != NULL; line = line->next)
+			PopupForm_add_text (popup, __, line->text, false);
+		if (unrecognized_keys != NULL) {
+			PopupForm_add_text (popup, __, "", false);
+			PopupForm_add_text (popup, __, "Unrecognized keys:", false);
+			for (struct error_line * line = unrecognized_keys; line != NULL; line = line->next)
+				PopupForm_add_text (popup, __, line->text, false);
+		}
+		patch_show_popup (popup, __, 0, 0);
+	}
+	free_error_lines (parse_errors);
+	free_error_lines (unrecognized_keys);
+}
+
+bool
+add_district_tile_ambience_config (int district_id, int sound_index, struct tile_ambience_inline_config const * sound)
+{
+	if ((sound == NULL) || (sound->sound_path == NULL) || (sound->sound_path[0] == '\0'))
+		return false;
+	if (is->tile_ambience_count >= MAX_TILE_AMBIENCE_CONFIGS)
+		return false;
+
+	int dest = is->tile_ambience_count;
+	struct tile_ambience_config * cfg = &is->tile_ambience_configs[dest];
+	memset (cfg, 0, sizeof *cfg);
+	char name[128];
+	snprintf (name, sizeof name, "district:%d:%d", district_id, sound_index);
+	cfg->name = strdup (name);
+	cfg->sound_path = strdup (sound->sound_path);
+	cfg->group = strdup ((sound->group != NULL) ? sound->group : name);
+	if ((cfg->name == NULL) || (cfg->sound_path == NULL) || (cfg->group == NULL)) {
+		if (cfg->name != NULL) free ((void *)cfg->name);
+		if (cfg->sound_path != NULL) free ((void *)cfg->sound_path);
+		if (cfg->group != NULL) free ((void *)cfg->group);
+		memset (cfg, 0, sizeof *cfg);
+		return false;
+	}
+	cfg->mode = sound->mode;
+	cfg->type = TAMB_DISTRICT;
+	cfg->format = tile_ambience_format_from_path (cfg->sound_path);
+	cfg->district_id = district_id;
+	cfg->resource_id = -1;
+	cfg->natural_wonder_id = -1;
+	cfg->weight = sound->has_weight ? not_below (1, sound->weight) : 10;
+	cfg->volume = sound->has_volume ? clamp (0, 127, sound->volume) : 35;
+	cfg->fade_ms = sound->has_fade_ms ? not_below (1, sound->fade_ms) : 3000;
+	cfg->min_interval_seconds = sound->has_min_interval_seconds ? not_below (0, sound->min_interval_seconds) : 90;
+	cfg->group_min_interval_seconds = sound->has_group_min_interval_seconds ? not_below (0, sound->group_min_interval_seconds) : 30;
+	cfg->loop = sound->has_loop ? sound->loop : (cfg->mode == TAM_BED);
+	cfg->day_night_hour_mask = sound->day_night_hour_mask;
+	cfg->season_mask = sound->season_mask;
+	cfg->in_use = cfg->format != TASF_UNKNOWN;
+	if (! cfg->in_use) {
+		if (cfg->name != NULL) free ((void *)cfg->name);
+		if (cfg->sound_path != NULL) free ((void *)cfg->sound_path);
+		if (cfg->group != NULL) free ((void *)cfg->group);
+		memset (cfg, 0, sizeof *cfg);
+		return false;
+	}
+	is->tile_ambience_count = dest + 1;
+	return true;
+}
+
+void
+add_district_tile_ambience_configs ()
+{
+	if (! is->current_config.enable_districts)
+		return;
+
+	for (int district_id = 0; district_id < is->district_count; district_id++) {
+		if (district_id == NATURAL_WONDER_DISTRICT_ID)
+			continue;
+		struct district_config const * district = &is->district_configs[district_id];
+		for (int i = 0; i < district->sound_count; i++)
+			if (! add_district_tile_ambience_config (district_id, i, &district->sounds[i]))
+				return;
+	}
+}
+
+bool
+add_natural_wonder_tile_ambience_config (int natural_wonder_id, int sound_index, struct tile_ambience_inline_config const * sound)
+{
+	if ((sound == NULL) || (sound->sound_path == NULL) || (sound->sound_path[0] == '\0'))
+		return false;
+	if ((natural_wonder_id < 0) || (natural_wonder_id >= is->natural_wonder_count))
+		return false;
+	if (is->tile_ambience_count >= MAX_TILE_AMBIENCE_CONFIGS)
+		return false;
+
+	int dest = is->tile_ambience_count;
+	struct tile_ambience_config * cfg = &is->tile_ambience_configs[dest];
+	memset (cfg, 0, sizeof *cfg);
+	char name[128];
+	snprintf (name, sizeof name, "natural_wonder:%d:%d", natural_wonder_id, sound_index);
+	cfg->name = strdup (name);
+	cfg->sound_path = strdup (sound->sound_path);
+	cfg->group = strdup ((sound->group != NULL) ? sound->group : name);
+	if ((cfg->name == NULL) || (cfg->sound_path == NULL) || (cfg->group == NULL)) {
+		if (cfg->name != NULL) free ((void *)cfg->name);
+		if (cfg->sound_path != NULL) free ((void *)cfg->sound_path);
+		if (cfg->group != NULL) free ((void *)cfg->group);
+		memset (cfg, 0, sizeof *cfg);
+		return false;
+	}
+	cfg->mode = sound->mode;
+	cfg->type = TAMB_NATURAL_WONDER;
+	cfg->format = tile_ambience_format_from_path (cfg->sound_path);
+	cfg->district_id = -1;
+	cfg->resource_id = -1;
+	cfg->natural_wonder_id = natural_wonder_id;
+	cfg->weight = sound->has_weight ? not_below (1, sound->weight) : 10;
+	cfg->volume = sound->has_volume ? clamp (0, 127, sound->volume) : 35;
+	cfg->fade_ms = sound->has_fade_ms ? not_below (1, sound->fade_ms) : 3000;
+	cfg->min_interval_seconds = sound->has_min_interval_seconds ? not_below (0, sound->min_interval_seconds) : 90;
+	cfg->group_min_interval_seconds = sound->has_group_min_interval_seconds ? not_below (0, sound->group_min_interval_seconds) : 30;
+	cfg->loop = sound->has_loop ? sound->loop : (cfg->mode == TAM_BED);
+	cfg->day_night_hour_mask = sound->day_night_hour_mask;
+	cfg->season_mask = sound->season_mask;
+	cfg->in_use = cfg->format != TASF_UNKNOWN;
+	if (! cfg->in_use) {
+		if (cfg->name != NULL) free ((void *)cfg->name);
+		if (cfg->sound_path != NULL) free ((void *)cfg->sound_path);
+		if (cfg->group != NULL) free ((void *)cfg->group);
+		memset (cfg, 0, sizeof *cfg);
+		return false;
+	}
+	is->tile_ambience_count = dest + 1;
+	return true;
+}
+
+void
+add_natural_wonder_tile_ambience_configs ()
+{
+	if (! is->current_config.enable_natural_wonders)
+		return;
+
+	for (int natural_wonder_id = 0; natural_wonder_id < is->natural_wonder_count; natural_wonder_id++) {
+		struct natural_wonder_district_config const * wonder = &is->natural_wonder_configs[natural_wonder_id];
+		for (int i = 0; i < wonder->sound_count; i++)
+			if (! add_natural_wonder_tile_ambience_config (natural_wonder_id, i, &wonder->sounds[i]))
+				return;
+	}
+}
+
+void
+load_tile_ambience_configs ()
+{
+	if (! is->current_config.enable_custom_ambience) {
+		clear_tile_ambience_configs ();
+		return;
+	}
+
+	load_tile_ambience_config_file ("default.tile_ambience.txt", 1, 1, 1);
+	load_tile_ambience_config_file ("user.tile_ambience.txt", 1, 0, 1);
+
+	char * scenario_filename = "scenario.tile_ambience.txt";
+	char * scenario_path = BIC_get_asset_path (p_bic_data, __, scenario_filename, false);
+	if ((scenario_path != NULL) && (0 != strcmp (scenario_filename, scenario_path)))
+		load_tile_ambience_config_file (scenario_path, 0, 0, 1);
+	add_district_tile_ambience_configs ();
+	add_natural_wonder_tile_ambience_configs ();
+	is->tile_ambience_scores_valid = false;
+}
+
+bool
+tile_ambience_matches_time_filters (struct tile_ambience_config const * cfg)
+{
+	if (cfg == NULL)
+		return false;
+	int hour = get_tile_animation_hour_for_match ();
+	int season = get_tile_animation_season_for_match ();
+	if ((cfg->day_night_hour_mask != 0) && ((cfg->day_night_hour_mask & (1u << hour)) == 0))
+		return false;
+	if ((cfg->season_mask != 0) && ((cfg->season_mask & (1u << season)) == 0))
+		return false;
+	return true;
+}
+
+bool
+tile_ambience_rule_matches_tile (struct tile_ambience_config const * cfg, Tile * tile, int tile_x, int tile_y)
+{
+	if ((cfg == NULL) || (! cfg->in_use) || (tile == NULL) || (tile == p_null_tile))
+		return false;
+	if (! tile_ambience_matches_time_filters (cfg))
+		return false;
+
+	if (cfg->type == TAMB_CITY) {
+		if (! Tile_has_city (tile))
+			return false;
+	} else {
+		if (Tile_has_city (tile))
+			return false;
+		if (cfg->type == TAMB_RESOURCE) {
+			int civ_id = (p_main_screen_form != NULL) ? p_main_screen_form->Player_CivID : -1;
+			int resource_id = (civ_id >= 0) ? Tile_get_resource_visible_to (tile, __, civ_id) : tile->vtable->m39_Get_Resource_Type (tile);
+			if (resource_id < 0)
+				return false;
+			if ((cfg->resource_id >= 0) && (resource_id != cfg->resource_id))
+				return false;
+		} else if (cfg->type == TAMB_NATURAL_WONDER) {
+			struct district_instance * inst = get_district_instance (tile);
+			if ((inst == NULL) || (inst->district_id != NATURAL_WONDER_DISTRICT_ID))
+				return false;
+			if ((cfg->natural_wonder_id >= 0) &&
+			    (inst->natural_wonder_info.natural_wonder_id != cfg->natural_wonder_id))
+				return false;
+		} else if (cfg->type == TAMB_DISTRICT) {
+			struct district_instance * inst = get_district_instance (tile);
+			if ((inst == NULL) || (inst->district_id == NATURAL_WONDER_DISTRICT_ID))
+				return false;
+			if ((cfg->district_id >= 0) && (inst->district_id != cfg->district_id))
+				return false;
+			if (! district_animation_instance_is_complete (tile, inst))
+				return false;
+		} else if (cfg->type == TAMB_TERRAIN) {
+			if (((cfg->terrain_types_mask != 0) || cfg->terrain_types_include_land) &&
+			    ! tile_matches_terrain_types (tile, cfg->terrain_types_mask, cfg->terrain_types_include_land))
+				return false;
+		} else if (cfg->type == TAMB_COASTAL_WAVE) {
+			enum direction dir = DIR_ZERO;
+			if (! get_tile_animation_coastal_wave_direction (tile_x, tile_y, &dir))
+				return false;
+		} else
+			return false;
+	}
+
+	if (cfg->adjacent_to_count > 0) {
+		bool matched = false;
+		for (int i = 0; i < cfg->adjacent_to_count; i++)
+			if (tile_animation_adjacent_requirement_matches (&cfg->adjacent_to[i], tile_x, tile_y)) {
+				matched = true;
+				break;
+			}
+		if (! matched)
+			return false;
+	}
+	return true;
+}
+
+void
+get_tile_ambience_center_tile (int * out_x, int * out_y)
+{
+	int x = 0, y = 0;
+	if (p_main_screen_form != NULL) {
+		x = (p_main_screen_form->TileX_Min + p_main_screen_form->TileX_Max) / 2;
+		y = (p_main_screen_form->TileY_Min + p_main_screen_form->TileY_Max) / 2;
+		if ((x & 1) != (y & 1))
+			x++;
+		wrap_tile_coords (&p_bic_data->Map, &x, &y);
+	}
+	if (out_x != NULL)
+		*out_x = x;
+	if (out_y != NULL)
+		*out_y = y;
+}
+
+int
+tile_ambience_sample_weight_for_ring (int ring)
+{
+	switch (ring) {
+		case 0: return 8;
+		case 1: return 4;
+		case 2: return 2;
+		case 3: return 1;
+		default: return 0;
+	}
+}
+
+void
+resample_tile_ambience_scores ()
+{
+	memset (is->tile_ambience_scores, 0, sizeof is->tile_ambience_scores);
+	is->tile_ambience_scores_valid = false;
+	if ((p_main_screen_form == NULL) || (is->tile_ambience_count <= 0) || (is->saved_tile_count >= 0))
+		return;
+
+	int player_id = p_main_screen_form->Player_CivID;
+	int center_x = 0, center_y = 0;
+	get_tile_ambience_center_tile (&center_x, &center_y);
+
+	for (int dy = -3; dy <= 3; dy++) {
+		for (int dx = -3; dx <= 3; dx++) {
+			int ring = int_abs (dx);
+			if (int_abs (dy) > ring)
+				ring = int_abs (dy);
+			int tile_weight = tile_ambience_sample_weight_for_ring (ring);
+			if (tile_weight <= 0)
+				continue;
+			int tile_x = center_x + dx;
+			int tile_y = center_y + dy;
+			wrap_tile_coords (&p_bic_data->Map, &tile_x, &tile_y);
+			if ((tile_x < 0) || (tile_y < 0) || (tile_x >= p_bic_data->Map.Width) || (tile_y >= p_bic_data->Map.Height))
+				continue;
+			if ((tile_x & 1) != (tile_y & 1))
+				continue;
+			Tile * tile = tile_at (tile_x, tile_y);
+			if ((tile == NULL) || (tile == p_null_tile))
+				continue;
+			if ((player_id >= 0) && ! is_explored (tile, player_id))
+				continue;
+
+			for (int i = 0; i < is->tile_ambience_count; i++) {
+				struct tile_ambience_config const * cfg = &is->tile_ambience_configs[i];
+				if (tile_ambience_rule_matches_tile (cfg, tile, tile_x, tile_y))
+					is->tile_ambience_scores[i] += cfg->weight * tile_weight;
+			}
+		}
+	}
+
+	is->tile_ambience_last_sample_ms = is->tile_ambience_clock_ms;
+	is->tile_ambience_last_center_x = center_x;
+	is->tile_ambience_last_center_y = center_y;
+	is->tile_ambience_last_sample_hour = get_tile_animation_hour_for_match ();
+	is->tile_ambience_last_sample_season = get_tile_animation_season_for_match ();
+	is->tile_ambience_scores_valid = true;
+}
+
+bool
+tile_ambience_sample_needs_refresh ()
+{
+	if (! is->tile_ambience_scores_valid)
+		return true;
+	if (is->tile_ambience_clock_ms - is->tile_ambience_last_sample_ms >= TILE_AMBIENCE_SAMPLE_INTERVAL_MS)
+		return true;
+	if (is->tile_ambience_last_sample_hour != get_tile_animation_hour_for_match ())
+		return true;
+	if (is->tile_ambience_last_sample_season != get_tile_animation_season_for_match ())
+		return true;
+	int center_x = 0, center_y = 0;
+	get_tile_ambience_center_tile (&center_x, &center_y);
+	return (center_x != is->tile_ambience_last_center_x) || (center_y != is->tile_ambience_last_center_y);
+}
+
+bool
+tile_ambience_ensure_sound_loaded (int config_index)
+{
+	if ((config_index < 0) || (config_index >= is->tile_ambience_count))
+		return false;
+	struct tile_ambience_config * cfg = &is->tile_ambience_configs[config_index];
+	struct tile_ambience_handle * handle = &is->tile_ambience_handles[config_index];
+	if (handle->loaded)
+		return true;
+	if ((cfg->sound_path == NULL) || (cfg->format == TASF_UNKNOWN))
+		return false;
+
+	char * asset_path = BIC_get_asset_path (p_bic_data, __, (char *)cfg->sound_path, true);
+	if (asset_path == NULL)
+		return false;
+
+	if (cfg->format == TASF_WAV) {
+		if (! handle->constructed) {
+			Sound_Info_construct (&handle->wav);
+			handle->constructed = true;
+		}
+		Sound_Info_set_playback_flags (&handle->wav, __, cfg->loop ? 2 : 0);
+		if (Sound_Info_load (&handle->wav, __, asset_path, 0) != 0) {
+			tile_ambience_destroy_sound (config_index);
+			return false;
+		}
+		Sound_Info_set_volume (&handle->wav, __, 0);
+		AudioOutput_assign_to_channel (p_audio_output, __, 1, (Sound *)&handle->wav);
+	} else if (cfg->format == TASF_AMB) {
+		if (! handle->constructed) {
+			AMB_construct (&handle->amb);
+			handle->constructed = true;
+		}
+		AMB_load (&handle->amb, __, asset_path, 1);
+		Sound_set_volume ((Sound *)&handle->amb, __, 0);
+		AudioOutput_assign_to_channel (p_audio_output, __, 1, (Sound *)&handle->amb);
+	} else
+		return false;
+
+	handle->loaded = true;
+	return true;
+}
+
+void
+tile_ambience_set_volume (int config_index, int volume)
+{
+	if ((config_index < 0) || (config_index >= is->tile_ambience_count))
+		return;
+	struct tile_ambience_config * cfg = &is->tile_ambience_configs[config_index];
+	struct tile_ambience_handle * handle = &is->tile_ambience_handles[config_index];
+	if (! handle->loaded)
+		return;
+	volume = clamp (0, 127, volume);
+	if (cfg->format == TASF_WAV)
+		Sound_Info_set_volume (&handle->wav, __, volume);
+	else if (cfg->format == TASF_AMB)
+		Sound_set_volume ((Sound *)&handle->amb, __, volume);
+}
+
+bool
+tile_ambience_is_playing (int config_index)
+{
+	if ((config_index < 0) || (config_index >= is->tile_ambience_count))
+		return false;
+	struct tile_ambience_config * cfg = &is->tile_ambience_configs[config_index];
+	struct tile_ambience_handle * handle = &is->tile_ambience_handles[config_index];
+	if (! handle->loaded)
+		return false;
+	if (cfg->format == TASF_WAV)
+		return Sound_Info_is_playing (&handle->wav) != 0;
+	if (cfg->format == TASF_AMB)
+		return Sound_is_playing ((Sound *)&handle->amb) != 0;
+	return false;
+}
+
+bool
+tile_ambience_play_sound (int config_index, int volume)
+{
+	if (! tile_ambience_ensure_sound_loaded (config_index))
+		return false;
+	struct tile_ambience_config * cfg = &is->tile_ambience_configs[config_index];
+	struct tile_ambience_handle * handle = &is->tile_ambience_handles[config_index];
+	tile_ambience_set_volume (config_index, volume);
+	if (cfg->format == TASF_WAV)
+		Sound_Info_play (&handle->wav);
+	else if (cfg->format == TASF_AMB)
+		Sound_play ((Sound *)&handle->amb);
+	else
+		return false;
+	handle->playing = true;
+	return true;
+}
+
+int
+tile_ambience_group_last_played_ms (char const * group)
+{
+	if (group == NULL)
+		return -0x3fffffff;
+	for (int i = 0; i < is->tile_ambience_group_cooldown_count; i++)
+		if ((is->tile_ambience_group_cooldowns[i].group != NULL) &&
+		    (strcmp (is->tile_ambience_group_cooldowns[i].group, group) == 0))
+			return is->tile_ambience_group_cooldowns[i].last_played_ms;
+	return -0x3fffffff;
+}
+
+void
+tile_ambience_record_group_played (char const * group)
+{
+	if (group == NULL)
+		return;
+	for (int i = 0; i < is->tile_ambience_group_cooldown_count; i++)
+		if ((is->tile_ambience_group_cooldowns[i].group != NULL) &&
+		    (strcmp (is->tile_ambience_group_cooldowns[i].group, group) == 0)) {
+			is->tile_ambience_group_cooldowns[i].last_played_ms = is->tile_ambience_clock_ms;
+			return;
+		}
+	if (is->tile_ambience_group_cooldown_count < MAX_TILE_AMBIENCE_GROUPS) {
+		struct tile_ambience_group_cooldown * cd = &is->tile_ambience_group_cooldowns[is->tile_ambience_group_cooldown_count++];
+		cd->group = group;
+		cd->last_played_ms = is->tile_ambience_clock_ms;
+	}
+}
+
+int
+pick_tile_ambience_stinger ()
+{
+	if (tile_ambience_sample_needs_refresh ())
+		resample_tile_ambience_scores ();
+	if (! is->tile_ambience_scores_valid)
+		return -1;
+
+	int total_weight = 0;
+	for (int i = 0; i < is->tile_ambience_count; i++) {
+		struct tile_ambience_config * cfg = &is->tile_ambience_configs[i];
+		if ((cfg->mode != TAM_STINGER) || (is->tile_ambience_scores[i] <= 0))
+			continue;
+		if (is->tile_ambience_clock_ms - is->tile_ambience_last_played_ms[i] < cfg->min_interval_seconds * 1000)
+			continue;
+		if (is->tile_ambience_clock_ms - tile_ambience_group_last_played_ms (cfg->group) < cfg->group_min_interval_seconds * 1000)
+			continue;
+		total_weight += is->tile_ambience_scores[i];
+	}
+	if (total_weight <= 0)
+		return -1;
+
+	int roll = rand_int (p_rand_object, __, total_weight);
+	for (int i = 0; i < is->tile_ambience_count; i++) {
+		struct tile_ambience_config * cfg = &is->tile_ambience_configs[i];
+		if ((cfg->mode != TAM_STINGER) || (is->tile_ambience_scores[i] <= 0))
+			continue;
+		if (is->tile_ambience_clock_ms - is->tile_ambience_last_played_ms[i] < cfg->min_interval_seconds * 1000)
+			continue;
+		if (is->tile_ambience_clock_ms - tile_ambience_group_last_played_ms (cfg->group) < cfg->group_min_interval_seconds * 1000)
+			continue;
+		roll -= is->tile_ambience_scores[i];
+		if (roll < 0)
+			return i;
+	}
+	return -1;
+}
+
+void
+tile_ambience_start_bed_fade (struct tile_ambience_active_bed * bed, int config_index, int target_volume, int score)
+{
+	if (bed == NULL)
+		return;
+	int fade_ms = 3000;
+	if ((config_index >= 0) && (config_index < is->tile_ambience_count))
+		fade_ms = is->tile_ambience_configs[config_index].fade_ms;
+	if ((! bed->active) || (bed->config_index != config_index)) {
+		bed->config_index = config_index;
+		bed->current_volume = 0;
+	}
+	bed->score = score;
+	bed->target_volume = clamp (0, 127, target_volume);
+	bed->fade_start_volume = bed->current_volume;
+	bed->fade_start_ms = is->tile_ambience_clock_ms;
+	bed->fade_duration_ms = not_below (1, fade_ms);
+	bed->active = true;
+}
+
+bool
+tile_ambience_bed_group_is_already_selected (int config_index, int * selected, int selected_count)
+{
+	char const * group = is->tile_ambience_configs[config_index].group;
+	for (int i = 0; i < selected_count; i++) {
+		int other = selected[i];
+		if ((other >= 0) &&
+		    (strcmp (group, is->tile_ambience_configs[other].group) == 0))
+			return true;
+	}
+	return false;
+}
+
+void
+update_tile_ambience_bed_targets ()
+{
+	int selected[MAX_TILE_AMBIENCE_ACTIVE_BEDS];
+	int selected_scores[MAX_TILE_AMBIENCE_ACTIVE_BEDS];
+	for (int i = 0; i < MAX_TILE_AMBIENCE_ACTIVE_BEDS; i++) {
+		selected[i] = -1;
+		selected_scores[i] = 0;
+	}
+
+	for (int slot = 0; slot < MAX_TILE_AMBIENCE_ACTIVE_BEDS; slot++) {
+		int winner = -1;
+		int winner_score = 0;
+		for (int i = 0; i < is->tile_ambience_count; i++) {
+			struct tile_ambience_config * cfg = &is->tile_ambience_configs[i];
+			int score = is->tile_ambience_scores[i];
+			if ((cfg->mode != TAM_BED) || (score <= 0))
+				continue;
+			if (tile_ambience_bed_group_is_already_selected (i, selected, slot))
+				continue;
+			if (score > winner_score) {
+				winner = i;
+				winner_score = score;
+			}
+		}
+		selected[slot] = winner;
+		selected_scores[slot] = winner_score;
+	}
+
+	for (int slot = 0; slot < MAX_TILE_AMBIENCE_ACTIVE_BEDS; slot++) {
+		struct tile_ambience_active_bed * bed = &is->tile_ambience_active_beds[slot];
+		int winner = selected[slot];
+		if (bed->active && (bed->config_index >= 0) && (winner >= 0) &&
+		    (bed->config_index < is->tile_ambience_count) &&
+		    (strcmp (is->tile_ambience_configs[bed->config_index].group, is->tile_ambience_configs[winner].group) == 0)) {
+			int active_score = is->tile_ambience_scores[bed->config_index];
+			if (active_score * 100 >= selected_scores[slot] * TILE_AMBIENCE_SCORE_HYSTERESIS_PERCENT)
+				winner = bed->config_index;
+		}
+
+		if (winner >= 0) {
+			struct tile_ambience_config * cfg = &is->tile_ambience_configs[winner];
+			if ((! bed->active) || (bed->config_index != winner) || (bed->target_volume != cfg->volume))
+				tile_ambience_start_bed_fade (bed, winner, cfg->volume, is->tile_ambience_scores[winner]);
+		} else if (bed->active && (bed->target_volume != 0))
+			tile_ambience_start_bed_fade (bed, bed->config_index, 0, 0);
+	}
+}
+
+void
+tick_tile_ambience_bed_fades ()
+{
+	for (int slot = 0; slot < MAX_TILE_AMBIENCE_ACTIVE_BEDS; slot++) {
+		struct tile_ambience_active_bed * bed = &is->tile_ambience_active_beds[slot];
+		if (! bed->active)
+			continue;
+		int config_index = bed->config_index;
+		if ((config_index < 0) || (config_index >= is->tile_ambience_count)) {
+			bed->active = false;
+			continue;
+		}
+
+		int elapsed = is->tile_ambience_clock_ms - bed->fade_start_ms;
+		int volume = bed->target_volume;
+		if (elapsed < bed->fade_duration_ms) {
+			int delta = bed->target_volume - bed->fade_start_volume;
+			volume = bed->fade_start_volume + (delta * elapsed) / bed->fade_duration_ms;
+		}
+		volume = clamp (0, 127, volume);
+
+		if (volume > 0) {
+			if (! tile_ambience_is_playing (config_index))
+				tile_ambience_play_sound (config_index, volume);
+			else
+				tile_ambience_set_volume (config_index, volume);
+		} else {
+			tile_ambience_set_volume (config_index, 0);
+			if (bed->target_volume == 0) {
+				tile_ambience_stop_sound (config_index);
+				memset (bed, 0, sizeof *bed);
+				bed->config_index = -1;
+				continue;
+			}
+		}
+		bed->current_volume = volume;
+	}
+}
+
+void
+fade_out_all_tile_ambience_beds ()
+{
+	for (int slot = 0; slot < MAX_TILE_AMBIENCE_ACTIVE_BEDS; slot++) {
+		struct tile_ambience_active_bed * bed = &is->tile_ambience_active_beds[slot];
+		if (bed->active && (bed->target_volume != 0))
+			tile_ambience_start_bed_fade (bed, bed->config_index, 0, 0);
+	}
+}
+
+void
+tile_ambience_scheduler_tick ()
+{
+	if (! is->current_config.enable_custom_ambience)
+		return;
+	is->tile_ambience_clock_ms += TILE_AMBIENCE_TIMER_TICK_MS;
+	if ((p_main_screen_form == NULL) ||
+	    p_main_screen_form->is_now_loading_game ||
+	    ((*p_debug_mode_bits & 0xC) != 0) ||
+	    (is->saved_tile_count >= 0)) {
+		fade_out_all_tile_ambience_beds ();
+		tick_tile_ambience_bed_fades ();
+		return;
+	}
+	if (tile_ambience_sample_needs_refresh ()) {
+		resample_tile_ambience_scores ();
+		update_tile_ambience_bed_targets ();
+	}
+	tick_tile_ambience_bed_fades ();
+}
+
+void
+rearm_custom_ambient_sound_timer (Main_Screen_Form * form)
+{
+	if (form == NULL)
+		return;
+	int delay = rand_int (p_rand_object, __, 30000) + 30000;
+	Timer_reset_and_activate (&form->ambient_sound_timer, __, on_ambient_sound_timer, form, delay, 5);
+}
+
+void __fastcall
+patch_Main_Screen_Form_play_ambient_sound (Main_Screen_Form * this, int edx)
+{
+	if (! is->current_config.enable_custom_ambience) {
+		Main_Screen_Form_play_ambient_sound (this, edx);
+		return;
+	}
+
+	if ((this != NULL) && ! this->is_now_loading_game && ((*p_debug_mode_bits & 0xC) == 0)) {
+		int stinger = pick_tile_ambience_stinger ();
+		if (stinger >= 0) {
+			struct tile_ambience_config * cfg = &is->tile_ambience_configs[stinger];
+			if (tile_ambience_play_sound (stinger, cfg->volume)) {
+				is->tile_ambience_last_played_ms[stinger] = is->tile_ambience_clock_ms;
+				tile_ambience_record_group_played (cfg->group);
+			}
+		}
+	}
+	rearm_custom_ambient_sound_timer (this);
+}
+
 int
 get_tile_animation_type_priority (enum tile_animation_type type)
 {
@@ -44137,6 +45499,8 @@ patch_on_timer_0x9F6500 (void)
 		else
 			tile_animation_scheduler_tick ();
 	}
+	if (is->current_config.enable_custom_ambience)
+		tile_ambience_scheduler_tick ();
 	on_timer_0x9F6500 ();
 }
 

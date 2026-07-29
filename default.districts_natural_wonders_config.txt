@@ -30,6 +30,11 @@
   ;                            Directions: northeast, east, southeast, south, southwest, west, northwest, north.
   ;                            Example:
   ;                            animation = ini=NaturalWonders\AngelFalls.ini; hours=1,2,3 seasons=spring,summer; direction=south; frame_time_seconds=0.12; offsets=0,-10
+  ;  - sound                 : Custom ambience for this natural wonder. May be repeated; requires enable_custom_ambience in C3X config.
+  ;                            Syntax: path=<sound>; mode=<bed|stinger>; volume=<0..127>; loop=<true|false>; hours=<0..23 list>; seasons=<season list>; fade_ms=<ms>; weight=<number>; min_interval_seconds=<seconds>; group_min_interval_seconds=<seconds>; group=<name>
+  ;                            path may point to either a WAV or AMB file using a Civ3 asset path.
+  ;                            Use mode=bed for quiet continuous layers and mode=stinger for occasional details. Beds default to loop=true; stingers default to loop=false.
+  ;                            Example: sound = path=Sounds\Ambience\NaturalWonders\Geyser.amb; mode=stinger; volume=45; hours=0-23; min_interval_seconds=240
 ]
 
 #Wonder

@@ -1,0 +1,114 @@
+[======================================================================= NOTE =======================================================================]
+[Instead of editing this file, changes to the settings should be placed in either the scenario or user config files. The scenario config file must   ]
+[be named scenario.tile_ambience.txt and must be located in your scenario search folder. Of course it only applies if you are using a scenario.      ]
+[The user config file must be named user.tile_ambience.txt and located in the C3X folder, which is the folder where this file is. When creating      ]
+[scenario or user configs, note that all ambience rules defined here will be removed and only your scenario or user-defined ambience rules will be   ]
+[used.                                                                                                                                               ]
+[====================================================================================================================================================]
+
+[
+  ;  Tile ambience sound config fields (each sound block begins with "#Sound")
+  ;  - name                     : Text (required). Internal ambience rule name; must be unique.
+  ;  - sound_path               : WAV or AMB filename (required). Use a Civ3 asset path, for example Sounds\Ambience\CoastSurf.wav.
+  ;  - mode                     : Text (required). "bed" or "stinger".
+  ;                               - bed:      A quiet looping or long-running ambience layer, such as surf, wind, leaves, or city hum.
+  ;                               - stinger:  An occasional one-shot detail, such as a bird call, gull, frog, owl, creak, or splash.
+  ;  - type                     : Text (required). "terrain", "resource", "city", or "coastal_wave".
+  ;                               - terrain:         Matches map terrain. Use terrain_types to narrow it.
+  ;                               - resource:        Matches visible resources. Use resource_type to narrow it.
+  ;                               - city:            Matches city tiles.
+  ;                               - coastal_wave:    Matches coast tiles where the coastal-wave animation logic finds a wave edge.
+  ;  - terrain_types            : Comma-delimited terrain types. Optional filter for type = terrain.
+  ;                               Valid values: desert, plains, grassland, jungle, tundra, floodplain, swamp, hills, mountains,
+  ;                                             forest, volcano, snow-forest, snow-mountains, snow-volcano, coast, sea, ocean, land
+  ;                               Singular/plural forms are both accepted (for example, volcano/volcanoes).
+  ;                               "land" means any non-water tile.
+  ;  - resource_type            : Resource name. Optional filter for type = resource.
+  ;  - adjacent_to              : Text. Optional adjacency requirements, using the same syntax as tile animations.
+  ;                               Comma-delimited values using:
+  ;                                 <terrain_or_land>
+  ;                               or
+  ;                                 <terrain_or_land>:<direction>
+  ;                               Direction values: northeast, east, southeast, south, southwest, west, northwest, north
+  ;                               Example: coast:southeast, sea, forest:north
+  ;  - group                    : Text. Ambience group used for bed replacement and stinger cooldowns. Defaults to name.
+  ;  - weight                   : Integer. Higher values are more likely to be chosen when multiple rules match. (default: 10)
+  ;  - volume                   : Integer from 0 to 127. Keep beds quiet; recognizable stingers can be a little louder. (default: 35)
+  ;  - fade_ms                  : Integer. Bed fade duration in milliseconds. Ignored by stingers. (default: 3000)
+  ;  - loop                     : true/false. Defaults to true for beds and false for stingers.
+  ;  - min_interval_seconds     : Integer. Minimum seconds before this exact stinger can play again. (default: 90)
+  ;  - group_min_interval_seconds : Integer. Minimum seconds before any stinger in the same group can play again. (default: 30)
+  ;  - show_in_day_night_hours  : Comma-delimited numbers [0..23] and/or inclusive ranges like 6-17.
+  ;                               Optional allowed day/night cycle hours. Example: 0-5,19-23
+  ;  - show_in_seasons          : Comma-delimited seasons. Optional allowed seasons: spring, summer, fall, winter.
+  ;
+  ;  Runtime behavior:
+  ;  - enable_custom_ambience must be true in C3X config.
+  ;  - When custom ambience is enabled, Civ3's native random map chirps are suppressed.
+  ;  - Candidate rules are sampled around the screen center, so borders and mixed terrain can contribute naturally.
+  ;  - District and natural wonder ambience is defined with sound entries in the district and natural wonder config files, not here.
+  ;  - Beds should be subtle and loop cleanly. Stingers should be rare enough that repeated calls do not become irritating.
+  ;  - If custom ambience is enabled but no active ambience rules match, no ambient map sound will play.
+  ;
+  ;  The examples below are commented out because C3X does not ship terrain ambience WAV/AMB assets. Copy them to user.tile_ambience.txt or
+  ;  scenario.tile_ambience.txt, add the referenced sound files, then remove the leading semicolons.
+]
+
+#Sound
+name                    = CoastSurf
+sound_path              = Sounds\Ambience\coast_waves.wav
+mode                    = bed
+type                    = terrain
+terrain_types           = coast
+group                   = coast_water
+weight                  = 80
+volume                  = 28
+fade_ms                 = 3000
+loop                    = true
+show_in_day_night_hours = 0-23
+show_in_seasons         = spring,summer,fall,winter
+
+; #Sound
+; name                       = MorningGrasslandBirds
+; sound_path                 = Sounds\Ambience\Birds\Meadowlark.amb
+; mode                       = stinger
+; type                       = terrain
+; terrain_types              = grassland,plains
+; group                      = birds
+; weight                     = 25
+; volume                     = 42
+; loop                       = false
+; min_interval_seconds       = 180
+; group_min_interval_seconds = 75
+; show_in_day_night_hours    = 6-11
+; show_in_seasons            = spring,summer
+
+; #Sound
+; name                       = EveningCrickets
+; sound_path                 = Sounds\Ambience\Insects\Crickets.wav
+; mode                       = stinger
+; type                       = terrain
+; terrain_types              = grassland,plains,forest,jungle
+; group                      = night_insects
+; weight                     = 35
+; volume                     = 35
+; loop                       = false
+; min_interval_seconds       = 120
+; group_min_interval_seconds = 60
+; show_in_day_night_hours    = 18-5
+; show_in_seasons            = spring,summer,fall
+
+; #Sound
+; name                       = HarborGulls
+; sound_path                 = Sounds\Ambience\Coast\Gulls.wav
+; mode                       = stinger
+; type                       = city
+; adjacent_to                = coast,sea,ocean
+; group                      = gulls
+; weight                     = 20
+; volume                     = 38
+; loop                       = false
+; min_interval_seconds       = 210
+; group_min_interval_seconds = 90
+; show_in_day_night_hours    = 7-18
+; show_in_seasons            = spring,summer,fall,winter
