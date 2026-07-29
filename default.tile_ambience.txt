@@ -56,7 +56,7 @@
 
 #Sound
 name                    = CoastSurf
-sound_path              = Sounds\Ambience\coast_waves.wav
+sound_path              = Sounds\Ambience\Terrain\coast_waves.wav
 mode                    = bed
 type                    = terrain
 terrain_types           = coast

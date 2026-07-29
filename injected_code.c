@@ -44995,9 +44995,8 @@ tile_ambience_ensure_sound_loaded (int config_index)
 	if ((cfg->sound_path == NULL) || (cfg->format == TASF_UNKNOWN))
 		return false;
 
-	char * asset_path = BIC_get_asset_path (p_bic_data, __, (char *)cfg->sound_path, true);
-	if (asset_path == NULL)
-		return false;
+	char asset_path[MAX_PATH];
+	get_mod_art_path (cfg->sound_path, asset_path, sizeof asset_path);
 
 	if (cfg->format == TASF_WAV) {
 		if (! handle->constructed) {

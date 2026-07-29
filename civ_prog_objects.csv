@@ -1038,4 +1038,4 @@ define,    0x5FA3C0,    0x0,        0x0,       "Sound_set_volume",              
 
 define,    0x5F9200,    0x0,        0x0,       "AudioOutput_assign_to_channel",             "int (__fastcall *) (AudioOutput * this, int edx, int channel, Sound * sound)"
 define,    0x5F9260,    0x0,        0x0,       "AudioOutput_unassign_sound",                "int * (__fastcall *) (AudioOutput * this, int edx, int sound)"
-define,    0x5F9C92,    0x0,        0x0,       "p_audio_output",                           "AudioOutput *"
+define,    0xCAAB40,    0x0,        0x0,       "p_audio_output",                           "AudioOutput *"
