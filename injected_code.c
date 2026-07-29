@@ -20574,11 +20574,10 @@ init_tile_highlights ()
 
 	is->tile_highlight_state = IS_INIT_FAILED;
 
-	snprintf (temp_path, sizeof temp_path, "%s\\Art\\TileHighlights.pcx", is->mod_rel_dir);
-	temp_path[(sizeof temp_path) - 1] = '\0';
+	get_mod_art_path ("TileHighlights.pcx", temp_path, sizeof temp_path);
 	PCX_Image_read_file (&pcx, __, temp_path, NULL, 0, 0x100, 2);
 	if (pcx.JGL.Image == NULL) {
-		(*p_OutputDebugStringA) ("[C3X] Failed to load stacked command buttons sprite sheet.\n");
+		(*p_OutputDebugStringA) ("[C3X] Failed to load tile highlights sprite sheet.\n");
 		goto cleanup;
 	}
 
