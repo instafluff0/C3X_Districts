@@ -45988,14 +45988,16 @@ tile_ambience_bed_candidate_is_better (int candidate, int candidate_score, int w
 void
 update_tile_ambience_bed_targets ()
 {
-	int selected[MAX_TILE_AMBIENCE_ACTIVE_BEDS];
-	int selected_scores[MAX_TILE_AMBIENCE_ACTIVE_BEDS];
-	for (int i = 0; i < MAX_TILE_AMBIENCE_ACTIVE_BEDS; i++) {
+	int selected[MAX_TILE_AMBIENCE_TARGET_BEDS];
+	int selected_scores[MAX_TILE_AMBIENCE_TARGET_BEDS];
+	bool selected_assigned[MAX_TILE_AMBIENCE_TARGET_BEDS];
+	for (int i = 0; i < MAX_TILE_AMBIENCE_TARGET_BEDS; i++) {
 		selected[i] = -1;
 		selected_scores[i] = 0;
+		selected_assigned[i] = false;
 	}
 
-	for (int slot = 0; slot < MAX_TILE_AMBIENCE_ACTIVE_BEDS; slot++) {
+	for (int target_slot = 0; target_slot < MAX_TILE_AMBIENCE_TARGET_BEDS; target_slot++) {
 		int winner = -1;
 		int winner_score = 0;
 		for (int i = 0; i < is->tile_ambience_count; i++) {
@@ -46003,19 +46005,19 @@ update_tile_ambience_bed_targets ()
 			int score = is->tile_ambience_scores[i];
 			if ((cfg->mode != TAM_BED) || (score <= 0))
 				continue;
-			if (tile_ambience_bed_group_is_already_selected (i, selected, slot))
+			if (tile_ambience_bed_group_is_already_selected (i, selected, target_slot))
 				continue;
 			if (tile_ambience_bed_candidate_is_better (i, score, winner, winner_score)) {
 				winner = i;
 				winner_score = score;
 			}
 		}
-		selected[slot] = winner;
-		selected_scores[slot] = winner_score;
+		selected[target_slot] = winner;
+		selected_scores[target_slot] = winner_score;
 		char ss[512];
 		struct tile_ambience_config * cfg = (winner >= 0) ? &is->tile_ambience_configs[winner] : NULL;
-		snprintf (ss, sizeof ss, "[C3X][ambience] bed select slot=%d winner=%d name=\"%s\" group=\"%s\" score=%d\n",
-			  slot,
+		snprintf (ss, sizeof ss, "[C3X][ambience] bed select target=%d winner=%d name=\"%s\" group=\"%s\" score=%d\n",
+			  target_slot,
 			  winner,
 			  cfg != NULL ? tile_ambience_debug_str (cfg->name) : "",
 			  cfg != NULL ? tile_ambience_debug_str (cfg->group) : "",
@@ -46027,73 +46029,100 @@ update_tile_ambience_bed_targets ()
 		struct tile_ambience_active_bed * bed = &is->tile_ambience_active_beds[slot];
 		if ((! bed->active) || (bed->config_index < 0) || (bed->config_index >= is->tile_ambience_count))
 			continue;
-		char const * active_group = is->tile_ambience_configs[bed->config_index].group;
-		if (active_group == NULL)
-			continue;
 		int selected_slot = -1;
-		for (int j = 0; j < MAX_TILE_AMBIENCE_ACTIVE_BEDS; j++) {
+		for (int j = 0; j < MAX_TILE_AMBIENCE_TARGET_BEDS; j++) {
 			int selected_index = selected[j];
-			if ((selected_index >= 0) &&
-			    (selected_index < is->tile_ambience_count) &&
-			    (strcmp (active_group, is->tile_ambience_configs[selected_index].group) == 0)) {
+			if (tile_ambience_groups_match (bed->config_index, selected_index)) {
 				selected_slot = j;
 				break;
 			}
 		}
-		if ((selected_slot >= 0) && (selected_slot != slot)) {
-			int selected_index = selected[slot];
-			int selected_score = selected_scores[slot];
-			selected[slot] = selected[selected_slot];
-			selected_scores[slot] = selected_scores[selected_slot];
-			selected[selected_slot] = selected_index;
-			selected_scores[selected_slot] = selected_score;
 
-			char ss[512];
-			snprintf (ss, sizeof ss, "[C3X][ambience] bed keep slot group slot=%d from_slot=%d group=\"%s\" winner=%d\n",
-				  slot,
-				  selected_slot,
-				  tile_ambience_debug_str (active_group),
-				  selected[slot]);
-			(*p_OutputDebugStringA) (ss);
-		}
-	}
-
-	for (int slot = 0; slot < MAX_TILE_AMBIENCE_ACTIVE_BEDS; slot++) {
-		struct tile_ambience_active_bed * bed = &is->tile_ambience_active_beds[slot];
-		int winner = selected[slot];
-		if (bed->active && (bed->config_index >= 0) && (winner >= 0) &&
-		    (bed->config_index < is->tile_ambience_count) &&
-		    (strcmp (is->tile_ambience_configs[bed->config_index].group, is->tile_ambience_configs[winner].group) == 0)) {
+		if (selected_slot >= 0) {
 			int active_score = is->tile_ambience_scores[bed->config_index];
-			if (active_score * 100 >= selected_scores[slot] * TILE_AMBIENCE_SCORE_HYSTERESIS_PERCENT) {
+			int challenger = selected[selected_slot];
+			int challenger_score = selected_scores[selected_slot];
+			int active_specificity = tile_ambience_specificity_score (&is->tile_ambience_configs[bed->config_index]);
+			int challenger_specificity = tile_ambience_specificity_score (&is->tile_ambience_configs[challenger]);
+			if ((bed->config_index == challenger) ||
+			    ((active_specificity >= challenger_specificity) &&
+			     (active_score > 0) &&
+			     (active_score * 100 >= challenger_score * TILE_AMBIENCE_SCORE_HYSTERESIS_PERCENT))) {
+				struct tile_ambience_config * cfg = &is->tile_ambience_configs[bed->config_index];
+				selected[selected_slot] = bed->config_index;
+				selected_scores[selected_slot] = active_score;
+				selected_assigned[selected_slot] = true;
+				if (bed->target_volume != cfg->volume)
+					tile_ambience_start_bed_fade (bed, bed->config_index, cfg->volume, active_score);
 				char ss[512];
-				snprintf (ss, sizeof ss, "[C3X][ambience] bed hysteresis slot=%d keep=%d \"%s\" active_score=%d challenger=%d challenger_score=%d\n",
+				snprintf (ss, sizeof ss, "[C3X][ambience] bed keep voice slot=%d target=%d index=%d \"%s\" active_score=%d challenger=%d challenger_score=%d\n",
 					  slot,
+					  selected_slot,
 					  bed->config_index,
-					  tile_ambience_debug_str (is->tile_ambience_configs[bed->config_index].name),
+					  tile_ambience_debug_str (cfg->name),
 					  active_score,
-					  winner,
-					  selected_scores[slot]);
+					  challenger,
+					  challenger_score);
 				(*p_OutputDebugStringA) (ss);
-				winner = bed->config_index;
+				continue;
 			}
 		}
 
-		if (winner >= 0) {
-			struct tile_ambience_config * cfg = &is->tile_ambience_configs[winner];
-			if ((! bed->active) || (bed->config_index != winner) || (bed->target_volume != cfg->volume))
-				tile_ambience_start_bed_fade (bed, winner, cfg->volume, is->tile_ambience_scores[winner]);
-		} else if (bed->active && (bed->target_volume != 0)) {
+		if (bed->target_volume != 0) {
 			char ss[512];
-			snprintf (ss, sizeof ss, "[C3X][ambience] bed fade-out slot=%d index=%d name=\"%s\" reason=no_winner current=%d target=%d\n",
+			snprintf (ss, sizeof ss, "[C3X][ambience] bed fade-out slot=%d index=%d name=\"%s\" reason=not_desired current=%d target=%d\n",
 				  slot,
 				  bed->config_index,
-				  (bed->config_index >= 0 && bed->config_index < is->tile_ambience_count) ? tile_ambience_debug_str (is->tile_ambience_configs[bed->config_index].name) : "",
+				  tile_ambience_debug_str (is->tile_ambience_configs[bed->config_index].name),
 				  bed->current_volume,
 				  bed->target_volume);
 			(*p_OutputDebugStringA) (ss);
 			tile_ambience_start_bed_fade (bed, bed->config_index, 0, 0);
 		}
+	}
+
+	for (int target_slot = 0; target_slot < MAX_TILE_AMBIENCE_TARGET_BEDS; target_slot++) {
+		if (selected_assigned[target_slot])
+			continue;
+		int winner = selected[target_slot];
+		if ((winner < 0) || (winner >= is->tile_ambience_count))
+			continue;
+
+		int voice_slot = -1;
+		for (int slot = 0; slot < MAX_TILE_AMBIENCE_ACTIVE_BEDS; slot++) {
+			struct tile_ambience_active_bed * bed = &is->tile_ambience_active_beds[slot];
+			if (bed->active && (bed->config_index == winner)) {
+				voice_slot = slot;
+				break;
+			}
+		}
+		if (voice_slot < 0)
+			for (int slot = 0; slot < MAX_TILE_AMBIENCE_ACTIVE_BEDS; slot++)
+				if (! is->tile_ambience_active_beds[slot].active) {
+					voice_slot = slot;
+					break;
+				}
+		if (voice_slot < 0) {
+			char ss[512];
+			snprintf (ss, sizeof ss, "[C3X][ambience] bed no free voice target=%d winner=%d name=\"%s\"\n",
+				  target_slot,
+				  winner,
+				  tile_ambience_debug_str (is->tile_ambience_configs[winner].name));
+			(*p_OutputDebugStringA) (ss);
+			continue;
+		}
+
+		struct tile_ambience_config * cfg = &is->tile_ambience_configs[winner];
+		char ss[512];
+		snprintf (ss, sizeof ss, "[C3X][ambience] bed assign voice slot=%d target=%d winner=%d name=\"%s\" group=\"%s\" score=%d\n",
+			  voice_slot,
+			  target_slot,
+			  winner,
+			  tile_ambience_debug_str (cfg->name),
+			  tile_ambience_debug_str (cfg->group),
+			  is->tile_ambience_scores[winner]);
+		(*p_OutputDebugStringA) (ss);
+		tile_ambience_start_bed_fade (&is->tile_ambience_active_beds[voice_slot], winner, cfg->volume, is->tile_ambience_scores[winner]);
 	}
 }
 

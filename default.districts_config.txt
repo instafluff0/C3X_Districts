@@ -407,6 +407,7 @@ food_bonus             = 0
 gold_bonus             = 2
 shield_bonus           = 0
 happiness_bonus        = 0
+sound                  = path=Sounds\Ambience\Districts\Port\HarborSeagulls.wav; mode=bed; volume=5; loop=true; hours=0-23; fade_ms=800
 
 #District
 name                   = Central Rail Hub
