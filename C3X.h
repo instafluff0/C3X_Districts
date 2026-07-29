@@ -26,6 +26,14 @@ typedef unsigned char byte;
 #define MAX_DISTRICT_COLUMN_COUNT 10
 #define C3X_DISTRICT_COMMAND_BASE (-11000000)
 
+#define MAX_TILE_AMBIENCE_CONFIGS 128
+#define MAX_TILE_AMBIENCE_ACTIVE_BEDS 2
+#define MAX_TILE_AMBIENCE_GROUPS 64
+#define TILE_AMBIENCE_SAMPLE_RADIUS 3
+#define TILE_AMBIENCE_SAMPLE_INTERVAL_MS 1000
+#define TILE_AMBIENCE_TIMER_TICK_MS 66
+#define TILE_AMBIENCE_SCORE_HYSTERESIS_PERCENT 70
+
 // Initialize to zero. Implementation is in common.c
 struct table {
 	void * block;
@@ -1227,13 +1235,6 @@ struct tile_animation_config {
 	int effect_id;
 	bool in_use;
 };
-
-#define MAX_TILE_AMBIENCE_CONFIGS 128
-#define MAX_TILE_AMBIENCE_ACTIVE_BEDS 2
-#define MAX_TILE_AMBIENCE_GROUPS 64
-#define TILE_AMBIENCE_SAMPLE_INTERVAL_MS 1000
-#define TILE_AMBIENCE_TIMER_TICK_MS 66
-#define TILE_AMBIENCE_SCORE_HYSTERESIS_PERCENT 70
 
 typedef struct Sound Sound;
 typedef struct AudioOutput AudioOutput;
@@ -2784,6 +2785,7 @@ struct district_button_image_set {
 	int tile_ambience_last_sample_ms;
 	int tile_ambience_last_center_x;
 	int tile_ambience_last_center_y;
+	int tile_ambience_last_city_screen_city_id;
 	int tile_ambience_last_sample_hour;
 	int tile_ambience_last_sample_season;
 	bool tile_ambience_scores_valid;

@@ -63,10 +63,11 @@
 ]
 
 #Sound
-name                    = ModernCity
-sound_path              = Sounds\Ambience\Cities\ModernCity.wav
+name                    = City
+sound_path              = Sounds\Ambience\Cities\City.wav
 mode                    = bed
 type                    = city
+volume                  = 50
 fade_ms                 = 800
 loop                    = true
 day_night_hours         = 0-23

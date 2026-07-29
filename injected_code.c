@@ -20602,8 +20602,8 @@ tile_ambience_debug_draw_sample_highlight (Map_Renderer * renderer, int tile_x, 
 	get_tile_ambience_center_tile (&center_x, &center_y);
 
 	int matched_ring = -1;
-	for (int dy = -3; dy <= 3; dy++) {
-		for (int dx = -3; dx <= 3; dx++) {
+	for (int dy = -TILE_AMBIENCE_SAMPLE_RADIUS; dy <= TILE_AMBIENCE_SAMPLE_RADIUS; dy++) {
+		for (int dx = -TILE_AMBIENCE_SAMPLE_RADIUS; dx <= TILE_AMBIENCE_SAMPLE_RADIUS; dx++) {
 			int sx = center_x + dx;
 			int sy = center_y + dy;
 			wrap_tile_coords (&p_bic_data->Map, &sx, &sy);
@@ -44471,6 +44471,7 @@ reset_tile_ambience_runtime_state ()
 	is->tile_ambience_last_sample_ms = -TILE_AMBIENCE_SAMPLE_INTERVAL_MS;
 	is->tile_ambience_last_center_x = -1;
 	is->tile_ambience_last_center_y = -1;
+	is->tile_ambience_last_city_screen_city_id = -1;
 	is->tile_ambience_last_sample_hour = -1;
 	is->tile_ambience_last_sample_season = -1;
 	is->tile_ambience_scores_valid = false;
@@ -45414,6 +45415,14 @@ tile_ambience_rule_matches_tile (struct tile_ambience_config const * cfg, Tile *
 	return true;
 }
 
+City *
+get_tile_ambience_city_screen_city ()
+{
+	if ((p_city_form == NULL) || (p_city_form->CurrentCity == NULL))
+		return NULL;
+	return p_city_form->CurrentCity;
+}
+
 void
 get_tile_ambience_center_tile (int * out_x, int * out_y)
 {
@@ -45451,6 +45460,62 @@ resample_tile_ambience_scores ()
 	if ((p_main_screen_form == NULL) || (is->tile_ambience_count <= 0) || (is->saved_tile_count >= 0))
 		return;
 
+	City * city_screen_city = get_tile_ambience_city_screen_city ();
+	if (city_screen_city != NULL) {
+		int city_x = city_screen_city->Body.X;
+		int city_y = city_screen_city->Body.Y;
+		Tile * tile = tile_at (city_x, city_y);
+		int match_count = 0;
+		int tile_weight = 8;
+		char ss[512];
+		snprintf (ss, sizeof ss, "[C3X][ambience] city screen resample begin t=%d city_id=%d tile=(%d,%d) configs=%d\n",
+			  is->tile_ambience_clock_ms, city_screen_city->Body.ID, city_x, city_y, is->tile_ambience_count);
+		(*p_OutputDebugStringA) (ss);
+
+		if ((tile != NULL) && (tile != p_null_tile)) {
+			for (int i = 0; i < is->tile_ambience_count; i++) {
+				struct tile_ambience_config const * cfg = &is->tile_ambience_configs[i];
+				if ((cfg->type == TAMB_CITY) && tile_ambience_rule_matches_tile (cfg, tile, city_x, city_y)) {
+					int add = cfg->weight * tile_weight;
+					is->tile_ambience_scores[i] += add;
+					match_count++;
+					snprintf (ss, sizeof ss, "[C3X][ambience] city screen match rule=%d \"%s\" mode=%s group=\"%s\" add=%d score=%d\n",
+						  i,
+						  tile_ambience_debug_str (cfg->name),
+						  tile_ambience_debug_mode_name (cfg->mode),
+						  tile_ambience_debug_str (cfg->group),
+						  add,
+						  is->tile_ambience_scores[i]);
+					(*p_OutputDebugStringA) (ss);
+				}
+			}
+		}
+
+		snprintf (ss, sizeof ss, "[C3X][ambience] city screen resample scores matches=%d\n", match_count);
+		(*p_OutputDebugStringA) (ss);
+		for (int i = 0; i < is->tile_ambience_count; i++) {
+			struct tile_ambience_config const * cfg = &is->tile_ambience_configs[i];
+			if (is->tile_ambience_scores[i] > 0) {
+				snprintf (ss, sizeof ss, "[C3X][ambience] score rule=%d \"%s\" mode=%s group=\"%s\" score=%d\n",
+					  i,
+					  tile_ambience_debug_str (cfg->name),
+					  tile_ambience_debug_mode_name (cfg->mode),
+					  tile_ambience_debug_str (cfg->group),
+					  is->tile_ambience_scores[i]);
+				(*p_OutputDebugStringA) (ss);
+			}
+		}
+
+		is->tile_ambience_last_sample_ms = is->tile_ambience_clock_ms;
+		is->tile_ambience_last_center_x = city_x;
+		is->tile_ambience_last_center_y = city_y;
+		is->tile_ambience_last_city_screen_city_id = city_screen_city->Body.ID;
+		is->tile_ambience_last_sample_hour = get_tile_animation_hour_for_match ();
+		is->tile_ambience_last_sample_season = get_tile_animation_season_for_match ();
+		is->tile_ambience_scores_valid = true;
+		return;
+	}
+
 	int player_id = p_main_screen_form->Player_CivID;
 	int center_x = 0, center_y = 0;
 	get_tile_ambience_center_tile (&center_x, &center_y);
@@ -45462,8 +45527,8 @@ resample_tile_ambience_scores ()
 
 	int visible_sample_count = 0;
 	int match_count = 0;
-	for (int dy = -3; dy <= 3; dy++) {
-		for (int dx = -3; dx <= 3; dx++) {
+	for (int dy = -TILE_AMBIENCE_SAMPLE_RADIUS; dy <= TILE_AMBIENCE_SAMPLE_RADIUS; dy++) {
+		for (int dx = -TILE_AMBIENCE_SAMPLE_RADIUS; dx <= TILE_AMBIENCE_SAMPLE_RADIUS; dx++) {
 			int ring = int_abs (dx);
 			if (int_abs (dy) > ring)
 				ring = int_abs (dy);
@@ -45528,6 +45593,7 @@ resample_tile_ambience_scores ()
 	is->tile_ambience_last_sample_ms = is->tile_ambience_clock_ms;
 	is->tile_ambience_last_center_x = center_x;
 	is->tile_ambience_last_center_y = center_y;
+	is->tile_ambience_last_city_screen_city_id = -1;
 	is->tile_ambience_last_sample_hour = get_tile_animation_hour_for_match ();
 	is->tile_ambience_last_sample_season = get_tile_animation_season_for_match ();
 	is->tile_ambience_scores_valid = true;
@@ -45544,6 +45610,12 @@ tile_ambience_sample_needs_refresh ()
 		return true;
 	if (is->tile_ambience_last_sample_season != get_tile_animation_season_for_match ())
 		return true;
+	City * city_screen_city = get_tile_ambience_city_screen_city ();
+	int city_screen_city_id = (city_screen_city != NULL) ? city_screen_city->Body.ID : -1;
+	if (city_screen_city_id != is->tile_ambience_last_city_screen_city_id)
+		return true;
+	if (city_screen_city_id >= 0)
+		return false;
 	int center_x = 0, center_y = 0;
 	get_tile_ambience_center_tile (&center_x, &center_y);
 	return (center_x != is->tile_ambience_last_center_x) || (center_y != is->tile_ambience_last_center_y);
