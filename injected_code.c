@@ -45830,22 +45830,34 @@ tile_ambience_start_bed_fade (struct tile_ambience_active_bed * bed, int config_
 {
 	if (bed == NULL)
 		return;
-	int fade_ms = 3000;
-	if ((config_index >= 0) && (config_index < is->tile_ambience_count))
-		fade_ms = is->tile_ambience_configs[config_index].fade_ms;
 	int old_config_index = bed->config_index;
 	int old_target_volume = bed->target_volume;
 	int old_current_volume = bed->current_volume;
-	if ((! bed->active) || (bed->config_index != config_index)) {
-		if (bed->active && (bed->config_index >= 0) && (bed->config_index < is->tile_ambience_count)) {
+
+	if (bed->active && (bed->config_index != config_index)) {
+		if ((bed->config_index >= 0) && (bed->config_index < is->tile_ambience_count)) {
+			if (bed->target_volume == 0)
+				return;
+
 			char ss[512];
-			snprintf (ss, sizeof ss, "[C3X][ambience] bed replace stop old_index=%d old_name=\"%s\" new_index=%d\n",
+			snprintf (ss, sizeof ss, "[C3X][ambience] bed replace fade-out old_index=%d old_name=\"%s\" requested_new_index=%d\n",
 				  bed->config_index,
 				  tile_ambience_debug_str (is->tile_ambience_configs[bed->config_index].name),
 				  config_index);
 			(*p_OutputDebugStringA) (ss);
-			tile_ambience_stop_sound (bed->config_index);
+			config_index = bed->config_index;
+			target_volume = 0;
+			score = 0;
+		} else {
+			memset (bed, 0, sizeof *bed);
+			bed->config_index = -1;
 		}
+	}
+
+	int fade_ms = 3000;
+	if ((config_index >= 0) && (config_index < is->tile_ambience_count))
+		fade_ms = is->tile_ambience_configs[config_index].fade_ms;
+	if ((! bed->active) || (bed->config_index != config_index)) {
 		bed->config_index = config_index;
 		bed->current_volume = 0;
 	}
