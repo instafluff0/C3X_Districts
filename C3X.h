@@ -1274,6 +1274,7 @@ struct tile_ambience_config {
 	bool has_city_civs;
 	bool has_city_cultures;
 	bool has_city_population_mask;
+	bool has_city_capital_filter;
 	bool has_city_era_mask;
 	struct tile_animation_adjacent_requirement adjacent_to[MAX_TILE_ANIMATION_ADJACENCY];
 	int adjacent_to_count;
@@ -1712,6 +1713,7 @@ struct parsed_tile_ambience_definition {
 	bool terrain_types_include_land;
 	unsigned int city_population_mask[8];
 	unsigned int city_era_mask;
+	bool city_capital_only;
 	int weight;
 	int volume;
 	int fade_ms;
@@ -1731,6 +1733,7 @@ struct parsed_tile_ambience_definition {
 	bool has_city_civs;
 	bool has_city_cultures;
 	bool has_city_population_mask;
+	bool has_city_capital_filter;
 	bool has_city_era_mask;
 	bool has_loop;
 };

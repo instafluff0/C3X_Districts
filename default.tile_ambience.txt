@@ -31,7 +31,10 @@
   ;                               and city rules. For non-city tiles, this matches the tile's territory owner's culture.
   ;                               Valid values: American/AMER, European/EURO, Roman, Mid East/Mideast/MIDEAST, Asian.
   ;  - city_sizes               : Comma-delimited city size filters. Optional filter for type = city.
-  ;                               Valid named values: town, city, metropolis. These use the scenario's configured city-size thresholds.
+  ;                               Valid named values: town, city, metropolis, capital. Town/city/metropolis use the scenario's configured
+  ;                               city-size thresholds. Capital restricts the rule to the owning civ's current capital.
+  ;                               If capital is combined with another size, both filters must match; for example capital,metropolis means
+  ;                               only capital cities that are also metropolises.
   ;                               Numeric values and ranges are also accepted, for example 1-6, 7-12, 13+.
   ;  - eras                     : Comma-delimited era filters. Optional filter for type = city.
   ;                               Valid values: ancient, middle, industrial, modern, or 0..3.
@@ -184,6 +187,20 @@ seasons                 = spring,summer,fall,winter
 ; group                   = city_hum
 ; weight                  = 35
 ; volume                  = 24
+; fade_ms                 = 3000
+; loop                    = true
+; day_night_hours         = 0-23
+; seasons                 = spring,summer,fall,winter
+
+; #Sound
+; name                    = CapitalCityMusic
+; sound_path              = Sounds\Ambience\Cities\CapitalTheme.wav
+; mode                    = bed
+; type                    = city
+; city_sizes              = capital
+; group                   = capital_city
+; weight                  = 45
+; volume                  = 22
 ; fade_ms                 = 3000
 ; loop                    = true
 ; day_night_hours         = 0-23

@@ -26984,7 +26984,7 @@ patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, 
 	Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (this, __, param_1, pixel_x, pixel_y, map_renderer, param_5, tile_x, tile_y, param_8);
 
 	// Ambience debug: uncomment to highlight the current tile-sampling footprint around the screen center.
-	tile_ambience_debug_draw_sample_highlight (this, tile_x, tile_y, pixel_x, pixel_y);
+	//tile_ambience_debug_draw_sample_highlight (this, tile_x, tile_y, pixel_x, pixel_y);
 
 	is->current_render_tile = NULL;
 	is->current_render_tile_x = -1;
@@ -44247,11 +44247,18 @@ read_tile_ambience_int_token (struct string_slice token, int * out)
 }
 
 bool
-parse_tile_ambience_city_size_token (struct string_slice token, unsigned int * mask)
+parse_tile_ambience_city_size_token (struct string_slice token, unsigned int * mask, bool * out_capital_only)
 {
 	token = trim_string_slice (&token, 1);
 	if ((token.len <= 0) || (mask == NULL))
 		return false;
+
+	if (slice_matches_str (&token, "capital") || slice_matches_str (&token, "capitals")) {
+		if (out_capital_only == NULL)
+			return false;
+		*out_capital_only = true;
+		return true;
+	}
 
 	int town_max = 6;
 	int city_max = 12;
@@ -44304,16 +44311,18 @@ parse_tile_ambience_city_size_token (struct string_slice token, unsigned int * m
 }
 
 bool
-parse_tile_ambience_city_size_list (struct string_slice const * value, unsigned int * out_mask)
+parse_tile_ambience_city_size_list (struct string_slice const * value, unsigned int * out_mask, bool * out_capital_only)
 {
-	if ((value == NULL) || (out_mask == NULL))
+	if ((value == NULL) || (out_mask == NULL) || (out_capital_only == NULL))
 		return false;
 	memset (out_mask, 0, sizeof (unsigned int) * 8);
+	*out_capital_only = false;
 
 	struct string_slice text = trim_string_slice (value, 1);
 	if (text.len <= 0)
 		return false;
 
+	bool has_population_token = false;
 	char * cursor = text.str;
 	char * end = text.str + text.len;
 	while (cursor < end) {
@@ -44321,11 +44330,18 @@ parse_tile_ambience_city_size_list (struct string_slice const * value, unsigned 
 		while ((cursor < end) && (*cursor != ','))
 			cursor++;
 		struct string_slice token = {.str = token_start, .len = cursor - token_start};
-		if (! parse_tile_ambience_city_size_token (token, out_mask))
+		struct string_slice trimmed_token = trim_string_slice (&token, 1);
+		bool is_capital_token = slice_matches_str (&trimmed_token, "capital") ||
+					slice_matches_str (&trimmed_token, "capitals");
+		if (! parse_tile_ambience_city_size_token (token, out_mask, out_capital_only))
 			return false;
+		if (! is_capital_token)
+			has_population_token = true;
 		if ((cursor < end) && (*cursor == ','))
 			cursor++;
 	}
+	if ((*out_capital_only) && (! has_population_token))
+		set_tile_ambience_population_mask_range (out_mask, 0, 255);
 	return true;
 }
 
@@ -44546,6 +44562,7 @@ copy_parsed_tile_ambience_to_config (struct tile_ambience_config * cfg,
 	cfg->has_city_civs = def->has_city_civs;
 	cfg->has_city_cultures = def->has_city_cultures;
 	cfg->has_city_population_mask = def->has_city_population_mask;
+	cfg->has_city_capital_filter = def->has_city_capital_filter;
 	cfg->has_city_era_mask = def->has_city_era_mask;
 	cfg->day_night_hour_mask = def->day_night_hour_mask;
 	cfg->season_mask = def->season_mask;
@@ -44719,11 +44736,16 @@ handle_tile_ambience_definition_key (struct parsed_tile_ambience_definition * de
 			def->has_city_cultures = false;
 	} else if (slice_matches_str (key, "city_sizes") || slice_matches_str (key, "city_size") ||
 		   slice_matches_str (key, "population") || slice_matches_str (key, "population_sizes")) {
-		if (parse_tile_ambience_city_size_list (value, def->city_population_mask))
+		bool capital_only = false;
+		if (parse_tile_ambience_city_size_list (value, def->city_population_mask, &capital_only)) {
 			def->has_city_population_mask = true;
-		else {
+			def->city_capital_only = capital_only;
+			def->has_city_capital_filter = capital_only;
+		} else {
 			def->has_city_population_mask = false;
-			add_key_parse_error (parse_errors, line_number, key, value, "(expected town, city, metropolis, a size, a range like 1-6, or an open range like 13+)");
+			def->city_capital_only = false;
+			def->has_city_capital_filter = false;
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected town, city, metropolis, capital, a size, a range like 1-6, or an open range like 13+)");
 		}
 	} else if (slice_matches_str (key, "eras") || slice_matches_str (key, "city_eras")) {
 		unsigned int mask = 0;
@@ -45278,6 +45300,13 @@ tile_ambience_city_matches_filters (struct tile_ambience_config const * cfg, Cit
 	if (! tile_ambience_civ_matches_filters (cfg, civ_id))
 		return false;
 
+	if (cfg->has_city_capital_filter) {
+		if ((civ_id < 0) || (civ_id >= 32))
+			return false;
+		if (city->Body.ID != leaders[civ_id].CapitalID)
+			return false;
+	}
+
 	if (cfg->has_city_population_mask) {
 		int population = clamp (0, 255, city->Body.Population.Size);
 		if ((cfg->city_population_mask[population / 32] & (1u << (population % 32))) == 0)
@@ -45788,6 +45817,8 @@ tile_ambience_specificity_score (struct tile_ambience_config const * cfg)
 		score += 2;
 	if (cfg->has_city_population_mask)
 		score += 1;
+	if (cfg->has_city_capital_filter)
+		score += 2;
 	if (cfg->has_city_era_mask)
 		score += 2;
 	if (cfg->has_city_cultures)
