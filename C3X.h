@@ -922,7 +922,9 @@ enum tile_ambience_type {
 	TAMB_WONDER_DISTRICT,
 	TAMB_DISTRICT,
 	TAMB_CITY,
-	TAMB_COASTAL_WAVE
+	TAMB_COASTAL_WAVE,
+	TAMB_DESTRUCT_INITIAL,
+	TAMB_DESTRUCT_AFTER
 };
 
 enum tile_ambience_sound_format {

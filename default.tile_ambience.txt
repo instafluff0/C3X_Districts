@@ -13,11 +13,13 @@
   ;  - mode                     : Text (required). "bed" or "stinger".
   ;                               - bed:      A quiet looping or long-running ambience layer, such as surf, wind, leaves, or city hum.
   ;                               - stinger:  An occasional one-shot detail, such as a bird call, gull, frog, owl, creak, or splash.
-  ;  - type                     : Text (required). "terrain", "resource", "city", or "coastal_wave".
+  ;  - type                     : Text (required). "terrain", "resource", "city", "coastal_wave", "destruct-initial", or "destruct-after".
   ;                               - terrain:         Matches map terrain. Use terrain_types to narrow it.
   ;                               - resource:        Matches visible resources. Use resource_type to narrow it.
   ;                               - city:            Matches city tiles. Use civs, cultures, city_sizes, and/or eras to narrow it.
   ;                               - coastal_wave:    Matches coast tiles where the coastal-wave animation logic finds a wave edge.
+  ;                               - destruct-initial: Matches tiles in the first turn of a custom destruction animation.
+  ;                               - destruct-after:   Matches tiles in later turns of a custom destruction animation.
   ;  - terrain_types            : Comma-delimited terrain types. Optional filter for type = terrain.
   ;                               Valid values: desert, plains, grassland, jungle, tundra, floodplain, swamp, hills, mountains,
   ;                                             forest, volcano, snow-forest, snow-mountains, snow-volcano, coast, sea, ocean, land
@@ -61,6 +63,7 @@
   ;  - When custom ambience is enabled, Civ3's native random map chirps are suppressed.
   ;  - Candidate rules are sampled around the screen center, so borders and mixed terrain can contribute naturally.
   ;  - District, wonder district, and natural wonder ambience is defined with sound entries in their respective config files, not here.
+  ;  - Destruction ambience uses the custom tile animation destruction state, so it requires custom animations to be enabled.
   ;  - Beds should be subtle and loop cleanly. Stingers should be rare enough that repeated calls do not become irritating.
   ;  - If custom ambience is enabled but no active ambience rules match, no ambient map sound will play.
 ]
@@ -188,6 +191,32 @@ seasons                 = spring,summer,fall,winter
 ; weight                  = 35
 ; volume                  = 24
 ; fade_ms                 = 3000
+; loop                    = true
+; day_night_hours         = 0-23
+; seasons                 = spring,summer,fall,winter
+
+; #Sound
+; name                    = FreshRubble
+; sound_path              = Sounds\Ambience\Destruction\FreshRubble.wav
+; mode                    = bed
+; type                    = destruct-initial
+; group                   = destruction
+; weight                  = 35
+; volume                  = 22
+; fade_ms                 = 500
+; loop                    = true
+; day_night_hours         = 0-23
+; seasons                 = spring,summer,fall,winter
+
+; #Sound
+; name                    = SmolderingRuin
+; sound_path              = Sounds\Ambience\Destruction\SmolderingRuin.wav
+; mode                    = bed
+; type                    = destruct-after
+; group                   = destruction
+; weight                  = 25
+; volume                  = 16
+; fade_ms                 = 1200
 ; loop                    = true
 ; day_night_hours         = 0-23
 ; seasons                 = spring,summer,fall,winter

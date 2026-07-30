@@ -44697,9 +44697,15 @@ handle_tile_ambience_definition_key (struct parsed_tile_ambience_definition * de
 		} else if (slice_matches_str (&v, "coastal_wave") || slice_matches_str (&v, "coastal-wave")) {
 			def->type = TAMB_COASTAL_WAVE;
 			def->has_type = true;
+		} else if (slice_matches_str (&v, "destruct-initial") || slice_matches_str (&v, "destruct_initial")) {
+			def->type = TAMB_DESTRUCT_INITIAL;
+			def->has_type = true;
+		} else if (slice_matches_str (&v, "destruct-after") || slice_matches_str (&v, "destruct_after")) {
+			def->type = TAMB_DESTRUCT_AFTER;
+			def->has_type = true;
 		} else {
 			def->has_type = false;
-			add_key_parse_error (parse_errors, line_number, key, value, "(expected \"terrain\", \"resource\", \"city\", or \"coastal_wave\")");
+			add_key_parse_error (parse_errors, line_number, key, value, "(expected \"terrain\", \"resource\", \"city\", \"coastal_wave\", \"destruct-initial\", or \"destruct-after\")");
 		}
 	} else if (slice_matches_str (key, "terrain_types")) {
 		if (read_tile_animation_terrain_types (value, &def->terrain_types_mask, &def->terrain_types_include_land))
@@ -45426,6 +45432,19 @@ tile_ambience_rule_matches_tile (struct tile_ambience_config const * cfg, Tile *
 		} else if (cfg->type == TAMB_COASTAL_WAVE) {
 			enum direction dir = DIR_ZERO;
 			if (! get_tile_animation_coastal_wave_direction (tile_x, tile_y, &dir))
+				return false;
+		} else if (cfg->type == TAMB_DESTRUCT_INITIAL) {
+			if (! is->current_config.enable_custom_animations)
+				return false;
+			int tile_index = tile_coords_to_index (&p_bic_data->Map, tile_x, tile_y);
+			if (! tile_has_destruct_animation_age (tile_index, 1))
+				return false;
+		} else if (cfg->type == TAMB_DESTRUCT_AFTER) {
+			if (! is->current_config.enable_custom_animations)
+				return false;
+			int tile_index = tile_coords_to_index (&p_bic_data->Map, tile_x, tile_y);
+			if (! tile_has_any_destruct_animation_age (tile_index) ||
+			    tile_has_destruct_animation_age (tile_index, 1))
 				return false;
 		} else
 			return false;
