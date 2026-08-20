@@ -9,8 +9,8 @@ typedef unsigned char byte;
 #define __fastcall __attribute__((fastcall))
 #include "Civ3Conquests.h"
 
-#define MOD_VERSION 2700
-#define MOD_PREVIEW_VERSION 0
+#define MOD_VERSION 2800
+#define MOD_PREVIEW_VERSION 1
 
 #define COUNT_TILE_HIGHLIGHTS 11
 #define MAX_BUILDING_PREREQS_FOR_UNIT 10
@@ -77,16 +77,20 @@ struct unit_type_limit {
 	int cities_per;
 };
 
-/* ToC-26: Represents a named group of unit types that share a combined build limit.
-   Stored by pointer in unit_limit_groups (keyed by group name) and in unit_type_to_group
-   (keyed by unit_type_id).  The group struct is owned by unit_limit_groups; unit_type_to_group
-   holds non-owning pointers into it. */
-struct unit_limit_group {
-    int * unit_type_ids;        // Array of unit type IDs belonging to this group
-    int   count;                // Number of IDs in the array
-    struct unit_type_limit limit; // The shared limit value for this group
-    bool  has_limit;            // True once a limit has been assigned via unit_limits
-}; // END ToC-26
+// A named tag attached to one or more unit types. Tags are shared by unit limits and counter rules.
+struct unit_type_tag {
+	int id;
+	int * unit_type_ids;
+	int count_unit_type_ids;
+	struct unit_type_limit limit;
+	bool has_limit;
+};
+
+// Reverse-index entry for unit_type_id_to_tag_ids.
+struct unit_type_tag_id_list {
+	int * tag_ids;
+	int count;
+};
 
 struct work_area_improvement {
 	short improv_id;
@@ -254,24 +258,23 @@ enum perfume_kind {
 	COUNT_PERFUME_KINDS
 };
 
-struct unit_counter_group {
-	char * name;
-	int *  type_ids;
-	int    count_type_ids;
+struct perfume_amounts {
+	int flat;
+	int percent;
 };
 
 // Attacker/defender match modes
 #define UCM_ANY   -1  // * Any unit type
-#define UCM_GROUP -2  // Match using the group_name field
+#define UCM_TAG   -2
 
 struct counter_rule {
 	// Attacker side
-	int    attacker_match;    // UnitTypeID, or UCM_ANY / UCM_GROUP
-	char * attacker_group;    // Used when attacker_match == UCM_GROUP
+	int    attacker_match;    // UnitTypeID, or UCM_ANY / UCM_TAG
+	int    attacker_tag_id;   // Used when attacker_match == UCM_TAG
 
 	// Defender side
 	int    defender_match;
-	char * defender_group;
+	int    defender_tag_id;
 
 	// Environment conditions (0 / false means no restriction)
 	unsigned int terrain_mask; // SquareTypes mask, 0 = no restriction
@@ -328,7 +331,7 @@ struct c3x_config {
 	bool enable_land_sea_intersections;
 	bool disallow_trespassing;
 	bool show_detailed_tile_info;
-	struct table perfume_specs[COUNT_PERFUME_KINDS]; // Each table maps strings to i31b's. Each i31b combines an amount and whether it's a percent
+	struct table perfume_specs[COUNT_PERFUME_KINDS]; // Maps strings to struct perfume_amounts pointers
 	struct table building_unit_prereqs; // A mapping from int keys to int values. The keys are unit type IDs. If an ID is present as a key in the
 					    // table that means that unit type has one or more prereq buildings. The associated value is either a
 					    // pointer to a list of MAX_BUILDING_PREREQS_FOR_UNITS improvement IDs or a single encoded improv ID. The
@@ -419,10 +422,12 @@ struct c3x_config {
 	struct leader_era_alias_list * leader_era_alias_lists;
 	int count_leader_era_alias_lists;
 	struct table unit_limits; // Maps unit type names (strings) to pointers to limit objects (struct unit_type_limit *)
-	// ToC-26: Group-based unit limits. unit_limit_groups maps group name strings to struct unit_limit_group*.
-	// unit_type_to_group maps unit_type_id (int) to struct unit_limit_group* for O(1) runtime lookup.
-	struct table unit_limit_groups;
-	struct table unit_type_to_group; // END ToC-26
+	// unit_type_tags maps tag names to struct unit_type_tag*. unit_type_tags_by_id maps tag IDs
+	// back to those objects, and unit_type_id_to_tag_ids maps each unit type ID to all of its tags.
+	struct table unit_type_tags;
+	struct unit_type_tag ** unit_type_tags_by_id;
+	int count_unit_type_tags;
+	struct table unit_type_id_to_tag_ids;
 	bool allow_upgrades_in_any_city;
 	bool do_not_generate_volcanos;
 	bool do_not_pollute_impassable_tiles;
@@ -462,8 +467,6 @@ struct c3x_config {
 	enum barbarian_activity_override override_barbarian_activity_level_for_scenario_maps;
 	bool initialize_preplaced_scenario_leaders_as_mgls;
 	bool enable_unit_counters;
-	struct unit_counter_group * unit_counter_groups;
-	int count_unit_counter_groups;
 	struct counter_rule * counter_rules;
 	int count_counter_rules;
 
@@ -473,6 +476,7 @@ struct c3x_config {
 
 	bool use_offensive_artillery_ai;
 	int diplo_demand_rate_between_ai_players;
+	bool limit_ai_to_one_demand_per_turn;
 	bool show_ai_demand_info_popup;
 	bool dont_escort_unflagged_units;
 	int ai_build_artillery_ratio;
@@ -1057,6 +1061,19 @@ enum district_overlay_mask_bits {
 	DOM_SWAMP       = 1u << 8,
 	DOM_RIVER       = 1u << 9,
 	DOM_AIRFIELD    = 1u << 10
+};
+
+struct natural_wonder_animation_config {
+	char const * ini_path;
+	unsigned int day_night_hour_mask; // bits 0..23
+	unsigned int season_mask; // bits 0..3
+	enum direction direction;
+	float frame_time_seconds;
+	int x_offset;
+	int y_offset;
+	bool has_direction;
+	bool has_frame_time_seconds;
+	bool has_offsets;
 };
 
 struct natural_wonder_district_config {
@@ -1812,6 +1829,11 @@ struct injected_state {
 
 	bool is_placing_scenario_things; // Set to true only while Map::place_scenario_things is running
 
+	// While an AI Leader::begin_turn is running, identifies the one player that AI may demand from, or -1 if there was no eligible player. The
+	// active flag distinguishes that state from times outside begin_turn, when demands are not limited by these fields.
+	bool ai_demand_target_selection_active;
+	int ai_demand_target_civ_id;
+
 	bool paused_for_popup; // Set to true while a popup, map message, or the diplo screen is open
 	long long time_spent_paused_during_popup; // Tracks time spent waiting for the three things above
 
@@ -2266,6 +2288,7 @@ struct injected_state {
 	// Records how many units of each type we're going to upgrade to during an upgrade-all. This info will be used to impose the unit type limit
 	// during the upgrade. Keep in mind units all get upgraded from the same type but might end up as different types after upgrade-all.
 	struct penciled_in_upgrade {
+		int source_unit_type_id;
 		int unit_type_id;
 		int count;
 	} * penciled_in_upgrades;
@@ -2273,10 +2296,10 @@ struct injected_state {
 	int penciled_in_upgrade_capacity;
 
 	// ToC-27: Set to true while patch_City_can_build_upgrade_type is running. When true,
-	// patch_City_can_build_unit skips its unit-type limit check so that upgrades to group-limited
+	// patch_City_can_build_unit skips its unit-type limit check so that upgrades to tag-limited
 	// types are not blocked at the City_can_build level. patch_Unit_can_upgrade re-applies the
-	// limit with full source-type context, allowing same-group upgrades (net-zero count change)
-	// while still blocking over-limit production and cross-group upgrade attempts.
+	// limit with full source-type context, allowing same-tag upgrades (net-zero count change)
+	// while still blocking over-limit production and cross-tag upgrade attempts.
 	bool checking_upgrade_type_eligibility; // END ToC-27
 
 	// While in Leader::do_capture_city, the city in question is stored in this var. Otherwise it's NULL.
