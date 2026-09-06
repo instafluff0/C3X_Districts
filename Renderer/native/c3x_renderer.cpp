@@ -103,6 +103,16 @@ struct TerrainTexture {
     bool configured = false;
 };
 
+struct CachedViewport {
+    c3x_renderer::TerrainFrameSignature signature;
+    std::vector<std::uint32_t> pixels;
+    std::vector<c3x_renderer_tile_v1> tiles;
+    std::vector<c3x_renderer_u32> replacement_flags;
+    c3x_renderer_u32 rendered_tile_count = 0;
+    c3x_renderer_u32 fallback_tile_count = 0;
+    c3x_renderer_u32 textured_tile_count = 0;
+};
+
 class RendererState {
 public:
     ID3D11Device * device = nullptr;
@@ -191,6 +201,11 @@ public:
     c3x_renderer::FeatureBundle wall_bundle;
     std::vector<std::uint8_t> wall_texture_dds;
     ID3D11ShaderResourceView * wall_texture_view = nullptr;
+    c3x_renderer::FeatureBundle mine_bundle;
+    std::array<std::vector<std::uint8_t>, 6> mine_base_dds;
+    std::array<ID3D11ShaderResourceView *, 6> mine_base_views = {};
+    std::array<std::vector<std::uint8_t>, 2> mine_emissive_dds;
+    std::array<ID3D11ShaderResourceView *, 2> mine_emissive_views = {};
     c3x_renderer::TerrainFrameSignature cached_signature;
     c3x_renderer::TerrainFrameSignature previous_signature;
     std::uint64_t content_revision = 0;
@@ -210,6 +225,7 @@ public:
     std::vector<float> shadow_visibility_cache;
     std::vector<c3x_renderer_tile_v1> cached_tiles;
     std::vector<c3x_renderer_u32> cached_replacement_tile_flags;
+    std::vector<CachedViewport> viewport_cache;
     bool cache_valid = false;
     bool feature_assets_ready = false;
     bool dune_assets_ready = false;
@@ -220,6 +236,7 @@ public:
     bool route_assets_ready = false;
     bool resource_assets_ready = false;
     bool city_assets_ready = false;
+    bool mine_assets_ready = false;
 
     ~RendererState() { reset(); }
 
@@ -297,6 +314,10 @@ public:
         for (ID3D11ShaderResourceView *& view : city_emissive_views)
             release(view);
         release(wall_texture_view);
+        for (ID3D11ShaderResourceView *& view : mine_base_views)
+            release(view);
+        for (ID3D11ShaderResourceView *& view : mine_emissive_views)
+            release(view);
         release(decal_sampler);
         release(terrain_sampler);
         release(rasterizer_state);
@@ -314,6 +335,7 @@ public:
         shadow_visibility_cache.clear();
         cached_tiles.clear();
         cached_replacement_tile_flags.clear();
+        viewport_cache.clear();
         cache_valid = false;
         if (device_generation != 0xffffffffu)
             ++device_generation;
@@ -731,6 +753,15 @@ public:
         release(wall_texture_view);
         wall_texture_dds.clear();
         wall_bundle = {};
+        for (std::size_t index = 0; index < mine_base_views.size(); ++index) {
+            release(mine_base_views[index]);
+            mine_base_dds[index].clear();
+        }
+        for (std::size_t index = 0; index < mine_emissive_views.size(); ++index) {
+            release(mine_emissive_views[index]);
+            mine_emissive_dds[index].clear();
+        }
+        mine_bundle = {};
         for (std::size_t index = 0; index < feature_texture_views.size(); ++index) {
             release(feature_texture_views[index]);
             feature_texture_dds[index].clear();
@@ -749,9 +780,11 @@ public:
         route_assets_ready = false;
         resource_assets_ready = false;
         city_assets_ready = false;
+        mine_assets_ready = false;
         terrain_extra_assets_ready = false;
         authored_relief_assets_ready = false;
         cache_valid = false;
+        viewport_cache.clear();
     }
 
     void mix_content_revision(std::vector<std::uint8_t> const & data) {
@@ -1201,6 +1234,56 @@ public:
                 wall_root.c_str(), wall_bundle.texture_paths[0].c_str(),
                 wall_texture_dds, DXGI_FORMAT_BC1_UNORM_SRGB, DXGI_FORMAT_BC1_UNORM);
         }
+
+        std::string mine_root = packs_root + "\\ImprovementsNormalized";
+        std::string mine_runtime_path = mine_root + "\\mine_runtime.bin";
+        std::vector<std::uint8_t> mine_runtime_bytes;
+        mine_assets_ready = read_file(mine_runtime_path.c_str(), mine_runtime_bytes);
+        if (!mine_assets_ready)
+            SetLastError(1801u);
+        if (mine_assets_ready) {
+            mine_assets_ready = load_feature_bundle(mine_runtime_path, mine_bundle);
+            if (!mine_assets_ready)
+                SetLastError(1802u);
+        }
+        if (mine_assets_ready) {
+            mine_assets_ready = mine_bundle.texture_paths.size() == 8u;
+            if (!mine_assets_ready)
+                SetLastError(1803u);
+        }
+        auto load_mine_texture = [&](std::size_t source_index,
+                                     std::vector<std::uint8_t> & output) {
+            char path[4 * MAX_PATH];
+            if (!pack_path(mine_root.c_str(), mine_bundle.texture_paths[source_index].c_str(),
+                           path, std::size(path)) ||
+                !read_file(path, output) || output.size() < 156 ||
+                std::memcmp(output.data(), "DDS ", 4) != 0 ||
+                std::memcmp(output.data() + 84, "DX10", 4) != 0)
+                return false;
+            std::uint32_t format = read_u32(output, 128);
+            if (format != DXGI_FORMAT_BC1_UNORM &&
+                format != DXGI_FORMAT_BC1_UNORM_SRGB &&
+                format != DXGI_FORMAT_BC3_UNORM &&
+                format != DXGI_FORMAT_BC3_UNORM_SRGB)
+                return false;
+            mix_content_revision(output);
+            return true;
+        };
+        if (mine_assets_ready) {
+            mix_content_revision(mine_runtime_bytes);
+            for (std::size_t index = 0; index < mine_base_dds.size(); ++index) {
+                mine_assets_ready = mine_assets_ready &&
+                    load_mine_texture(index, mine_base_dds[index]);
+                if (!mine_assets_ready)
+                    SetLastError(static_cast<DWORD>(1810u + index));
+            }
+            for (std::size_t index = 0; index < mine_emissive_dds.size(); ++index) {
+                mine_assets_ready = mine_assets_ready &&
+                    load_mine_texture(index + mine_base_dds.size(), mine_emissive_dds[index]);
+                if (!mine_assets_ready)
+                    SetLastError(static_cast<DWORD>(1820u + index));
+            }
+        }
     }
 
     bool configure_asset(int terrain_type, char const * root, char const * logical_asset_id) {
@@ -1482,7 +1565,8 @@ public:
                 !dune_assets_ready ||
                 !marsh_assets_ready || !volcano_assets_ready ||
                 !clutter_assets_ready || !feature_assets_ready || !river_assets_ready ||
-                !route_assets_ready || !resource_assets_ready || !city_assets_ready)
+                !route_assets_ready || !resource_assets_ready || !city_assets_ready ||
+                !mine_assets_ready)
                 return false;
         }
         return true;
@@ -1666,6 +1750,14 @@ public:
             }
             city_assets_ready = city_assets_ready && ensure_dds_texture(
                 wall_texture_dds, wall_texture_view, true);
+        }
+        if (mine_assets_ready) {
+            for (std::size_t index = 0; index < mine_base_views.size(); ++index)
+                mine_assets_ready = mine_assets_ready && ensure_dds_texture(
+                    mine_base_dds[index], mine_base_views[index], true);
+            for (std::size_t index = 0; index < mine_emissive_views.size(); ++index)
+                mine_assets_ready = mine_assets_ready && ensure_dds_texture(
+                    mine_emissive_dds[index], mine_emissive_views[index], true);
         }
         return true;
     }
@@ -1923,8 +2015,12 @@ public:
         output.rendered_tile_count = cached_rendered_tile_count;
         output.fallback_tile_count = cached_fallback_tile_count;
         output.bgra_pixels = pixels.data();
-        output.visible_animation_count = cached_visible_animation_count;
-        output.request_continuous_redraw = cached_request_continuous_redraw;
+        // Terrain is independent of retained native unit/effect animation.  A
+        // cache hit must still report the current frame's animation demand so
+        // Civ III keeps driving those overlay planes without rerendering the
+        // static map underneath them.
+        output.visible_animation_count = frame.visible_animation_count;
+        output.request_continuous_redraw = frame.visible_animation_count != 0;
         output.renderer_cpu_ticks = renderer_ticks;
         output.textured_tile_count = cached_textured_tile_count;
         output.fallback_tile_indices = fallback_tile_indices.empty() ? nullptr : fallback_tile_indices.data();
@@ -1935,8 +2031,8 @@ public:
         output.cache_misses = cache_misses;
         output.cache_evictions = cache_evictions;
         output.cache_stale_rejections = cache_stale_rejections;
-        output.cache_entries = cache_valid ? 1u : 0u;
-        output.cache_capacity = 1u;
+        output.cache_entries = static_cast<c3x_renderer_u32>(viewport_cache.size());
+        output.cache_capacity = 4u;
         output.device_generation = device_generation;
         output.device_recoveries = device_recoveries;
         output.content_revision = static_cast<c3x_renderer_i64>(content_revision);
@@ -1967,19 +2063,30 @@ public:
             left.anchor_x == right.anchor_x && left.anchor_y == right.anchor_y &&
             left.terrain_type == right.terrain_type &&
             left.real_terrain_type == right.real_terrain_type &&
-            left.square_parts == right.square_parts &&
-            left.terrain_overlays == right.terrain_overlays &&
-            left.visibility_mask == right.visibility_mask &&
             left.variant_seed == right.variant_seed &&
             left.tile_flags == right.tile_flags &&
             left.feature_flags == right.feature_flags &&
+            left.improvement_flags == right.improvement_flags &&
             left.has_effect == right.has_effect &&
-            left.river_code == right.river_code;
+            left.river_code == right.river_code &&
+            left.road_mask == right.road_mask &&
+            left.railroad_mask == right.railroad_mask &&
+            left.route_style == right.route_style &&
+            left.resource_id == right.resource_id &&
+            left.resource_class == right.resource_class &&
+            std::memcmp(left.resource_name, right.resource_name,
+                        sizeof(left.resource_name)) == 0 &&
+            left.city_id == right.city_id &&
+            left.city_owner_id == right.city_owner_id &&
+            left.city_size == right.city_size &&
+            left.city_culture_group == right.city_culture_group &&
+            left.city_era == right.city_era &&
+            left.city_flags == right.city_flags;
     }
 
     bool reuse_cached_subset(c3x_renderer_frame_v1 const & frame,
                              c3x_renderer::TerrainFrameSignature const & signature) {
-        if (!cache_valid || frame.visible_animation_count != 0 || cached_tiles.empty() ||
+        if (!cache_valid || cached_tiles.empty() ||
             frame.tile_count > cached_tiles.size() ||
             signature.camera != cached_signature.camera ||
             signature.environment != cached_signature.environment ||
@@ -2026,7 +2133,7 @@ public:
         }
         c3x_renderer::TerrainFrameSignature signature = c3x_renderer::terrain_frame_signature(
             frame, content_revision, device_generation);
-        if (cache_valid && frame.visible_animation_count == 0 &&
+        if (cache_valid &&
             signature.complete == cached_signature.complete) {
             if (cache_hits != 0xffffffffu)
                 ++cache_hits;
@@ -2034,6 +2141,31 @@ public:
             fallback_tile_indices.clear();
             fill_output(frame, output, 0, 0);
             return true;
+        }
+        {
+            for (std::size_t cache_index = 0; cache_index < viewport_cache.size(); ++cache_index) {
+                if (viewport_cache[cache_index].signature.complete != signature.complete)
+                    continue;
+                CachedViewport hit = std::move(viewport_cache[cache_index]);
+                viewport_cache.erase(viewport_cache.begin() + static_cast<std::ptrdiff_t>(cache_index));
+                pixels = hit.pixels;
+                cached_tiles = hit.tiles;
+                cached_replacement_tile_flags = hit.replacement_flags;
+                replacement_tile_flags = hit.replacement_flags;
+                cached_rendered_tile_count = hit.rendered_tile_count;
+                cached_fallback_tile_count = hit.fallback_tile_count;
+                cached_textured_tile_count = hit.textured_tile_count;
+                cached_visible_animation_count = 0;
+                cached_request_continuous_redraw = 0;
+                cached_signature = hit.signature;
+                cache_valid = true;
+                viewport_cache.push_back(std::move(hit));
+                fallback_tile_indices.clear();
+                if (cache_hits != 0xffffffffu)
+                    ++cache_hits;
+                fill_output(frame, output, 0, 0);
+                return true;
+            }
         }
         if (reuse_cached_subset(frame, signature)) {
             if (cache_hits != 0xffffffffu)
@@ -2043,8 +2175,6 @@ public:
         }
         c3x_renderer_u32 invalidations = invalidations_for(signature);
         if (cache_valid) {
-            if (cache_evictions != 0xffffffffu)
-                ++cache_evictions;
             if (cache_stale_rejections != 0xffffffffu)
                 ++cache_stale_rejections;
         }
@@ -2058,8 +2188,12 @@ public:
         std::vector<Vertex> bed_vertices;
         std::vector<Vertex> water_vertices;
         std::vector<Vertex> river_vertices;
+        std::vector<Vertex> route_vertices;
         std::vector<Vertex> shadow_vertices;
         std::vector<Vertex> feature_vertices;
+        std::vector<Vertex> city_vertices;
+        std::vector<Vertex> wall_vertices;
+        std::vector<Vertex> mine_vertices;
         std::size_t rendered_reserve = 0, land_reserve = 0, river_reserve = 0;
         for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
@@ -2116,10 +2250,7 @@ public:
             for (auto value : {tile.tile_x, tile.tile_y, tile.terrain_type,
                                tile.real_terrain_type})
                 hash_shadow_value(value);
-            for (auto value : {tile.square_parts, tile.terrain_overlays,
-                               tile.visibility_mask, tile.variant_seed,
-                               tile.tile_flags, tile.feature_flags,
-                               tile.has_effect, tile.river_code})
+            for (auto value : {tile.tile_flags, tile.river_code})
                 hash_shadow_value(value);
         }
         bool reuse_shadow_field = !shadow_visibility_cache.empty() &&
@@ -2371,6 +2502,15 @@ public:
                 replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_DUNES_REPLACED;
             if (river_assets_ready && (tile.river_code & 170u) != 0)
                 replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED;
+            if (route_assets_ready && tile.road_mask != 0)
+                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED;
+            if (route_assets_ready && tile.railroad_mask != 0)
+                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED;
+            if (city_assets_ready && tile.city_id >= 0)
+                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED;
+            if (mine_assets_ready &&
+                (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) != 0)
+                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED;
             float left = static_cast<float>(tile.anchor_x);
             float top = static_cast<float>(tile.anchor_y);
             // The source terrain materials are detail textures, not one enormous
@@ -3208,6 +3348,136 @@ public:
                     }
                 }
             };
+            auto append_feature_instance = [&](c3x_renderer::FeatureBundle const & bundle,
+                                               c3x_renderer::FeaturePlacement const & placement,
+                                               float local_u, float local_v, float rotation,
+                                               float scale, float material_offset,
+                                               float owner_code, bool cast_shadow,
+                                               std::vector<Vertex> & target) {
+                if (placement.asset_index >= bundle.assets.size())
+                    return;
+                c3x_renderer::FeatureAsset const & asset = bundle.assets[placement.asset_index];
+                float tile_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
+                float tile_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
+                std::array<float, 3> ground_sample = relief_at_world(
+                    tile_world_u + local_u, tile_world_v + (1.0f - local_v));
+                float center_x = left + half_w + (local_u - local_v) * half_w;
+                float center_y = top + (local_u + local_v) * half_h -
+                    ground_sample[0] * relief_projection_scale;
+                if (cast_shadow)
+                    append_object_shadow(asset, scale, center_x, center_y,
+                                         ground_sample[0] * relief_projection_scale);
+                float cosine = std::cos(rotation);
+                float sine = std::sin(rotation);
+                std::vector<Vertex> transformed(asset.vertices.size());
+                for (std::size_t vertex_index = 0; vertex_index < asset.vertices.size(); ++vertex_index) {
+                    c3x_renderer::FeatureSourceVertex const & source = asset.vertices[vertex_index];
+                    float local_x = (source.position[0] * cosine - source.position[1] * sine) * scale;
+                    float local_y = (source.position[0] * sine + source.position[1] * cosine) * scale;
+                    float local_z = source.position[2] * scale;
+                    float screen_x = center_x + (local_x - local_y) * half_w;
+                    float screen_y = center_y + (local_x + local_y) * half_h -
+                        local_z * 150.0f * feature_projection_scale;
+                    float normal_x = source.normal[0] * cosine - source.normal[1] * sine;
+                    float normal_y = source.normal[0] * sine + source.normal[1] * cosine;
+                    float ground_height_pixels = ground_sample[0] * relief_projection_scale;
+                    float base_ground_y = center_y + ground_height_pixels +
+                        (local_x + local_y) * half_h;
+                    float feature_height_tiles = local_z * 150.0f *
+                        feature_projection_scale / relief_projection_scale;
+                    float depth = std::clamp(
+                        1.0f - base_ground_y / static_cast<float>(frame.target_height) -
+                        ground_height_pixels * 0.75f / static_cast<float>(frame.target_height) -
+                        feature_height_tiles * 0.0012f, 0.001f, 0.999f);
+                    transformed[vertex_index] = Vertex{
+                        ndc_x(screen_x), ndc_y(screen_y), depth,
+                        source.uv[0], source.uv[1], 1.0f,
+                        normal_x, normal_y, source.normal[2],
+                        1.0f, 1.0f, 0.0f, 0.0f,
+                        0.0f, 0.0f,
+                        static_cast<float>(asset.texture_index) + material_offset + owner_code,
+                        0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                        0.0f, 0.0f, 1.0f,
+                        1000.0f, 0.0f, 1000.0f, 0.0f, -1.0f};
+                }
+                for (std::uint32_t source_index : asset.indices)
+                    target.push_back(transformed[source_index]);
+            };
+            auto append_route_segment = [&](float u0, float v0, float u1, float v1,
+                                            unsigned style, bool railroad) {
+                constexpr int subdivisions = 16;
+                float route_half_width = railroad ? 0.076f : 0.105f;
+                float atlas_half_width = railroad ? 0.058f : 0.075f;
+                float du = u1 - u0, dv = v1 - v0;
+                float original_length = std::sqrt(du * du + dv * dv);
+                if (original_length < 0.001f)
+                    return;
+                float direction_u = du / original_length;
+                float direction_v = dv / original_length;
+                float original_u0 = u0, original_v0 = v0;
+                float original_u1 = u1, original_v1 = v1;
+                u0 -= direction_u * 0.14f; v0 -= direction_v * 0.14f;
+                u1 += direction_u * 0.14f; v1 += direction_v * 0.14f;
+                du = u1 - u0; dv = v1 - v0;
+                float length = std::sqrt(du * du + dv * dv);
+                float perpendicular_u = -dv / length;
+                float perpendicular_v = du / length;
+                float atlas_dx = 1.0f;
+                float atlas_dy = 0.99021526f - 0.90606654f;
+                float atlas_length = std::sqrt(atlas_dx * atlas_dx + atlas_dy * atlas_dy);
+                float atlas_perpendicular_u = -atlas_dy / atlas_length;
+                float atlas_perpendicular_v = atlas_dx / atlas_length;
+                float wave_seed = std::fmod(std::fabs(
+                    original_u0 * 17.0f + original_v0 * 31.0f +
+                    original_u1 * 47.0f + original_v1 * 61.0f), 19.0f) / 19.0f;
+                float wave_phase = wave_seed * 6.28318530718f;
+                auto route_vertex = [&](float along, float across) {
+                    float source_along = (along * length - 0.14f) / original_length;
+                    float curve_t = std::clamp(source_along, 0.0f, 1.0f);
+                    float curve_envelope = std::sin(curve_t * 3.14159265359f);
+                    float curve_amplitude = railroad ? 0.028f : 0.042f;
+                    float road_wave = curve_envelope * curve_amplitude *
+                        (0.62f * std::sin(wave_phase) +
+                         0.38f * std::sin(curve_t * 6.28318530718f + wave_phase));
+                    float route_u = u0 + du * along + perpendicular_u *
+                        (route_half_width * across + road_wave);
+                    float route_v = v0 + dv * along + perpendicular_v *
+                        (route_half_width * across + road_wave);
+                    float atlas_u = atlas_dx * source_along +
+                        atlas_perpendicular_u * atlas_half_width * across;
+                    float atlas_v = 0.90606654f + atlas_dy * source_along +
+                        atlas_perpendicular_v * atlas_half_width * across;
+                    float tile_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
+                    float tile_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
+                    std::array<float, 3> ground_sample = relief_at_world(
+                        tile_world_u + route_u, tile_world_v + (1.0f - route_v));
+                    float ground_x = left + half_w + (route_u - route_v) * half_w;
+                    float ground_y = top + (route_u + route_v) * half_h;
+                    float h = ground_sample[0] * relief_projection_scale;
+                    float depth = std::max(0.003f, std::clamp(
+                        1.0f - ground_y / static_cast<float>(frame.target_height) -
+                        h * 0.75f / static_cast<float>(frame.target_height),
+                        0.001f, 0.999f) - 0.010f);
+                    return Vertex{
+                        ndc_x(ground_x), ndc_y(ground_y - h), depth,
+                        atlas_u, atlas_v, 1.0f, 0.0f, 0.0f, 1.0f,
+                        across, curve_t, source_along, 0.90606654f + atlas_dy * source_along,
+                        11.0f, 0.0f, static_cast<float>(style), 0.0f,
+                        route_u, route_v, 0.0f, 0.0f,
+                        0.0f, 0.0f, 1.0f,
+                        1000.0f, 0.0f, 1000.0f, 0.0f, -1.0f};
+                };
+                for (int segment = 0; segment < subdivisions; ++segment) {
+                    float a0 = static_cast<float>(segment) / subdivisions;
+                    float a1 = static_cast<float>(segment + 1) / subdivisions;
+                    Vertex left0 = route_vertex(a0, -1.0f);
+                    Vertex right0 = route_vertex(a0, 1.0f);
+                    Vertex right1 = route_vertex(a1, 1.0f);
+                    Vertex left1 = route_vertex(a1, -1.0f);
+                    Vertex triangles[] = {left0, right0, right1, left0, right1, left1};
+                    route_vertices.insert(route_vertices.end(), std::begin(triangles), std::end(triangles));
+                }
+            };
             // Match the standalone terrain stack exactly: a flat material
             // underlay, raised land, submerged bed, then transparent water.
             // Keeping these pass-major vectors prevents a later land tile
@@ -3230,6 +3500,53 @@ public:
                     ? 16 : 8;
                 append_ground_layer(shadow_vertices, 10.0f,
                                     shadow_grid);
+            }
+            if (route_assets_ready && (tile.road_mask != 0 || tile.railroad_mask != 0)) {
+                constexpr int route_offsets[4][2] = {
+                    {1, -1}, {2, 0}, {1, 1}, {0, 2}
+                };
+                constexpr unsigned river_edge_bits[4] = {2u, 0u, 8u, 0u};
+                constexpr unsigned opposite_river_bits[4] = {32u, 0u, 128u, 0u};
+                float base_world_u = static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f;
+                float base_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
+                for (int direction = 0; direction < 4; ++direction) {
+                    int neighbor_x = tile.tile_x + route_offsets[direction][0];
+                    int neighbor_y = tile.tile_y + route_offsets[direction][1];
+                    auto found = tile_by_coordinate.find(coordinate_key(neighbor_x, neighbor_y));
+                    if (found == tile_by_coordinate.end())
+                        continue;
+                    c3x_renderer_tile_v1 const & neighbor = *found->second;
+                    bool railroad = tile.railroad_mask != 0 && neighbor.railroad_mask != 0;
+                    bool road = tile.road_mask != 0 && neighbor.road_mask != 0;
+                    if (!railroad && !road)
+                        continue;
+                    float end_u = (static_cast<float>(neighbor_x + neighbor_y) * 0.5f + 0.5f) -
+                        base_world_u;
+                    float end_v = 1.0f - ((static_cast<float>(neighbor_x - neighbor_y) * 0.5f + 0.5f) -
+                        base_world_v);
+                    unsigned style = railroad ? 4u : static_cast<unsigned>(
+                        std::clamp(tile.route_style, 0, 3));
+                    append_route_segment(0.5f, 0.5f, end_u, end_v, style, railroad);
+                    bool bridge = river_edge_bits[direction] != 0 &&
+                        (((tile.river_code & river_edge_bits[direction]) != 0) ||
+                         ((neighbor.river_code & opposite_river_bits[direction]) != 0));
+                    if (bridge) {
+                        char const * bridge_style = railroad ? "railroad" :
+                            (style >= 3u ? "modern" : (style >= 2u ? "industrial" : "medieval"));
+                        std::string group_name = std::string("bridge_") + bridge_style + "_normal";
+                        c3x_renderer::FeatureGroup const * bridge_group =
+                            c3x_renderer::find_feature_group(bridge_bundle, group_name.c_str());
+                        if (bridge_group != nullptr && !bridge_group->placements.empty()) {
+                            float rotation = std::atan2(end_v - 0.5f, end_u - 0.5f);
+                            c3x_renderer::FeaturePlacement const & placement =
+                                bridge_group->placements.front();
+                            append_feature_instance(bridge_bundle, placement,
+                                (0.5f + end_u) * 0.5f, (0.5f + end_v) * 0.5f,
+                                rotation, placement.scale, 13.0f, 0.0f, true,
+                                feature_vertices);
+                        }
+                    }
+                }
             }
             if (feature_assets_ready &&
                 (tile.real_terrain_type == 7 || tile.real_terrain_type == 8)) {
@@ -3447,6 +3764,128 @@ public:
                         feature_vertices.push_back(transformed[source_index]);
                 }
             }
+            if (resource_assets_ready && tile.resource_id >= 0) {
+                std::string resource_name = tile.resource_name;
+                std::transform(resource_name.begin(), resource_name.end(), resource_name.begin(),
+                    [](unsigned char value) { return static_cast<char>(std::tolower(value)); });
+                char const * group_name = nullptr;
+                for (char const * candidate : {"horses", "iron", "uranium", "gold",
+                                               "dye", "wheat", "cattle", "fish"}) {
+                    if (resource_name.find(candidate) != std::string::npos) {
+                        group_name = candidate;
+                        break;
+                    }
+                }
+                c3x_renderer::FeatureGroup const * group = group_name == nullptr ? nullptr :
+                    c3x_renderer::find_feature_group(resource_bundle, group_name);
+                if (group != nullptr && !group->placements.empty()) {
+                    replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
+                    c3x_renderer::FeaturePlacement const & placement = group->placements.front();
+                    unsigned count = std::max(1u, placement.count);
+                    for (unsigned body = 0; body < count; ++body) {
+                        float angle = 6.28318530718f *
+                            (static_cast<float>(body) / static_cast<float>(count) +
+                             c3x_renderer::stable_random(tile.variant_seed * 101u + body * 37u) * 0.11f);
+                        float ring = count == 1u ? 0.0f :
+                            (body == 0u ? 0.045f : 0.10f + 0.055f * static_cast<float>((body - 1u) % 3u));
+                        float variation =
+                            (c3x_renderer::stable_random(tile.variant_seed * 59u + body * 71u + 13u) *
+                             2.0f - 1.0f) * placement.scale_variation;
+                        float scale = placement.scale * (1.0f + variation) * 0.78f;
+                        float rotation = c3x_renderer::stable_random(
+                            tile.variant_seed * 83u + body * 97u + 29u) * 6.28318530718f;
+                        bool fish = std::strcmp(group_name, "fish") == 0;
+                        append_feature_instance(resource_bundle, placement,
+                            0.5f + std::cos(angle) * ring,
+                            0.5f + std::sin(angle) * ring * 0.78f,
+                            rotation, scale, 21.0f, 0.0f, !fish, feature_vertices);
+                    }
+                }
+            }
+            if (mine_assets_ready && ground < 11 &&
+                (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) != 0) {
+                unsigned era = static_cast<unsigned>(std::clamp(tile.route_style, 0, 3));
+                unsigned family = era < 2u ? 0u : 1u;
+                unsigned variant = tile.variant_seed % 3u;
+                std::string group_name = "mine_" + std::to_string(family * 3u + variant);
+                c3x_renderer::FeatureGroup const * group =
+                    c3x_renderer::find_feature_group(mine_bundle, group_name.c_str());
+                if (group != nullptr && !group->placements.empty()) {
+                    float rotation = c3x_renderer::stable_random(
+                        static_cast<std::uint32_t>(tile.tile_x * 71 + tile.tile_y * 113) +
+                        era * 29u) * 0.48f - 0.24f;
+                    for (std::size_t part = 0; part < group->placements.size(); ++part) {
+                        c3x_renderer::FeaturePlacement const & placement =
+                            group->placements[part];
+                        if (placement.asset_index >= mine_bundle.assets.size())
+                            continue;
+                        c3x_renderer::FeatureAsset const & asset =
+                            mine_bundle.assets[placement.asset_index];
+                        unsigned emissive_code = 0u;
+                        std::size_t marker = asset.id.rfind(":e");
+                        if (marker != std::string::npos)
+                            emissive_code = static_cast<unsigned>(std::strtoul(
+                                asset.id.c_str() + marker + 2u, nullptr, 10));
+                        append_feature_instance(mine_bundle, placement,
+                            0.5f, 0.5f, rotation, placement.scale, 21.0f,
+                            0.01f * static_cast<float>(emissive_code + 1u),
+                            part == 0u, mine_vertices);
+                    }
+                }
+            }
+            if (city_assets_ready && tile.city_id >= 0 && ground < 11) {
+                constexpr char const * era_names[] = {
+                    "ancient", "medieval", "industrial", "modern"};
+                constexpr char const * wall_names[] = {
+                    "wall_ancient", "wall_medieval", "wall_industrial"};
+                constexpr unsigned counts[] = {4u, 7u, 11u};
+                constexpr float radii[] = {0.25f, 0.33f, 0.41f};
+                constexpr float size_scales[] = {0.92f, 1.00f, 1.08f};
+                constexpr float golden_angle = 2.39996322973f;
+                unsigned era = static_cast<unsigned>(std::clamp(tile.city_era, 0, 3));
+                unsigned size = static_cast<unsigned>(std::clamp(tile.city_size, 0, 2));
+                unsigned culture = static_cast<unsigned>(std::max(0, tile.city_culture_group));
+                unsigned owner = static_cast<unsigned>(std::max(0, tile.city_owner_id));
+                c3x_renderer::FeatureGroup const * group =
+                    c3x_renderer::find_feature_group(city_bundle, era_names[era]);
+                if (group != nullptr && !group->placements.empty()) {
+                    unsigned component_count = counts[size];
+                    for (unsigned slot = 0; slot < component_count; ++slot) {
+                        c3x_renderer::FeaturePlacement const & placement = group->placements[
+                            (culture + tile.variant_seed + slot) % group->placements.size()];
+                        float angle = static_cast<float>(slot) * golden_angle +
+                            c3x_renderer::stable_random(tile.variant_seed * 53u + culture * 19u) * 0.72f;
+                        float radius = slot == 0u ? 0.0f : radii[size] *
+                            std::sqrt(static_cast<float>(slot) /
+                                      static_cast<float>(component_count - 1u));
+                        float scale = placement.scale * size_scales[size] *
+                            (slot == 0u && (tile.city_flags & C3X_RENDERER_CITY_CAPITAL) != 0 ? 1.30f : 1.0f);
+                        append_feature_instance(city_bundle, placement,
+                            0.5f + std::cos(angle) * radius,
+                            0.5f + std::sin(angle) * radius * 0.78f,
+                            angle + 0.55f, scale, 29.0f,
+                            0.08f * static_cast<float>(owner + 1u), true, city_vertices);
+                    }
+                }
+                if ((tile.city_flags & C3X_RENDERER_CITY_WALLED) != 0) {
+                    c3x_renderer::FeatureGroup const * walls = c3x_renderer::find_feature_group(
+                        wall_bundle, wall_names[std::min(era, 2u)]);
+                    if (walls != nullptr && !walls->placements.empty()) {
+                        c3x_renderer::FeaturePlacement const & wall = walls->placements.front();
+                        constexpr float offsets[4][3] = {
+                            {-0.29f, 0.00f, 0.785398163f},
+                            {0.29f, 0.00f, 0.785398163f},
+                            {0.00f, -0.23f, -0.785398163f},
+                            {0.00f, 0.23f, -0.785398163f},
+                        };
+                        for (auto const & offset : offsets)
+                            append_feature_instance(wall_bundle, wall,
+                                0.5f + offset[0], 0.5f + offset[1], offset[2],
+                                wall.scale * (size == 0u ? 0.82f : 1.0f), 29.0f,
+                                0.08f * static_cast<float>(owner + 1u), true, wall_vertices);
+                    }
+                }
+            }
         }
         float clear[4] = {0, 0, 0, 0};
         context->ClearRenderTargetView(render_target, clear);
@@ -3465,15 +3904,16 @@ public:
 
         if (!underlay_vertices.empty() || !land_vertices.empty() ||
             !bed_vertices.empty() || !water_vertices.empty() ||
-            !river_vertices.empty() || !shadow_vertices.empty() ||
-            !feature_vertices.empty()) {
+            !river_vertices.empty() || !route_vertices.empty() ||
+            !shadow_vertices.empty() || !feature_vertices.empty() ||
+            !city_vertices.empty() || !wall_vertices.empty() || !mine_vertices.empty()) {
             context->IASetInputLayout(input_layout);
             context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context->VSSetShader(vertex_shader, nullptr, 0);
             context->PSSetShader(pixel_shader, nullptr, 0);
             // Register-for-register match with the frozen approved terrain
             // shader. No production-only palette remains in this binding path.
-            std::array<ID3D11ShaderResourceView *, 98> views = {};
+            std::array<ID3D11ShaderResourceView *, 128> views = {};
             TerrainTexture const & grass = terrain_textures[2];
             TerrainTexture const & plains = terrain_textures[1];
             TerrainTexture const & desert = terrain_textures[0];
@@ -3525,6 +3965,14 @@ public:
                 views[89 + index] = river_rock_texture_views[index];
             for (std::size_t index = 4; index < feature_texture_views.size(); ++index)
                 views[90 + index] = feature_texture_views[index];
+            for (std::size_t index = 0; index < route_texture_views.size(); ++index)
+                views[98 + index] = route_texture_views[index];
+            for (std::size_t index = 0; index < bridge_texture_views.size(); ++index)
+                views[108 + index] = bridge_texture_views[index];
+            for (std::size_t index = 0; index < resource_texture_views.size(); ++index)
+                views[116 + index] = resource_texture_views[index];
+            for (std::size_t index = 0; index < city_base_views.size(); ++index)
+                views[124 + index] = city_base_views[index];
             context->PSSetShaderResources(0, static_cast<UINT>(views.size()), views.data());
             ID3D11SamplerState * samplers[] = {terrain_sampler, decal_sampler};
             context->PSSetSamplers(0, 2, samplers);
@@ -3557,13 +4005,41 @@ public:
             };
             if (!draw_batches(underlay_vertices) || !draw_batches(land_vertices) ||
                 !draw_batches(bed_vertices) || !draw_batches(water_vertices) ||
-                !draw_batches(river_vertices) || !draw_batches(shadow_vertices)) {
+                !draw_batches(river_vertices) || !draw_batches(shadow_vertices) ||
+                !draw_batches(route_vertices)) {
                 return false;
             }
             if (!feature_vertices.empty()) {
                 context->VSSetShader(feature_vertex_shader, nullptr, 0);
                 context->PSSetShader(feature_pixel_shader, nullptr, 0);
                 if (!draw_batches(feature_vertices))
+                    return false;
+            }
+            if (!mine_vertices.empty()) {
+                context->VSSetShader(feature_vertex_shader, nullptr, 0);
+                context->PSSetShader(feature_pixel_shader, nullptr, 0);
+                context->PSSetShaderResources(116, 6, mine_base_views.data());
+                context->PSSetShaderResources(124, 2, mine_emissive_views.data());
+                if (!draw_batches(mine_vertices))
+                    return false;
+            }
+            if (!city_vertices.empty()) {
+                context->VSSetShader(feature_vertex_shader, nullptr, 0);
+                context->PSSetShader(feature_pixel_shader, nullptr, 0);
+                context->PSSetShaderResources(116, 4, city_emissive_views.data());
+                context->PSSetShaderResources(124, 4, city_base_views.data());
+                if (!draw_batches(city_vertices))
+                    return false;
+            }
+            if (!wall_vertices.empty()) {
+                std::array<ID3D11ShaderResourceView *, 4> no_emissive = {};
+                std::array<ID3D11ShaderResourceView *, 4> wall_views = {
+                    wall_texture_view, nullptr, nullptr, nullptr};
+                context->VSSetShader(feature_vertex_shader, nullptr, 0);
+                context->PSSetShader(feature_pixel_shader, nullptr, 0);
+                context->PSSetShaderResources(116, 4, no_emissive.data());
+                context->PSSetShaderResources(124, 4, wall_views.data());
+                if (!draw_batches(wall_vertices))
                     return false;
             }
         }
@@ -3594,12 +4070,34 @@ public:
         cached_signature = signature;
         previous_signature = signature;
         previous_content_revision = content_revision;
-        cache_valid = frame.visible_animation_count == 0;
+        cache_valid = true;
         if (frame.tile_count == 0)
             cached_tiles.clear();
         else
             cached_tiles.assign(frame.tiles, frame.tiles + frame.tile_count);
         cached_replacement_tile_flags = replacement_tile_flags;
+        if (cache_valid) {
+            for (auto existing = viewport_cache.begin(); existing != viewport_cache.end(); ++existing) {
+                if (existing->signature.complete == signature.complete) {
+                    viewport_cache.erase(existing);
+                    break;
+                }
+            }
+            if (viewport_cache.size() == 4u) {
+                viewport_cache.erase(viewport_cache.begin());
+                if (cache_evictions != 0xffffffffu)
+                    ++cache_evictions;
+            }
+            CachedViewport stored;
+            stored.signature = signature;
+            stored.pixels = pixels;
+            stored.tiles = cached_tiles;
+            stored.replacement_flags = cached_replacement_tile_flags;
+            stored.rendered_tile_count = cached_rendered_tile_count;
+            stored.fallback_tile_count = cached_fallback_tile_count;
+            stored.textured_tile_count = cached_textured_tile_count;
+            viewport_cache.push_back(std::move(stored));
+        }
         QueryPerformanceCounter(&finished);
         fill_output(frame, output, invalidations, finished.QuadPart - started.QuadPart);
         return true;

@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 8u
+#define C3X_RENDERER_API_VERSION 9u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -34,7 +34,8 @@ enum c3x_renderer_tile_flags {
     C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED = 128u,
     C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED = 256u,
     C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED = 512u,
-    C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED = 1024u
+    C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED = 1024u,
+    C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED = 2048u
 };
 
 enum c3x_renderer_invalidation_flags {

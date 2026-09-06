@@ -264,8 +264,10 @@ int main(int argc, char ** argv) {
         if (set_definition_paths(".", "build\\synthetic_default.txt", "build\\synthetic_scenario.txt", nullptr) != C3X_RENDERER_RESULT_OK)
             return fail("layered terrain definitions were not accepted");
     } else if (external_definition_mode) {
-        if (set_definition_paths(argv[3], argv[4], nullptr, nullptr) != C3X_RENDERER_RESULT_OK)
+        if (set_definition_paths(argv[3], argv[4], nullptr, nullptr) != C3X_RENDERER_RESULT_OK) {
+            std::fprintf(stderr, "external definition diagnostic=%lu\n", GetLastError());
             return fail("external terrain definitions were not accepted");
+        }
     } else if (set_pack_path(pack_path) != C3X_RENDERER_RESULT_OK) {
         return fail("normalized grassland pack was not accepted");
     }
@@ -336,8 +338,8 @@ int main(int argc, char ** argv) {
         output.renderer_cpu_ticks < 0 || output.textured_tile_count != expected_textured)
         return fail("off-screen output metadata is invalid");
     if (output.replacement_tile_count != static_cast<c3x_renderer_u32>(std::size(tiles)) ||
-        output.replacement_tile_flags == nullptr || output.cache_capacity != 1 ||
-        output.cache_entries != 0 || output.content_revision == 0)
+        output.replacement_tile_flags == nullptr || output.cache_capacity != 4 ||
+        output.cache_entries != 1 || output.content_revision == 0)
         return fail("replacement ownership or bounded cache metadata is invalid");
     for (std::size_t index = 0; index < std::size(tiles); ++index) {
         bool expected_replacement = external_definition_mode ||
@@ -391,7 +393,7 @@ int main(int argc, char ** argv) {
     output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
     if (render(&frame, &output) != C3X_RENDERER_RESULT_OK)
         return fail("static cache priming render failed");
-    if (output.cache_entries != 1 || output.cache_capacity != 1)
+    if (output.cache_entries != 2 || output.cache_capacity != 4)
         return fail("static terrain cache is not populated within its fixed bound");
     c3x_renderer_u32 cache_hits_before = output.cache_hits;
     output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
@@ -400,23 +402,46 @@ int main(int argc, char ** argv) {
         output.frame_invalidation_flags != 0)
         return fail("identical static frame did not produce an exact cache hit");
 
-    // Roads, resources, cities, units, and their UI selectors remain in later
-    // Civ III planes.  They must not evict a terrain-only retained result.
+    // Units and their UI selectors remain in Civ III's retained overlay planes.
+    // Visible animation must keep driving redraw without evicting static map art.
     c3x_renderer_u32 retained_hits_before = output.cache_hits;
-    tiles[0].road_mask ^= 4u;
-    tiles[0].resource_id += 1;
-    tiles[0].city_population += 1;
     tiles[0].unit_direction = (tiles[0].unit_direction + 1) & 7;
+    tiles[0].square_parts ^= 0x20u;
+    tiles[0].terrain_overlays ^= 0x40u;
+    tiles[0].visibility_mask ^= 0x80u;
+    tiles[0].city_population += 1;
+    frame.visible_animation_count = 1;
     output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
     if (render(&frame, &output) != C3X_RENDERER_RESULT_OK ||
         output.cache_hits != retained_hits_before + 1 || output.renderer_cpu_ticks != 0 ||
         output.frame_invalidation_flags != 0 ||
+        output.request_continuous_redraw != 1 ||
         hash_pixels(output.bgra_pixels, byte_count) != first_hash)
-        return fail("retained Civ III overlay state invalidated terrain-only cache work");
+        return fail("animated Civ III overlay state invalidated static map cache work");
+    tiles[0].unit_direction = (tiles[0].unit_direction + 7) & 7;
+    tiles[0].square_parts ^= 0x20u;
+    tiles[0].terrain_overlays ^= 0x40u;
+    tiles[0].visibility_mask ^= 0x80u;
+    tiles[0].city_population -= 1;
+    frame.visible_animation_count = 0;
+
+    // Renderer-owned routes, resources, and cities are authoritative static
+    // scene inputs and must invalidate when their captured state changes.
+    tiles[0].road_mask ^= 4u;
+    tiles[0].resource_id += 1;
+    tiles[0].city_size += 1;
+    output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+    if (render(&frame, &output) != C3X_RENDERER_RESULT_OK ||
+        (output.frame_invalidation_flags & C3X_RENDERER_INVALIDATE_SCENE) == 0 ||
+        output.renderer_cpu_ticks == 0)
+        return fail("renderer-owned route/resource/city change reused stale terrain");
     tiles[0].road_mask ^= 4u;
     tiles[0].resource_id -= 1;
-    tiles[0].city_population -= 1;
-    tiles[0].unit_direction = (tiles[0].unit_direction + 7) & 7;
+    tiles[0].city_size -= 1;
+    output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+    if (render(&frame, &output) != C3X_RENDERER_RESULT_OK ||
+        hash_pixels(output.bgra_pixels, byte_count) != first_hash)
+        return fail("renderer-owned route/resource/city restore was not deterministic");
 
     // Rivers are renderer-owned geometry after I13, so authoritative mask
     // changes must invalidate the retained terrain result.
@@ -541,6 +566,23 @@ int main(int argc, char ** argv) {
         approved_tiles[10].feature_flags = C3X_RENDERER_FEATURE_VOLCANO;
         approved_tiles[1].river_code = 2u;
         approved_tiles[2].river_code = 8u;
+        approved_tiles[1].road_mask = 1u;
+        approved_tiles[1].route_style = 2;
+        approved_tiles[2].road_mask = 1u;
+        approved_tiles[2].route_style = 2;
+        approved_tiles[3].railroad_mask = 1u;
+        approved_tiles[4].railroad_mask = 1u;
+        approved_tiles[5].resource_id = 4;
+        strcpy_s(approved_tiles[5].resource_name, "Horses");
+        approved_tiles[6].improvement_flags |= C3X_RENDERER_IMPROVEMENT_MINE;
+        approved_tiles[6].route_style = 3;
+        approved_tiles[3].city_id = 7;
+        approved_tiles[3].city_owner_id = 2;
+        approved_tiles[3].city_population = 4;
+        approved_tiles[3].city_size = 0;
+        approved_tiles[3].city_culture_group = 1;
+        approved_tiles[3].city_era = 1;
+        approved_tiles[3].city_flags = C3X_RENDERER_CITY_WALLED;
 
         c3x_renderer_frame_v1 approved_frame = frame;
         approved_frame.target_width = 1024;
@@ -588,6 +630,13 @@ int main(int argc, char ** argv) {
                 (flags[6] & C3X_RENDERER_TILE_CUSTOM_FEATURE_REPLACED) == 0 ||
                 (flags[1] & C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED) == 0 ||
                 (flags[2] & C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED) == 0 ||
+                (flags[1] & C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED) == 0 ||
+                (flags[2] & C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED) == 0 ||
+                (flags[3] & C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED) == 0 ||
+                (flags[4] & C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED) == 0 ||
+                (flags[5] & C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED) == 0 ||
+                (flags[3] & C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED) == 0 ||
+                (flags[6] & C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED) == 0 ||
                 flags[10] != (C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED |
                               C3X_RENDERER_TILE_CUSTOM_FEATURE_REPLACED) ||
                 flags[11] != (C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED |
@@ -680,8 +729,8 @@ int main(int argc, char ** argv) {
         if (zoom_hashes[0] == zoom_hashes[1])
             return fail("approved L9-L12 zoom fixtures were not distinct");
 
-        // A terrain owner change is cache-relevant, while later retained
-        // overlays are not.  Reset must rebuild D3D resources from the same
+        // A terrain owner change is cache-relevant, while unit overlays are
+        // not.  Reset must rebuild D3D resources from the same
         // approved CPU-side handoff without changing the resulting pixels.
         approved_frame.tile_width = 128;
         approved_frame.tile_height = 64;
@@ -692,15 +741,12 @@ int main(int argc, char ** argv) {
             approved_output.height;
         std::uint64_t owned_hash = hash_pixels(approved_output.bgra_pixels, ownership_bytes);
         c3x_renderer_u32 ownership_hits = approved_output.cache_hits;
-        approved_tiles[5].road_mask = 15;
-        approved_tiles[5].resource_id = 4;
-        approved_tiles[5].city_id = 7;
         approved_tiles[5].unit_type_id = 9;
         approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
         if (render(&approved_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
             approved_output.cache_hits != ownership_hits + 1 ||
             approved_output.frame_invalidation_flags != 0)
-            return fail("approved retained overlay selectors invalidated terrain ownership");
+            return fail("approved retained unit selector invalidated terrain ownership");
         approved_tiles[5].real_terrain_type = 2;
         approved_tiles[5].feature_flags = 0;
         approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
@@ -723,6 +769,19 @@ int main(int argc, char ** argv) {
                 vegetation_restore_result);
             return fail("approved vegetation fixture did not restore deterministically");
         }
+        approved_tiles[6].improvement_flags &= ~C3X_RENDERER_IMPROVEMENT_MINE;
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&approved_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
+            (approved_output.frame_invalidation_flags & C3X_RENDERER_INVALIDATE_SCENE) == 0 ||
+            (approved_output.replacement_tile_flags[6] &
+             C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED) != 0 ||
+            hash_pixels(approved_output.bgra_pixels, ownership_bytes) == owned_hash)
+            return fail("approved mine body was absent or retained after ownership changed");
+        approved_tiles[6].improvement_flags |= C3X_RENDERER_IMPROVEMENT_MINE;
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&approved_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
+            hash_pixels(approved_output.bgra_pixels, ownership_bytes) != owned_hash)
+            return fail("approved mine fixture did not restore deterministically");
         approved_tiles[11].real_terrain_type = 2;
         approved_tiles[11].feature_flags = 0;
         approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
@@ -774,11 +833,21 @@ int main(int argc, char ** argv) {
         c3x_renderer_u32 generation_before = approved_output.device_generation;
         reset();
         approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
-        if (render(&approved_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
+        int reset_result = render(&approved_frame, &approved_output);
+        std::uint64_t reset_after_hash = hash_pixels(
+            approved_output.bgra_pixels, reset_bytes);
+        if (reset_result != C3X_RENDERER_RESULT_OK ||
             approved_output.device_generation <= generation_before ||
             (approved_output.frame_invalidation_flags & C3X_RENDERER_INVALIDATE_DEVICE) == 0 ||
-            hash_pixels(approved_output.bgra_pixels, reset_bytes) != reset_hash)
+            reset_after_hash != reset_hash) {
+            std::fprintf(stderr,
+                "device reset expected=%llu actual=%llu result=%d generation=%u->%u invalidations=%u\n",
+                static_cast<unsigned long long>(reset_hash),
+                static_cast<unsigned long long>(reset_after_hash), reset_result,
+                generation_before, approved_output.device_generation,
+                approved_output.frame_invalidation_flags);
             return fail("approved L9-L12 device reset did not rebuild deterministically");
+        }
 
         // Match the full-screen capture volume observed at the live m19 boundary:
         // 400 logical tiles plus 400 odd-parity companion records.

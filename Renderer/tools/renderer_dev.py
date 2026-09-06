@@ -287,6 +287,8 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
             "Renderer.terrain_lab.test_l17_city_contract",
             "Renderer.terrain_lab.test_build_l18_mine_scenario",
             "Renderer.terrain_lab.test_l18_mine_contract",
+            "Renderer.terrain_lab.test_build_l19_farm_scenario",
+            "Renderer.terrain_lab.test_l19_farm_contract",
         ]))
         if results[-1]["status"] == "pass":
             results.append(command_result(

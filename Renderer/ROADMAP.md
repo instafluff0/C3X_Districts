@@ -138,16 +138,15 @@ shoreline clipping. The same generic pass adds restrained grassland, plains,
 and grassland-hill surface clutter. The rejected transparency, whole-atlas,
 oversized-cloud, and every-cell repetition candidates are not preserved.
 
-## Next Step: L18
+## Next Step: L19
 
-L17 is complete and approved under the user's explicit autonomous-review
-authorization. Its frozen handoff adds compact normalized city compositions
-across four eras and all three Civ III size bands, with culture/owner metadata,
-wall and capital states, retained-label clearance, shared lighting, and
-source-authored night emissives. Noon, midnight, city-only, no-city, native,
-and reduced controls are deterministic, and the no-city control is byte-identical
-to L16. Begin L18 with normalized terrain-aware mine structures and excavation
-footprints without altering the approved alternate-skin scene.
+L18 is complete and approved under the user's explicit autonomous-review
+authorization. Its frozen handoff adds twenty recursive source-backed mine
+compositions across preindustrial/industrial eras and three variants, with
+terrain-following excavation decals, one compound shadow, confirmed emissives,
+and native/reduced readability. The no-mine control is byte-identical to L17.
+Begin L19 with connected, topology-aware normalized farm and irrigation blocks
+without altering the approved alternate-skin scene.
 Use `python3 Renderer/tools/renderer_dev.py lab`.
 
 Ahead of that visual gate, all 24 animated clutter bodies now compile with
@@ -229,7 +228,8 @@ instead of comparing unrelated map regions.
 15. L15 complete / I15 handoff available — the approved connected railroad subset uses narrow authored sleepers/ballast, paired source-colored rails, exact river bridges, road coexistence, relief, wrap, and deterministic both-zoom evidence without changing L14.
 16. L16 complete / I16 handoff available — the approved normalized resource gate covers strategic, luxury, land-bonus, and aquatic-bonus bodies, corrected Civ III-scale clustering, shared lighting/grounding, visibility suppression, and deterministic both-zoom evidence without changing L15.
 17. L17 complete / I17 handoff available — the approved normalized city gate covers four eras, all three Civ III size bands, culture/owner metadata, wall/capital states, compact source-backed compositions, retained-label clearance, shared lighting, and source-authored night emissives without changing L16.
-18. L18 ready: add terrain-aware normalized mine structures and excavation footprints over the approved alternate-skin 192-tile scene, then critically inspect and self-approve under the user's 2026-09-05 authorization.
+18. L18 complete / I18 handoff available — the approved recursive normalized mine gate covers preindustrial/industrial families, three variants, terrain-following excavation, mineral and relief adjacency, coherent compound shadows, source emissives, and deterministic isolation without changing L17.
+19. L19 ready: add connected topology-aware normalized farm and irrigation blocks over the approved alternate-skin 192-tile scene, then critically inspect and self-approve under the user's authorization.
 
 Offline L14/L15 intake is prepared ahead without advancing either gate. The
 source-independent route packs now cover four road stages, railroad ballast and

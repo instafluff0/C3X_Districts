@@ -26,7 +26,7 @@
     "renderer_lab": {
       "responsibility": "Standalone asset use, rendering technique, visual quality, and approval for all map graphics.",
       "plan": "terrain_lab/PLAN.md",
-      "current_step": "L18",
+      "current_step": "L19",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py lab"
     },
     "game_integration": {
@@ -135,29 +135,31 @@
     "terrain_lab/DUNE_SOURCE_AUDIT.md"
   ],
   "next_step": {
-    "id": "L18",
-    "title": "Mines and 192-tile promotion approval",
+    "id": "L19",
+    "title": "Farms and irrigation, independent bundled tundra correction, and 192-tile promotion approval",
     "status": "ready",
     "workstream": "renderer_lab",
     "iteration_command": "python3 Renderer/tools/renderer_dev.py lab",
     "promotion_required": true,
     "scope": [
-      "Render normalized source-backed mine structures and excavation footprints over a separate deterministic Lab-only object scenario without changing authoritative BIQ terrain.",
-      "Cover reachable terrain, relief, resource association, era/civilization variants, route adjacency, shoreline proximity, and source-owned emissive channels bound to the accepted L13A environment.",
-      "Preserve the approved L9-L17 alternate-environment terrain, lighting, routes, resources, cities, relief, coastline, water, vegetation, and clutter in deterministic native, reduced, and day/night 16x12 / 192-tile fixtures."
+      "Compose normalized source-backed farm tile bases, buildings, and crop decals from authoritative four-neighbor irrigation masks over a deterministic Lab-only scenario without changing BIQ terrain.",
+      "Independently replace the Lab's grassland fallback for Civ III tundra base 3 with normalized tundra base-color, height, and specular channels in irrigated and unirrigated cells.",
+      "Cover grassland, plains, desert, tundra, relief adjacency, route/river/city proximity, all four eras, continuous blocks, boundaries, corners, junctions, and isolated cells.",
+      "Preserve the approved L9-L18 alternate-environment scene in deterministic native, reduced, day/night, no-farm, and isolated fixtures."
     ],
     "acceptance": [
-      "Mine bodies read as compact worked improvements rather than cities or resources, with excavation/base treatment blended into every supported underlying terrain.",
-      "Raised mine structures share the accepted face, contact, and coherent cast-shadow lighting; only normalized source emissive channels may activate at night.",
-      "Relief, route, river, shoreline, resource, vegetation, and city adjacency remain free of tile-edge seams, clipping, or depth-order loss.",
-      "Complete noon/night, no-mines, mines-only, and reduced renders contain exactly 192 contiguous authoritative Civ III tiles where applicable and are byte-deterministic for identical inputs.",
-      "The user explicitly authorized careful self-approval of the complete alternate-skin L18 promotion on 2026-09-05 before L19 begins."
+      "Farm ownership forms continuous, naturally varied field blocks whose topology joins at shared edges and fades cleanly at non-irrigated boundaries.",
+      "Tundra reads as its own normalized cold-ground material at both zooms and blends cleanly against every adjacent terrain family regardless of irrigation state.",
+      "Era-specific buildings and default source crop decals remain subordinate to terrain relief and cities, with terrain-aware color/footprint blending and no duplicated L16 resource crop.",
+      "Raised farm components share accepted face/contact/cast lighting and only source-authored emissives may activate at night.",
+      "Complete noon/night, no-farms, farm-isolation, topology, and reduced renders contain exactly 192 contiguous authoritative Civ III tiles where applicable and are byte-deterministic.",
+      "The user explicitly authorized careful self-approval of the complete alternate-skin L19 promotion before L19A begins."
     ],
     "must_not": [
-      "Do not modify injected game code, implement I18, or launch Civilization III during the L18 visual gate.",
-      "Do not redesign approved L9-L17 terrain, river, route, resource, city, geometry, material, placement, lighting, or alternate-skin art direction.",
-      "Do not invent smoke, fire, bloom, weather, excavation animation, or lights unsupported by normalized source art.",
-      "Do not begin L19 before the authorized critical visual approval of L18."
+      "Do not modify injected game code, implement I19, or launch Civilization III during the L19 visual gate.",
+      "Do not redesign approved L9-L18 terrain or object layers.",
+      "Do not invent crop resources, smoke, fire, bloom, weather, terrain deformation, or lights unsupported by normalized source art.",
+      "Do not begin L19A before the authorized critical visual approval of L19."
     ]
   },
   "milestones": [
@@ -1091,7 +1093,11 @@
         {
           "id": "L18",
           "title": "Mines and 192-tile promotion approval",
-          "status": "ready",
+          "status": "complete",
+          "completed_on": "2026-09-06",
+          "approved_on": "2026-09-06",
+          "evidence": ["handoffs/L18_mines.json", "terrain_lab/L18_MINE_AUDIT.md", "terrain_lab/RUN_L18.bat"],
+          "verification": ["terrain_lab_l18_replayable_render_and_authorized_critical_visual_approval"],
           "promotion_required": true,
           "offline_preparation": {
             "status": "complete",
@@ -1108,7 +1114,7 @@
         {
           "id": "L19",
           "title": "Farms and irrigation, independent bundled tundra correction, and 192-tile promotion approval",
-          "status": "blocked_by_previous",
+          "status": "ready",
           "promotion_required": true,
           "offline_preparation": {
             "status": "complete",

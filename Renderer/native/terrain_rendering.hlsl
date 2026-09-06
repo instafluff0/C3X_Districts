@@ -650,9 +650,27 @@ float sample_masked_land_clutter_height(Texture2D height_atlas, Texture2D base_a
     return height * coverage;
 }
 
+float4 sample_reused_resource_slot(float slot, float2 uv)
+{
+    float4 sampled = resource_base_texture_7.Sample(material_sampler, uv);
+    if (slot < 0.5) sampled = resource_base_texture_0.Sample(material_sampler, uv);
+    else if (slot < 1.5) sampled = resource_base_texture_1.Sample(material_sampler, uv);
+    else if (slot < 2.5) sampled = resource_base_texture_2.Sample(material_sampler, uv);
+    else if (slot < 3.5) sampled = resource_base_texture_3.Sample(material_sampler, uv);
+    else if (slot < 4.5) sampled = resource_base_texture_4.Sample(material_sampler, uv);
+    else if (slot < 5.5) sampled = resource_base_texture_5.Sample(material_sampler, uv);
+    else if (slot < 6.5) sampled = resource_base_texture_6.Sample(material_sampler, uv);
+    return sampled;
+}
+
 float4 PSFeature(FeaturePixelInput input) : SV_TARGET
 {
     float3 albedo;
+    float3 emissive = 0.0;
+    float material_fraction = frac(input.material_index);
+    float mine_weight = step(20.5, input.material_index) *
+        (1.0 - step(28.5, input.material_index)) * step(0.005, material_fraction);
+    float mine_slot = floor(input.material_index + 0.001) - 21.0;
     if (input.material_index < 0.5)
         albedo = feature_base_texture_0.Sample(material_sampler, input.uv).rgb;
     else if (input.material_index < 1.5)
@@ -677,8 +695,73 @@ float4 PSFeature(FeaturePixelInput input) : SV_TARGET
         albedo = river_rock_base_texture_2.Sample(material_sampler, input.uv).rgb;
     else if (input.material_index < 11.5)
         albedo = river_rock_base_texture_3.Sample(material_sampler, input.uv).rgb;
-    else
+    else if (input.material_index < 12.5)
         albedo = river_rock_base_texture_4.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 13.5)
+        albedo = road_bridge_base_texture_0.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 14.5)
+        albedo = road_bridge_base_texture_1.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 15.5)
+        albedo = road_bridge_base_texture_2.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 16.5)
+        albedo = road_bridge_base_texture_3.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 17.5)
+        albedo = road_bridge_base_texture_4.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 18.5)
+        albedo = road_bridge_base_texture_5.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 19.5)
+        albedo = road_bridge_base_texture_6.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 20.5)
+        albedo = road_bridge_base_texture_7.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 21.5)
+        albedo = resource_base_texture_0.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 22.5)
+        albedo = resource_base_texture_1.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 23.5)
+        albedo = resource_base_texture_2.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 24.5)
+        albedo = resource_base_texture_3.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 25.5)
+        albedo = resource_base_texture_4.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 26.5)
+        albedo = resource_base_texture_5.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 27.5)
+        albedo = resource_base_texture_6.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 28.5)
+        albedo = resource_base_texture_7.Sample(material_sampler, input.uv).rgb;
+    else if (input.material_index < 29.5)
+    {
+        albedo = city_base_texture_0.Sample(material_sampler, input.uv).rgb;
+        emissive = resource_base_texture_0.Sample(material_sampler, input.uv).rgb;
+    }
+    else if (input.material_index < 30.5)
+    {
+        albedo = city_base_texture_1.Sample(material_sampler, input.uv).rgb;
+        emissive = resource_base_texture_1.Sample(material_sampler, input.uv).rgb;
+    }
+    else if (input.material_index < 31.5)
+    {
+        albedo = city_base_texture_2.Sample(material_sampler, input.uv).rgb;
+        emissive = resource_base_texture_2.Sample(material_sampler, input.uv).rgb;
+    }
+    else
+    {
+        albedo = city_base_texture_3.Sample(material_sampler, input.uv).rgb;
+        emissive = resource_base_texture_3.Sample(material_sampler, input.uv).rgb;
+    }
+    float4 mine_sample = sample_reused_resource_slot(mine_slot, input.uv);
+    clip(lerp(1.0, mine_sample.a - 0.08, mine_weight));
+    float mine_emissive_code = floor(material_fraction * 100.0 + 0.5);
+    if (mine_weight > 0.5 && mine_emissive_code > 1.5)
+        emissive = mine_emissive_code < 2.5
+            ? city_base_texture_0.Sample(material_sampler, input.uv).rgb
+            : city_base_texture_1.Sample(material_sampler, input.uv).rgb;
+    float city_weight = step(28.5, input.material_index);
+    float owner_code = floor(frac(input.material_index) * 12.5 + 0.25) - 1.0;
+    float3 owner_tint = owner_code < 0.5 ? float3(0.78, 0.94, 1.12) :
+        (owner_code < 1.5 ? float3(1.12, 0.80, 0.72) :
+        (owner_code < 2.5 ? float3(0.80, 1.08, 0.80) : float3(1.10, 0.92, 0.68)));
+    albedo *= lerp(float3(1.0, 1.0, 1.0), owner_tint, city_weight * 0.10);
     float3 normal = normalize(input.geometry_normal);
     float3 light_direction = frame_light_direction();
     // The source vegetation meshes use broad, mostly upward canopy normals.
@@ -705,13 +788,90 @@ float4 PSFeature(FeaturePixelInput input) : SV_TARGET
         float feature_form = raised_form_response(signed_diffuse);
         light *= feature_form;
     }
+    float3 lit_color = albedo * light + emissive * saturate(city_weight + mine_weight) *
+        environment_night_activation * environment_emissive_scale * 1.45;
     float3 display_color = pow(saturate(frame_tone_map(
-        albedo * light * frame_output_exposure())), 1.0 / 2.2);
+        lit_color * frame_output_exposure())), 1.0 / 2.2);
     return float4(display_color, 1.0);
+}
+
+float4 sample_road_source(float2 uv, float style, float pillaged)
+{
+    float4 base_route = lerp(
+        road_base_texture_0.Sample(decal_sampler, uv),
+        road_base_texture_1.Sample(decal_sampler, uv), pillaged);
+    float4 detail_route = base_route;
+    if (style > 0.5 && style < 1.5)
+        detail_route = lerp(road_base_texture_2.Sample(decal_sampler, uv),
+                            road_base_texture_3.Sample(decal_sampler, uv), pillaged);
+    else if (style > 1.5 && style < 2.5)
+        detail_route = lerp(road_base_texture_4.Sample(decal_sampler, uv),
+                            road_base_texture_5.Sample(decal_sampler, uv), pillaged);
+    else if (style > 2.5)
+        detail_route = lerp(road_base_texture_6.Sample(decal_sampler, uv),
+                            road_base_texture_7.Sample(decal_sampler, uv), pillaged);
+    float layered = step(0.5, style);
+    return float4(lerp(base_route.rgb, detail_route.rgb, detail_route.a * layered),
+                  max(base_route.a, detail_route.a * layered));
+}
+
+float4 sample_railroad_source(float along, float across, float pillaged)
+{
+    float2 rail_direction = normalize(float2(1.0, 0.24705882));
+    float2 rail_perpendicular = float2(-rail_direction.y, rail_direction.x);
+    float2 rail_uv_a = float2(along, lerp(0.75294118, 1.0, along)) +
+                       rail_perpendicular * across * 0.070;
+    float2 rail_uv_b = float2(along, lerp(0.25098039, 0.49803922, along)) +
+                       rail_perpendicular * across * 0.070;
+    float4 sleepers = lerp(railroad_base_texture_0.Sample(decal_sampler, rail_uv_a),
+                           railroad_base_texture_1.Sample(decal_sampler, rail_uv_a), pillaged);
+    float4 ballast = lerp(railroad_base_texture_0.Sample(decal_sampler, rail_uv_b),
+                          railroad_base_texture_1.Sample(decal_sampler, rail_uv_b), pillaged);
+    float4 steel_source = lerp(
+        railroad_base_texture_0.Sample(decal_sampler, float2(frac(along), 0.095)),
+        railroad_base_texture_1.Sample(decal_sampler, float2(frac(along), 0.095)), pillaged);
+    float rail_distance = abs(abs(across) - 0.34);
+    float rail_coverage = 1.0 - smoothstep(0.040, 0.075, rail_distance);
+    float4 bed = ballast.a > sleepers.a ? ballast : sleepers;
+    return float4(lerp(bed.rgb, steel_source.rgb, rail_coverage),
+                  max(bed.a, rail_coverage));
 }
 
 float4 PSMain(PixelInput input) : SV_TARGET
 {
+    if (input.panel > 0.5 && input.surface_kind > 10.5 && input.surface_kind < 11.5)
+    {
+        float railroad = step(3.5, input.base_terrain);
+        float pillaged = step(0.5, input.real_terrain);
+        float4 authored_route = railroad > 0.5
+            ? sample_railroad_source(input.shape_visibility.y,
+                                     input.shape_visibility.x, pillaged)
+            : sample_road_source(input.uv, input.base_terrain, pillaged);
+        float4 center_route = sample_road_source(input.macro_uv, input.base_terrain, pillaged);
+        if (railroad > 0.5)
+        {
+            center_route = lerp(road_base_texture_0.Sample(decal_sampler, input.macro_uv),
+                                road_base_texture_1.Sample(decal_sampler, input.macro_uv), pillaged);
+            float4 rail_detail = sample_railroad_source(
+                input.shape_visibility.y, input.shape_visibility.x, pillaged);
+            center_route = lerp(center_route, rail_detail, saturate(rail_detail.a));
+            authored_route = float4(
+                lerp(center_route.rgb, rail_detail.rgb, rail_detail.a),
+                max(center_route.a * 0.72, rail_detail.a));
+        }
+        float continuous_ribbon = 1.0 - smoothstep(
+            0.46, 0.70, abs(input.shape_visibility.x));
+        float alpha = max(authored_route.a, continuous_ribbon * 0.88);
+        clip(alpha - 0.025);
+        float center_weight = continuous_ribbon *
+            (1.0 - smoothstep(0.02, 0.20, authored_route.a));
+        float3 albedo = lerp(authored_route.rgb, center_route.rgb, center_weight);
+        float3 normal = normalize(input.geometry_normal);
+        float3 light = frame_illumination(normal, 1.0, 1.0);
+        float3 display_color = pow(saturate(frame_tone_map(
+            albedo * light * frame_output_exposure())), 1.0 / 2.2);
+        return float4(display_color, alpha);
+    }
     if (input.panel > 0.5 && input.surface_kind > 9.5 && input.surface_kind < 10.5)
     {
         float alpha = (1.0 - input.shape_visibility.x) *

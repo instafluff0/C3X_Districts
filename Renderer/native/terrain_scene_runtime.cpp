@@ -80,8 +80,7 @@ bool consume_string(std::vector<std::uint8_t> const & data, std::size_t & cursor
         return false;
     output.assign(reinterpret_cast<char const *>(data.data() + cursor), bytes);
     cursor += bytes;
-    return output.find("..") == std::string::npos && output.find(':') == std::string::npos &&
-        output.front() != '/' && output.front() != '\\';
+    return true;
 }
 
 float smoothstep(float value) {
@@ -114,7 +113,10 @@ bool load_feature_bundle(std::string const & path, FeatureBundle & output) {
         return false;
     output.texture_paths.resize(texture_count);
     for (std::string & texture : output.texture_paths)
-        if (!consume_string(data, cursor, texture))
+        if (!consume_string(data, cursor, texture) ||
+            texture.find("..") != std::string::npos ||
+            texture.find(':') != std::string::npos ||
+            texture.front() == '/' || texture.front() == '\\')
             return false;
     output.assets.resize(asset_count);
     for (FeatureAsset & asset : output.assets) {
@@ -244,18 +246,23 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
         for (auto value : {tile.tile_x, tile.tile_y, tile.anchor_x, tile.anchor_y,
                            tile.terrain_type, tile.real_terrain_type})
             hash_value(result.scene, value);
-        for (auto value : {tile.square_parts, tile.terrain_overlays, tile.visibility_mask,
-                           tile.variant_seed, tile.tile_flags, tile.feature_flags,
+        // Cache only state that changes custom-renderer pixels. Civ III draw
+        // selectors, native overlay bits, fog traversal, and exact population
+        // remain authoritative capture data but do not belong to this static
+        // terrain plane.
+        for (auto value : {tile.variant_seed, tile.tile_flags, tile.feature_flags,
+                           tile.improvement_flags,
                            tile.has_effect, tile.river_code, tile.road_mask,
                            tile.railroad_mask, static_cast<c3x_renderer_u32>(tile.route_style),
                            static_cast<c3x_renderer_u32>(tile.resource_id),
+                           static_cast<c3x_renderer_u32>(tile.resource_class),
                            static_cast<c3x_renderer_u32>(tile.city_id),
                            static_cast<c3x_renderer_u32>(tile.city_owner_id),
-                           static_cast<c3x_renderer_u32>(tile.city_population),
                            static_cast<c3x_renderer_u32>(tile.city_size),
                            static_cast<c3x_renderer_u32>(tile.city_culture_group),
                            static_cast<c3x_renderer_u32>(tile.city_era), tile.city_flags})
             hash_value(result.scene, value);
+        hash_bytes(result.scene, tile.resource_name, sizeof(tile.resource_name));
         hash_value(result.ownership, tile.tile_flags);
         hash_value(result.ownership, tile.feature_flags);
     }

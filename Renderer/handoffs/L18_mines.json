@@ -1,0 +1,43 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L18",
+  "system": "mines",
+  "status": "approved",
+  "approved_on": "2026-09-06",
+  "approval_basis": "critical autonomous visual review explicitly authorized by the user",
+  "depends_on": ["handoffs/L17_cities.json", "handoffs/L13A_lighting.json"],
+  "source_contract": {
+    "pack_roots": ["packs/ImprovementsNormalized"],
+    "definition": "terrain_lab/RUN_L18.bat",
+    "scenario": "terrain_lab/fixtures/l18_mines_192.csv",
+    "scenario_provenance": "deterministic source-independent Lab-only mine augmentation over unchanged authoritative BIQ terrain",
+    "runtime_bundle": "packs/ImprovementsNormalized/mine_runtime.bin",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "shader": "terrain_lab/terrain_lab.hlsl"
+  },
+  "coverage": [
+    "preindustrial and industrial families across all four Civ III eras and three stable variants",
+    "flat, relief, mineral-associated, route-adjacent, river-adjacent, coast-near, city-near, and wrap-near cells",
+    "recursive source decals and structures with one compound shadow and two confirmed emissive channels",
+    "noon, midnight, complete, no-mine, terrain+mine isolation, native, and reduced controls"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l18_mines_noon.bmp",
+    "native_sha256": "934cb7fe2dc9e620357682c11416f12652266f2f1fa1749c010401d3b569a129",
+    "night_sha256": "1beca612d2cf2f4f6e6c7923c4456f5013a92a76ffc07124a54fdc7cdc33db0c",
+    "reduced_sha256": "62d1b8f4730d562c7463bb378b369857ae8e310a04a1793fb71102eeaa29d6db",
+    "no_mines_sha256": "53d9717775789cee0e3a67fd936447817818c90672c7c8945c6b8a72ae5a2ed6",
+    "isolation_sha256": "8e62bd3eba1d61052524d6c12763ac8092feabb89a7301a09dfce100390e3e2d",
+    "scenario_sha256": "3cf0b60852e1caa4934febbacc649d18c7953e2da07b72f823b4ec1ffafe62a7",
+    "runtime_sha256": "d833335ec1a4b1e4c9c4da637f81b46f7828ff038a722a9a5a4673c76ba751f1",
+    "tile_count": 192,
+    "audit": "terrain_lab/L18_MINE_AUDIT.md"
+  },
+  "ownership_intent": {
+    "map_mine_bodies": "custom_when_renderer_enabled_after_I18",
+    "authoritative_state": "Civ III mine ownership, era, pillage, tile/resource, visibility, environment, and visible-scene state",
+    "retained_layers": "labels, units, cities, borders, fog, HUD, and UI"
+  },
+  "update_mode": "static except when authoritative mine, pillage, resource, environment, or visible-scene state changes",
+  "fallback": "After I18, unresolved or failed custom mine rendering fails the custom frame visibly; it never replays native mine pixels."
+}

@@ -112,8 +112,9 @@ class ProjectStateTests(unittest.TestCase):
         self.assertEqual("complete", lab_steps["L15"]["status"])
         self.assertEqual("complete", lab_steps["L16"]["status"])
         self.assertEqual("complete", lab_steps["L17"]["status"])
-        self.assertEqual("ready", lab_steps["L18"]["status"])
-        self.assertEqual("L18", source["next_step"]["id"])
+        self.assertEqual("complete", lab_steps["L18"]["status"])
+        self.assertEqual("ready", lab_steps["L19"]["status"])
+        self.assertEqual("L19", source["next_step"]["id"])
         environment_scope = " ".join(
             m6_steps["M6.4"][field][index]
             for field in ("scope", "acceptance", "must_not")
@@ -189,7 +190,7 @@ class ProjectStateTests(unittest.TestCase):
         source = json.loads(check_project_state.DEFAULT_STATUS.read_text(encoding="utf-8"))
         workstreams = source["workstreams"]
 
-        self.assertEqual("L18", workstreams["renderer_lab"]["current_step"])
+        self.assertEqual("L19", workstreams["renderer_lab"]["current_step"])
         self.assertEqual("I13A", workstreams["game_integration"]["current_step"])
         self.assertIn("renderer_dev.py lab", workstreams["renderer_lab"]["iteration_command"])
         self.assertIn("renderer_dev.py integration", workstreams["game_integration"]["iteration_command"])

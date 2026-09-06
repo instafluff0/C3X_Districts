@@ -6,7 +6,7 @@ terrain = replace
 features = replace
 roads = replace
 rivers = replace
-improvements = civ3
+improvements = replace
 resources = replace
 cities = replace
 units = civ3
@@ -54,6 +54,10 @@ path = mod:Renderer\packs\CityComponentsNormalized
 #Pack
 id = city_adjuncts_normalized
 path = mod:Renderer\packs\CityAdjunctsNormalized
+
+#Pack
+id = improvements_normalized
+path = mod:Renderer\packs\ImprovementsNormalized
 
 #Asset
 id = terrain.desert.base

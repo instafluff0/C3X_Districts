@@ -26968,7 +26968,7 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 		C3X_RENDERER_TILE_CUSTOM_FEATURE_REPLACED | C3X_RENDERER_TILE_CUSTOM_DUNES_REPLACED |
 		C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED | C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED |
 		C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED | C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED |
-		C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED;
+		C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED | C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED;
 	for (unsigned int n = 0; n < output->replacement_tile_count; n++) {
 		unsigned int flags = output->replacement_tile_flags[n];
 		struct c3x_renderer_tile_v1 const * captured = &is->custom_renderer_tiles[n];
@@ -26987,18 +26987,24 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 			return false;
 		if (((flags & C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED) != 0) &&
 		    (captured->railroad_mask == 0))
+			return false;
 		if (((flags & C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED) != 0) &&
 		    (captured->resource_id < 0))
 			return false;
 		if (((flags & C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED) != 0) &&
 		    (captured->city_id < 0))
+			return false;
+		if (((flags & C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED) != 0) &&
+		    ((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) == 0))
+			return false;
 		if (((flags & (C3X_RENDERER_TILE_CUSTOM_FEATURE_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_DUNES_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED |
-		               C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED)) != 0) &&
+		               C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED |
+		               C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED)) != 0) &&
 		    ((flags & C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED) == 0))
 			return false;
 	}

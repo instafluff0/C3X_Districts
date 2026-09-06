@@ -1451,6 +1451,18 @@ def check_terrain_lab_l17_handoff() -> dict[str, Any]:
     )
 
 
+def check_terrain_lab_l18_handoff() -> dict[str, Any]:
+    return check_lab_handoff(
+        "L18_mines.json",
+        "L18",
+        192,
+        [
+            "Renderer.terrain_lab.test_build_l18_mine_scenario",
+            "Renderer.terrain_lab.test_l18_mine_contract",
+        ],
+    )
+
+
 CHECKS: dict[str, tuple[CheckFunction, bool]] = {
     "project_state_contract": (check_project_state_contract, False),
     "renderer_unit_tests": (check_renderer_unit_tests, False),
@@ -1506,6 +1518,7 @@ CHECKS: dict[str, tuple[CheckFunction, bool]] = {
     "terrain_lab_l15_replayable_render_and_authorized_critical_visual_approval": (check_terrain_lab_l15_handoff, False),
     "terrain_lab_l16_replayable_render_and_authorized_critical_visual_approval": (check_terrain_lab_l16_handoff, False),
     "terrain_lab_l17_replayable_render_and_authorized_critical_visual_approval": (check_terrain_lab_l17_handoff, False),
+    "terrain_lab_l18_replayable_render_and_authorized_critical_visual_approval": (check_terrain_lab_l18_handoff, False),
 }
 
 WINDOWS_NATIVE_CHECKS = {

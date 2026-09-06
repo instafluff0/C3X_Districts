@@ -40,6 +40,7 @@ bool road_geometry_enabled = false;
 bool railroad_geometry_enabled = false;
 bool resource_geometry_enabled = false;
 bool city_geometry_enabled = false;
+bool l19_scene_enabled = false;
 c3x_renderer::EnvironmentState frame_environment = {};
 float active_light_direction[3] = {-0.808f, -0.514f, 0.323f};
 float frame_hour = 12.0f;
@@ -75,6 +76,7 @@ struct Vertex {
     float river_branch_count = 0.0f;
     float river_mouth_distance = 1000.0f;
     float river_padding = 0.0f;
+    float material_tundra = 0.0f;
 };
 
 struct BiqWindowTile {
@@ -175,6 +177,24 @@ struct MineScenario {
 };
 
 MineScenario mine_scenario;
+
+struct FarmInstance {
+    int column = 0;
+    int row = 0;
+    unsigned era = 0;
+    unsigned adjacency_mask = 0;
+    unsigned terrain_family = 0;
+    unsigned visible = 0;
+    unsigned variant = 0;
+};
+
+struct FarmScenario {
+    int columns = 0;
+    int rows = 0;
+    std::vector<FarmInstance> instances;
+};
+
+FarmScenario farm_scenario;
 
 struct RiverNode {
     int lattice_x = 0;
@@ -614,6 +634,46 @@ bool load_mine_scenario(char const * path, MineScenario & output) {
     if (!ok) {
         output = {};
         std::fprintf(stderr, "terrain_lab: invalid Lab-only mine scenario: %s\n", path);
+    }
+    return ok;
+}
+
+bool load_farm_scenario(char const * path, FarmScenario & output) {
+    FILE * file = nullptr;
+    if (fopen_s(&file, path, "rb") != 0 || file == nullptr)
+        return false;
+    char magic[48] = {};
+    char source_hash[80] = {};
+    char provenance[40] = {};
+    unsigned count = 0;
+    bool ok = fscanf_s(file, "%47[^,],%d,%d,%u,%79[^,],%39[^\n]\n", magic,
+                       static_cast<unsigned>(sizeof(magic)), &output.columns,
+                       &output.rows, &count, source_hash,
+                       static_cast<unsigned>(sizeof(source_hash)), provenance,
+                       static_cast<unsigned>(sizeof(provenance))) == 6 &&
+              std::strcmp(magic, "C3X_LAB_FARM_SCENARIO_V0") == 0 &&
+              std::strcmp(provenance, "lab_augmentation") == 0 &&
+              output.columns > 0 && output.rows > 0 && count > 0 && count <= 256;
+    output.instances.reserve(count);
+    for (unsigned index = 0; ok && index < count; ++index) {
+        FarmInstance instance;
+        ok = fscanf_s(file, "%d,%d,%u,%u,%u,%u,%u\n",
+                      &instance.column, &instance.row, &instance.era,
+                      &instance.adjacency_mask, &instance.terrain_family,
+                      &instance.visible, &instance.variant) == 7 &&
+             instance.column >= 0 && instance.column < output.columns &&
+             instance.row >= 0 && instance.row < output.rows &&
+             instance.era < 4u && instance.adjacency_mask < 16u &&
+             instance.terrain_family < 4u && instance.visible <= 1u &&
+             instance.variant < 3u;
+        if (ok)
+            output.instances.push_back(instance);
+    }
+    std::fclose(file);
+    ok = ok && output.instances.size() == count;
+    if (!ok) {
+        output = {};
+        std::fprintf(stderr, "terrain_lab: invalid Lab-only farm scenario: %s\n", path);
     }
     return ok;
 }
@@ -1676,10 +1736,12 @@ int biq_material_class(BiqWindowTile const & tile) {
         return 2;
     if (tile.base == 1)
         return 1;
+    if (tile.base == 3)
+        return 4;
     return 0;
 }
 
-void biq_center_material_weights(int column, int row, float (&weights)[4]) {
+void biq_center_material_weights(int column, int row, float (&weights)[5]) {
     for (float & weight : weights)
         weight = 0.0f;
     BiqWindowTile const * center = biq_tile_at(column, row);
@@ -1700,7 +1762,7 @@ void biq_center_material_weights(int column, int row, float (&weights)[4]) {
             weights[biq_material_class(*sample)] += influence;
         }
     }
-    float total = weights[0] + weights[1] + weights[2] + weights[3];
+    float total = weights[0] + weights[1] + weights[2] + weights[3] + weights[4];
     if (total <= 0.0f)
         weights[0] = 1.0f;
     else
@@ -1709,7 +1771,7 @@ void biq_center_material_weights(int column, int row, float (&weights)[4]) {
 }
 
 void biq_material_weights(BiqWindowTile const & tile, float u, float v,
-                          float (&weights)[4]) {
+                          float (&weights)[5]) {
     float world_x = static_cast<float>(tile.column) + u;
     float world_y = static_cast<float>(tile.row) + (1.0f - v);
     BiqWindowTile const & first = biq_window.tiles.front();
@@ -1728,12 +1790,12 @@ void biq_material_weights(BiqWindowTile const & tile, float u, float v,
     int y0 = static_cast<int>(std::floor(grid_y));
     float tx = smoothstep01((grid_x - static_cast<float>(x0) - 0.20f) / 0.60f);
     float ty = smoothstep01((grid_y - static_cast<float>(y0) - 0.20f) / 0.60f);
-    float centers[4][4] = {};
+    float centers[4][5] = {};
     biq_center_material_weights(x0, y0, centers[0]);
     biq_center_material_weights(x0 + 1, y0, centers[1]);
     biq_center_material_weights(x0, y0 + 1, centers[2]);
     biq_center_material_weights(x0 + 1, y0 + 1, centers[3]);
-    for (unsigned material = 0; material < 4; ++material) {
+    for (unsigned material = 0; material < 5; ++material) {
         float top = centers[0][material] * (1.0f - tx) + centers[1][material] * tx;
         float bottom = centers[2][material] * (1.0f - tx) + centers[3][material] * tx;
         weights[material] = top * (1.0f - ty) + bottom * ty;
@@ -2271,9 +2333,9 @@ Vertex make_biq_vertex(BiqWindowTile const & tile, float u, float v, float uv_sc
         authored_relief_blend *= material_envelope *
                                  biq_coastal_relief_envelope(tile, u, v);
     }
-    float weights[4] = {};
+    float weights[5] = {};
     biq_material_weights(tile, u, v, weights);
-    return Vertex{ndc_x(screen_x), ndc_y(screen_y),
+    Vertex result{ndc_x(screen_x), ndc_y(screen_y),
                   (static_cast<float>(tile.column) + u) * uv_scale,
                   (static_cast<float>(tile.row) + (1.0f - v)) * uv_scale,
                   1.0f, -slope_u / length, -slope_v / length, 1.0f / length,
@@ -2288,6 +2350,8 @@ Vertex make_biq_vertex(BiqWindowTile const & tile, float u, float v, float uv_sc
                   biq_river_node_distance(tile, u, v, 1u),
                   biq_river_mouth_distance(tile, u, v),
                   biq_river_node_distance(tile, u, v, 0u)};
+    result.material_tundra = weights[4];
+    return result;
 }
 
 void add_biq_tile_surface(std::vector<Vertex> & vertices, BiqWindowTile const & tile,
@@ -3376,6 +3440,65 @@ bool add_mine_scene(FeatureBundle const & bundle,
     return true;
 }
 
+bool add_farm_scene(FeatureBundle const & bundle,
+                    HeightField const * authored_height,
+                    HeightField const * authored_blend,
+                    std::vector<Vertex> & shadows,
+                    std::vector<FeatureVertex> & output) {
+    std::vector<Vertex> discarded_shadows;
+    constexpr int direction_x[4] = {0, 1, 0, -1};
+    constexpr int direction_y[4] = {-1, 0, 1, 0};
+    constexpr unsigned direction_bit[4] = {1u, 2u, 4u, 8u};
+    for (FarmInstance const & instance : farm_scenario.instances) {
+        if (instance.visible == 0u)
+            continue;
+        unsigned era = instance.era < 2u ? 0u : instance.era - 1u;
+        std::string group_name = "farm_" + std::to_string(era);
+        FeatureGroup const * group = find_feature_group(bundle, group_name.c_str());
+        BiqWindowTile const * tile = biq_tile_at(instance.column, instance.row);
+        if (group == nullptr || group->placements.empty() || tile == nullptr || tile->base >= 11)
+            return false;
+        bool shadow_emitted = false;
+        for (FeaturePlacement const & placement : group->placements) {
+            FeatureAsset const & asset = bundle.assets[placement.asset_index];
+            bool base_part = asset.id.find(":base:") != std::string::npos;
+            bool building_part = asset.id.find(":building:") != std::string::npos;
+            float scale = base_part ? 1.34f : 1.18f;
+            auto add_part = [&](float offset_x, float offset_y) {
+                std::size_t first = output.size();
+                std::vector<Vertex> & part_shadows = building_part && !shadow_emitted
+                    ? shadows : discarded_shadows;
+                add_feature_instance(bundle, placement,
+                                     static_cast<float>(instance.column) + 0.50f + offset_x,
+                                     static_cast<float>(instance.row) + 0.50f + offset_y,
+                                     0.0f, scale, authored_height, authored_blend, true,
+                                     part_shadows, output);
+                if (building_part && !shadow_emitted)
+                    shadow_emitted = true;
+                unsigned emissive_code = 0u;
+                std::size_t marker = asset.id.rfind(":e");
+                if (marker != std::string::npos)
+                    emissive_code = static_cast<unsigned>(std::strtoul(
+                        asset.id.c_str() + marker + 2u, nullptr, 10));
+                float material_marker = 0.01f * static_cast<float>(emissive_code + 1u);
+                for (std::size_t index = first; index < output.size(); ++index)
+                    output[index].material_index += material_marker;
+            };
+            add_part(0.0f, 0.0f);
+            // The authored tile-base geometry supplies the visual material.
+            // Reusing it toward each owned N/E/S/W edge closes gaps between
+            // connected Civ III diamonds without procedurally painting crops.
+            if (base_part) {
+                for (unsigned direction = 0; direction < 4u; ++direction)
+                    if ((instance.adjacency_mask & direction_bit[direction]) != 0u)
+                        add_part(direction_x[direction] * 0.19f,
+                                 direction_y[direction] * 0.19f);
+            }
+        }
+    }
+    return true;
+}
+
 bool write_bmp(char const * path, D3D11_MAPPED_SUBRESOURCE const & mapped, unsigned downsample) {
     FILE * file = nullptr;
     if (fopen_s(&file, path, "wb") != 0 || file == nullptr)
@@ -3442,7 +3565,7 @@ std::string join(std::string const & root, char const * relative) {
 } // namespace
 
 int main(int argc, char ** argv) {
-    if (argc < 5 || argc > 26) {
+    if (argc < 5 || argc > 28) {
         std::fprintf(stderr,
             "usage: terrain_lab <pack-root> <shader.hlsl> <output.bmp> "
             "<albedo|material|relief|shadow|hill|mountain|coast_beach|coast_cliff|beauty|"
@@ -3468,7 +3591,9 @@ int main(int argc, char ** argv) {
             "beauty_cities_noon|beauty_cities_night|beauty_cities_zoom2|"
             "beauty_cities_no_cities|beauty_cities_only|beauty_mines_noon|"
             "beauty_mines_night|beauty_mines_zoom2|beauty_mines_no_mines|"
-            "beauty_mines_only> "
+            "beauty_mines_only|beauty_farms_noon|beauty_farms_night|"
+            "beauty_farms_zoom2|beauty_farms_no_farms|beauty_farms_only|"
+            "beauty_farms_tundra> "
             "[uv-scale=0.26] [normal-strength=4.0] [exposure=1.0] [relief-height=72] "
             "[hill-uv-scale=0.085] [vegetation-pack-root] [decal-pack-root] [biq-window.csv] "
             "[terrain-elements-pack-root] [shore-feature-pack-root] "
@@ -3583,8 +3708,19 @@ int main(int argc, char ** argv) {
     bool beauty_mines_no_mines_mode =
         std::strcmp(argv[4], "beauty_mines_no_mines") == 0;
     bool beauty_mines_only_mode = std::strcmp(argv[4], "beauty_mines_only") == 0;
+    bool beauty_farms_noon_mode = std::strcmp(argv[4], "beauty_farms_noon") == 0;
+    bool beauty_farms_night_mode = std::strcmp(argv[4], "beauty_farms_night") == 0;
+    bool beauty_farms_zoom2_mode = std::strcmp(argv[4], "beauty_farms_zoom2") == 0;
+    bool beauty_farms_no_farms_mode =
+        std::strcmp(argv[4], "beauty_farms_no_farms") == 0;
+    bool beauty_farms_only_mode = std::strcmp(argv[4], "beauty_farms_only") == 0;
+    bool beauty_farms_tundra_mode = std::strcmp(argv[4], "beauty_farms_tundra") == 0;
+    bool l19_mode = beauty_farms_noon_mode || beauty_farms_night_mode ||
+        beauty_farms_zoom2_mode || beauty_farms_no_farms_mode ||
+        beauty_farms_only_mode || beauty_farms_tundra_mode;
     bool l18_mode = beauty_mines_noon_mode || beauty_mines_night_mode ||
-        beauty_mines_zoom2_mode || beauty_mines_no_mines_mode || beauty_mines_only_mode;
+        beauty_mines_zoom2_mode || beauty_mines_no_mines_mode || beauty_mines_only_mode ||
+        l19_mode;
     bool l17_mode = beauty_cities_noon_mode || beauty_cities_night_mode ||
         beauty_cities_zoom2_mode || beauty_cities_no_cities_mode ||
         beauty_cities_only_mode || l18_mode;
@@ -3639,7 +3775,7 @@ int main(int argc, char ** argv) {
         !beauty_dunes_only_mode && !beauty_marsh_only_mode && !beauty_volcano_only_mode &&
         !beauty_rivers_only_mode && !beauty_roads_only_mode && !beauty_roads_styles_mode &&
         !beauty_railroads_only_mode && !beauty_railroads_crossings_mode &&
-        !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_mines_only_mode;
+        !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_farms_only_mode;
     bool beauty_surf_enabled = beauty_water_enabled && !beauty_shore_no_surf_mode &&
         !beauty_promotion_no_surf_mode;
     bool beauty_vegetation_enabled =
@@ -3651,10 +3787,10 @@ int main(int argc, char ** argv) {
          !beauty_rivers_only_mode && !beauty_roads_only_mode &&
          !beauty_roads_styles_mode && !beauty_railroads_only_mode &&
          !beauty_railroads_crossings_mode && !beauty_resources_only_mode &&
-         !beauty_cities_only_mode && !beauty_mines_only_mode);
+         !beauty_cities_only_mode && !beauty_mines_only_mode && !beauty_farms_only_mode);
     bool beauty_shore_enabled = l95_mode || promotion_mode;
     bool beauty_terrain_enabled = !beauty_vegetation_only_mode &&
-        !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_mines_only_mode;
+        !beauty_resources_only_mode && !beauty_cities_only_mode;
     bool coast_mode = coast_beach_mode || coast_cliff_mode || beauty_mode;
     promotion_scene_enabled = promotion_mode;
     l10_scene_enabled = l10_mode || l11_mode;
@@ -3666,21 +3802,28 @@ int main(int argc, char ** argv) {
     l15_scene_enabled = l15_mode || l16_mode;
     l16_scene_enabled = l16_mode || l17_mode;
     l17_scene_enabled = l17_mode;
+    l19_scene_enabled = l19_mode;
     biq_scene_enabled = l11_mode;
     dune_scene_enabled = (l10_mode || l11_mode) && !beauty_dunes_no_dunes_mode;
     volcano_geometry_enabled = l12_scene_enabled && !beauty_volcano_no_volcano_mode;
     river_geometry_enabled = l13_mode && !beauty_rivers_no_rivers_mode &&
         !beauty_roads_only_mode && !beauty_roads_styles_mode &&
-        !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_mines_only_mode;
+        !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_mines_only_mode &&
+        !beauty_farms_only_mode;
     road_geometry_enabled = l14_scene_enabled && !beauty_roads_no_roads_mode &&
         !beauty_railroads_only_mode && !beauty_resources_only_mode &&
-        !beauty_cities_only_mode && !beauty_mines_only_mode;
+        !beauty_cities_only_mode && !beauty_mines_only_mode && !beauty_farms_only_mode;
     railroad_geometry_enabled = l15_mode && !beauty_railroads_no_railroads_mode &&
-        !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_mines_only_mode;
+        !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_mines_only_mode &&
+        !beauty_farms_only_mode;
     resource_geometry_enabled = l16_mode && !beauty_resources_no_resources_mode &&
-        !beauty_resources_hidden_mode && !beauty_cities_only_mode && !beauty_mines_only_mode;
-    city_geometry_enabled = l17_mode && !beauty_cities_no_cities_mode && !beauty_mines_only_mode;
-    bool mine_geometry_enabled = l18_mode && !beauty_mines_no_mines_mode;
+        !beauty_resources_hidden_mode && !beauty_cities_only_mode && !beauty_mines_only_mode &&
+        !beauty_farms_only_mode;
+    city_geometry_enabled = l17_mode && !beauty_cities_no_cities_mode &&
+        !beauty_mines_only_mode && !beauty_farms_only_mode;
+    bool mine_geometry_enabled = l18_mode && !beauty_mines_no_mines_mode &&
+        !beauty_farms_only_mode;
+    bool farm_geometry_enabled = l19_mode && !beauty_farms_no_farms_mode;
     bool feature_geometry_enabled = beauty_vegetation_enabled || river_geometry_enabled ||
         road_geometry_enabled || railroad_geometry_enabled || resource_geometry_enabled;
     if (promotion_scene_enabled) {
@@ -3734,6 +3877,10 @@ int main(int argc, char ** argv) {
         std::fprintf(stderr, "terrain_lab: mine modes require a normalized mine pack and Lab mine scenario\n");
         return 2;
     }
+    if (l19_mode && argc < 28) {
+        std::fprintf(stderr, "terrain_lab: farm modes require a normalized farm pack and Lab farm scenario\n");
+        return 2;
+    }
     float uv_scale = argc > 5 ? std::strtof(argv[5], nullptr) : 0.26f;
     float normal_strength = argc > 6 ? std::strtof(argv[6], nullptr) : 4.0f;
     float exposure = argc > 7 ? std::strtof(argv[7], nullptr) : 1.0f;
@@ -3749,7 +3896,7 @@ int main(int argc, char ** argv) {
         frame_hour = (beauty_lighting_sunset_mode || beauty_lighting_sunset_zoom2_mode)
             ? 18.0f
             : ((beauty_lighting_midnight_mode || beauty_lighting_midnight_zoom2_mode ||
-                beauty_cities_night_mode || beauty_mines_night_mode)
+                beauty_cities_night_mode || beauty_mines_night_mode || beauty_farms_night_mode)
                 ? 0.0f
                 : ((beauty_lighting_sunrise_mode || beauty_lighting_sunrise_zoom2_mode)
                     ? 6.0f : 12.0f));
@@ -3831,6 +3978,14 @@ int main(int argc, char ** argv) {
         std::fprintf(stderr, "terrain_lab: Lab mine scenario does not match BIQ viewport\n");
         return 1;
     }
+    if (l19_mode && !load_farm_scenario(argv[27], farm_scenario))
+        return 1;
+    if (l19_mode &&
+        (farm_scenario.columns != biq_window.columns ||
+         farm_scenario.rows != biq_window.rows)) {
+        std::fprintf(stderr, "terrain_lab: Lab farm scenario does not match BIQ viewport\n");
+        return 1;
+    }
 
     ID3D11Device * device = nullptr;
     ID3D11DeviceContext * context = nullptr;
@@ -3848,6 +4003,9 @@ int main(int argc, char ** argv) {
     ID3D11ShaderResourceView * base_view = nullptr;
     ID3D11ShaderResourceView * height_view = nullptr;
     ID3D11ShaderResourceView * specular_view = nullptr;
+    ID3D11ShaderResourceView * tundra_base_view = nullptr;
+    ID3D11ShaderResourceView * tundra_height_view = nullptr;
+    ID3D11ShaderResourceView * tundra_specular_view = nullptr;
     ID3D11ShaderResourceView * authored_height_view = nullptr;
     ID3D11ShaderResourceView * authored_blend_view = nullptr;
     ID3D11ShaderResourceView * authored_region_view = nullptr;
@@ -3945,6 +4103,8 @@ int main(int argc, char ** argv) {
     ID3D11ShaderResourceView * wall_base_views[1] = {};
     ID3D11ShaderResourceView * mine_base_views[6] = {};
     ID3D11ShaderResourceView * mine_emissive_views[2] = {};
+    ID3D11ShaderResourceView * farm_base_views[6] = {};
+    ID3D11ShaderResourceView * farm_emissive_views[2] = {};
     FeatureBundle feature_bundle;
     FeatureBundle river_feature_bundle;
     FeatureBundle road_bridge_bundle;
@@ -3952,6 +4112,7 @@ int main(int argc, char ** argv) {
     FeatureBundle city_bundle;
     FeatureBundle wall_bundle;
     FeatureBundle mine_bundle;
+    FeatureBundle farm_bundle;
     HeightField authored_height;
     HeightField authored_blend;
     HeightField authored_region;
@@ -3971,6 +4132,16 @@ int main(int argc, char ** argv) {
                        DXGI_FORMAT_BC4_UNORM, &height_view, height_width, height_height) &&
               load_dds(device, join(pack, "textures\\grassland_specular.dds"),
                        DXGI_FORMAT_BC4_UNORM, &specular_view, unused_width, unused_height);
+    if (ok && l19_scene_enabled)
+        ok = load_dds(device, join(pack, "textures\\tundra_base_color.dds"),
+                      DXGI_FORMAT_BC3_UNORM_SRGB, &tundra_base_view,
+                      unused_width, unused_height) &&
+             load_dds(device, join(pack, "textures\\tundra_height.dds"),
+                      DXGI_FORMAT_BC4_UNORM, &tundra_height_view,
+                      unused_width, unused_height) &&
+             load_dds(device, join(pack, "textures\\tundra_specular.dds"),
+                      DXGI_FORMAT_BC4_UNORM, &tundra_specular_view,
+                      unused_width, unused_height);
     if (ok && hill_mode)
         ok = load_r8_height(device, join(pack, "textures\\relief\\hills\\standard\\height_lod0.dds"),
                             DXGI_FORMAT_R8_UNORM, authored_height, &authored_height_view);
@@ -4438,6 +4609,29 @@ int main(int argc, char ** argv) {
                           texture_width, texture_height);
         }
     }
+    if (ok && l19_mode) {
+        unsigned texture_width = 0;
+        unsigned texture_height = 0;
+        std::string farm_pack = argv[26];
+        ok = load_feature_bundle(join(farm_pack, "farm_runtime.bin"), farm_bundle) &&
+             farm_bundle.texture_paths.size() == 8u;
+        for (FeatureAsset & asset : farm_bundle.assets)
+            asset.texture_index += 21u;
+        for (unsigned index = 0; ok && index < 6u; ++index) {
+            std::string path = join(farm_pack, farm_bundle.texture_paths[index].c_str());
+            DXGI_FORMAT format = source_color_dds_format(path);
+            ok = format != DXGI_FORMAT_UNKNOWN &&
+                 load_dds(device, path, format, &farm_base_views[index],
+                          texture_width, texture_height);
+        }
+        for (unsigned index = 0; ok && index < 2u; ++index) {
+            std::string path = join(farm_pack, farm_bundle.texture_paths[index + 6u].c_str());
+            DXGI_FORMAT format = source_color_dds_format(path);
+            ok = format != DXGI_FORMAT_UNKNOWN &&
+                 load_dds(device, path, format, &farm_emissive_views[index],
+                          texture_width, texture_height);
+        }
+    }
     if (ok && feature_geometry_enabled) {
         std::string vegetation_pack = argv[10];
         ok = load_feature_bundle(join(vegetation_pack, "vegetation_runtime.bin"), feature_bundle);
@@ -4482,15 +4676,17 @@ int main(int argc, char ** argv) {
         {"TEXCOORD", 10, DXGI_FORMAT_R32G32_FLOAT, 0, 84, D3D11_INPUT_PER_VERTEX_DATA, 0},
         {"TEXCOORD", 11, DXGI_FORMAT_R32_FLOAT, 0, 92, D3D11_INPUT_PER_VERTEX_DATA, 0},
         {"TEXCOORD", 12, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 96, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 13, DXGI_FORMAT_R32_FLOAT, 0, 112, D3D11_INPUT_PER_VERTEX_DATA, 0},
     };
     if (ok && SUCCEEDED(hr))
-        hr = device->CreateInputLayout(elements, 15, vertex_blob->GetBufferPointer(),
+        hr = device->CreateInputLayout(elements, 16, vertex_blob->GetBufferPointer(),
                                        vertex_blob->GetBufferSize(), &input_layout);
     ok = ok && SUCCEEDED(hr);
     release(vertex_blob);
     release(pixel_blob);
 
-    if (ok && feature_geometry_enabled) {
+    if (ok && (feature_geometry_enabled || city_geometry_enabled || mine_geometry_enabled ||
+               farm_geometry_enabled)) {
         ID3DBlob * feature_vertex_blob = nullptr;
         ID3DBlob * feature_pixel_blob = nullptr;
         ok = compile_shader(argv[2], "VSFeature", "vs_4_0", &feature_vertex_blob) &&
@@ -4524,6 +4720,7 @@ int main(int argc, char ** argv) {
     std::vector<FeatureVertex> city_vertices;
     std::vector<FeatureVertex> wall_vertices;
     std::vector<FeatureVertex> mine_vertices;
+    std::vector<FeatureVertex> farm_vertices;
     if (!beauty_mode)
         add_source_panel(vertices, mountain_mode, coast_mode);
     if (coast_mode) {
@@ -4613,6 +4810,12 @@ int main(int argc, char ** argv) {
                 beauty_relief_enabled ? &authored_height : nullptr,
                 beauty_relief_enabled ? &authored_blend : nullptr,
                 vertices, mine_vertices);
+        if (ok && farm_geometry_enabled)
+            ok = add_farm_scene(
+                farm_bundle,
+                beauty_relief_enabled ? &authored_height : nullptr,
+                beauty_relief_enabled ? &authored_blend : nullptr,
+                vertices, farm_vertices);
     } else {
         add_patch_grid(vertices, uv_scale,
                        (relief_mode || shadow_mode || hill_mode || mountain_mode) ? relief_height : 0.0f,
@@ -4626,6 +4829,7 @@ int main(int argc, char ** argv) {
     ID3D11Buffer * city_vertex_buffer = nullptr;
     ID3D11Buffer * wall_vertex_buffer = nullptr;
     ID3D11Buffer * mine_vertex_buffer = nullptr;
+    ID3D11Buffer * farm_vertex_buffer = nullptr;
     ID3D11Buffer * settings_buffer = nullptr;
     ID3D11SamplerState * sampler = nullptr;
     ID3D11SamplerState * decal_sampler = nullptr;
@@ -4687,6 +4891,18 @@ int main(int argc, char ** argv) {
             desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
             D3D11_SUBRESOURCE_DATA initial = {mine_vertices.data(), 0, 0};
             hr = device->CreateBuffer(&desc, &initial, &mine_vertex_buffer);
+        }
+    }
+    if (ok && farm_geometry_enabled) {
+        if (farm_vertices.empty()) {
+            ok = false;
+        } else {
+            D3D11_BUFFER_DESC desc = {};
+            desc.ByteWidth = static_cast<UINT>(farm_vertices.size() * sizeof(FeatureVertex));
+            desc.Usage = D3D11_USAGE_IMMUTABLE;
+            desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA initial = {farm_vertices.data(), 0, 0};
+            hr = device->CreateBuffer(&desc, &initial, &farm_vertex_buffer);
         }
     }
     float lab_mode_value = 0.0f;
@@ -4928,6 +5144,11 @@ int main(int argc, char ** argv) {
                                              river_clutter_height_view,
                                              river_bank_noise_view};
         context->PSSetShaderResources(0, 89, views);
+        if (l19_scene_enabled) {
+            ID3D11ShaderResourceView * tundra_views[] = {
+                tundra_base_view, tundra_height_view, tundra_specular_view};
+            context->PSSetShaderResources(94, 3, tundra_views);
+        }
         if (l14_scene_enabled)
             context->PSSetShaderResources(98, 10, road_base_views);
         ID3D11SamplerState * samplers[] = {sampler, decal_sampler};
@@ -4955,8 +5176,6 @@ int main(int argc, char ** argv) {
             context->OMSetDepthStencilState(nullptr, 0);
         }
         if (mine_geometry_enabled) {
-            if (beauty_mines_only_mode)
-                context->ClearDepthStencilView(feature_depth_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
             context->OMSetRenderTargets(1, &render_target, feature_depth_view);
             context->OMSetDepthStencilState(feature_depth_state, 0);
             UINT feature_stride = sizeof(FeatureVertex);
@@ -4969,6 +5188,21 @@ int main(int argc, char ** argv) {
             context->PSSetShaderResources(116, 6, mine_base_views);
             context->PSSetShaderResources(124, 2, mine_emissive_views);
             context->Draw(static_cast<UINT>(mine_vertices.size()), 0);
+            context->OMSetDepthStencilState(nullptr, 0);
+        }
+        if (farm_geometry_enabled) {
+            context->OMSetRenderTargets(1, &render_target, feature_depth_view);
+            context->OMSetDepthStencilState(feature_depth_state, 0);
+            UINT feature_stride = sizeof(FeatureVertex);
+            UINT feature_offset = 0;
+            context->IASetInputLayout(feature_input_layout);
+            context->VSSetShader(feature_vertex_shader, nullptr, 0);
+            context->PSSetShader(feature_pixel_shader, nullptr, 0);
+            context->IASetVertexBuffers(0, 1, &farm_vertex_buffer,
+                                        &feature_stride, &feature_offset);
+            context->PSSetShaderResources(116, 6, farm_base_views);
+            context->PSSetShaderResources(124, 2, farm_emissive_views);
+            context->Draw(static_cast<UINT>(farm_vertices.size()), 0);
             context->OMSetDepthStencilState(nullptr, 0);
         }
         if (city_geometry_enabled) {
@@ -5010,7 +5244,7 @@ int main(int argc, char ** argv) {
                              beauty_railroads_zoom2_mode ||
                              beauty_resources_zoom2_mode ||
                              beauty_cities_zoom2_mode ||
-                             beauty_mines_zoom2_mode) ? 2u : 1u));
+                             beauty_mines_zoom2_mode || beauty_farms_zoom2_mode) ? 2u : 1u));
             context->Unmap(readback_texture, 0);
         } else {
             ok = false;
@@ -5032,6 +5266,7 @@ int main(int argc, char ** argv) {
     release(city_vertex_buffer);
     release(wall_vertex_buffer);
     release(mine_vertex_buffer);
+    release(farm_vertex_buffer);
     release(vertex_buffer);
     release(feature_input_layout);
     release(feature_pixel_shader);
@@ -5059,6 +5294,13 @@ int main(int argc, char ** argv) {
         release(view);
     for (ID3D11ShaderResourceView *& view : mine_emissive_views)
         release(view);
+    for (ID3D11ShaderResourceView *& view : farm_base_views)
+        release(view);
+    for (ID3D11ShaderResourceView *& view : farm_emissive_views)
+        release(view);
+    release(tundra_base_view);
+    release(tundra_height_view);
+    release(tundra_specular_view);
     release(desert_mountain_specular_view);
     release(desert_mountain_height_view);
     release(desert_mountain_stripe3_view);

@@ -143,13 +143,22 @@ class NativeBridgeContractTests(unittest.TestCase):
         for required in (
             "anchor_x", "anchor_y", "tile_width", "tile_height", "world_wrap_x",
             "world_wrap_y", "hour", "season", "content_revision", "device_generation",
-            "feature_flags", "terrain_overlays", "square_parts",
-            "has_effect", "river_code",
+            "feature_flags",
+            "has_effect", "river_code", "road_mask", "railroad_mask", "route_style",
+            "resource_id", "resource_class", "resource_name", "city_id",
+            "city_owner_id", "city_size", "city_culture_group",
+            "city_era", "city_flags",
         ):
             self.assertIn(required, signature)
-        for retained_only in ("resource_id", "city_id", "unit_type_id", "road_mask"):
+        for retained_only in (
+            "unit_type_id", "unit_state", "unit_direction", "square_parts",
+            "terrain_overlays", "visibility_mask", "city_population",
+        ):
             self.assertNotIn(retained_only, signature)
-        self.assertIn("cache_capacity = 1u", renderer)
+        self.assertIn("cache_capacity = 4u", renderer)
+        self.assertIn("std::vector<CachedViewport> viewport_cache", renderer)
+        self.assertIn("output.visible_animation_count = frame.visible_animation_count", renderer)
+        self.assertNotIn("frame.visible_animation_count == 0 &&", renderer)
         self.assertIn("cache_stale_rejections", renderer)
         self.assertIn("C3X_RENDERER_INVALIDATE_PACK_DEFINITION", renderer)
         self.assertIn("frame_invalidation_flags", api)
@@ -213,7 +222,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn('#include "terrain_rendering.hlsl"', adapter)
         self.assertNotIn("terrain_lab", adapter)
         self.assertEqual(
-            "3d8e4aa95b6abb9e5a37da78762d3ee38f2335d85f0fdc7aa7aca2bd1b0ac765",
+            "2a55c59b085b0125e53127f516621261db3b4d6cf21d11d301beac177ebe6eb9",
             hashlib.sha256(production_shader_path.read_bytes()).hexdigest(),
         )
         self.assertIn("return PSMain(input);", adapter)
@@ -221,7 +230,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn('compile_terrain_shader("PSIntegrated"', renderer)
         self.assertIn('compile_terrain_shader("PSIntegratedFeature"', renderer)
         self.assertIn("D3DCompileFromFile", renderer)
-        self.assertIn("std::array<ID3D11ShaderResourceView *, 98> views", renderer)
+        self.assertIn("std::array<ID3D11ShaderResourceView *, 128> views", renderer)
         self.assertIn("context->PSSetConstantBuffers(0, 1, &terrain_settings_buffer)", renderer)
         self.assertIn("#define C3X_GAME_RENDERER 1", adapter)
         self.assertIn("#define rivers_enabled 1.0", production_shader)
@@ -268,7 +277,9 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("id = shore_normalized", default_definition)
         self.assertIn("rivers = replace", default_definition)
         self.assertIn("features = replace", default_definition)
-        self.assertIn("roads = civ3", default_definition)
+        self.assertIn("roads = replace", default_definition)
+        self.assertIn("resources = replace", default_definition)
+        self.assertIn("cities = replace", default_definition)
         for asset in (
             "river_base_color.dds", "river_height.dds", "river_specular.dds",
             "river_lean0.dds", "river_lean1.dds", "river_bank_noise",
@@ -287,7 +298,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("views[89 + index] = river_rock_texture_views[index]", renderer)
         self.assertIn("C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED", renderer + injected)
         self.assertIn("river_assets_ready && (tile.river_code & 170u)", renderer)
-        self.assertNotIn("!feature_assets_ready || !river_assets_ready", renderer)
+        self.assertIn("river_assets_ready = river_surface_ready && river_rocks_ready", renderer)
         reset = renderer[renderer.index("void reset()") : renderer.index("bool initialize()")]
         self.assertIn("river_surface_views", reset)
         self.assertIn("river_rock_texture_views", reset)
@@ -322,7 +333,88 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("frame_output_exposure", shader)
         self.assertIn("environment_water_fresnel", shader)
         self.assertIn("environment_water_specular", shader)
-        self.assertNotIn("road_base_texture_0", shader)
+        self.assertIn("road_base_texture_0", shader)
+        self.assertIn("railroad_base_texture", shader)
+        self.assertIn("resource_base_texture_0", shader)
+        self.assertIn("city_base_texture_0", shader)
+
+    def test_i14_i17_consume_approved_routes_resources_and_cities(self) -> None:
+        renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
+            encoding="utf-8"
+        )
+        shader = (Path(__file__).parent / "terrain_rendering.hlsl").read_text(
+            encoding="utf-8"
+        )
+        api = (Path(__file__).parent / "c3x_renderer_api.h").read_text(
+            encoding="utf-8"
+        )
+        injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
+        default_definition = (C3X_ROOT / "Renderer/default.custom_rendering.txt").read_text(
+            encoding="utf-8"
+        )
+
+        for runtime_pack in (
+            "bridge_runtime.bin", "resource_runtime.bin", "city_runtime.bin",
+            "wall_runtime.bin",
+        ):
+            self.assertIn(runtime_pack, renderer)
+        for pack_id in (
+            "route_styles_normalized", "route_doodads_normalized",
+            "resource_normalized", "city_components_normalized",
+            "city_adjuncts_normalized",
+        ):
+            self.assertIn(f"id = {pack_id}", default_definition)
+        for register in (
+            "road_base_texture_0 : register(t98)",
+            "railroad_base_texture_1 : register(t107)",
+            "road_bridge_base_texture_0 : register(t108)",
+            "resource_base_texture_0 : register(t116)",
+            "city_base_texture_3 : register(t127)",
+        ):
+            self.assertIn(register, shader)
+        for implementation in (
+            "append_route_segment", "bridge_", "resource_name.find(candidate)",
+            "constexpr unsigned counts[] = {4u, 7u, 11u}",
+            "C3X_RENDERER_CITY_WALLED", "city_emissive_views",
+        ):
+            self.assertIn(implementation, renderer)
+        for ownership in (
+            "C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED",
+            "C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED",
+            "C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED",
+            "C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED",
+        ):
+            self.assertIn(ownership, api)
+            self.assertIn(ownership, renderer)
+            self.assertIn(ownership, injected)
+        self.assertIn("record->route_style", injected)
+        self.assertIn("record->resource_name", injected)
+        self.assertIn("record->city_population", injected)
+        self.assertIn("has_active_building (city, improvement_id)", injected)
+
+    def test_i18_consumes_approved_mines_without_reaching_into_l19(self) -> None:
+        renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
+            encoding="utf-8"
+        ).casefold()
+        shader = (Path(__file__).parent / "terrain_rendering.hlsl").read_text(
+            encoding="utf-8"
+        ).casefold()
+        api = (Path(__file__).parent / "c3x_renderer_api.h").read_text(
+            encoding="utf-8"
+        )
+        default_definition = (C3X_ROOT / "Renderer/default.custom_rendering.txt").read_text(
+            encoding="utf-8"
+        ).casefold()
+        self.assertIn("mine_runtime.bin", renderer)
+        self.assertIn("mine_vertices", renderer)
+        self.assertIn('"mine_" + std::to_string', renderer)
+        self.assertIn("sample_reused_resource_slot", shader)
+        self.assertIn("mine_emissive_code", shader)
+        self.assertIn("C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED", api)
+        self.assertIn("improvements = replace", default_definition)
+        self.assertIn("id = improvements_normalized", default_definition)
+        self.assertNotIn("farm_runtime.bin", renderer)
+        self.assertNotIn("irrigation_vertices", renderer)
 
     def test_live_terrain_mesh_reuses_shared_corners_and_bounds_shadow_density(self) -> None:
         renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
@@ -638,7 +730,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("water_foam_texture : register(t24)", shader)
         self.assertIn("DXGI_FORMAT_R16G16B16A16_UNORM", native)
         self.assertIn("c3x_renderer_i32 clip_left", api)
-        self.assertIn("#define C3X_RENDERER_API_VERSION 7u", api)
+        self.assertIn("#define C3X_RENDERER_API_VERSION 9u", api)
         self.assertIn("DXGI_FORMAT_R16G16_UNORM", native)
         self.assertIn("float2 combined_lean =", shader)
         self.assertIn("water_foam_texture.Sample", shader)
