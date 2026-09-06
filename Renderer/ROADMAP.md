@@ -106,17 +106,24 @@ authoritative lighting phases, and zero native fallback. No new Civ III patch
 symbol was required.
 
 Post-I18 integration maintenance preserves the approved hashes while reducing
-the native 400-tile/800-record cold benchmark from 57.790 seconds to 5.241
-seconds and an anchor-only scroll to 1.054 seconds through shared-grid sampling,
-per-tile surface memoization, river-pass isolation, large-live shadow LOD, and a
-content-fingerprinted anchor-independent shadow field. API v9 returns the exact
+the native 400-tile/800-record cold benchmark from 57.790 seconds to roughly
+5-7 seconds, a uniform anchor-only scroll to 0.026 seconds, and a one-pair
+tile-boundary change to 1.948 seconds. The fast paths combine shared-grid
+sampling, a 96 MiB anchor-independent world-tile sample/shadow LRU, river-pass
+isolation, large-live shadow LOD, retained generated layer geometry with
+vertex-adapter XY/depth translation, bounded immutable D3D vertex-buffer
+regions, a 32-entry/128 MiB exact viewport LRU, and a persistent clip-only GDI
+blit surface. One dedicated DLL worker owns immutable snapshot consumption,
+renderer state, and D3D work; Civ III's thread still owns capture and the final
+serialized GDI blit, and the synchronous ABI never presents a stale result.
+API v9 returns the exact
 authoritative clip and blits only that dirty rectangle, preventing cleared
 off-clip pixels from truncating retained neighboring tile art. Custom-on `m71`
 now captures a complete visible traversal even for a partial unit/UI redraw, so
 such a traversal cannot poison the full-viewport cache; partial and reordered
 static-terrain traversals are zero-tick cache hits. Visible native unit animation
 and other retained selectors no longer invalidate static terrain, and an
-eight-viewport exact-signature LRU makes recent unit-jump camera views zero-tick
+memory-bounded exact-signature LRU makes recent unit-jump camera views zero-tick
 hits while remaining deterministically bounded. Feature bodies use the frozen
 Lab ground-plane depth rule rather than the formerly divergent lifted-screen-Y
 formula that allowed neighboring ground diamonds to clip tall vegetation.
@@ -143,15 +150,16 @@ shoreline clipping. The same generic pass adds restrained grassland, plains,
 and grassland-hill surface clutter. The rejected transparency, whole-atlas,
 oversized-cloud, and every-cell repetition candidates are not preserved.
 
-## Next Step: L20
+## Next Step: L21
 
-Direct canonical tank comparison reopened L20: the neutral woodland body is now
-correctly olive, but the dedicated owner-color plates remain gray-green because
-their standalone TeamColor geometry incorrectly reused the source texture's
-alpha as a mask. The sole ready task treats that already-localized geometry as
-the constant owner mask, reruns the 192-tile L20 matrix, and proves every
-non-tank unit plus the no-unit witness unchanged. L21 and Integration-owned I19
-remain blocked until the correction is frozen.
+L20 is frozen again after direct canonical tank comparison and unit-shadow
+correction. Dedicated TeamColor geometry now follows its normalized source bone
+and uses a constant owner mask over the unchanged textured olive body; runtime
+owner RGB remains generic instance state. Every animated unit component now
+projects its actual source silhouette into a shared-direction soft cast shadow.
+The sole ready task recomposes and critically inspects the complete alternate-
+skin scene across four day phases, reduced zoom, and no-unit isolation.
+Integration-owned I19 remains paused until L21 is frozen again.
 
 Ahead of that visual gate, all 24 animated clutter bodies now compile with
 model-aware pose caches, including single-animal elephant selection and one
@@ -242,7 +250,7 @@ instead of comparing unrelated map regions.
 19a. L19A complete / I19A handoff available — the approved source-backed hut/colony gate covers viewer-hidden huts, the deterministic eight-to-three variant map, all four colony eras and owners, extraterritorial ownership, resource coexistence, both zooms, and shared lighting without changing L19 when disabled.
 19b. L19B complete / I19B handoff available — the approved pass covers all remaining persistent tile infrastructure, both zooms, shared lighting, and source-only night emission without changing L19A when disabled.
 20. L20 complete / I20 handoff available — representative ordinary, mounted, crewed, vehicle, naval, air, worker, and Army bodies pass the 192-tile/two-zoom/action matrix without regressing L19B. Its final L21 lighting revision gives every visible formation member authored-normal face separation and a readable source-scaled cast/contact shadow using the shared environment direction.
-21. L21 complete: the corrected complete alternate-skin beauty scene passed noon, sunset, midnight, sunrise, reduced-zoom, no-unit regression, critical visual review, 123 tests, and byte-identical replay.
+21. L21 complete: the corrected complete alternate-skin beauty scene passed noon, sunset, midnight, sunrise, reduced-zoom, no-unit regression, critical visual review, 124 tests, and byte-identical replay.
 
 Offline L14/L15 intake is prepared ahead without advancing either gate. The
 source-independent route packs now cover four road stages, railroad ballast and

@@ -30,18 +30,18 @@ The terrain cache fingerprints only custom-renderer pixels. Unit animation,
 selection, native `SquareParts`, retained overlay bits, fog traversal, and exact
 population counts no longer evict static terrain. Renderer-owned routes,
 resources, cities, mines, rivers, environment, anchors, wrap, content revision,
-ownership, and device generation still invalidate. Eight exact viewports are
-kept in a bounded LRU so ordinary unit-cycling camera jumps can return at zero
-renderer ticks; a native test fills the bound, proves a recent-view hit, and
-forces deterministic LRU eviction. Anchor-only scrolling reuses the
-content-fingerprinted relief shadow field.
+ownership, and device generation still invalidate. The current implementation
+retains up to 32 exact viewports within 128 MiB so ordinary unit-cycling camera
+jumps can return at zero renderer ticks; a native test fills the bound, proves a
+recent-view hit, and forces deterministic LRU eviction. Anchor-only scrolling
+reuses retained GPU geometry, while changed visible sets reuse a bounded
+canonical world-tile surface/relief/shadow sample cache.
 
 The Windows Integration report is
 `Renderer/verification/i18_cache_integration.json`. Its isolated approved
-production replay reports zero fallback, deterministic L9-L18 ownership and
-reset, a 5.154-second 400-tile cold render, and a 1.069-second anchor-scroll
-render on the current VM. Exact unchanged or recently revisited
-viewports report zero renderer ticks.
+production replay reports zero fallback and deterministic L9-L18 ownership and
+reset. Current post-I18 performance evidence is recorded in
+`Renderer/evidence/integration_cache_worker/README.md`.
 
 No new Civ III patch symbol or `civ_prog_objects.csv` entry was required. The
 existing m19/m71 capture boundary and loaded Civ III tile, resource, city,

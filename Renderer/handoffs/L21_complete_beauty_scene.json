@@ -35,16 +35,16 @@
   ],
   "reference": {
     "native_output": "preview/out/terrain_lab/terrain_beauty_l21_complete_noon.bmp",
-    "native_sha256": "8814a86a6886b941a266da399eb9c53a6a88a20cfc6219c911bba5730614723e",
-    "sunset_sha256": "7d16ed27c5f7d8e6e9cd4f6786077225e3f9436ee19cca460b680cf869e48cd0",
-    "midnight_sha256": "c17d8d4f20a8732d4544a0b33d489f2cbde54e1359b561b21b2b6af8e5b580e8",
-    "sunrise_sha256": "911ca5f96e129639161bba0096d5f924216ee7cbbe33e159fd534d5ef80f4120",
+    "native_sha256": "96c1903ba0a3c772657f9abda9724dd778bfe4ca82623ff84520dc264a8a364c",
+    "sunset_sha256": "c867411726b1ed598216ee3d170ecc06f9d80a1c7480b768dfbaf96b24efdf26",
+    "midnight_sha256": "552f1e6bd10b45cc2b4a1f11f7066b1b9a3ddd159d41aa3639f2d39a7dc0241d",
+    "sunrise_sha256": "67b118240e5b5a8b31828d7ac36fd4974916d5957b0825e1baabc27beeec4f94",
     "reduced_output": "preview/out/terrain_lab/terrain_beauty_l21_complete_zoom2.bmp",
-    "reduced_sha256": "e2703a52bc82f75f141b02aea94b7d1e219f33a0ac934be21c51aeafa6f53036",
+    "reduced_sha256": "c1faff8aa46c16a28aa35f6533f50c2a961896ad89f903253c2defb4a0e35365",
     "no_units_sha256": "6582747ec96995cca34cc8de996305ec7ccf1d58732562a2042988aa488ddfd0",
-    "runner_sha256": "66c93895841c54e7af39db82260caf8d6d59b43f5497593cdaed8644eb6e78e5",
+    "runner_sha256": "9afa817dcf2276a7510a8c3ec3c4d12567fe5b898f3e1c34a64fce77b4127ec0",
     "terrain_fixture_sha256": "1500c085e88425796fb150db4a96a904722d1f8b0cce1d614d46db58bc3c0b4b",
-    "unit_scenario_sha256": "b85d570959920564b2baa42f04ffc0abdd3ff7c528d5223864d55779aefe643b",
+    "unit_scenario_sha256": "8066d641aa12ab7d42e62c83b77bc048bb003446eb97d975ede0e9814662d9b3",
     "tile_count": 192,
     "audit": "terrain_lab/L21_COMPLETE_BEAUTY_AUDIT.md"
   },
@@ -53,6 +53,13 @@
     "result": "complete-scene noon, midnight, and reduced inspection confirms olive vehicles, khaki infantry, warm skin, and authored horse/wood browns with localized owner accents and no near-white calibration bodies",
     "non_unit_regression": "the no-unit control remains byte-identical",
     "source": "handoffs/L20_units.json#source_material_tint_revision"
+  },
+  "unit_shape_revision": {
+    "approved_on": "2026-09-06",
+    "owner_color": "dedicated Tank TeamColor geometry follows the normalized tankAll attachment and receives localized instance-owner color over the unchanged textured olive body",
+    "cast_shadow": "every visible animated unit component projects its actual source triangles along the shared light direction with light-facing coverage and a restrained five-sample penumbra",
+    "visual_result": "localized canonical-style vehicle panels and recognizable hull, turret, limb, weapon, mount, wing, sail, and attachment shadow silhouettes without hard unit-name branches or generic blobs",
+    "source": "handoffs/L20_units.json#team_color_geometry_revision"
   },
   "ownership_intent": {
     "complete_map_plane": "custom_when_renderer_enabled_only_after_each matching I gate and final I21",

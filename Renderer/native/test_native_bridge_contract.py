@@ -155,7 +155,8 @@ class NativeBridgeContractTests(unittest.TestCase):
             "terrain_overlays", "visibility_mask", "city_population",
         ):
             self.assertNotIn(retained_only, signature)
-        self.assertIn("viewport_cache_capacity = 8u", renderer)
+        self.assertIn("viewport_cache_capacity = 32u", renderer)
+        self.assertIn("viewport_cache_budget = 128u * 1024u * 1024u", renderer)
         self.assertIn("std::vector<CachedViewport> viewport_cache", renderer)
         self.assertIn("output.visible_animation_count = frame.visible_animation_count", renderer)
         self.assertNotIn("frame.visible_animation_count == 0 &&", renderer)
@@ -164,12 +165,52 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("frame_invalidation_flags", api)
         self.assertIn("result.geometry = fnv_offset", signature)
         self.assertIn("reuse_geometry_for_translation", renderer)
+        self.assertIn("std::unordered_map<std::uint64_t, WorldTileSemantic>", renderer)
+        self.assertIn("update_world_tile_cache(frame)", renderer)
+        self.assertIn("world_tile_key", renderer)
+        self.assertIn("geometry_region_cache_capacity = 2u", renderer)
+        self.assertIn("geometry_region_cache_budget = 192u * 1024u * 1024u", renderer)
+        self.assertIn("geometry_region_entry_budget = 96u * 1024u * 1024u", renderer)
+        self.assertIn("restore_geometry_region", renderer)
+        self.assertIn("retain_current_geometry_region", renderer)
         self.assertIn("current.anchor_x - cached.anchor_x != translation_x", renderer)
-        self.assertIn("signature.geometry != geometry_cache.signature.geometry", renderer)
-        self.assertIn("c3x_viewport_translation", (
-            Path(__file__).parent / "integrated_terrain.hlsl"
-        ).read_text(encoding="utf-8"))
+        self.assertIn("signature.geometry != candidate.signature.geometry", renderer)
+        adapter = (Path(__file__).parent / "integrated_terrain.hlsl").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("c3x_viewport_translation", adapter)
+        self.assertIn("c3x_viewport_depth_translation", adapter)
+        self.assertIn(
+            "input.position.z + c3x_viewport_depth_translation", adapter
+        )
+        self.assertIn(
+            "-static_cast<float>(geometry_translation_y) / frame.target_height",
+            renderer,
+        )
         self.assertIn("VSSetConstantBuffers(1, 1, &viewport_settings_buffer)", renderer)
+
+    def test_renderer_worker_owns_d3d_and_copies_immutable_frames(self) -> None:
+        renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
+            encoding="utf-8"
+        )
+        injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
+        worker = renderer[renderer.index("class RendererWorker") :]
+        self.assertIn("std::thread worker", worker)
+        self.assertIn("std::condition_variable wake", worker)
+        self.assertIn("immutable_tiles.assign(frame.tiles", worker)
+        self.assertIn("job_frame.tiles = job_tiles.empty() ? nullptr : job_tiles.data()", worker)
+        self.assertIn("latest_job_sequence", worker)
+        self.assertIn("completed_job_sequence == sequence", worker)
+        self.assertIn("renderer_state.render(job_frame, output)", worker)
+        self.assertIn("renderer_state.reset()", worker)
+        self.assertIn("renderer_worker->blit", worker)
+        unload = injected[injected.index("unload_custom_renderer ()") :]
+        unload = unload[: unload.index("bool\nensure_custom_renderer_loaded")]
+        self.assertIn("is->custom_renderer_reset ();", unload)
+        self.assertLess(
+            unload.index("is->custom_renderer_reset ();"),
+            unload.index("FreeLibrary (is->custom_renderer_module)"),
+        )
 
     def test_m6_7_feature_ownership_is_exact_and_post_composite(self) -> None:
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
@@ -435,16 +476,25 @@ class NativeBridgeContractTests(unittest.TestCase):
         )
         self.assertIn("std::vector<Vertex> grid_vertices", renderer)
         self.assertIn("ground_point_cache.reserve(2048)", renderer)
-        self.assertIn("GroundPoint const & point = ground_point_at(u, v)", renderer)
-        self.assertIn("shadow_field_signature", renderer)
-        self.assertIn("reuse_shadow_field", renderer)
-        self.assertIn("shadow_visibility_cache[shadow_visibility_index++]", renderer)
-        self.assertIn("hash_shadow_value(frame.tile_width)", renderer)
-        self.assertIn("hash_shadow_value(frame.tile_height)", renderer)
-        self.assertNotIn("tile.anchor_x", renderer[
-            renderer.index("current_shadow_field_signature"):
-            renderer.index("c3x_renderer::EnvironmentState environment")
-        ])
+        self.assertIn("GroundPoint & point = ground_point_at(u, v)", renderer)
+        self.assertIn("world_sample_cache_budget = 96u * 1024u * 1024u", renderer)
+        self.assertIn("tile_semantic.ground_samples", renderer)
+        self.assertIn("tile_semantic.sample_signature == tile_sample_signature", renderer)
+        self.assertIn("trim_world_sample_cache()", renderer)
+        self.assertIn("tile_semantic.shadow_signature", renderer)
+        self.assertIn("reuse_tile_shadow", renderer)
+        self.assertIn("tile_semantic.shadow_visibility[tile_shadow_index++]", renderer)
+        self.assertIn("hash_tile_sample_value(frame.tile_width)", renderer)
+        self.assertIn("hash_tile_sample_value(frame.tile_height)", renderer)
+        self.assertIn("hash_tile_shadow_value(tile_sample_signature)", renderer)
+        shadow_key = renderer[
+            renderer.index("std::uint64_t tile_sample_signature"):
+            renderer.index("auto ground_at =")
+        ]
+        self.assertNotIn("tile.anchor_x", shadow_key)
+        self.assertNotIn("tile.anchor_y", shadow_key)
+        self.assertIn("std::sort(shadow_neighbors.begin(), shadow_neighbors.end())", shadow_key)
+        self.assertIn("std::abs(neighbor.tile_x - tile.tile_x) > 14", shadow_key)
         self.assertIn("grid_v <= subdivisions", renderer)
         self.assertIn("grid_u <= subdivisions", renderer)
         self.assertIn("bool river_surface = layer > 8.5f", renderer)
@@ -685,9 +735,10 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("chunk_capacity = 262143u", native)
         self.assertNotIn("shore_vertices", native)
         self.assertNotIn("bool rugged_shore", native)
-        self.assertIn("draw_streaming_batches(geometry_cache.water)", native)
-        self.assertIn("D3D11_USAGE_DYNAMIC", native)
-        self.assertIn("D3D11_MAP_WRITE_DISCARD", native)
+        self.assertIn("draw_cached_geometry(geometry_water)", native)
+        self.assertIn("cache_geometry_vertex_buffers", native)
+        self.assertIn("D3D11_USAGE_IMMUTABLE", native)
+        self.assertNotIn("D3D11_MAP_WRITE_DISCARD", native)
         self.assertIn("(seed >> 3) % 5u", native)
         self.assertIn("has_relief_neighbor ? 0.50f : 0.68f", native)
         self.assertIn("constexpr int candidates[5][2]", native)
@@ -717,7 +768,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
         blit = native[native.index('extern "C" __declspec(dllexport) int c3x_renderer_blit') :]
         blit = blit[:blit.index('extern "C" __declspec(dllexport) void c3x_renderer_reset')]
-        self.assertIn("renderer.blit(*output", blit)
+        self.assertIn("renderer_worker->blit(*output", blit)
         self.assertIn("BitBlt", native)
         self.assertIn("SRCCOPY", native)
         self.assertIn("output.clip_right - output.clip_left", native)
@@ -735,10 +786,10 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("append_ground_layer(bed_vertices, 4.0f,", native)
 
         self.assertIn("append_ground_layer(water_vertices, 5.0f,", native)
-        self.assertIn("draw_streaming_batches(geometry_cache.underlay)", native)
-        self.assertIn("draw_streaming_batches(geometry_cache.land)", native)
-        self.assertIn("draw_streaming_batches(geometry_cache.bed)", native)
-        self.assertIn("draw_streaming_batches(geometry_cache.water)", native)
+        self.assertIn("draw_cached_geometry(geometry_underlay)", native)
+        self.assertIn("draw_cached_geometry(geometry_land)", native)
+        self.assertIn("draw_cached_geometry(geometry_bed)", native)
+        self.assertIn("draw_cached_geometry(geometry_water)", native)
         self.assertIn("beach_base_texture.Sample", shader)
         self.assertIn("float3 water_normal = normalize", shader)
         self.assertIn("float sun_glint =", shader)

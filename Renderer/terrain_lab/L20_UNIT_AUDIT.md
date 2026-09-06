@@ -55,29 +55,41 @@ remain visible. A hierarchical marker decoder prevents lower decimal fields
 from carrying into higher fields. Native close, complete, reduced, and night
 inspection confirms the white-calibration failure is gone.
 
+Direct comparison with `canonical/unit_texture_and_civ_colors3.png` then found
+that the Tank's dedicated `TeamColor` component was still inheriting the
+vehicle root transform and sitting largely below the ground plane. The generic
+compound importer now resolves the component's declared `tankAll` attachment
+bone, and the component-role contract maps dedicated `TeamColor` geometry to a
+constant owner mask. This is source-semantic authoring: runtime code never
+branches on the Tank name or hardcodes a color for a particular unit. The same
+owner-color path supplies blue, red, gold, and green from instance state while
+the neutral `Vehicle_Woodland` hull stays textured olive.
+
 ## Shared-shadow correction
 
 The user reopened the final beauty gate on 2026-09-06 because unit lighting was
 technically present but too subtle at map scale. Every ordinary, compound,
-worker, and Army body now preserves its authored normals while receiving the
-same horizontal face emphasis used for other small raised forms. Every visible
-formation member has a source-scaled cast/contact footprint with a six-pixel
-minimum and the exact shared L13A direction and time-of-day strength. The
-corrected complete noon witness is
-`0d516a393ed529eb839ef037a45999a0a224f29877739e1196cb49140c2300db`;
-two unchanged L21 runs were byte-identical.
+worker, and Army body preserves authored-normal face shading with the same
+horizontal emphasis used for other small raised forms. Cast shadows no longer
+use one radius/height quad per unit: every visible animated component projects
+its actual source triangles along the shared L13A light direction. Light-facing
+coverage plus a restrained five-sample penumbra preserves recognizable hull,
+turret, limb, weapon, mount, sail, wing, and attachment silhouettes without
+turning them into hard black decals. Direction and near-constant stylized length
+remain shared across object families and day phases; only strength follows the
+approved environment evaluator.
 
 ## Deterministic evidence
 
 Two final unchanged `python3 Renderer/tools/renderer_dev.py lab` runs produced byte-identical outputs:
 
-- noon complete: `8814a86a6886b941a266da399eb9c53a6a88a20cfc6219c911bba5730614723e`
-- midnight complete: `c17d8d4f20a8732d4544a0b33d489f2cbde54e1359b561b21b2b6af8e5b580e8`
-- reduced: `e2703a52bc82f75f141b02aea94b7d1e219f33a0ac934be21c51aeafa6f53036`
+- noon complete: `96c1903ba0a3c772657f9abda9724dd778bfe4ca82623ff84520dc264a8a364c`
+- midnight complete: `552f1e6bd10b45cc2b4a1f11f7066b1b9a3ddd159d41aa3639f2d39a7dc0241d`
+- reduced: `c1faff8aa46c16a28aa35f6533f50c2a961896ad89f903253c2defb4a0e35365`
 - no units: `6582747ec96995cca34cc8de996305ec7ccf1d58732562a2042988aa488ddfd0`
-- unit isolation: `d2069f5030127ca551a358d80dd70e199ccfefcc2974f0e0c9686fa240ea502b`
-- eight-facing turntable: `3ccef1c3dcc8c1fabe4126967e5484b2c4170759ce87691e8111604c8113cb98`
-- action/worker matrix: `bf9caae116f76e751976592a01bdcb46e3b22ac391096fd2448add15fd7acb38`
-- Lab scenario: `b85d570959920564b2baa42f04ffc0abdd3ff7c528d5223864d55779aefe643b`
+- unit isolation: `138de1c5f7207433432aaf3ec206b390e7bd15b975665d92a16b1340813e6390`
+- eight-facing turntable: `65ae2adf03fe56eef6fd5ec710c4912cca0c92617cfd4aa4a7340e5946ce78e1`
+- action/worker matrix: `497b9860aeb5b08b3b9e9008ea98ef4d29fe15032ad087ba8633e1746c346500`
+- Lab scenario: `8066d641aa12ab7d42e62c83b77bc048bb003446eb97d975ede0e9814662d9b3`
 
 The no-unit hash exactly matches approved L19B noon.

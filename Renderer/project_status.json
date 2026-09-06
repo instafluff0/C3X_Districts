@@ -26,13 +26,13 @@
     "renderer_lab": {
       "responsibility": "Standalone asset use, rendering technique, visual quality, and approval for all map graphics.",
       "plan": "terrain_lab/PLAN.md",
-      "current_step": "L20",
+            "current_step": "L21",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py lab"
     },
     "game_integration": {
       "responsibility": "Civ III state capture, cache/invalidation, redraws, anchoring, compositing, exclusive native suppression, retained layers, telemetry, and hard failure without native replay.",
     "current_step": "I19",
-    "status": "paused_for_l20_visual_revision",
+            "status": "paused_for_l21_visual_revision",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py integration"
     },
     "promotion_rule": "Every L# visual gate has a same-numbered I# game-integration gate. I# cannot start before L# approval; after L# is approved, I# consumes that frozen handoff before the next system is considered integrated. L21/I21 remain the final combined release gates.",
@@ -140,26 +140,26 @@
     "handoffs/L21_complete_beauty_scene.json"
   ],
   "next_step": {
-    "id": "L20",
-    "title": "Units and animation and 192-tile promotion approval",
+        "id": "L21",
+        "title": "Complete 192-tile beauty scene and final user visual approval",
     "status": "ready",
     "workstream": "renderer_lab",
     "iteration_command": "python3 Renderer/tools/renderer_dev.py lab",
     "promotion_required": true,
     "scope": [
-      "Correct the dedicated Tank TeamColor component against the registered canonical tank reference.",
-      "Keep the authored woodland vehicle tint on the neutral body while applying owner color to the dedicated panel geometry.",
-      "Re-run the unchanged deterministic 192-tile L20 matrix at both zooms and at night."
+            "Recompose the complete frozen alternate-skin L9-L20 scene with the corrected localized Tank owner panels and mesh-projected unit silhouettes.",
+            "Inspect noon, sunset, midnight, sunrise, reduced zoom, and no-unit isolation across all terrain, shoreline, route, object, city, improvement, resource, and unit adjacencies.",
+            "Freeze deterministic complete-scene output hashes without changing any individual art-system contract."
     ],
     "acceptance": [
-      "Tank owner-color panels are saturated and localized like the canonical example rather than remaining gray-green.",
-      "The neutral vehicle body remains olive with readable source texture and face shading.",
-      "Every non-tank unit and the no-unit control remain unchanged; two identical runs are byte-deterministic."
+            "The complete scene preserves seamless terrain and shoreline blends, connected routes, hierarchy, density, readable scale, shared face/cast lighting, and source-only night emission.",
+            "Tank panels remain saturated and localized over an olive body, and unit cast shadows retain recognizable animated silhouettes in the shared direction.",
+            "The no-unit control remains unchanged and repeated complete-scene renders are byte-deterministic."
     ],
     "must_not": [
-      "Do not tint the complete tank body with owner color.",
-      "Do not alter unit scale, animation, lighting, shadows, or another accepted art system.",
-      "Do not resume Integration until L20 and L21 are frozen again."
+            "Do not add a new visual system or custom effects at the combined-scene gate.",
+            "Do not change an accepted per-system appearance merely to hide a composition problem.",
+            "Do not resume Integration until L21 is frozen again."
     ]
   },
   "milestones": [
@@ -1224,7 +1224,7 @@
         {
           "id": "L20",
           "title": "Units and animation and 192-tile promotion approval",
-          "status": "ready",
+          "status": "complete",
           "promotion_required": true,
           "evidence": [
             "handoffs/L20_units.json",
@@ -1279,7 +1279,7 @@
         {
           "id": "L21",
           "title": "Complete 192-tile beauty scene and final user visual approval",
-          "status": "blocked_by_previous",
+          "status": "ready",
           "promotion_required": true,
           "evidence": [
             "handoffs/L21_complete_beauty_scene.json",

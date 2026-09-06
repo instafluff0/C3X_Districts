@@ -37,8 +37,8 @@ environment may adapt to authoritative Civ III state. Substitute geometry,
 color grading, proxy vegetation, invented cliffs, and shoreline-rock dressing
 are outside the tolerance.
 
-The cache is intentionally correctness-first. It retains eight complete terrain
-viewports in a bounded exact-signature LRU. Its fingerprint includes target size,
+The cache is intentionally correctness-first. It retains up to 32 complete
+terrain viewports in a 128 MiB exact-signature LRU. Its fingerprint includes target size,
 zoom basis, ordered canonical identity plus screen occurrence anchors,
 renderer-owned tile state, world size and wrap, environment, definition/pack
 content revision, ownership, and device generation. The dirty clip is a
@@ -52,17 +52,53 @@ visible native animation continues requesting Civ III redraws while terrain
 itself remains a zero-tick cache hit.
 
 The live-scale path avoids repeated CPU work without weakening that identity.
-Each terrain layer reuses one evaluated shared grid per tile, common surface and
-material samples are memoized within the tile, river topology is evaluated only
-for the river pass, and a bounded anchor-independent cast-shadow field is reused
-only when its terrain, feature, visibility, wrap, zoom, environment, content,
-and device fingerprint is unchanged. Screen-anchor changes still rebuild the
-viewport geometry. On the Windows native 400-rendered-tile/800-record fixture,
-the cold render fell from 57.790 seconds to 5.241 seconds; a three-pixel/two-pixel
-camera move completes in about one second while proving a scene invalidation and
-shadow-field reuse. Exact unchanged viewports and any of the eight most recently
-visited matching viewports return at zero renderer ticks. Canonical synthetic
-and approved-scene pixel hashes remain deterministic.
+Each terrain layer reuses one evaluated shared grid per tile, river topology is
+evaluated only for the river pass, and canonical world tiles retain
+anchor-independent surface, relief, normal, and cast-shadow samples in a 96 MiB
+LRU. A tile sample key covers its renderer-owned state plus the complete local
+topology neighborhood reached by relief and shadow evaluation, zoom, wrapping,
+world dimensions, and content revision. Shadow keys additionally cover the
+environment and sample density. Native overlay state and screen anchors are
+excluded. Any tile mutation clears that tile's dependent samples; new scenario,
+world-size, wrap, definition, or pack state clears or rejects the affected
+entries. A second geometry signature deliberately
+excludes occurrence anchors. When every captured occurrence has unchanged
+renderer-owned content and moves by one uniform screen delta, the DLL retains
+the complete generated layer geometry and applies matching XY and depth
+translation in the production vertex adapter. The generated layers are uploaded
+once into bounded immutable vertex-buffer chunks and their large CPU vertex
+arrays are released; camera-only frames issue draws directly from those retained
+buffers. The Windows 400-rendered-tile/800-record fixture measures 5.315 seconds
+for a cold build and 0.026 seconds for a three-pixel/two-pixel camera move, while
+still reporting authoritative scene invalidation and an incremented
+geometry-cache hit. A device-reset cold rebuild bounds translation equivalence
+to fewer than one differing raster-edge pixel per thousand and a maximum channel
+delta of 128; the measured fixture is 292 of 393,216 pixels and 99. Exact
+unchanged or recently visited matching viewports return at zero renderer ticks.
+The current Windows 400-rendered-tile/800-record fixture measures 5.315 seconds
+cold, 0.026 seconds for uniform anchor translation, and 1.948 seconds after one
+logical tile plus its companion crosses the visible boundary. The boundary case
+defeats both exact pixels and whole-viewport geometry, proving reuse comes from
+the world-coordinate semantic/sample cache. Canonical synthetic and approved-
+scene pixel hashes remain deterministic.
+
+Generated GPU regions are separately bounded to two entries, 192 MiB total and
+96 MiB per entry. A full live viewport larger than the per-entry limit is not
+retained; this prevents the 32-bit process exhaustion reproduced by the native
+stress fixture. Crossing a tile boundary still rebuilds and uploads the expanded
+viewport geometry, so 1.948 seconds is an intermediate result, not the final
+interactive target. Future indexed/chunked GPU geometry and staging-readback
+work may reduce that remainder, but it may not reuse an incomplete topology edge
+or silently present a stale viewport.
+
+One lazily started renderer worker owns definition/pack mutation, renderer state,
+D3D creation, rendering, recovery, and reset. It receives a deep copy of the
+captured tile array. The capacity-one synchronous handoff accumulates no frame
+backlog and returns only the exact submitted sequence; Civ III's UI thread still
+captures authoritative state and performs the final serialized GDI blit while
+the worker is idle. Reset joins the worker before the DLL is unloaded. This is
+not a second presenter or game loop, and it never authorizes stale or native
+terrain fallback.
 
 Partial Civ III redraws preserve the destination map outside the authoritative
 dirty rectangle. When custom rendering is enabled, the `m71` hook deliberately
@@ -71,6 +107,9 @@ supplied a smaller traversal rectangle. This guarantees that a partial redraw
 can neither become a partial terrain render nor poison the retained cache. The
 renderer fills the complete off-screen target, while API v9 returns the exact
 original image clip and the bridge performs `SRCCOPY` only for that rectangle.
+The DLL retains its compatible DIB section and source DC between blits and copies
+only the requested clip into that surface before `BitBlt`, avoiding per-frame
+GDI object creation without changing destination pixels outside the clip.
 Repeated or reordered subsets of the same static terrain are also accepted as
 zero-tick cache hits. Native smoke proves unchanged full-frame pixels and exact
 ownership for those subsets, then exhaustively checks every destination pixel

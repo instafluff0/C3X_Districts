@@ -22,7 +22,16 @@ C3X owns only presentation state derived from those facts:
 - Animation clip selection, normalized phase, blending, particles, and renderer-only ambient motion.
 - Dirty-state tracking and requests for another normal Civ III map redraw.
 
-The renderer DLL never runs an independent presenter, message pump, simulation loop, swap chain, or unconditional background frame thread. Renderer work may enter through the retained map plane or, after M7.4 proves its hook, the Animator-owned dynamic unit plane; both remain ordinary Civ III UI-thread updates into Civ III-owned surfaces.
+The renderer DLL never runs an independent presenter, message pump, simulation
+loop, swap chain, or autonomous frame-producing thread. It may use one dedicated
+renderer worker to consume an immutable snapshot and own D3D state. That worker
+has a capacity-one, no-backlog handoff, never reads Civ III pointers, and never
+presents. The current synchronous ABI waits for the exact submitted sequence;
+Civ III's UI thread remains authoritative for capture, redraw decisions, and the
+final serialized GDI copy into Civ III-owned surfaces. Renderer work may enter
+through the retained map plane or, after M7.4 proves its hook, the Animator-owned
+dynamic unit plane; both remain ordinary Civ III-driven updates rather than a
+second game loop.
 
 ## Frame Scheduling
 

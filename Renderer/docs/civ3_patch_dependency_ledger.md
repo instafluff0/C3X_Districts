@@ -106,9 +106,13 @@ M5.1 through M5.3 were implemented with existing symbols. M5.3 proved that the e
   necessary; Civ III city labels, resource UI icons, and all retained overlays
   continue after the custom plane.
 - API v9 adds DLL-local route/resource/city/mine selectors and exact ownership
-  bits. The bounded eight-viewport terrain cache includes every renderer-owned
+  bits. The 32-entry/128 MiB exact viewport LRU and 96 MiB canonical world-tile
+  sample cache include every renderer-owned
   selector but excludes unit animation, selection, native `SquareParts`, fog,
   and exact population values that cannot change this plane.
+- One capacity-one renderer worker consumes copied immutable snapshots and owns
+  renderer/D3D mutation. Existing m19/m71 capture, reset, and blit boundaries are
+  sufficient; no worker-specific Civ III hook or symbol is required.
 - The production smoke consumes the frozen approved L14-L18 payloads at both
   zooms and proves route/resource/city/mine invalidation, LRU reuse/eviction,
   exact clips, scrolling/wrap occurrences, deterministic reset, and zero native

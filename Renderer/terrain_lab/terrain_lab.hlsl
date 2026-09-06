@@ -868,19 +868,25 @@ float4 PSFeature(FeaturePixelInput input) : SV_TARGET
     albedo = lerp(albedo, float3(0.13, 0.115, 0.055), pollution_weight);
     float3 normal = normalize(input.geometry_normal);
     float3 light_direction = frame_light_direction();
-    // Small vegetation, resource, and unit bodies otherwise collapse toward
-    // flat ambient color at Civ III scale. Preserve their authored normals,
-    // but expand the horizontal response so each has the same legible lit and
-    // opposing faces as larger relief. River/shore rocks and flat decals keep
-    // their unmodified geometric normals.
+    // Small vegetation, resources, units, cities, and raised improvements
+    // otherwise collapse toward flat ambient color at Civ III scale. Preserve
+    // authored normals, but expand their horizontal response so each receives
+    // the same readable lit and opposing faces as relief. Flat pollution and
+    // crater decals retain their unmodified normals.
     float vegetation_weight = 1.0 - step(7.5, input.material_index);
     float3 vegetation_normal = normalize(float3(
         normal.xy * 2.40, max(0.18, normal.z * 0.70)));
     float3 form_normal = normalize(lerp(normal, vegetation_normal,
                                          vegetation_weight));
-    float raised_detail_weight = saturate(resource_weight + unit_weight);
-    float horizontal_gain = 1.0 + resource_weight * 0.95 + unit_weight * 1.10;
-    float vertical_gain = 1.0 - resource_weight * 0.18 - unit_weight * 0.22;
+    float raised_map_object_weight = saturate(
+        city_weight + tile_object_weight + raised_infrastructure_weight +
+        mine_weight * (1.0 - ground_state_weight));
+    float raised_detail_weight = saturate(
+        resource_weight + unit_weight + raised_map_object_weight);
+    float horizontal_gain = 1.0 + resource_weight * 0.95 + unit_weight * 1.10 +
+                            raised_map_object_weight * 0.82;
+    float vertical_gain = 1.0 - resource_weight * 0.18 - unit_weight * 0.22 -
+                          raised_map_object_weight * 0.16;
     float3 raised_detail_normal = normalize(float3(
         normal.xy * horizontal_gain, max(0.18, normal.z * vertical_gain)));
     form_normal = normalize(lerp(form_normal, raised_detail_normal,
@@ -971,6 +977,24 @@ float4 sample_railroad_source(float along, float across, float pillaged)
 
 float4 PSMain(PixelInput input) : SV_TARGET
 {
+    if (input.panel > 0.5 && input.surface_kind > 12.5 && input.surface_kind < 13.5)
+    {
+        float owner = input.base_terrain;
+        float3 civ_color = owner < 0.5 ? float3(0.08, 0.36, 0.95) :
+            (owner < 1.5 ? float3(0.90, 0.08, 0.05) :
+            (owner < 2.5 ? float3(0.08, 0.64, 0.14) :
+                           float3(0.98, 0.70, 0.04)));
+        float edge = 1.0 - smoothstep(0.66, 1.0, abs(input.shape_visibility.x));
+        float daylight = saturate(environment_sun_intensity +
+                                  environment_moon_intensity * 0.45);
+        float3 display_color = pow(saturate(frame_tone_map(
+            civ_color * lerp(0.50, 1.18, daylight) * frame_output_exposure())),
+            1.0 / 2.2);
+        clip(edge - 0.02);
+        // One owner color only: coverage softens the ribbon edge, but no
+        // secondary dark/light civilization stripe is synthesized.
+        return float4(display_color, edge * 0.94);
+    }
     if (input.panel > 0.5 && input.surface_kind > 10.5 && input.surface_kind < 11.5)
     {
         float railroad = step(3.5, input.base_terrain);
@@ -1030,12 +1054,23 @@ float4 PSMain(PixelInput input) : SV_TARGET
         clip(alpha - 0.004);
         return float4(0.018, 0.022, 0.030, alpha);
     }
-    if (input.panel > 0.5 && input.surface_kind > 10.5 && input.surface_kind < 11.5)
+    if (input.panel > 0.5 && input.surface_kind > 11.5 && input.surface_kind < 12.5)
     {
         // Animated unit bodies cast their actual projected source triangles.
-        // Multiple facing surfaces naturally build a denser umbra while thin
-        // limbs, weapons, turrets, mounts, and attachments retain their shape.
-        float alpha = frame_cast_shadow_strength() * 0.42;
+        // Five low-opacity light-facing projections form one restrained soft
+        // penumbra while limbs, weapons, turrets, mounts, and attachments
+        // retain their source silhouette.
+        float alpha = frame_cast_shadow_strength() * 0.16;
+        clip(alpha - 0.004);
+        return float4(0.010, 0.014, 0.019, alpha);
+    }
+    if (input.panel > 0.5 && input.surface_kind > 13.5 && input.surface_kind < 14.5)
+    {
+        // Static raised map objects use the same projected source-mesh method
+        // and shared light vector as units. A single silhouette sample avoids
+        // multiplying the large city mesh budget; blend coverage supplies the
+        // restrained soft edge.
+        float alpha = frame_cast_shadow_strength() * 0.46;
         clip(alpha - 0.004);
         return float4(0.010, 0.014, 0.019, alpha);
     }

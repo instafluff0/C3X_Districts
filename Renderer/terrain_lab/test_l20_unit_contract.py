@@ -44,8 +44,11 @@ class L20UnitContractTests(unittest.TestCase):
         self.assertIn("unit_weight * 0.22", shader)
         self.assertIn("make_projected_feature_shadow_vertex", source)
         self.assertIn("project_shadow_mesh", source)
+        self.assertIn("light_facing <= 0.0f", source)
+        self.assertIn("penumbra_x[5]", source)
         self.assertIn("shadows, unit_output[instance.kind], 6.0f, 1.10f, true", source)
-        self.assertIn("surface_kind > 10.5", shader)
+        self.assertIn("surface_kind > 11.5", shader)
+        self.assertIn("frame_cast_shadow_strength() * 0.16", shader)
         self.assertIn("progress_milli", source)
         self.assertIn("army_commander_plus_member", (
             ROOT / "Renderer/terrain_lab/build_l20_unit_scenario.py"
@@ -55,6 +58,7 @@ class L20UnitContractTests(unittest.TestCase):
         ).read_text(encoding="utf-8"))
         self.assertIn("C3X_LAB_COMPOUND_UNITS", runner)
         self.assertIn("C3X_L20_MODES", runner)
+        self.assertIn("ping -n 6 127.0.0.1", runner)
         self.assertNotIn("launch", runner.lower())
 
     def test_canonical_owner_color_authoring_is_component_local(self) -> None:

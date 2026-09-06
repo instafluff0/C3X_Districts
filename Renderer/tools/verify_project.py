@@ -1167,7 +1167,8 @@ def check_i18_approved_map_stack_integration() -> dict[str, Any]:
     renderer = (RENDERER_ROOT / "native" / "c3x_renderer.cpp").read_text(encoding="utf-8")
     api = (RENDERER_ROOT / "native" / "c3x_renderer_api.h").read_text(encoding="utf-8")
     for token in ("route_vertices", "find_feature_group(resource_bundle", "city_vertices", "mine_vertices",
-                  "viewport_cache_capacity = 8u"):
+                  "viewport_cache_capacity = 32u",
+                  "viewport_cache_budget = 128u * 1024u * 1024u"):
         if token not in renderer:
             return failed(f"I14-I18 production path is missing {token}")
     for token in ("CUSTOM_ROAD_REPLACED", "CUSTOM_RAILROAD_REPLACED",
@@ -1176,7 +1177,7 @@ def check_i18_approved_map_stack_integration() -> dict[str, Any]:
         if token not in api:
             return failed(f"I14-I18 API is missing {token}")
     return passed(
-        "Frozen approved L14-L18 handoffs, production draw paths, exact ownership, authoritative selectors, and bounded eight-viewport cache contracts passed."
+        "Frozen approved L14-L18 handoffs, production draw paths, exact ownership, authoritative selectors, and memory-bounded multi-viewport cache contracts passed."
     )
 
 

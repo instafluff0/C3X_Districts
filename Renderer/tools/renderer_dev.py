@@ -382,8 +382,6 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
                 str(RENDERER_ROOT / "terrain_lab" / "fixtures" / "l20_units_192.csv"),
             ]))
         if results[-1]["status"] == "pass":
-            results.append(native_command_result("Renderer/terrain_lab", "call BUILD.bat"))
-        if results[-1]["status"] == "pass":
             lab_script_name = f"RUN_{results[0]['next_step']}.bat"
             lab_script = RENDERER_ROOT / "terrain_lab" / lab_script_name
             if lab_script.is_file():

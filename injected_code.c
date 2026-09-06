@@ -26683,6 +26683,9 @@ log_custom_renderer_event (char const * stage, int result)
 void
 unload_custom_renderer ()
 {
+	if ((is->custom_renderer_module != NULL) &&
+	    (is->custom_renderer_reset != NULL))
+		is->custom_renderer_reset ();
 	if (is->custom_renderer_module != NULL)
 		FreeLibrary (is->custom_renderer_module);
 	is->custom_renderer_module = NULL;

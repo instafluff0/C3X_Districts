@@ -28,14 +28,14 @@
   ],
   "reference": {
     "native_output": "preview/out/terrain_lab/terrain_beauty_l20_units_noon.bmp",
-    "native_sha256": "8814a86a6886b941a266da399eb9c53a6a88a20cfc6219c911bba5730614723e",
-    "night_sha256": "c17d8d4f20a8732d4544a0b33d489f2cbde54e1359b561b21b2b6af8e5b580e8",
-    "reduced_sha256": "e2703a52bc82f75f141b02aea94b7d1e219f33a0ac934be21c51aeafa6f53036",
+    "native_sha256": "96c1903ba0a3c772657f9abda9724dd778bfe4ca82623ff84520dc264a8a364c",
+    "night_sha256": "552f1e6bd10b45cc2b4a1f11f7066b1b9a3ddd159d41aa3639f2d39a7dc0241d",
+    "reduced_sha256": "c1faff8aa46c16a28aa35f6533f50c2a961896ad89f903253c2defb4a0e35365",
     "no_units_sha256": "6582747ec96995cca34cc8de996305ec7ccf1d58732562a2042988aa488ddfd0",
-    "unit_isolation_sha256": "d2069f5030127ca551a358d80dd70e199ccfefcc2974f0e0c9686fa240ea502b",
-    "turntable_sha256": "3ccef1c3dcc8c1fabe4126967e5484b2c4170759ce87691e8111604c8113cb98",
-    "actions_sha256": "bf9caae116f76e751976592a01bdcb46e3b22ac391096fd2448add15fd7acb38",
-    "scenario_sha256": "b85d570959920564b2baa42f04ffc0abdd3ff7c528d5223864d55779aefe643b",
+    "unit_isolation_sha256": "138de1c5f7207433432aaf3ec206b390e7bd15b975665d92a16b1340813e6390",
+    "turntable_sha256": "65ae2adf03fe56eef6fd5ec710c4912cca0c92617cfd4aa4a7340e5946ce78e1",
+    "actions_sha256": "497b9860aeb5b08b3b9e9008ea98ef4d29fe15032ad087ba8633e1746c346500",
+    "scenario_sha256": "8066d641aa12ab7d42e62c83b77bc048bb003446eb97d975ede0e9814662d9b3",
     "tile_count": 192,
     "audit": "terrain_lab/L20_UNIT_AUDIT.md"
   },
@@ -68,12 +68,22 @@
     "visual_result": "olive tanks, khaki infantry, warm skin, and authored horse/wood browns without white calibration bodies; texture, owner accents, face shading, and cast shadows retained",
     "verification": "terrain_lab/test_l20_unit_contract.py"
   },
+  "team_color_geometry_revision": {
+    "approved_on": "2026-09-06",
+    "canonical_reference": "canonical/unit_texture_and_civ_colors3.png",
+    "reason": "the dedicated Tank TeamColor mesh inherited the vehicle root transform and remained mostly below ground, leaving its localized panels gray-green",
+    "contract": "component attachment bones are normalized source metadata; a dedicated TeamColor role with USE_CIV_COLOR selects a constant owner mask while all owner RGB still comes from instance state",
+    "resolved_attachment": "tankAll",
+    "visual_result": "saturated localized blue, red, gold, and green armor panels over the unchanged textured olive Vehicle_Woodland body",
+    "runtime_unit_name_branches": false,
+    "verification": "tools/asset_compiler/test_compound_unit_asset_importer.py and terrain_lab/test_l20_unit_contract.py"
+  },
   "lighting_revision": {
     "approved_on": "2026-09-06",
     "reason": "unit self/face and cast shadows were too subtle in the complete beauty scene",
-    "contract": "authored normals receive map-scale face emphasis; every visible formation member receives a source-scaled cast/contact footprint with a six-pixel minimum and the shared L13A direction/strength",
+    "contract": "authored normals receive map-scale face emphasis; every visible animated component projects its actual source triangles along the shared L13A direction, with light-facing coverage and a restrained five-sample penumbra preserving unit silhouette",
     "complete_noon_output": "preview/out/terrain_lab/terrain_beauty_l21_complete_noon.bmp",
-    "complete_noon_sha256": "0d516a393ed529eb839ef037a45999a0a224f29877739e1196cb49140c2300db",
+    "complete_noon_sha256": "96c1903ba0a3c772657f9abda9724dd778bfe4ca82623ff84520dc264a8a364c",
     "verification": "terrain_lab/test_l20_unit_contract.py"
   },
   "ownership_intent": {

@@ -40,6 +40,7 @@ bool road_geometry_enabled = false;
 bool railroad_geometry_enabled = false;
 bool resource_geometry_enabled = false;
 bool city_geometry_enabled = false;
+bool territory_geometry_enabled = false;
 bool l19_scene_enabled = false;
 c3x_renderer::EnvironmentState frame_environment = {};
 float active_light_direction[3] = {-0.808f, -0.514f, 0.323f};
@@ -160,6 +161,12 @@ struct CityScenario {
 };
 
 CityScenario city_scenario;
+
+// Lab-only ownership is derived deterministically from the existing city
+// augmentation. Runtime integration will supply the authoritative Civ III
+// owner for every visible tile; the renderer consumes the same simple owner
+// grid and never infers ownership from terrain appearance.
+std::vector<int> territory_owners;
 
 struct MineInstance {
     int column = 0;
@@ -878,6 +885,47 @@ BiqWindowTile const * biq_tile_at(int column, int row) {
         if (tile.column == column && tile.row == row)
             return &tile;
     return nullptr;
+}
+
+void build_lab_territory_owners() {
+    territory_owners.assign(
+        static_cast<std::size_t>(biq_window.columns * biq_window.rows), -1);
+    for (int row = 0; row < biq_window.rows; ++row) {
+        for (int column = 0; column < biq_window.columns; ++column) {
+            float best_distance = 1000000.0f;
+            int best_owner = -1;
+            float best_radius = 0.0f;
+            for (CityInstance const & city : city_scenario.instances) {
+                if (city.visible == 0u)
+                    continue;
+                int raw_dx = std::abs(column - city.column);
+                int wrapped_dx = std::min(raw_dx, biq_window.columns - raw_dx);
+                float dx = static_cast<float>(wrapped_dx);
+                float dy = static_cast<float>(row - city.row) * 1.12f;
+                float distance = dx * dx + dy * dy;
+                if (distance < best_distance ||
+                    (distance == best_distance && static_cast<int>(city.owner) < best_owner)) {
+                    best_distance = distance;
+                    best_owner = static_cast<int>(city.owner);
+                    best_radius = 2.55f + static_cast<float>(city.size) * 0.55f;
+                }
+            }
+            if (best_owner >= 0 && best_distance <= best_radius * best_radius)
+                territory_owners[static_cast<std::size_t>(
+                    row * biq_window.columns + column)] = best_owner;
+        }
+    }
+}
+
+int territory_owner_at(int column, int row) {
+    if (row < 0 || row >= biq_window.rows || biq_window.columns <= 0)
+        return -2; // viewport continuation: do not invent a border at the crop
+    while (column < 0)
+        column += biq_window.columns;
+    while (column >= biq_window.columns)
+        column -= biq_window.columns;
+    return territory_owners[static_cast<std::size_t>(
+        row * biq_window.columns + column)];
 }
 
 BiqWindowTile const * biq_tile_at(float world_x, float world_y) {
@@ -2804,6 +2852,129 @@ void add_railroad_scene(std::vector<Vertex> & vertices,
     }
 }
 
+Vertex make_territory_vertex(float world_x, float world_y, float across,
+                             unsigned owner, HeightField const * authored_height,
+                             HeightField const * authored_blend) {
+    Vertex result = make_biq_road_vertex(
+        world_x, world_y, 0.0f, 0.0f, owner, 0u, 0u,
+        authored_height, authored_blend);
+    result.surface_kind = 13.0f;
+    result.base_terrain = static_cast<float>(owner);
+    result.shadow_visibility = across;
+    result.ambient_visibility = 1.0f;
+    result.terrain_depth = std::max(0.002f, result.terrain_depth - 0.006f);
+    return result;
+}
+
+void add_territory_segment(std::vector<Vertex> & vertices,
+                           float x0, float y0, float x1, float y1,
+                           unsigned owner, float owner_side,
+                           HeightField const * authored_height,
+                           HeightField const * authored_blend) {
+    constexpr int subdivisions = 12;
+    constexpr float half_width = 0.035f;
+    constexpr float owner_inset = 0.046f;
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float length = std::sqrt(dx * dx + dy * dy);
+    if (length < 0.001f)
+        return;
+    float perpendicular_x = -dy / length;
+    float perpendicular_y = dx / length;
+    float phase = std::fmod(std::fabs(
+        (x0 + 3.0f) * 103.0f + (y0 + 5.0f) * 197.0f), 29.0f) /
+        29.0f * 6.28318530718f;
+    auto border_vertex = [&](float along, float across) {
+        float envelope = std::sin(along * 3.14159265359f);
+        float wave = envelope * 0.011f *
+            std::sin(along * 6.28318530718f + phase);
+        float lateral = owner_side * owner_inset + half_width * across + wave;
+        return make_territory_vertex(
+            x0 + dx * along + perpendicular_x * lateral,
+            y0 + dy * along + perpendicular_y * lateral,
+            across, owner, authored_height, authored_blend);
+    };
+    for (int index = 0; index < subdivisions; ++index) {
+        float a0 = static_cast<float>(index) / subdivisions;
+        float a1 = static_cast<float>(index + 1) / subdivisions;
+        Vertex left0 = border_vertex(a0, -1.0f);
+        Vertex right0 = border_vertex(a0, 1.0f);
+        Vertex right1 = border_vertex(a1, 1.0f);
+        Vertex left1 = border_vertex(a1, -1.0f);
+        add_triangle(vertices, left0, right0, right1);
+        add_triangle(vertices, left0, right1, left1);
+    }
+    // Round caps bridge the small inset displacement where two diamond edges
+    // turn a corner. Overlapping caps are intentional and eliminate pinholes
+    // without adding a second outline color.
+    auto add_cap = [&](float center_x, float center_y) {
+        constexpr int cap_segments = 12;
+        constexpr float cap_radius = 0.052f;
+        Vertex center = make_territory_vertex(
+            center_x, center_y, 0.0f, owner, authored_height, authored_blend);
+        for (int index = 0; index < cap_segments; ++index) {
+            float angle0 = static_cast<float>(index) * 6.28318530718f / cap_segments;
+            float angle1 = static_cast<float>(index + 1) * 6.28318530718f / cap_segments;
+            Vertex edge0 = make_territory_vertex(
+                center_x + std::cos(angle0) * cap_radius,
+                center_y + std::sin(angle0) * cap_radius,
+                1.0f, owner, authored_height, authored_blend);
+            Vertex edge1 = make_territory_vertex(
+                center_x + std::cos(angle1) * cap_radius,
+                center_y + std::sin(angle1) * cap_radius,
+                1.0f, owner, authored_height, authored_blend);
+            add_triangle(vertices, center, edge0, edge1);
+        }
+    };
+    float inset_x = perpendicular_x * owner_side * owner_inset;
+    float inset_y = perpendicular_y * owner_side * owner_inset;
+    add_cap(x0 + inset_x, y0 + inset_y);
+    add_cap(x1 + inset_x, y1 + inset_y);
+}
+
+void add_territory_boundary(std::vector<Vertex> & vertices,
+                            float x0, float y0, float x1, float y1,
+                            int owner_a, int owner_b,
+                            HeightField const * authored_height,
+                            HeightField const * authored_blend) {
+    if (owner_a == owner_b || owner_a == -2 || owner_b == -2)
+        return;
+    // Unowned land gets no ribbon. At a rival border each civilization keeps
+    // one narrow ribbon in its own main color; there is no Civ VI-style
+    // secondary color inside either ribbon.
+    if (owner_a >= 0)
+        add_territory_segment(vertices, x0, y0, x1, y1,
+                              static_cast<unsigned>(owner_a), -1.0f,
+                              authored_height, authored_blend);
+    if (owner_b >= 0)
+        add_territory_segment(vertices, x0, y0, x1, y1,
+                              static_cast<unsigned>(owner_b), 1.0f,
+                              authored_height, authored_blend);
+}
+
+void add_territory_scene(std::vector<Vertex> & vertices,
+                         HeightField const * authored_height,
+                         HeightField const * authored_blend) {
+    for (int row = 0; row < biq_window.rows; ++row) {
+        for (int column = 0; column < biq_window.columns; ++column) {
+            int owner = territory_owner_at(column, row);
+            // Emit each logical edge exactly once. X wraps are authoritative;
+            // Y crop edges remain open rather than creating a false frame.
+            int right_owner = territory_owner_at(column + 1, row);
+            if (column + 1 < biq_window.columns)
+                add_territory_boundary(
+                    vertices, static_cast<float>(column + 1), static_cast<float>(row),
+                    static_cast<float>(column + 1), static_cast<float>(row + 1),
+                    owner, right_owner, authored_height, authored_blend);
+            int bottom_owner = territory_owner_at(column, row + 1);
+            add_territory_boundary(
+                vertices, static_cast<float>(column), static_cast<float>(row + 1),
+                static_cast<float>(column + 1), static_cast<float>(row + 1),
+                owner, bottom_owner, authored_height, authored_blend);
+        }
+    }
+}
+
 void add_biq_grid(std::vector<Vertex> & vertices, HeightField const * authored_height,
                   HeightField const * authored_blend) {
     // The promotion grid was useful while validating the exact 96-cell BIQ
@@ -3039,9 +3210,10 @@ Vertex make_feature_shadow_vertex(float screen_x, float screen_y, float depth,
                   2.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, depth};
 }
 
-Vertex make_projected_feature_shadow_vertex(float screen_x, float screen_y, float depth) {
+Vertex make_projected_feature_shadow_vertex(float screen_x, float screen_y, float depth,
+                                            float surface_kind) {
     return Vertex{ndc_x(screen_x), ndc_y(screen_y), 0.0f, 0.0f, 1.0f,
-                  0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 11.0f, 0.0f,
+                  0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, surface_kind, 0.0f,
                   2.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, depth};
 }
 
@@ -3053,7 +3225,9 @@ void add_feature_instance(FeatureBundle const & bundle, FeaturePlacement const &
                           std::vector<FeatureVertex> & output,
                           float shadow_width_floor = 4.0f,
                           float shadow_length_scale = 1.0f,
-                          bool project_shadow_mesh = false) {
+                          bool project_shadow_mesh = false,
+                          unsigned projected_shadow_samples = 5u,
+                          float projected_shadow_kind = 12.0f) {
     FeatureAsset const & asset = bundle.assets[placement.asset_index];
     float land_edge = coast_position(world_y, false, integrated_shore) -
                       beach_width_at(world_y, integrated_shore);
@@ -3142,6 +3316,7 @@ void add_feature_instance(FeatureBundle const & bundle, FeaturePlacement const &
             // near-constant Civ VI-like shadow length over the day/night cycle.
             for (std::size_t index = 0; index + 2 < asset.indices.size(); index += 3) {
                 Vertex projected[3];
+                float light_facing = 0.0f;
                 for (unsigned corner = 0; corner < 3u; ++corner) {
                     FeatureSourceVertex const & source = asset.vertices[
                         asset.indices[index + corner]];
@@ -3159,9 +3334,33 @@ void add_feature_instance(FeatureBundle const & bundle, FeaturePlacement const &
                     float screen_x = base_x + cast_screen_x * cast;
                     float screen_y = base_y + cast_screen_y * cast;
                     projected[corner] = make_projected_feature_shadow_vertex(
-                        screen_x, screen_y, shadow_depth_at(screen_y));
+                        screen_x, screen_y, shadow_depth_at(screen_y),
+                        projected_shadow_kind);
+                    float normal_x =
+                        source.normal[0] * cosine - source.normal[1] * sine;
+                    float normal_y =
+                        source.normal[0] * sine + source.normal[1] * cosine;
+                    light_facing += normal_x * active_light_direction[0] +
+                                    normal_y * active_light_direction[1] +
+                                    source.normal[2] * active_light_direction[2];
                 }
-                add_triangle(shadows, projected[0], projected[1], projected[2]);
+                if (light_facing <= 0.0f)
+                    continue;
+                float penumbra_x[5] = {0.0f, -1.6f, 1.6f, 0.0f, 0.0f};
+                float penumbra_y[5] = {0.0f, 0.0f, 0.0f, -1.6f, 1.6f};
+                unsigned sample_count = std::clamp(projected_shadow_samples, 1u, 5u);
+                for (unsigned sample = 0; sample < sample_count; ++sample) {
+                    Vertex softened[3] = {projected[0], projected[1], projected[2]};
+                    for (unsigned corner = 0; corner < 3u; ++corner) {
+                        softened[corner].x = ndc_x(
+                            (softened[corner].x + 1.0f) * 0.5f * output_width +
+                            penumbra_x[sample]);
+                        softened[corner].y = ndc_y(
+                            (1.0f - softened[corner].y) * 0.5f * output_height +
+                            penumbra_y[sample]);
+                    }
+                    add_triangle(shadows, softened[0], softened[1], softened[2]);
+                }
             }
         } else {
             float near_left_x = center_x - perpendicular_x * shadow_width * 0.42f;
@@ -3551,7 +3750,8 @@ bool add_resource_scene(FeatureBundle const & bundle,
             add_feature_instance(bundle, placement, world_x, world_y, rotation, scale,
                                  authored_height, authored_blend, true,
                                  instance.resource == 7u ? submerged_shadows : shadows,
-                                 output, 7.0f, 1.05f);
+                                 output, 7.0f, 1.05f, instance.resource != 7u,
+                                 1u, 14.0f);
         }
     }
     return true;
@@ -3593,7 +3793,8 @@ bool add_city_scene(FeatureBundle const & city_bundle,
             float rotation = angle + 0.55f;
             std::size_t first = city_output.size();
             add_feature_instance(city_bundle, placement, world_x, world_y, rotation, scale,
-                                 authored_height, authored_blend, true, shadows, city_output);
+                                 authored_height, authored_blend, true, shadows, city_output,
+                                 4.0f, 1.0f, true, 1u, 14.0f);
             float owner_code = 0.08f * static_cast<float>(instance.owner + 1u);
             for (std::size_t index = first; index < city_output.size(); ++index)
                 city_output[index].material_index += owner_code;
@@ -3617,7 +3818,8 @@ bool add_city_scene(FeatureBundle const & city_bundle,
                     static_cast<float>(instance.column) + 0.50f + offset[0],
                     static_cast<float>(instance.row) + 0.50f + offset[1],
                     offset[2], wall.scale * (instance.size == 0u ? 0.82f : 1.0f),
-                    authored_height, authored_blend, true, shadows, wall_output);
+                    authored_height, authored_blend, true, shadows, wall_output,
+                    4.0f, 1.0f, true, 1u, 14.0f);
                 float owner_code = 0.08f * static_cast<float>(instance.owner + 1u);
                 for (std::size_t index = first; index < wall_output.size(); ++index)
                     wall_output[index].material_index += owner_code;
@@ -3632,7 +3834,6 @@ bool add_mine_scene(FeatureBundle const & bundle,
                     HeightField const * authored_blend,
                     std::vector<Vertex> & shadows,
                     std::vector<FeatureVertex> & output) {
-    std::vector<Vertex> discarded_child_shadows;
     for (MineInstance const & instance : mine_scenario.instances) {
         if (instance.visible == 0u)
             continue;
@@ -3653,7 +3854,7 @@ bool add_mine_scene(FeatureBundle const & bundle,
                                  static_cast<float>(instance.row) + 0.50f,
                                  rotation, placement.scale,
                                  authored_height, authored_blend, true,
-                                 part == 0 ? shadows : discarded_child_shadows, output);
+                                 shadows, output, 4.0f, 1.0f, true, 1u, 14.0f);
             FeatureAsset const & asset = bundle.assets[placement.asset_index];
             unsigned emissive_code = 0u;
             std::size_t marker = asset.id.rfind(":e");
@@ -3683,7 +3884,6 @@ bool add_farm_scene(FeatureBundle const & bundle,
         BiqWindowTile const * tile = biq_tile_at(instance.column, instance.row);
         if (group == nullptr || group->placements.empty() || tile == nullptr || tile->base >= 11)
             return false;
-        bool shadow_emitted = false;
         for (FeaturePlacement const & placement : group->placements) {
             FeatureAsset const & asset = bundle.assets[placement.asset_index];
             bool base_part = asset.id.find(":base:") != std::string::npos;
@@ -3703,15 +3903,14 @@ bool add_farm_scene(FeatureBundle const & bundle,
                 : (building_part ? 0.94f : 1.05f);
             auto add_part = [&](float offset_x, float offset_y) {
                 std::size_t first = output.size();
-                std::vector<Vertex> & part_shadows = building_part && !shadow_emitted
+                std::vector<Vertex> & part_shadows = building_part
                     ? shadows : discarded_shadows;
                 add_feature_instance(bundle, placement,
                                      static_cast<float>(instance.column) + 0.50f + offset_x,
                                      static_cast<float>(instance.row) + 0.50f + offset_y,
                                      0.0f, scale, authored_height, authored_blend, true,
-                                     part_shadows, output);
-                if (building_part && !shadow_emitted)
-                    shadow_emitted = true;
+                                     part_shadows, output, 4.0f, 1.0f,
+                                     building_part, 1u, 14.0f);
                 unsigned emissive_code = 0u;
                 std::size_t marker = asset.id.rfind(":e");
                 if (marker != std::string::npos)
@@ -3734,7 +3933,6 @@ bool add_tile_object_scene(FeatureBundle const & bundle,
                            std::vector<FeatureVertex> & output) {
     constexpr unsigned hut_bucket_to_variant[] = {0u, 1u, 2u, 0u, 1u, 2u, 0u, 1u};
     constexpr float half_pi = 1.57079632679f;
-    std::vector<Vertex> discarded_child_shadows;
     for (TileObjectInstance const & instance : tile_object_scenario.instances) {
         if (instance.visible == 0u)
             continue;
@@ -3775,18 +3973,14 @@ bool add_tile_object_scene(FeatureBundle const & bundle,
         } else {
             object_scale = 1.25f;
         }
-        bool shadow_emitted = false;
         for (FeaturePlacement const & placement : group->placements) {
             std::size_t first = output.size();
-            std::vector<Vertex> & part_shadows = !shadow_emitted
-                ? shadows : discarded_child_shadows;
             add_feature_instance(bundle, placement,
                                  static_cast<float>(instance.column) + 0.50f + offset_x,
                                  static_cast<float>(instance.row) + 0.50f + offset_y,
                                  rotation, placement.scale * object_scale,
                                  authored_height, authored_blend, true,
-                                 part_shadows, output);
-            shadow_emitted = true;
+                                 shadows, output, 4.0f, 1.0f, true, 1u, 14.0f);
             float material_marker = instance.kind == 0u
                 ? 0.01f : 0.10f + static_cast<float>(instance.owner) * 0.01f;
             for (std::size_t index = first; index < output.size(); ++index)
@@ -3857,19 +4051,18 @@ bool add_infrastructure_scene(FeatureBundle const & fort_bundle,
         unsigned facing = feature_hash(instance.column * 73u + instance.row * 131u +
                                        instance.variant * 19u + instance.kind * 41u) % 4u;
         float rotation = 0.78539816339f + static_cast<float>(facing) * half_pi;
-        bool shadow_emitted = false;
         for (FeaturePlacement const & placement : group->placements) {
             std::size_t first = output->size();
             bool ground = instance.kind == 5u || instance.kind == 6u;
-            std::vector<Vertex> & part_shadows = !ground && !shadow_emitted
+            std::vector<Vertex> & part_shadows = !ground
                 ? shadows : discarded_shadows;
             add_feature_instance(*bundle, placement,
                                  static_cast<float>(instance.column) + 0.50f,
                                  static_cast<float>(instance.row) + 0.50f,
                                  rotation, placement.scale * object_scale,
                                  authored_height, authored_blend, true,
-                                 part_shadows, *output);
-            shadow_emitted = shadow_emitted || !ground;
+                                 part_shadows, *output, 4.0f, 1.0f,
+                                 !ground, 1u, 14.0f);
             unsigned emissive_code = 0u;
             std::size_t marker = bundle->assets[placement.asset_index].id.rfind(":e");
             if (marker != std::string::npos)
@@ -4112,7 +4305,8 @@ int main(int argc, char ** argv) {
             "beauty_units_night|beauty_units_zoom2|beauty_units_no_units|"
             "beauty_units_only|beauty_units_turntable|beauty_units_actions|"
             "beauty_complete_noon|beauty_complete_sunset|beauty_complete_midnight|"
-            "beauty_complete_sunrise|beauty_complete_zoom2|beauty_complete_no_units> "
+            "beauty_complete_sunrise|beauty_complete_zoom2|beauty_complete_no_units|"
+            "beauty_complete_no_borders> "
             "[uv-scale=0.26] [normal-strength=4.0] [exposure=1.0] [relief-height=72] "
             "[hill-uv-scale=0.085] [vegetation-pack-root] [decal-pack-root] [biq-window.csv] "
             "[terrain-elements-pack-root] [shore-feature-pack-root] "
@@ -4274,9 +4468,12 @@ int main(int argc, char ** argv) {
     bool beauty_complete_sunrise_mode = std::strcmp(argv[4], "beauty_complete_sunrise") == 0;
     bool beauty_complete_zoom2_mode = std::strcmp(argv[4], "beauty_complete_zoom2") == 0;
     bool beauty_complete_no_units_mode = std::strcmp(argv[4], "beauty_complete_no_units") == 0;
+    bool beauty_complete_no_borders_mode =
+        std::strcmp(argv[4], "beauty_complete_no_borders") == 0;
     bool l21_mode = beauty_complete_noon_mode || beauty_complete_sunset_mode ||
         beauty_complete_midnight_mode || beauty_complete_sunrise_mode ||
-        beauty_complete_zoom2_mode || beauty_complete_no_units_mode;
+        beauty_complete_zoom2_mode || beauty_complete_no_units_mode ||
+        beauty_complete_no_borders_mode;
     bool l20_mode = beauty_units_noon_mode || beauty_units_night_mode ||
         beauty_units_zoom2_mode || beauty_units_no_units_mode || beauty_units_only_mode ||
         beauty_units_turntable_mode || beauty_units_actions_mode || l21_mode;
@@ -4441,6 +4638,7 @@ int main(int argc, char ** argv) {
         !beauty_infrastructure_strategic_only_mode;
     bool unit_geometry_enabled = l20_mode && !beauty_units_no_units_mode &&
         !beauty_complete_no_units_mode;
+    territory_geometry_enabled = l21_mode && !beauty_complete_no_borders_mode;
     bool feature_geometry_enabled = beauty_vegetation_enabled || river_geometry_enabled ||
         road_geometry_enabled || railroad_geometry_enabled || resource_geometry_enabled;
     if (promotion_scene_enabled) {
@@ -4603,6 +4801,8 @@ int main(int argc, char ** argv) {
         std::fprintf(stderr, "terrain_lab: Lab city scenario does not match BIQ viewport\n");
         return 1;
     }
+    if (territory_geometry_enabled)
+        build_lab_territory_owners();
     if (l18_mode && !load_mine_scenario(argv[25], mine_scenario))
         return 1;
     if (l18_mode &&
@@ -5555,6 +5755,11 @@ int main(int argc, char ** argv) {
                 beauty_relief_enabled ? &authored_height : nullptr,
                 beauty_relief_enabled ? &authored_blend : nullptr,
                 vertices, feature_vertices);
+        if (ok && territory_geometry_enabled)
+            add_territory_scene(
+                vertices,
+                beauty_relief_enabled ? &authored_height : nullptr,
+                beauty_relief_enabled ? &authored_blend : nullptr);
         if (ok && beauty_vegetation_enabled)
             ok = add_feature_scene(feature_bundle,
                                    beauty_relief_enabled ? &authored_height : nullptr,

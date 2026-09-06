@@ -119,9 +119,9 @@ class ProjectStateTests(unittest.TestCase):
             self.assertEqual("complete", integration_steps[integration_id]["status"])
         self.assertEqual("blocked_by_previous", integration_steps["I19"]["status"])
         self.assertEqual("complete", lab_steps["L19B"]["status"])
-        self.assertEqual("ready", lab_steps["L20"]["status"])
-        self.assertEqual("blocked_by_previous", lab_steps["L21"]["status"])
-        self.assertEqual("L20", source["next_step"]["id"])
+        self.assertEqual("complete", lab_steps["L20"]["status"])
+        self.assertEqual("ready", lab_steps["L21"]["status"])
+        self.assertEqual("L21", source["next_step"]["id"])
         environment_scope = " ".join(
             m6_steps["M6.4"][field][index]
             for field in ("scope", "acceptance", "must_not")
@@ -197,7 +197,7 @@ class ProjectStateTests(unittest.TestCase):
         source = json.loads(check_project_state.DEFAULT_STATUS.read_text(encoding="utf-8"))
         workstreams = source["workstreams"]
 
-        self.assertEqual("L20", workstreams["renderer_lab"]["current_step"])
+        self.assertEqual("L21", workstreams["renderer_lab"]["current_step"])
         self.assertEqual("I19", workstreams["game_integration"]["current_step"])
         self.assertIn("renderer_dev.py lab", workstreams["renderer_lab"]["iteration_command"])
         self.assertIn("renderer_dev.py integration", workstreams["game_integration"]["iteration_command"])

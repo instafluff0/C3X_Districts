@@ -8,7 +8,8 @@
 cbuffer C3XViewportSettings : register(b1)
 {
     float2 c3x_viewport_translation;
-    float2 c3x_viewport_translation_padding;
+    float c3x_viewport_depth_translation;
+    float c3x_viewport_translation_padding;
 };
 
 struct IntegratedVertexInput
@@ -34,7 +35,7 @@ PixelInput VSIntegrated(IntegratedVertexInput input)
 {
     PixelInput output;
     output.position = float4(input.position.xy + c3x_viewport_translation,
-                             input.position.z, 1.0);
+                             input.position.z + c3x_viewport_depth_translation, 1.0);
     output.uv = input.uv;
     output.panel = input.panel;
     output.geometry_normal = input.geometry_normal;
@@ -61,7 +62,7 @@ FeaturePixelInput VSIntegratedFeature(IntegratedVertexInput input)
 {
     FeaturePixelInput output;
     output.position = float4(input.position.xy + c3x_viewport_translation,
-                             input.position.z, 1.0);
+                             input.position.z + c3x_viewport_depth_translation, 1.0);
     output.uv = input.uv;
     output.geometry_normal = input.geometry_normal;
     output.material_index = input.base_terrain;
