@@ -62,23 +62,24 @@ M6.5 is complete. The native material bootstrap now uses authoritative map coord
 
 M6.6 is complete. The bridge now distinguishes underlying material from visible real terrain, and the ignored local pack exposes all fourteen terrain identities. The compiler structurally extracts actual Civ VI R8 terrain-element height fields, including a nine-variant mountain atlas. The native renderer uses a 12x12 surface grid, map-continuous UVs, subpixel seam closure, source-material grading, distinct shallow/deep water, and a D24S8 depth target. Forest, jungle, marsh, ice, shoreline detail, and landmarks remain explicit complete Civ III overlays/fallbacks rather than false procedural replacements. The user-supplied 100x100 `test.biq` drives deterministic native screenshots at both Civ III zoom sizes with zero fallback, plus a closed all-fourteen-type fixture. No new Civ III function/address was required.
 
-M6.7/I13A is complete. Build-time contracts consume the frozen approved L9
-through L13A handoffs; the production DLL contains only deliberately integrated
+M6.7/I18 is complete. Build-time contracts consume the frozen approved L9
+through L18 handoffs; the production DLL contains only deliberately integrated
 paths and performs no runtime handoff-approval decision tree. It loads generic
-terrain, dune, vegetation, marsh, volcano, clutter, river, shore-feature, and
-shared-environment payloads and uses the approved formulas, topology, densities,
-anchors, materials, shadows, and lighting. L14 road code remains absent.
+terrain, dune, vegetation, marsh, volcano, clutter, river, shore-feature,
+shared-environment, route, resource, city, wall, and mine payloads and uses the
+approved formulas, topology, densities, anchors, materials, shadows, lighting,
+and emissives. L19 farm/irrigation and tundra changes remain absent.
 
 Authoritative Civ III capture supplies real/base terrain, SquareParts,
 visibility, canonical coordinates, and distinct screen occurrences. A bounded
 terrain-only cache fingerprints target, zoom, anchors, wrap, environment,
-content revision, ownership, and device generation independently of dirty
-hints; the dirty clip and retained unit/UI state are deliberately excluded. For
+content revision, renderer-owned map state, ownership, and device generation
+independently of dirty hints; the dirty clip and retained unit/UI state are
+deliberately excluded. For
 the current user-directed diagnostic stage, an active custom frame
 owns the complete Civ III `m19` map plane after using that function's
-authoritative capture/composite boundary. Native roads, improvements, resources,
-and cities are intentionally absent until their approved renderer
-systems arrive. Configuration off is fully vanilla; configuration on never
+authoritative capture/composite boundary. Configuration off is fully vanilla;
+configuration on never
 replays native terrain after loader, capture, render, validation, blit, device,
 or reentrant failure.
 This exclusive custom-on policy supersedes the fallback behavior recorded for
@@ -97,22 +98,26 @@ custom terrain in game. The next live report exposed cumulative brightening and
 scroll ghosts caused by alpha-blending each new map over the prior surface. The
 DLL now replaces the complete map bitmap with `BitBlt(..., SRCCOPY)` on every
 composite. The user then confirmed stable camera movement and scrolling, closing
-I11. The frozen L9 terrain through L13A shared-lighting handoffs load in the
+I11. The frozen L9 terrain through L18 mine handoffs load in the
 standalone production fixture, and the Windows smoke
 proves both zooms, clipping, scrolling, wrapping, cache invalidation, device
-reset, exact terrain/feature/river ownership, authoritative lighting phases, and zero native
-fallback. No new Civ III patch symbol was required.
+reset, exact terrain/feature/river/route/resource/city/mine ownership,
+authoritative lighting phases, and zero native fallback. No new Civ III patch
+symbol was required.
 
-Post-I13A integration maintenance preserves the approved hashes while reducing
+Post-I18 integration maintenance preserves the approved hashes while reducing
 the native 400-tile/800-record cold benchmark from 57.790 seconds to 5.241
 seconds and an anchor-only scroll to 1.054 seconds through shared-grid sampling,
 per-tile surface memoization, river-pass isolation, large-live shadow LOD, and a
-content-fingerprinted anchor-independent shadow field. API v7 returns the exact
+content-fingerprinted anchor-independent shadow field. API v9 returns the exact
 authoritative clip and blits only that dirty rectangle, preventing cleared
 off-clip pixels from truncating retained neighboring tile art. Custom-on `m71`
 now captures a complete visible traversal even for a partial unit/UI redraw, so
 such a traversal cannot poison the full-viewport cache; partial and reordered
-static-terrain traversals are zero-tick cache hits. Feature bodies use the frozen
+static-terrain traversals are zero-tick cache hits. Visible native unit animation
+and other retained selectors no longer invalidate static terrain, and an
+eight-viewport exact-signature LRU makes recent unit-jump camera views zero-tick
+hits while remaining deterministically bounded. Feature bodies use the frozen
 Lab ground-plane depth rule rather than the formerly divergent lifted-screen-Y
 formula that allowed neighboring ground diamonds to clip tall vegetation.
 
@@ -138,16 +143,16 @@ shoreline clipping. The same generic pass adds restrained grassland, plains,
 and grassland-hill surface clutter. The rejected transparency, whole-atlas,
 oversized-cloud, and every-cell repetition candidates are not preserved.
 
-## Next Step: L19
+## Next Step: I19
 
-L18 is complete and approved under the user's explicit autonomous-review
-authorization. Its frozen handoff adds twenty recursive source-backed mine
-compositions across preindustrial/industrial eras and three variants, with
-terrain-following excavation decals, one compound shadow, confirmed emissives,
-and native/reduced readability. The no-mine control is byte-identical to L17.
-Begin L19 with connected, topology-aware normalized farm and irrigation blocks
-without altering the approved alternate-skin scene.
-Use `python3 Renderer/tools/renderer_dev.py lab`.
+L21 is complete and approved under the user's explicit autonomous-review
+authorization. The frozen 192-tile alternate-skin beauty handoff composes every
+approved L9-L20 system at noon, sunset, midnight, sunrise, and both Civ III zoom
+bases. Its no-unit control is byte-identical to L19B/L20, and two unchanged Lab
+runs produced byte-identical outputs after 121 passing tests. Renderer Lab is
+therefore complete through L21. The sole ready project step is now I19, owned by
+Game Integration, consuming `handoffs/L19_farms_tundra.json` via
+`python3 Renderer/tools/renderer_dev.py integration`.
 
 Ahead of that visual gate, all 24 animated clutter bodies now compile with
 model-aware pose caches, including single-animal elephant selection and one
@@ -194,13 +199,18 @@ tracked or distributed.
 12. L12 / I12: Complete — the approved volcano and complete shared L12 terrain-stack delta are integrated without native terrain fallback.
 13. L13 / I13: Complete — authoritative Civ III river masks drive the frozen approved shared-edge graph, valleys, water/material channels, mouth/source/junction topology, and normalized river rocks.
 14. L13A / I13A: Complete — authoritative hour and season drive the frozen approved sun/moon/ambient/exposure/water response and raised-terrain/feature cast-shadow contract at both game zooms.
+15. L14 / I14: Complete — authoritative road topology and visible-era style drive the approved connected route and bridge pass.
+16. L15 / I15: Complete — authoritative railroad topology drives the approved sleeper, ballast, rail, coexistence, and river-crossing pass.
+17. L16 / I16: Complete — visibility-conditioned Civ III resource identity drives the approved land and aquatic resource bodies while resource UI remains native.
+18. L17 / I17: Complete — authoritative city owner/style/era/size/wall/capital state drives the approved city body while labels and status overlays remain native.
+19. L18 / I18: Complete — authoritative mine state and visible era drive the approved terrain-following mine families, variants, shadows, and emissives.
 
 Production now compiles a frozen copy of the approved standalone renderer's
 `PSMain` and `PSFeature` functions. Production retains only a Civ III
 scene/input adapter and semantic terrain settings around that copy; it does not
 include the live Lab shader, so in-progress visual work cannot enter the game
-before its handoff. The current freeze ends at L13A; L14 road selectors and
-textures are omitted at compile time and no road geometry is submitted.
+before its handoff. The current integration freeze ends at L18; approved L19
+farms, irrigation, and tundra changes remain Lab handoff input until I19.
 
 The first live I12 checkpoint exposed an incomplete shader-only convergence:
 production still averaged categorical terrain IDs, supplied flat normals,
@@ -224,12 +234,16 @@ instead of comparing unrelated map regions.
 
 13. L13 complete / I13 handoff available — the approved alternate-skin river gate covers canonical shared-edge topology, source-backed channels/banks/clutter, sources, junctions, coast mouths, relief, vegetation, and horizontal wrap in deterministic 192-tile fixtures.
 13a. L13A complete / I13A handoff available — the approved alternate-skin lighting gate covers shared shadows, coherent face and cast direction, water response, non-visual emissive activation, and deterministic noon/sunset/midnight/sunrise fixtures at both Civ III zoom scales. Visible city lights remain owned by L17.
-14. L14 complete / I14 handoff available — the approved 98-node / 109-edge Lab road graph uses gently curved exact-node centerlines, source-backed continuity coverage, normalized bridge bodies, wrap continuity, four styles, and pillage coverage without changing the approved L13A control.
-15. L15 complete / I15 handoff available — the approved connected railroad subset uses narrow authored sleepers/ballast, paired source-colored rails, exact river bridges, road coexistence, relief, wrap, and deterministic both-zoom evidence without changing L14.
-16. L16 complete / I16 handoff available — the approved normalized resource gate covers strategic, luxury, land-bonus, and aquatic-bonus bodies, corrected Civ III-scale clustering, shared lighting/grounding, visibility suppression, and deterministic both-zoom evidence without changing L15.
-17. L17 complete / I17 handoff available — the approved normalized city gate covers four eras, all three Civ III size bands, culture/owner metadata, wall/capital states, compact source-backed compositions, retained-label clearance, shared lighting, and source-authored night emissives without changing L16.
-18. L18 complete / I18 handoff available — the approved recursive normalized mine gate covers preindustrial/industrial families, three variants, terrain-following excavation, mineral and relief adjacency, coherent compound shadows, source emissives, and deterministic isolation without changing L17.
-19. L19 ready: add connected topology-aware normalized farm and irrigation blocks over the approved alternate-skin 192-tile scene, then critically inspect and self-approve under the user's authorization.
+14. L14 / I14 complete — the approved 98-node / 109-edge Lab road graph uses gently curved exact-node centerlines, source-backed continuity coverage, normalized bridge bodies, wrap continuity, four styles, and pillage coverage without changing the approved L13A control.
+15. L15 / I15 complete — the approved connected railroad subset uses narrow authored sleepers/ballast, paired source-colored rails, exact river bridges, road coexistence, relief, wrap, and deterministic both-zoom evidence without changing L14.
+16. L16 / I16 complete — the approved normalized resource gate covers strategic, luxury, land-bonus, and aquatic-bonus bodies, corrected Civ III-scale clustering, shared lighting/grounding, visibility suppression, and deterministic both-zoom evidence without changing L15.
+17. L17 / I17 complete — the approved normalized city gate covers four eras, all three Civ III size bands, culture/owner metadata, wall/capital states, compact source-backed compositions, retained-label clearance, shared lighting, and source-authored night emissives without changing L16.
+18. L18 / I18 complete — the approved recursive normalized mine gate covers preindustrial/industrial families, three variants, terrain-following excavation, mineral and relief adjacency, coherent compound shadows, source emissives, and deterministic isolation without changing L17.
+19. L19 complete / I19 handoff available — the approved crop-first farm gate covers all sixteen irrigation masks, four eras, mixed terrain and adjacency cases, source-only sparse accents, and the independent alternate-skin tundra material path without changing L18 when farms are disabled.
+19a. L19A complete / I19A handoff available — the approved source-backed hut/colony gate covers viewer-hidden huts, the deterministic eight-to-three variant map, all four colony eras and owners, extraterritorial ownership, resource coexistence, both zooms, and shared lighting without changing L19 when disabled.
+19b. L19B complete / I19B handoff available — the approved pass covers all remaining persistent tile infrastructure, both zooms, shared lighting, and source-only night emission without changing L19A when disabled.
+20. L20 complete / I20 handoff available — representative ordinary, mounted, crewed, vehicle, naval, air, worker, and Army bodies pass the 192-tile/two-zoom/action matrix without regressing L19B.
+21. L21 complete: the complete approved alternate-skin beauty scene passed noon, sunset, midnight, sunrise, reduced-zoom, no-unit regression, critical visual review, and byte-identical replay.
 
 Offline L14/L15 intake is prepared ahead without advancing either gate. The
 source-independent route packs now cover four road stages, railroad ballast and
@@ -304,6 +318,18 @@ selects `Leader.Color_Table_ID` using the native viewer-conditioned display
 civilization rather than blindly exposing its owner. Captures or alternate
 color assignments update only the instance selector, while scenario palette
 changes rebuild the lookup, never the unit art.
+
+Worker specialty-action intake is now frozen without advancing L20. The native
+job mapper proves that current FLC type is insufficient: irrigation and damage
+cleanup share one slot, road and railroad share one slot, fortress and
+barricade share one slot, and airfield/radar/outpost present DEFAULT. A checked
+source-to-generic compiler therefore maps all 13 `Job_ID` values, state
+fallbacks, CAPTURE, and generic BUILD; it also emits an exclusive action-
+selected Tool group. Eleven installed Builder motions (three primary work,
+four optional repair, four capture) successfully normalize with one Root group
+and 41 tracks. Body/tool import, pose caches, all-facing/two-zoom rendering,
+VFX calibration, and approval remain L20 work. See
+`docs/worker_builder_animation_mapping.md`.
 
 Army presentation is now frozen without advancing L20. Civ III's dedicated
 Army path confirms that the authoritative displayed member and the Army's own

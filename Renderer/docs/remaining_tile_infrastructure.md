@@ -1,6 +1,6 @@
 # Remaining Tile Infrastructure Intake
 
-Status: offline source intake prepared; no Lab promotion or runtime ownership is enabled.
+Status: L19B Renderer Lab promotion complete and frozen; runtime ownership remains disabled until I19B.
 
 ## Why This Is A Separate Gate
 
@@ -62,29 +62,26 @@ The checked strategy covers all four Civ III eras for those four accepted
 families. Rotation remains projection-aware and deterministic, terrain follows
 the renderer surface, and Civ III state remains authoritative.
 
-## Honest Deferred Families
+## Closed L19B Families
 
-- **Radar tower:** `IMP_SILO` remains rejected. A separately discovered
-  observatory main body normalizes cleanly, including an emissive material, as
-  `candidate/infrastructure/radar_observatory_body`. Automatic tile fitting and
-  a 32-cell eight-facing/two-zoom/day-night sheet now prove that the isolated
-  body requires 11.22191796x enlargement and reads as a flat ornamental plaza,
-  not a tower or antenna. It remains available as evidence but is a weak L19B
-  candidate rather than an approved mapping.
-- **Pollution:** use the installed `NUCLEAR_FALLOUT -> FX_Radiation` family as
-  the preferred visual direction. Five Base radiation color/alpha/atlas
-  textures now normalize under generic `effect/pollution/*` IDs. L19B should
-  show a restrained tile-local subset of the green ground wisps, with lifetime
-  owned by Civ III's pollution flag; it must not inherit the source disaster
-  radius, city-wide density, or detonation timing. A bounded generic profile now
-  caps the tile-local presentation at seven particles across both zoom policies;
-  visual calibration remains pending, so this is not yet a promoted body.
+- **Radar tower:** `IMP_SILO`, the Modern Fort, and the flat observatory plaza
+  remain rejected. The accepted generic mapping uses the normalized
+  `VIL_BAR_IND_Tower` source body's narrow watchtower/antenna silhouette at
+  restrained strategic scale. It reads as a radar post without masquerading as
+  a fort, city, or missile silo.
+- **Pollution:** the accepted static ground state combines a low-opacity
+  source crater-blast soil footprint with the installed
+  `NUCLEAR_FALLOUT -> FX_Radiation` atlas. Both source layers feather before the
+  tile-local quad edge; the radiation layer contributes only its authored alpha.
+  Civ III's pollution flag owns lifetime. No particles, disaster radius,
+  detonation timing, smoke, glow, or animation are inherited.
 - **Crater:** all four `CLUTTER_CRATERBLASTS` crater decal roots now normalize
   as `infrastructure/crater/variant_01..04`. Lifetime must be owned by Civ III's
   crater flag, independently of the transient impact event that may have
   created it.
-- **Victory location:** explicitly set aside by user direction. No candidate or
-  fallback is advanced by this preparation pass.
+- **Victory location:** the accepted restrained marker uses source-authored fort
+  pole and bunting components. It is deliberately smaller and simpler than a
+  city, wonder, or fortification and carries no invented effect.
 
 Two rejected source records are preserved in the strategy rather than hidden:
 the Modern Fort root has maximum bind-pose error `0.05620446733770823`, and the
@@ -104,12 +101,13 @@ The smaller root-only source probe is
 `compound_landmark_importer.py`. Runtime selection is defined by the
 `infrastructure` section of `tile_object_render_strategy.json`.
 
-## L19B Acceptance Boundary
+## L19B Acceptance Evidence
 
-L19B must render fortress, barricade, airfield, and outpost at both zooms across
-all reachable eras, owner-color cases, terrain/relief grounding, rotation,
-clipping/wrap, and noon/night. Barricade must be visibly stronger than Fortress;
-Airfield runway lights must be dark by day. Radar, pollution, crater, and
-victory-location mappings must be closed with exact or explicitly approved
-generic art before L19B can promote. I19B then owns capture, invalidation,
-exclusive native suppression, retained layers, and failure behavior.
+The frozen 192-tile alternate-skin scene renders every family across all four
+eras/owners, routes, relief, stable rotations, noon, midnight, full scale, and
+reduced scale. Family-isolation frames prove silhouettes and ground blending;
+the no-infrastructure control is byte-identical to L19A. Two unchanged Lab runs
+are byte-deterministic. See `terrain_lab/L19B_INFRASTRUCTURE_AUDIT.md` and
+`handoffs/L19B_remaining_tile_infrastructure.json`. I19B owns later capture,
+invalidation, exclusive native suppression, retained layers, and failure
+behavior; none is enabled by the Lab promotion.

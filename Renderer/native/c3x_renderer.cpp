@@ -24,6 +24,8 @@
 
 namespace {
 
+constexpr c3x_renderer_u32 viewport_cache_capacity = 8u;
+
 struct Vertex {
     float x, y, z;
     float u, v;
@@ -2032,7 +2034,7 @@ public:
         output.cache_evictions = cache_evictions;
         output.cache_stale_rejections = cache_stale_rejections;
         output.cache_entries = static_cast<c3x_renderer_u32>(viewport_cache.size());
-        output.cache_capacity = 4u;
+        output.cache_capacity = viewport_cache_capacity;
         output.device_generation = device_generation;
         output.device_recoveries = device_recoveries;
         output.content_revision = static_cast<c3x_renderer_i64>(content_revision);
@@ -4083,7 +4085,7 @@ public:
                     break;
                 }
             }
-            if (viewport_cache.size() == 4u) {
+            if (viewport_cache.size() == viewport_cache_capacity) {
                 viewport_cache.erase(viewport_cache.begin());
                 if (cache_evictions != 0xffffffffu)
                     ++cache_evictions;

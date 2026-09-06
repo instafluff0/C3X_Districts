@@ -138,6 +138,55 @@ def integrated_terrain_preview_results() -> list[dict[str, Any]]:
     return results
 
 
+def approved_terrain_smoke_result() -> dict[str, Any]:
+    """Replay the complete approved L9-L18 production payload in its own VM command.
+
+    Parallels can stop relaying output from one long remote command after the
+    compile/synthetic-smoke phase. Keeping this licensed-payload replay in a
+    second command makes its pass/fail result explicit in every Integration and
+    Full report while preserving portable builds when ignored local packs are
+    unavailable.
+    """
+    required = (
+        "TerrainNormalized/manifest.json",
+        "VegetationNormalized/vegetation_runtime.bin",
+        "DecalsNormalized/manifest.json",
+        "TerrainElementsNormalized/manifest.json",
+        "ShoreNormalized/shore_runtime.bin",
+        "RouteStylesNormalized/manifest.json",
+        "RouteDoodadsNormalized/bridge_runtime.bin",
+        "ResourceNormalized/resource_runtime.bin",
+        "CityComponentsNormalized/city_runtime.bin",
+        "CityAdjunctsNormalized/wall_runtime.bin",
+        "ImprovementsNormalized/mine_runtime.bin",
+    )
+    missing = [entry for entry in required if not (RENDERER_ROOT / "packs" / entry).is_file()]
+    if missing:
+        detail = "ignored normalized L9-L18 payloads are unavailable: " + ", ".join(missing)
+        print(f"SKIP approved_terrain_integration: {detail}")
+        return {"name": "approved_terrain_integration", "status": "skip", "reason": detail}
+    command = (
+        r'build\native_smoke.exe build\candidate\C3XRenderer.dll '
+        r'--definitions ..\.. ..\..\Renderer\default.custom_rendering.txt'
+    )
+    result = native_command_result("Renderer/native", command)
+    if result["status"] == "fail":
+        # Parallels occasionally returns 255 without starting or relaying this
+        # otherwise deterministic D3D process immediately after a compiler VM
+        # command. Retry once in a fresh guest command; a real renderer failure
+        # remains a failure on the second run and is never hidden.
+        first_returncode = result.get("returncode")
+        print(f"RETRY approved_terrain_integration after VM return code {first_returncode}.")
+        result = native_command_result("Renderer/native", command)
+        result["retry_after_returncode"] = first_returncode
+    result["name"] = "approved_terrain_integration"
+    if result["status"] == "pass" and \
+       "PASS approved_terrain_integration" not in result.get("output_tail", ""):
+        result["status"] = "fail"
+        result["detail"] = "approved production smoke did not report its completion marker"
+    return result
+
+
 def injected_compile_result() -> dict[str, Any]:
     if os.name == "nt" and (C3X_ROOT.parent / "Civ3Conquests.exe").is_file():
         return command_result(
@@ -245,7 +294,9 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
         ]
         results.append(command_result(command))
         if results[-1]["status"] == "pass":
-            results.append(native_command_result("Renderer/native", "call BUILD.bat"))
+            results.append(native_command_result("Renderer/native", "call BUILD.bat portable"))
+        if results[-1]["status"] == "pass":
+            results.append(approved_terrain_smoke_result())
         if results[-1]["status"] == "pass":
             results.extend(integrated_terrain_preview_results())
         if results[-1]["status"] == "pass":
@@ -265,6 +316,7 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
             "Renderer.tools.asset_compiler.test_city_asset_importer",
             "Renderer.tools.asset_compiler.test_improvement_asset_importer",
             "Renderer.tools.asset_compiler.test_unit_family_asset_importer",
+            "Renderer.tools.asset_compiler.test_worker_builder_action_compiler",
             "Renderer.tools.asset_compiler.test_effect_graph_compiler",
             "Renderer.tools.asset_compiler.test_pack_loader_abi",
             "Renderer.tools.asset_compiler.test_tile_fit_calibrator",
@@ -289,11 +341,45 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
             "Renderer.terrain_lab.test_l18_mine_contract",
             "Renderer.terrain_lab.test_build_l19_farm_scenario",
             "Renderer.terrain_lab.test_l19_farm_contract",
+            "Renderer.terrain_lab.test_build_l19a_tile_object_scenario",
+            "Renderer.terrain_lab.test_l19a_tile_object_contract",
+            "Renderer.terrain_lab.test_build_l19b_infrastructure_scenario",
+            "Renderer.terrain_lab.test_l19b_infrastructure_contract",
+            "Renderer.terrain_lab.test_build_l20_unit_scenario",
+            "Renderer.terrain_lab.test_l20_unit_contract",
+            "Renderer.terrain_lab.test_l21_complete_scene_contract",
         ]))
         if results[-1]["status"] == "pass":
             results.append(command_result(
                 ["node", str(RENDERER_ROOT / "tools" / "test_export_biq_terrain_scene.js")]
             ))
+        if results[-1]["status"] == "pass" and results[0]["next_step"] in ("L20", "L21"):
+            results.append(command_result([
+                python,
+                str(RENDERER_ROOT / "tools" / "asset_compiler" /
+                    "build_l20_unit_runtime.py"),
+                "--pack", str(RENDERER_ROOT / "packs" / "UnitFamilyLab"),
+            ]))
+        if results[-1]["status"] == "pass" and results[0]["next_step"] in ("L20", "L21"):
+            results.append(command_result([
+                python,
+                str(RENDERER_ROOT / "tools" / "asset_compiler" /
+                    "build_l20_compound_unit_runtime.py"),
+                "--pack", str(RENDERER_ROOT / "packs" / "CompoundUnitLab"),
+            ]))
+        if results[-1]["status"] == "pass" and results[0]["next_step"] in ("L20", "L21"):
+            results.append(command_result([
+                python,
+                str(RENDERER_ROOT / "terrain_lab" / "build_l20_unit_scenario.py"),
+                str(RENDERER_ROOT / "preview" / "out" / "terrain_lab" /
+                    "test_biq_l13_rivers_192.csv"),
+                str(RENDERER_ROOT / "terrain_lab" / "fixtures" / "l17_cities_192.csv"),
+                str(RENDERER_ROOT / "terrain_lab" / "fixtures" /
+                    "l19a_tile_objects_192.csv"),
+                str(RENDERER_ROOT / "terrain_lab" / "fixtures" /
+                    "l19b_infrastructure_192.csv"),
+                str(RENDERER_ROOT / "terrain_lab" / "fixtures" / "l20_units_192.csv"),
+            ]))
         if results[-1]["status"] == "pass":
             results.append(native_command_result("Renderer/terrain_lab", "call BUILD.bat"))
         if results[-1]["status"] == "pass":
@@ -322,7 +408,9 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
         "Renderer.native.test_native_bridge_contract",
     ]))
     if results[-1]["status"] == "pass":
-        results.append(native_command_result("Renderer/native", "call BUILD.bat"))
+        results.append(native_command_result("Renderer/native", "call BUILD.bat portable"))
+    if results[-1]["status"] == "pass":
+        results.append(approved_terrain_smoke_result())
     if results[-1]["status"] == "pass":
         results.extend(integrated_terrain_preview_results())
     should_compile_injected = with_injected or changed_injected_sources()

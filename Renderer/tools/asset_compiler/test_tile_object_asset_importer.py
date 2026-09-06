@@ -32,7 +32,7 @@ class TileObjectAssetImporterTests(unittest.TestCase):
         self.assertEqual(5, len(infrastructure["source_assets"]))
         self.assertEqual(
             {"radar_tower", "pollution", "crater", "victory_location"},
-            set(infrastructure["deferred_families"]),
+            set(infrastructure["l19b_promoted_families"]),
         )
         self.assertTrue(all(
             len(family["civ3_era_assets"]) == 4

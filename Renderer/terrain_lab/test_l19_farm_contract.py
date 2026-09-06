@@ -26,15 +26,15 @@ class L19FarmContractTests(unittest.TestCase):
 
     def test_checked_in_inputs_are_stable(self):
         self.assertEqual(
-            "746cbf2e6ea2c7d8dfd44a44d7c5e647f3c250766c8ad9a6228a991446be2d7e",
+            "c82b8d17ad7256f11f1807ca2ccf3e7ced402a63a4d99e275e67d22ee6ed769a",
             hashlib.sha256(RUNTIME.read_bytes()).hexdigest(),
         )
         self.assertEqual(
-            "b1ec2a17879dbaa61a4d7b3c9e31d2dbc235c1a59444dc0ec603ffeed83c32c6",
+            "8ab4f84e86b6778283c193def06ee681560026b3f56bb41895f0b5fd9085bb9d",
             hashlib.sha256(SCENARIO.read_bytes()).hexdigest(),
         )
         self.assertEqual(
-            "25c1839ddbaefbb79ee108f79aa06430d90693900af7e7abdfd1f890c3e1133f",
+            "6da892dd9807905c93e38c01cf6e4f40d5c4977e2a06bb8ff04352caf057e8e6",
             hashlib.sha256(TUNDRA.read_bytes()).hexdigest(),
         )
 

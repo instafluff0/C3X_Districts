@@ -79,6 +79,9 @@
     "effect_pipeline_owns": ["projectile", "muzzle_flash", "impact", "damage_visual"],
     "event_markers": "authored normalized phase metadata; never inferred from renderer frames"
   },
-  "deferred_slots": ["CAPTURE", "BUILD", "FORTRESS", "worker_jobs", "paradrop", "load_unload", "scenario_specific"],
+  "supplemental_action_contracts": {
+    "worker_jobs_capture_build_and_fortress": "worker_builder_action_strategy.json"
+  },
+  "deferred_slots": ["paradrop", "load_unload", "scenario_specific"],
   "runtime_integration": "not_enabled"
 }

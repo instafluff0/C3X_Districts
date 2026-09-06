@@ -63,9 +63,12 @@ class RendererDevTests(unittest.TestCase):
             encoding="utf-8"
         )
         approved = build[build.index('build\\native_smoke.exe "build\\candidate\\C3XRenderer.dll" --definitions') :]
-        approved = approved[:approved.index(":skip_approved_terrain")]
+        approved = approved[:approved.index(":approved_terrain_done")]
         self.assertIn("if errorlevel 1", approved)
         self.assertNotIn("%errorlevel%", approved)
+        workflow = Path(renderer_dev.__file__).read_text(encoding="utf-8")
+        self.assertIn('call BUILD.bat portable', workflow)
+        self.assertIn('approved_terrain_smoke_result()', workflow)
 
     def test_native_build_rejects_a_locked_stale_live_dll(self) -> None:
         build = (renderer_dev.RENDERER_ROOT / "native" / "BUILD.bat").read_text(
@@ -76,6 +79,22 @@ class RendererDevTests(unittest.TestCase):
         self.assertIn("exit /b 1", staging)
         self.assertIn("stale build", staging)
         self.assertNotIn('if not exist "..\\bin\\C3XRenderer.dll"', staging)
+
+    def test_approved_smoke_retries_one_empty_vm_failure(self) -> None:
+        failed = {"status": "fail", "returncode": 255, "output_tail": ""}
+        passed = {
+            "status": "pass",
+            "returncode": 0,
+            "output_tail": "PASS approved_terrain_integration",
+        }
+        with mock.patch.object(Path, "is_file", return_value=True), \
+             mock.patch.object(
+                 renderer_dev, "native_command_result", side_effect=[failed, passed]
+             ) as run:
+            result = renderer_dev.approved_terrain_smoke_result()
+        self.assertEqual("pass", result["status"])
+        self.assertEqual(255, result["retry_after_returncode"])
+        self.assertEqual(2, run.call_count)
 
     def test_lab_workflow_runs_the_authorized_gate_script(self) -> None:
         source = Path(renderer_dev.__file__).read_text(encoding="utf-8")

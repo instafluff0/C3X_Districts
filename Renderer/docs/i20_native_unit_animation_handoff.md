@@ -74,7 +74,7 @@ Capture the following directly from Civ III at the dynamic draw boundary:
 | Identity | `Unit.Body.ID`, type, civilization/owner | Stable instance/model identity; ownership is not assumed to be the displayed color |
 | Display color | Native unit-body display-civ decision, then `leaders[display_civ_id].Color_Table_ID` | One 0..31 palette-row selector per instance; preserves hidden-nationality/viewer behavior |
 | Effective palettes | `units_image_data.Color_Tables[0..31].JGL_Color_Table` after game/scenario load | One 64x32 RGBA8 LUT, including partial scenario `ntpXX.pcx` overrides |
-| Action | `AnimationSummary.current_anim_type` and `queued_anim_type` | Default/fidget/run/attack1-3/death/fortify/victory/build/worker clip mapping |
+| Action | `AnimationSummary.current_anim_type` and `queued_anim_type`; worker `Job_ID` and `UnitState` | Basic clip mapping; exact worker job mapping without collapsing native slot aliases |
 | Facing | `direction` and `direction_2` | Approved eight-direction pose/clip orientation |
 | Placement | `pixel_loc_x/y`, wrapped origin selected by `Animator::FUN_004f0b90` | Exact normal/reduced-zoom body anchor |
 | Motion target | `pixel_target_x/y`, tile coordinates | Validation and optional between-tick interpolation only |
@@ -87,6 +87,15 @@ the relevant movement/combat participant or segment identity. A repeated redraw
 must not restart a clip. Loading, teleport, upgrade, capture, despawn, visibility
 loss, renderer reset, or an incompatible native transition terminates or rebases
 the presentation event.
+
+For worker units, `Job_ID` is the primary specialty-action selector and
+`UnitState` is its validation/fallback. `current_anim_type` is diagnostic only:
+the native job mapper aliases multiple jobs and presents airfield, radar, and
+outpost work as DEFAULT. Persistent custom work loops only while that
+authoritative job remains active. Integration may derive a stable visual clock
+for DEFAULT-presented jobs, but it must never advance job strength or decide
+completion. The complete checked mapping and exclusive tool-selection contract
+are in `worker_builder_animation_mapping.md`.
 
 Owner color does not create per-civilization models, textures, materials, or
 clips. The converted material supplies a neutral base and a continuous

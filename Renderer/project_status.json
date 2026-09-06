@@ -1,6 +1,6 @@
 {
   "schema": "c3x.renderer_project_status.v0",
-  "last_updated": "2026-09-05",
+  "last_updated": "2026-09-06",
   "current_milestone": "INTEGRATION",
   "manual_evidence_policy": {
     "mode": "strategic_batched_checkpoints",
@@ -26,13 +26,13 @@
     "renderer_lab": {
       "responsibility": "Standalone asset use, rendering technique, visual quality, and approval for all map graphics.",
       "plan": "terrain_lab/PLAN.md",
-      "current_step": "L19",
+      "current_step": "L21",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py lab"
     },
     "game_integration": {
       "responsibility": "Civ III state capture, cache/invalidation, redraws, anchoring, compositing, exclusive native suppression, retained layers, telemetry, and hard failure without native replay.",
-    "current_step": "I13A",
-    "status": "i13a_complete",
+    "current_step": "I19",
+    "status": "i19_ready",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py integration"
     },
     "promotion_rule": "Every L# visual gate has a same-numbered I# game-integration gate. I# cannot start before L# approval; after L# is approved, I# consumes that frozen handoff before the next system is considered integrated. L21/I21 remain the final combined release gates.",
@@ -127,39 +127,48 @@
     "docs/civ3_insertion_points.md",
     "docs/civ3_render_loop_viability.md",
     "docs/i20_native_unit_animation_handoff.md",
+    "docs/worker_builder_animation_mapping.md",
     "docs/army_rendering_strategy.md",
     "docs/approved_terrain_integration.md",
     "docs/vanilla_terrain_scene.md",
     "docs/terrain_visual_direction.md",
     "terrain_lab/PLAN.md",
-    "terrain_lab/DUNE_SOURCE_AUDIT.md"
+    "terrain_lab/DUNE_SOURCE_AUDIT.md",
+    "terrain_lab/L20_UNIT_AUDIT.md",
+    "handoffs/L20_units.json",
+    "terrain_lab/L21_COMPLETE_BEAUTY_AUDIT.md",
+    "handoffs/L21_complete_beauty_scene.json"
   ],
   "next_step": {
-    "id": "L19",
-    "title": "Farms and irrigation, independent bundled tundra correction, and 192-tile promotion approval",
+    "id": "I19",
+    "title": "Integrate farms and irrigation",
     "status": "ready",
-    "workstream": "renderer_lab",
-    "iteration_command": "python3 Renderer/tools/renderer_dev.py lab",
-    "promotion_required": true,
+    "workstream": "game_integration",
+    "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
+    "promotion_required": false,
+    "lab_handoffs": [
+      {
+        "gate": "L19",
+        "record": "handoffs/L19_farms_tundra.json"
+      }
+    ],
     "scope": [
-      "Compose normalized source-backed farm tile bases, buildings, and crop decals from authoritative four-neighbor irrigation masks over a deterministic Lab-only scenario without changing BIQ terrain.",
-      "Independently replace the Lab's grassland fallback for Civ III tundra base 3 with normalized tundra base-color, height, and specular channels in irrigated and unirrigated cells.",
-      "Cover grassland, plains, desert, tundra, relief adjacency, route/river/city proximity, all four eras, continuous blocks, boundaries, corners, junctions, and isolated cells.",
-      "Preserve the approved L9-L18 alternate-environment scene in deterministic native, reduced, day/night, no-farm, and isolated fixtures."
+      "Consume the frozen approved L19 farm/tundra handoff without redesigning its appearance.",
+      "Capture authoritative Civ III irrigation adjacency, terrain, era, ownership, visibility, zoom, and anchors through the existing map-scene boundary.",
+      "Integrate deterministic farm payload selection, cache invalidation, compositing, exclusive native irrigation suppression, retained overlays, telemetry, reset behavior, and visible hard failure.",
+      "Preserve the independent alternate-skin tundra material correction through the already-integrated terrain path."
     ],
     "acceptance": [
-      "Farm ownership forms continuous, naturally varied field blocks whose topology joins at shared edges and fades cleanly at non-irrigated boundaries.",
-      "Tundra reads as its own normalized cold-ground material at both zooms and blends cleanly against every adjacent terrain family regardless of irrigation state.",
-      "Era-specific buildings and default source crop decals remain subordinate to terrain relief and cities, with terrain-aware color/footprint blending and no duplicated L16 resource crop.",
-      "Raised farm components share accepted face/contact/cast lighting and only source-authored emissives may activate at night.",
-      "Complete noon/night, no-farms, farm-isolation, topology, and reduced renders contain exactly 192 contiguous authoritative Civ III tiles where applicable and are byte-deterministic.",
-      "The user explicitly authorized careful self-approval of the complete alternate-skin L19 promotion before L19A begins."
+      "All sixteen authoritative irrigation connection masks select the matching approved L19 farm presentation at both Civ III zoom levels.",
+      "Authoritative state changes invalidate only affected cached payloads; scrolling, wrap, redraw, save/load, and renderer reset remain stable.",
+      "Custom-on owns the complete integrated farm presentation with native irrigation pixels suppressed; custom-off remains fully vanilla.",
+      "Failure is visible and atomic, with no native/custom double draw or silent native replay."
     ],
     "must_not": [
-      "Do not modify injected game code, implement I19, or launch Civilization III during the L19 visual gate.",
-      "Do not redesign approved L9-L18 terrain or object layers.",
-      "Do not invent crop resources, smoke, fire, bloom, weather, terrain deformation, or lights unsupported by normalized source art.",
-      "Do not begin L19A before the authorized critical visual approval of L19."
+      "Do not redesign the approved L19 farm/tundra art in Integration.",
+      "Do not infer irrigation topology from screen pixels when authoritative tile state is available.",
+      "Do not transfer ownership partially or suppress native irrigation before the complete replacement payload succeeds.",
+      "Do not begin I19A, I19B, I20, or I21 before I19 is complete."
     ]
   },
   "milestones": [
@@ -856,11 +865,19 @@
           "lab_handoffs": [
             {"gate": "L9", "record": "handoffs/L9_terrain.json"},
             {"gate": "L10", "record": "handoffs/L10_dunes.json"},
-            {"gate": "L11", "record": "handoffs/L11_marsh.json"}
+            {"gate": "L11", "record": "handoffs/L11_marsh.json"},
+            {"gate": "L12", "record": "handoffs/L12_volcano.json"},
+            {"gate": "L13", "record": "handoffs/L13_rivers.json"},
+            {"gate": "L13A", "record": "handoffs/L13A_lighting.json"},
+            {"gate": "L14", "record": "handoffs/L14_roads.json"},
+            {"gate": "L15", "record": "handoffs/L15_railroads.json"},
+            {"gate": "L16", "record": "handoffs/L16_resources.json"},
+            {"gate": "L17", "record": "handoffs/L17_cities.json"},
+            {"gate": "L18", "record": "handoffs/L18_mines.json"}
           ],
           "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
           "scope": [
-            "Consume the approved L9 terrain foundation, L10 dunes, and L11 marsh lab outputs through frozen source-independent pack, definition, scene, and reference handoffs; visual redesign remains in Renderer Lab.",
+            "Consume the approved L9 terrain through L18 mine Lab outputs through frozen source-independent pack, definition, scene, and reference handoffs; visual redesign remains in Renderer Lab.",
             "Prove authoritative state capture, content-derived frame/fragment fingerprints, bounded eviction, and invalidation for camera, zoom, clip coverage, wrap occurrence, visibility, environment, pack/definition revision, ownership, reset, and device changes; dirty flags are hints rather than cache authority.",
             "Prove exact anchors, full and partial clipping, both zooms, pixel and sub-tile scrolling, horizontal wrapping, normal Civ III redraw scheduling, retained-overlay ordering, exclusive native suppression, reentrant-draw exclusion, device reset, and visible hard failure without native replay.",
             "Combine automated replay, cache, ownership, and fidelity evidence with at most one optional batched in-game checkpoint after implementation is stable."
@@ -868,8 +885,8 @@
           "acceptance": [
             "For the approved handoff fixtures, game-integration output matches the lab reference within documented deterministic/perceptual tolerances without introducing seams, stale tiles, duplicate native art, or missing replacements.",
             "Every cache-relevant state change invalidates exactly the affected work even when a timer redraw was pending; unchanged static scenes remain idle and bounded caches expose useful hit, miss, eviction, and fingerprint-based stale-rejection telemetry.",
-            "With custom rendering enabled, every accepted L9-L11 terrain tile is custom-owned, production output reports zero fallback tiles, and no renderer, capture, validation, blit, load, or reentrant failure replays native map terrain.",
-            "Fog, borders, grid, selections, paths, labels, units, status overlays, cursor, minimap, HUD, and UI remain correctly anchored and above the replacement at both zooms after scrolling and wrapping; unported m19 categories are intentionally absent."
+            "With custom rendering enabled, every accepted L9-L18 terrain/object body is custom-owned, production output reports zero fallback tiles, and no renderer, capture, validation, blit, load, or reentrant failure replays native map terrain.",
+            "Fog, borders, grid, selections, paths, labels, units, status overlays, cursor, minimap, HUD, and UI remain correctly anchored and above the replacement at both zooms after scrolling and wrapping; post-L18 categories are intentionally absent."
           ],
           "must_not": [
             "Do not redesign terrain, relief, coastline, water, vegetation, lighting, or other art direction in Game Integration; return visual changes to Renderer Lab.",
@@ -880,6 +897,14 @@
             "handoffs/L9_terrain.json",
             "handoffs/L10_dunes.json",
             "handoffs/L11_marsh.json",
+            "handoffs/L12_volcano.json",
+            "handoffs/L13_rivers.json",
+            "handoffs/L13A_lighting.json",
+            "handoffs/L14_roads.json",
+            "handoffs/L15_railroads.json",
+            "handoffs/L16_resources.json",
+            "handoffs/L17_cities.json",
+            "handoffs/L18_mines.json",
             "native/terrain_scene_runtime.h",
             "native/terrain_scene_runtime.cpp",
             "native/c3x_renderer_api.h",
@@ -891,14 +916,16 @@
             "docs/civ3_render_loop_viability.md",
             "docs/civ3_patch_dependency_ledger.md",
             "evidence/m6_7/README.md",
+            "evidence/i14_i18/README.md",
             "../C3X.h",
             "../injected_code.c"
           ],
           "verification": [
-            "i11_approved_marsh_integration"
+            "m6_7_approved_terrain_integration",
+            "i18_approved_map_stack_integration"
           ],
           "local_verification": [
-            "i11_local_approved_marsh_payload"
+            "i18_local_approved_map_stack_payload"
           ]
         },
         {
@@ -1114,8 +1141,18 @@
         {
           "id": "L19",
           "title": "Farms and irrigation, independent bundled tundra correction, and 192-tile promotion approval",
-          "status": "ready",
+          "status": "complete",
           "promotion_required": true,
+          "evidence": [
+            "handoffs/L19_farms_tundra.json",
+            "terrain_lab/L19_FARM_TUNDRA_AUDIT.md",
+            "terrain_lab/fixtures/l19_farms_192.csv",
+            "terrain_lab/fixtures/l19_tundra_witness_192.csv",
+            "packs/ImprovementsNormalized/farm_runtime.bin"
+          ],
+          "verification": [
+            "terrain_lab_l19_replayable_render_and_authorized_critical_visual_approval"
+          ],
           "offline_preparation": {
             "status": "complete",
             "scope": "Closed source-graph inventory, representative conversion plus zero-reject full 204-root recursive intake with unresolved rice terrain edits preserved but disabled, and checked era/topology/terrain/crop strategy only. L19 contains two independent tracks bundled only for convenience: farms/irrigation must prove all 16 adjacency masks across every irrigable terrain family, while the base-terrain track must replace the Terrain Lab's grassland fallback for Civ III tundra (base 3) with normalized tundra base-color, height, and specular channels regardless of irrigation state. Irrigated and unirrigated tundra plus mixed tundra/non-tundra material boundaries must appear at both zooms. Neither track may depend on the other; no L19 rendering, final adjacency mapping, or ownership has been performed by offline preparation.",
@@ -1131,8 +1168,17 @@
         {
           "id": "L19A",
           "title": "Goody huts and colony outposts with 192-tile promotion approval",
-          "status": "blocked_by_previous",
+          "status": "complete",
           "promotion_required": true,
+          "evidence": [
+            "handoffs/L19A_goody_huts_colonies.json",
+            "terrain_lab/L19A_TILE_OBJECT_AUDIT.md",
+            "terrain_lab/fixtures/l19a_tile_objects_192.csv",
+            "packs/TileObjectsNormalized/tile_object_runtime.bin"
+          ],
+          "verification": [
+            "terrain_lab_l19a_replayable_render_and_authorized_critical_visual_approval"
+          ],
           "offline_preparation": {
             "status": "complete",
             "scope": "Exact three-root goody-hut conversion, strict recursive three-root preindustrial plus three-root industrial colony-outpost conversion, 8-bucket hut selection, viewer visibility, owner/era/extraterritorial colony semantics, restrained owner-color marker, resource coexistence, rotation, and night attachments. Corrected matrix-order evidence closes the stale industrial rejection below 8e-7 without a static bake; no L19A rendering or ownership.",
@@ -1148,11 +1194,22 @@
         {
           "id": "L19B",
           "title": "Remaining tile infrastructure and 192-tile promotion approval",
-          "status": "blocked_by_previous",
+          "status": "complete",
           "promotion_required": true,
+          "evidence": [
+            "handoffs/L19B_remaining_tile_infrastructure.json",
+            "terrain_lab/L19B_INFRASTRUCTURE_AUDIT.md",
+            "terrain_lab/fixtures/l19b_infrastructure_192.csv",
+            "packs/TileObjectsNormalized/fortification_runtime.bin",
+            "packs/TileObjectsNormalized/airfield_runtime.bin",
+            "packs/TileObjectsNormalized/ground_state_runtime.bin"
+          ],
+          "verification": [
+            "terrain_lab_l19b_replayable_render_and_authorized_critical_visual_approval"
+          ],
           "offline_preparation": {
-            "status": "partial_with_explicit_radar_semantic_and_pollution_visual_calibration_blockers_victory_location_set_aside",
-            "scope": "Exact Fort and Airstrip chains, five recursively normalized Fort/Airstrip/watchtower roots, four normalized persistent crater decals, one structurally valid emissive observatory/radar candidate, five normalized `NUCLEAR_FALLOUT -> FX_Radiation` pollution textures, bounded seven-particle generic pollution graph, automatic eight-facing/two-zoom calibration, road-connected attachment support, four-era Fortress/Barricade/Airfield/Outpost policy, reusable promotion scaffold, inactive Integration contract, and preserved Modern-Fort/missile-silo rejects. The isolated radar sheet reads as a flat plaza and remains unapproved; pollution visual calibration and all L19B rendering/ownership remain pending. Victory Location is explicitly set aside.",
+            "status": "lab_promotion_complete_runtime_integration_inactive",
+            "scope": "Approved source-backed Fort/Barricade, exact Airstrip, era-aware Outpost, watchtower-derived Radar Tower, restrained source fort pole/bunting Victory Location, and feathered static Pollution/Crater ground-state presentation across all four eras/owners, routes, relief, day/night, isolation, and both zooms. Flat observatory plaza, Modern Fort, missile silo, opaque pollution tile replacement, and all transient effects remain rejected. Runtime ownership is inactive until I19B.",
             "evidence": [
               "docs/remaining_tile_infrastructure.md",
               "docs/upstream_asset_family_backlog.md",
@@ -1168,17 +1225,28 @@
               ,"preview/render_compound_tile_fit_sheet.py"
               ,"tools/visual_qa.py"
               ,"docs/offline_crosscutting_preparation.md"
+              ,"terrain_lab/L19B_INFRASTRUCTURE_AUDIT.md"
+              ,"handoffs/L19B_remaining_tile_infrastructure.json"
             ]
           }
         },
         {
           "id": "L20",
           "title": "Units and animation and 192-tile promotion approval",
-          "status": "blocked_by_previous",
+          "status": "complete",
+          "completed_on": "2026-09-06",
           "promotion_required": true,
+          "evidence": [
+            "handoffs/L20_units.json",
+            "terrain_lab/L20_UNIT_AUDIT.md",
+            "terrain_lab/fixtures/l20_units_192.csv",
+            "packs/UnitFamilyLab/unit_worker_runtime.bin",
+            "packs/CompoundUnitLab/unit_tank_runtime.bin"
+          ],
+          "verification": ["terrain_lab_l20_replayable_render_and_authorized_critical_visual_approval"],
           "offline_preparation": {
             "status": "complete",
-            "scope": "Five-family non-Warrior static conversion including a multi-mesh naval body, eight-action basic semantic contract, 37 unique raw clips/44 logical bindings, 93 deduplicated model-aware component pose caches serving 100 logical component/action bindings, pose-versus-motion policy, native timing and attack-slot alias policy, quantized skin-weight evidence, facing strategy, runtime-selected Civ III owner-color contract, an authoritative two-child Army contract using dedicated Great General art, and a generic arbitrary-tree compiler for Horseman, Classical Great General, Catapult, and Tank producing eight independently animated nodes, four resolved sockets, 30 components, 50 textures, 52 unique converted node/action clips, 62 logical bindings across 31 actions, 52 deterministic model-aware pose caches, and four-phase zero-separation proof. Horseman, Tank, and Classical General cover all eight basic actions; Catapult death remains an explicit truthful-art gap. The executable calibration contract covers eight Civ III facings and both 128x64/64x32 zoom bases, freezes single-body default/optional humanoid triad/Army two-body formation policy, and records an exact installed-GOG body-only replacement boundary without enabling it; no L20 rendering gate, actual all-facing/both-zoom visual measurements, final scale/facing-offset approval, Catapult death selection, specialty action expansion, or runtime unit ownership transfer.",
+            "scope": "Five-family non-Warrior static conversion including a multi-mesh naval body, eight-action basic semantic contract, 37 unique raw clips/44 logical bindings, 93 deduplicated model-aware component pose caches serving 100 logical component/action bindings, pose-versus-motion policy, native timing and attack-slot alias policy, quantized skin-weight evidence, facing strategy, runtime-selected Civ III owner-color contract, an authoritative two-child Army contract using dedicated Great General art, and a generic arbitrary-tree compiler for Horseman, Classical Great General, Catapult, and Tank producing eight independently animated nodes, four resolved sockets, 30 components, 50 textures, 52 unique converted node/action clips, 62 logical bindings across 31 actions, 52 deterministic model-aware pose caches, and four-phase zero-separation proof. Worker specialty preparation covers all 13 authoritative Job_ID values, state fallbacks, CAPTURE and generic BUILD, an exclusive action-selected tool group, and 11 structurally validated normalized Builder work/repair/capture clips. Horseman, Tank, and Classical General cover all eight basic actions; Catapult death remains an explicit truthful-art gap. The executable calibration contract covers eight Civ III facings and both 128x64/64x32 zoom bases, freezes single-body default/optional humanoid triad/Army two-body formation policy, and records an exact installed-GOG body-only replacement boundary without enabling it; no L20 rendering gate, actual all-facing/both-zoom visual measurements, final scale/facing-offset approval, Catapult death selection, Builder body/tool binding, worker VFX calibration, or runtime unit ownership transfer.",
             "evidence": [
               "docs/unit_asset_conversion.md",
               "docs/upstream_asset_family_backlog.md",
@@ -1186,6 +1254,12 @@
               "tools/asset_compiler/unit_family_action_validator.py",
               "tools/asset_compiler/unit_family_pose_cache_builder.py",
               "tools/asset_compiler/unit_action_conversion.json",
+              "docs/worker_builder_animation_mapping.md",
+              "tools/asset_compiler/worker_builder_action_strategy.json",
+              "tools/asset_compiler/worker_builder_action_compiler.py",
+              "tools/asset_compiler/worker_builder_clip_validator.py",
+              "tools/asset_compiler/test_worker_builder_action_compiler.py",
+              "tools/asset_compiler/CONVERT_WORKER_BUILDER_ANIMATIONS.bat",
               "tools/asset_compiler/unit_owner_color_runtime.json",
               "tools/asset_compiler/unit_family_strategy.json",
               "docs/army_rendering_strategy.md",
@@ -1212,7 +1286,20 @@
             ]
           }
         },
-        {"id": "L21", "title": "Complete 192-tile beauty scene and final user visual approval", "status": "blocked_by_previous", "promotion_required": true}
+        {
+          "id": "L21",
+          "title": "Complete 192-tile beauty scene and final user visual approval",
+          "status": "complete",
+          "completed_on": "2026-09-06",
+          "promotion_required": true,
+          "evidence": [
+            "handoffs/L21_complete_beauty_scene.json",
+            "terrain_lab/L21_COMPLETE_BEAUTY_AUDIT.md",
+            "terrain_lab/RUN_L21.bat",
+            "terrain_lab/test_l21_complete_scene_contract.py"
+          ],
+          "verification": ["terrain_lab_l21_complete_beauty_scene_and_authorized_critical_visual_approval"]
+        }
       ]
     },
     {
@@ -1227,12 +1314,12 @@
         {"id": "I12", "lab_gate": "L12", "title": "Integrate volcanoes and the approved L12 shared terrain stack", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L12_volcano.json", "terrain/i12_handoff_fidelity.json", "terrain_lab/terrain_lab.hlsl", "native/terrain_rendering.hlsl", "native/integrated_terrain.hlsl", "native/terrain_scene_runtime.cpp", "native/c3x_renderer.cpp", "native/native_smoke.cpp", "native/biq_preview.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i12/README.md", "../injected_code.c"], "verification": ["i12_approved_volcano_integration"], "local_verification": ["i12_local_approved_volcano_payload"]},
         {"id": "I13", "lab_gate": "L13", "title": "Integrate rivers", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L13_rivers.json", "terrain/i13_handoff_fidelity.json", "native/terrain_rendering.hlsl", "native/integrated_terrain.hlsl", "native/terrain_scene_runtime.cpp", "native/c3x_renderer.cpp", "native/biq_preview.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i13/README.md", "../injected_code.c"], "verification": ["i13_approved_river_integration"], "local_verification": ["i13_local_approved_river_payload"]},
         {"id": "I13A", "lab_gate": "L13A", "title": "Integrate shared shadows, lighting, and day-night", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L13A_lighting.json", "terrain/i13a_handoff_fidelity.json", "native/environment_runtime.cpp", "native/terrain_rendering.hlsl", "native/c3x_renderer.cpp", "native/biq_preview.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/environment_lighting_and_ambient_effects.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i13a/README.md"], "verification": ["i13a_approved_lighting_integration"], "local_verification": ["i13a_local_approved_lighting_payload"]},
-        {"id": "I14", "lab_gate": "L14", "title": "Integrate roads", "status": "blocked_by_previous"},
-        {"id": "I15", "lab_gate": "L15", "title": "Integrate railroads", "status": "blocked_by_previous"},
-        {"id": "I16", "lab_gate": "L16", "title": "Integrate resources", "status": "blocked_by_previous"},
-        {"id": "I17", "lab_gate": "L17", "title": "Integrate civilization-, size-, and era-specific cities", "status": "blocked_by_previous"},
-        {"id": "I18", "lab_gate": "L18", "title": "Integrate mines", "status": "blocked_by_previous"},
-        {"id": "I19", "lab_gate": "L19", "title": "Integrate farms and irrigation", "status": "blocked_by_previous"},
+        {"id": "I14", "lab_gate": "L14", "title": "Integrate roads", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L14_roads.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
+        {"id": "I15", "lab_gate": "L15", "title": "Integrate railroads", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L15_railroads.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
+        {"id": "I16", "lab_gate": "L16", "title": "Integrate resources", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L16_resources.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
+        {"id": "I17", "lab_gate": "L17", "title": "Integrate civilization-, size-, and era-specific cities", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L17_cities.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
+        {"id": "I18", "lab_gate": "L18", "title": "Integrate mines", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L18_mines.json", "native/c3x_renderer_api.h", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/terrain_scene_runtime.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
+        {"id": "I19", "lab_gate": "L19", "title": "Integrate farms and irrigation", "status": "ready"},
         {"id": "I19A", "lab_gate": "L19A", "title": "Integrate goody huts and colony outposts", "status": "blocked_by_previous"},
         {"id": "I19B", "lab_gate": "L19B", "title": "Integrate remaining tile infrastructure", "status": "blocked_by_previous"},
         {"id": "I20", "lab_gate": "L20", "title": "Integrate units and animation", "status": "blocked_by_previous"},

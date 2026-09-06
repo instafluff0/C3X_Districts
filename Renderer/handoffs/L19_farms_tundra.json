@@ -1,0 +1,52 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L19",
+  "system": "farms_irrigation_and_independent_tundra_material",
+  "status": "approved",
+  "approved_on": "2026-09-06",
+  "approval_basis": "critical autonomous visual review explicitly approved and authorized by the user",
+  "depends_on": ["handoffs/L18_mines.json", "handoffs/L13A_lighting.json"],
+  "source_contract": {
+    "pack_roots": ["packs/ImprovementsNormalized", "packs/AlternateEnvironment"],
+    "definition": "terrain_lab/RUN_L19.bat",
+    "farm_scenario": "terrain_lab/fixtures/l19_farms_192.csv",
+    "tundra_scenario": "terrain_lab/fixtures/l19_tundra_witness_192.csv",
+    "scenario_provenance": "deterministic Lab-only farm and tundra witnesses over the approved authoritative BIQ scene",
+    "runtime_bundle": "packs/ImprovementsNormalized/farm_runtime.bin",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "shader": "terrain_lab/terrain_lab.hlsl"
+  },
+  "coverage": [
+    "all sixteen irrigation adjacency masks, continuous blocks, boundaries, corners, junctions, isolated and hidden cells",
+    "grassland, plains, desert, tundra, all four eras, relief, river, route, city, resource, shore, and horizontal-wrap adjacency",
+    "independent irrigated and unirrigated tundra plus mixed tundra/non-tundra material boundaries",
+    "noon, midnight, complete, no-farm, terrain+farm isolation, tundra witness, native, and reduced controls"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l19_farms_noon.bmp",
+    "native_sha256": "99a82cff7891d946481a4d96ee5eb80e42b71baa2457a118dedf1a25ee276e2c",
+    "night_sha256": "4534ed052fc2294979981262a17070eb24d9a8f7cff81c4588213703ca519355",
+    "reduced_sha256": "9fdc3426d5fef96e72e6b6869763ba8631e5d7eb3b3f0f4087f83a44e92e761f",
+    "no_farms_sha256": "934cb7fe2dc9e620357682c11416f12652266f2f1fa1749c010401d3b569a129",
+    "isolation_sha256": "79a1595ad2299048edfeac0b802b052a88edc45c5600874dc94d6bd9a9ea8968",
+    "tundra_sha256": "871e463269cb3607d81eb1b600267c89e6fe86ad06f63bd00e523bf473d79873",
+    "farm_scenario_sha256": "8ab4f84e86b6778283c193def06ee681560026b3f56bb41895f0b5fd9085bb9d",
+    "tundra_scenario_sha256": "6da892dd9807905c93e38c01cf6e4f40d5c4977e2a06bb8ff04352caf057e8e6",
+    "runtime_sha256": "c82b8d17ad7256f11f1807ca2ccf3e7ced402a63a4d99e275e67d22ee6ed769a",
+    "tile_count": 192,
+    "audit": "terrain_lab/L19_FARM_TUNDRA_AUDIT.md"
+  },
+  "ownership_intent": {
+    "map_farm_bodies": "custom_when_renderer_enabled_after_I19",
+    "tundra_material": "custom_when_renderer_enabled_after_I19",
+    "authoritative_state": "Civ III irrigation topology, tile terrain, visibility, era, environment, and visible-scene state",
+    "retained_layers": "labels, units, cities, resources, borders, fog, HUD, and UI"
+  },
+  "cache_inputs": [
+    "canonical tile identity and screen occurrence",
+    "irrigation presence and four-neighbor topology mask",
+    "base and real terrain identity, terrain-fit transform, era, visibility, hour, season, and asset-definition revision"
+  ],
+  "update_mode": "static except when authoritative irrigation, topology, terrain, era, environment, or visible-scene state changes",
+  "fallback": "After I19, unresolved or failed custom farm or tundra rendering fails the custom frame visibly; it never replays native farm pixels or substitutes grassland for tundra."
+}

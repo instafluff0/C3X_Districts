@@ -113,8 +113,15 @@ class ProjectStateTests(unittest.TestCase):
         self.assertEqual("complete", lab_steps["L16"]["status"])
         self.assertEqual("complete", lab_steps["L17"]["status"])
         self.assertEqual("complete", lab_steps["L18"]["status"])
-        self.assertEqual("ready", lab_steps["L19"]["status"])
-        self.assertEqual("L19", source["next_step"]["id"])
+        self.assertEqual("complete", lab_steps["L19"]["status"])
+        self.assertEqual("complete", lab_steps["L19A"]["status"])
+        for integration_id in ("I14", "I15", "I16", "I17", "I18"):
+            self.assertEqual("complete", integration_steps[integration_id]["status"])
+        self.assertEqual("ready", integration_steps["I19"]["status"])
+        self.assertEqual("complete", lab_steps["L19B"]["status"])
+        self.assertEqual("complete", lab_steps["L20"]["status"])
+        self.assertEqual("complete", lab_steps["L21"]["status"])
+        self.assertEqual("I19", source["next_step"]["id"])
         environment_scope = " ".join(
             m6_steps["M6.4"][field][index]
             for field in ("scope", "acceptance", "must_not")
@@ -190,8 +197,8 @@ class ProjectStateTests(unittest.TestCase):
         source = json.loads(check_project_state.DEFAULT_STATUS.read_text(encoding="utf-8"))
         workstreams = source["workstreams"]
 
-        self.assertEqual("L19", workstreams["renderer_lab"]["current_step"])
-        self.assertEqual("I13A", workstreams["game_integration"]["current_step"])
+        self.assertEqual("L21", workstreams["renderer_lab"]["current_step"])
+        self.assertEqual("I19", workstreams["game_integration"]["current_step"])
         self.assertIn("renderer_dev.py lab", workstreams["renderer_lab"]["iteration_command"])
         self.assertIn("renderer_dev.py integration", workstreams["game_integration"]["iteration_command"])
         self.assertEqual("Windows 11", workstreams["windows_vm"]["name"])

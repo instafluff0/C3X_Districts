@@ -37,20 +37,29 @@ if not "%C3X_BUILD_RESULT%"=="0" (
   exit /b %C3X_BUILD_RESULT%
 )
 
-if not exist "..\packs\TerrainNormalized\manifest.json" goto skip_approved_terrain
-if not exist "..\packs\VegetationNormalized\vegetation_runtime.bin" goto skip_approved_terrain
-if not exist "..\packs\DecalsNormalized\manifest.json" goto skip_approved_terrain
-if not exist "..\packs\TerrainElementsNormalized\manifest.json" goto skip_approved_terrain
-if not exist "..\packs\ShoreNormalized\shore_runtime.bin" goto skip_approved_terrain
-build\native_smoke.exe "build\candidate\C3XRenderer.dll" --definitions ..\.. ..\..\Renderer\default.custom_rendering.txt
-if errorlevel 1 (
-  popd
-  exit /b 1
-)
-goto approved_terrain_done
+if /i "%~1"=="portable" goto approved_terrain_done
 
-:skip_approved_terrain
-echo SKIP approved_terrain_integration: local normalized terrain-through-river payloads are unavailable.
+set "C3X_APPROVED_PAYLOAD=1"
+if not exist "..\packs\TerrainNormalized\manifest.json" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\VegetationNormalized\vegetation_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\DecalsNormalized\manifest.json" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\TerrainElementsNormalized\manifest.json" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\ShoreNormalized\shore_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\RouteStylesNormalized\manifest.json" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\RouteDoodadsNormalized\bridge_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\ResourceNormalized\resource_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\CityComponentsNormalized\city_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\CityAdjunctsNormalized\wall_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\ImprovementsNormalized\mine_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"
+if "%C3X_APPROVED_PAYLOAD%"=="1" (
+  build\native_smoke.exe "build\candidate\C3XRenderer.dll" --definitions ..\.. ..\..\Renderer\default.custom_rendering.txt
+  if errorlevel 1 (
+    popd
+    exit /b 1
+  )
+) else (
+  echo SKIP approved_terrain_integration: local normalized L9-L18 payloads are unavailable.
+)
 
 :approved_terrain_done
 

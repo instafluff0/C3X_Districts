@@ -166,11 +166,11 @@ def load_strategy(path: Path = DEFAULT_STRATEGY) -> dict[str, Any]:
             or any(asset_id not in infrastructure_ids for asset_id in era_assets)
         ):
             raise ValueError(f"Infrastructure family {family_id} must map all four Civ III eras")
-    deferred = infrastructure.get("deferred_families")
-    if not isinstance(deferred, dict) or set(deferred) != {
+    promoted = infrastructure.get("l19b_promoted_families")
+    if not isinstance(promoted, dict) or set(promoted) != {
         "radar_tower", "pollution", "crater", "victory_location"
     }:
-        raise ValueError("Infrastructure strategy must retain every deferred family")
+        raise ValueError("Infrastructure strategy must retain every L19B-promoted family")
     rejected = infrastructure.get("rejected_source_candidates")
     if not isinstance(rejected, list) or len(rejected) < 2:
         raise ValueError("Infrastructure strategy must preserve rejected source evidence")
@@ -391,7 +391,7 @@ def compile_tile_objects(
         "rejected_optional_dependencies": rejected_optional_dependencies,
         "resolved_industrial_colony_source_candidates": strategy["colony"]["industrial_source_resolution"],
         "rejected_infrastructure_source_candidates": strategy["infrastructure"]["rejected_source_candidates"],
-        "deferred_infrastructure_families": strategy["infrastructure"]["deferred_families"],
+        "l19b_promoted_infrastructure_families": strategy["infrastructure"]["l19b_promoted_families"],
         "outputs": {
             "pack": str(pack),
             "hut_root_variants": len(hut_variants),

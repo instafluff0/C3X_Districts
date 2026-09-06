@@ -157,32 +157,33 @@
         "night": "optional_single_warm_guard_light"
       }
     },
-    "deferred_families": {
+    "l19b_promoted_families": {
       "radar_tower": {
-        "status": "observatory_body_structurally_valid_but_isolated_sheet_reads_as_flat_plaza",
-        "candidate_asset": "candidate/infrastructure/radar_observatory_body",
+        "status": "promoted_normalized_industrial_watchtower",
+        "asset": "infrastructure/outpost/industrial_watchtower",
         "rejected_candidates": [
-          {"source_entry": "IMP_SILO", "reason": "compound_model_invalid_mesh_range"}
+          {"source_entry": "IMP_SILO", "reason": "compound_model_invalid_mesh_range_and_wrong_semantics"},
+          {"asset_id": "candidate/infrastructure/radar_observatory_body", "reason": "isolated_sheet_reads_as_flat_ornamental_plaza"},
+          {"source_entry": "IMP_Fort_Modern_Base", "reason": "bind_pose_error_and_fort_semantics"}
         ],
-        "required_shape": "small_standalone_radar_or_antenna_tower_not_a_missile_silo",
-        "calibration": {"required_uniform_scale": 11.22191796, "facings": 8, "zooms": 2, "day_night_cells": 32}
+        "composition": "small_standalone_watchtower_antenna_silhouette",
+        "calibration": {"lab_scale": 0.46, "stable_facings": 4, "zooms": 2}
       },
       "pollution": {
-        "status": "preferred_radiation_family_with_bounded_generic_effect_graph_visual_calibration_required",
+        "status": "promoted_static_feathered_persistent_ground_state",
         "source_chain": "NUCLEAR_FALLOUT -> FX_Radiation",
         "candidate_assets": ["effect/pollution/radiation_sheet_01", "effect/pollution/radiation_sheet_02", "effect/pollution/radiation_alpha_01", "effect/pollution/radiation_alpha_02", "effect/pollution/radiation_atlas"],
-        "rule": "use_restrained_tile_local_green_wisps_with_authoritative_civ3_pollution_lifetime_not_source_disaster_timing",
-        "effect_profile": "infrastructure/pollution_radiation",
-        "maximum_live_particles": 7
+        "rule": "blend_low_opacity_source_blast_ground_and_authored_radiation_alpha_with_authoritative_civ3_pollution_lifetime",
+        "transient_effects": "none"
       },
       "crater": {
-        "status": "four_persistent_decal_variants_normalized",
+        "status": "promoted_four_feathered_persistent_decal_variants",
         "candidate_assets": ["infrastructure/crater/variant_01", "infrastructure/crater/variant_02", "infrastructure/crater/variant_03", "infrastructure/crater/variant_04"],
         "rule": "authoritative_civ3_crater_state_owns_lifetime"
       },
       "victory_location": {
-        "status": "explicitly_set_aside_by_user_direction",
-        "policy": "do_not_investigate_generate_map_or_promote_in_this_preparation_pass"
+        "status": "promoted_restrained_source_fort_pole_and_bunting_marker",
+        "policy": "remain_smaller_and_simpler_than_city_wonder_or_fortification_without_invented_effects"
       }
     },
     "rejected_source_candidates": [

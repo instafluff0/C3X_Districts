@@ -675,8 +675,27 @@ float4 PSFeature(FeaturePixelInput input) : SV_TARGET
     float3 albedo;
     float3 emissive = 0.0;
     float material_fraction = frac(input.material_index);
-    float mine_weight = step(20.5, input.material_index) *
+    float source_decal_weight = step(20.5, input.material_index) *
         (1.0 - step(28.5, input.material_index)) * step(0.005, material_fraction);
+    float infrastructure_weight = step(0.195, material_fraction) *
+        (1.0 - step(0.295, material_fraction)) * source_decal_weight;
+    float tile_object_weight = step(0.095, material_fraction) *
+        (1.0 - step(0.195, material_fraction)) * source_decal_weight;
+    float unit_weight = step(0.395, material_fraction) *
+        (1.0 - step(0.445, material_fraction)) * source_decal_weight;
+    float mine_weight = source_decal_weight *
+        (1.0 - tile_object_weight) * (1.0 - infrastructure_weight) *
+        (1.0 - unit_weight);
+    float raised_infrastructure_weight = infrastructure_weight *
+        (1.0 - step(0.25, material_fraction));
+    float pollution_weight = step(0.295, material_fraction) *
+        (1.0 - step(0.305, material_fraction));
+    float ground_state_weight = step(0.295, material_fraction) *
+        (1.0 - step(0.320, material_fraction)) * source_decal_weight;
+    float pollution_base_weight = pollution_weight *
+        (1.0 - step(21.5, input.material_index));
+    float pollution_detail_weight = pollution_weight *
+        step(21.5, input.material_index);
     float mine_slot = floor(input.material_index + 0.001) - 21.0;
     if (input.material_index < 0.5)
         albedo = feature_base_texture_0.Sample(material_sampler, input.uv).rgb;
@@ -757,18 +776,55 @@ float4 PSFeature(FeaturePixelInput input) : SV_TARGET
         emissive = resource_base_texture_3.Sample(material_sampler, input.uv).rgb;
     }
     float4 mine_sample = sample_reused_resource_slot(mine_slot, input.uv);
-    clip(lerp(1.0, mine_sample.a - 0.08, mine_weight));
+    clip(lerp(1.0, mine_sample.a - 0.08,
+              source_decal_weight * (1.0 - unit_weight)));
     float mine_emissive_code = floor(material_fraction * 100.0 + 0.5);
     if (mine_weight > 0.5 && mine_emissive_code > 1.5)
         emissive = mine_emissive_code < 2.5
             ? city_base_texture_0.Sample(material_sampler, input.uv).rgb
             : city_base_texture_1.Sample(material_sampler, input.uv).rgb;
+    float infrastructure_emissive_code = floor(material_fraction * 1000.0 + 0.5) -
+        floor(material_fraction * 100.0 + 0.5) * 10.0;
+    if (raised_infrastructure_weight > 0.5 && infrastructure_emissive_code > 0.5)
+        emissive = city_base_texture_0.Sample(material_sampler, input.uv).rgb;
     float city_weight = step(28.5, input.material_index);
     float owner_code = floor(frac(input.material_index) * 12.5 + 0.25) - 1.0;
     float3 owner_tint = owner_code < 0.5 ? float3(0.78, 0.94, 1.12) :
         (owner_code < 1.5 ? float3(1.12, 0.80, 0.72) :
         (owner_code < 2.5 ? float3(0.80, 1.08, 0.80) : float3(1.10, 0.92, 0.68)));
     albedo *= lerp(float3(1.0, 1.0, 1.0), owner_tint, city_weight * 0.10);
+    float tile_object_owner = floor(material_fraction * 100.0 + 0.5) - 10.0;
+    float3 tile_object_tint = tile_object_owner < 0.5 ? float3(0.78, 0.94, 1.12) :
+        (tile_object_owner < 1.5 ? float3(1.12, 0.80, 0.72) :
+        (tile_object_owner < 2.5 ? float3(0.80, 1.08, 0.80) :
+                                  float3(1.10, 0.92, 0.68)));
+    albedo *= lerp(float3(1.0, 1.0, 1.0), tile_object_tint,
+                   tile_object_weight * 0.07);
+    float infrastructure_owner = floor(material_fraction * 100.0 + 0.5) - 20.0;
+    float3 infrastructure_tint = infrastructure_owner < 0.5
+        ? float3(0.78, 0.94, 1.12)
+        : (infrastructure_owner < 1.5 ? float3(1.12, 0.80, 0.72)
+        : (infrastructure_owner < 2.5 ? float3(0.80, 1.08, 0.80)
+                                      : float3(1.10, 0.92, 0.68)));
+    albedo *= lerp(float3(1.0, 1.0, 1.0), infrastructure_tint,
+                   raised_infrastructure_weight * 0.07);
+    float unit_owner = floor((material_fraction - 0.40) * 100.0 + 0.05);
+    float unit_team_code = floor(material_fraction * 1000.0 + 0.5) -
+        floor(material_fraction * 100.0 + 0.5) * 10.0;
+    float3 unit_color = unit_owner < 0.5 ? float3(0.22, 0.52, 0.95) :
+        (unit_owner < 1.5 ? float3(0.92, 0.22, 0.16) :
+        (unit_owner < 2.5 ? float3(0.20, 0.76, 0.30) :
+                            float3(0.96, 0.74, 0.14)));
+    float unit_team_mask = unit_team_code < 0.5 ? 0.0 :
+        (unit_team_code < 1.5 ? 1.0 - mine_sample.a : 1.0);
+    float3 unit_tinted = albedo * 0.28 + unit_color * 0.72;
+    albedo = lerp(albedo, unit_tinted,
+                  unit_weight * unit_team_mask * 0.82);
+    // Persistent damage is source art blended into the terrain, not a square
+    // replacement tile.  The crater-ground layer supplies a subdued dead-soil
+    // footprint while the radiation atlas contributes only its authored alpha
+    // detail; both feather before the source quad edge.
+    albedo = lerp(albedo, float3(0.13, 0.115, 0.055), pollution_weight);
     float3 normal = normalize(input.geometry_normal);
     float3 light_direction = frame_light_direction();
     // The source vegetation meshes use broad, mostly upward canopy normals.
@@ -795,11 +851,21 @@ float4 PSFeature(FeaturePixelInput input) : SV_TARGET
         float feature_form = raised_form_response(signed_diffuse);
         light *= feature_form;
     }
-    float3 lit_color = albedo * light + emissive * saturate(city_weight + mine_weight) *
+    float3 lit_color = albedo * light + emissive *
+        saturate(city_weight + mine_weight + raised_infrastructure_weight) *
         environment_night_activation * environment_emissive_scale * 1.45;
     float3 display_color = pow(saturate(frame_tone_map(
         lit_color * frame_output_exposure())), 1.0 / 2.2);
-    return float4(display_color, 1.0);
+    float2 ground_local_uv = frac(input.uv * 2.0);
+    float ground_radius = length((ground_local_uv - 0.5) * 2.0);
+    float ground_feather = 1.0 - smoothstep(0.58, 1.0, ground_radius);
+    float pollution_alpha = pollution_base_weight * 0.30 * ground_feather +
+        pollution_detail_weight * mine_sample.a * 0.62 * ground_feather;
+    float crater_alpha = mine_sample.a * 0.85 * ground_feather;
+    float ground_alpha = lerp(1.0,
+        lerp(crater_alpha, pollution_alpha, pollution_weight),
+        ground_state_weight);
+    return float4(display_color, ground_alpha);
 }
 
 float4 sample_road_source(float2 uv, float style, float pillaged)

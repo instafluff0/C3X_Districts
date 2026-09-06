@@ -9,30 +9,30 @@
       "night": "use normalized emissive materials; VFX sockets remain inactive until their resource graphs decode"
     },
     "radar_tower": {
-      "status": "normalized_observatory_candidate_is_structurally_valid_but_isolated_sheet_reads_as_flat_plaza",
-      "assets": ["candidate/infrastructure/radar_observatory_body"],
-      "policy": "retain as evidence but expect rejection unless later source-backed components create an unmistakable tower or antenna silhouette",
+      "status": "l19b_promoted_using_normalized_industrial_watchtower",
+      "assets": ["infrastructure/outpost/industrial_watchtower"],
+      "policy": "use the restrained narrow tower/antenna silhouette; retain the flat observatory plaza as rejected evidence",
       "calibration": {"required_uniform_scale": 11.22191796, "facings": 8, "zooms": 2, "day_night_cells": 32},
       "rejected": ["missile_silo_semantically_wrong"]
     },
     "crater": {
-      "status": "four_persistent_decal_variants_normalized",
+      "status": "l19b_promoted_four_persistent_decal_variants",
       "assets": ["infrastructure/crater/variant_01", "infrastructure/crater/variant_02", "infrastructure/crater/variant_03", "infrastructure/crater/variant_04"],
       "policy": "lifetime follows authoritative Civ III crater state, never transient impact lifetime"
     },
     "pollution": {
-      "status": "preferred_nuclear_fallout_visual_family_with_five_normalized_textures_and_bounded_generic_graph",
+      "status": "l19b_promoted_static_feathered_source_ground_state",
       "source_chain": "NUCLEAR_FALLOUT -> FX_Radiation",
       "assets": ["effect/pollution/radiation_sheet_01", "effect/pollution/radiation_sheet_02", "effect/pollution/radiation_alpha_01", "effect/pollution/radiation_alpha_02", "effect/pollution/radiation_atlas"],
-      "policy": "use a restrained tile-local subset of the green radiation wisps, with lifetime owned by authoritative Civ III pollution state; do not inherit the source disaster radius or detonation timing",
+      "policy": "blend low-opacity source blast ground and authored radiation alpha as static tile-local damage owned by authoritative Civ III pollution state; never inherit source disaster timing, radius, particles, smoke, or animation",
       "effect_profile": "infrastructure/pollution_radiation",
       "maximum_live_particles": 7,
-      "remaining": "calibrate density, alpha, emissive response, and night exposure in L19B; exact source-script behavior remains unclaimed"
+      "remaining": "runtime capture and ownership remain I19B work; exact source-script behavior remains unclaimed"
     },
     "victory_location": {
-      "status": "explicitly_set_aside_by_user_direction",
+      "status": "l19b_promoted_restrained_source_fort_pole_and_bunting_marker",
       "rejected": ["supply_drop_reads_as_loot", "city_monument_collides_with_city_semantics"],
-      "policy": "do not investigate, generate, map, or promote a Victory Location candidate in this preparation pass"
+      "policy": "keep the marker smaller and simpler than cities, wonders, and fortifications; no invented effects"
     },
     "industrial_colony": {
       "status": "three_preindustrial_and_three_industrial_source_bodies_pass_strict_conversion",

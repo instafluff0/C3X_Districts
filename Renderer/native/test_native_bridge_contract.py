@@ -155,7 +155,7 @@ class NativeBridgeContractTests(unittest.TestCase):
             "terrain_overlays", "visibility_mask", "city_population",
         ):
             self.assertNotIn(retained_only, signature)
-        self.assertIn("cache_capacity = 4u", renderer)
+        self.assertIn("viewport_cache_capacity = 8u", renderer)
         self.assertIn("std::vector<CachedViewport> viewport_cache", renderer)
         self.assertIn("output.visible_animation_count = frame.visible_animation_count", renderer)
         self.assertNotIn("frame.visible_animation_count == 0 &&", renderer)

@@ -1,0 +1,58 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L19B",
+  "system": "remaining_tile_infrastructure",
+  "status": "approved",
+  "approved_on": "2026-09-06",
+  "approval_basis": "critical autonomous visual review explicitly approved and authorized by the user",
+  "depends_on": ["handoffs/L19A_goody_huts_colonies.json", "handoffs/L13A_lighting.json"],
+  "source_contract": {
+    "pack_root": "packs/TileObjectsNormalized",
+    "definition": "terrain_lab/RUN_L19B.bat",
+    "scenario": "terrain_lab/fixtures/l19b_infrastructure_192.csv",
+    "scenario_provenance": "deterministic Lab-only object/state augmentation over unchanged authoritative BIQ terrain",
+    "runtime_bundles": ["packs/TileObjectsNormalized/fortification_runtime.bin", "packs/TileObjectsNormalized/airfield_runtime.bin", "packs/TileObjectsNormalized/ground_state_runtime.bin"],
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "shader": "terrain_lab/terrain_lab.hlsl"
+  },
+  "coverage": [
+    "Fortress, Barricade, Airfield, Outpost, Radar Tower, and Victory Location across all four owner eras, owners, stable rotations, routes, relief, visibility, noon, and midnight",
+    "six source-backed pollution and six source-backed crater witnesses with stable variation and feathered terrain-following placement",
+    "complete, no-infrastructure, fortification-only, airfield-only, strategic-only, damage-only, and reduced controls"
+  ],
+  "rejected_candidates": [
+    "flat observatory radar plaza",
+    "modern-fort candidate",
+    "missile-silo candidate",
+    "opaque rectangular pollution ground replacement"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l19b_infrastructure_noon.bmp",
+    "native_sha256": "f9ede652e3eb47dbcbb8f0943ef8f2654a6f65735094a69dae35136a880d7fa1",
+    "night_sha256": "dc26643540a6fbad928caff89d8f2084f9c3db889934554a63141b9c8dddca3b",
+    "reduced_sha256": "b2d81e746b49ed90d00cd861edb81776bc57ef9e0ae96644a8cb3052910760b1",
+    "no_infrastructure_sha256": "d620366d8e1b1ae13ffee9ce918747f8c0a61ca825612b67560f6cefd4e14736",
+    "fortifications_sha256": "679deab3533c4ca00457617678bf271725f266904f255da52011044224be8936",
+    "airfields_sha256": "5ff44faba4d00c53bdee826241a89538d503432e608cf5e430ce3daffac182b8",
+    "strategic_sha256": "f0d3ab6d968f91eee66d74a184ce8ee42b8a230b12726321ea1e375d08e10830",
+    "damage_sha256": "2480b42ad5ff46c5f36fa71bb87aaa46b9fb199e387ef359719c4970e626a96b",
+    "scenario_sha256": "f63cef6c887badaa59fd71e19810bd12c554358e15669e49353f52d74b47a94a",
+    "fortification_runtime_sha256": "c2a31a2ad505d2252e57f74d3cc1eadf16f91c82bed7dca8c45b5fc4add1dc7a",
+    "airfield_runtime_sha256": "e2dbf70ecdbe4514e09adcd26bcdefe9d85237037ffea8f324c89685ee9fa7b2",
+    "ground_state_runtime_sha256": "2245e9beb6624ec76311781697c50d545530ef9ee3616bc75ac2174205351862",
+    "tile_count": 192,
+    "audit": "terrain_lab/L19B_INFRASTRUCTURE_AUDIT.md"
+  },
+  "ownership_intent": {
+    "bodies_and_persistent_states": "custom_when_renderer_enabled_after_I19B",
+    "authoritative_state": "Civ III infrastructure kind, owner, era, orientation/topology, visibility, pollution/crater state, tile anchor, environment, and visible-scene state",
+    "retained_layers": "resources, cities, units, borders, fog, labels, HUD, and UI"
+  },
+  "cache_inputs": [
+    "canonical tile identity and screen occurrence",
+    "infrastructure kind, owner, owner era, orientation/topology, visibility, and damage variant",
+    "terrain-fit transform, hour, season, and asset-definition revision"
+  ],
+  "update_mode": "static except when authoritative infrastructure, owner, era, damage, visibility, environment, or visible-scene state changes",
+  "fallback": "After I19B, unresolved or failed custom infrastructure rendering fails the custom frame visibly and never restores native object pixels or transient effects."
+}

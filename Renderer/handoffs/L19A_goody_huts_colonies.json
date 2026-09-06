@@ -1,0 +1,49 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L19A",
+  "system": "goody_huts_and_colony_outposts",
+  "status": "approved",
+  "approved_on": "2026-09-06",
+  "approval_basis": "critical autonomous visual review explicitly approved and authorized by the user",
+  "depends_on": ["handoffs/L19_farms_tundra.json", "handoffs/L16_resources.json", "handoffs/L13A_lighting.json"],
+  "source_contract": {
+    "pack_roots": ["packs/TileObjectsNormalized"],
+    "definition": "terrain_lab/RUN_L19A.bat",
+    "scenario": "terrain_lab/fixtures/l19a_tile_objects_192.csv",
+    "scenario_provenance": "deterministic Lab-only viewer/owner/era/resource augmentation over unchanged authoritative BIQ terrain",
+    "runtime_bundle": "packs/TileObjectsNormalized/tile_object_runtime.bin",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "shader": "terrain_lab/terrain_lab.hlsl"
+  },
+  "coverage": [
+    "all eight stable Civ III goody-hut buckets mapped to three source variants plus viewer-hidden suppression",
+    "all four colony owner eras, all four owners, extraterritorial ownership, preindustrial and strict industrial source families",
+    "same-tile land-resource coexistence, flat and relief adjacency, routes, rivers, vegetation, shores, and wrap-rich viewport",
+    "noon, midnight, complete, no-object, terrain+resource+object isolation, native, and reduced controls"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l19a_tile_objects_noon.bmp",
+    "native_sha256": "d620366d8e1b1ae13ffee9ce918747f8c0a61ca825612b67560f6cefd4e14736",
+    "night_sha256": "71f4249910a525deba33e97c3ff90935851c1c8052fef754825d702a9c2ee50d",
+    "reduced_sha256": "e9a485a5deb1082bbf9d026aed40a2020146c90fc76e1c5b95b4df50a542449c",
+    "no_objects_sha256": "99a82cff7891d946481a4d96ee5eb80e42b71baa2457a118dedf1a25ee276e2c",
+    "isolation_sha256": "6d33b0301deccd57cb73b5b7a3009f5d4d46c68cdea218499277ed6bf109ccb0",
+    "scenario_sha256": "b4c5ec90004960237411106104276b5639e31e8c6151688e01f76128d0310fe1",
+    "runtime_sha256": "16e1acdb3835b25cd929ad51221e08ce8b303c0caff4050f98aded15bcb41ec3",
+    "tile_count": 192,
+    "audit": "terrain_lab/L19A_TILE_OBJECT_AUDIT.md"
+  },
+  "ownership_intent": {
+    "goody_hut_bodies": "custom_when_renderer_enabled_after_I19A",
+    "colony_bodies": "custom_when_renderer_enabled_after_I19A",
+    "authoritative_state": "Civ III viewer-conditioned hut presence plus colony owner, owner era, extraterritorial coordinates, visibility, environment, and visible-scene state",
+    "retained_layers": "resource bodies, labels, units, cities, borders, fog, HUD, and UI"
+  },
+  "cache_inputs": [
+    "canonical tile identity, screen occurrence, viewer, and goody-hut visibility bit",
+    "colony presence, owner ID, owner era, effective owner color, territory owner, same-tile resource identity and bounds",
+    "terrain-fit transform, visibility, hour, season, and asset-definition revision"
+  ],
+  "update_mode": "static except when authoritative viewer, hut, colony, owner, era, resource, environment, or visible-scene state changes",
+  "fallback": "After I19A, unresolved or failed custom goody-hut or colony rendering fails the custom frame visibly; it never reveals a hidden hut, duplicates a resource, or replays native object pixels."
+}

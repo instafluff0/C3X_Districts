@@ -1,0 +1,57 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L21",
+  "system": "complete_beauty_scene",
+  "status": "approved",
+  "approved_on": "2026-09-06",
+  "approval_basis": "critical autonomous visual review explicitly approved and authorized by the user",
+  "depends_on": [
+    "handoffs/L19B_remaining_tile_infrastructure.json",
+    "handoffs/L20_units.json",
+    "handoffs/L13A_lighting.json"
+  ],
+  "source_contract": {
+    "definition": "terrain_lab/RUN_L21.bat",
+    "terrain_fixture": "preview/out/terrain_lab/test_biq_l13_rivers_192.csv",
+    "object_scenarios": [
+      "terrain_lab/fixtures/l14_roads_192.csv",
+      "terrain_lab/fixtures/l15_railroads_192.csv",
+      "terrain_lab/fixtures/l16_resources_192.csv",
+      "terrain_lab/fixtures/l17_cities_192.csv",
+      "terrain_lab/fixtures/l18_mines_192.csv",
+      "terrain_lab/fixtures/l19_farms_192.csv",
+      "terrain_lab/fixtures/l19a_tile_objects_192.csv",
+      "terrain_lab/fixtures/l19b_infrastructure_192.csv",
+      "terrain_lab/fixtures/l20_units_192.csv"
+    ],
+    "scenario_provenance": "authoritative 192-tile BIQ terrain plus deterministic Lab-only object and unit augmentations",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "shader": "terrain_lab/terrain_lab.hlsl"
+  },
+  "coverage": [
+    "the complete frozen L9-L20 alternate-skin scene stack",
+    "noon, sunset, midnight, sunrise, both Civ III zoom bases, and no-unit isolation",
+    "continuous terrain/coasts/rivers/routes, shared face/contact/cast lighting, source-only emissives, overlap, scale, density, and readability"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l21_complete_noon.bmp",
+    "native_sha256": "cc13bf4fdfe0debaefca3c3ab1e8f4609f5370b40e75902118db510c90c7f6e7",
+    "sunset_sha256": "cc74becef3ccd4db03591e9b164c81aefded52eaa74b2347e71d343b0806ad22",
+    "midnight_sha256": "ed6ef1ec2d212442ed928cb935533cebd8255d2094d54d2f4bfe24d17022ae57",
+    "sunrise_sha256": "4c9d4120c988988b4034dfcdb573dd8646e1d5fee9f8b53b10dbb3cc4e504850",
+    "reduced_output": "preview/out/terrain_lab/terrain_beauty_l21_complete_zoom2.bmp",
+    "reduced_sha256": "12bc58fa16a53828358396da95633fad68d17847cc341943370f59154829f9b2",
+    "no_units_sha256": "f9ede652e3eb47dbcbb8f0943ef8f2654a6f65735094a69dae35136a880d7fa1",
+    "runner_sha256": "66c93895841c54e7af39db82260caf8d6d59b43f5497593cdaed8644eb6e78e5",
+    "terrain_fixture_sha256": "1500c085e88425796fb150db4a96a904722d1f8b0cce1d614d46db58bc3c0b4b",
+    "unit_scenario_sha256": "b85d570959920564b2baa42f04ffc0abdd3ff7c528d5223864d55779aefe643b",
+    "tile_count": 192,
+    "audit": "terrain_lab/L21_COMPLETE_BEAUTY_AUDIT.md"
+  },
+  "ownership_intent": {
+    "complete_map_plane": "custom_when_renderer_enabled_only_after_each matching I gate and final I21",
+    "authoritative_state": "Civ III terrain, tile objects, cities, improvements, units, visibility, time, zoom, and screen anchors",
+    "retained_layers": "fog, borders, labels, selections, unit HUD, highlights, map overlays, HUD, and UI"
+  },
+  "fallback": "L21 freezes appearance only. Integration retains its existing atomic ownership and visible hard-failure contracts; the Lab handoff never enables runtime ownership."
+}

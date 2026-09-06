@@ -338,7 +338,7 @@ int main(int argc, char ** argv) {
         output.renderer_cpu_ticks < 0 || output.textured_tile_count != expected_textured)
         return fail("off-screen output metadata is invalid");
     if (output.replacement_tile_count != static_cast<c3x_renderer_u32>(std::size(tiles)) ||
-        output.replacement_tile_flags == nullptr || output.cache_capacity != 4 ||
+        output.replacement_tile_flags == nullptr || output.cache_capacity != 8 ||
         output.cache_entries != 1 || output.content_revision == 0)
         return fail("replacement ownership or bounded cache metadata is invalid");
     for (std::size_t index = 0; index < std::size(tiles); ++index) {
@@ -393,7 +393,7 @@ int main(int argc, char ** argv) {
     output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
     if (render(&frame, &output) != C3X_RENDERER_RESULT_OK)
         return fail("static cache priming render failed");
-    if (output.cache_entries != 2 || output.cache_capacity != 4)
+    if (output.cache_entries != 2 || output.cache_capacity != 8)
         return fail("static terrain cache is not populated within its fixed bound");
     c3x_renderer_u32 cache_hits_before = output.cache_hits;
     output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
@@ -401,6 +401,39 @@ int main(int argc, char ** argv) {
         output.cache_hits != cache_hits_before + 1 || output.renderer_cpu_ticks != 0 ||
         output.frame_invalidation_flags != 0)
         return fail("identical static frame did not produce an exact cache hit");
+
+    if (!external_definition_mode) {
+        // Keep enough exact viewports for normal unit-cycling camera jumps while
+        // retaining a hard bound suitable for Civ III's 32-bit process. The
+        // portable 320x200 fixture fills and evicts the cache without extending
+        // the licensed full-scene VM replay past the remote-command time bound.
+        for (int offset = 1; offset <= 6; ++offset) {
+            frame.world_width_tiles = 100 + offset;
+            output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+            if (render(&frame, &output) != C3X_RENDERER_RESULT_OK)
+                return fail("multi-viewport cache priming render failed");
+        }
+        frame.world_width_tiles = 100;
+        c3x_renderer_u32 multi_view_hits = output.cache_hits;
+        output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&frame, &output) != C3X_RENDERER_RESULT_OK ||
+            output.cache_hits != multi_view_hits + 1 || output.renderer_cpu_ticks != 0 ||
+            output.cache_entries != 8 || output.cache_capacity != 8)
+            return fail("recent unit-jump viewport was not retained in the bounded LRU");
+        c3x_renderer_u32 evictions_before = output.cache_evictions;
+        for (int offset = 7; offset <= 9; ++offset) {
+            frame.world_width_tiles = 100 + offset;
+            output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+            if (render(&frame, &output) != C3X_RENDERER_RESULT_OK)
+                return fail("bounded viewport eviction render failed");
+        }
+        if (output.cache_entries != 8 || output.cache_evictions <= evictions_before)
+            return fail("multi-viewport cache exceeded its bound or failed to evict LRU views");
+        frame.world_width_tiles = 100;
+        output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&frame, &output) != C3X_RENDERER_RESULT_OK)
+            return fail("could not restore static viewport after bounded LRU exercise");
+    }
 
     // Units and their UI selectors remain in Civ III's retained overlay planes.
     // Visible animation must keep driving redraw without evicting static map art.
@@ -619,7 +652,7 @@ int main(int argc, char ** argv) {
                     approved_output.replacement_tile_count);
                 for (c3x_renderer_u32 index = 0; index < approved_output.fallback_tile_count; ++index)
                     std::fprintf(stderr, " fallback_index=%u\n", approved_output.fallback_tile_indices[index]);
-                return fail("approved L9/L10/L11 category fixture did not render with exclusive ownership");
+                return fail("approved L9-L18 category fixture did not render with exclusive ownership");
             }
             c3x_renderer_u32 const * flags = approved_output.replacement_tile_flags;
             if ((flags[0] & (C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED |
@@ -650,7 +683,7 @@ int main(int argc, char ** argv) {
                 approved_output.height;
             zoom_hashes[zoom] = hash_pixels(approved_output.bgra_pixels, approved_bytes);
             if (zoom_hashes[zoom] == 0)
-                return fail("approved L9-L12 zoom fixture was blank");
+                return fail("approved L9-L18 zoom fixture was blank");
 
             approved_tiles[10].has_effect = 1;
             approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
@@ -685,7 +718,7 @@ int main(int argc, char ** argv) {
                 approved_output.clip_bottom != approved_frame.target_height - 7 ||
                 approved_output.renderer_cpu_ticks != 0 ||
                 approved_output.frame_invalidation_flags != 0)
-                return fail("approved L9-L12 partial redraw did not retain complete terrain");
+                return fail("approved L9-L18 partial redraw did not retain complete terrain");
             approved_frame.clip_left = 0;
             approved_frame.clip_top = 0;
             approved_frame.clip_right = approved_frame.target_width;
@@ -696,7 +729,7 @@ int main(int argc, char ** argv) {
             approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
             if (render(&approved_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
                 (approved_output.frame_invalidation_flags & C3X_RENDERER_INVALIDATE_SCENE) == 0)
-                return fail("approved L9-L12 pixel scroll did not invalidate exact anchors");
+                return fail("approved L9-L18 pixel scroll did not invalidate exact anchors");
             approved_tiles[5].anchor_x -= 3;
             approved_tiles[5].anchor_y += 2;
 
@@ -705,7 +738,7 @@ int main(int argc, char ** argv) {
             if (render(&approved_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
                 (approved_output.frame_invalidation_flags & C3X_RENDERER_INVALIDATE_WRAP) == 0 ||
                 approved_output.replacement_tile_flags[13] == 0)
-                return fail("approved L9-L12 horizontal wrap occurrence was not rendered independently");
+                return fail("approved L9-L18 horizontal wrap occurrence was not rendered independently");
             approved_frame.world_wrap_x = 0;
             approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
             int restored_result = render(&approved_frame, &approved_output);
@@ -716,7 +749,7 @@ int main(int argc, char ** argv) {
                 std::fprintf(stderr, "zoom restore zoom=%d expected=%llu actual=%llu result=%d\n",
                     zoom, static_cast<unsigned long long>(zoom_hashes[zoom]),
                     static_cast<unsigned long long>(restored_zoom_hash), restored_result);
-                return fail("approved L9-L12 zoom fixture retained stale clip, scroll, or wrap pixels");
+                return fail("approved L9-L18 zoom fixture retained stale clip, scroll, or wrap pixels");
             }
             c3x_renderer_u32 zoom_hits = approved_output.cache_hits;
             approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
@@ -724,10 +757,10 @@ int main(int argc, char ** argv) {
                 hash_pixels(approved_output.bgra_pixels, approved_bytes) != zoom_hashes[zoom] ||
                 approved_output.cache_hits != zoom_hits + 1 ||
                 approved_output.frame_invalidation_flags != 0)
-                return fail("approved L9-L12 static zoom fixture was not exact and idle");
+                return fail("approved L9-L18 static zoom fixture was not exact and idle");
         }
         if (zoom_hashes[0] == zoom_hashes[1])
-            return fail("approved L9-L12 zoom fixtures were not distinct");
+            return fail("approved L9-L18 zoom fixtures were not distinct");
 
         // A terrain owner change is cache-relevant, while unit overlays are
         // not.  Reset must rebuild D3D resources from the same
@@ -846,7 +879,7 @@ int main(int argc, char ** argv) {
                 static_cast<unsigned long long>(reset_after_hash), reset_result,
                 generation_before, approved_output.device_generation,
                 approved_output.frame_invalidation_flags);
-            return fail("approved L9-L12 device reset did not rebuild deterministically");
+            return fail("approved L9-L18 device reset did not rebuild deterministically");
         }
 
         // Match the full-screen capture volume observed at the live m19 boundary:
@@ -1104,7 +1137,7 @@ int main(int argc, char ** argv) {
     reset();
     FreeLibrary(module);
     if (external_definition_mode) {
-        std::printf("PASS approved_terrain_integration: frozen approved terrain, dune, marsh, volcano, river, and shared-lighting handoffs; authoritative river/volcano invalidation; exclusive ownership; retained overlays; bounded cache invalidation; both zooms; clipping; scrolling; horizontal wrapping; deterministic reset; and hard-failure behavior passed; pixel_hash=%llu.\n",
+        std::printf("PASS approved_terrain_integration: frozen approved L9-L18 terrain, dune, vegetation, marsh, volcano, river, lighting, road, railroad, resource, city, and mine handoffs; authoritative invalidation; exclusive ownership; retained overlays; eight-viewport bounded cache; both zooms; clipping; scrolling; horizontal wrapping; deterministic reset; and hard-failure behavior passed; pixel_hash=%llu.\n",
                     static_cast<unsigned long long>(first_hash));
         return 0;
     }

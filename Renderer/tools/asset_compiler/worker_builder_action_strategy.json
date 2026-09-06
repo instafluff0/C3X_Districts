@@ -1,0 +1,195 @@
+{
+  "schema": "c3x.worker_builder_action_strategy.v0",
+  "scope": "worker_specialty_actions_offline_preparation",
+  "authority": {
+    "primary": "civ3_worker_job_id",
+    "fallback": "civ3_unit_state",
+    "diagnostic_only": "civ3_current_animation_type",
+    "reason": "Civ III aliases several worker jobs to one FLC slot and uses DEFAULT for airfield, radar tower, and outpost jobs."
+  },
+  "applicability": {
+    "selector": "authoritative_worker_job_id_plus_pack_action_set",
+    "unit_name_detection": false,
+    "body_resolution": "unit_definition_then_optional_default_worker_era_profile",
+    "reason": "scenario units and enslaved or modded laborers may perform worker jobs with arbitrary bodies"
+  },
+  "source_body_profiles": [
+    {"era": 0, "source_unit": "UNIT_BUILDER", "runtime_body": "unit/worker/body/ancient"},
+    {"era": 1, "source_unit": "UNIT_BUILDER_MEDIEVAL", "runtime_body": "unit/worker/body/medieval"},
+    {"era": 2, "source_unit": "UNIT_BUILDER_INDUSTRIAL", "runtime_body": "unit/worker/body/industrial"},
+    {"era": 3, "source_unit": "UNIT_BUILDER_MODERN", "runtime_body": "unit/worker/body/modern"}
+  ],
+  "source_activities": {
+    "ACTIVITY_BUILD": {"expend_animation": "ACTION_1", "runtime_action": "work_ground"},
+    "ACTIVITY_DIG": {"expend_animation": "ACTION_2", "runtime_action": "work_heavy"},
+    "ACTIVITY_CUT": {"expend_animation": "ACTION_3", "runtime_action": "work_cut"},
+    "ACTIVITY_REPAIR": {"expend_animation": "ACTION_A", "runtime_action": "work_repair"}
+  },
+  "source_operation_evidence": {
+    "UNITOPERATION_BUILD_IMPROVEMENT": "ACTIVITY_BUILD",
+    "UNITOPERATION_BUILD_ROUTE": "ACTIVITY_BUILD",
+    "UNITOPERATION_CLEAR_CONTAMINATION": "ACTIVITY_DIG",
+    "UNITOPERATION_REMOVE_FEATURE": "ACTIVITY_CUT",
+    "UNITOPERATION_REMOVE_IMPROVEMENT": "ACTIVITY_REPAIR",
+    "UNITOPERATION_REPAIR": "ACTIVITY_REPAIR",
+    "UNITOPERATION_HARVEST_RESOURCE": "ACTIVITY_DIG",
+    "UNITOPERATION_PLANT_FOREST": "ACTIVITY_DIG"
+  },
+  "source_improvement_evidence": {
+    "IMPROVEMENT_FARM": "ACTIVITY_BUILD",
+    "IMPROVEMENT_MINE": "ACTIVITY_DIG"
+  },
+  "clips": {
+    "work_ground": {
+      "source_entry": "ANIMATION_Builder_BuildAction01_Shovel",
+      "runtime_clip": "animation/unit/worker/work_ground",
+      "output": "animations/unit/worker/work_ground.c3anim",
+      "playback": "loop",
+      "tool": "unit/worker/tool/shovel",
+      "tool_evidence": "confirmed_by_source_clip_name"
+    },
+    "work_heavy": {
+      "source_entry": "ANIMATION_Builder_BuildAction02_2H",
+      "runtime_clip": "animation/unit/worker/work_heavy",
+      "output": "animations/unit/worker/work_heavy.c3anim",
+      "playback": "loop",
+      "tool": "unit/worker/tool/pickaxe",
+      "tool_evidence": "inferred_two_hand_presentation_pending_l20_visual_proof"
+    },
+    "work_cut": {
+      "source_entry": "ANIMATION_Builder_BuildAction03_Axe",
+      "runtime_clip": "animation/unit/worker/work_cut",
+      "output": "animations/unit/worker/work_cut.c3anim",
+      "playback": "loop",
+      "tool": "unit/worker/tool/axe",
+      "tool_evidence": "confirmed_by_source_clip_name"
+    },
+    "work_repair_1": {
+      "source_entry": "ANIMATION_Builder_RepairAction01_1H",
+      "runtime_clip": "animation/unit/worker/work_repair_1",
+      "output": "animations/unit/worker/work_repair_1.c3anim",
+      "playback": "clamp",
+      "tool": "unit/worker/tool/hammer",
+      "tool_evidence": "inferred_repair_presentation_pending_l20_visual_proof"
+    },
+    "work_repair_2": {
+      "source_entry": "ANIMATION_Builder_RepairAction02_1H",
+      "runtime_clip": "animation/unit/worker/work_repair_2",
+      "output": "animations/unit/worker/work_repair_2.c3anim",
+      "playback": "clamp",
+      "tool": "unit/worker/tool/hammer",
+      "tool_evidence": "inferred_repair_presentation_pending_l20_visual_proof"
+    },
+    "work_repair_3": {
+      "source_entry": "ANIMATION_Builder_RepairAction03_1H",
+      "runtime_clip": "animation/unit/worker/work_repair_3",
+      "output": "animations/unit/worker/work_repair_3.c3anim",
+      "playback": "clamp",
+      "tool": "unit/worker/tool/hammer",
+      "tool_evidence": "inferred_repair_presentation_pending_l20_visual_proof"
+    },
+    "work_repair_4": {
+      "source_entry": "ANIMATION_Builder_RepairAction04_1H",
+      "runtime_clip": "animation/unit/worker/work_repair_4",
+      "output": "animations/unit/worker/work_repair_4.c3anim",
+      "playback": "clamp",
+      "tool": "unit/worker/tool/hammer",
+      "tool_evidence": "inferred_repair_presentation_pending_l20_visual_proof"
+    },
+    "captured_1": {
+      "source_entry": "ANIMATION_Builder_Captured01",
+      "runtime_clip": "animation/unit/worker/captured_1",
+      "output": "animations/unit/worker/captured_1.c3anim",
+      "playback": "clamp",
+      "tool": null
+    },
+    "captured_2": {
+      "source_entry": "ANIMATION_Builder_Captured02",
+      "runtime_clip": "animation/unit/worker/captured_2",
+      "output": "animations/unit/worker/captured_2.c3anim",
+      "playback": "clamp",
+      "tool": null
+    },
+    "captured_3": {
+      "source_entry": "ANIMATION_Builder_Captured03",
+      "runtime_clip": "animation/unit/worker/captured_3",
+      "output": "animations/unit/worker/captured_3.c3anim",
+      "playback": "clamp",
+      "tool": null
+    },
+    "captured_4": {
+      "source_entry": "ANIMATION_Builder_Captured04",
+      "runtime_clip": "animation/unit/worker/captured_4",
+      "output": "animations/unit/worker/captured_4.c3anim",
+      "playback": "clamp",
+      "tool": null
+    }
+  },
+  "worker_jobs": [
+    {"id": 0, "name": "build_mines", "unit_state": 2, "civ3_slot": "MINE", "action": "work_heavy", "vfx": "work/stone_chips"},
+    {"id": 1, "name": "irrigate", "unit_state": 3, "civ3_slot": "IRRIGATE", "action": "work_ground", "vfx": "work/soil_dust"},
+    {"id": 2, "name": "build_fortress", "unit_state": 4, "civ3_slot": "FORTRESS", "action": "work_ground", "vfx": "work/soil_dust"},
+    {"id": 3, "name": "build_road", "unit_state": 5, "civ3_slot": "ROAD", "action": "work_ground", "vfx": "work/soil_dust"},
+    {"id": 4, "name": "build_railroad", "unit_state": 6, "civ3_slot": "ROAD", "action": "work_ground", "vfx": "work/soil_dust"},
+    {"id": 5, "name": "plant_forest", "unit_state": 7, "civ3_slot": "PLANT", "action": "work_heavy", "vfx": "work/soil_dust"},
+    {"id": 6, "name": "clear_forest", "unit_state": 8, "civ3_slot": "FOREST", "action": "work_cut", "vfx": "work/wood_chips"},
+    {"id": 7, "name": "clear_wetlands", "unit_state": 9, "civ3_slot": "JUNGLE", "action": "work_cut", "vfx": "work/leaf_debris"},
+    {"id": 8, "name": "clean_damage", "unit_state": 10, "civ3_slot": "IRRIGATE", "action": "work_heavy", "vfx": "work/cleanup_dust"},
+    {"id": 9, "name": "build_airfield", "unit_state": 11, "civ3_slot": "DEFAULT", "action": "work_ground", "vfx": "work/soil_dust"},
+    {"id": 10, "name": "build_radar", "unit_state": 12, "civ3_slot": "DEFAULT", "action": "work_ground", "vfx": "work/soil_dust"},
+    {"id": 11, "name": "build_outpost", "unit_state": 13, "civ3_slot": "DEFAULT", "action": "work_ground", "vfx": "work/soil_dust"},
+    {"id": 12, "name": "build_barricade", "unit_state": 14, "civ3_slot": "FORTRESS", "action": "work_ground", "vfx": "work/soil_dust"}
+  ],
+  "special_actions": {
+    "CAPTURE": {
+      "selection": "stable_body_variation_modulo_4",
+      "actions": ["captured_1", "captured_2", "captured_3", "captured_4"],
+      "playback": "clamp"
+    },
+    "BUILD": {
+      "action": "work_ground",
+      "playback": "clamp",
+      "meaning": "generic one-shot transition only; persistent worker jobs use job_id"
+    },
+    "REPAIR": {
+      "selection": "stable_body_variation_modulo_4",
+      "actions": ["work_repair_1", "work_repair_2", "work_repair_3", "work_repair_4"],
+      "playback": "clamp",
+      "meaning": "optional pack-authored action; ordinary Civ III workers have no distinct repair job"
+    }
+  },
+  "attachment_selection": {
+    "mode": "exclusive_attachment_group",
+    "socket": "Tool",
+    "group": "worker_tool",
+    "select_exactly_one_for_work_action": true,
+    "hide_for_non_work_action": true,
+    "source_candidates": ["Tools/Axe", "Tools/Pickaxe", "Tools/Shovel", "Tools/Sledgehammer"],
+    "source_tool_assets": {
+      "Tools/Axe": "Builder_Axe",
+      "Tools/Pickaxe": "Builder_PickAxe",
+      "Tools/Shovel": "Builder_Shovel",
+      "Tools/Sledgehammer": "Builder_SledgeHammer"
+    },
+    "runtime_candidates": [
+      "unit/worker/tool/axe",
+      "unit/worker/tool/pickaxe",
+      "unit/worker/tool/shovel",
+      "unit/worker/tool/hammer"
+    ],
+    "rule": "pack metadata selects an attachment by logical action; runtime code must not branch on Builder or source asset names"
+  },
+  "timing": {
+    "authority": "civ3_worker_job_and_native_animation_progress",
+    "loop": "repeat_pose_only_while_authoritative_job_remains_active",
+    "default_slot_jobs": "use_a_stable_job_event_clock_without_changing_gameplay_duration",
+    "completion": "tile_change_and_unit_transition_are_owned_by_civ3"
+  },
+  "effects": {
+    "unit_clip_owns": ["body_pose", "tool_pose"],
+    "effect_pipeline_owns": ["soil", "chips", "leaves", "sparks", "cleanup_particles"],
+    "markers": "authored_normalized_phase_metadata_only",
+    "audio": "retain_native_civ3_worker_audio"
+  },
+  "runtime_integration": "not_enabled"
+}

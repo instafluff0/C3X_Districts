@@ -25,22 +25,38 @@ def write_scenario(viewport: Path, cities: Path, output: Path) -> None:
     }
     city_cells = {(int(row[0]), int(row[1])) for row in rows(cities)[1:]}
     land = {
-        point for point, tile in tiles.items() if tile[4] < 11 and point not in city_cells
+        point
+        for point, tile in tiles.items()
+        if tile[4] < 11 and tile[5] in (0, 1, 2, 3) and point not in city_cells
     }
-    # A broad connected block plus a separated 4x4 topology matrix. Masks are
-    # authoritative N/E/S/W adjacency bits computed from the selected cells.
-    selected = {
-        (x, y)
-        for y in range(2, 8)
-        for x in range(2, 10)
-        if (x, y) in land and (x + y) % 7 != 0
-    }
-    candidates = sorted(land - selected, key=lambda p: (p[1], p[0]))
-    for point in candidates:
-        if len(selected) >= 56:
+    # Select the largest flat-land components so the beauty scene contains
+    # broad connected acreages rather than scattered per-mask stamps.
+    remaining = set(land)
+    components = []
+    while remaining:
+        seed = min(remaining, key=lambda point: (point[1], point[0]))
+        remaining.remove(seed)
+        component = {seed}
+        frontier = [seed]
+        while frontier:
+            column, row = frontier.pop()
+            for point in ((column, row - 1), (column + 1, row),
+                          (column, row + 1), (column - 1, row)):
+                if point in remaining:
+                    remaining.remove(point)
+                    component.add(point)
+                    frontier.append(point)
+        components.append(component)
+    components.sort(key=lambda points: (-len(points), min((p[1], p[0]) for p in points)))
+    selected = set()
+    for component in components:
+        for point in sorted(component, key=lambda p: ((p[0] * 97 + p[1] * 151) % 389, p[1], p[0])):
+            if len(selected) >= 36:
+                break
+            selected.add(point)
+        if len(selected) >= 36:
             break
-        selected.add(point)
-    if len(selected) < 40:
+    if len(selected) < 32:
         raise ValueError("viewport lacks enough land for the L19 farm matrix")
     directions = ((0, -1, 1), (1, 0, 2), (0, 1, 4), (-1, 0, 8))
     records = []
@@ -52,10 +68,27 @@ def write_scenario(viewport: Path, cities: Path, output: Path) -> None:
         records.append((column, row, era, mask, terrain_family, visible, index % 3))
     # Ensure all 16 topology masks are represented as explicit Lab witnesses.
     represented = {record[3] for record in records}
+    used = {(record[0], record[1]) for record in records}
     for mask in range(16):
         if mask in represented:
             continue
-        column, row = candidates[(mask * 11) % len(candidates)]
+        frontier = [
+            point
+            for point in land - used
+            if any(
+                (point[0] + dx, point[1] + dy) in used
+                for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0))
+            )
+        ]
+        frontier.sort(
+            key=lambda point: (
+                (point[0] * 67 + point[1] * 103 + mask * 29) % 421,
+                point[1],
+                point[0],
+            )
+        )
+        column, row = frontier[0]
+        used.add((column, row))
         records.append((column, row, mask % 4, mask, mask % 4, 1, mask % 3))
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", newline="", encoding="utf-8") as stream:

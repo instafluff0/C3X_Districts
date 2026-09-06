@@ -23,7 +23,7 @@
   ],
   "reference": {
     "native_output": "preview/out/terrain_lab/terrain_beauty_l17_cities_noon.bmp",
-    "native_sha256": "53d9717775789cee0e3b1cc779f57ca6e566ad36ad56fc7c04968be8b34d02dc",
+    "native_sha256": "53d9717775789cee0e3a67fd936447817818c90672c7c8945c6b8a72ae5a2ed6",
     "night_output": "preview/out/terrain_lab/terrain_beauty_l17_cities_night.bmp",
     "night_sha256": "5910b2088685cb54ee3b1cc779f57ca6e566ad36ad56fc7c04968be8b34d02dc",
     "reduced_sha256": "8a26cd75c6494ec8822457e957c89cf647427c5f60481458e3cfc597e07129fe",

@@ -94,6 +94,30 @@ M5.1 through M5.3 were implemented with existing symbols. M5.3 proved that the e
 - The current production smoke covers both zoom bases, clipped and pixel-scrolled frames, a duplicate horizontal-wrap occurrence, reset recovery, bounded 32-bit live-scale capture, cache telemetry, terrain/feature/river ownership, active/dormant volcano invalidation, authoritative river-mask invalidation, four lighting phases, and zero native fallback with the frozen L9-L13A payloads.
 - Existing `m49_Get_Square_RealType`, `m50_Get_Square_BaseType`, `Tile.Body.active_tile_effect`, `Tile::m37_Get_River_Code`, captured hour/season, and the m19 anchor/clip/wrap context provide every I13/I13A selector. The river and shared-lighting work is DLL-local apart from adding a river replacement ownership bit to the existing bridge contract. No new symbol or address is required for I9 through I13A. Automated evidence remains in `approved_terrain_integration.md`, `terrain/i12_handoff_fidelity.json`, `terrain/i13_handoff_fidelity.json`, `terrain/i13a_handoff_fidelity.json`, and the corresponding evidence directories.
 
+### I14-I18 Routes, Resources, Cities, And Mines: Resolved, No New Entry
+
+- The existing `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture supplies
+  authoritative road/rail topology, tile improvement flags, resource identity,
+  and exact anchors at the already exclusive custom map-plane boundary.
+- Loaded `BIC` resource records provide visibility-conditioned resource class
+  and name. Loaded city/leader/improvement structures provide city identity,
+  owner, size band, culture group, era, capital, walls, and the visible
+  civilization era used by routes and mines. No separate map-body hook is
+  necessary; Civ III city labels, resource UI icons, and all retained overlays
+  continue after the custom plane.
+- API v9 adds DLL-local route/resource/city/mine selectors and exact ownership
+  bits. The bounded eight-viewport terrain cache includes every renderer-owned
+  selector but excludes unit animation, selection, native `SquareParts`, fog,
+  and exact population values that cannot change this plane.
+- The production smoke consumes the frozen approved L14-L18 payloads at both
+  zooms and proves route/resource/city/mine invalidation, LRU reuse/eviction,
+  exact clips, scrolling/wrap occurrences, deterministic reset, and zero native
+  replay. Evidence is in `docs/approved_terrain_integration.md`,
+  `evidence/i14_i18/README.md`, and
+  `verification/i18_cache_integration.json`.
+- `required_user_action: []`. No new or changed `civ_prog_objects.csv` symbol,
+  signature, or supported-build address is required for I14 through I18.
+
 ### M7.2 Map Resources
 
 - Begin with existing `Map_Renderer_m09_Draw_Tile_Resources`, `Sprite_draw_on_map`, loaded BIQ resource records, and the captured map anchor/index context. Suppress only the map draw call for a fully accepted replacement; never replace or mutate the shared resource PCX/UI icon paths globally.

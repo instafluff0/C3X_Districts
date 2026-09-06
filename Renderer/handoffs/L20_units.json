@@ -1,0 +1,53 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L20",
+  "system": "units_and_animation",
+  "status": "approved",
+  "approved_on": "2026-09-06",
+  "approval_basis": "critical autonomous visual review explicitly approved and authorized by the user",
+  "depends_on": ["handoffs/L19B_remaining_tile_infrastructure.json", "handoffs/L13A_lighting.json"],
+  "source_contract": {
+    "ordinary_pack_root": "packs/UnitFamilyLab",
+    "compound_pack_root": "packs/CompoundUnitLab",
+    "definition": "terrain_lab/RUN_L20.bat",
+    "scenario": "terrain_lab/fixtures/l20_units_192.csv",
+    "scenario_provenance": "deterministic Lab-only unit/action augmentation over unchanged authoritative BIQ terrain",
+    "runtime_builder": ["tools/asset_compiler/build_l20_unit_runtime.py", "tools/asset_compiler/build_l20_compound_unit_runtime.py"],
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "shader": "terrain_lab/terrain_lab.hlsl"
+  },
+  "coverage": [
+    "Archer, Swordsman, Infantry, Fighter, Galley, Horseman, Catapult, Tank, Great General/Army, and Worker",
+    "all eight facings, four owner colors, both zoom bases, stable anchors, movement interpolation, stacking, hidden state, shared noon/night lighting",
+    "idle, fidget, move, fortify, attack, defend, victory, death, Builder light/heavy/cut work, and capture samples",
+    "generic mounted, crewed, vehicle, and Army parent/child/socket composition"
+  ],
+  "truthful_gaps": [
+    "Catapult has no source death clip and therefore aliases no invented death art",
+    "Worker tool-body intake remains restrained to the common civilian body components; no incorrect or invented work tool/effect is emitted"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l20_units_noon.bmp",
+    "native_sha256": "cc13bf4fdfe0debaefca3c3ab1e8f4609f5370b40e75902118db510c90c7f6e7",
+    "night_sha256": "ed6ef1ec2d212442ed928cb935533cebd8255d2094d54d2f4bfe24d17022ae57",
+    "reduced_sha256": "12bc58fa16a53828358396da95633fad68d17847cc341943370f59154829f9b2",
+    "no_units_sha256": "f9ede652e3eb47dbcbb8f0943ef8f2654a6f65735094a69dae35136a880d7fa1",
+    "unit_isolation_sha256": "bd5347e8bda69362e5553060b3ff75a532cec640e851ec5f219d7df5a0c2b10e",
+    "turntable_sha256": "de282e8225d6881417506115ab857b3e99148c8b7363241ce5aa1b4ddd29fdeb",
+    "actions_sha256": "20647804ec000cf8f8764bae3a8121f239693bec7903fb68eae3a869562f645a",
+    "scenario_sha256": "b85d570959920564b2baa42f04ffc0abdd3ff7c528d5223864d55779aefe643b",
+    "tile_count": 192,
+    "audit": "terrain_lab/L20_UNIT_AUDIT.md"
+  },
+  "ownership_intent": {
+    "unit_bodies": "custom_when_renderer_enabled_after_I20",
+    "authoritative_state": "Civ III unit identity, owner/display color, facing, action, absolute action time, anchor/interpolation, visibility, stack/Army membership, zoom, and environment",
+    "retained_layers": "unit HUD, selection, health, orders, labels, fog, borders, map overlays, HUD, and UI"
+  },
+  "cache_inputs": [
+    "unit definition and stable instance identity",
+    "display color, facing, action, absolute action time, anchor/interpolation, visibility, stack/Army composition, zoom, environment, and asset-definition revision"
+  ],
+  "update_mode": "absolute-time animation sampled from authoritative state; rendering never owns gameplay timing or completion",
+  "fallback": "After I20, unresolved or failed custom unit-body rendering fails the custom frame visibly and never restores native body pixels while retained native HUD remains available."
+}

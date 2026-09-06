@@ -196,6 +196,68 @@ struct FarmScenario {
 
 FarmScenario farm_scenario;
 
+struct TileObjectInstance {
+    int column = 0;
+    int row = 0;
+    unsigned kind = 0;
+    unsigned variant = 0;
+    unsigned era = 0;
+    unsigned owner = 0;
+    unsigned territory_owner = 0;
+    unsigned visible = 0;
+    unsigned resource = 0;
+};
+
+struct TileObjectScenario {
+    int columns = 0;
+    int rows = 0;
+    std::vector<TileObjectInstance> instances;
+};
+
+TileObjectScenario tile_object_scenario;
+
+struct InfrastructureInstance {
+    int column = 0;
+    int row = 0;
+    unsigned kind = 0;
+    unsigned variant = 0;
+    unsigned era = 0;
+    unsigned owner = 0;
+    unsigned visible = 0;
+    unsigned road_connected = 0;
+};
+
+struct InfrastructureScenario {
+    int columns = 0;
+    int rows = 0;
+    std::vector<InfrastructureInstance> instances;
+};
+
+InfrastructureScenario infrastructure_scenario;
+
+struct UnitInstance {
+    int column = 0;
+    int row = 0;
+    unsigned kind = 0;
+    unsigned owner = 0;
+    unsigned facing = 0;
+    unsigned action = 0;
+    unsigned phase = 0;
+    unsigned visible = 0;
+    unsigned stack_slot = 0;
+    int move_dx = 0;
+    int move_dy = 0;
+    unsigned progress_milli = 0;
+};
+
+struct UnitScenario {
+    int columns = 0;
+    int rows = 0;
+    std::vector<UnitInstance> instances;
+};
+
+UnitScenario unit_scenario;
+
 struct RiverNode {
     int lattice_x = 0;
     int lattice_y = 0;
@@ -678,6 +740,134 @@ bool load_farm_scenario(char const * path, FarmScenario & output) {
     return ok;
 }
 
+bool load_tile_object_scenario(char const * path, TileObjectScenario & output) {
+    FILE * file = nullptr;
+    if (fopen_s(&file, path, "rb") != 0 || file == nullptr)
+        return false;
+    char magic[48] = {};
+    char source_hash[80] = {};
+    char provenance[40] = {};
+    unsigned count = 0;
+    bool ok = fscanf_s(file, "%47[^,],%d,%d,%u,%79[^,],%39[^\n]\n", magic,
+                       static_cast<unsigned>(sizeof(magic)), &output.columns,
+                       &output.rows, &count, source_hash,
+                       static_cast<unsigned>(sizeof(source_hash)), provenance,
+                       static_cast<unsigned>(sizeof(provenance))) == 6 &&
+              std::strcmp(magic, "C3X_LAB_TILE_OBJECT_SCENARIO_V0") == 0 &&
+              std::strcmp(provenance, "lab_augmentation") == 0 &&
+              output.columns > 0 && output.rows > 0 && count > 0 && count <= 128;
+    output.instances.reserve(count);
+    for (unsigned index = 0; ok && index < count; ++index) {
+        TileObjectInstance instance;
+        ok = fscanf_s(file, "%d,%d,%u,%u,%u,%u,%u,%u,%u\n",
+                      &instance.column, &instance.row, &instance.kind,
+                      &instance.variant, &instance.era, &instance.owner,
+                      &instance.territory_owner, &instance.visible,
+                      &instance.resource) == 9 &&
+             instance.column >= 0 && instance.column < output.columns &&
+             instance.row >= 0 && instance.row < output.rows &&
+             instance.kind <= 1u && instance.variant < 8u &&
+             instance.era < 4u && instance.owner < 4u &&
+             instance.territory_owner < 4u && instance.visible <= 1u &&
+             ((instance.kind == 0u && instance.resource == 255u) ||
+              (instance.kind == 1u && instance.resource < 7u));
+        if (ok)
+            output.instances.push_back(instance);
+    }
+    std::fclose(file);
+    ok = ok && output.instances.size() == count;
+    if (!ok) {
+        output = {};
+        std::fprintf(stderr, "terrain_lab: invalid Lab-only tile-object scenario: %s\n", path);
+    }
+    return ok;
+}
+
+bool load_infrastructure_scenario(char const * path, InfrastructureScenario & output) {
+    FILE * file = nullptr;
+    if (fopen_s(&file, path, "rb") != 0 || file == nullptr)
+        return false;
+    char magic[48] = {};
+    char source_hash[80] = {};
+    char provenance[40] = {};
+    unsigned count = 0;
+    bool ok = fscanf_s(file, "%47[^,],%d,%d,%u,%79[^,],%39[^\n]\n", magic,
+                       static_cast<unsigned>(sizeof(magic)), &output.columns,
+                       &output.rows, &count, source_hash,
+                       static_cast<unsigned>(sizeof(source_hash)), provenance,
+                       static_cast<unsigned>(sizeof(provenance))) == 6 &&
+              std::strcmp(magic, "C3X_LAB_INFRASTRUCTURE_SCENARIO_V0") == 0 &&
+              std::strcmp(provenance, "lab_augmentation") == 0 &&
+              output.columns > 0 && output.rows > 0 && count > 0 && count <= 128;
+    output.instances.reserve(count);
+    for (unsigned index = 0; ok && index < count; ++index) {
+        InfrastructureInstance instance;
+        ok = fscanf_s(file, "%d,%d,%u,%u,%u,%u,%u,%u\n",
+                      &instance.column, &instance.row, &instance.kind,
+                      &instance.variant, &instance.era, &instance.owner,
+                      &instance.visible, &instance.road_connected) == 8 &&
+             instance.column >= 0 && instance.column < output.columns &&
+             instance.row >= 0 && instance.row < output.rows &&
+             instance.kind < 8u && instance.variant < 4u && instance.era < 4u &&
+             instance.owner < 4u && instance.visible <= 1u &&
+             instance.road_connected <= 1u;
+        if (ok)
+            output.instances.push_back(instance);
+    }
+    std::fclose(file);
+    ok = ok && output.instances.size() == count;
+    if (!ok) {
+        output = {};
+        std::fprintf(stderr, "terrain_lab: invalid Lab-only infrastructure scenario: %s\n", path);
+    }
+    return ok;
+}
+
+bool load_unit_scenario(char const * path, UnitScenario & output) {
+    FILE * file = nullptr;
+    if (fopen_s(&file, path, "rb") != 0 || file == nullptr)
+        return false;
+    char magic[48] = {};
+    char source_hash[80] = {};
+    char provenance[64] = {};
+    unsigned count = 0;
+    bool ok = fscanf_s(file, "%47[^,],%d,%d,%u,%79[^,],%63[^\n]\n", magic,
+                       static_cast<unsigned>(sizeof(magic)), &output.columns,
+                       &output.rows, &count, source_hash,
+                       static_cast<unsigned>(sizeof(source_hash)), provenance,
+                       static_cast<unsigned>(sizeof(provenance))) == 6 &&
+              std::strcmp(magic, "C3X_LAB_UNIT_SCENARIO_V0") == 0 &&
+              std::strcmp(provenance, "lab_augmentation_absolute_time_samples") == 0 &&
+              output.columns > 0 && output.rows > 0 && count > 0 && count <= 128;
+    output.instances.reserve(count);
+    for (unsigned index = 0; ok && index < count; ++index) {
+        UnitInstance instance;
+        ok = fscanf_s(file, "%d,%d,%u,%u,%u,%u,%u,%u,%u,%d,%d,%u\n",
+                      &instance.column, &instance.row, &instance.kind,
+                      &instance.owner, &instance.facing, &instance.action,
+                      &instance.phase, &instance.visible, &instance.stack_slot,
+                      &instance.move_dx, &instance.move_dy,
+                      &instance.progress_milli) == 12 &&
+             instance.column >= 0 && instance.column < output.columns &&
+             instance.row >= 0 && instance.row < output.rows &&
+             instance.kind < 10u && instance.owner < 4u && instance.facing < 8u &&
+             instance.action < 12u && instance.phase < 4u &&
+             instance.visible <= 1u && instance.stack_slot < 4u &&
+             instance.move_dx >= -1 && instance.move_dx <= 1 &&
+             instance.move_dy >= -1 && instance.move_dy <= 1 &&
+             instance.progress_milli <= 1000u;
+        if (ok)
+            output.instances.push_back(instance);
+    }
+    std::fclose(file);
+    ok = ok && output.instances.size() == count;
+    if (!ok) {
+        output = {};
+        std::fprintf(stderr, "terrain_lab: invalid Lab-only unit scenario: %s\n", path);
+    }
+    return ok;
+}
+
 BiqWindowTile const * biq_tile_at(int column, int row) {
     if (!biq_scene_enabled)
         return nullptr;
@@ -808,7 +998,7 @@ bool load_feature_bundle(std::string const & path, FeatureBundle & output) {
     if (!consume_u32(data, cursor, version) || !consume_u32(data, cursor, texture_count) ||
         !consume_u32(data, cursor, asset_count) || !consume_u32(data, cursor, group_count) ||
         version != 1 || texture_count == 0 || texture_count > 8 || asset_count == 0 ||
-        asset_count > 256 || group_count == 0 || group_count > 16) {
+        asset_count > 256 || group_count == 0 || group_count > 64) {
         std::fprintf(stderr, "terrain_lab: unsupported vegetation runtime bundle header\n");
         return false;
     }
@@ -3446,9 +3636,6 @@ bool add_farm_scene(FeatureBundle const & bundle,
                     std::vector<Vertex> & shadows,
                     std::vector<FeatureVertex> & output) {
     std::vector<Vertex> discarded_shadows;
-    constexpr int direction_x[4] = {0, 1, 0, -1};
-    constexpr int direction_y[4] = {-1, 0, 1, 0};
-    constexpr unsigned direction_bit[4] = {1u, 2u, 4u, 8u};
     for (FarmInstance const & instance : farm_scenario.instances) {
         if (instance.visible == 0u)
             continue;
@@ -3463,7 +3650,19 @@ bool add_farm_scene(FeatureBundle const & bundle,
             FeatureAsset const & asset = bundle.assets[placement.asset_index];
             bool base_part = asset.id.find(":base:") != std::string::npos;
             bool building_part = asset.id.find(":building:") != std::string::npos;
-            float scale = base_part ? 1.34f : 1.18f;
+            bool crop_part = asset.id.find(":crop:") != std::string::npos;
+            unsigned connection_count = 0u;
+            for (unsigned bits = instance.adjacency_mask; bits != 0u; bits >>= 1u)
+                connection_count += bits & 1u;
+            bool include_base = base_part && connection_count < 4u &&
+                feature_hash(instance.column * 37u + instance.row * 101u) % 5u == 0u;
+            bool include_building = building_part &&
+                feature_hash(instance.column * 71u + instance.row * 43u) % 7u == 0u;
+            if (!crop_part && !include_base && !include_building)
+                continue;
+            float scale = crop_part
+                ? 2.22f + 0.025f * static_cast<float>(connection_count)
+                : (building_part ? 0.94f : 1.05f);
             auto add_part = [&](float offset_x, float offset_y) {
                 std::size_t first = output.size();
                 std::vector<Vertex> & part_shadows = building_part && !shadow_emitted
@@ -3485,14 +3684,281 @@ bool add_farm_scene(FeatureBundle const & bundle,
                     output[index].material_index += material_marker;
             };
             add_part(0.0f, 0.0f);
-            // The authored tile-base geometry supplies the visual material.
-            // Reusing it toward each owned N/E/S/W edge closes gaps between
-            // connected Civ III diamonds without procedurally painting crops.
-            if (base_part) {
-                for (unsigned direction = 0; direction < 4u; ++direction)
-                    if ((instance.adjacency_mask & direction_bit[direction]) != 0u)
-                        add_part(direction_x[direction] * 0.19f,
-                                 direction_y[direction] * 0.19f);
+        }
+    }
+    return true;
+}
+
+bool add_tile_object_scene(FeatureBundle const & bundle,
+                           HeightField const * authored_height,
+                           HeightField const * authored_blend,
+                           std::vector<Vertex> & shadows,
+                           std::vector<FeatureVertex> & output) {
+    constexpr unsigned hut_bucket_to_variant[] = {0u, 1u, 2u, 0u, 1u, 2u, 0u, 1u};
+    constexpr float half_pi = 1.57079632679f;
+    std::vector<Vertex> discarded_child_shadows;
+    for (TileObjectInstance const & instance : tile_object_scenario.instances) {
+        if (instance.visible == 0u)
+            continue;
+        BiqWindowTile const * tile = biq_tile_at(instance.column, instance.row);
+        if (tile == nullptr || tile->base >= 11)
+            return false;
+        std::string group_name;
+        if (instance.kind == 0u) {
+            group_name = "hut_" + std::to_string(
+                hut_bucket_to_variant[instance.variant]);
+        } else {
+            unsigned family = instance.era < 2u ? 0u : 1u;
+            group_name = "colony_" + std::to_string(
+                family * 3u + instance.variant % 3u);
+            bool matching_resource = false;
+            for (ResourceInstance const & resource : resource_scenario.instances)
+                if (resource.visible != 0u && resource.column == instance.column &&
+                    resource.row == instance.row && resource.resource == instance.resource)
+                    matching_resource = true;
+            if (!matching_resource)
+                return false;
+        }
+        FeatureGroup const * group = find_feature_group(bundle, group_name.c_str());
+        if (group == nullptr || group->placements.empty())
+            return false;
+        unsigned facing = feature_hash(instance.column * 73u + instance.row * 131u +
+                                       instance.variant * 19u) % 4u;
+        float rotation = 0.78539816339f + static_cast<float>(facing) * half_pi;
+        float offset_x = 0.0f;
+        float offset_y = 0.0f;
+        float object_scale = 1.0f;
+        if (instance.kind == 1u) {
+            unsigned quadrant = feature_hash(instance.column * 43u + instance.row * 97u +
+                                             instance.owner * 17u) % 4u;
+            offset_x = (quadrant == 0u || quadrant == 3u) ? -0.18f : 0.18f;
+            offset_y = (quadrant < 2u) ? -0.14f : 0.14f;
+            object_scale = 0.90f;
+        } else {
+            object_scale = 1.25f;
+        }
+        bool shadow_emitted = false;
+        for (FeaturePlacement const & placement : group->placements) {
+            std::size_t first = output.size();
+            std::vector<Vertex> & part_shadows = !shadow_emitted
+                ? shadows : discarded_child_shadows;
+            add_feature_instance(bundle, placement,
+                                 static_cast<float>(instance.column) + 0.50f + offset_x,
+                                 static_cast<float>(instance.row) + 0.50f + offset_y,
+                                 rotation, placement.scale * object_scale,
+                                 authored_height, authored_blend, true,
+                                 part_shadows, output);
+            shadow_emitted = true;
+            float material_marker = instance.kind == 0u
+                ? 0.01f : 0.10f + static_cast<float>(instance.owner) * 0.01f;
+            for (std::size_t index = first; index < output.size(); ++index)
+                output[index].material_index += material_marker;
+        }
+    }
+    return true;
+}
+
+bool add_infrastructure_scene(FeatureBundle const & fort_bundle,
+                              FeatureBundle const & airfield_bundle,
+                              FeatureBundle const & ground_bundle,
+                              bool fortifications_enabled,
+                              bool airfields_enabled,
+                              bool strategic_enabled,
+                              bool damage_enabled,
+                              HeightField const * authored_height,
+                              HeightField const * authored_blend,
+                              std::vector<Vertex> & shadows,
+                              std::vector<FeatureVertex> & fort_output,
+                              std::vector<FeatureVertex> & airfield_output,
+                              std::vector<FeatureVertex> & ground_output) {
+    constexpr float half_pi = 1.57079632679f;
+    std::vector<Vertex> discarded_shadows;
+    for (InfrastructureInstance const & instance : infrastructure_scenario.instances) {
+        if (instance.visible == 0u)
+            continue;
+        bool selected = (instance.kind <= 1u && fortifications_enabled) ||
+                        ((instance.kind == 2u || instance.kind == 3u) && airfields_enabled) ||
+                        ((instance.kind == 4u || instance.kind == 7u) && strategic_enabled) ||
+                        ((instance.kind == 5u || instance.kind == 6u) && damage_enabled);
+        if (!selected)
+            continue;
+        BiqWindowTile const * tile = biq_tile_at(instance.column, instance.row);
+        if (tile == nullptr || tile->base >= 11)
+            return false;
+        FeatureBundle const * bundle = &fort_bundle;
+        std::vector<FeatureVertex> * output = &fort_output;
+        std::string group_name;
+        float object_scale = 1.0f;
+        if (instance.kind == 0u || instance.kind == 1u) {
+            group_name = "fort_" + std::to_string(instance.era < 2u ? 0u : 1u);
+            object_scale = instance.kind == 0u ? 1.00f : 1.30f;
+        } else if (instance.kind == 2u) {
+            bundle = &airfield_bundle;
+            output = &airfield_output;
+            group_name = "airfield";
+            object_scale = 1.42f;
+        } else if (instance.kind == 3u) {
+            group_name = "outpost_" + std::to_string(instance.era < 2u ? 0u : 1u);
+            object_scale = 0.45f;
+        } else if (instance.kind == 4u) {
+            group_name = "radar";
+            object_scale = 0.46f;
+        } else if (instance.kind == 7u) {
+            group_name = "victory";
+            object_scale = 3.00f;
+        } else {
+            bundle = &ground_bundle;
+            output = &ground_output;
+            group_name = (instance.kind == 5u ? "pollution_" : "crater_") +
+                         std::to_string(instance.variant);
+            object_scale = instance.kind == 5u ? 1.00f : 1.00f;
+        }
+        FeatureGroup const * group = find_feature_group(*bundle, group_name.c_str());
+        if (group == nullptr || group->placements.empty())
+            return false;
+        unsigned facing = feature_hash(instance.column * 73u + instance.row * 131u +
+                                       instance.variant * 19u + instance.kind * 41u) % 4u;
+        float rotation = 0.78539816339f + static_cast<float>(facing) * half_pi;
+        bool shadow_emitted = false;
+        for (FeaturePlacement const & placement : group->placements) {
+            std::size_t first = output->size();
+            bool ground = instance.kind == 5u || instance.kind == 6u;
+            std::vector<Vertex> & part_shadows = !ground && !shadow_emitted
+                ? shadows : discarded_shadows;
+            add_feature_instance(*bundle, placement,
+                                 static_cast<float>(instance.column) + 0.50f,
+                                 static_cast<float>(instance.row) + 0.50f,
+                                 rotation, placement.scale * object_scale,
+                                 authored_height, authored_blend, true,
+                                 part_shadows, *output);
+            shadow_emitted = shadow_emitted || !ground;
+            unsigned emissive_code = 0u;
+            std::size_t marker = bundle->assets[placement.asset_index].id.rfind(":e");
+            if (marker != std::string::npos)
+                emissive_code = static_cast<unsigned>(std::strtoul(
+                    bundle->assets[placement.asset_index].id.c_str() + marker + 2u,
+                    nullptr, 10));
+            float material_marker = ground
+                ? (instance.kind == 5u ? 0.30f : 0.31f)
+                : 0.20f + static_cast<float>(instance.owner) * 0.01f +
+                  static_cast<float>(emissive_code) * 0.001f;
+            for (std::size_t index = first; index < output->size(); ++index)
+                (*output)[index].material_index += material_marker;
+        }
+    }
+    return true;
+}
+
+bool add_unit_scene(FeatureBundle const unit_bundles[10],
+                    unsigned selection,
+                    HeightField const * authored_height,
+                    HeightField const * authored_blend,
+                    std::vector<Vertex> & shadows,
+                    std::vector<FeatureVertex> unit_output[10]) {
+    constexpr float quarter_turn = 0.78539816339f;
+    char const * action_names[12] = {
+        "idle", "fidget", "move", "fortify",
+        "attack", "defend", "victory", "death",
+        "work_ground", "work_heavy", "work_cut", "capture"
+    };
+    float const family_scales[10] = {
+        0.63f, 0.76f, 1.45f, 3.30f, 3.00f,
+        1.50f, 1.55f, 1.25f, 1.65f, 0.82f
+    };
+    std::vector<Vertex> discarded_child_shadows;
+    for (UnitInstance const & instance : unit_scenario.instances) {
+        if (instance.visible == 0u)
+            continue;
+        if ((selection == 1u && (instance.kind != 0u || instance.action != 0u)) ||
+            (selection == 2u && (instance.kind == 0u || instance.kind == 3u ||
+                                 instance.kind == 4u)))
+            continue;
+        BiqWindowTile const * tile = biq_tile_at(instance.column, instance.row);
+        if (tile == nullptr || (instance.kind == 4u ? tile->base < 11 : tile->base >= 11))
+            return false;
+        unsigned phase_count = (instance.action == 2u || instance.action == 4u ||
+                                instance.action == 7u || instance.action >= 8u) ? 4u : 1u;
+        if (instance.phase >= phase_count)
+            return false;
+        std::string group_name = std::string(action_names[instance.action]) + "_" +
+                                 std::to_string(instance.phase);
+        FeatureGroup const * group = find_feature_group(
+            unit_bundles[instance.kind], group_name.c_str());
+        if (group == nullptr || group->placements.empty())
+            return false;
+        float progress = static_cast<float>(instance.progress_milli) / 1000.0f;
+        float anchor_x = static_cast<float>(instance.column) + 0.50f +
+                         static_cast<float>(instance.move_dx) * progress;
+        float anchor_y = static_cast<float>(instance.row) + 0.50f +
+                         static_cast<float>(instance.move_dy) * progress;
+        float rotation = static_cast<float>(instance.facing) * quarter_turn;
+        unsigned members = (instance.kind <= 2u || instance.kind == 9u)
+            ? 3u : (instance.kind == 5u ? 2u : 1u);
+        for (unsigned member = 0; member < members; ++member) {
+            float local_x = member == 0u ? 0.0f : (member == 1u ? -0.095f : 0.095f);
+            float local_y = member == 0u ? -0.055f : 0.065f;
+            float cosine = std::cos(rotation);
+            float sine = std::sin(rotation);
+            float offset_x = local_x * cosine - local_y * sine +
+                             static_cast<float>(instance.stack_slot) * 0.10f;
+            float offset_y = local_x * sine + local_y * cosine +
+                             static_cast<float>(instance.stack_slot) * 0.07f;
+            bool shadow_emitted = false;
+            for (FeaturePlacement const & placement : group->placements) {
+                std::size_t first = unit_output[instance.kind].size();
+                std::vector<Vertex> & part_shadows = !shadow_emitted
+                    ? shadows : discarded_child_shadows;
+                add_feature_instance(unit_bundles[instance.kind], placement,
+                                     anchor_x + offset_x, anchor_y + offset_y,
+                                     rotation, placement.scale * family_scales[instance.kind],
+                                     authored_height, authored_blend, true,
+                                     part_shadows, unit_output[instance.kind]);
+                shadow_emitted = true;
+                FeatureAsset const & asset = unit_bundles[instance.kind].assets[
+                    placement.asset_index];
+                unsigned team_code = 0u;
+                std::size_t marker = asset.id.rfind(":t");
+                if (marker != std::string::npos)
+                    team_code = static_cast<unsigned>(std::strtoul(
+                        asset.id.c_str() + marker + 2u, nullptr, 10));
+                float material_marker = 0.40f +
+                    static_cast<float>(instance.owner) * 0.01f +
+                    static_cast<float>(team_code) * 0.001f;
+                for (std::size_t index = first;
+                     index < unit_output[instance.kind].size(); ++index)
+                    unit_output[instance.kind][index].material_index += material_marker;
+            }
+        }
+        // An Army is one commander plus one representative loaded member. Other
+        // loaded members remain authoritative state, not duplicated silhouettes.
+        if (instance.kind == 8u) {
+            FeatureGroup const * member_group = find_feature_group(
+                unit_bundles[1], group_name.c_str());
+            if (member_group == nullptr || member_group->placements.empty())
+                return false;
+            bool shadow_emitted = false;
+            for (FeaturePlacement const & placement : member_group->placements) {
+                std::size_t first = unit_output[1].size();
+                std::vector<Vertex> & part_shadows = !shadow_emitted
+                    ? shadows : discarded_child_shadows;
+                add_feature_instance(unit_bundles[1], placement,
+                                     anchor_x + 0.13f, anchor_y + 0.06f,
+                                     rotation, placement.scale * family_scales[1],
+                                     authored_height, authored_blend, true,
+                                     part_shadows, unit_output[1]);
+                shadow_emitted = true;
+                FeatureAsset const & asset = unit_bundles[1].assets[
+                    placement.asset_index];
+                unsigned team_code = 0u;
+                std::size_t marker = asset.id.rfind(":t");
+                if (marker != std::string::npos)
+                    team_code = static_cast<unsigned>(std::strtoul(
+                        asset.id.c_str() + marker + 2u, nullptr, 10));
+                float material_marker = 0.40f +
+                    static_cast<float>(instance.owner) * 0.01f +
+                    static_cast<float>(team_code) * 0.001f;
+                for (std::size_t index = first; index < unit_output[1].size(); ++index)
+                    unit_output[1][index].material_index += material_marker;
             }
         }
     }
@@ -3565,7 +4031,7 @@ std::string join(std::string const & root, char const * relative) {
 } // namespace
 
 int main(int argc, char ** argv) {
-    if (argc < 5 || argc > 28) {
+    if (argc < 5 || argc > 35) {
         std::fprintf(stderr,
             "usage: terrain_lab <pack-root> <shader.hlsl> <output.bmp> "
             "<albedo|material|relief|shadow|hill|mountain|coast_beach|coast_cliff|beauty|"
@@ -3593,7 +4059,19 @@ int main(int argc, char ** argv) {
             "beauty_mines_night|beauty_mines_zoom2|beauty_mines_no_mines|"
             "beauty_mines_only|beauty_farms_noon|beauty_farms_night|"
             "beauty_farms_zoom2|beauty_farms_no_farms|beauty_farms_only|"
-            "beauty_farms_tundra> "
+            "beauty_farms_tundra|beauty_tile_objects_noon|beauty_tile_objects_night|"
+            "beauty_tile_objects_zoom2|beauty_tile_objects_no_objects|"
+            "beauty_tile_objects_only|beauty_infrastructure_noon|"
+            "beauty_infrastructure_night|beauty_infrastructure_zoom2|"
+            "beauty_infrastructure_no_infrastructure|"
+            "beauty_infrastructure_fortifications_only|"
+            "beauty_infrastructure_airfields_only|"
+            "beauty_infrastructure_strategic_only|"
+            "beauty_infrastructure_damage_only|beauty_units_noon|"
+            "beauty_units_night|beauty_units_zoom2|beauty_units_no_units|"
+            "beauty_units_only|beauty_units_turntable|beauty_units_actions|"
+            "beauty_complete_noon|beauty_complete_sunset|beauty_complete_midnight|"
+            "beauty_complete_sunrise|beauty_complete_zoom2|beauty_complete_no_units> "
             "[uv-scale=0.26] [normal-strength=4.0] [exposure=1.0] [relief-height=72] "
             "[hill-uv-scale=0.085] [vegetation-pack-root] [decal-pack-root] [biq-window.csv] "
             "[terrain-elements-pack-root] [shore-feature-pack-root] "
@@ -3715,9 +4193,72 @@ int main(int argc, char ** argv) {
         std::strcmp(argv[4], "beauty_farms_no_farms") == 0;
     bool beauty_farms_only_mode = std::strcmp(argv[4], "beauty_farms_only") == 0;
     bool beauty_farms_tundra_mode = std::strcmp(argv[4], "beauty_farms_tundra") == 0;
+    bool beauty_tile_objects_noon_mode =
+        std::strcmp(argv[4], "beauty_tile_objects_noon") == 0;
+    bool beauty_tile_objects_night_mode =
+        std::strcmp(argv[4], "beauty_tile_objects_night") == 0;
+    bool beauty_tile_objects_zoom2_mode =
+        std::strcmp(argv[4], "beauty_tile_objects_zoom2") == 0;
+    bool beauty_tile_objects_no_objects_mode =
+        std::strcmp(argv[4], "beauty_tile_objects_no_objects") == 0;
+    bool beauty_tile_objects_only_mode =
+        std::strcmp(argv[4], "beauty_tile_objects_only") == 0;
+    bool beauty_infrastructure_noon_mode =
+        std::strcmp(argv[4], "beauty_infrastructure_noon") == 0;
+    bool beauty_infrastructure_night_mode =
+        std::strcmp(argv[4], "beauty_infrastructure_night") == 0;
+    bool beauty_infrastructure_zoom2_mode =
+        std::strcmp(argv[4], "beauty_infrastructure_zoom2") == 0;
+    bool beauty_infrastructure_no_infrastructure_mode =
+        std::strcmp(argv[4], "beauty_infrastructure_no_infrastructure") == 0;
+    bool beauty_infrastructure_fortifications_only_mode =
+        std::strcmp(argv[4], "beauty_infrastructure_fortifications_only") == 0;
+    bool beauty_infrastructure_airfields_only_mode =
+        std::strcmp(argv[4], "beauty_infrastructure_airfields_only") == 0;
+    bool beauty_infrastructure_strategic_only_mode =
+        std::strcmp(argv[4], "beauty_infrastructure_strategic_only") == 0;
+    bool beauty_infrastructure_damage_only_mode =
+        std::strcmp(argv[4], "beauty_infrastructure_damage_only") == 0;
+    bool beauty_units_noon_mode = std::strcmp(argv[4], "beauty_units_noon") == 0;
+    bool beauty_units_night_mode = std::strcmp(argv[4], "beauty_units_night") == 0;
+    bool beauty_units_zoom2_mode = std::strcmp(argv[4], "beauty_units_zoom2") == 0;
+    bool beauty_units_no_units_mode = std::strcmp(argv[4], "beauty_units_no_units") == 0;
+    bool beauty_units_only_mode = std::strcmp(argv[4], "beauty_units_only") == 0;
+    bool beauty_units_turntable_mode =
+        std::strcmp(argv[4], "beauty_units_turntable") == 0;
+    bool beauty_units_actions_mode = std::strcmp(argv[4], "beauty_units_actions") == 0;
+    bool beauty_complete_noon_mode = std::strcmp(argv[4], "beauty_complete_noon") == 0;
+    bool beauty_complete_sunset_mode = std::strcmp(argv[4], "beauty_complete_sunset") == 0;
+    bool beauty_complete_midnight_mode = std::strcmp(argv[4], "beauty_complete_midnight") == 0;
+    bool beauty_complete_sunrise_mode = std::strcmp(argv[4], "beauty_complete_sunrise") == 0;
+    bool beauty_complete_zoom2_mode = std::strcmp(argv[4], "beauty_complete_zoom2") == 0;
+    bool beauty_complete_no_units_mode = std::strcmp(argv[4], "beauty_complete_no_units") == 0;
+    bool l21_mode = beauty_complete_noon_mode || beauty_complete_sunset_mode ||
+        beauty_complete_midnight_mode || beauty_complete_sunrise_mode ||
+        beauty_complete_zoom2_mode || beauty_complete_no_units_mode;
+    bool l20_mode = beauty_units_noon_mode || beauty_units_night_mode ||
+        beauty_units_zoom2_mode || beauty_units_no_units_mode || beauty_units_only_mode ||
+        beauty_units_turntable_mode || beauty_units_actions_mode || l21_mode;
+    bool l19b_mode = beauty_infrastructure_noon_mode ||
+        beauty_infrastructure_night_mode || beauty_infrastructure_zoom2_mode ||
+        beauty_infrastructure_no_infrastructure_mode ||
+        beauty_infrastructure_fortifications_only_mode ||
+        beauty_infrastructure_airfields_only_mode ||
+        beauty_infrastructure_strategic_only_mode ||
+        beauty_infrastructure_damage_only_mode || l20_mode;
+    bool l19a_mode = beauty_tile_objects_noon_mode || beauty_tile_objects_night_mode ||
+        beauty_tile_objects_zoom2_mode || beauty_tile_objects_no_objects_mode ||
+        beauty_tile_objects_only_mode || l19b_mode;
+    bool infrastructure_isolation_mode =
+        beauty_infrastructure_fortifications_only_mode ||
+        beauty_infrastructure_airfields_only_mode ||
+        beauty_infrastructure_strategic_only_mode ||
+        beauty_infrastructure_damage_only_mode;
+    bool unit_isolation_mode = beauty_units_only_mode ||
+        beauty_units_turntable_mode || beauty_units_actions_mode;
     bool l19_mode = beauty_farms_noon_mode || beauty_farms_night_mode ||
         beauty_farms_zoom2_mode || beauty_farms_no_farms_mode ||
-        beauty_farms_only_mode || beauty_farms_tundra_mode;
+        beauty_farms_only_mode || beauty_farms_tundra_mode || l19a_mode;
     bool l18_mode = beauty_mines_noon_mode || beauty_mines_night_mode ||
         beauty_mines_zoom2_mode || beauty_mines_no_mines_mode || beauty_mines_only_mode ||
         l19_mode;
@@ -3775,7 +4316,9 @@ int main(int argc, char ** argv) {
         !beauty_dunes_only_mode && !beauty_marsh_only_mode && !beauty_volcano_only_mode &&
         !beauty_rivers_only_mode && !beauty_roads_only_mode && !beauty_roads_styles_mode &&
         !beauty_railroads_only_mode && !beauty_railroads_crossings_mode &&
-        !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_farms_only_mode;
+        !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_farms_only_mode &&
+        !beauty_tile_objects_only_mode && !infrastructure_isolation_mode &&
+        !unit_isolation_mode;
     bool beauty_surf_enabled = beauty_water_enabled && !beauty_shore_no_surf_mode &&
         !beauty_promotion_no_surf_mode;
     bool beauty_vegetation_enabled =
@@ -3787,7 +4330,9 @@ int main(int argc, char ** argv) {
          !beauty_rivers_only_mode && !beauty_roads_only_mode &&
          !beauty_roads_styles_mode && !beauty_railroads_only_mode &&
          !beauty_railroads_crossings_mode && !beauty_resources_only_mode &&
-         !beauty_cities_only_mode && !beauty_mines_only_mode && !beauty_farms_only_mode);
+         !beauty_cities_only_mode && !beauty_mines_only_mode && !beauty_farms_only_mode &&
+         !beauty_tile_objects_only_mode && !infrastructure_isolation_mode &&
+         !unit_isolation_mode);
     bool beauty_shore_enabled = l95_mode || promotion_mode;
     bool beauty_terrain_enabled = !beauty_vegetation_only_mode &&
         !beauty_resources_only_mode && !beauty_cities_only_mode;
@@ -3809,21 +4354,52 @@ int main(int argc, char ** argv) {
     river_geometry_enabled = l13_mode && !beauty_rivers_no_rivers_mode &&
         !beauty_roads_only_mode && !beauty_roads_styles_mode &&
         !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_mines_only_mode &&
-        !beauty_farms_only_mode;
+        !beauty_farms_only_mode && !beauty_tile_objects_only_mode &&
+        !infrastructure_isolation_mode && !unit_isolation_mode;
     road_geometry_enabled = l14_scene_enabled && !beauty_roads_no_roads_mode &&
         !beauty_railroads_only_mode && !beauty_resources_only_mode &&
-        !beauty_cities_only_mode && !beauty_mines_only_mode && !beauty_farms_only_mode;
+        !beauty_cities_only_mode && !beauty_mines_only_mode && !beauty_farms_only_mode &&
+        !beauty_tile_objects_only_mode && !infrastructure_isolation_mode;
     railroad_geometry_enabled = l15_mode && !beauty_railroads_no_railroads_mode &&
         !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_mines_only_mode &&
-        !beauty_farms_only_mode;
+        !beauty_farms_only_mode && !beauty_tile_objects_only_mode &&
+        !infrastructure_isolation_mode && !unit_isolation_mode;
     resource_geometry_enabled = l16_mode && !beauty_resources_no_resources_mode &&
         !beauty_resources_hidden_mode && !beauty_cities_only_mode && !beauty_mines_only_mode &&
-        !beauty_farms_only_mode;
+        !beauty_farms_only_mode && !infrastructure_isolation_mode &&
+        !unit_isolation_mode;
     city_geometry_enabled = l17_mode && !beauty_cities_no_cities_mode &&
-        !beauty_mines_only_mode && !beauty_farms_only_mode;
+        !beauty_mines_only_mode && !beauty_farms_only_mode &&
+        !beauty_tile_objects_only_mode && !infrastructure_isolation_mode &&
+        !unit_isolation_mode;
     bool mine_geometry_enabled = l18_mode && !beauty_mines_no_mines_mode &&
-        !beauty_farms_only_mode;
-    bool farm_geometry_enabled = l19_mode && !beauty_farms_no_farms_mode;
+        !beauty_farms_only_mode && !beauty_tile_objects_only_mode &&
+        !infrastructure_isolation_mode && !unit_isolation_mode;
+    bool farm_geometry_enabled = l19_mode && !beauty_farms_no_farms_mode &&
+        !beauty_tile_objects_only_mode && !infrastructure_isolation_mode &&
+        !unit_isolation_mode;
+    bool tile_object_geometry_enabled = l19a_mode && !beauty_tile_objects_no_objects_mode &&
+        !infrastructure_isolation_mode && !unit_isolation_mode;
+    bool infrastructure_geometry_enabled = l19b_mode &&
+        !beauty_infrastructure_no_infrastructure_mode && !unit_isolation_mode;
+    bool fortification_geometry_enabled = infrastructure_geometry_enabled &&
+        !beauty_infrastructure_airfields_only_mode &&
+        !beauty_infrastructure_strategic_only_mode &&
+        !beauty_infrastructure_damage_only_mode;
+    bool airfield_geometry_enabled = infrastructure_geometry_enabled &&
+        !beauty_infrastructure_fortifications_only_mode &&
+        !beauty_infrastructure_strategic_only_mode &&
+        !beauty_infrastructure_damage_only_mode;
+    bool strategic_geometry_enabled = infrastructure_geometry_enabled &&
+        !beauty_infrastructure_fortifications_only_mode &&
+        !beauty_infrastructure_airfields_only_mode &&
+        !beauty_infrastructure_damage_only_mode;
+    bool damage_geometry_enabled = infrastructure_geometry_enabled &&
+        !beauty_infrastructure_fortifications_only_mode &&
+        !beauty_infrastructure_airfields_only_mode &&
+        !beauty_infrastructure_strategic_only_mode;
+    bool unit_geometry_enabled = l20_mode && !beauty_units_no_units_mode &&
+        !beauty_complete_no_units_mode;
     bool feature_geometry_enabled = beauty_vegetation_enabled || river_geometry_enabled ||
         road_geometry_enabled || railroad_geometry_enabled || resource_geometry_enabled;
     if (promotion_scene_enabled) {
@@ -3881,6 +4457,18 @@ int main(int argc, char ** argv) {
         std::fprintf(stderr, "terrain_lab: farm modes require a normalized farm pack and Lab farm scenario\n");
         return 2;
     }
+    if (l19a_mode && argc < 30) {
+        std::fprintf(stderr, "terrain_lab: tile-object modes require a normalized tile-object pack and Lab scenario\n");
+        return 2;
+    }
+    if (l19b_mode && argc < 32) {
+        std::fprintf(stderr, "terrain_lab: infrastructure modes require normalized infrastructure bundles and a Lab scenario\n");
+        return 2;
+    }
+    if (l20_mode && argc < 34) {
+        std::fprintf(stderr, "terrain_lab: unit modes require normalized unit runtimes and a Lab scenario\n");
+        return 2;
+    }
     float uv_scale = argc > 5 ? std::strtof(argv[5], nullptr) : 0.26f;
     float normal_strength = argc > 6 ? std::strtof(argv[6], nullptr) : 4.0f;
     float exposure = argc > 7 ? std::strtof(argv[7], nullptr) : 1.0f;
@@ -3893,12 +4481,16 @@ int main(int argc, char ** argv) {
         return 2;
     }
     if (l13a_scene_enabled) {
-        frame_hour = (beauty_lighting_sunset_mode || beauty_lighting_sunset_zoom2_mode)
+        frame_hour = (beauty_lighting_sunset_mode || beauty_lighting_sunset_zoom2_mode ||
+                      beauty_complete_sunset_mode)
             ? 18.0f
             : ((beauty_lighting_midnight_mode || beauty_lighting_midnight_zoom2_mode ||
-                beauty_cities_night_mode || beauty_mines_night_mode || beauty_farms_night_mode)
+                beauty_cities_night_mode || beauty_mines_night_mode || beauty_farms_night_mode ||
+                beauty_tile_objects_night_mode || beauty_infrastructure_night_mode ||
+                beauty_units_night_mode || beauty_complete_midnight_mode)
                 ? 0.0f
-                : ((beauty_lighting_sunrise_mode || beauty_lighting_sunrise_zoom2_mode)
+                : ((beauty_lighting_sunrise_mode || beauty_lighting_sunrise_zoom2_mode ||
+                    beauty_complete_sunrise_mode)
                     ? 6.0f : 12.0f));
         frame_environment = c3x_renderer::evaluate_environment(frame_hour, 0);
         float const * selected_direction =
@@ -3984,6 +4576,30 @@ int main(int argc, char ** argv) {
         (farm_scenario.columns != biq_window.columns ||
          farm_scenario.rows != biq_window.rows)) {
         std::fprintf(stderr, "terrain_lab: Lab farm scenario does not match BIQ viewport\n");
+        return 1;
+    }
+    if (l19a_mode && !load_tile_object_scenario(argv[29], tile_object_scenario))
+        return 1;
+    if (l19a_mode &&
+        (tile_object_scenario.columns != biq_window.columns ||
+         tile_object_scenario.rows != biq_window.rows)) {
+        std::fprintf(stderr, "terrain_lab: Lab tile-object scenario does not match BIQ viewport\n");
+        return 1;
+    }
+    if (l19b_mode && !load_infrastructure_scenario(argv[31], infrastructure_scenario))
+        return 1;
+    if (l19b_mode &&
+        (infrastructure_scenario.columns != biq_window.columns ||
+         infrastructure_scenario.rows != biq_window.rows)) {
+        std::fprintf(stderr, "terrain_lab: Lab infrastructure scenario does not match BIQ viewport\n");
+        return 1;
+    }
+    if (l20_mode && !load_unit_scenario(argv[34], unit_scenario))
+        return 1;
+    if (l20_mode &&
+        (unit_scenario.columns != biq_window.columns ||
+         unit_scenario.rows != biq_window.rows)) {
+        std::fprintf(stderr, "terrain_lab: Lab unit scenario does not match BIQ viewport\n");
         return 1;
     }
 
@@ -4105,6 +4721,12 @@ int main(int argc, char ** argv) {
     ID3D11ShaderResourceView * mine_emissive_views[2] = {};
     ID3D11ShaderResourceView * farm_base_views[6] = {};
     ID3D11ShaderResourceView * farm_emissive_views[2] = {};
+    ID3D11ShaderResourceView * tile_object_base_views[8] = {};
+    ID3D11ShaderResourceView * fortification_base_views[8] = {};
+    ID3D11ShaderResourceView * airfield_base_views[7] = {};
+    ID3D11ShaderResourceView * airfield_emissive_view = nullptr;
+    ID3D11ShaderResourceView * ground_state_base_views[2] = {};
+    ID3D11ShaderResourceView * unit_base_views[10][8] = {};
     FeatureBundle feature_bundle;
     FeatureBundle river_feature_bundle;
     FeatureBundle road_bridge_bundle;
@@ -4113,6 +4735,11 @@ int main(int argc, char ** argv) {
     FeatureBundle wall_bundle;
     FeatureBundle mine_bundle;
     FeatureBundle farm_bundle;
+    FeatureBundle tile_object_bundle;
+    FeatureBundle fortification_bundle;
+    FeatureBundle airfield_bundle;
+    FeatureBundle ground_state_bundle;
+    FeatureBundle unit_bundles[10];
     HeightField authored_height;
     HeightField authored_blend;
     HeightField authored_region;
@@ -4632,6 +5259,107 @@ int main(int argc, char ** argv) {
                           texture_width, texture_height);
         }
     }
+    if (ok && l19a_mode) {
+        unsigned texture_width = 0;
+        unsigned texture_height = 0;
+        std::string tile_object_pack = argv[28];
+        ok = load_feature_bundle(join(tile_object_pack, "tile_object_runtime.bin"),
+                                 tile_object_bundle) &&
+             tile_object_bundle.texture_paths.size() == 8u;
+        for (FeatureAsset & asset : tile_object_bundle.assets)
+            asset.texture_index += 21u;
+        for (unsigned index = 0; ok && index < 8u; ++index) {
+            std::string path = join(
+                tile_object_pack, tile_object_bundle.texture_paths[index].c_str());
+            DXGI_FORMAT format = source_color_dds_format(path);
+            ok = format != DXGI_FORMAT_UNKNOWN &&
+                 load_dds(device, path, format, &tile_object_base_views[index],
+                          texture_width, texture_height);
+        }
+    }
+    if (ok && l19b_mode) {
+        unsigned texture_width = 0;
+        unsigned texture_height = 0;
+        std::string infrastructure_pack = argv[30];
+        ok = load_feature_bundle(join(infrastructure_pack, "fortification_runtime.bin"),
+                                 fortification_bundle) &&
+             fortification_bundle.texture_paths.size() == 8u &&
+             load_feature_bundle(join(infrastructure_pack, "airfield_runtime.bin"),
+                                 airfield_bundle) &&
+             airfield_bundle.texture_paths.size() == 8u &&
+             load_feature_bundle(join(infrastructure_pack, "ground_state_runtime.bin"),
+                                 ground_state_bundle) &&
+             ground_state_bundle.texture_paths.size() == 2u;
+        for (FeatureAsset & asset : fortification_bundle.assets)
+            asset.texture_index += 21u;
+        for (FeatureAsset & asset : airfield_bundle.assets)
+            asset.texture_index += 21u;
+        for (FeatureAsset & asset : ground_state_bundle.assets)
+            asset.texture_index += 21u;
+        for (unsigned index = 0; ok && index < 8u; ++index) {
+            std::string path = join(infrastructure_pack,
+                                    fortification_bundle.texture_paths[index].c_str());
+            DXGI_FORMAT format = source_color_dds_format(path);
+            ok = format != DXGI_FORMAT_UNKNOWN &&
+                 load_dds(device, path, format, &fortification_base_views[index],
+                          texture_width, texture_height);
+        }
+        for (unsigned index = 0; ok && index < 7u; ++index) {
+            std::string path = join(infrastructure_pack,
+                                    airfield_bundle.texture_paths[index].c_str());
+            DXGI_FORMAT format = source_color_dds_format(path);
+            ok = format != DXGI_FORMAT_UNKNOWN &&
+                 load_dds(device, path, format, &airfield_base_views[index],
+                          texture_width, texture_height);
+        }
+        if (ok) {
+            std::string path = join(infrastructure_pack,
+                                    airfield_bundle.texture_paths[7].c_str());
+            DXGI_FORMAT format = source_color_dds_format(path);
+            ok = format != DXGI_FORMAT_UNKNOWN &&
+                 load_dds(device, path, format, &airfield_emissive_view,
+                          texture_width, texture_height);
+        }
+        for (unsigned index = 0; ok && index < 2u; ++index) {
+            std::string path = join(infrastructure_pack,
+                                    ground_state_bundle.texture_paths[index].c_str());
+            DXGI_FORMAT format = source_color_dds_format(path);
+            ok = format != DXGI_FORMAT_UNKNOWN &&
+                 load_dds(device, path, format, &ground_state_base_views[index],
+                          texture_width, texture_height);
+        }
+    }
+    if (ok && l20_mode) {
+        char const * unit_names[10] = {
+            "archer", "swordsman", "infantry", "fighter", "galley",
+            "horseman", "catapult", "tank", "great_general_classical", "worker"
+        };
+        std::string unit_pack = argv[32];
+        std::string compound_unit_pack = argv[33];
+        for (unsigned family = 0; ok && family < 10u; ++family) {
+            unsigned texture_width = 0;
+            unsigned texture_height = 0;
+            std::string filename = "unit_" + std::string(unit_names[family]) + "_runtime.bin";
+            std::string const & family_pack =
+                (family < 5u || family == 9u) ? unit_pack : compound_unit_pack;
+            ok = load_feature_bundle(join(family_pack, filename.c_str()),
+                                     unit_bundles[family]) &&
+                 !unit_bundles[family].texture_paths.empty() &&
+                 unit_bundles[family].texture_paths.size() <= 8u;
+            for (FeatureAsset & asset : unit_bundles[family].assets)
+                asset.texture_index += 21u;
+            for (unsigned index = 0;
+                 ok && index < unit_bundles[family].texture_paths.size(); ++index) {
+                std::string path = join(
+                    family_pack, unit_bundles[family].texture_paths[index].c_str());
+                DXGI_FORMAT format = source_color_dds_format(path);
+                ok = format != DXGI_FORMAT_UNKNOWN &&
+                     load_dds(device, path, format,
+                              &unit_base_views[family][index],
+                              texture_width, texture_height);
+            }
+        }
+    }
     if (ok && feature_geometry_enabled) {
         std::string vegetation_pack = argv[10];
         ok = load_feature_bundle(join(vegetation_pack, "vegetation_runtime.bin"), feature_bundle);
@@ -4686,7 +5414,8 @@ int main(int argc, char ** argv) {
     release(pixel_blob);
 
     if (ok && (feature_geometry_enabled || city_geometry_enabled || mine_geometry_enabled ||
-               farm_geometry_enabled)) {
+               farm_geometry_enabled || tile_object_geometry_enabled ||
+               infrastructure_geometry_enabled || unit_geometry_enabled)) {
         ID3DBlob * feature_vertex_blob = nullptr;
         ID3DBlob * feature_pixel_blob = nullptr;
         ok = compile_shader(argv[2], "VSFeature", "vs_4_0", &feature_vertex_blob) &&
@@ -4721,6 +5450,11 @@ int main(int argc, char ** argv) {
     std::vector<FeatureVertex> wall_vertices;
     std::vector<FeatureVertex> mine_vertices;
     std::vector<FeatureVertex> farm_vertices;
+    std::vector<FeatureVertex> tile_object_vertices;
+    std::vector<FeatureVertex> fortification_vertices;
+    std::vector<FeatureVertex> airfield_vertices;
+    std::vector<FeatureVertex> ground_state_vertices;
+    std::vector<FeatureVertex> unit_vertices[10];
     if (!beauty_mode)
         add_source_panel(vertices, mountain_mode, coast_mode);
     if (coast_mode) {
@@ -4816,6 +5550,30 @@ int main(int argc, char ** argv) {
                 beauty_relief_enabled ? &authored_height : nullptr,
                 beauty_relief_enabled ? &authored_blend : nullptr,
                 vertices, farm_vertices);
+        if (ok && tile_object_geometry_enabled)
+            ok = add_tile_object_scene(
+                tile_object_bundle,
+                beauty_relief_enabled ? &authored_height : nullptr,
+                beauty_relief_enabled ? &authored_blend : nullptr,
+                vertices, tile_object_vertices);
+        if (ok && infrastructure_geometry_enabled)
+            ok = add_infrastructure_scene(
+                fortification_bundle, airfield_bundle, ground_state_bundle,
+                fortification_geometry_enabled, airfield_geometry_enabled,
+                strategic_geometry_enabled, damage_geometry_enabled,
+                beauty_relief_enabled ? &authored_height : nullptr,
+                beauty_relief_enabled ? &authored_blend : nullptr,
+                vertices, fortification_vertices, airfield_vertices,
+                ground_state_vertices);
+        if (ok && unit_geometry_enabled) {
+            unsigned selection = beauty_units_turntable_mode ? 1u
+                : (beauty_units_actions_mode ? 2u : 0u);
+            ok = add_unit_scene(
+                unit_bundles, selection,
+                beauty_relief_enabled ? &authored_height : nullptr,
+                beauty_relief_enabled ? &authored_blend : nullptr,
+                vertices, unit_vertices);
+        }
     } else {
         add_patch_grid(vertices, uv_scale,
                        (relief_mode || shadow_mode || hill_mode || mountain_mode) ? relief_height : 0.0f,
@@ -4830,6 +5588,11 @@ int main(int argc, char ** argv) {
     ID3D11Buffer * wall_vertex_buffer = nullptr;
     ID3D11Buffer * mine_vertex_buffer = nullptr;
     ID3D11Buffer * farm_vertex_buffer = nullptr;
+    ID3D11Buffer * tile_object_vertex_buffer = nullptr;
+    ID3D11Buffer * fortification_vertex_buffer = nullptr;
+    ID3D11Buffer * airfield_vertex_buffer = nullptr;
+    ID3D11Buffer * ground_state_vertex_buffer = nullptr;
+    ID3D11Buffer * unit_vertex_buffers[10] = {};
     ID3D11Buffer * settings_buffer = nullptr;
     ID3D11SamplerState * sampler = nullptr;
     ID3D11SamplerState * decal_sampler = nullptr;
@@ -4903,6 +5666,80 @@ int main(int argc, char ** argv) {
             desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
             D3D11_SUBRESOURCE_DATA initial = {farm_vertices.data(), 0, 0};
             hr = device->CreateBuffer(&desc, &initial, &farm_vertex_buffer);
+        }
+    }
+    if (ok && tile_object_geometry_enabled) {
+        if (tile_object_vertices.empty()) {
+            ok = false;
+        } else {
+            D3D11_BUFFER_DESC desc = {};
+            desc.ByteWidth = static_cast<UINT>(
+                tile_object_vertices.size() * sizeof(FeatureVertex));
+            desc.Usage = D3D11_USAGE_IMMUTABLE;
+            desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA initial = {tile_object_vertices.data(), 0, 0};
+            hr = device->CreateBuffer(&desc, &initial, &tile_object_vertex_buffer);
+        }
+    }
+    if (ok && (fortification_geometry_enabled || airfield_geometry_enabled ||
+               strategic_geometry_enabled)) {
+        if (fortification_vertices.empty()) {
+            ok = false;
+        } else {
+            D3D11_BUFFER_DESC desc = {};
+            desc.ByteWidth = static_cast<UINT>(
+                fortification_vertices.size() * sizeof(FeatureVertex));
+            desc.Usage = D3D11_USAGE_IMMUTABLE;
+            desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA initial = {fortification_vertices.data(), 0, 0};
+            hr = device->CreateBuffer(&desc, &initial, &fortification_vertex_buffer);
+        }
+    }
+    if (ok && airfield_geometry_enabled) {
+        if (airfield_vertices.empty()) {
+            ok = false;
+        } else {
+            D3D11_BUFFER_DESC desc = {};
+            desc.ByteWidth = static_cast<UINT>(
+                airfield_vertices.size() * sizeof(FeatureVertex));
+            desc.Usage = D3D11_USAGE_IMMUTABLE;
+            desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA initial = {airfield_vertices.data(), 0, 0};
+            hr = device->CreateBuffer(&desc, &initial, &airfield_vertex_buffer);
+        }
+    }
+    if (ok && damage_geometry_enabled) {
+        if (ground_state_vertices.empty()) {
+            ok = false;
+        } else {
+            D3D11_BUFFER_DESC desc = {};
+            desc.ByteWidth = static_cast<UINT>(
+                ground_state_vertices.size() * sizeof(FeatureVertex));
+            desc.Usage = D3D11_USAGE_IMMUTABLE;
+            desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA initial = {ground_state_vertices.data(), 0, 0};
+            hr = device->CreateBuffer(&desc, &initial, &ground_state_vertex_buffer);
+        }
+    }
+    if (ok && unit_geometry_enabled) {
+        for (unsigned family = 0; ok && family < 10u; ++family) {
+            if (unit_vertices[family].empty() &&
+                !((beauty_units_turntable_mode && family != 0u) ||
+                  (beauty_units_actions_mode && (family == 0u || family == 3u ||
+                                                  family == 4u)))) {
+                ok = false;
+                break;
+            }
+            if (unit_vertices[family].empty())
+                continue;
+            D3D11_BUFFER_DESC desc = {};
+            desc.ByteWidth = static_cast<UINT>(
+                unit_vertices[family].size() * sizeof(FeatureVertex));
+            desc.Usage = D3D11_USAGE_IMMUTABLE;
+            desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA initial = {unit_vertices[family].data(), 0, 0};
+            hr = device->CreateBuffer(&desc, &initial, &unit_vertex_buffers[family]);
+            ok = SUCCEEDED(hr);
         }
     }
     float lab_mode_value = 0.0f;
@@ -5205,6 +6042,64 @@ int main(int argc, char ** argv) {
             context->Draw(static_cast<UINT>(farm_vertices.size()), 0);
             context->OMSetDepthStencilState(nullptr, 0);
         }
+        if (tile_object_geometry_enabled) {
+            context->OMSetRenderTargets(1, &render_target, feature_depth_view);
+            context->OMSetDepthStencilState(feature_depth_state, 0);
+            UINT feature_stride = sizeof(FeatureVertex);
+            UINT feature_offset = 0;
+            context->IASetInputLayout(feature_input_layout);
+            context->VSSetShader(feature_vertex_shader, nullptr, 0);
+            context->PSSetShader(feature_pixel_shader, nullptr, 0);
+            context->IASetVertexBuffers(0, 1, &tile_object_vertex_buffer,
+                                        &feature_stride, &feature_offset);
+            context->PSSetShaderResources(116, 8, tile_object_base_views);
+            context->Draw(static_cast<UINT>(tile_object_vertices.size()), 0);
+            context->OMSetDepthStencilState(nullptr, 0);
+        }
+        if (damage_geometry_enabled) {
+            context->OMSetRenderTargets(1, &render_target, feature_depth_view);
+            context->OMSetDepthStencilState(feature_depth_state, 0);
+            UINT feature_stride = sizeof(FeatureVertex);
+            UINT feature_offset = 0;
+            context->IASetInputLayout(feature_input_layout);
+            context->VSSetShader(feature_vertex_shader, nullptr, 0);
+            context->PSSetShader(feature_pixel_shader, nullptr, 0);
+            context->IASetVertexBuffers(0, 1, &ground_state_vertex_buffer,
+                                        &feature_stride, &feature_offset);
+            context->PSSetShaderResources(116, 2, ground_state_base_views);
+            context->Draw(static_cast<UINT>(ground_state_vertices.size()), 0);
+            context->OMSetDepthStencilState(nullptr, 0);
+        }
+        if (fortification_geometry_enabled || airfield_geometry_enabled ||
+            strategic_geometry_enabled) {
+            context->OMSetRenderTargets(1, &render_target, feature_depth_view);
+            context->OMSetDepthStencilState(feature_depth_state, 0);
+            UINT feature_stride = sizeof(FeatureVertex);
+            UINT feature_offset = 0;
+            context->IASetInputLayout(feature_input_layout);
+            context->VSSetShader(feature_vertex_shader, nullptr, 0);
+            context->PSSetShader(feature_pixel_shader, nullptr, 0);
+            context->IASetVertexBuffers(0, 1, &fortification_vertex_buffer,
+                                        &feature_stride, &feature_offset);
+            context->PSSetShaderResources(116, 8, fortification_base_views);
+            context->Draw(static_cast<UINT>(fortification_vertices.size()), 0);
+            context->OMSetDepthStencilState(nullptr, 0);
+        }
+        if (airfield_geometry_enabled) {
+            context->OMSetRenderTargets(1, &render_target, feature_depth_view);
+            context->OMSetDepthStencilState(feature_depth_state, 0);
+            UINT feature_stride = sizeof(FeatureVertex);
+            UINT feature_offset = 0;
+            context->IASetInputLayout(feature_input_layout);
+            context->VSSetShader(feature_vertex_shader, nullptr, 0);
+            context->PSSetShader(feature_pixel_shader, nullptr, 0);
+            context->IASetVertexBuffers(0, 1, &airfield_vertex_buffer,
+                                        &feature_stride, &feature_offset);
+            context->PSSetShaderResources(116, 7, airfield_base_views);
+            context->PSSetShaderResources(124, 1, &airfield_emissive_view);
+            context->Draw(static_cast<UINT>(airfield_vertices.size()), 0);
+            context->OMSetDepthStencilState(nullptr, 0);
+        }
         if (city_geometry_enabled) {
             context->OMSetRenderTargets(1, &render_target, feature_depth_view);
             context->OMSetDepthStencilState(feature_depth_state, 0);
@@ -5228,6 +6123,24 @@ int main(int argc, char ** argv) {
             }
             context->OMSetDepthStencilState(nullptr, 0);
         }
+        if (unit_geometry_enabled) {
+            context->OMSetRenderTargets(1, &render_target, feature_depth_view);
+            context->OMSetDepthStencilState(feature_depth_state, 0);
+            UINT feature_stride = sizeof(FeatureVertex);
+            UINT feature_offset = 0;
+            context->IASetInputLayout(feature_input_layout);
+            context->VSSetShader(feature_vertex_shader, nullptr, 0);
+            context->PSSetShader(feature_pixel_shader, nullptr, 0);
+            for (unsigned family = 0; family < 10u; ++family) {
+                if (unit_vertex_buffers[family] == nullptr)
+                    continue;
+                context->IASetVertexBuffers(0, 1, &unit_vertex_buffers[family],
+                                            &feature_stride, &feature_offset);
+                context->PSSetShaderResources(116, 8, unit_base_views[family]);
+                context->Draw(static_cast<UINT>(unit_vertices[family].size()), 0);
+            }
+            context->OMSetDepthStencilState(nullptr, 0);
+        }
         context->CopyResource(readback_texture, render_texture);
         D3D11_MAPPED_SUBRESOURCE mapped = {};
         hr = context->Map(readback_texture, 0, D3D11_MAP_READ, 0, &mapped);
@@ -5244,7 +6157,10 @@ int main(int argc, char ** argv) {
                              beauty_railroads_zoom2_mode ||
                              beauty_resources_zoom2_mode ||
                              beauty_cities_zoom2_mode ||
-                             beauty_mines_zoom2_mode || beauty_farms_zoom2_mode) ? 2u : 1u));
+                             beauty_mines_zoom2_mode || beauty_farms_zoom2_mode ||
+                             beauty_tile_objects_zoom2_mode ||
+                             beauty_infrastructure_zoom2_mode ||
+                             beauty_units_zoom2_mode || beauty_complete_zoom2_mode) ? 2u : 1u));
             context->Unmap(readback_texture, 0);
         } else {
             ok = false;
@@ -5267,6 +6183,12 @@ int main(int argc, char ** argv) {
     release(wall_vertex_buffer);
     release(mine_vertex_buffer);
     release(farm_vertex_buffer);
+    release(tile_object_vertex_buffer);
+    release(fortification_vertex_buffer);
+    release(airfield_vertex_buffer);
+    release(ground_state_vertex_buffer);
+    for (ID3D11Buffer *& buffer : unit_vertex_buffers)
+        release(buffer);
     release(vertex_buffer);
     release(feature_input_layout);
     release(feature_pixel_shader);
@@ -5298,6 +6220,18 @@ int main(int argc, char ** argv) {
         release(view);
     for (ID3D11ShaderResourceView *& view : farm_emissive_views)
         release(view);
+    for (ID3D11ShaderResourceView *& view : tile_object_base_views)
+        release(view);
+    for (ID3D11ShaderResourceView *& view : fortification_base_views)
+        release(view);
+    for (ID3D11ShaderResourceView *& view : airfield_base_views)
+        release(view);
+    release(airfield_emissive_view);
+    for (ID3D11ShaderResourceView *& view : ground_state_base_views)
+        release(view);
+    for (auto & family_views : unit_base_views)
+        for (ID3D11ShaderResourceView *& view : family_views)
+            release(view);
     release(tundra_base_view);
     release(tundra_height_view);
     release(tundra_specular_view);

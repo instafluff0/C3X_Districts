@@ -1,18 +1,17 @@
 # Approved Terrain Integration Contract
 
-M6.7 established the delivery boundary; the paired I9-I13A implementation is
-generated and tested against the approved `handoffs/L9_terrain.json`,
-`handoffs/L10_dunes.json`, `handoffs/L11_marsh.json`, and
-`handoffs/L12_volcano.json`, `handoffs/L13_rivers.json`, and
-`handoffs/L13A_lighting.json` records. The game DLL
+M6.7 established the delivery boundary; the paired I9-I18 implementation is
+generated and tested against the approved L9 terrain through L18 mine handoff
+records. The game DLL
 does not parse handoff approval flags or hashes at runtime. It contains only the
 draw paths deliberately integrated from those handoffs and reads generic
 normalized packs plus the layered renderer definition. Lab art direction remains
-authoritative and no source-game format or identity enters the DLL.
+authoritative and no source-game format or milestone identity enters the DLL.
+The in-progress L19 farm/irrigation and tundra work is absent.
 
 The game path executes a frozen production copy of the approved Lab `PSMain`
 and `PSFeature` terrain functions. It does not include the live
-`terrain_lab/terrain_lab.hlsl`, which has already advanced into L14. The game-owned
+`terrain_lab/terrain_lab.hlsl`, which has advanced into L19. The game-owned
 `native/integrated_terrain.hlsl` file is only a vertex/input adapter from
 authoritative Civ III anchors and state into that shared surface contract.
 That adapter transfers exact base and visible terrain identities, computed
@@ -20,11 +19,11 @@ geometry normals, material weights, authored relief height/blend, signed shore
 distance, water depth, and authoritative active-effect state. It does not
 average categorical terrain IDs or synthesize replacement values. Production
 submits the same ordered viewport-wide underlay, land, bed, water, river, cast-
-shadow, and feature passes as the approved Lab stack. Production has a semantic
+shadow, feature, route, resource, city, wall, and mine passes as the approved
+Lab stack. Production has a semantic
 constant buffer for texel scale plus the approved shared sun, moon, ambient,
 exposure, shadow, water, emissive-policy, and hour state. Standalone fixture
-selectors and milestone labels are not C++ runtime state. Roads remain
-compile-time absent and no route geometry is submitted.
+selectors and milestone labels are not C++ runtime state.
 
 The L9-L11 mapping is frozen in `terrain/m6_7_handoff_fidelity.json`; the L12,
 L13, and L13A deltas are frozen in `terrain/i12_handoff_fidelity.json`,
@@ -38,15 +37,19 @@ environment may adapt to authoritative Civ III state. Substitute geometry,
 color grading, proxy vegetation, invented cliffs, and shoreline-rock dressing
 are outside the tolerance.
 
-The cache is intentionally correctness-first and bounded to one complete
-terrain viewport. Its fingerprint includes target size, zoom basis, ordered
-canonical identity plus screen occurrence anchors, renderer-owned tile state,
-visibility, world size and wrap, environment, definition/pack content revision,
-ownership, and device generation. The dirty clip is a compositing instruction,
-not terrain identity. Dirty flags never authorize reuse. Roads, resources,
-cities, units, selection state, and other retained later-plane selectors are
-excluded from terrain cache identity. Authoritative `river_code`, hour, and
-season are included because they now change renderer-owned geometry or lighting.
+The cache is intentionally correctness-first. It retains eight complete terrain
+viewports in a bounded exact-signature LRU. Its fingerprint includes target size,
+zoom basis, ordered canonical identity plus screen occurrence anchors,
+renderer-owned tile state, world size and wrap, environment, definition/pack
+content revision, ownership, and device generation. The dirty clip is a
+compositing instruction, not terrain identity. Dirty flags never authorize
+reuse. Unit animation, selection, `SquareParts`, native overlay bits, fog
+traversal, and exact city population are excluded because they belong to
+retained Civ III planes or do not change the selected city body. Authoritative
+routes, resource identity, city style/size/state, mines, `river_code`, hour, and
+season are included because they change renderer-owned geometry or lighting. A
+visible native animation continues requesting Civ III redraws while terrain
+itself remains a zero-tick cache hit.
 
 The live-scale path avoids repeated CPU work without weakening that identity.
 Each terrain layer reuses one evaluated shared grid per tile, common surface and
@@ -56,16 +59,17 @@ only when its terrain, feature, visibility, wrap, zoom, environment, content,
 and device fingerprint is unchanged. Screen-anchor changes still rebuild the
 viewport geometry. On the Windows native 400-rendered-tile/800-record fixture,
 the cold render fell from 57.790 seconds to 5.241 seconds; a three-pixel/two-pixel
-camera move completed in 1.054 seconds while proving a scene invalidation and
-shadow-field reuse. Canonical synthetic and approved-scene pixel hashes remained
-unchanged.
+camera move completes in about one second while proving a scene invalidation and
+shadow-field reuse. Exact unchanged viewports and any of the eight most recently
+visited matching viewports return at zero renderer ticks. Canonical synthetic
+and approved-scene pixel hashes remain deterministic.
 
 Partial Civ III redraws preserve the destination map outside the authoritative
 dirty rectangle. When custom rendering is enabled, the `m71` hook deliberately
 asks Civ III for the complete visible tile traversal even if a unit or UI change
 supplied a smaller traversal rectangle. This guarantees that a partial redraw
 can neither become a partial terrain render nor poison the retained cache. The
-renderer fills the complete off-screen target, while API v7 returns the exact
+renderer fills the complete off-screen target, while API v9 returns the exact
 original image clip and the bridge performs `SRCCOPY` only for that rectangle.
 Repeated or reordered subsets of the same static terrain are also accepted as
 zero-tick cache hits. Native smoke proves unchanged full-frame pixels and exact
@@ -79,12 +83,11 @@ calls or replays the original multiplexed tile renderer. Production I13A require
 zero fallback tiles. A category without an integrated draw path is simply not
 called. Failure to load any configured terrain, relief, dune, marsh, volcano,
 clutter, or vegetation payload rejects the custom frame atomically and visibly.
-An incomplete river payload atomically omits the entire river subsystem and does
-not claim river ownership; the already integrated exclusive custom terrain plane
-continues and native rivers are never replayed. Structural capture, renderer/device,
+An incomplete configured subsystem rejects the custom frame atomically rather
+than mixing in native map-plane pixels. Structural capture, renderer/device,
 validation, or blit errors remain visible and emit diagnostics. Configuration
-off remains fully vanilla. Unported roads, improvements, resources, and cities
-are intentionally absent until their matching I# gate.
+off remains fully vanilla. Systems without an approved I# gate are simply not
+compiled or called.
 
 I11 ports the approved `GrassMarsh` base-color, height, and specular channels
 plus the exact L11 `CLUTTER_MARSH` projected-decal composition. Marsh identity,
@@ -116,8 +119,35 @@ cast direction across raised terrain, volcanoes, vegetation, shore bodies, and
 river clutter. Static scenes remain idle, and visible object lights stay absent
 until L17/I17.
 
-The production replay is part of both `integration` and `full`. It renders the
-approved 192-tile L13 BIQ fixture and its topology-only halo through the built
-32-bit DLL to ignored near-noon and far-sunset BMPs. The two images require zero
-fallback and witness authoritative rivers, terrain/relief/features, both Civ III
-zoom bases, and shared lighting before an interactive game install.
+I14 and I15 consume Civ III road and railroad topology plus the visible
+civilization's era as the approved route style. The renderer uses the frozen
+exact-node curves, route layers, river bridge bodies, coexistence order, and
+relief grounding. Each family has a separate ownership bit and every route
+selector participates in the terrain signature.
+
+I16 captures visibility-conditioned resource identity, class, and name. The
+frozen source-backed resource bundle selects the approved stable composition
+and grounding for land and aquatic bodies. Civilopedia, city-screen,
+trade-network, advisor, and diplomacy icons remain native.
+
+I17 captures city identity, owner, size band, culture group, visible era,
+capital, and wall state from loaded Civ III objects. Production ports the
+approved compact city and wall compositions, material slots, retained-label
+clearance, and night emissive handling. Names, population text, production
+status, borders, units, HUD, and UI remain native overlays.
+
+I18 captures authoritative mine presence and uses the visible civilization era,
+stable tile seed, terrain/resource context, and shared environment. Production
+ports the approved preindustrial/industrial families, three variants,
+terrain-following excavation decals, recursive component placements, one
+compound shadow, and source-authored emissives. Mine state has its own ownership
+bit and invalidates cached terrain exactly when the improvement changes.
+
+The production replay is an explicit, separately reported Windows command in
+both `integration` and `full`; the compile/synthetic build uses `BUILD.bat
+portable` so Parallels cannot stop relaying before the licensed-payload replay.
+The approved smoke requires zero fallback and exact ownership for the L9-L18
+stack at both zooms, including clips, scrolling, wrapping, cache reuse/eviction,
+state invalidation, and deterministic reset. The workflow also renders the
+approved 192-tile L13 BIQ fixture and topology halo to ignored near-noon and
+far-sunset BMPs before an interactive game install.

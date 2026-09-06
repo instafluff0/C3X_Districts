@@ -117,6 +117,15 @@ logical attack clip unless a unit receives an authored override. Defend is not
 a Civ III FLC slot; it is a target-side reaction selected only when Civ III's
 authoritative combat event reports one.
 
+Worker specialty actions extend rather than enlarge that basic matrix. The
+checked `worker_builder_action_strategy.json` covers all thirteen Civ III
+worker job IDs, CAPTURE, and the generic BUILD transition with three primary,
+four optional repair, and four capture Builder clips. It uses `Job_ID` as the
+primary selector because native work FLC slots are many-to-one and airfield,
+radar, and outpost use DEFAULT. Its action-selected tool contract makes Axe,
+Pickaxe, Shovel, and Hammer one exclusive attachment group instead of four
+simultaneous props. See `worker_builder_animation_mapping.md`.
+
 Converted resources are classified as `motion` or `pose`. A two-frame idle or
 brace resource is preserved as a target pose. Fidget blends idle -> pose -> idle
 over native FIDGET progress; fortify blends into the pose and holds it while the

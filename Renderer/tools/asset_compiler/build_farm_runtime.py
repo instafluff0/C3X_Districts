@@ -40,14 +40,25 @@ def build(pack: Path) -> Path:
         for role, asset_id in roots
     }
     base_counts: dict[str, int] = defaultdict(int)
+    crop_counts: dict[str, int] = defaultdict(int)
     for parts in all_parts.values():
         for _mesh, base, _emissive in parts:
             base_counts[base] += 1
-    # Keep the six dominant authored materials plus both confirmed emissive
-    # maps in the generic eight-texture FeatureBundle ABI. This retains the
-    # visible field, crop, fence, building and prop composition without baking
-    # or repainting Firaxis source art.
-    base_textures = sorted(base_counts, key=lambda item: (-base_counts[item], item))[:6]
+    for role, parts in all_parts.items():
+        if role.endswith(":crop"):
+            for _mesh, base, _emissive in parts:
+                crop_counts[base] += 1
+    # Crop geometry is the semantic body of irrigation. Preserve all five of
+    # its authored materials before selecting one dominant boundary material;
+    # a global frequency sort wrongly kept repeated trees and discarded the
+    # low-count green/gold field channels.
+    if len(crop_counts) != 5:
+        raise ValueError("L19 farm crop proof expects five authored base materials")
+    base_textures = sorted(crop_counts, key=lambda item: (-crop_counts[item], item))
+    base_textures += sorted(
+        (item for item in base_counts if item not in crop_counts),
+        key=lambda item: (-base_counts[item], item),
+    )[:1]
     emissive_textures = sorted(
         {
             emissive
