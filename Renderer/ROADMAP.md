@@ -150,16 +150,17 @@ shoreline clipping. The same generic pass adds restrained grassland, plains,
 and grassland-hill surface clutter. The rejected transparency, whole-atlas,
 oversized-cloud, and every-cell repetition candidates are not preserved.
 
-## Next Step: L21
+## Next Step: I19
 
-L20 is frozen again after direct canonical tank comparison and unit-shadow
-correction. Dedicated TeamColor geometry now follows its normalized source bone
-and uses a constant owner mask over the unchanged textured olive body; runtime
-owner RGB remains generic instance state. Every animated unit component now
-projects its actual source silhouette into a shared-direction soft cast shadow.
-The sole ready task recomposes and critically inspects the complete alternate-
-skin scene across four day phases, reduced zoom, and no-unit isolation.
-Integration-owned I19 remains paused until L21 is frozen again.
+The Renderer Lab iteration is complete through L21. Its final revision adds
+single-main-color civilization territory ribbons with no same-owner seams, and
+extends the shared authored-normal/self-face plus directionally consistent
+source-mesh cast-shadow system to cities, walls, mines, farm buildings, goody
+huts, colonies, fortresses, barricades, airfields, outposts, radar towers, and
+victory locations. Flat borders, pollution, and crater decals correctly remain
+non-casters. At the user's explicit request, the last full validation matrix was
+waived and the visually inspected result was frozen immediately. Integration
+may resume at I19; Lab appearance is closed unless explicitly reopened.
 
 Ahead of that visual gate, all 24 animated clutter bodies now compile with
 model-aware pose caches, including single-animal elephant selection and one
@@ -250,7 +251,7 @@ instead of comparing unrelated map regions.
 19a. L19A complete / I19A handoff available — the approved source-backed hut/colony gate covers viewer-hidden huts, the deterministic eight-to-three variant map, all four colony eras and owners, extraterritorial ownership, resource coexistence, both zooms, and shared lighting without changing L19 when disabled.
 19b. L19B complete / I19B handoff available — the approved pass covers all remaining persistent tile infrastructure, both zooms, shared lighting, and source-only night emission without changing L19A when disabled.
 20. L20 complete / I20 handoff available — representative ordinary, mounted, crewed, vehicle, naval, air, worker, and Army bodies pass the 192-tile/two-zoom/action matrix without regressing L19B. Its final L21 lighting revision gives every visible formation member authored-normal face separation and a readable source-scaled cast/contact shadow using the shared environment direction.
-21. L21 complete: the corrected complete alternate-skin beauty scene passed noon, sunset, midnight, sunrise, reduced-zoom, no-unit regression, critical visual review, 124 tests, and byte-identical replay.
+21. L21 complete: the corrected complete alternate-skin beauty scene includes one-main-color territory borders and unified self/cast lighting for raised map objects. The final territory revision was visually inspected and frozen by explicit user direction; the remaining validation matrix was waived.
 
 Offline L14/L15 intake is prepared ahead without advancing either gate. The
 source-independent route packs now cover four road stages, railroad ballast and

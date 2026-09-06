@@ -26,13 +26,14 @@
     "renderer_lab": {
       "responsibility": "Standalone asset use, rendering technique, visual quality, and approval for all map graphics.",
       "plan": "terrain_lab/PLAN.md",
-            "current_step": "L21",
+      "current_step": "complete",
+      "status": "complete",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py lab"
     },
     "game_integration": {
       "responsibility": "Civ III state capture, cache/invalidation, redraws, anchoring, compositing, exclusive native suppression, retained layers, telemetry, and hard failure without native replay.",
-    "current_step": "I19",
-            "status": "paused_for_l21_visual_revision",
+      "current_step": "I19",
+      "status": "ready",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py integration"
     },
     "promotion_rule": "Every L# visual gate has a same-numbered I# game-integration gate. I# cannot start before L# approval; after L# is approved, I# consumes that frozen handoff before the next system is considered integrated. L21/I21 remain the final combined release gates.",
@@ -140,26 +141,23 @@
     "handoffs/L21_complete_beauty_scene.json"
   ],
   "next_step": {
-        "id": "L21",
-        "title": "Complete 192-tile beauty scene and final user visual approval",
+    "id": "I19",
+    "title": "Integrate farms and irrigation",
     "status": "ready",
-    "workstream": "renderer_lab",
-    "iteration_command": "python3 Renderer/tools/renderer_dev.py lab",
-    "promotion_required": true,
+    "workstream": "game_integration",
+    "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
+    "promotion_required": false,
     "scope": [
-            "Recompose the complete frozen alternate-skin L9-L20 scene with the corrected localized Tank owner panels and mesh-projected unit silhouettes.",
-            "Inspect noon, sunset, midnight, sunrise, reduced zoom, and no-unit isolation across all terrain, shoreline, route, object, city, improvement, resource, and unit adjacencies.",
-            "Freeze deterministic complete-scene output hashes without changing any individual art-system contract."
+      "Consume the already-approved L19 farm and irrigation handoff without changing Renderer Lab appearance.",
+      "Preserve the frozen L21 territory-border and unified raised-object lighting contracts for their matching later integration gates."
     ],
     "acceptance": [
-            "The complete scene preserves seamless terrain and shoreline blends, connected routes, hierarchy, density, readable scale, shared face/cast lighting, and source-only night emission.",
-            "Tank panels remain saturated and localized over an olive body, and unit cast shadows retain recognizable animated silhouettes in the shared direction.",
-            "The no-unit control remains unchanged and repeated complete-scene renders are byte-deterministic."
+      "Authoritative Civ III farm and irrigation state is captured, cached, composited, and invalidated through the established custom-renderer boundary.",
+      "Configuration-off and hard-failure fallback behavior remain unchanged."
     ],
     "must_not": [
-            "Do not add a new visual system or custom effects at the combined-scene gate.",
-            "Do not change an accepted per-system appearance merely to hide a composition problem.",
-            "Do not resume Integration until L21 is frozen again."
+      "Do not reopen Renderer Lab appearance work during I19.",
+      "Do not integrate later object, unit, or final territory systems ahead of their ordered gates."
     ]
   },
   "milestones": [
@@ -1279,7 +1277,8 @@
         {
           "id": "L21",
           "title": "Complete 192-tile beauty scene and final user visual approval",
-          "status": "ready",
+          "status": "complete",
+          "completed_on": "2026-09-06",
           "promotion_required": true,
           "evidence": [
             "handoffs/L21_complete_beauty_scene.json",
@@ -1308,7 +1307,7 @@
         {"id": "I16", "lab_gate": "L16", "title": "Integrate resources", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L16_resources.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
         {"id": "I17", "lab_gate": "L17", "title": "Integrate civilization-, size-, and era-specific cities", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L17_cities.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
         {"id": "I18", "lab_gate": "L18", "title": "Integrate mines", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L18_mines.json", "native/c3x_renderer_api.h", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/terrain_scene_runtime.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
-        {"id": "I19", "lab_gate": "L19", "title": "Integrate farms and irrigation", "status": "blocked_by_previous"},
+        {"id": "I19", "lab_gate": "L19", "title": "Integrate farms and irrigation", "status": "ready"},
         {"id": "I19A", "lab_gate": "L19A", "title": "Integrate goody huts and colony outposts", "status": "blocked_by_previous"},
         {"id": "I19B", "lab_gate": "L19B", "title": "Integrate remaining tile infrastructure", "status": "blocked_by_previous"},
         {"id": "I20", "lab_gate": "L20", "title": "Integrate units and animation", "status": "blocked_by_previous"},

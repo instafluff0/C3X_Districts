@@ -1,6 +1,6 @@
 # L21 Complete Beauty Scene Audit
 
-Status: complete; deterministic 192-tile alternate-skin release composition critically inspected and explicitly approved under the user's 2026-09-06 autonomous-review authorization.
+Status: complete; 192-tile alternate-skin release composition frozen by the user's explicit 2026-09-06 instruction to finish the Lab iteration immediately and waive the remaining final validation scripts.
 
 ## Scene and provenance
 
@@ -27,10 +27,27 @@ Status: complete; deterministic 192-tile alternate-skin release composition crit
   silhouettes. Their restrained penumbra, direction, and day-phase strength
   remain coherent with the shared terrain/object lighting rather than using a
   detached generic blob.
+- Civilization territory now follows tile ownership discontinuities with no
+  same-owner internal seams. Each civilization uses one main owner color only;
+  rival boundaries may place the two civilizations' separate single-color
+  ribbons side by side, but no ribbon synthesizes a secondary outline color.
+  Slight deterministic waviness and rounded same-color joins prevent the
+  borders from reading as disconnected tile strokes.
+- Cities, walls, mines, farm buildings, goody huts, colonies, fortresses,
+  barricades, airfields, outposts, radar towers, and victory locations now use
+  the same authored-normal face response and shared-light source-mesh cast
+  projection. Flat territory ribbons, pollution, and crater art remain
+  deliberately non-casting.
 
-## Deterministic evidence
+## Evidence and validation disposition
 
-Two final unchanged `python3 Renderer/tools/renderer_dev.py lab` runs passed 124 tests and produced byte-identical outputs:
+The pre-territory L21 composition passed two unchanged 124-test runs and
+produced byte-identical outputs. The territory/unified-object-shadow revision
+then passed 125 local contract tests and produced visually inspected noon,
+sunset, midnight, and sunrise standalone frames. The user explicitly waived
+the remaining full matrix and requested immediate Lab closure, so the hashes
+below are retained only as the pre-territory deterministic baseline rather
+than misrepresented as final-territory hashes:
 
 - noon: `96c1903ba0a3c772657f9abda9724dd778bfe4ca82623ff84520dc264a8a364c`
 - sunset: `c867411726b1ed598216ee3d170ecc06f9d80a1c7480b768dfbaf96b24efdf26`

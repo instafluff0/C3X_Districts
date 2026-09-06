@@ -4,7 +4,7 @@
   "system": "complete_beauty_scene",
   "status": "approved",
   "approved_on": "2026-09-06",
-  "approval_basis": "critical autonomous visual review explicitly approved and authorized by the user",
+  "approval_basis": "visual inspection plus the user's explicit instruction to freeze the Lab iteration immediately and waive the remaining final validation scripts",
   "depends_on": [
     "handoffs/L19B_remaining_tile_infrastructure.json",
     "handoffs/L20_units.json",
@@ -31,9 +31,12 @@
   "coverage": [
     "the complete frozen L9-L20 alternate-skin scene stack",
     "noon, sunset, midnight, sunrise, both Civ III zoom bases, and no-unit isolation",
-    "continuous terrain/coasts/rivers/routes, shared face/contact/cast lighting, source-only emissives, overlap, scale, density, and readability"
+    "continuous terrain/coasts/rivers/routes, shared face/contact/cast lighting, source-only emissives, overlap, scale, density, and readability",
+    "single-main-color civilization territory boundaries with no same-owner seams",
+    "source-mesh cast shadows and authored-normal self-face shading for cities, huts, colonies, mines, farm buildings, fortifications, airfields, outposts, radar towers, and victory locations"
   ],
   "reference": {
+    "hash_scope": "pre-territory deterministic L21 baseline; final territory matrix explicitly waived by user",
     "native_output": "preview/out/terrain_lab/terrain_beauty_l21_complete_noon.bmp",
     "native_sha256": "96c1903ba0a3c772657f9abda9724dd778bfe4ca82623ff84520dc264a8a364c",
     "sunset_sha256": "c867411726b1ed598216ee3d170ecc06f9d80a1c7480b768dfbaf96b24efdf26",
@@ -47,6 +50,11 @@
     "unit_scenario_sha256": "8066d641aa12ab7d42e62c83b77bc048bb003446eb97d975ede0e9814662d9b3",
     "tile_count": 192,
     "audit": "terrain_lab/L21_COMPLETE_BEAUTY_AUDIT.md"
+  },
+  "final_revision": {
+    "territory": "deterministic Lab ownership grid derived from city owner state; runtime consumes authoritative per-tile Civ III owner ids; same-owner edges are suppressed; each owner ribbon contains only its main color; rounded joins and restrained waviness preserve continuity",
+    "raised_object_lighting": "cities, walls, mines, farm buildings, goody huts, colonies, fortresses, barricades, airfields, outposts, radar towers, and victory locations share authored-normal self-face response and shared-light source-mesh cast projection; flat borders, pollution, and craters do not cast",
+    "validation_disposition": "125 local contracts and visually inspected standalone noon/sunset/midnight/sunrise evidence were available; the user explicitly waived the remaining full matrix and requested immediate closure"
   },
   "unit_material_revision": {
     "approved_on": "2026-09-06",
@@ -64,7 +72,8 @@
   "ownership_intent": {
     "complete_map_plane": "custom_when_renderer_enabled_only_after_each matching I gate and final I21",
     "authoritative_state": "Civ III terrain, tile objects, cities, improvements, units, visibility, time, zoom, and screen anchors",
-    "retained_layers": "fog, borders, labels, selections, unit HUD, highlights, map overlays, HUD, and UI"
+    "retained_layers": "fog, labels, selections, unit HUD, highlights, map overlays, HUD, and UI",
+    "territory_state": "authoritative per-tile ownership supplied by Civ III at the future matching Integration gate"
   },
   "fallback": "L21 freezes appearance only. Integration retains its existing atomic ownership and visible hard-failure contracts; the Lab handoff never enables runtime ownership."
 }
