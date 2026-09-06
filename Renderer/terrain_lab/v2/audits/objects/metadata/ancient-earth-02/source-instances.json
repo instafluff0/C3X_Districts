@@ -1,0 +1,2604 @@
+{
+  "schema": "c3x.q7.source_instances.v1",
+  "classification": "source_adaptation",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/ancient-earth-02/fixture.json",
+  "layout_sha256": "81a3c9035af17ade34c730f6c70c48c6c72d4d242c9bf9a35f569a947a74cf80",
+  "geometry_sha256": "f94f82e251b972db23180a4def45f384954c8a5ecc794d9bef267078449b45fb",
+  "coordinate_space": "q7_pinned_preprojection_tile_world_v1",
+  "projection": {
+    "tile_pixels": [
+      128,
+      64
+    ],
+    "z_pixels_per_source_world_unit": 80.9543
+  },
+  "exceptions": [
+    "This pinned lab coordinate system is not the Q0 authoritative world-position attribute.",
+    "Real fixtures add a clip-depth grounding bias; source matrix remains uniform, but Q0 world conversion is pending.",
+    "Source UVs are unchanged, including authored high anisotropy/degenerate exceptions audited by Q1.",
+    "Base/emissive display path only; no tangent/normal-map/AO/gloss/owner-color material closure.",
+    "No source-equivalent lamp point lights or animated Light/VFX are inferred."
+  ],
+  "assets": {
+    "city/component/c84cb8074f013fe4": {
+      "landmark": "Renderer/packs/CityComponentsNormalized/compound_landmarks/city_component_c84cb8074f013fe4.json",
+      "landmark_sha256": "d3f7ecd94fd63be6532381d883226114173a32b9ae9ce57bd01f9179b1ff587d",
+      "parts": [
+        {
+          "mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+          "mesh_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+          "material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+          "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+          "source_uv_sha256": "f5b7ddd0c9cb34c02d221cb0299ba80d1c51c0b4520f9831ce843d51d9d62167",
+          "source_normal_sha256": "b40b65cced16b5119f0a5cd53eb8de0ecb4faf80d688cdea6543aeeff04b8e46",
+          "tangent": "absent_in_normalized_mesh_and_runtime",
+          "uv_operation": "identity",
+          "normal_operation": "yaw_rotation_only",
+          "alpha_mode": "opaque",
+          "channels": {
+            "ambient_occlusion": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/ambient_occlusion_8463b2d150f593a0.dds",
+              "sha256": "2dc4a6d7671794231ea34f3ece884475c682670c048e1b751c9d7e5cbd5cca08",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "base_color": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_f7ad267d3025a9dd.dds",
+              "sha256": "64e93eb30b2a55b58cbd726132f382d7f1f595a8d80ede5a4d608038e129ad80",
+              "runtime_slot": 124,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "emissive": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_a4ee052b3fab0a07.dds",
+              "sha256": "7fc9dce718203c8454338c58ad9ad95eb60fbb91690a456d28d9b3f778c7032a",
+              "runtime_slot": 116,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "gloss": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/gloss_4a4e94829e52cdd8.dds",
+              "sha256": "6e105b4cb5243b6fbf7086fed73a0c05b862b659ae459c061e8adfdd5c198f1f",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            },
+            "normal_0": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC5_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_bb5240d4d71af935.dds",
+              "sha256": "3b86626576636ba6d053439b6c5400e75af276e0d357c53d0a1065e339d73433",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "normal_1": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_1_2596c60b6bc90033.dds",
+              "sha256": "535e2e62c65e29f2caf7a2b911e1be31c9d23080181e72ba01722b3c2067f636",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            }
+          },
+          "vertices": 427,
+          "triangles": 284
+        }
+      ],
+      "sockets": [],
+      "socket_runtime": "not_attached; no inferred Light/VFX"
+    },
+    "city/component/f2cd97f8b152d975": {
+      "landmark": "Renderer/packs/CityComponentsNormalized/compound_landmarks/city_component_f2cd97f8b152d975.json",
+      "landmark_sha256": "880a4f7a60586c1d9626fa0c0a24f04506ba017477cc0e5e3ddbfe858505f764",
+      "parts": [
+        {
+          "mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+          "mesh_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+          "material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+          "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+          "source_uv_sha256": "7399cb621b35cfc2254517676a78e2510ba673ddd9b52c4c54b93c5be5022942",
+          "source_normal_sha256": "7df29a69e08129d30a65846805d9bdf9b00de65feac3313792b002af080ddd26",
+          "tangent": "absent_in_normalized_mesh_and_runtime",
+          "uv_operation": "identity",
+          "normal_operation": "yaw_rotation_only",
+          "alpha_mode": "opaque",
+          "channels": {
+            "ambient_occlusion": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/ambient_occlusion_8463b2d150f593a0.dds",
+              "sha256": "2dc4a6d7671794231ea34f3ece884475c682670c048e1b751c9d7e5cbd5cca08",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "base_color": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_f7ad267d3025a9dd.dds",
+              "sha256": "64e93eb30b2a55b58cbd726132f382d7f1f595a8d80ede5a4d608038e129ad80",
+              "runtime_slot": 124,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "emissive": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_a4ee052b3fab0a07.dds",
+              "sha256": "7fc9dce718203c8454338c58ad9ad95eb60fbb91690a456d28d9b3f778c7032a",
+              "runtime_slot": 116,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "gloss": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/gloss_4a4e94829e52cdd8.dds",
+              "sha256": "6e105b4cb5243b6fbf7086fed73a0c05b862b659ae459c061e8adfdd5c198f1f",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            },
+            "normal_0": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC5_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_bb5240d4d71af935.dds",
+              "sha256": "3b86626576636ba6d053439b6c5400e75af276e0d357c53d0a1065e339d73433",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "normal_1": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_1_2596c60b6bc90033.dds",
+              "sha256": "535e2e62c65e29f2caf7a2b911e1be31c9d23080181e72ba01722b3c2067f636",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            }
+          },
+          "vertices": 680,
+          "triangles": 450
+        }
+      ],
+      "sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "pillaged"
+        }
+      ],
+      "socket_runtime": "not_attached; no inferred Light/VFX"
+    },
+    "city/component/74a3878677e1abf5": {
+      "landmark": "Renderer/packs/CityComponentsNormalized/compound_landmarks/city_component_74a3878677e1abf5.json",
+      "landmark_sha256": "d6f8a887594611b0aabe606db35661b6f5235c8da1885986ac55c7cb0b60b7b2",
+      "parts": [
+        {
+          "mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+          "mesh_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+          "material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+          "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+          "source_uv_sha256": "ac57f9c46ed38e8939a0ca3d9ed0076687a26305174411c7f623637145c95b4a",
+          "source_normal_sha256": "245adbde70e2e79dec75f76066fc6a164fc602f5cfb301c703684eef8b8fefd1",
+          "tangent": "absent_in_normalized_mesh_and_runtime",
+          "uv_operation": "identity",
+          "normal_operation": "yaw_rotation_only",
+          "alpha_mode": "opaque",
+          "channels": {
+            "ambient_occlusion": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/ambient_occlusion_c616f290771e4770.dds",
+              "sha256": "4166003ae1c4b4f1fc41dd9b1b754a80ebe3be9f0f66d4996b824ce9381dd5d9",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "base_color": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_f7ad267d3025a9dd.dds",
+              "sha256": "64e93eb30b2a55b58cbd726132f382d7f1f595a8d80ede5a4d608038e129ad80",
+              "runtime_slot": 124,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "emissive": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_a4ee052b3fab0a07.dds",
+              "sha256": "7fc9dce718203c8454338c58ad9ad95eb60fbb91690a456d28d9b3f778c7032a",
+              "runtime_slot": 116,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "gloss": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/gloss_4a4e94829e52cdd8.dds",
+              "sha256": "6e105b4cb5243b6fbf7086fed73a0c05b862b659ae459c061e8adfdd5c198f1f",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            },
+            "normal_0": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC5_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_bb5240d4d71af935.dds",
+              "sha256": "3b86626576636ba6d053439b6c5400e75af276e0d357c53d0a1065e339d73433",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "normal_1": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_1_2596c60b6bc90033.dds",
+              "sha256": "535e2e62c65e29f2caf7a2b911e1be31c9d23080181e72ba01722b3c2067f636",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            }
+          },
+          "vertices": 233,
+          "triangles": 156
+        }
+      ],
+      "sockets": [],
+      "socket_runtime": "not_attached; no inferred Light/VFX"
+    },
+    "city/component/4e1caf8e90b00192": {
+      "landmark": "Renderer/packs/CityComponentsNormalized/compound_landmarks/city_component_4e1caf8e90b00192.json",
+      "landmark_sha256": "05c252d661721fd2fde32a4d9ece30058b4aec9bedc132636cad9f79a1b61a97",
+      "parts": [
+        {
+          "mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_4e1caf8e90b00192_00.json",
+          "mesh_sha256": "8c54a751ceec8f2bee654035d1329a597811104bf32d04e31d7dc98c623b0dfc",
+          "material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_4e1caf8e90b00192_00.json",
+          "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+          "source_uv_sha256": "9d2d3779cfb7ca25c27a11a6763880a4301de4dbfb2745de518d999434f10348",
+          "source_normal_sha256": "d13ebf426e0420cf0806dbf9a7d3d13353f9360e6f2c0c060af31d18f4c5336e",
+          "tangent": "absent_in_normalized_mesh_and_runtime",
+          "uv_operation": "identity",
+          "normal_operation": "yaw_rotation_only",
+          "alpha_mode": "opaque",
+          "channels": {
+            "ambient_occlusion": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/ambient_occlusion_8463b2d150f593a0.dds",
+              "sha256": "2dc4a6d7671794231ea34f3ece884475c682670c048e1b751c9d7e5cbd5cca08",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "base_color": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_f7ad267d3025a9dd.dds",
+              "sha256": "64e93eb30b2a55b58cbd726132f382d7f1f595a8d80ede5a4d608038e129ad80",
+              "runtime_slot": 124,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "emissive": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_a4ee052b3fab0a07.dds",
+              "sha256": "7fc9dce718203c8454338c58ad9ad95eb60fbb91690a456d28d9b3f778c7032a",
+              "runtime_slot": 116,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "gloss": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/gloss_4a4e94829e52cdd8.dds",
+              "sha256": "6e105b4cb5243b6fbf7086fed73a0c05b862b659ae459c061e8adfdd5c198f1f",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            },
+            "normal_0": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC5_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_bb5240d4d71af935.dds",
+              "sha256": "3b86626576636ba6d053439b6c5400e75af276e0d357c53d0a1065e339d73433",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "normal_1": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_1_2596c60b6bc90033.dds",
+              "sha256": "535e2e62c65e29f2caf7a2b911e1be31c9d23080181e72ba01722b3c2067f636",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            }
+          },
+          "vertices": 233,
+          "triangles": 156
+        }
+      ],
+      "sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "pillaged"
+        }
+      ],
+      "socket_runtime": "not_attached; no inferred Light/VFX"
+    }
+  },
+  "instances": [
+    {
+      "id": "city:0",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "slot": 0,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.4445758984462291,
+          -1.3457617931130348,
+          0.0,
+          -3.046875
+        ],
+        [
+          1.3457617931130348,
+          1.4445758984462291,
+          0.0,
+          0.953125
+        ],
+        [
+          0.0,
+          0.0,
+          1.9743035050808528,
+          0.004615230588652256
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 1.9743035050808528,
+      "yaw_radians": 0.75,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        122.40839894456414,
+        113.3631327837085,
+        133.84722078231198,
+        128.47255068611418
+      ],
+      "footprint": [
+        -0.07250299775643052,
+        -0.08323261068725303,
+        0.09024703417737996,
+        0.08216716953438145
+      ]
+    },
+    {
+      "id": "city:1",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "slot": 1,
+      "source_to_preprojection_world_4x4": [
+        [
+          -1.9742343391676325,
+          0.016525865359580387,
+          0.0,
+          -3.1705535021056845
+        ],
+        [
+          -0.016525865359580387,
+          -1.9742343391676325,
+          0.0,
+          1.011165394091688
+        ],
+        [
+          0.0,
+          0.0,
+          1.9743035050808528,
+          0.011201862456232895
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 1.9743035050808528,
+      "yaw_radians": 3.14996323,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        106.34046977928602,
+        108.83146049551935,
+        126.42447958961033,
+        127.7040266596867
+      ],
+      "footprint": [
+        -0.26314594954075854,
+        -0.007027755956176364,
+        0.01579193105748436,
+        0.12307142539336816
+      ]
+    },
+    {
+      "id": "city:2",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "slot": 2,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.4669020217489546,
+          1.3213904755080426,
+          0.0,
+          -2.988987093704286
+        ],
+        [
+          -1.3213904755080426,
+          1.4669020217489546,
+          0.0,
+          0.8004447926993199
+        ],
+        [
+          0.0,
+          0.0,
+          1.9743035050808528,
+          0.004345303813437601
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 1.9743035050808528,
+      "yaw_radians": 5.54992646,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        137.26255245675299,
+        111.3076684750989,
+        145.69016608358547,
+        123.38591375300078
+      ],
+      "footprint": [
+        0.011530919754053633,
+        -0.19827695276273466,
+        0.10424489283737423,
+        -0.10708346183862555
+      ]
+    },
+    {
+      "id": "city:3",
+      "asset": "city/component/4e1caf8e90b00192",
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "slot": 3,
+      "source_to_preprojection_world_4x4": [
+        [
+          -0.1890614574258023,
+          -1.965230290701467,
+          0.0,
+          -2.937213384650987
+        ],
+        [
+          1.965230290701467,
+          -0.1890614574258023,
+          0.0,
+          1.1283636442666887
+        ],
+        [
+          0.0,
+          0.0,
+          1.9743035050808528,
+          0.0018593398119799947
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 1.9743035050808528,
+      "yaw_radians": 7.94988969,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        119.59198924205066,
+        123.78659008685337,
+        128.01415105648684,
+        135.5029980263449
+      ],
+      "footprint": [
+        0.06414150749638006,
+        0.12883311114787355,
+        0.15518172320164572,
+        0.22164417738550385
+      ]
+    },
+    {
+      "id": "city:4",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 0,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.5701911939632924,
+          -1.4627845577315597,
+          0.0,
+          -1.046875
+        ],
+        [
+          1.4627845577315597,
+          1.5701911939632924,
+          0.0,
+          -1.046875
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.005016554987665496
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0.75,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        377.92217276583057,
+        112.35123128663966,
+        390.3556747633826,
+        128.77451161534148
+      ],
+      "footprint": [
+        -0.0788076062569897,
+        -0.09047022900788372,
+        0.09809460236671734,
+        0.08931214079824071
+      ]
+    },
+    {
+      "id": "city:5",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 1,
+      "source_to_preprojection_world_4x4": [
+        [
+          -2.1459068903996004,
+          0.017962897129978683,
+          0.0,
+          -1.1623141579342198
+        ],
+        [
+          -0.017962897129978683,
+          -2.1459068903996004,
+          0.0,
+          -0.9927012017566367
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.01217593745242706
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 3.14996323,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        362.24311769150194,
+        107.74807365507436,
+        384.0735631375066,
+        128.2617325291693
+      ],
+      "footprint": [
+        -0.2670342094940831,
+        -0.016552451808663146,
+        0.0361591389822679,
+        0.1248597018321461
+      ]
+    },
+    {
+      "id": "city:6",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 2,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.5944587192923418,
+          1.4362939951174376,
+          0.0,
+          -0.9928435309606842
+        ],
+        [
+          -1.4362939951174376,
+          1.5944587192923418,
+          0.0,
+          -1.189383797114568
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0047231563189539146
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 5.54992646,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        391.998352236657,
+        110.5828799660026,
+        401.15880183104014,
+        123.71140744198291
+      ],
+      "footprint": [
+        0.0036434401896850432,
+        -0.19207047696462723,
+        0.10441949788894656,
+        -0.09294711726450863
+      ]
+    },
+    {
+      "id": "city:7",
+      "asset": "city/component/4e1caf8e90b00192",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 3,
+      "source_to_preprojection_world_4x4": [
+        [
+          -0.20550158415848077,
+          -2.1361198811972466,
+          0.0,
+          -0.9445189371591117
+        ],
+        [
+          2.1361198811972466,
+          -0.20550158415848077,
+          0.0,
+          -0.8833105875332752
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0020210215347608636
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 7.94988969,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        375.5054037682746,
+        122.28095714370332,
+        384.6599274796183,
+        135.01618316488975
+      ],
+      "footprint": [
+        0.05287768474020045,
+        0.11312361559844744,
+        0.15183444094157617,
+        0.21400520933500208
+      ]
+    },
+    {
+      "id": "city:8",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 4,
+      "source_to_preprojection_world_4x4": [
+        [
+          -1.2913977741084954,
+          1.7139226461440458,
+          0.0,
+          -1.2975871778776609
+        ],
+        [
+          -1.7139226461440458,
+          -1.2913977741084954,
+          0.0,
+          -1.1238677718085297
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.005016554987665496
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 10.34985292,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        367.07422480336425,
+        98.30915329152359,
+        379.67945566492625,
+        118.52977913276402
+      ],
+      "footprint": [
+        -0.34238519760810343,
+        -0.170103378140266,
+        -0.18217296441458383,
+        0.019584696557283565
+      ]
+    },
+    {
+      "id": "city:9",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 5,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.109974640326328,
+          -0.3914665568315725,
+          0.0,
+          -0.7656401310260509
+        ],
+        [
+          0.3914665568315725,
+          2.109974640326328,
+          0.0,
+          -1.1310895323035064
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.01217593745242706
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 12.749816150000001,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        397.57607650724134,
+        115.84453666607247,
+        417.16822043310185,
+        137.08623443976558
+      ],
+      "footprint": [
+        0.12952297608560365,
+        -0.16114911475059937,
+        0.4328760355994718,
+        -0.006400676823114251
+      ]
+    },
+    {
+      "id": "city:10",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 6,
+      "source_to_preprojection_world_4x4": [
+        [
+          -1.8202614932872505,
+          -1.1366121343683842,
+          0.0,
+          -1.194149865667451
+        ],
+        [
+          1.1366121343683842,
+          -1.8202614932872505,
+          0.0,
+          -0.8165304030963637
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0047231563189539146
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 15.14977938,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        355.3637793622057,
+        116.02445970278649,
+        364.3009294286951,
+        129.18378545338376
+      ],
+      "footprint": [
+        -0.19781740955519034,
+        0.18116831812735437,
+        -0.09673232177971164,
+        0.27952087567991823
+      ]
+    },
+    {
+      "id": "city:11",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 0,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.6958064894803562,
+          -1.5798073223500846,
+          0.0,
+          0.953125
+        ],
+        [
+          1.5798073223500846,
+          1.6958064894803562,
+          0.0,
+          -3.046875
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.0054178793866787355
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 0.75,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        633.4359465870971,
+        111.33932978957084,
+        646.8641287444532,
+        129.07647254456882
+      ],
+      "footprint": [
+        -0.08511221475754888,
+        -0.09770784732851442,
+        0.10594217055605473,
+        0.09645711206209998
+      ]
+    },
+    {
+      "id": "city:12",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 1,
+      "source_to_preprojection_world_4x4": [
+        [
+          -2.317579441631569,
+          0.019399928900376978,
+          0.0,
+          0.842028931009957
+        ],
+        [
+          -0.019399928900376978,
+          -2.317579441631569,
+          0.0,
+          -2.9947393457315683
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.013150012448621226
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 3.14996323,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        617.7793843492742,
+        106.59851710730476,
+        641.3562654309593,
+        128.7532686913273
+      ],
+      "footprint": [
+        -0.2748187246746953,
+        -0.024248695787756985,
+        0.052630091679763805,
+        0.12847643014431703
+      ]
+    },
+    {
+      "id": "city:13",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 2,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.7220154168357293,
+          1.5511975147268326,
+          0.0,
+          1.0051236798192489
+        ],
+        [
+          -1.5511975147268326,
+          1.7220154168357293,
+          0.0,
+          -3.1840222855419618
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.005101008824470228
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 5.54992646,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        647.1586990021506,
+        109.76253143843671,
+        657.0519845640844,
+        123.94134111249545
+      ],
+      "footprint": [
+        -0.002420391338352368,
+        -0.19067389978002586,
+        0.10641775097685008,
+        -0.08362067130389776
+      ]
+    },
+    {
+      "id": "city:14",
+      "asset": "city/component/4e1caf8e90b00192",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 3,
+      "source_to_preprojection_world_4x4": [
+        [
+          -0.22194171089115924,
+          -2.3070094716930267,
+          0.0,
+          1.0516301902873388
+        ],
+        [
+          2.3070094716930267,
+          -0.22194171089115924,
+          0.0,
+          -2.8894642602051586
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.002182703257541733
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 7.94988969,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        631.2866020273942,
+        121.06253185119824,
+        641.1734876356454,
+        134.81657595407958
+      ],
+      "footprint": [
+        0.04506854193859604,
+        0.102934679177102,
+        0.15194183863608185,
+        0.21188680041258104
+      ]
+    },
+    {
+      "id": "city:15",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 4,
+      "source_to_preprojection_world_4x4": [
+        [
+          -1.3947095960371751,
+          1.8510364578355696,
+          0.0,
+          0.7118451959147003
+        ],
+        [
+          -1.8510364578355696,
+          -1.3947095960371751,
+          0.0,
+          -3.120971125107298
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.0054178793866787355
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 10.34985292,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        623.0278926805396,
+        97.4073388818371,
+        636.6415420110266,
+        119.24561479037678
+      ],
+      "footprint": [
+        -0.3402866653941777,
+        -0.17465557994557293,
+        -0.16725745354517652,
+        0.030207540727780646
+      ]
+    },
+    {
+      "id": "city:16",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 5,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.278772611552435,
+          -0.4227838813780983,
+          0.0,
+          1.2237791607288857
+        ],
+        [
+          0.4227838813780983,
+          2.278772611552435,
+          0.0,
+          -3.1279211862177285
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.013150012448621226
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 12.749816150000001,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        651.9111222161063,
+        114.3705319483848,
+        673.0706376560356,
+        137.31156554397336
+      ],
+      "footprint": [
+        0.1068053164094725,
+        -0.16413553526058888,
+        0.43442662068445015,
+        0.002992777701095045
+      ]
+    },
+    {
+      "id": "city:17",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 6,
+      "source_to_preprojection_world_4x4": [
+        [
+          -1.9658824127502308,
+          -1.227541105117855,
+          0.0,
+          0.8113909564615523
+        ],
+        [
+          1.227541105117855,
+          -1.9658824127502308,
+          0.0,
+          -2.8251965012390157
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.005101008824470228
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 15.14977938,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        611.9155362569321,
+        114.99374913460802,
+        621.5676583287407,
+        129.20582094525307
+      ],
+      "footprint": [
+        -0.19631999093720615,
+        0.16856811768259974,
+        -0.0871480961396891,
+        0.2747888798393687
+      ]
+    },
+    {
+      "id": "city:18",
+      "asset": "city/component/4e1caf8e90b00192",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 7,
+      "source_to_preprojection_world_4x4": [
+        [
+          0.6203884074153007,
+          2.233085096779641,
+          0.0,
+          0.8586506708529961
+        ],
+        [
+          -2.233085096779641,
+          0.6203884074153007,
+          0.0,
+          -3.3040912812281618
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.002182703257541733
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 17.54974261,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        645.4948381061691,
+        101.48009484830962,
+        655.336131760219,
+        115.35997429503516
+      ],
+      "footprint": [
+        -0.14915720332168764,
+        -0.3099467448822466,
+        -0.039791454972320166,
+        -0.20448581757407705
+      ]
+    },
+    {
+      "id": "city:19",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 8,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.0509722046255716,
+          -2.0656738006323985,
+          0.0,
+          1.2657299170621656
+        ],
+        [
+          2.0656738006323985,
+          1.0509722046255716,
+          0.0,
+          -2.8973301301779504
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.0054178793866787355
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 19.94970584,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        642.4410454570676,
+        126.27220765064298,
+        657.440644016953,
+        143.8475605395464
+      ],
+      "footprint": [
+        0.2485249345102138,
+        0.041834264558730544,
+        0.4079707601459932,
+        0.25113226023236185
+      ]
+    },
+    {
+      "id": "city:20",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 9,
+      "source_to_preprojection_world_4x4": [
+        [
+          -2.1702967986330837,
+          0.8132420496737861,
+          0.0,
+          0.5712735836033263
+        ],
+        [
+          -0.8132420496737861,
+          -2.1702967986330837,
+          0.0,
+          -2.9891365791504687
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.013150012448621226
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 22.34966907,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        602.8393115735039,
+        97.37485481404272,
+        620.9345508766952,
+        121.352358591877
+      ],
+      "footprint": [
+        -0.5406666603331483,
+        -0.0356802260178789,
+        -0.22288924401908478,
+        0.15029951756191984
+      ]
+    },
+    {
+      "id": "city:21",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 10,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.14964642718012,
+          0.8663550447861301,
+          0.0,
+          1.1972139563329733
+        ],
+        [
+          -0.8663550447861301,
+          2.14964642718012,
+          0.0,
+          -3.3038262049426828
+        ],
+        [
+          0.0,
+          0.0,
+          2.3176606363992622,
+          0.005101008824470228
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.3176606363992622,
+      "yaw_radians": 24.749632300000002,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        667.2397861023932,
+        112.12871302832386,
+        676.8933545408909,
+        126.27904973537863
+      ],
+      "footprint": [
+        0.19100499048666186,
+        -0.31155427510810113,
+        0.29717292217928504,
+        -0.20234813477726457
+      ]
+    },
+    {
+      "id": "city:22",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "slot": 0,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          -0.374375
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          3.625625
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.005016554987665496
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        121.03829956652378,
+        282.4160088006816,
+        136.78243128114656,
+        299.8996840500777
+      ],
+      "footprint": [
+        -0.242604767757259,
+        -0.20810977983612777,
+        -0.03739523224274102,
+        -0.07189022016387227
+      ]
+    },
+    {
+      "id": "city:23",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "slot": 1,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.31403503697971e-16,
+          -2.1459820707400574,
+          0.0,
+          -0.374375
+        ],
+        [
+          2.1459820707400574,
+          1.31403503697971e-16,
+          0.0,
+          3.905625
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.01217593745242706
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        99.10061871554049,
+        290.1190892116207,
+        121.04328607557183,
+        310.22077196355264
+      ],
+      "footprint": [
+        -0.21033121463647503,
+        -0.011476161686333447,
+        -0.06966878536352498,
+        0.2914761616863335
+      ]
+    },
+    {
+      "id": "city:24",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "slot": 2,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          -0.164375
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          3.625625
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0047231563189539146
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        136.9106373644978,
+        291.28961693922105,
+        145.9693626355022,
+        304.2226210338477
+      ],
+      "footprint": [
+        0.01932632448863522,
+        -0.1882007745319682,
+        0.12067367551136479,
+        -0.09179922546803183
+      ]
+    },
+    {
+      "id": "city:25",
+      "asset": "city/component/4e1caf8e90b00192",
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "slot": 3,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.31403503697971e-16,
+          -2.1459820707400574,
+          0.0,
+          -0.09437499999999999
+        ],
+        [
+          2.1459820707400574,
+          1.31403503697971e-16,
+          0.0,
+          3.835625
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0020210215347608636
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        127.95063736449781,
+        300.5231411011079,
+        137.00936263550219,
+        313.2195044568939
+      ],
+      "footprint": [
+        0.09179922546803183,
+        0.01932632448863522,
+        0.1882007745319682,
+        0.12067367551136479
+      ]
+    },
+    {
+      "id": "city:26",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 0,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          1.6256249999999999
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          1.6256249999999999
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.005016554987665496
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        377.0382995665238,
+        282.4160088006816,
+        392.78243128114656,
+        299.8996840500777
+      ],
+      "footprint": [
+        -0.242604767757259,
+        -0.20810977983612777,
+        -0.03739523224274102,
+        -0.07189022016387227
+      ]
+    },
+    {
+      "id": "city:27",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 1,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.31403503697971e-16,
+          -2.1459820707400574,
+          0.0,
+          1.6256249999999999
+        ],
+        [
+          2.1459820707400574,
+          1.31403503697971e-16,
+          0.0,
+          1.9056250000000001
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.01217593745242706
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        355.10061871554046,
+        290.1190892116207,
+        377.0432860755718,
+        310.22077196355264
+      ],
+      "footprint": [
+        -0.21033121463647503,
+        -0.011476161686333447,
+        -0.06966878536352498,
+        0.2914761616863335
+      ]
+    },
+    {
+      "id": "city:28",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 2,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          1.835625
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          1.6256249999999999
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0047231563189539146
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        392.9106373644978,
+        291.28961693922105,
+        401.9693626355022,
+        304.2226210338477
+      ],
+      "footprint": [
+        0.01932632448863522,
+        -0.1882007745319682,
+        0.12067367551136479,
+        -0.09179922546803183
+      ]
+    },
+    {
+      "id": "city:29",
+      "asset": "city/component/4e1caf8e90b00192",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 3,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.31403503697971e-16,
+          -2.1459820707400574,
+          0.0,
+          1.9056250000000001
+        ],
+        [
+          2.1459820707400574,
+          1.31403503697971e-16,
+          0.0,
+          1.835625
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0020210215347608636
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        383.9506373644978,
+        300.5231411011079,
+        393.0093626355022,
+        313.2195044568939
+      ],
+      "footprint": [
+        0.09179922546803183,
+        0.01932632448863522,
+        0.1882007745319682,
+        0.12067367551136479
+      ]
+    },
+    {
+      "id": "city:30",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 4,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          1.9056250000000001
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          1.485625
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.005016554987665496
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        403.9182995665238,
+        286.8960088006816,
+        419.66243128114655,
+        304.37968405007774
+      ],
+      "footprint": [
+        0.03739523224274102,
+        -0.3481097798361278,
+        0.242604767757259,
+        -0.21189022016387227
+      ]
+    },
+    {
+      "id": "city:31",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 5,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.31403503697971e-16,
+          -2.1459820707400574,
+          0.0,
+          1.415625
+        ],
+        [
+          2.1459820707400574,
+          1.31403503697971e-16,
+          0.0,
+          1.695625
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.01217593745242706
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        355.10061871554046,
+        276.6790892116207,
+        377.0432860755718,
+        296.78077196355264
+      ],
+      "footprint": [
+        -0.42033121463647505,
+        -0.22147616168633347,
+        -0.279668785363525,
+        0.08147616168633345
+      ]
+    },
+    {
+      "id": "city:32",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "slot": 6,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          2.0456250000000002
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          1.835625
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0047231563189539146
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        392.9106373644978,
+        304.72961693922105,
+        401.9693626355022,
+        317.6626210338477
+      ],
+      "footprint": [
+        0.22932632448863524,
+        0.021799225468031827,
+        0.33067367551136484,
+        0.11820077453196819
+      ]
+    },
+    {
+      "id": "city:33",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 0,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          3.625625
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          -0.374375
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.005016554987665496
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        633.0382995665237,
+        282.4160088006816,
+        648.7824312811465,
+        299.8996840500777
+      ],
+      "footprint": [
+        -0.242604767757259,
+        -0.20810977983612777,
+        -0.03739523224274102,
+        -0.07189022016387227
+      ]
+    },
+    {
+      "id": "city:34",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 1,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.31403503697971e-16,
+          -2.1459820707400574,
+          0.0,
+          3.625625
+        ],
+        [
+          2.1459820707400574,
+          1.31403503697971e-16,
+          0.0,
+          -0.09437499999999999
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.01217593745242706
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        611.1006187155405,
+        290.1190892116207,
+        633.0432860755718,
+        310.22077196355264
+      ],
+      "footprint": [
+        -0.21033121463647503,
+        -0.011476161686333447,
+        -0.06966878536352498,
+        0.2914761616863335
+      ]
+    },
+    {
+      "id": "city:35",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 2,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          3.835625
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          -0.374375
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0047231563189539146
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        648.9106373644978,
+        291.28961693922105,
+        657.9693626355022,
+        304.2226210338477
+      ],
+      "footprint": [
+        0.01932632448863522,
+        -0.1882007745319682,
+        0.12067367551136479,
+        -0.09179922546803183
+      ]
+    },
+    {
+      "id": "city:36",
+      "asset": "city/component/4e1caf8e90b00192",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 3,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.31403503697971e-16,
+          -2.1459820707400574,
+          0.0,
+          3.905625
+        ],
+        [
+          2.1459820707400574,
+          1.31403503697971e-16,
+          0.0,
+          -0.164375
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0020210215347608636
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        639.9506373644978,
+        300.5231411011079,
+        649.0093626355022,
+        313.2195044568939
+      ],
+      "footprint": [
+        0.09179922546803183,
+        0.01932632448863522,
+        0.1882007745319682,
+        0.12067367551136479
+      ]
+    },
+    {
+      "id": "city:37",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 4,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          3.905625
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          -0.514375
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.005016554987665496
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        659.9182995665237,
+        286.8960088006816,
+        675.6624312811466,
+        304.37968405007774
+      ],
+      "footprint": [
+        0.03739523224274102,
+        -0.3481097798361278,
+        0.242604767757259,
+        -0.21189022016387227
+      ]
+    },
+    {
+      "id": "city:38",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 5,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.31403503697971e-16,
+          -2.1459820707400574,
+          0.0,
+          3.415625
+        ],
+        [
+          2.1459820707400574,
+          1.31403503697971e-16,
+          0.0,
+          -0.304375
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.01217593745242706
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        611.1006187155405,
+        276.6790892116207,
+        633.0432860755718,
+        296.78077196355264
+      ],
+      "footprint": [
+        -0.42033121463647505,
+        -0.22147616168633347,
+        -0.279668785363525,
+        0.08147616168633345
+      ]
+    },
+    {
+      "id": "city:39",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 6,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          4.045625
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          -0.164375
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0047231563189539146
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        648.9106373644978,
+        304.72961693922105,
+        657.9693626355022,
+        317.6626210338477
+      ],
+      "footprint": [
+        0.22932632448863524,
+        0.021799225468031827,
+        0.33067367551136484,
+        0.11820077453196819
+      ]
+    },
+    {
+      "id": "city:40",
+      "asset": "city/component/4e1caf8e90b00192",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 7,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.31403503697971e-16,
+          -2.1459820707400574,
+          0.0,
+          3.905625
+        ],
+        [
+          2.1459820707400574,
+          1.31403503697971e-16,
+          0.0,
+          -0.02437499999999998
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0020210215347608636
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        630.9906373644978,
+        305.00314110110793,
+        640.0493626355022,
+        317.6995044568939
+      ],
+      "footprint": [
+        0.09179922546803183,
+        0.15932632448863523,
+        0.1882007745319682,
+        0.2606736755113648
+      ]
+    },
+    {
+      "id": "city:41",
+      "asset": "city/component/c84cb8074f013fe4",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 8,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          4.115625
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          -0.304375
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.005016554987665496
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        659.9182995665237,
+        300.3360088006816,
+        675.6624312811466,
+        317.81968405007774
+      ],
+      "footprint": [
+        0.24739523224274104,
+        -0.13810977983612777,
+        0.452604767757259,
+        -0.001890220163872261
+      ]
+    },
+    {
+      "id": "city:42",
+      "asset": "city/component/f2cd97f8b152d975",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 9,
+      "source_to_preprojection_world_4x4": [
+        [
+          1.31403503697971e-16,
+          -2.1459820707400574,
+          0.0,
+          3.415625
+        ],
+        [
+          2.1459820707400574,
+          1.31403503697971e-16,
+          0.0,
+          0.04562500000000003
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.01217593745242706
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        588.7006187155405,
+        287.8790892116207,
+        610.6432860755718,
+        307.9807719635527
+      ],
+      "footprint": [
+        -0.42033121463647505,
+        0.12852383831366657,
+        -0.279668785363525,
+        0.4314761616863335
+      ]
+    },
+    {
+      "id": "city:43",
+      "asset": "city/component/74a3878677e1abf5",
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "slot": 10,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1459820707400574,
+          -0.0,
+          0.0,
+          3.625625
+        ],
+        [
+          0.0,
+          2.1459820707400574,
+          0.0,
+          -0.5843750000000001
+        ],
+        [
+          0.0,
+          0.0,
+          2.1459820707400574,
+          0.0047231563189539146
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 2.1459820707400574,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        648.9106373644978,
+        277.84961693922105,
+        657.9693626355022,
+        290.7826210338477
+      ],
+      "footprint": [
+        -0.1906736755113648,
+        -0.3982007745319682,
+        -0.08932632448863523,
+        -0.30179922546803184
+      ]
+    }
+  ]
+}

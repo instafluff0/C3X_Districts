@@ -1,0 +1,1 @@
+{"schema":"c3x.q4.clearance_proxy.v1","classification":"diagnostic_proxy","coordinate_space":"world tile lattice","envelopes":[{"id":"road-bend","points":[[0,2],[1,2],[2,2.4],[3,2.2],[4,2],[6,2]],"half_width":0.055,"clearance":0.045},{"id":"rail-approach","points":[[3,0],[3.1,1],[3,2.2],[3.2,3.5],[3.6,5],[4,6]],"half_width":0.04,"clearance":0.055}]}

@@ -1,0 +1,12 @@
+{
+  "label": "augmentation-off control; immutable real terrain",
+  "objects": [],
+  "profile": "q1_sampling_context_v1",
+  "region_id": "mixed",
+  "routes": [],
+  "schema": "c3x.lab_v2.augmentation.v1",
+  "seed": 731,
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "terrain_sha256": "8c28cd98fed837aa2925873fd3aa27425452e6cceb9de9835602af62625788f3",
+  "owner": "Q1-sampling"
+}

@@ -1,0 +1,1951 @@
+{
+  "schema": "c3x.q1.q7_world_audit.v1",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/ancient-earth-02",
+  "world_sha256": "515b9355f62c64495bf838e52ef22ba48dfa50f10696f26db6ede91f559ae46d",
+  "layout_sha256": "81a3c9035af17ade34c730f6c70c48c6c72d4d242c9bf9a35f569a947a74cf80",
+  "geometry_sha256": "f94f82e251b972db23180a4def45f384954c8a5ecc794d9bef267078449b45fb",
+  "world_to_serialized_max_error": 0.0,
+  "parts": [
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 0,
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 2.220446049250313e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        1.9743035050808655,
+        1.9743035050808502,
+        1.9743035050808457
+      ],
+      "axis_ratio": 1.00000000000001,
+      "inferred_uniform_scale": 1.9743035050808537,
+      "declared_scale": 1.9743035050808528,
+      "normal_max_error": 1.454392162258955e-14,
+      "determinant": 7.695586952428292,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 1,
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 2.220446049250313e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        1.9743035050808742,
+        1.9743035050808544,
+        1.9743035050808162
+      ],
+      "axis_ratio": 1.0000000000000293,
+      "inferred_uniform_scale": 1.9743035050808482,
+      "declared_scale": 1.9743035050808528,
+      "normal_max_error": 2.8282931552325863e-14,
+      "determinant": 7.695586952428224,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 2,
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 2.220446049250313e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        1.9743035050808915,
+        1.974303505080852,
+        1.974303505080824
+      ],
+      "axis_ratio": 1.0000000000000342,
+      "inferred_uniform_scale": 1.974303505080856,
+      "declared_scale": 1.9743035050808528,
+      "normal_max_error": 2.886579864025407e-14,
+      "determinant": 7.695586952428316,
+      "passed": true
+    },
+    {
+      "asset": "city/component/4e1caf8e90b00192",
+      "slot": 3,
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_4e1caf8e90b00192_00.json",
+      "source_sha256": "8c54a751ceec8f2bee654035d1329a597811104bf32d04e31d7dc98c623b0dfc",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_4e1caf8e90b00192_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 5.329070518200751e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        1.974303505080864,
+        1.9743035050808515,
+        1.9743035050806943
+      ],
+      "axis_ratio": 1.000000000000086,
+      "inferred_uniform_scale": 1.974303505080803,
+      "declared_scale": 1.9743035050808528,
+      "normal_max_error": 5.873079800267078e-14,
+      "determinant": 7.695586952427701,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 0,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 8.881784197001252e-16,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400574,
+        2.1459820707400565,
+        2.1459820707400525
+      ],
+      "axis_ratio": 1.0000000000000022,
+      "inferred_uniform_scale": 2.1459820707400556,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 7.993605777301127e-15,
+      "determinant": 9.882760428346472,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 1,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 1.1102230246251565e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740069,
+        2.145982070740063,
+        2.145982070740058
+      ],
+      "axis_ratio": 1.000000000000005,
+      "inferred_uniform_scale": 2.145982070740063,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.1268763699945339e-14,
+      "determinant": 9.882760428346577,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 2,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 8.881784197001252e-16,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400588,
+        2.145982070740057,
+        2.1459820707400543
+      ],
+      "axis_ratio": 1.000000000000002,
+      "inferred_uniform_scale": 2.145982070740057,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 3.885780586188048e-15,
+      "determinant": 9.88276042834649,
+      "passed": true
+    },
+    {
+      "asset": "city/component/4e1caf8e90b00192",
+      "slot": 3,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_4e1caf8e90b00192_00.json",
+      "source_sha256": "8c54a751ceec8f2bee654035d1329a597811104bf32d04e31d7dc98c623b0dfc",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_4e1caf8e90b00192_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 9.992007221626409e-16,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400574,
+        2.145982070740053,
+        2.1459820707400143
+      ],
+      "axis_ratio": 1.00000000000002,
+      "inferred_uniform_scale": 2.1459820707400414,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.970645868709653e-14,
+      "determinant": 9.882760428346279,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 4,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 1.9984014443252818e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400676,
+        2.1459820707400583,
+        2.145982070740054
+      ],
+      "axis_ratio": 1.0000000000000064,
+      "inferred_uniform_scale": 2.1459820707400596,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 8.826273045769994e-15,
+      "determinant": 9.88276042834653,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 5,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 1.1102230246251565e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400614,
+        2.145982070740059,
+        2.145982070740037
+      ],
+      "axis_ratio": 1.0000000000000113,
+      "inferred_uniform_scale": 2.1459820707400525,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.1213252548714081e-14,
+      "determinant": 9.882760428346428,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 6,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 2.220446049250313e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400574,
+        2.145982070740054,
+        2.1459820707400006
+      ],
+      "axis_ratio": 1.0000000000000264,
+      "inferred_uniform_scale": 2.1459820707400374,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.432187701766452e-14,
+      "determinant": 9.882760428346218,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 0,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 2.220446049250313e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.317660636399279,
+        2.317660636399252,
+        2.3176606363992436
+      ],
+      "axis_ratio": 1.0000000000000153,
+      "inferred_uniform_scale": 2.3176606363992582,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 1.5376588891058418e-14,
+      "determinant": 12.449431904713155,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 1,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 3.9968028886505635e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.3176606363993133,
+        2.317660636399274,
+        2.317660636399265
+      ],
+      "axis_ratio": 1.0000000000000209,
+      "inferred_uniform_scale": 2.317660636399284,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 1.765254609153999e-14,
+      "determinant": 12.449431904713586,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 2,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 1.7763568394002505e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.3176606363993,
+        2.3176606363992622,
+        2.317660636399226
+      ],
+      "axis_ratio": 1.000000000000032,
+      "inferred_uniform_scale": 2.3176606363992627,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 2.1760371282653068e-14,
+      "determinant": 12.449431904713238,
+      "passed": true
+    },
+    {
+      "asset": "city/component/4e1caf8e90b00192",
+      "slot": 3,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_4e1caf8e90b00192_00.json",
+      "source_sha256": "8c54a751ceec8f2bee654035d1329a597811104bf32d04e31d7dc98c623b0dfc",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_4e1caf8e90b00192_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 3.9968028886505635e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.317660636399353,
+        2.3176606363992613,
+        2.31766063639919
+      ],
+      "axis_ratio": 1.0000000000000704,
+      "inferred_uniform_scale": 2.317660636399268,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 7.099876242477876e-14,
+      "determinant": 12.449431904713322,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 4,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 2.6645352591003757e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.317660636399268,
+        2.317660636399259,
+        2.3176606363992427
+      ],
+      "axis_ratio": 1.0000000000000109,
+      "inferred_uniform_scale": 2.3176606363992565,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 2.5479618415147343e-14,
+      "determinant": 12.449431904713139,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 5,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 2.220446049250313e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.317660636399266,
+        2.317660636399265,
+        2.317660636399197
+      ],
+      "axis_ratio": 1.0000000000000298,
+      "inferred_uniform_scale": 2.3176606363992427,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 1.9761969838327786e-14,
+      "determinant": 12.449431904712913,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 6,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 3.552713678800501e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.3176606363992978,
+        2.3176606363992533,
+        2.3176606363991885
+      ],
+      "axis_ratio": 1.000000000000047,
+      "inferred_uniform_scale": 2.3176606363992467,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 4.235500838944972e-14,
+      "determinant": 12.449431904712979,
+      "passed": true
+    },
+    {
+      "asset": "city/component/4e1caf8e90b00192",
+      "slot": 7,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_4e1caf8e90b00192_00.json",
+      "source_sha256": "8c54a751ceec8f2bee654035d1329a597811104bf32d04e31d7dc98c623b0dfc",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_4e1caf8e90b00192_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 3.9968028886505635e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.3176606363993386,
+        2.3176606363992622,
+        2.3176606363991925
+      ],
+      "axis_ratio": 1.000000000000063,
+      "inferred_uniform_scale": 2.3176606363992645,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 5.867528685143952e-14,
+      "determinant": 12.449431904713256,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 8,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 4.440892098500626e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.317660636399309,
+        2.317660636399253,
+        2.3176606363992267
+      ],
+      "axis_ratio": 1.0000000000000355,
+      "inferred_uniform_scale": 2.3176606363992627,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 3.673450432728487e-14,
+      "determinant": 12.449431904713244,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 9,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 2.220446049250313e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.317660636399314,
+        2.3176606363992707,
+        2.3176606363992636
+      ],
+      "axis_ratio": 1.0000000000000218,
+      "inferred_uniform_scale": 2.317660636399283,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 1.8762769116165146e-14,
+      "determinant": 12.449431904713554,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 10,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 2.6645352591003757e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.317660636399274,
+        2.317660636399266,
+        2.317660636399264
+      ],
+      "axis_ratio": 1.0000000000000044,
+      "inferred_uniform_scale": 2.317660636399268,
+      "declared_scale": 2.3176606363992622,
+      "normal_max_error": 1.8762769116165146e-14,
+      "determinant": 12.449431904713322,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 0,
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 2.220446049250313e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400623,
+        2.1459820707400565,
+        2.1459820707400237
+      ],
+      "axis_ratio": 1.000000000000018,
+      "inferred_uniform_scale": 2.145982070740047,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 2.0872192862952943e-14,
+      "determinant": 9.882760428346362,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 1,
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 3.1086244689504383e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400916,
+        2.1459820707400605,
+        2.145982070740026
+      ],
+      "axis_ratio": 1.0000000000000306,
+      "inferred_uniform_scale": 2.145982070740059,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 3.05242227382308e-14,
+      "determinant": 9.882760428346526,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 2,
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 3.9968028886505635e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740072,
+        2.1459820707400583,
+        2.145982070739961
+      ],
+      "axis_ratio": 1.0000000000000517,
+      "inferred_uniform_scale": 2.145982070740031,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 4.3853809472693683e-14,
+      "determinant": 9.882760428346126,
+      "passed": true
+    },
+    {
+      "asset": "city/component/4e1caf8e90b00192",
+      "slot": 3,
+      "pool": "city/pool/european/ancient",
+      "size": 0,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_4e1caf8e90b00192_00.json",
+      "source_sha256": "8c54a751ceec8f2bee654035d1329a597811104bf32d04e31d7dc98c623b0dfc",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_4e1caf8e90b00192_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 7.105427357601002e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740186,
+        2.1459820707400588,
+        2.145982070739958
+      ],
+      "axis_ratio": 1.0000000000001064,
+      "inferred_uniform_scale": 2.1459820707400676,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.0319855795819996e-13,
+      "determinant": 9.882760428346643,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 0,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 8.881784197001252e-16,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400614,
+        2.1459820707400565,
+        2.145982070740047
+      ],
+      "axis_ratio": 1.0000000000000067,
+      "inferred_uniform_scale": 2.145982070740055,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 8.548717289613705e-15,
+      "determinant": 9.882760428346463,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 1,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 1.3322676295501878e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740063,
+        2.1459820707400583,
+        2.1459820707400445
+      ],
+      "axis_ratio": 1.0000000000000087,
+      "inferred_uniform_scale": 2.1459820707400556,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.2656542480726785e-14,
+      "determinant": 9.882760428346467,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 2,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 2.6645352591003757e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740063,
+        2.1459820707400503,
+        2.145982070739997
+      ],
+      "axis_ratio": 1.0000000000000309,
+      "inferred_uniform_scale": 2.1459820707400366,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 2.3314683517128287e-14,
+      "determinant": 9.882760428346218,
+      "passed": true
+    },
+    {
+      "asset": "city/component/4e1caf8e90b00192",
+      "slot": 3,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_4e1caf8e90b00192_00.json",
+      "source_sha256": "8c54a751ceec8f2bee654035d1329a597811104bf32d04e31d7dc98c623b0dfc",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_4e1caf8e90b00192_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 3.3306690738754696e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740164,
+        2.1459820707400574,
+        2.1459820707400485
+      ],
+      "axis_ratio": 1.0000000000000537,
+      "inferred_uniform_scale": 2.14598207074009,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 3.47499806707674e-14,
+      "determinant": 9.88276042834695,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 4,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 2.4424906541753444e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740062,
+        2.1459820707400503,
+        2.1459820707400414
+      ],
+      "axis_ratio": 1.0000000000000095,
+      "inferred_uniform_scale": 2.145982070740051,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.2656542480726785e-14,
+      "determinant": 9.882760428346407,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 5,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 1.5543122344752192e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740061,
+        2.1459820707400574,
+        2.1459820707400317
+      ],
+      "axis_ratio": 1.0000000000000138,
+      "inferred_uniform_scale": 2.14598207074005,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.3600232051658168e-14,
+      "determinant": 9.882760428346392,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 6,
+      "pool": "city/pool/european/ancient",
+      "size": 1,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 1.3322676295501878e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400596,
+        2.145982070740055,
+        2.145982070740029
+      ],
+      "axis_ratio": 1.0000000000000142,
+      "inferred_uniform_scale": 2.145982070740048,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.759703494030873e-14,
+      "determinant": 9.882760428346367,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 0,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 3.1086244689504383e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740087,
+        2.1459820707400556,
+        2.14598207074003
+      ],
+      "axis_ratio": 1.0000000000000266,
+      "inferred_uniform_scale": 2.145982070740058,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 2.646026161081647e-14,
+      "determinant": 9.882760428346499,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 1,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 2.6645352591003757e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740062,
+        2.1459820707400583,
+        2.1459820707399913
+      ],
+      "axis_ratio": 1.0000000000000329,
+      "inferred_uniform_scale": 2.1459820707400374,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 2.398081733190338e-14,
+      "determinant": 9.882760428346222,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 2,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 3.9968028886505635e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740105,
+        2.1459820707400485,
+        2.145982070739998
+      ],
+      "axis_ratio": 1.00000000000005,
+      "inferred_uniform_scale": 2.1459820707400508,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 4.9478683967358644e-14,
+      "determinant": 9.882760428346407,
+      "passed": true
+    },
+    {
+      "asset": "city/component/4e1caf8e90b00192",
+      "slot": 3,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_4e1caf8e90b00192_00.json",
+      "source_sha256": "8c54a751ceec8f2bee654035d1329a597811104bf32d04e31d7dc98c623b0dfc",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_4e1caf8e90b00192_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 6.661338147750939e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707403066,
+        2.145982070740057,
+        2.1459820707400565
+      ],
+      "axis_ratio": 1.0000000000001166,
+      "inferred_uniform_scale": 2.14598207074014,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 7.849276784099857e-14,
+      "determinant": 9.88276042834764,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 4,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 3.552713678800501e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.145982070740061,
+        2.1459820707400548,
+        2.1459820707400246
+      ],
+      "axis_ratio": 1.0000000000000169,
+      "inferred_uniform_scale": 2.1459820707400468,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.6431300764452317e-14,
+      "determinant": 9.88276042834635,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 5,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 2.220446049250313e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400583,
+        2.145982070740058,
+        2.145982070739997
+      ],
+      "axis_ratio": 1.0000000000000286,
+      "inferred_uniform_scale": 2.145982070740038,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 2.1094237467877974e-14,
+      "determinant": 9.882760428346227,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 6,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 5.329070518200751e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707401076,
+        2.1459820707400543,
+        2.145982070739974
+      ],
+      "axis_ratio": 1.0000000000000624,
+      "inferred_uniform_scale": 2.1459820707400454,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 6.253440630980953e-14,
+      "determinant": 9.882760428346327,
+      "passed": true
+    },
+    {
+      "asset": "city/component/4e1caf8e90b00192",
+      "slot": 7,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_4e1caf8e90b00192_00.json",
+      "source_sha256": "8c54a751ceec8f2bee654035d1329a597811104bf32d04e31d7dc98c623b0dfc",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_4e1caf8e90b00192_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 6.661338147750939e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707403057,
+        2.145982070740058,
+        2.145982070740057
+      ],
+      "axis_ratio": 1.000000000000116,
+      "inferred_uniform_scale": 2.1459820707401405,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 7.827072323607354e-14,
+      "determinant": 9.882760428347645,
+      "passed": true
+    },
+    {
+      "asset": "city/component/c84cb8074f013fe4",
+      "slot": 8,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_c84cb8074f013fe4_00.json",
+      "source_sha256": "b78e6d00b08ed87d4e632c90168cf38e5385d08e217ac17d1b86f701346aaa7d",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_c84cb8074f013fe4_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 852,
+      "affine_rank": 4,
+      "position_fit_error": 5.329070518200751e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.1459820707400565,
+        2.1459820707400565,
+        2.145982070740026
+      ],
+      "axis_ratio": 1.0000000000000142,
+      "inferred_uniform_scale": 2.1459820707400463,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 1.099120794378905e-14,
+      "determinant": 9.88276042834635,
+      "passed": true
+    },
+    {
+      "asset": "city/component/f2cd97f8b152d975",
+      "slot": 9,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_f2cd97f8b152d975_00.json",
+      "source_sha256": "bb0e452a67d05fdbf95e1c360758cdd15b46559c9ee1fb8860bb82f8c2ddc732",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_f2cd97f8b152d975_00.json",
+      "material_sha256": "8aeb30bab52b747fecf9f5dab9cf811cb8bf2f91e3ca502be692933dc1ad3806",
+      "vertices": 1350,
+      "affine_rank": 4,
+      "position_fit_error": 2.220446049250313e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.14598207074006,
+        2.1459820707400588,
+        2.145982070739995
+      ],
+      "axis_ratio": 1.0000000000000304,
+      "inferred_uniform_scale": 2.145982070740038,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 2.1094237467877974e-14,
+      "determinant": 9.88276042834623,
+      "passed": true
+    },
+    {
+      "asset": "city/component/74a3878677e1abf5",
+      "slot": 10,
+      "pool": "city/pool/european/ancient",
+      "size": 2,
+      "source_mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_74a3878677e1abf5_00.json",
+      "source_sha256": "688d36da02774991033e80286aa543f7b725ffab8a354fb47a6fcb8d55f19ea6",
+      "source_material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_74a3878677e1abf5_00.json",
+      "material_sha256": "1559cdb1d3775a44aa58d070a36f6531d29d04f2281aa2079267f3c8904b724f",
+      "vertices": 468,
+      "affine_rank": 4,
+      "position_fit_error": 4.440892098500626e-15,
+      "uv_max_error": 0.0,
+      "declared_material_channels": [
+        "ambient_occlusion",
+        "base_color",
+        "emissive",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "bound_material_channels": [
+        "base_color",
+        "emissive"
+      ],
+      "pending_material_channels": [
+        "ambient_occlusion",
+        "gloss",
+        "normal_0",
+        "normal_1"
+      ],
+      "alpha_mode": "opaque",
+      "singular_values": [
+        2.14598207074012,
+        2.1459820707400508,
+        2.145982070739985
+      ],
+      "axis_ratio": 1.0000000000000628,
+      "inferred_uniform_scale": 2.145982070740052,
+      "declared_scale": 2.1459820707400574,
+      "normal_max_error": 6.295293069045817e-14,
+      "determinant": 9.882760428346424,
+      "passed": true
+    }
+  ],
+  "full_rank_parts": 44,
+  "passed_full_rank_parts": 44,
+  "unidentifiable_parts": 0,
+  "uv_max_error": 0.0,
+  "interpretation": "Source-to-published-Q7-world evidence only. Runtime packet, alpha/channel completeness, real terrain placement and shared shadows remain separate gates."
+}

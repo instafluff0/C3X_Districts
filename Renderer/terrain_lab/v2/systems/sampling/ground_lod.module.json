@@ -1,0 +1,12 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "sampling-ground-lod",
+  "owner": "Q1-sampling",
+  "provider": "frozen_l21",
+  "contract": 1,
+  "shader": "Renderer/terrain_lab/v2/shaders/sampling/ground_lod.hlsl",
+  "scene": "complete",
+  "fit_viewport": true,
+  "suppress_territory": true,
+  "msl_version": 20200
+}

@@ -51,10 +51,11 @@ terrain after a partial or failed custom frame. See
 
 After the complete L9-L21 Lab v1 stack was frozen, the user authorized a
 separate Renderer Lab v2 quality campaign before the remaining Integration
-gates. Lab v2 preserves every historical handoff, first performs a
-zero-intended-visual-change modularization and macOS Metal port, then runs
-ownership-separated visual tracks and freezes separately versioned v2
-candidates. Windows D3D11 remains the promotion-parity target and Civ III
+gates. Lab v2 preserves every historical handoff. The user subsequently assigned a sole lead implementer and visual integrator
+to the complete current Lab v2 path. Q0-Q8 remain requirement categories and
+historical namespaces; exclusive ownership and cross-owner start blockers are
+superseded. Preserve their candidates and iterate on one combined gameplay view.
+Windows D3D11 remains the promotion-parity target and Civ III
 Integration remains Windows-only. See
 [docs/renderer_lab_v2.md](docs/renderer_lab_v2.md).
 

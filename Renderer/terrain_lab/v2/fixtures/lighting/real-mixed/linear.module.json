@@ -1,0 +1,13 @@
+{
+  "contract": 1,
+  "fit_viewport": true,
+  "id": "q6-real-mixed-linear",
+  "owner": "Q6-lighting",
+  "provider": "frozen_l21",
+  "scene": "complete",
+  "schema": "c3x.lab_v2.module.v1",
+  "shader": "Renderer/terrain_lab/v2/shaders/lighting/generated/scene_linear_v1.hlsl",
+  "suppress_territory": true,
+  "linear_adapter": 1,
+  "color_branch": "q6_scene_linear_premultiplied_v1"
+}

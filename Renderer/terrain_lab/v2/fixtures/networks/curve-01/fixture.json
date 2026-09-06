@@ -1,0 +1,47 @@
+{
+  "schema": "c3x.lab_v2.fixture.v1",
+  "id": "curve-01",
+  "track": "Q5-networks",
+  "campaign": "Q1",
+  "tile_count": 49,
+  "viewport": [
+    960,
+    576
+  ],
+  "terrain": "Renderer/terrain_lab/v2/fixtures/networks/curve-01/terrain.csv",
+  "modules": [
+    "Renderer/terrain_lab/v2/systems/networks/module.json"
+  ],
+  "packs": {
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "shore": "Renderer/packs/ShoreNormalized"
+  },
+  "references": [
+    "civ6.roads",
+    "civ3.real_gameplay_layout"
+  ],
+  "isolations": [
+    "no_routes",
+    "networks_only"
+  ],
+  "settings": {
+    "anisotropy": 8,
+    "mip_bias": 0,
+    "samples": 4,
+    "render_scale": 1,
+    "postprocess": "box",
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "scenarios": {
+    "network_mesh": "Renderer/terrain_lab/v2/fixtures/networks/curve-01/scene.bin",
+    "network_provenance": "Renderer/terrain_lab/v2/fixtures/networks/curve-01/provenance.json"
+  }
+}

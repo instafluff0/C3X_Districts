@@ -1,0 +1,9 @@
+{
+  "schema": "c3x.lab_v2.frozen_source.v1",
+  "sources": {
+    "Renderer/terrain_lab/terrain_lab.cpp": "84f7fa7279e4068a1d5c31c31a0c08fcbc357135146f4a80530ff8965c262df2",
+    "Renderer/terrain_lab/terrain_lab.hlsl": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+    "Renderer/native/environment_runtime.cpp": "9b27492abebb850420ff2d1fb6d5d67cc8f296c135e0047a98d27087b32cd427",
+    "Renderer/native/environment_runtime.h": "4da550dd9e57289ddf5f188be124f80f9b93f5c451517d5bafdfa085f48713c2"
+  }
+}

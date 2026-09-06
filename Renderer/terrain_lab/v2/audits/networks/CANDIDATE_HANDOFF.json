@@ -1,0 +1,49 @@
+{
+  "schema": "c3x.q5.candidate_handoff.v1",
+  "id": "Q5-networks-source-14",
+  "status": "blocked_for_cross_owner_convergence",
+  "historical_reference": "Renderer/handoffs/L21_complete_beauty_scene.json",
+  "immutable_v1": true,
+  "candidate_fixture": "Renderer/terrain_lab/v2/fixtures/networks/source-linear/fixture.json",
+  "module": "Renderer/terrain_lab/v2/systems/networks/linear.module.json",
+  "corridors": "Renderer/terrain_lab/v2/fixtures/networks/source-linear/corridors.json",
+  "audit": "Renderer/terrain_lab/v2/audits/networks/Q5_NETWORKS_AUDIT.md",
+  "tests": {
+    "command": "python3 -B -m unittest discover -s Renderer/terrain_lab/v2/tests/networks -v",
+    "passed": 19,
+    "exhaustive_masks": 256
+  },
+  "render_reports": {
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/report.json": "68063e4fcb2d6d5f4c3a8f71a55363d9c6715920c87fb7f451845c9e5aacb173",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/linear-14/report.json": "6fe7c2e67a599a545874dd7c6dc2e0f20daaa2bb61c87f12565807b89b85bffa",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/source-states/report.json": "aad0958e7077ca952c7ff855410c057c2dc5e1ea3ebbb82157e917d5643fd0ec",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/source-isolation/report.json": "fe98c586328f01729244ad9b31e0a38db9c2a722fb56a2eea00b0c08ab7bfadc",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/source-control/report.json": "713abdbc1cd477867639c9e2ed9308565b7dbc135f966f1707f0c246c63521d8",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/proxy-control/report.json": "41d4ad866c86c2ba2b47d92b36f924cc2c8a8cf037174bd2659c661a36264378",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/real-mixed-reference/report.json": "688d7e72d2e6bd529dd84bd560adc16755d7360ba34176c2a443ffb38d6285f2",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/real-holdout-reference/report.json": "14c9372b32ca1eef515b24b1b51e3c219aadcf6af15cc48e2e16525fc92bf239",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/real-wrap-reference/report.json": "4e4c483eb1014e071160552d41e735d859926869c010a819dfde492d43f2a41f",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/real-wrap-holdout-reference/report.json": "d2fddc1a143fc9602e92fcfd62527b1820b060c17ebb4070803f852599d87d9c"
+  },
+  "source_art": "Renderer/terrain_lab/v2/fixtures/networks/source-10/source_art.json",
+  "metrics": "Renderer/terrain_lab/v2/audits/networks/metrics.json",
+  "controls": "Renderer/terrain_lab/v2/audits/networks/no_route_control.json",
+  "consumed_contracts": [
+    "Renderer/terrain_lab/v2/audits/networks/consumed_contracts.json",
+    "Renderer/terrain_lab/v2/audits/networks/convergence_contracts.json"
+  ],
+  "provenance": {
+    "routes": "source_adaptation",
+    "bridges": "source_adaptation",
+    "context_ground_and_markers": "diagnostic_proxy",
+    "real_map_renders": "Q0 frozen reference only; not Q5 acceptance"
+  },
+  "pending": [
+    "Compatible Q2/Q3/Q4 composed surface and coordinate/depth conventions",
+    "Q5 source geometry over actual verified regions and holdout",
+    "Q4/Q7 source-instance corridor clearance and Q8 composed readability",
+    "Final combined scene, 192-tile gate, Windows parity, project closure and approval"
+  ],
+  "required_user_action": null,
+  "ownership": "Q5 owned paths plus own status only; no injected or v1 changes"
+}

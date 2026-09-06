@@ -1,0 +1,33 @@
+{
+  "schema": "c3x.q2.region_request.v1",
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "purpose": "Explicit user request: a large varied map for visual evaluation; one noon overview, not acceptance/promotion",
+  "regions": [
+    {
+      "requested_id": "q2-evaluation-large",
+      "origin": [
+        58,
+        56
+      ],
+      "extent": [
+        16,
+        8
+      ],
+      "halo": 2,
+      "camera": {
+        "viewport": [
+          2400,
+          1600
+        ],
+        "hours": [
+          12
+        ],
+        "zooms": [
+          1,
+          2
+        ]
+      },
+      "role": "user_evaluation"
+    }
+  ]
+}

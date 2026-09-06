@@ -2,9 +2,27 @@
   "schema": "c3x.renderer_lab_v2_track_status.v0",
   "id": "Q2-terrain",
   "campaign": "Q1",
-  "state": "blocked_by_dependency",
-  "candidate": null,
-  "evidence": [],
-  "blockers": ["Q0-platform", "Q1-sampling"],
-  "approval": null
+  "state": "blocked",
+  "candidate": "Renderer/terrain_lab/v2/audits/terrain/CANDIDATE.json",
+  "evidence": [
+    "Renderer/terrain_lab/v2/audits/terrain/Q2_TERRAIN_AUDIT.md",
+    "Renderer/terrain_lab/v2/audits/terrain/metrics_v1.json",
+    "Renderer/terrain_lab/v2/audits/terrain/composed_metrics_v1.json",
+    "Renderer/terrain_lab/v2/audits/terrain/wet_surface_seams.json",
+    "Renderer/terrain_lab/v2/audits/terrain/dry_surface_seams.json",
+    "Renderer/terrain_lab/v2/audits/terrain/INTERFACE_REQUESTS.md",
+    "Renderer/terrain_lab/v2/fixtures/terrain/large-evaluation/EVALUATION.json"
+  ],
+  "blockers": [
+    "Exact source-scene geometry normals mismatch across 145 wet and 153 dry edge samples despite equal heights and shore distance. Q4 continuous normal provider required; Q2 cannot replace authored relief with flat base normals. See composed_surface_audit.py and edge reports."
+  ],
+  "pending_validation": [
+    "Q4/Q0 continuous raised-surface normals and full 14-family geometry matrix",
+    "Full Q3 water material and Q4/Q7/Q8 gameplay composition",
+    "Coordinated 192-tile promotion and Windows D3D11 parity",
+    "Q6 actual transformed caster mesh/cutout silhouettes on real receivers; no generic shadow substitutes"
+  ],
+  "approval": null,
+  "progress": "Fourteen visual revisions; 832 isolated images and 32 composed phase/zoom check images, plus source controls and scrolling. User-rejected pale rectangles removed through Q3 shoreline hook. Candidate ready for convergence; acceptance gate fails on proven incident-normal blocker.",
+  "required_user_action": null
 }

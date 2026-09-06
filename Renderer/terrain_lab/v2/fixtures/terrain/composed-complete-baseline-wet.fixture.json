@@ -1,0 +1,123 @@
+{
+  "campaign": "Q1",
+  "id": "q2-wet-composed-complete-baseline",
+  "isolations": [
+    "complete_terrain_stack_no_object_augmentation"
+  ],
+  "modules": [
+    "Renderer/terrain_lab/v2/systems/terrain/composed-complete-baseline.module.json"
+  ],
+  "packs": {
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "shore": "Renderer/packs/ShoreNormalized",
+    "routes": "Renderer/packs/RouteStylesNormalized",
+    "bridges": "Renderer/packs/RouteDoodadsNormalized",
+    "resources": "Renderer/packs/ResourceNormalized",
+    "cities": "Renderer/packs/CityComponentsNormalized",
+    "walls": "Renderer/packs/CityAdjunctsNormalized",
+    "improvements": "Renderer/packs/ImprovementsNormalized",
+    "objects": "Renderer/packs/TileObjectsNormalized",
+    "units": "Renderer/packs/UnitFamilyLab",
+    "compound_units": "Renderer/packs/CompoundUnitLab"
+  },
+  "real_map": {
+    "dataset_payload_sha256": "4e5fa91a03586b9b36da1ec3d8ee8249d19e803fe710ecd6659a174697cee837",
+    "fixture_class": "unaltered_real_terrain",
+    "parser": {
+      "adapter": 1,
+      "closure_sha256": "3f1ec44302b61b4fc2ad9ebbe53e25081f0805443872f07a56bfa2dbe0b99fc1",
+      "text_encoding": "windows-1252"
+    },
+    "profile": "q0_real_map_v1",
+    "region": {
+      "camera": {
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ],
+        "viewport": [
+          768,
+          512
+        ],
+        "zooms": [
+          1,
+          2
+        ]
+      },
+      "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+      "coverage": {
+        "land_water_edges": 0,
+        "river_tiles": 0,
+        "terrain": {
+          "desert": 1,
+          "forest": 2,
+          "grassland": 2,
+          "hills": 3,
+          "jungle": 1,
+          "marsh": 1,
+          "plains": 6
+        },
+        "terrain_edges": 19
+      },
+      "extent": [
+        4,
+        4
+      ],
+      "halo": 2,
+      "id": "q2-wet",
+      "origin": [
+        83,
+        39
+      ],
+      "request_sha256": "dd969d84e7d973781bdb27c13d932bc6e8f21493b6dace0d708fbb7c4eebb450",
+      "role": "primary",
+      "terrain_sha256": "4ceeaf415e68fa0ea10fcd69a1a83afc67ff88a0586390c701ffcacc575de9b9",
+      "wrap": {
+        "x": true,
+        "y": false
+      }
+    },
+    "region_id": "q2-wet",
+    "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e"
+  },
+  "references": [
+    "c3x.lab_v1.l21"
+  ],
+  "schema": "c3x.lab_v2.fixture.v1",
+  "settings": {
+    "anisotropy": 8,
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ],
+    "mip_bias": 0,
+    "postprocess": "box",
+    "render_scale": 1,
+    "samples": 1
+  },
+  "terrain": "Renderer/terrain_lab/v2/fixtures/terrain/real-q2-wet/terrain.csv",
+  "tile_count": 16,
+  "track": "Q2-terrain",
+  "viewport": [
+    768,
+    512
+  ],
+  "scenarios": {
+    "roads": "Renderer/terrain_lab/v2/fixtures/terrain/empty_layers/roads.csv",
+    "railroads": "Renderer/terrain_lab/v2/fixtures/terrain/empty_layers/railroads.csv",
+    "resources": "Renderer/terrain_lab/v2/fixtures/terrain/empty_layers/resources.csv",
+    "cities": "Renderer/terrain_lab/v2/fixtures/terrain/empty_layers/cities.csv",
+    "mines": "Renderer/terrain_lab/v2/fixtures/terrain/empty_layers/mines.csv",
+    "farms": "Renderer/terrain_lab/v2/fixtures/terrain/empty_layers/farms.csv",
+    "objects": "Renderer/terrain_lab/v2/fixtures/terrain/empty_layers/objects.csv",
+    "infrastructure": "Renderer/terrain_lab/v2/fixtures/terrain/empty_layers/infrastructure.csv",
+    "units": "Renderer/terrain_lab/v2/fixtures/terrain/empty_layers/units.csv"
+  }
+}

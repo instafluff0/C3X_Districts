@@ -1,0 +1,17 @@
+{
+  "anisotropy": 8,
+  "mip_bias": 0,
+  "samples": 4,
+  "render_scale": 2,
+  "postprocess": {
+    "owner": "Q0-platform",
+    "contract": 2,
+    "shader": "Renderer/terrain_lab/v2/shaders/common/linear_post_witness.hlsl"
+  },
+  "camera_offsets": [
+    [
+      0,
+      0
+    ]
+  ]
+}

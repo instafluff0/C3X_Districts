@@ -2,9 +2,19 @@
   "schema": "c3x.renderer_lab_v2_track_status.v0",
   "id": "Q7-presentation",
   "campaign": "Q1",
-  "state": "blocked_by_dependency",
-  "candidate": null,
-  "evidence": [],
-  "blockers": ["Q0-platform", "Q1-sampling", "Q6-lighting"],
+  "state": "active",
+  "candidate": "Q7-source-presentation-v1",
+  "evidence": [
+    "Renderer/terrain_lab/v2/audits/objects/CITY_VEGETATION_WITNESS.json",
+    "Renderer/terrain_lab/v2/audits/objects/BOUNDED_CHECKS.json",
+    "Renderer/terrain_lab/v2/audits/objects/metadata/registered-mixed-v2/source-instances.json"
+  ],
+  "blockers": [],
+  "pending_validation": [
+    "Heldout city wholly obscured by source vegetation; Q4/Q0 corridor adoption pending.",
+    "Q7 adoption of new Q0 wire6 and Q6 final composed scene-linear world shadow path in progress.",
+    "Source normal/AO/gloss/owner-color and complete alpha semantics unresolved.",
+    "Final all-pool phases/zooms/scroll/retained-overlay/192-tile/Windows gates not passed; broad matrix deferred by coordinator."
+  ],
   "approval": null
 }

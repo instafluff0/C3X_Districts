@@ -1,0 +1,23 @@
+{
+  "schema": "c3x.q6.color_alpha.v1",
+  "version": 1,
+  "branch": "q6_scene_linear_premultiplied_v1",
+  "working_primaries": "Rec709_D65",
+  "attachment": "RGBA16_FLOAT",
+  "alpha": "premultiplied_linear",
+  "clear": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "map_validity": "independent_coverage_and_half_open_rect",
+  "reconstruction": "before_exposure_tonemap_transfer",
+  "exposure": "frame.exposure * profile.exposure",
+  "tone_map": "max_channel_reinhard_v1",
+  "output_transfer": "IEC_sRGB",
+  "output": "BGRA8_UNORM_straight_sRGB",
+  "legacy_branch": "legacy_l21_display_straight_v1",
+  "bloom": false,
+  "specification": "Renderer/terrain_lab/v2/audits/lighting/COLOR_ALPHA_CONTRACT_V1.md"
+}

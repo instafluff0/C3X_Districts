@@ -1,0 +1,48 @@
+{
+  "schema": "c3x.lab_v2.fixture.v1",
+  "id": "context-before",
+  "track": "Q3-hydrology",
+  "campaign": "Q1",
+  "tile_count": 36,
+  "viewport": [
+    512,
+    256
+  ],
+  "terrain": "Renderer/terrain_lab/v2/fixtures/hydrology/coves.csv",
+  "modules": [
+    "Renderer/terrain_lab/v2/systems/hydrology/static.module.json"
+  ],
+  "packs": {
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "shore": "Renderer/packs/ShoreNormalized"
+  },
+  "references": [
+    "civ6.sea_and_shore",
+    "civ6.river",
+    "civ6.rocky_hill_coast"
+  ],
+  "isolations": [
+    "beach-only",
+    "bed-only",
+    "classification"
+  ],
+  "settings": {
+    "anisotropy": 8,
+    "mip_bias": 0,
+    "samples": 1,
+    "render_scale": 1,
+    "postprocess": "box",
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "scenarios": {
+    "controls": "Renderer/terrain_lab/v2/fixtures/hydrology/context-before.controls.json"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "c3x.lab_v2.fixture.v1",
+  "id": "q2-pair_00_09_column_r1_x98",
+  "track": "Q2-terrain",
+  "campaign": "Q1",
+  "tile_count": 16,
+  "viewport": [
+    256,
+    128
+  ],
+  "terrain": "Renderer/terrain_lab/v2/fixtures/terrain/material-pairs/pair_00_09_column_r1_x98.csv",
+  "modules": [
+    "Renderer/terrain_lab/v2/systems/terrain/base.module.json"
+  ],
+  "packs": {
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "shore": "Renderer/packs/ShoreNormalized"
+  },
+  "references": [
+    "civ6.desert",
+    "civ6.hills",
+    "civ6.marsh"
+  ],
+  "isolations": [
+    "base_material"
+  ],
+  "settings": {
+    "anisotropy": 8,
+    "mip_bias": 0,
+    "samples": 1,
+    "render_scale": 1,
+    "postprocess": "box",
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ]
+  }
+}

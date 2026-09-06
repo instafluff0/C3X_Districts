@@ -1,0 +1,719 @@
+{
+  "schema": "c3x.renderer_lab_v2.candidate_handoff.v1",
+  "id": "Q1-sampling-candidate-v1",
+  "owner": "Q1-sampling",
+  "state": "blocked_on_cross_owner_acceptance",
+  "accepted": false,
+  "proposed_policy": "Renderer/terrain_lab/v2/systems/sampling/policy_v1.json",
+  "audit": "Renderer/terrain_lab/v2/audits/sampling/SAMPLING_CANDIDATE_V1.md",
+  "recipes": "Renderer/terrain_lab/v2/audits/sampling/REPRODUCE.md",
+  "v1_references": [
+    {
+      "path": "Renderer/handoffs/L21_complete_beauty_scene.json",
+      "sha256": "426d65f4733b0587ba9ee22a8c6be0f666e1371999427293ca72072dbb91b059",
+      "action": "read-only reference; unchanged"
+    }
+  ],
+  "consumed_color_contract": "q6_scene_linear_premultiplied_v1",
+  "consumed_post_contract": 2,
+  "evidence": [
+    {
+      "id": "c006mixedab",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/report.json",
+      "sha256": "52681cb76f1a87fa595e62dd68c153c41db5104bfb052be2b96a8fe86bf9a4d0",
+      "outputs": 16,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "7c1dcb6bf9cee586286f70bf382af9d23d1fc046f6cb325b98c47ae9e57c409b",
+      "backend_sha256": "18228f73c412e2a6544677be14ea79726c9c44d741338bf10f011b078a9a9073",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--0.35/PSFeature.msl": "8b81c22f5e585a768ad37fdf78b0fc962dc690ef5fcc35677870eb8f4988bd62",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--0.35/PSMain.msl": "cf10336a6dec13d278318f34748e90f7d4efd62eec1a078e0e8a1852f5718716",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--0.35/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--0.35/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--0.65/PSFeature.msl": "477c2c256e49494b205ff0661cd43bcbd61ecc66c64448575e124f55131030fb",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--0.65/PSMain.msl": "3c77cf460873c6519f9ffa78235bc2b9ca17d47028d9286858ceb30505c85d19",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--0.65/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--0.65/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--1/PSFeature.msl": "e817cfbaae1fca830ec03541e2f8950d7a23476a1bc64311eaf5e2e5f3d10a85",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--1/PSMain.msl": "631fc55b2361548399b831af52dd98d781efb3f86045660c65e541dd6799ed3e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--1/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders--1/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c006mixedab/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c003post",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c003post/report.json",
+      "sha256": "42a335d69ea520cc6d84bf4b68d0904319ebd6495b0fd1c0de6b25980cf59558",
+      "outputs": 10,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "45aa7ee9b2a804eab6401c07d44e6bdfdebecfdd2c9a339a8b29742dcca7327e",
+      "backend_sha256": "b78d6139d619db8b3e715519bdd65f5f77f43be5db19df10b57990b3ad85ef89",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c003post/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c003post/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c003post/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c003post/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c007pan",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c007pan/report.json",
+      "sha256": "ef029de1a362db00c8b140e0806b6d9255f0386ea4a3396077d14ea8a8932466",
+      "outputs": 88,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "7c1dcb6bf9cee586286f70bf382af9d23d1fc046f6cb325b98c47ae9e57c409b",
+      "backend_sha256": "fb6b7876ec532287b2e5e7378ce38c2579d504f1042ecdb998a2de8bdcddf443",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c007pan/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c007pan/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c007pan/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c007pan/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c011real-final",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c011real-final/report.json",
+      "sha256": "40aafbed77d50f57ecc325e7ac59009ebe1a4214ecf057dc3464bc5375d10a3b",
+      "outputs": 32,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "a66f87ffdc20af177c2d045e534afbcd5f39bcefb795c432f5591b28668beced",
+      "backend_sha256": "cf5a1400f3cc43f67c2a2be316e80fb2bc451d7e0047aac8ff327e66b4771953",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c011real-final/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c011real-final/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c011real-final/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c011real-final/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c012holdout-final",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c012holdout-final/report.json",
+      "sha256": "77877807cfee304057b2870d9379001e3a866e496c8f4c3b4062fc097cece784",
+      "outputs": 32,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "a66f87ffdc20af177c2d045e534afbcd5f39bcefb795c432f5591b28668beced",
+      "backend_sha256": "cf5a1400f3cc43f67c2a2be316e80fb2bc451d7e0047aac8ff327e66b4771953",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c012holdout-final/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c012holdout-final/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c012holdout-final/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c012holdout-final/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c013off-mixed",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c013off-mixed/report.json",
+      "sha256": "0749bf73a5589204405baa12a4b2013f2260816fa21577f310f2cadfc9a1ca1f",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "4619354967f71e41db506a569664c2fe13628fcee7e070258ccfa164bed5aea2",
+      "backend_sha256": "cf5a1400f3cc43f67c2a2be316e80fb2bc451d7e0047aac8ff327e66b4771953",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c013off-mixed/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c013off-mixed/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c013off-mixed/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c013off-mixed/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c014off-holdout",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c014off-holdout/report.json",
+      "sha256": "356a1bfa01ec74ada0090ef442dbb298dd0a7aa3e1ac108cefb5334b083c09e8",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "4619354967f71e41db506a569664c2fe13628fcee7e070258ccfa164bed5aea2",
+      "backend_sha256": "cf5a1400f3cc43f67c2a2be316e80fb2bc451d7e0047aac8ff327e66b4771953",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c014off-holdout/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c014off-holdout/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c014off-holdout/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c014off-holdout/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c015animation0",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c015animation0/report.json",
+      "sha256": "12a2f08a10f6c58ebc2d050b3e1707e7fd8bdcb40704e9f0b1f6f4a4dc4d00ec",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "4619354967f71e41db506a569664c2fe13628fcee7e070258ccfa164bed5aea2",
+      "backend_sha256": "cf5a1400f3cc43f67c2a2be316e80fb2bc451d7e0047aac8ff327e66b4771953",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c015animation0/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c015animation0/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c015animation0/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c015animation0/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c016animation1",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c016animation1/report.json",
+      "sha256": "514e35f989e4e46f3b92186f6fe75fef1c76159b0810641ba38bbb9af4019d31",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "4619354967f71e41db506a569664c2fe13628fcee7e070258ccfa164bed5aea2",
+      "backend_sha256": "cf5a1400f3cc43f67c2a2be316e80fb2bc451d7e0047aac8ff327e66b4771953",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c016animation1/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c016animation1/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c016animation1/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c016animation1/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c017animation2",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c017animation2/report.json",
+      "sha256": "45782a977772c3ed43591755d915a321d6fac2aaeeb16d68b7c92dcb5e4a081b",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "4619354967f71e41db506a569664c2fe13628fcee7e070258ccfa164bed5aea2",
+      "backend_sha256": "cf5a1400f3cc43f67c2a2be316e80fb2bc451d7e0047aac8ff327e66b4771953",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c017animation2/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c017animation2/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c017animation2/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c017animation2/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c018animation3",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c018animation3/report.json",
+      "sha256": "5b6f1fa298ec46fb189a59b6cb17b9d1eb1bae38e349afb26e76dcea6f3f3b93",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "4619354967f71e41db506a569664c2fe13628fcee7e070258ccfa164bed5aea2",
+      "backend_sha256": "cf5a1400f3cc43f67c2a2be316e80fb2bc451d7e0047aac8ff327e66b4771953",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c018animation3/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c018animation3/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c018animation3/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c018animation3/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c019real-pan",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c019real-pan/report.json",
+      "sha256": "98f9cc7fcfec3636a01c651978c077bd1cb6b8f1bc4190420c22f822b51f93b8",
+      "outputs": 88,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+      "builder_sha256": "fd6e50797bdad73f16c543aef17cf99021129690f974d9fd95911fd506d62e97",
+      "backend_sha256": "cf5a1400f3cc43f67c2a2be316e80fb2bc451d7e0047aac8ff327e66b4771953",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c019real-pan/shaders-0/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c019real-pan/shaders-0/PSMain.msl": "f84e98f166775f4dcdffd456dab3b818022597fcfb8467b6df4ca1b9827011dc",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c019real-pan/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c019real-pan/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "linear01",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/linear01/report.json",
+      "sha256": "9ff4523997c44f71edd1a02c1160bc9e0d24d79d0cdf6f1feb8399859254b1e0",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": {
+        "PSFeature": "2bdaabab288d6924809de5e6f88495402b1b977fe81e0284349aa36e06461fd0",
+        "PSMain": "84aa916f6b55056d8844d0b5771abc54684d2e4ab423aa4ae097f607b85a1e2f",
+        "VSFeature": "3d7b0a996b1fe61f48af782e856944aeac092f8f41c9e0e7d91f987f57e801e8",
+        "VSMain": "ab85ceb2edd1c7b665c582eb73dd519daf2827a8afed212e7b471b86ce1e5b2c"
+      },
+      "builder_sha256": null,
+      "backend_sha256": null,
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/linear01/shaders/PSFeature.msl": "2bdaabab288d6924809de5e6f88495402b1b977fe81e0284349aa36e06461fd0",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/linear01/shaders/PSMain.msl": "84aa916f6b55056d8844d0b5771abc54684d2e4ab423aa4ae097f607b85a1e2f",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/linear01/shaders/VSFeature.msl": "3d7b0a996b1fe61f48af782e856944aeac092f8f41c9e0e7d91f987f57e801e8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/linear01/shaders/VSMain.msl": "ab85ceb2edd1c7b665c582eb73dd519daf2827a8afed212e7b471b86ce1e5b2c"
+      }
+    },
+    {
+      "id": "ground-lod01",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/ground-lod01/report.json",
+      "sha256": "03dd7a61d7b1864ff9105ed2eb0a6c48e17984fd8f48341d72a44e0f05ad96fb",
+      "outputs": 2,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": {
+        "PSFeature": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "PSMain": "cbaed3a5e06958b6e8f1f3a7cf1db14c11a6be4e859134fe10c0f0ed0d0b84ae",
+        "VSFeature": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "VSMain": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      },
+      "builder_sha256": null,
+      "backend_sha256": null,
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/ground-lod01/shaders/PSFeature.msl": "7fc535ac8246a42732e784b6639b008853f732d0dcdc5433fe2ed4ca7f86f70e",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/ground-lod01/shaders/PSMain.msl": "cbaed3a5e06958b6e8f1f3a7cf1db14c11a6be4e859134fe10c0f0ed0d0b84ae",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/ground-lod01/shaders/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/ground-lod01/shaders/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "checker-hardware-lod02",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/checker-hardware-lod02/report.json",
+      "sha256": "9ba5ac49eecdbdcd492571eff1b46afcf39057a7b50c5fbb59704706baf31799",
+      "outputs": 2,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": {
+        "PSFeature": "db63e85ccd0c20d6f4920d50356e86d23c2e1766bd628e90b6195003bb4de7a2",
+        "PSMain": "1d53bf2955d2de7fa4c4086f3fd5169bc1c218522a2bfd814babb4a263f5e1e9",
+        "VSFeature": "abc4611d12fd8090800c6487d7d4ba3f506dbce46d50ef3a582fc550d2c9a9d4",
+        "VSMain": "b4956b591c1266b4361ddf88eadaecde271d7dbd8714dc3acba4c4bb29c44fa7"
+      },
+      "builder_sha256": null,
+      "backend_sha256": null,
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/checker-hardware-lod02/shaders/PSFeature.msl": "db63e85ccd0c20d6f4920d50356e86d23c2e1766bd628e90b6195003bb4de7a2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/checker-hardware-lod02/shaders/PSMain.msl": "1d53bf2955d2de7fa4c4086f3fd5169bc1c218522a2bfd814babb4a263f5e1e9",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/checker-hardware-lod02/shaders/VSFeature.msl": "abc4611d12fd8090800c6487d7d4ba3f506dbce46d50ef3a582fc550d2c9a9d4",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/checker-hardware-lod02/shaders/VSMain.msl": "b4956b591c1266b4361ddf88eadaecde271d7dbd8714dc3acba4c4bb29c44fa7"
+      }
+    },
+    {
+      "id": "q2detail-ab",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/report.json",
+      "sha256": "d7ffe2ee4fdbad62ba3faa56be2b76cb882bc3a8f10d382030fb5d4d62506d68",
+      "outputs": 14,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "e80fcd4523263d0209d8b90d30dcebe2f3cac55d84259831753fa61262daeb0c",
+      "builder_sha256": "303a0a96ef525f3235df5b7e68501a270261afc9208b227843147ae6c19a51bd",
+      "backend_sha256": "fb6b7876ec532287b2e5e7378ce38c2579d504f1042ecdb998a2de8bdcddf443",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--0.35/PSFeature.msl": "45c12e84fe8736176074156e1d1b68e6852a62ff12342f70a01d747b0dff20bd",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--0.35/PSMain.msl": "7373ca072deb2bab4c1fa3de4de017436fb343fdfc89baab52cf5fe9e842f3f6",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--0.35/VSFeature.msl": "4a63a47bec7f0b0bab1ed5d4ac7549985cc37cf7254e99e615ebe1587a63fb70",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--0.35/VSMain.msl": "86f77cc294b00c2ad4b6048ef40b95cd0294eee14bfab5ce78884a894db6c665",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--0.65/PSFeature.msl": "029a3aa6401be83e55d9d6eccf73ac9bfe6d4324c477da6f3ef7a693e779e1e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--0.65/PSMain.msl": "30913ed22e5b4e710c2767273a25b68906ac4a47d9fc4a3a572f2be23fad7072",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--0.65/VSFeature.msl": "4a63a47bec7f0b0bab1ed5d4ac7549985cc37cf7254e99e615ebe1587a63fb70",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--0.65/VSMain.msl": "86f77cc294b00c2ad4b6048ef40b95cd0294eee14bfab5ce78884a894db6c665",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--1/PSFeature.msl": "2d0b97e29ce58f389e39a47d3e3b8aab7b5c125ab8fb2f168be154cd4687c55f",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--1/PSMain.msl": "a193fcea13438ea9db54f7b1a0a894e9e266435df8decfc67c0c2c2ab2cc95e3",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--1/VSFeature.msl": "4a63a47bec7f0b0bab1ed5d4ac7549985cc37cf7254e99e615ebe1587a63fb70",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders--1/VSMain.msl": "86f77cc294b00c2ad4b6048ef40b95cd0294eee14bfab5ce78884a894db6c665",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders-0/PSFeature.msl": "6846287d5e73942a45a1d6ee4c657d68ce98a7e633e03f39e34a16937bb23d94",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders-0/PSMain.msl": "9ec14000f5436b2b206e310a3c4d9429d3b43bc4ebcb256174a7a028fd1789ab",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders-0/VSFeature.msl": "4a63a47bec7f0b0bab1ed5d4ac7549985cc37cf7254e99e615ebe1587a63fb70",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2detail-ab/shaders-0/VSMain.msl": "86f77cc294b00c2ad4b6048ef40b95cd0294eee14bfab5ce78884a894db6c665"
+      }
+    },
+    {
+      "id": "q2off-control",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2off-control/report.json",
+      "sha256": "8a421875f7ce045e0a83c1f09c679f2da406fff5ea92a0808adeefc96bf55c57",
+      "outputs": 10,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "d0f52a7212fe2fabec5cad1726b21312d964fdb4aa74fdf3c0f7eb026381ff18",
+      "builder_sha256": "303a0a96ef525f3235df5b7e68501a270261afc9208b227843147ae6c19a51bd",
+      "backend_sha256": "fb6b7876ec532287b2e5e7378ce38c2579d504f1042ecdb998a2de8bdcddf443",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2off-control/shaders-0/PSFeature.msl": "348135f21d2f2b51560e9b534c9e51d01efcb825ac2b4e2536e3750e64bc86ae",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2off-control/shaders-0/PSMain.msl": "ff7917f50a1377f4c3c7f8657e4c4d1d5986f31bcded07b48b6e4960c62c63ad",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2off-control/shaders-0/VSFeature.msl": "4a63a47bec7f0b0bab1ed5d4ac7549985cc37cf7254e99e615ebe1587a63fb70",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/q2off-control/shaders-0/VSMain.msl": "86f77cc294b00c2ad4b6048ef40b95cd0294eee14bfab5ce78884a894db6c665"
+      }
+    },
+    {
+      "id": "c020linear-mixed",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c020linear-mixed/report.json",
+      "sha256": "74a6c5a65f6d0a80c964d8643fc67f323c587e103164d525b9800b20afe409cf",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "b617d4838101789244b7eac25d6de6a76617e029c144028084f6b09601d9febd",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c020linear-mixed/shaders-0/PSFeature.msl": "f312a4263a748c43ba60704b8356b22befd39a51a737b806ecb0c9dec8395c5a",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c020linear-mixed/shaders-0/PSMain.msl": "060d766a91e225d57f69ff5efc563e0b89d3fbbc11596c1feb38e78ed36e8654",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c020linear-mixed/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c020linear-mixed/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c021linear-matrix",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c021linear-matrix/report.json",
+      "sha256": "d27c8e288f66999e0020e8a65806ca6a9c083a7a4525756f89a5aeb6f6ab0136",
+      "outputs": 32,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "b617d4838101789244b7eac25d6de6a76617e029c144028084f6b09601d9febd",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c021linear-matrix/shaders-0/PSFeature.msl": "f312a4263a748c43ba60704b8356b22befd39a51a737b806ecb0c9dec8395c5a",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c021linear-matrix/shaders-0/PSMain.msl": "060d766a91e225d57f69ff5efc563e0b89d3fbbc11596c1feb38e78ed36e8654",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c021linear-matrix/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c021linear-matrix/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c022linear-holdout",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c022linear-holdout/report.json",
+      "sha256": "5cb9a798ca3e06c804daf9d7ea355a27310ccfeb450f5273d9252a63f53f1e09",
+      "outputs": 32,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "b617d4838101789244b7eac25d6de6a76617e029c144028084f6b09601d9febd",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c022linear-holdout/shaders-0/PSFeature.msl": "f312a4263a748c43ba60704b8356b22befd39a51a737b806ecb0c9dec8395c5a",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c022linear-holdout/shaders-0/PSMain.msl": "060d766a91e225d57f69ff5efc563e0b89d3fbbc11596c1feb38e78ed36e8654",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c022linear-holdout/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c022linear-holdout/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c023linear-pan",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c023linear-pan/report.json",
+      "sha256": "e024996e080076ee5bfd0be192b5c3db145ee73c3c5ac28fb058d6f742b48b84",
+      "outputs": 88,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "d077e313173493fc604cb9df2313b7c2a18dbb6074be2061c8bd89200224309f",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c023linear-pan/shaders-0/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c023linear-pan/shaders-0/PSMain.msl": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c023linear-pan/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c023linear-pan/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c024linear-animation1",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c024linear-animation1/report.json",
+      "sha256": "a36918ca93b4b2717870c147a6084a4caea34ddf5115130fa50ad3a1cfc44173",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "d077e313173493fc604cb9df2313b7c2a18dbb6074be2061c8bd89200224309f",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c024linear-animation1/shaders-0/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c024linear-animation1/shaders-0/PSMain.msl": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c024linear-animation1/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c024linear-animation1/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c025linear-off",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c025linear-off/report.json",
+      "sha256": "cd8dfbfa6cafb064a89e59b26cc6ade69bad09c1df0bd0064ecb229a6f8552dd",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "d077e313173493fc604cb9df2313b7c2a18dbb6074be2061c8bd89200224309f",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c025linear-off/shaders-0/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c025linear-off/shaders-0/PSMain.msl": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c025linear-off/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c025linear-off/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c026linear-animation0",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c026linear-animation0/report.json",
+      "sha256": "261ad4759a94a33cd682ea4b1f01ef2d94c2336e8975061156dc0ce296704456",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "d077e313173493fc604cb9df2313b7c2a18dbb6074be2061c8bd89200224309f",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c026linear-animation0/shaders-0/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c026linear-animation0/shaders-0/PSMain.msl": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c026linear-animation0/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c026linear-animation0/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c027linear-animation2",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c027linear-animation2/report.json",
+      "sha256": "150da277dc1bb581b16ffb1a95ffa96be53b47e94b9177f2a91ccb8abb2290ee",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "d077e313173493fc604cb9df2313b7c2a18dbb6074be2061c8bd89200224309f",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c027linear-animation2/shaders-0/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c027linear-animation2/shaders-0/PSMain.msl": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c027linear-animation2/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c027linear-animation2/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c028linear-animation3",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c028linear-animation3/report.json",
+      "sha256": "98936630d3ce13d8c78aadcc2feac4438c9da97af40affb3a51e247a6c252716",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "d077e313173493fc604cb9df2313b7c2a18dbb6074be2061c8bd89200224309f",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c028linear-animation3/shaders-0/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c028linear-animation3/shaders-0/PSMain.msl": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c028linear-animation3/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c028linear-animation3/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c029linear-parity",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c029linear-parity/report.json",
+      "sha256": "82e64de417654ff9c7846c9c16d1ee7960fa2dfbd93ca6b90a4cbf9fa8246836",
+      "outputs": 2,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": {
+        "PSFeature": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "PSMain": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "VSFeature": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "VSMain": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      },
+      "builder_sha256": null,
+      "backend_sha256": null,
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c029linear-parity/shaders/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c029linear-parity/shaders/PSMain.msl": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c029linear-parity/shaders/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c029linear-parity/shaders/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c030q2-linear-on",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c030q2-linear-on/report.json",
+      "sha256": "8c588a29a29227d2831054a612f556dbcf22088e4bd643bab9cdb80483b9f7b7",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "a3ef03fd29e7850cfc26362265f8d5e4b3362e90b94fb3346c5db957f6ba1310",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c030q2-linear-on/shaders-0/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c030q2-linear-on/shaders-0/PSMain.msl": "f30639cff77d9e80d5bd32f388d6bca925a224824c58d15a10244eafa58118d0",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c030q2-linear-on/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c030q2-linear-on/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c031q2-linear-off",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c031q2-linear-off/report.json",
+      "sha256": "5808c6c445f448f9ca1aba6f032a40bfa221c7c22b044be25ba63f0c9faa8f9e",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "3f8f17de90415fd0b7c2ab1bc167b0d45e4a5d83584bec465e3b169e060b5a05",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c031q2-linear-off/shaders-0/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c031q2-linear-off/shaders-0/PSMain.msl": "3de55c4619ed0f524d6434a4f05891504761ed554628d9c6bc2b64fa839a1f78",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c031q2-linear-off/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c031q2-linear-off/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c032linear-off-holdout",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c032linear-off-holdout/report.json",
+      "sha256": "92f42cf7ba0f2628b3b816ce51a7539d39743ec1bc3dabc560412e7c4ef9db63",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "9ffd7e15e5e00ca78078fdc26da5d737c5ba92031d6e0a2c7a6efbf853c792c2",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "1e6de0217d795e4e3fffabc4eb7ec58a7a6fd503432b8077805660ca2a1e1497",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c032linear-off-holdout/shaders-0/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c032linear-off-holdout/shaders-0/PSMain.msl": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c032linear-off-holdout/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c032linear-off-holdout/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c033validity-fixed",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c033validity-fixed/report.json",
+      "sha256": "912c41f98e5b478de3d2c3f43b245ea1b808734ea53d8b3bd61730f7c17fbf84",
+      "outputs": 8,
+      "contract_sha256": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+      "shader_sha256": "9ffd7e15e5e00ca78078fdc26da5d737c5ba92031d6e0a2c7a6efbf853c792c2",
+      "builder_sha256": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+      "backend_sha256": "21e4643bd0878a4c8e7eaf67cf79854d5a0b6a9943ee3f25310c114d28b050ba",
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c033validity-fixed/shaders-0/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c033validity-fixed/shaders-0/PSMain.msl": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c033validity-fixed/shaders-0/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c033validity-fixed/shaders-0/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    },
+    {
+      "id": "c034source-audit",
+      "report": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c034source-audit/report.json",
+      "sha256": "89fb9ac0713144e4be63e7b87a7b6b2b5b967d943ce46356a4a706961d282868",
+      "outputs": 2,
+      "contract_sha256": "8c9c3951a3c71b31ecc574b21e897517f9e8a008cddf7b9f0c235ffe35091b55",
+      "shader_sha256": {
+        "PSFeature": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "PSMain": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "VSFeature": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "VSMain": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      },
+      "builder_sha256": null,
+      "backend_sha256": null,
+      "provisional": true,
+      "compiled_msl_sha256": {
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c034source-audit/shaders/PSFeature.msl": "c3737b409349ac98e44b1857f1486edda145f040b2d045315d444688b9d5f4d8",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c034source-audit/shaders/PSMain.msl": "5556483b3fa49a41033fd76e54bbea63bd69f34b432059ff54ce2250aff333e2",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c034source-audit/shaders/VSFeature.msl": "6b2a378002b8ce9a007ad7d68f2cb1bde4fd87167a7d2b6f605a4b56e3a68484",
+        "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c034source-audit/shaders/VSMain.msl": "8b9915dafbe1057517a88f85f7c7a41fad2ef6348967c28388f5de87ccc73f33"
+      }
+    }
+  ],
+  "acceptance_gates": [
+    {
+      "id": "individual_ab",
+      "state": "passed",
+      "owner": "Q1",
+      "evidence": "Source mixed fixture, equal output, one variable, repeats and direct crops"
+    },
+    {
+      "id": "real_map_regions",
+      "state": "passed",
+      "owner": "Q1",
+      "evidence": "Mixed and fixed holdout, 4 phases and 2 zooms, verified BIQ"
+    },
+    {
+      "id": "augmentation_off",
+      "state": "passed",
+      "owner": "Q1",
+      "evidence": "Same provider and exact underlying terrain, both zooms"
+    },
+    {
+      "id": "pan_and_animation",
+      "state": "passed",
+      "owner": "Q1",
+      "evidence": "Legacy and source-linear real pan, existing4sourceattackposes at bothzooms; motion/crops/aligned residuals inspected"
+    },
+    {
+      "id": "linear_shader_math",
+      "state": "passed",
+      "owner": "Q1",
+      "evidence": "8 GPU/CPU HDR validity comparisons max byte error1"
+    },
+    {
+      "id": "source_uv_diagnostics",
+      "state": "passed",
+      "owner": "Q1",
+      "evidence": "181 normalized assets and negative checker/transform controls"
+    },
+    {
+      "id": "source_linear_map",
+      "state": "passed",
+      "owner": "Q0/Q6",
+      "evidence": "Q0/Q6 actual-source linear adapter: two real regions4phases2zooms; Q1post2 independent reference max1byte, direct images andpan inspected"
+    },
+    {
+      "id": "source_channel_and_alpha_fidelity",
+      "state": "blocked",
+      "owner": "Q0/Q6/Q7",
+      "evidence": "Q7 directly confirms base/emissive-only runtime; 664cityparts normal0/normal1/gloss and160AO unbound, tangent absent, secondarynormal/gloss interpretation unproven. Legacy familyalpha incomplete; noalternate publishedruntimepath."
+    },
+    {
+      "id": "instance_source_transform_equivalence",
+      "state": "blocked",
+      "owner": "Q0/Q7",
+      "evidence": "Q0c034 verifies34source meshes/175instances, but all175 declare nonuniform legacy vertical projection. Q7source/world cityaudit passes748fullrankparts +44ancient parts,60planar ambiguity; mainrealmap source-body replacement remains Q7 convergence."
+    },
+    {
+      "id": "finalist_d3d_parity",
+      "state": "passed",
+      "owner": "Q0",
+      "evidence": "c029 actual-source two-zoom samepacket Metal/D3D: maxchannel1,p99=0,IoU1, deterministic repeats"
+    },
+    {
+      "id": "combined_192_tile_closure",
+      "state": "pending",
+      "owner": "coordinator/Q0/Q1",
+      "evidence": "After converged candidate, shared large matrix and closure checks required"
+    },
+    {
+      "id": "caster_geometry_alpha_shared_shadows",
+      "state": "blocked",
+      "owner": "Q0/Q6/Q7",
+      "evidence": "New shared rule requires actual posed caster mesh plus authored cutout alpha. Legacy projected/source proxy shadow paths cannot pass; no independent Q1 shadows."
+    }
+  ],
+  "source_provenance": {
+    "terrain": "Civ5EnvironmentSkin source material; generated/adapted topology and source height composition",
+    "vegetation": "Civ5EnvironmentVegetation source meshes/materials",
+    "city": "CityComponentsNormalized source components; deterministic Lab placement",
+    "unit": "CompoundUnitLab source tank and existing four attack poses; uniform existing scale",
+    "resources": "ResourceNormalized source meshes/materials in mixed diagnostic",
+    "routes": "RouteStylesNormalized source material with generated route topology; separate deterministic Lab layer",
+    "water": "ShoreNormalized and terrain-pack source channels with existing static water surface",
+    "checker": "diagnostic_proxy generated checker/topology; excluded from beauty acceptance"
+  },
+  "required_user_action": null,
+  "sensitive_information": "Portable source and audit records checked for personal paths/identifiers; local raw GPU batches remain ignored.",
+  "completed_validation": {
+    "preserved_study_variants": 536,
+    "portable_tests": 6,
+    "actual_source_d3d_pairs": 2,
+    "d3d_max_channel_delta": 1,
+    "d3d_p99": 0,
+    "d3d_silhouette_iou": 1,
+    "source_metadata_meshes": 34,
+    "source_metadata_textures": 208,
+    "source_metadata_instances": 175
+  },
+  "resolved_platform_defects": [
+    "Q0built-in invalid-color accumulation fixed and independently rechecked",
+    "Q0remapped texture-index source metadata out-of-bounds fixed; imagehashes unchanged"
+  ],
+  "closure": "No192tile/globalclosure or Integration promotion while source material/projection/caster gates are blocked. No in-scope sampling implementation remains before those owner inputs.",
+  "q7_source_sidecar_validation": "Renderer/terrain_lab/v2/audits/sampling/q7-sidecar-validation.json",
+  "changed_files_manifest": "Renderer/terrain_lab/v2/audits/sampling/changed_files.json",
+  "validation_summary": "Renderer/terrain_lab/v2/audits/sampling/validation_summary.json"
+}

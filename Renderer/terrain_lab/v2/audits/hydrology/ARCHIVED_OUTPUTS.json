@@ -1,0 +1,1794 @@
+[
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "c0e1cba1e3bb13883702f51482bf6c18bd1bb1eadaba3d7816fe61933c007cb3",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h12-z1-pan00.png",
+    "png_sha256": "13e8ad7f484226b5cedfa54e71ee274af57a9486e14404ef8b576fcc8ba8e870",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "fa41d7e5c62aef57b6a2eefaa55d9fae95467a713f6f51c2bde11edb00c323bc",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h12-z2-pan00.png",
+    "png_sha256": "3bddd5e1fe09552e890fece189c28ed17cdc3a3bc7dc83264ef6f6e10bdac7fc",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "05f33ed24f5d20a8e74e4a3ce116c5448f968a197d6c73c817b9a28d4aac8840",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h18-z1-pan00.png",
+    "png_sha256": "ce22750848e3e23db5af08def41b2085c98003c5631beecba855aa25abefafcd",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "c84adf6e4cf698277b6722b9afb7fe4d65c0271f520510ad818e296f39ae00a3",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h18-z2-pan00.png",
+    "png_sha256": "7aa388f03a9162a26fcd188341ebebc8a41b1e7020fda5dfd4a31364bde9fae1",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "958530320557c84e7b9fd3f9026e7c3d4efc66b83e1494a4d8951b9b800f967d",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h00-z1-pan00.png",
+    "png_sha256": "33834b61a6f20467d96f37e96390e857cc636374d375bb7d14359d2c33a2cb52",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "e72f111c18789838a18142a5be7a6c5a7a168e573dfb4ae43c939c46c755ae09",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h00-z2-pan00.png",
+    "png_sha256": "2458066baf6b43bff09441c61387c2c76c0fa688cb98fc4ab9f00c2d227e1318",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "1091b54f0be140a58a15bae32be3980c9659a9f88e7e755dba456414849e5cdb",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h06-z1-pan00.png",
+    "png_sha256": "d21a28c84115ca3526900e5dc0d85e770ba3cf36d3922a74c867f2f249f97c82",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "222aa5ed7b68e0fc5a4818c08a580c55a1f21263d66bf94f0e2635b28c19f000",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-06/h06-z2-pan00.png",
+    "png_sha256": "3670b5cc04d6dd396aa564e27abef43be215096c5e3487a472b88103968274ad",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "7e8fc4e866b2741f685b665ede32699e728aedb71b8013b77d96802a01630313",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h12-z1-pan00.png",
+    "png_sha256": "e6c1eb980fff222ebfbb0535c21da42a385cdb86e84111b9471992e2afef9b1d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "0c2b421b3bd70abca131fc29fbd3d4e06153dee3d9a5d6b349555a3caf06ffe8",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h12-z2-pan00.png",
+    "png_sha256": "d1dca71f077188b462a84275eb7493827b552649d47427fd568e86265db00e9d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "5725a16591b2708f9be7f79b9745235a33fbe38a1a48d51a036e93fbbd89e29e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h18-z1-pan00.png",
+    "png_sha256": "f75d65fe08accc896d47439a08f398235c6521062da04ee4462caef1b1bb5a05",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "a63eaa36c207d8f2e70e032c7d509d9ce9f1b2135d3626b8288979e14290e8aa",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h18-z2-pan00.png",
+    "png_sha256": "107f1bda497e017b7d353dd4db08866e659772cc046588de9d763bda6d9d9a95",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "f7fb5e58c4f9a60b3ccdf6b688e86b280fe8ce179d6d56ac110dc2e6a232f428",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h00-z1-pan00.png",
+    "png_sha256": "77dca05548a79e16332c30420351fe76f591183a64d0d2eb6f68964e94812ad5",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "b4dd1fd3297bac76627db0c11e5ebb26876961222843e3e4bf59b40fbe0cde32",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h00-z2-pan00.png",
+    "png_sha256": "26b0fb77629a03111ea8aafa7a5a7870336bce70816e9ead990c6a11c492d7aa",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "a7109d131ac6785e4f3319dd71ffad51130ebc54c8fe25e684e308eac1d3b390",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h06-z1-pan00.png",
+    "png_sha256": "dc12ad1319df5caab71f97d665d93ce5490f1fea12639e80b877016be1fe4273",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "dbc76674a05a19308721168e6fad8e3368ce901d30facc4e86dbee7dd750a7cf",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-05/h06-z2-pan00.png",
+    "png_sha256": "2037f525d94ba098888cf46a74516f952acf12da00f482a4f8f1a572c857784d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "c604fe73f19174372ada56329f78f14ceb9f23b76a235fe8133674b64655868c",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h12-z1-pan00.png",
+    "png_sha256": "47141a0c1c3ebd240a00d94a2a0146d7718d3ad88bf6a441e4fac9f655f475df",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "4ad0d95f8623a8ad966c0616ababf5dcd51bcbb9310ea3980ca7985aa89d9faf",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h12-z2-pan00.png",
+    "png_sha256": "476029ef71defa467175b8211390183c0a8634a032e66f42b9b1e3f5e14ceb24",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "7f64477e4c83899b95f95b0f96e04671a2d18a8cee5885fe586036a6ed8fb115",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h18-z1-pan00.png",
+    "png_sha256": "e8d45768bd3ce1bf7ad4a29ed7562cf02b0619c88e364c07ff914ea1ca24d791",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "217c351064817362bed590b9dd3bffc6a7c33e492281d57c1ab38d40946e2e0e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h18-z2-pan00.png",
+    "png_sha256": "5f8e0be9c8d774ad046e65376708c5dc530ac40c9141e97689e7115b1064944b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "1f6a02cfb60ba1019fc36c1ec8ced5e25dc6f9712745a193f1d5d746ffefe083",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h00-z1-pan00.png",
+    "png_sha256": "47d4669568e2573f90a1922ae2a0f16069a704feded9615cdd74b4e94a329ee5",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "f7bb1c556546433a5dd473e2a21ace39ec348370955e9df461786c9cce6044c0",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h00-z2-pan00.png",
+    "png_sha256": "70a27e111eb33ec78e5e2d92febfbc511918fd6c9ac7790fba2978ad6027bf5f",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "c5aae254ae18561323b5c11e7090b29df227e7412e60c29a21e49fee046ea3fb",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h06-z1-pan00.png",
+    "png_sha256": "afd3ea794ab7ec04ef1fb1189326afb7101e62c7c34c088731f94e22feb08136",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "7e42e5ff2d0d35b756d437096719d359aaa26fd80d19ed03a16d57582a919624",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-05/h06-z2-pan00.png",
+    "png_sha256": "6582eb41102506786cffa8f954ddb47bccb6badb435c4b766c431daa192712de",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "57cbd1a0ccf9b436c9778f10cfe84592e4aa5e5db80bcd648779ba0492eb23ff",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h12-z1-pan00.png",
+    "png_sha256": "2f536b7812ccfd7b03740de461bd8df5a085c89f70239376933398bea0e60332",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "89d8cc333a0c789b94077c919478e5f163e321ed071fc44b9efd10b936ccc31c",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h12-z2-pan00.png",
+    "png_sha256": "26b5eff27ddb814908e3316908350e16fc41e1c1eb8cfe5b58170cc795238d00",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "5e1de9387a962f88c1cbc5b631b6b4fc1f44e541bdadeb081b453cf46b03842a",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h18-z1-pan00.png",
+    "png_sha256": "5648ab45b219d71a86f43c2a4ad70335645ff78c13c431495605552c4165abe3",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "55a382d2e301111ce0ebaa4c906017f45934a48d5150e96d20c0c2f7b5226a2f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h18-z2-pan00.png",
+    "png_sha256": "dd3441895836f11b7256c56660919a174ff76d0c3955bda46789c90e4ed60699",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "0a5a5c5d1e54cdc9528376eb65e6abc8d9e548df1560909bad751691025b9cf9",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h00-z1-pan00.png",
+    "png_sha256": "0c87fcc609b059e95c17a463025900aebc42147db94202d83dc8bc058aa49d4d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "5392e9d86e5c7cc39d9ca59bce51c36f8ef003d2e1352fffc77fd8b8fad14f95",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h00-z2-pan00.png",
+    "png_sha256": "ab4b5e5c424c460c7077e3dfb303fe0f5acdc4bfa0fd07896870034801bf4f0c",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "960e01d72b9a89497e36267994745193f96ca075c4eef09905c13bc5310b799f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h06-z1-pan00.png",
+    "png_sha256": "dc418e20dc1295aced5a98f702f09dfb8cbbdbe071243bfe7d1e873cdda2592a",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "38bb6637dbe5ebd47a3085373233fb81639f9f4720ade89a322b720ff3c14a3b",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-05/h06-z2-pan00.png",
+    "png_sha256": "e79a060ac8a1a763c659c0dfba6582f21d6e39fe88d947512c0b244dd750eecd",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "200c22e38fb58cb32df32dc24657e721504e3f1f323e2ede0ff29833fc19ea6f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h12-z1-pan00.png",
+    "png_sha256": "5b1a106fe1d30f00a87f411d19bff6af8a5f06d74d9974eef195fb51155120bf",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "dd5ee7313699f51250aeac56709a0cdd40ec8f466624e20429db2e3731058490",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h12-z2-pan00.png",
+    "png_sha256": "5f10cd7f126124d88c30c973e489bf430bf7457ce6714e19a1d9d8a115c4b280",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "24c13ea017e49d54397cd066f6a2108d64faa8448733934b6b03f7cb22451f42",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h18-z1-pan00.png",
+    "png_sha256": "b9c6fe857d573da95aa5ab7cbce8501b50f92e61910fbaea538b2c6140980d53",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "8e6d8aac2fb2201a396f108e0608923fe2cc5b65f22481ec912646aa0effacaa",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h18-z2-pan00.png",
+    "png_sha256": "585246a0027ba7bb71ad5558213c3c88210a8d8d474786b937db2beac301bdf4",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "0a4587e5d1c767b5f01f0ac6a9c8326c8c29383c45bea2731e5326c386b9ef32",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h00-z1-pan00.png",
+    "png_sha256": "7cd6d889d0d543ea7445144f03f0323d8830463b0ee9982de10d58b286ea824c",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "4fdde2cea8ce5f3aacce222be7a000a09acc6ea314e6f3ea8463930e14d71000",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h00-z2-pan00.png",
+    "png_sha256": "f31eba6a97633d3b0dad947ec2efb683d7aa21a8b81a97ba9fd347969932caa1",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "f3b1d6272f072cc65df5423b3083dca6fe0c9ceb900a4be9c63945453b13b1ef",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h06-z1-pan00.png",
+    "png_sha256": "ededdbe7f3bcbbd2d1ff05bb315cefc404d026cedefa94107a77f074efec24d9",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "498ee080ae9ad51fb51b995483b3945adae106b8b878691f9a766ea6d41aadc7",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-05/h06-z2-pan00.png",
+    "png_sha256": "ceac5fceb6b1334fbc36f078d91d507232a19caddd975223fff9fba83444ea25",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "0fc92d8b5cfece3ab6f215b9836585c0de0a13f60d06ebc4ed0bf079b0e5f39e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h12-z1-pan00.png",
+    "png_sha256": "d11054c739abe813fcad27d013d8dc7078422ae88161b395c2678894ff2f76d9",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "1a84e1999c857bdcde3d1e7931461688518c21a7411584466a98f8125662d932",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h12-z2-pan00.png",
+    "png_sha256": "d027c10cb3a5c7a4b703b963688c07a4b4abd195dfb58c0f8a3a99658735668d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "6fcf6fc7bc69fb3ae9d5afbad2bfd5d2cbaee5bb0d87479ebcf4222a8ceb5e2e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h18-z1-pan00.png",
+    "png_sha256": "ed3cd7e844a1dced3288459693dd07bbcb556979e994a3e4ae5ffdd9cfb44a50",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "5e6011650694bc25945ae45e9d5796fd7b93aa6fa66fe58ddbeda2feabe002e9",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h18-z2-pan00.png",
+    "png_sha256": "ee533a78d4f8fe2a7f2d9abbb4cdf4afa2f0829eace4c7b3390e1d17a18064b8",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "5c6e6854ee07bb7fb0eac779fca7d89b4a950cd9bbb0a89ef370a32b8cb500a8",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h00-z1-pan00.png",
+    "png_sha256": "e1713082051cef45ff3776a1a49f9e3cc62f399540c9d2ce2dd4c08b4e5378cf",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "06c74a4cf18ddcefa79d6974808dcb8e4ed89baafdf8ad51b3f4cbc90905bd40",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h00-z2-pan00.png",
+    "png_sha256": "ea4482880f36945c85afd1d1187d6196f1e05e646911a760677a75a7a990451b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "53525d725ec08ea281003c083113ccae8bafe9e1b1c5bf33c1b5ad3ae4da9027",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h06-z1-pan00.png",
+    "png_sha256": "3698b8231957495731a394d8f36749654f1f6c190f1082ba605b875c6bcaff12",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "6e69acbadc4dc50832041991d52c0c00413df8e3b92f3ba111f807bd95766bc6",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-06/h06-z2-pan00.png",
+    "png_sha256": "e1160742c4f9cdd6689390e281498cff0c7fbb6c37ebbde439e3e217ea9a318d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "5f7b7cd4f5fe137c4b3bf783e5c0089cfd919ed46847206b74dc109a54e63ef4",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h12-z1-pan00.png",
+    "png_sha256": "bc55fd41e990633a7debdf814eaa9ee8920d2d245c65b2715950a2da8f322f16",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "56e5443c2af1db681bbe974873fc00930df0bc1d43fcc5c4d0a93d8028c5f772",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h12-z2-pan00.png",
+    "png_sha256": "29b60e803444f01e68c7f69d6976148d5e1387532e7a55a557382140e2fdcd2c",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "1d56f8b963d83b1e280cf03bc236524c0f1e99f61f36cbf239eef16023e2a4aa",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h18-z1-pan00.png",
+    "png_sha256": "7be4aebc3182b982961c2865c013c97ce534ea5a6c7e87669dc1b041afa37de5",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "feb38b26e28ebba6a8060eb9907f0494dce40fd2837fb308c2349b205d8a1b68",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h18-z2-pan00.png",
+    "png_sha256": "a73684ff2328bee30669062aa0327922b9da9e0852a07a8b1b7820980d89e84a",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "b4b22908ddec55d62b7e6450892ee39d5c57211ab7d8a22e48dd5d92839ea2d6",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h00-z1-pan00.png",
+    "png_sha256": "b20df06438d318151ca9a2a1b45f64e45673f0a7dde4326252d6706938b31de1",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "e95eae660d719f35ff6aa60c0aa529d8fb9ab3c553ed688c6e43967877467cb5",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h00-z2-pan00.png",
+    "png_sha256": "c7afe957a688259838e0730fab9c7a31e40a76b48c149eac38c4f661f4d37bbf",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "9776a00b243b7af1e5fcf211e32f196d6c5fa85fd1e09fde43a2d62663072dae",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h06-z1-pan00.png",
+    "png_sha256": "be8a3d834c62c3dcde66e7a12fc6372ddb4ccfed32c8111712e64c49084c4b63",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "252a22a8575d306d6195d1b334370199a3a71305c21ad7dffe8a56fead9624ff",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-05/h06-z2-pan00.png",
+    "png_sha256": "c284c6ab274dd83957b8a9d72f6d2a51d7fd5e9750fd79e4c2ab725dcb128d70",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "386a25f7e68815916af81b3dad71ebc152fca2b92b41bd41e1d8d79eb862704d",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h12-z1-pan00.png",
+    "png_sha256": "ac00cd241980619d4330e392c1f282e99a66384f45e3ed333a14a4b2a49da237",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "b466430f7f0f7ae570f837ecdca17f282ff8164d092c580a41ad79d94f69e055",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h12-z2-pan00.png",
+    "png_sha256": "85f15a7362430ed5b9abd12c421e2f1dd053e194971385486830b46485990a21",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "f6f639ca2f5c9bf0233830abca334db1eb4a5905ff081538bca36133ca1abfec",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h18-z1-pan00.png",
+    "png_sha256": "e049a3f6660df8058595dca65f919e0fd6c226cf5f702321d63fe6c8a535f9c6",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "03c59612db4ab06c23e2c937e3c2c372b25a2707c2a6e2120a517810f1073c7d",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h18-z2-pan00.png",
+    "png_sha256": "b79ce80a739bfcdcbd33b3d3ac444e68ee3cf29893677e5d79ed94b45ea7e2bb",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "2ecb9dea48a35c133f96d4551fd971897cc88b5b550ee935543737af20f2b034",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h00-z1-pan00.png",
+    "png_sha256": "b13513e41e918c53586869e41842bf19f8aab890fd8967830718bb7d9dfd30dd",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "182a8862a8acb0e1a4168e50ae544ac1a440c01bc5e3b013f28797290b040171",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h00-z2-pan00.png",
+    "png_sha256": "7e9ba0747ba26f1d9f44a4cf579707a049a5bef8ee5cb817855bdfc44f6cf10e",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "3986836f14d65f6dc45db2c93e1d32891de08efdc0a994d78bf25eb2c4d49d5f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h06-z1-pan00.png",
+    "png_sha256": "ad83a18b3e5a33060db17d40e8fab5e286103531b9b095d9c75d984dbb921061",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "243757ac6583aa768b8018104543fb79a011d14bfb91c555ce122cb0f4fe0f65",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-05/h06-z2-pan00.png",
+    "png_sha256": "b32cf45cd20313abe5a320b434a8cb60ef01764493e8334583a71e939c317b9b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "c8d0b21281a69f7a8e1d6aa9311958a824f0f0226466c3de522c88fa537cf3f6",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h12-z1-pan00.png",
+    "png_sha256": "8f46f0e43d9b1929872355f2c3fb17efa2281f78a786a853b2760fddd0a0ead9",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "aeb345eaa5275110c36f9c714132c675001c71a50e09ff5195157b71087481ab",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h12-z2-pan00.png",
+    "png_sha256": "3d06ac360c07eafc785ed8e0cefc3c88099dde6ff5b6bdae692e40bde56d94b0",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "4eed0653e53d050b11959d0f6b1df67b605e84bbae39002c5da35ca1c994d26b",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h18-z1-pan00.png",
+    "png_sha256": "11ca368d263a538c2072a269bf68ed2900f52284221e6b8c5492a802651071a3",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "d4beb5e01cf6c3a4dae2a3ef29a9e9137c16e6a4815e4239297a9f6993deff78",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h18-z2-pan00.png",
+    "png_sha256": "d8027d23b8b4576a2adc4a6eb2909c9da632d5ae39b30a6df181399fb59ac7fe",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "effd57bd115f0c4024cc9c9b4df7ef62e8abcde8340e2daf7bec154146ce291f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h00-z1-pan00.png",
+    "png_sha256": "a414ef1a09ec798e43f1be7e9e2a661779b5ac7817262e1979c1dacbb70b9f2d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "d79ecff7af53f4521cbfa17e1df14aa5e79f1cc2265369cd7d67af64a85097c6",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h00-z2-pan00.png",
+    "png_sha256": "0516fc4e67f74eceef2a747c4569da4fbc3a8abf4b1aba3b03218d7e3dfdad1f",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "75c5a66f3455b36c1cf7bd50ebc2787ee6e550e7a8066ff752c0a870bfb8c49f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h06-z1-pan00.png",
+    "png_sha256": "77b1013a26b1dcc4c3d2e05dcd099ddeeda2725eb6c31ef690a4b3066043a2f9",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "aa357a4ec6dc178624288a2339c75ef843ae5fb55056a3cf28d35caa95493fa2",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-06/h06-z2-pan00.png",
+    "png_sha256": "c716c29a0b685be4e61b139fb93757cf44836dc734d1f1868a556916233839d1",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "92d1910122a1391b2637c1f5d6deae224796c4ee8e862a0459dcf3bf3484dd02",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h12-z1-pan00.png",
+    "png_sha256": "d40a9782e7e8e553a71862476acf46ed9e9fde9eb6e316f704912e8d9b3c9061",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "fef729f6c7865e76e4ec411e2b0147dee939ec7c446686f57f18e04c7360989e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h12-z2-pan00.png",
+    "png_sha256": "a4a10ba7612c83e33bdfd7c5dda713e8d5a6949cffcdd970406bddbd99c9bc23",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "141818ea9251dce5a473f2c7dc1b8316da9d754b8c93e36c70957bf86f6bbc64",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h18-z1-pan00.png",
+    "png_sha256": "4e3a26530abc0de5aa1db55f3211c234f9bdfb518499de2c6e7fce89176c5c04",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "eb312843bc04ff800826f16bbb59052cbd976eb533be66858c28482a2a2f456c",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h18-z2-pan00.png",
+    "png_sha256": "f8fd9d55a3a8eec2b7d19aed2bc13c6462c260d410309e7d68c0592ad252d60a",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "91e40576327ff0dd53c718cb811ab667140fc312dca70e66d7152587e6cbe8bd",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h00-z1-pan00.png",
+    "png_sha256": "8226ca0373597d11e1c54c79a6ad0af1597d235975d62bfde602d5bad449207d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "6ed9a585316253ddca1c7d772c05486a05ed3019caaa8dbf828740cc1e46517f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h00-z2-pan00.png",
+    "png_sha256": "e7c8d6e0827353869ebc85b01b6098104f26c273d8e158fa48738caac74f054f",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "ef3802d1e1a61e82581b22fcc0c5e6fa4fd8c2b7ecf415127f422ef0521f33a5",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h06-z1-pan00.png",
+    "png_sha256": "c4f8bf7f481968e59f769e64eb9b8ad23a807ea51335539897ef14fd8160ac55",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "6a58ee268ae855d8d6b53bc57f00f111abcc7a494a9ac9f53f0fd6a41f9ed75c",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-06/h06-z2-pan00.png",
+    "png_sha256": "150c1363d00f36a375ccb3354405fd7ba18e6a1b6830c2dac67f39999989ff30",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "14b1fadb9c10cb1775bede49dda6672778e1bc72546d9c5517655db1e37b95c0",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h12-z1-pan00.png",
+    "png_sha256": "1ad62088ab8033d40532bf49241e6728ed1c3e04f80af9e9aacc3ac64b19ac4b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "9d65edcd0788df046100b688cbb04985adc0ec49ba8c668ee1d2c72da935eca7",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h12-z2-pan00.png",
+    "png_sha256": "4e59f7a283813777607f220601036dd2878ddae501898e058c66d5d9d4ab1153",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "9116dbcdc6a457bd6a16187b13d9cc40ea316f1ba07b1a29f21e4f034c1b1ad4",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h18-z1-pan00.png",
+    "png_sha256": "aeeece56c75ec3752fdc623965034c42b21c027586e4ede45e61965a29fac5ce",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "fe0a1e459c93d4833e6b58e1d3c7d66f97a2b28c8482c81ebaa4a98f38bf90c3",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h18-z2-pan00.png",
+    "png_sha256": "262e0ca0923c9c9a9c63bb611d364c8f304eb174b5e0888b0a29b0b0c4b26840",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "852cd04b7312fedce40126571e2c32ec28466744a8c30eb9f3b07cad29f1362c",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h00-z1-pan00.png",
+    "png_sha256": "8d98f8d50d9102d182f0242d918b421c38478ea2f11b40dc637e6ebae1f7e95e",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "53efa7175f143e5dde13befa506f50c1c850ea61d8a27cf976b315562f034831",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h00-z2-pan00.png",
+    "png_sha256": "96c948ef925fe848a067d732f0a6879e9740e1e611a8eb424cf6d561d6760c0a",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "c23e96feb4e62f1422dfa7e4ce21056b4d5d7b3595db866ee4101fe1758d88b0",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h06-z1-pan00.png",
+    "png_sha256": "77239978632d5e48e53eb39403c787e24c41e4d1857de57218936a869eb653b9",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "b34050ef9f1a6b98096fbea6e14dda76c52f2efd0d561b91b89b8a28c4682f76",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-06/h06-z2-pan00.png",
+    "png_sha256": "c340ef6ba4ebf9025a428280b10f3034c2834dee46246e0f063a9013e3d9b234",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "10cbb7fceeb844246ebbfcb38c49a7462040edf971149a65a95ff4d5e52c6688",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h12-z1-pan00.png",
+    "png_sha256": "4e7d4cc1cd52f75ff6212bbca16399509b3553a22cb392d54325c63a3cbb0392",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "072bf05b469c1d7f0ecf608c44bd0093867c18d48e4d036724ec5590fa54af8a",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h12-z2-pan00.png",
+    "png_sha256": "64e4da8bf11b36de23d3ac3d102882e318db29bcf850ec2fdab185fcdabf4b7d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "a6ea5479bbf9ce1757af4876a1fd550bb262a83fef5b1cd5eff73b2c601c7cda",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h18-z1-pan00.png",
+    "png_sha256": "2ba300ce285571a77f9be351c116ac44fec4c5a5cf9837d35f430fc46b40642f",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "a73c65d32f53fa43584c6f5d183fbc328a4ccc83cdd6a26549681e07b711dc3d",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h18-z2-pan00.png",
+    "png_sha256": "7ae6441ba40204834ed1e06040040cca20ade0df1a1e3614760921f0d28add20",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "70683efd53f07bcbbf7bf664c252609f4c1d67fbd38da56be9d39a2271e2dbf4",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h00-z1-pan00.png",
+    "png_sha256": "3c1fa860657aaf1a0bc9e324a08f91e5c0b52aa2e21d0cb9bed31293dcd1e2c7",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "67415ff06645c201974a8e781aa010c997a6c574021bae7246bcfa32016c7a04",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h00-z2-pan00.png",
+    "png_sha256": "616bda684d4daf234679f7da4bcaa79c5b1ff2f6767520be144dedb074b16d15",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "18df0586bd82b9eae49d817879fe1f1ea71d75465f4fc1145e0e2f001c1a0ce0",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h06-z1-pan00.png",
+    "png_sha256": "132328de842cc687b927c6511e9b734437a64d76abfc5aa472c90167ef9e36c2",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "0bed1a244a98fd4d3b63d3a1e096655d0b69c617591c9a1c7bcdacb21aabcfe7",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-05/h06-z2-pan00.png",
+    "png_sha256": "5103e2fb138fc276d4fdbeb31cce02336eb79379d920ae7a74cf3c683639222b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "673c68941324ff50e603d62e3482852bd9f6713c84424ed0307a8b0d0e27d202",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h12-z1-pan00.png",
+    "png_sha256": "20762cfb5cb2246c5e8b1fb4997ddcebfe88ee6142b3adc636ea147f505a5b88",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "a6491d0eb632585e273340bb0647e069aa2bde206c2c6def01b5075462e418fc",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h12-z2-pan00.png",
+    "png_sha256": "4c5d7ef78cfffd27f92ca45e7a47ed894d2f8cc56b1f270543e19f72a04097ac",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "3c8874682ab44aa1eaecc63633c712b35514cc6a856287cfc927898584114bf1",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h18-z1-pan00.png",
+    "png_sha256": "f69a3294d8430c52f31bb2bcd222b266cbfa9d0692899b0f119ad1c07adb3b1b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "cf47c8984fb4b62bc796dbf13e25089c0e283c1456ac2b9681382544ce139b9e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h18-z2-pan00.png",
+    "png_sha256": "7baae1a971b4c506e1b2a05f2b360880e4a6267a127dece948273d41118b528b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "57c6e7224c7d9f207b676db04446db1ed49e55322dc3880b4864092820051241",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h00-z1-pan00.png",
+    "png_sha256": "9134da5d3052b79523c2f49aaf7a6b6055370e9033d138abcb377b77a2b818e2",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "a8acab197cc8dbbb51bc753307e1092b7818959bd1cd92b0b6a202706e456401",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h00-z2-pan00.png",
+    "png_sha256": "f0a5e56a5f8c9c606939e00d8bb7d6b44e5223e81e6dbddee8a2095977ebd04e",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "6d8e8009ac9dc225203edcd724c180455481b6d34dd2448de9005a33402cb40d",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h06-z1-pan00.png",
+    "png_sha256": "4f7377d1c34072cb5bce533ad362015e6140de4a70365322710be71ba6dd5c49",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "30fdd5b9e3c26bb8a2ba0424b78fa8a70870ea179d3f3364ddffa519b186aa60",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-05/h06-z2-pan00.png",
+    "png_sha256": "fac503719792416446fbb8a7dad3d0016942f68fa5722ab3cda4a2aa0f081187",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "c4a525d61d0dfea8beeeb65a756670e0b4472f0e752f01e1b4aa7e9ea441f65f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h12-z1-pan00.png",
+    "png_sha256": "fc5c7af30609b846a9979582b046f0f831d198022e24c0a272a90d813e6c2723",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "d8cdee3d39df546399fd0d144e12cfe745c1caa14c3b1a2e79114c18ac069117",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h12-z2-pan00.png",
+    "png_sha256": "3873f6e365a82050a2facb72d2bd4542e20112552ca6b95e099534f8743499a7",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "31fc3114be9f8e0ad76915a37d9a383eef3a32cb4c3cd66c88a8dd1453d6b710",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h18-z1-pan00.png",
+    "png_sha256": "47324061720e45b44399cb20eff49804a1d36863f6a9238284dcbf15b1a11a49",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "b5e2b3330f8f43d408b1dd87beaa93be2d713ddeee219a1091e4dc397ae925ff",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h18-z2-pan00.png",
+    "png_sha256": "44e3e3f01e7dd50e609681e03d07cc06346917b690c7a6e787c8c6a713e91139",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "ed7286fd4c751c95fe05ce5af97e93793e65529e13d4e7e6ecb52b8904bb58c4",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h00-z1-pan00.png",
+    "png_sha256": "c7cb8b57802b1cff2905d71ed7418d4b9a6d290be628e157908f9da2addae6ee",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "fba8a05e487f5400db60478cea00b63921125e7f436b32c2fff82e86e44f8414",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h00-z2-pan00.png",
+    "png_sha256": "7e4120665c714ede6b5ef5cef7c787f4222e8b0eb56eba577c32d210eb4964ee",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "813cc9186b0d3291849bd0f54f8f1ff389508331d00598adea62f2504cf4b323",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h06-z1-pan00.png",
+    "png_sha256": "2d6916fdcc91ad8d6b168d4227da8e3f25e90a5b2adf07922d9897f118911fb5",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "5f022407cf2cf00b0f9692e8d3e8a3091954fd2461bf66e7c411b8e1327c8972",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-06/h06-z2-pan00.png",
+    "png_sha256": "450f3262eea05d76b662d2dbe70fe65750f8e299fd8b1566da090dfa1b875a96",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "c7b8405a3c6515624bd2456b11a42bee7ad292fb6b770e8d88e8beb3ac5360e5",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h12-z1-pan00.png",
+    "png_sha256": "33f843eba61a42c9e2b6e332bfe42fafe4a6c10f91fb6e370646d16d97560416",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "55ce728b230321bc73f0005c33e6b7add2373d71461b0c0cbff7346edfcf9ad4",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h12-z2-pan00.png",
+    "png_sha256": "1a5fab2b48f3a35b931ef27669537ad70bf16eaf0e18d7566c2fc944a625324b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "51bea166c728020409e9481049c676e29c13b0e427fe130d4689a4d795c10422",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h18-z1-pan00.png",
+    "png_sha256": "7dbfb98f0970968068f37340576072b844b59cd51fe5b1c23d22a35dae6c4f95",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "7d477c418fa4d6eb729cbcc92e1a28a17d69af4b6e0f080f520c1f56f2781877",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h18-z2-pan00.png",
+    "png_sha256": "b4c0f92735838bbeb0764a38937444d049d37042470d6666c2714a20b501982f",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "69570c4d28e778bdc3dd74940c2deff7f25d3c6ed05461e0a42af22eee7b1ef5",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h00-z1-pan00.png",
+    "png_sha256": "cef09a4c92050d55722d9f4dee2426f0272ce23bd7e6196b76e8289608a66b44",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "19eeafdf0ee490adc7bf6023fc4a6f0ee747f6a49f2f23e18681590d440710b1",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h00-z2-pan00.png",
+    "png_sha256": "3149a009a3fb4101e9ee6870dc367ada7cb63914e85fbe56209acb873ff25039",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "587466cdb69deebe766869c66491d9a2d82b5ef34c0c06d0cc9d0a956aec0812",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h06-z1-pan00.png",
+    "png_sha256": "68f17b6f4c5c91ade45a3277ad2a727812aac55d70f0743f492160dfc0f43645",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "2c2eaae9fdc82d198a591c5e3e3a544d333690fee2cf9761792df8b0ecfc0773",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-05/h06-z2-pan00.png",
+    "png_sha256": "d41485b36a6ee77d8b846cf818b1a7b6ef7ad8de84fe3876e206ed4a74fbd594",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "cb429dab58da92140713ebcc5139c6d3b8a0493d5b270e4b8428b3d8ef04e35e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h12-z1-pan00.png",
+    "png_sha256": "ca257530d7227ecb1653b5da6cd570a649caa33f6a7a8752faf1e29b677628c7",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "c500a2caa04dddfa68a1fc9baf66699b366d5e00024df6311cd4def2c07aa84e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h12-z2-pan00.png",
+    "png_sha256": "453f5f3cab625b76528c0fd916f54dba139f66635f80a2473971474e1ffd51b2",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "af11bdaab3a2c254c2ae6782d01119d484cfbca895446fcdf52e1d99d06f7db6",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h18-z1-pan00.png",
+    "png_sha256": "53359ce206d7366e5541519857b73c0c09d576f0fd41f37af7424f50a471bc50",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "5d023f8976180af12e862ea8e1dc5db52a815a771ffd8fe6889a31fa35ac09a0",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h18-z2-pan00.png",
+    "png_sha256": "f9852078ed6a53bdb4e85f358d2219bf1c5f113dba6e832fe5204718125d84e5",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "7b055539dec247a9a172b5d04bee768a75b5901dde7bb4418bfa76ca214d7cdb",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h00-z1-pan00.png",
+    "png_sha256": "447ad954e72dc9d98bf3f7854833cce0b0c6de7ea60624b8c68ee6c807bb8b11",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "e7c4bf6a0fb01d1cc6c60609736f7e928aa35a791910a8bfd2c7a4eeafdeb728",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h00-z2-pan00.png",
+    "png_sha256": "8b05e08ce67e35aea8ae04bd009dac444afa29ed7082d0d8b4c138dd14359dca",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "6a7110415270627720ed95628d0e4d6bb711ca63705e1b4195a43b49e00822eb",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h06-z1-pan00.png",
+    "png_sha256": "666194499b7da85a4044cf4a5d18830387445046bc7e3d699d48fc800c8344c2",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "9158cf9204b1323bd2e3c3295d0a412343b248dfbb5a53cac42381a84f7c832a",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-06/h06-z2-pan00.png",
+    "png_sha256": "00a9cd977980e23682bf6863cad6a0d7ecccd89266b01d9a9befc5a43eb6b84e",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "c0e1cba1e3bb13883702f51482bf6c18bd1bb1eadaba3d7816fe61933c007cb3",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h12-z1-pan00.png",
+    "png_sha256": "13e8ad7f484226b5cedfa54e71ee274af57a9486e14404ef8b576fcc8ba8e870",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "fa41d7e5c62aef57b6a2eefaa55d9fae95467a713f6f51c2bde11edb00c323bc",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h12-z2-pan00.png",
+    "png_sha256": "3bddd5e1fe09552e890fece189c28ed17cdc3a3bc7dc83264ef6f6e10bdac7fc",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "05f33ed24f5d20a8e74e4a3ce116c5448f968a197d6c73c817b9a28d4aac8840",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h18-z1-pan00.png",
+    "png_sha256": "ce22750848e3e23db5af08def41b2085c98003c5631beecba855aa25abefafcd",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "c84adf6e4cf698277b6722b9afb7fe4d65c0271f520510ad818e296f39ae00a3",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h18-z2-pan00.png",
+    "png_sha256": "7aa388f03a9162a26fcd188341ebebc8a41b1e7020fda5dfd4a31364bde9fae1",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "958530320557c84e7b9fd3f9026e7c3d4efc66b83e1494a4d8951b9b800f967d",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h00-z1-pan00.png",
+    "png_sha256": "33834b61a6f20467d96f37e96390e857cc636374d375bb7d14359d2c33a2cb52",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "e72f111c18789838a18142a5be7a6c5a7a168e573dfb4ae43c939c46c755ae09",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h00-z2-pan00.png",
+    "png_sha256": "2458066baf6b43bff09441c61387c2c76c0fa688cb98fc4ab9f00c2d227e1318",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "1091b54f0be140a58a15bae32be3980c9659a9f88e7e755dba456414849e5cdb",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h06-z1-pan00.png",
+    "png_sha256": "d21a28c84115ca3526900e5dc0d85e770ba3cf36d3922a74c867f2f249f97c82",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "222aa5ed7b68e0fc5a4818c08a580c55a1f21263d66bf94f0e2635b28c19f000",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/bed-only-static-05/h06-z2-pan00.png",
+    "png_sha256": "3670b5cc04d6dd396aa564e27abef43be215096c5e3487a472b88103968274ad",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "7e8fc4e866b2741f685b665ede32699e728aedb71b8013b77d96802a01630313",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h12-z1-pan00.png",
+    "png_sha256": "e6c1eb980fff222ebfbb0535c21da42a385cdb86e84111b9471992e2afef9b1d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "0c2b421b3bd70abca131fc29fbd3d4e06153dee3d9a5d6b349555a3caf06ffe8",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h12-z2-pan00.png",
+    "png_sha256": "d1dca71f077188b462a84275eb7493827b552649d47427fd568e86265db00e9d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "5725a16591b2708f9be7f79b9745235a33fbe38a1a48d51a036e93fbbd89e29e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h18-z1-pan00.png",
+    "png_sha256": "f75d65fe08accc896d47439a08f398235c6521062da04ee4462caef1b1bb5a05",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "a63eaa36c207d8f2e70e032c7d509d9ce9f1b2135d3626b8288979e14290e8aa",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h18-z2-pan00.png",
+    "png_sha256": "107f1bda497e017b7d353dd4db08866e659772cc046588de9d763bda6d9d9a95",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "f7fb5e58c4f9a60b3ccdf6b688e86b280fe8ce179d6d56ac110dc2e6a232f428",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h00-z1-pan00.png",
+    "png_sha256": "77dca05548a79e16332c30420351fe76f591183a64d0d2eb6f68964e94812ad5",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "b4dd1fd3297bac76627db0c11e5ebb26876961222843e3e4bf59b40fbe0cde32",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h00-z2-pan00.png",
+    "png_sha256": "26b0fb77629a03111ea8aafa7a5a7870336bce70816e9ead990c6a11c492d7aa",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "a7109d131ac6785e4f3319dd71ffad51130ebc54c8fe25e684e308eac1d3b390",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h06-z1-pan00.png",
+    "png_sha256": "dc12ad1319df5caab71f97d665d93ce5490f1fea12639e80b877016be1fe4273",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "dbc76674a05a19308721168e6fad8e3368ce901d30facc4e86dbee7dd750a7cf",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-holdout-static-06/h06-z2-pan00.png",
+    "png_sha256": "2037f525d94ba098888cf46a74516f952acf12da00f482a4f8f1a572c857784d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "200c22e38fb58cb32df32dc24657e721504e3f1f323e2ede0ff29833fc19ea6f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h12-z1-pan00.png",
+    "png_sha256": "5b1a106fe1d30f00a87f411d19bff6af8a5f06d74d9974eef195fb51155120bf",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "dd5ee7313699f51250aeac56709a0cdd40ec8f466624e20429db2e3731058490",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h12-z2-pan00.png",
+    "png_sha256": "5f10cd7f126124d88c30c973e489bf430bf7457ce6714e19a1d9d8a115c4b280",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "24c13ea017e49d54397cd066f6a2108d64faa8448733934b6b03f7cb22451f42",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h18-z1-pan00.png",
+    "png_sha256": "b9c6fe857d573da95aa5ab7cbce8501b50f92e61910fbaea538b2c6140980d53",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "8e6d8aac2fb2201a396f108e0608923fe2cc5b65f22481ec912646aa0effacaa",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h18-z2-pan00.png",
+    "png_sha256": "585246a0027ba7bb71ad5558213c3c88210a8d8d474786b937db2beac301bdf4",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "0a4587e5d1c767b5f01f0ac6a9c8326c8c29383c45bea2731e5326c386b9ef32",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h00-z1-pan00.png",
+    "png_sha256": "7cd6d889d0d543ea7445144f03f0323d8830463b0ee9982de10d58b286ea824c",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "4fdde2cea8ce5f3aacce222be7a000a09acc6ea314e6f3ea8463930e14d71000",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h00-z2-pan00.png",
+    "png_sha256": "f31eba6a97633d3b0dad947ec2efb683d7aa21a8b81a97ba9fd347969932caa1",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "f3b1d6272f072cc65df5423b3083dca6fe0c9ceb900a4be9c63945453b13b1ef",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h06-z1-pan00.png",
+    "png_sha256": "ededdbe7f3bcbbd2d1ff05bb315cefc404d026cedefa94107a77f074efec24d9",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "498ee080ae9ad51fb51b995483b3945adae106b8b878691f9a766ea6d41aadc7",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/north-static-06/h06-z2-pan00.png",
+    "png_sha256": "ceac5fceb6b1334fbc36f078d91d507232a19caddd975223fff9fba83444ea25",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "0fc92d8b5cfece3ab6f215b9836585c0de0a13f60d06ebc4ed0bf079b0e5f39e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h12-z1-pan00.png",
+    "png_sha256": "d11054c739abe813fcad27d013d8dc7078422ae88161b395c2678894ff2f76d9",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "1a84e1999c857bdcde3d1e7931461688518c21a7411584466a98f8125662d932",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h12-z2-pan00.png",
+    "png_sha256": "d027c10cb3a5c7a4b703b963688c07a4b4abd195dfb58c0f8a3a99658735668d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "6fcf6fc7bc69fb3ae9d5afbad2bfd5d2cbaee5bb0d87479ebcf4222a8ceb5e2e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h18-z1-pan00.png",
+    "png_sha256": "ed3cd7e844a1dced3288459693dd07bbcb556979e994a3e4ae5ffdd9cfb44a50",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "5e6011650694bc25945ae45e9d5796fd7b93aa6fa66fe58ddbeda2feabe002e9",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h18-z2-pan00.png",
+    "png_sha256": "ee533a78d4f8fe2a7f2d9abbb4cdf4afa2f0829eace4c7b3390e1d17a18064b8",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "5c6e6854ee07bb7fb0eac779fca7d89b4a950cd9bbb0a89ef370a32b8cb500a8",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h00-z1-pan00.png",
+    "png_sha256": "e1713082051cef45ff3776a1a49f9e3cc62f399540c9d2ce2dd4c08b4e5378cf",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "06c74a4cf18ddcefa79d6974808dcb8e4ed89baafdf8ad51b3f4cbc90905bd40",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h00-z2-pan00.png",
+    "png_sha256": "ea4482880f36945c85afd1d1187d6196f1e05e646911a760677a75a7a990451b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "53525d725ec08ea281003c083113ccae8bafe9e1b1c5bf33c1b5ad3ae4da9027",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h06-z1-pan00.png",
+    "png_sha256": "3698b8231957495731a394d8f36749654f1f6c190f1082ba605b875c6bcaff12",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "6e69acbadc4dc50832041991d52c0c00413df8e3b92f3ba111f807bd95766bc6",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/west-static-05/h06-z2-pan00.png",
+    "png_sha256": "e1160742c4f9cdd6689390e281498cff0c7fbb6c37ebbde439e3e217ea9a318d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "c604fe73f19174372ada56329f78f14ceb9f23b76a235fe8133674b64655868c",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h12-z1-pan00.png",
+    "png_sha256": "47141a0c1c3ebd240a00d94a2a0146d7718d3ad88bf6a441e4fac9f655f475df",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "4ad0d95f8623a8ad966c0616ababf5dcd51bcbb9310ea3980ca7985aa89d9faf",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h12-z2-pan00.png",
+    "png_sha256": "476029ef71defa467175b8211390183c0a8634a032e66f42b9b1e3f5e14ceb24",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "7f64477e4c83899b95f95b0f96e04671a2d18a8cee5885fe586036a6ed8fb115",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h18-z1-pan00.png",
+    "png_sha256": "e8d45768bd3ce1bf7ad4a29ed7562cf02b0619c88e364c07ff914ea1ca24d791",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "217c351064817362bed590b9dd3bffc6a7c33e492281d57c1ab38d40946e2e0e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h18-z2-pan00.png",
+    "png_sha256": "5f8e0be9c8d774ad046e65376708c5dc530ac40c9141e97689e7115b1064944b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "1f6a02cfb60ba1019fc36c1ec8ced5e25dc6f9712745a193f1d5d746ffefe083",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h00-z1-pan00.png",
+    "png_sha256": "47d4669568e2573f90a1922ae2a0f16069a704feded9615cdd74b4e94a329ee5",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "f7bb1c556546433a5dd473e2a21ace39ec348370955e9df461786c9cce6044c0",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h00-z2-pan00.png",
+    "png_sha256": "70a27e111eb33ec78e5e2d92febfbc511918fd6c9ac7790fba2978ad6027bf5f",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "c5aae254ae18561323b5c11e7090b29df227e7412e60c29a21e49fee046ea3fb",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h06-z1-pan00.png",
+    "png_sha256": "afd3ea794ab7ec04ef1fb1189326afb7101e62c7c34c088731f94e22feb08136",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "7e42e5ff2d0d35b756d437096719d359aaa26fd80d19ed03a16d57582a919624",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/lowland-static-06/h06-z2-pan00.png",
+    "png_sha256": "6582eb41102506786cffa8f954ddb47bccb6badb435c4b766c431daa192712de",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "57cbd1a0ccf9b436c9778f10cfe84592e4aa5e5db80bcd648779ba0492eb23ff",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h12-z1-pan00.png",
+    "png_sha256": "2f536b7812ccfd7b03740de461bd8df5a085c89f70239376933398bea0e60332",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "89d8cc333a0c789b94077c919478e5f163e321ed071fc44b9efd10b936ccc31c",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h12-z2-pan00.png",
+    "png_sha256": "26b5eff27ddb814908e3316908350e16fc41e1c1eb8cfe5b58170cc795238d00",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "5e1de9387a962f88c1cbc5b631b6b4fc1f44e541bdadeb081b453cf46b03842a",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h18-z1-pan00.png",
+    "png_sha256": "5648ab45b219d71a86f43c2a4ad70335645ff78c13c431495605552c4165abe3",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "55a382d2e301111ce0ebaa4c906017f45934a48d5150e96d20c0c2f7b5226a2f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h18-z2-pan00.png",
+    "png_sha256": "dd3441895836f11b7256c56660919a174ff76d0c3955bda46789c90e4ed60699",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "0a5a5c5d1e54cdc9528376eb65e6abc8d9e548df1560909bad751691025b9cf9",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h00-z1-pan00.png",
+    "png_sha256": "0c87fcc609b059e95c17a463025900aebc42147db94202d83dc8bc058aa49d4d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "5392e9d86e5c7cc39d9ca59bce51c36f8ef003d2e1352fffc77fd8b8fad14f95",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h00-z2-pan00.png",
+    "png_sha256": "ab4b5e5c424c460c7077e3dfb303fe0f5acdc4bfa0fd07896870034801bf4f0c",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "960e01d72b9a89497e36267994745193f96ca075c4eef09905c13bc5310b799f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h06-z1-pan00.png",
+    "png_sha256": "dc418e20dc1295aced5a98f702f09dfb8cbbdbe071243bfe7d1e873cdda2592a",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "38bb6637dbe5ebd47a3085373233fb81639f9f4720ade89a322b720ff3c14a3b",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-wrap-static-06/h06-z2-pan00.png",
+    "png_sha256": "e79a060ac8a1a763c659c0dfba6582f21d6e39fe88d947512c0b244dd750eecd",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "92d1910122a1391b2637c1f5d6deae224796c4ee8e862a0459dcf3bf3484dd02",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h12-z1-pan00.png",
+    "png_sha256": "d40a9782e7e8e553a71862476acf46ed9e9fde9eb6e316f704912e8d9b3c9061",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "fef729f6c7865e76e4ec411e2b0147dee939ec7c446686f57f18e04c7360989e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h12-z2-pan00.png",
+    "png_sha256": "a4a10ba7612c83e33bdfd7c5dda713e8d5a6949cffcdd970406bddbd99c9bc23",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "141818ea9251dce5a473f2c7dc1b8316da9d754b8c93e36c70957bf86f6bbc64",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h18-z1-pan00.png",
+    "png_sha256": "4e3a26530abc0de5aa1db55f3211c234f9bdfb518499de2c6e7fce89176c5c04",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "eb312843bc04ff800826f16bbb59052cbd976eb533be66858c28482a2a2f456c",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h18-z2-pan00.png",
+    "png_sha256": "f8fd9d55a3a8eec2b7d19aed2bc13c6462c260d410309e7d68c0592ad252d60a",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "91e40576327ff0dd53c718cb811ab667140fc312dca70e66d7152587e6cbe8bd",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h00-z1-pan00.png",
+    "png_sha256": "8226ca0373597d11e1c54c79a6ad0af1597d235975d62bfde602d5bad449207d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "6ed9a585316253ddca1c7d772c05486a05ed3019caaa8dbf828740cc1e46517f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h00-z2-pan00.png",
+    "png_sha256": "e7c8d6e0827353869ebc85b01b6098104f26c273d8e158fa48738caac74f054f",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "ef3802d1e1a61e82581b22fcc0c5e6fa4fd8c2b7ecf415127f422ef0521f33a5",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h06-z1-pan00.png",
+    "png_sha256": "c4f8bf7f481968e59f769e64eb9b8ad23a807ea51335539897ef14fd8160ac55",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "6a58ee268ae855d8d6b53bc57f00f111abcc7a494a9ac9f53f0fd6a41f9ed75c",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/channel-static-05/h06-z2-pan00.png",
+    "png_sha256": "150c1363d00f36a375ccb3354405fd7ba18e6a1b6830c2dac67f39999989ff30",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "386a25f7e68815916af81b3dad71ebc152fca2b92b41bd41e1d8d79eb862704d",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h12-z1-pan00.png",
+    "png_sha256": "ac00cd241980619d4330e392c1f282e99a66384f45e3ed333a14a4b2a49da237",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "b466430f7f0f7ae570f837ecdca17f282ff8164d092c580a41ad79d94f69e055",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h12-z2-pan00.png",
+    "png_sha256": "85f15a7362430ed5b9abd12c421e2f1dd053e194971385486830b46485990a21",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "f6f639ca2f5c9bf0233830abca334db1eb4a5905ff081538bca36133ca1abfec",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h18-z1-pan00.png",
+    "png_sha256": "e049a3f6660df8058595dca65f919e0fd6c226cf5f702321d63fe6c8a535f9c6",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "03c59612db4ab06c23e2c937e3c2c372b25a2707c2a6e2120a517810f1073c7d",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h18-z2-pan00.png",
+    "png_sha256": "b79ce80a739bfcdcbd33b3d3ac444e68ee3cf29893677e5d79ed94b45ea7e2bb",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "2ecb9dea48a35c133f96d4551fd971897cc88b5b550ee935543737af20f2b034",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h00-z1-pan00.png",
+    "png_sha256": "b13513e41e918c53586869e41842bf19f8aab890fd8967830718bb7d9dfd30dd",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "182a8862a8acb0e1a4168e50ae544ac1a440c01bc5e3b013f28797290b040171",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h00-z2-pan00.png",
+    "png_sha256": "7e9ba0747ba26f1d9f44a4cf579707a049a5bef8ee5cb817855bdfc44f6cf10e",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "3986836f14d65f6dc45db2c93e1d32891de08efdc0a994d78bf25eb2c4d49d5f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h06-z1-pan00.png",
+    "png_sha256": "ad83a18b3e5a33060db17d40e8fab5e286103531b9b095d9c75d984dbb921061",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "243757ac6583aa768b8018104543fb79a011d14bfb91c555ce122cb0f4fe0f65",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/real-mixed-static-06/h06-z2-pan00.png",
+    "png_sha256": "b32cf45cd20313abe5a320b434a8cb60ef01764493e8334583a71e939c317b9b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "c8d0b21281a69f7a8e1d6aa9311958a824f0f0226466c3de522c88fa537cf3f6",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h12-z1-pan00.png",
+    "png_sha256": "8f46f0e43d9b1929872355f2c3fb17efa2281f78a786a853b2760fddd0a0ead9",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "aeb345eaa5275110c36f9c714132c675001c71a50e09ff5195157b71087481ab",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h12-z2-pan00.png",
+    "png_sha256": "3d06ac360c07eafc785ed8e0cefc3c88099dde6ff5b6bdae692e40bde56d94b0",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "4eed0653e53d050b11959d0f6b1df67b605e84bbae39002c5da35ca1c994d26b",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h18-z1-pan00.png",
+    "png_sha256": "11ca368d263a538c2072a269bf68ed2900f52284221e6b8c5492a802651071a3",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "d4beb5e01cf6c3a4dae2a3ef29a9e9137c16e6a4815e4239297a9f6993deff78",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h18-z2-pan00.png",
+    "png_sha256": "d8027d23b8b4576a2adc4a6eb2909c9da632d5ae39b30a6df181399fb59ac7fe",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "effd57bd115f0c4024cc9c9b4df7ef62e8abcde8340e2daf7bec154146ce291f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h00-z1-pan00.png",
+    "png_sha256": "a414ef1a09ec798e43f1be7e9e2a661779b5ac7817262e1979c1dacbb70b9f2d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "d79ecff7af53f4521cbfa17e1df14aa5e79f1cc2265369cd7d67af64a85097c6",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h00-z2-pan00.png",
+    "png_sha256": "0516fc4e67f74eceef2a747c4569da4fbc3a8abf4b1aba3b03218d7e3dfdad1f",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "75c5a66f3455b36c1cf7bd50ebc2787ee6e550e7a8066ff752c0a870bfb8c49f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h06-z1-pan00.png",
+    "png_sha256": "77b1013a26b1dcc4c3d2e05dcd099ddeeda2725eb6c31ef690a4b3066043a2f9",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "aa357a4ec6dc178624288a2339c75ef843ae5fb55056a3cf28d35caa95493fa2",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/islands-static-05/h06-z2-pan00.png",
+    "png_sha256": "c716c29a0b685be4e61b139fb93757cf44836dc734d1f1868a556916233839d1",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "5f7b7cd4f5fe137c4b3bf783e5c0089cfd919ed46847206b74dc109a54e63ef4",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h12-z1-pan00.png",
+    "png_sha256": "bc55fd41e990633a7debdf814eaa9ee8920d2d245c65b2715950a2da8f322f16",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "56e5443c2af1db681bbe974873fc00930df0bc1d43fcc5c4d0a93d8028c5f772",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h12-z2-pan00.png",
+    "png_sha256": "29b60e803444f01e68c7f69d6976148d5e1387532e7a55a557382140e2fdcd2c",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "1d56f8b963d83b1e280cf03bc236524c0f1e99f61f36cbf239eef16023e2a4aa",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h18-z1-pan00.png",
+    "png_sha256": "7be4aebc3182b982961c2865c013c97ce534ea5a6c7e87669dc1b041afa37de5",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "feb38b26e28ebba6a8060eb9907f0494dce40fd2837fb308c2349b205d8a1b68",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h18-z2-pan00.png",
+    "png_sha256": "a73684ff2328bee30669062aa0327922b9da9e0852a07a8b1b7820980d89e84a",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "b4b22908ddec55d62b7e6450892ee39d5c57211ab7d8a22e48dd5d92839ea2d6",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h00-z1-pan00.png",
+    "png_sha256": "b20df06438d318151ca9a2a1b45f64e45673f0a7dde4326252d6706938b31de1",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "e95eae660d719f35ff6aa60c0aa529d8fb9ab3c553ed688c6e43967877467cb5",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h00-z2-pan00.png",
+    "png_sha256": "c7afe957a688259838e0730fab9c7a31e40a76b48c149eac38c4f661f4d37bbf",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "9776a00b243b7af1e5fcf211e32f196d6c5fa85fd1e09fde43a2d62663072dae",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h06-z1-pan00.png",
+    "png_sha256": "be8a3d834c62c3dcde66e7a12fc6372ddb4ccfed32c8111712e64c49084c4b63",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "252a22a8575d306d6195d1b334370199a3a71305c21ad7dffe8a56fead9624ff",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/rivers-static-06/h06-z2-pan00.png",
+    "png_sha256": "c284c6ab274dd83957b8a9d72f6d2a51d7fd5e9750fd79e4c2ab725dcb128d70",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "14b1fadb9c10cb1775bede49dda6672778e1bc72546d9c5517655db1e37b95c0",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h12-z1-pan00.png",
+    "png_sha256": "1ad62088ab8033d40532bf49241e6728ed1c3e04f80af9e9aacc3ac64b19ac4b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "9d65edcd0788df046100b688cbb04985adc0ec49ba8c668ee1d2c72da935eca7",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h12-z2-pan00.png",
+    "png_sha256": "4e59f7a283813777607f220601036dd2878ddae501898e058c66d5d9d4ab1153",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "9116dbcdc6a457bd6a16187b13d9cc40ea316f1ba07b1a29f21e4f034c1b1ad4",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h18-z1-pan00.png",
+    "png_sha256": "aeeece56c75ec3752fdc623965034c42b21c027586e4ede45e61965a29fac5ce",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "fe0a1e459c93d4833e6b58e1d3c7d66f97a2b28c8482c81ebaa4a98f38bf90c3",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h18-z2-pan00.png",
+    "png_sha256": "262e0ca0923c9c9a9c63bb611d364c8f304eb174b5e0888b0a29b0b0c4b26840",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "852cd04b7312fedce40126571e2c32ec28466744a8c30eb9f3b07cad29f1362c",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h00-z1-pan00.png",
+    "png_sha256": "8d98f8d50d9102d182f0242d918b421c38478ea2f11b40dc637e6ebae1f7e95e",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "53efa7175f143e5dde13befa506f50c1c850ea61d8a27cf976b315562f034831",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h00-z2-pan00.png",
+    "png_sha256": "96c948ef925fe848a067d732f0a6879e9740e1e611a8eb424cf6d561d6760c0a",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "c23e96feb4e62f1422dfa7e4ce21056b4d5d7b3595db866ee4101fe1758d88b0",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h06-z1-pan00.png",
+    "png_sha256": "77239978632d5e48e53eb39403c787e24c41e4d1857de57218936a869eb653b9",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "b34050ef9f1a6b98096fbea6e14dda76c52f2efd0d561b91b89b8a28c4682f76",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/classification-static-05/h06-z2-pan00.png",
+    "png_sha256": "c340ef6ba4ebf9025a428280b10f3034c2834dee46246e0f063a9013e3d9b234",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "c4a525d61d0dfea8beeeb65a756670e0b4472f0e752f01e1b4aa7e9ea441f65f",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h12-z1-pan00.png",
+    "png_sha256": "fc5c7af30609b846a9979582b046f0f831d198022e24c0a272a90d813e6c2723",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "d8cdee3d39df546399fd0d144e12cfe745c1caa14c3b1a2e79114c18ac069117",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h12-z2-pan00.png",
+    "png_sha256": "3873f6e365a82050a2facb72d2bd4542e20112552ca6b95e099534f8743499a7",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "31fc3114be9f8e0ad76915a37d9a383eef3a32cb4c3cd66c88a8dd1453d6b710",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h18-z1-pan00.png",
+    "png_sha256": "47324061720e45b44399cb20eff49804a1d36863f6a9238284dcbf15b1a11a49",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "b5e2b3330f8f43d408b1dd87beaa93be2d713ddeee219a1091e4dc397ae925ff",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h18-z2-pan00.png",
+    "png_sha256": "44e3e3f01e7dd50e609681e03d07cc06346917b690c7a6e787c8c6a713e91139",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "ed7286fd4c751c95fe05ce5af97e93793e65529e13d4e7e6ecb52b8904bb58c4",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h00-z1-pan00.png",
+    "png_sha256": "c7cb8b57802b1cff2905d71ed7418d4b9a6d290be628e157908f9da2addae6ee",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "fba8a05e487f5400db60478cea00b63921125e7f436b32c2fff82e86e44f8414",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h00-z2-pan00.png",
+    "png_sha256": "7e4120665c714ede6b5ef5cef7c787f4222e8b0eb56eba577c32d210eb4964ee",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "813cc9186b0d3291849bd0f54f8f1ff389508331d00598adea62f2504cf4b323",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h06-z1-pan00.png",
+    "png_sha256": "2d6916fdcc91ad8d6b168d4227da8e3f25e90a5b2adf07922d9897f118911fb5",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "5f022407cf2cf00b0f9692e8d3e8a3091954fd2461bf66e7c411b8e1327c8972",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/beach-only-static-05/h06-z2-pan00.png",
+    "png_sha256": "450f3262eea05d76b662d2dbe70fe65750f8e299fd8b1566da090dfa1b875a96",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "10cbb7fceeb844246ebbfcb38c49a7462040edf971149a65a95ff4d5e52c6688",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h12-z1-pan00.png",
+    "png_sha256": "4e7d4cc1cd52f75ff6212bbca16399509b3553a22cb392d54325c63a3cbb0392",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "072bf05b469c1d7f0ecf608c44bd0093867c18d48e4d036724ec5590fa54af8a",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h12-z2-pan00.png",
+    "png_sha256": "64e4da8bf11b36de23d3ac3d102882e318db29bcf850ec2fdab185fcdabf4b7d",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "a6ea5479bbf9ce1757af4876a1fd550bb262a83fef5b1cd5eff73b2c601c7cda",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h18-z1-pan00.png",
+    "png_sha256": "2ba300ce285571a77f9be351c116ac44fec4c5a5cf9837d35f430fc46b40642f",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "a73c65d32f53fa43584c6f5d183fbc328a4ccc83cdd6a26549681e07b711dc3d",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h18-z2-pan00.png",
+    "png_sha256": "7ae6441ba40204834ed1e06040040cca20ade0df1a1e3614760921f0d28add20",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "70683efd53f07bcbbf7bf664c252609f4c1d67fbd38da56be9d39a2271e2dbf4",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h00-z1-pan00.png",
+    "png_sha256": "3c1fa860657aaf1a0bc9e324a08f91e5c0b52aa2e21d0cb9bed31293dcd1e2c7",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "67415ff06645c201974a8e781aa010c997a6c574021bae7246bcfa32016c7a04",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h00-z2-pan00.png",
+    "png_sha256": "616bda684d4daf234679f7da4bcaa79c5b1ff2f6767520be144dedb074b16d15",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "18df0586bd82b9eae49d817879fe1f1ea71d75465f4fc1145e0e2f001c1a0ce0",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h06-z1-pan00.png",
+    "png_sha256": "132328de842cc687b927c6511e9b734437a64d76abfc5aa472c90167ef9e36c2",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "0bed1a244a98fd4d3b63d3a1e096655d0b69c617591c9a1c7bcdacb21aabcfe7",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/coves-static-06/h06-z2-pan00.png",
+    "png_sha256": "5103e2fb138fc276d4fdbeb31cce02336eb79379d920ae7a74cf3c683639222b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "673c68941324ff50e603d62e3482852bd9f6713c84424ed0307a8b0d0e27d202",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h12-z1-pan00.png",
+    "png_sha256": "20762cfb5cb2246c5e8b1fb4997ddcebfe88ee6142b3adc636ea147f505a5b88",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "a6491d0eb632585e273340bb0647e069aa2bde206c2c6def01b5075462e418fc",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h12-z2-pan00.png",
+    "png_sha256": "4c5d7ef78cfffd27f92ca45e7a47ed894d2f8cc56b1f270543e19f72a04097ac",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "3c8874682ab44aa1eaecc63633c712b35514cc6a856287cfc927898584114bf1",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h18-z1-pan00.png",
+    "png_sha256": "f69a3294d8430c52f31bb2bcd222b266cbfa9d0692899b0f119ad1c07adb3b1b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "cf47c8984fb4b62bc796dbf13e25089c0e283c1456ac2b9681382544ce139b9e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h18-z2-pan00.png",
+    "png_sha256": "7baae1a971b4c506e1b2a05f2b360880e4a6267a127dece948273d41118b528b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "57c6e7224c7d9f207b676db04446db1ed49e55322dc3880b4864092820051241",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h00-z1-pan00.png",
+    "png_sha256": "9134da5d3052b79523c2f49aaf7a6b6055370e9033d138abcb377b77a2b818e2",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "a8acab197cc8dbbb51bc753307e1092b7818959bd1cd92b0b6a202706e456401",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h00-z2-pan00.png",
+    "png_sha256": "f0a5e56a5f8c9c606939e00d8bb7d6b44e5223e81e6dbddee8a2095977ebd04e",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "6d8e8009ac9dc225203edcd724c180455481b6d34dd2448de9005a33402cb40d",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h06-z1-pan00.png",
+    "png_sha256": "4f7377d1c34072cb5bce533ad362015e6140de4a70365322710be71ba6dd5c49",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "30fdd5b9e3c26bb8a2ba0424b78fa8a70870ea179d3f3364ddffa519b186aa60",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/south-static-06/h06-z2-pan00.png",
+    "png_sha256": "fac503719792416446fbb8a7dad3d0016942f68fa5722ab3cda4a2aa0f081187",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "cb429dab58da92140713ebcc5139c6d3b8a0493d5b270e4b8428b3d8ef04e35e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h12-z1-pan00.png",
+    "png_sha256": "ca257530d7227ecb1653b5da6cd570a649caa33f6a7a8752faf1e29b677628c7",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "c500a2caa04dddfa68a1fc9baf66699b366d5e00024df6311cd4def2c07aa84e",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h12-z2-pan00.png",
+    "png_sha256": "453f5f3cab625b76528c0fd916f54dba139f66635f80a2473971474e1ffd51b2",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "af11bdaab3a2c254c2ae6782d01119d484cfbca895446fcdf52e1d99d06f7db6",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h18-z1-pan00.png",
+    "png_sha256": "53359ce206d7366e5541519857b73c0c09d576f0fd41f37af7424f50a471bc50",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "5d023f8976180af12e862ea8e1dc5db52a815a771ffd8fe6889a31fa35ac09a0",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h18-z2-pan00.png",
+    "png_sha256": "f9852078ed6a53bdb4e85f358d2219bf1c5f113dba6e832fe5204718125d84e5",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "7b055539dec247a9a172b5d04bee768a75b5901dde7bb4418bfa76ca214d7cdb",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h00-z1-pan00.png",
+    "png_sha256": "447ad954e72dc9d98bf3f7854833cce0b0c6de7ea60624b8c68ee6c807bb8b11",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "e7c4bf6a0fb01d1cc6c60609736f7e928aa35a791910a8bfd2c7a4eeafdeb728",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h00-z2-pan00.png",
+    "png_sha256": "8b05e08ce67e35aea8ae04bd009dac444afa29ed7082d0d8b4c138dd14359dca",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "6a7110415270627720ed95628d0e4d6bb711ca63705e1b4195a43b49e00822eb",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h06-z1-pan00.png",
+    "png_sha256": "666194499b7da85a4044cf4a5d18830387445046bc7e3d699d48fc800c8344c2",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "9158cf9204b1323bd2e3c3295d0a412343b248dfbb5a53cac42381a84f7c832a",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/context-before-static-05/h06-z2-pan00.png",
+    "png_sha256": "00a9cd977980e23682bf6863cad6a0d7ecccd89266b01d9a9befc5a43eb6b84e",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h12-z1-pan00.bmp",
+    "original_bmp_sha256": "c7b8405a3c6515624bd2456b11a42bee7ad292fb6b770e8d88e8beb3ac5360e5",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h12-z1-pan00.png",
+    "png_sha256": "33f843eba61a42c9e2b6e332bfe42fafe4a6c10f91fb6e370646d16d97560416",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h12-z2-pan00.bmp",
+    "original_bmp_sha256": "55ce728b230321bc73f0005c33e6b7add2373d71461b0c0cbff7346edfcf9ad4",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h12-z2-pan00.png",
+    "png_sha256": "1a5fab2b48f3a35b931ef27669537ad70bf16eaf0e18d7566c2fc944a625324b",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h18-z1-pan00.bmp",
+    "original_bmp_sha256": "51bea166c728020409e9481049c676e29c13b0e427fe130d4689a4d795c10422",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h18-z1-pan00.png",
+    "png_sha256": "7dbfb98f0970968068f37340576072b844b59cd51fe5b1c23d22a35dae6c4f95",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h18-z2-pan00.bmp",
+    "original_bmp_sha256": "7d477c418fa4d6eb729cbcc92e1a28a17d69af4b6e0f080f520c1f56f2781877",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h18-z2-pan00.png",
+    "png_sha256": "b4c0f92735838bbeb0764a38937444d049d37042470d6666c2714a20b501982f",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h00-z1-pan00.bmp",
+    "original_bmp_sha256": "69570c4d28e778bdc3dd74940c2deff7f25d3c6ed05461e0a42af22eee7b1ef5",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h00-z1-pan00.png",
+    "png_sha256": "cef09a4c92050d55722d9f4dee2426f0272ce23bd7e6196b76e8289608a66b44",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h00-z2-pan00.bmp",
+    "original_bmp_sha256": "19eeafdf0ee490adc7bf6023fc4a6f0ee747f6a49f2f23e18681590d440710b1",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h00-z2-pan00.png",
+    "png_sha256": "3149a009a3fb4101e9ee6870dc367ada7cb63914e85fbe56209acb873ff25039",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h06-z1-pan00.bmp",
+    "original_bmp_sha256": "587466cdb69deebe766869c66491d9a2d82b5ef34c0c06d0cc9d0a956aec0812",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h06-z1-pan00.png",
+    "png_sha256": "68f17b6f4c5c91ade45a3277ad2a727812aac55d70f0743f492160dfc0f43645",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  },
+  {
+    "original_bmp": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h06-z2-pan00.bmp",
+    "original_bmp_sha256": "2c2eaae9fdc82d198a591c5e3e3a544d333690fee2cf9761792df8b0ecfc0773",
+    "preserved_rgb_png": "Renderer/terrain_lab/v2/audits/hydrology/out/Q1/Q3-hydrology/east-static-06/h06-z2-pan00.png",
+    "png_sha256": "d41485b36a6ee77d8b846cf818b1a7b6ef7ad8de84fe3876e206ed4a74fbd594",
+    "note": "Original RGB preserved without resizing; inspection PNG uses opaque display alpha. Original BMP/header and repeats were reproducible intermediates removed during storage incident."
+  }
+]

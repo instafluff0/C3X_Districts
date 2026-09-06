@@ -1,0 +1,3059 @@
+{
+  "schema": "c3x.q2.composed_surface_audit.v1",
+  "region": "wet",
+  "source_query": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-surface-query.json",
+  "sample_pairs": 408,
+  "max_delta": {
+    "height": 0,
+    "normal": 0.42137616899999997,
+    "shore": 0
+  },
+  "remaining_failures": [
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 0,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0029785689000000025,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          7.0
+        ],
+        [
+          2.0,
+          8.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 0,
+      "along": 0.9375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0011474688100000002,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          7.0
+        ],
+        [
+          2.0,
+          8.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 0,
+      "along": 1.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00100124522,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          7.0
+        ],
+        [
+          2.0,
+          8.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 1,
+      "along": 0.75,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00268122554,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 1,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.008273957299999999,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 1,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.010657837599999997,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 1,
+      "along": 0.9375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.010931696800000008,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 1,
+      "along": 1.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.006630666600000001,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 1,
+      "along": 0.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00100124359,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          9.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 1,
+      "along": 0.75,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004361393869999999,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          9.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 1,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0065921862000000025,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          9.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 1,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00544819492,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          9.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 1,
+      "along": 0.9375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.006407856050000001,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          9.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 1,
+      "along": 1.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.005267819399999998,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          9.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.006563052599999994,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.0625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.01091848320000001,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.019096032,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.1875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.027747884999999986,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.25,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.015271954300000001,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.3125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.025532823000000003,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.008935855700000002,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.4375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004031949700000001,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.5625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004273919399999999,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.008174095299999996,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.6875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.01794136056,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.75,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0016342327000000018,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0026997780000000138,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0011189289999999907,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 0.9375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004910722000000006,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 2,
+      "along": 1.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004386022999999989,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.005238048700000001,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.0625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.009702263400000005,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0171380546,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.1875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.008981708399999996,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.25,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0129221408,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.3125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0060608294,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.012011669600000004,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.4375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0070490464999999995,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.5,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0081079826,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.5625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.009163249299999995,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.013625342400000004,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.6875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0193433306,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.75,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.007567457900000005,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.009992509999999982,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004288733000000017,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 0.9375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004595577999999989,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 2,
+      "along": 1.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.29427503099999996,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 0,
+      "row": 3,
+      "along": 0.5,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00120398984,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 0,
+      "row": 3,
+      "along": 0.5625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00174655195,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 0,
+      "row": 3,
+      "along": 0.625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00229523471,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 0,
+      "row": 3,
+      "along": 0.6875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00277749635,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 0,
+      "row": 3,
+      "along": 0.75,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00313523505,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 0,
+      "row": 3,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00335805584,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 0,
+      "row": 3,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00306754559,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 0,
+      "row": 3,
+      "along": 0.9375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0012682149,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 3,
+      "along": 0.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004396901000000009,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 3,
+      "along": 0.0625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.002632096399999992,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 1,
+      "row": 3,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0033870600000000042,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.29729163599999997,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.0625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0035696769999999933,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.002327933999999976,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.1875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.012768790000000016,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.25,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.011965632399999995,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.3125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.012403260900000001,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00543809146,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.5625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0028739265000000003,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.6875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0022605103400000007,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.75,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0033983104,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "column",
+      "column": 2,
+      "row": 3,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0015164800000000006,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 0,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.002981998099999994,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 0,
+      "along": 0.1875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.008681399700000002,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 0,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0023940521100000002,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          7.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 0,
+      "along": 0.0625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.001077965014,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          8.0
+        ],
+        [
+          2.0,
+          9.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 1,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0037462934999999975,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 1,
+      "along": 0.1875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.009768159999999998,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 1,
+      "row": 1,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0329652438,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          7.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 1,
+      "row": 1,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.1082491018,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          7.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 1,
+      "row": 1,
+      "along": 0.9375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.1558205823,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          7.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 1,
+      "row": 1,
+      "along": 1.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.183139298,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          1.0,
+          7.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.183220919,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.0625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.1901264262,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.18126208337,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.1875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.15970095599999998,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.25,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.1404248103,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.3125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.1163776961,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0960770617,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.4375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.08164639,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.5,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.07848527300000001,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.5625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.07913309329999998,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0858382244,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.6875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0967477192,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.75,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.1095186656,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.12462257249999999,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.12736968618,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 0.9375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.13459123637,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 1,
+      "along": 1.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.12528995650000002,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 1,
+      "along": 0.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.1253055559,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          9.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 1,
+      "along": 0.0625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.1123460252,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          9.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 1,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0771428309,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          9.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 1,
+      "along": 0.1875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0224378239,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          9.0
+        ],
+        [
+          2.0,
+          2.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.1875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00199732929,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.25,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00676358584,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.3125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0173356459,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0289225988,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.4375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0344092585,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.5,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0345141925,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.5625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0338692591,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.032762181,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.6875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0272942986,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.75,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0169736724,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0077749365,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 0,
+      "row": 2,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.00321401353,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          1.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 1,
+      "row": 2,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.009261582,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 1,
+      "row": 2,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.008092358999999993,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 1,
+      "row": 2,
+      "along": 0.9375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.007211446999999982,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 1,
+      "row": 2,
+      "along": 1.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.010349734999999999,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          1.0,
+          7.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.010343953999999989,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.0625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.005147338000000001,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.001403957999999983,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.3125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.008896157000000016,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.012137756,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.4375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.007630228999999988,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.5,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.003513514999999995,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.5625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0021530389999999955,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.009190246000000013,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.6875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.005377323000000045,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.75,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.007096559000000002,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.002599834999999995,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004128306999999998,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 0.9375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0064907069999999845,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 2,
+      "row": 2,
+      "along": 1.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.420202642,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          5.0
+        ],
+        [
+          1.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.0,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.42137616899999997,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.0625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0038408490000000073,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004893943000000012,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.1875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004481763,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.25,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.021057799000000016,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.3125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.020262501999999988,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.004198812199999999,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.4375,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.006604369699999994,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.5,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.031185031000000002,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.5625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.0013476014000000022,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.625,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.026841454299999998,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.6875,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.020587391999999996,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.75,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.011816948999999993,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    },
+    {
+      "axis": "row",
+      "column": 3,
+      "row": 2,
+      "along": 0.8125,
+      "errors": {
+        "height": 0.0,
+        "normal": 0.01951208800000001,
+        "shore": 0.0
+      },
+      "terrain": [
+        [
+          2.0,
+          2.0
+        ],
+        [
+          2.0,
+          5.0
+        ]
+      ]
+    }
+  ],
+  "scope": "Exact source builder incident edges; geometry failures belong to shared relief/shore composition, not flat Q2 base field."
+}

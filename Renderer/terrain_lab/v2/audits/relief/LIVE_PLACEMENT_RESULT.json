@@ -1,0 +1,33 @@
+{
+  "schema": "c3x.q4.live_placement_result.v1",
+  "records": [
+    {
+      "candidate": "city-clearance-off-01",
+      "metadata": {
+        "path": "Renderer/terrain_lab/v2/app/.cache/geometry/a74bde593ed4e47657c3dabfece409e549a7c77d91a405de0701be281bdf556b/payload.source.json",
+        "sha256": "d7bf1fd5078631b80a5f7e27c5841a613eaacdf7d93c5e2180eb1558ca666a46"
+      },
+      "instance_count": 597
+    },
+    {
+      "candidate": "city-clearance-live-01",
+      "metadata": {
+        "path": "Renderer/terrain_lab/v2/app/.cache/geometry/fc37bc1421e9370a49ec0235d215a383332b5579c91b6c13a738390dd3953e8f/payload.source.json",
+        "sha256": "b81336a5a4542b97b9e44396b5038d8defde8d7655a6e3e20ca4c9ab3a7fb20a"
+      },
+      "instance_count": 593
+    }
+  ],
+  "removed_instances": 4,
+  "new_or_moved_instances": 0,
+  "changed_pixels": 478,
+  "changed_pixel_bbox": [
+    174,
+    99,
+    283,
+    182
+  ],
+  "mean_absolute_byte_error": 0.04771592881944445,
+  "visual_observation": "Small local tree removals; town is already visible in the matched current control. Earlier Q7 screenshot is not a matched current baseline.",
+  "limits": "City footprint witness only; full route/river/wrap and composed phase/zoom acceptance pending."
+}

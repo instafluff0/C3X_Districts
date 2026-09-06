@@ -1,0 +1,7 @@
+{
+  "source": "Renderer/terrain_lab/v2/shaders/common/frozen_l21.hlsl",
+  "source_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+  "output_sha256": "c168f9c544d2a64460fd994d05ad210d42d864fc5201a15d96a2e96feeeeebe2",
+  "display_conversions": 12,
+  "scope": "shared tone map and exact display transfer only; legacy display-space alpha blending and inherited projected shadows remain provisional"
+}

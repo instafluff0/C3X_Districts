@@ -1,0 +1,56 @@
+{
+  "schema": "c3x.q3_hydrology_candidate.v1",
+  "id": "Q3-hydrology-static-07",
+  "campaign": "Q1",
+  "state": "active_source_composition_revision",
+  "accepted": false,
+  "baseline_reference": "Renderer/handoffs/L21_complete_beauty_scene.json",
+  "baseline_ownership": "reference_only; no v1 handoff or Integration gate changed",
+  "implementation": [
+    "Renderer/terrain_lab/v2/systems/hydrology/field.h",
+    "Renderer/terrain_lab/v2/systems/hydrology/packet.cpp",
+    "Renderer/terrain_lab/v2/shaders/hydrology/static.hlsl",
+    "Renderer/terrain_lab/v2/systems/hydrology/linear.module.json",
+    "Renderer/terrain_lab/v2/shaders/hydrology/static_linear.hlsl",
+    "Renderer/terrain_lab/v2/systems/hydrology/source-linear.module.json",
+    "Renderer/terrain_lab/v2/shaders/hydrology/scene_material_v1.hlsl"
+  ],
+  "interfaces": [
+    "Renderer/terrain_lab/v2/audits/hydrology/INTERFACE_V1.md",
+    "Renderer/terrain_lab/v2/systems/hydrology/publish_corridors.py",
+    "Renderer/terrain_lab/v2/systems/hydrology/scene_adapter.h"
+  ],
+  "fixtures_root": "Renderer/terrain_lab/v2/fixtures/hydrology/",
+  "evidence": [
+    "Renderer/terrain_lab/v2/audits/hydrology/REVIEW.md",
+    "Renderer/terrain_lab/v2/audits/hydrology/EVIDENCE.json",
+    "Renderer/terrain_lab/v2/audits/hydrology/SOURCE_PROVENANCE.json",
+    "Renderer/terrain_lab/v2/audits/hydrology/ARCHIVED_OUTPUTS.json",
+    "Renderer/terrain_lab/v2/audits/hydrology/crossing_witness_v1.json",
+    "Renderer/terrain_lab/v2/audits/hydrology/FROZEN_BASIN_BUG.md",
+    "Renderer/terrain_lab/v2/audits/hydrology/COMPOSED_REGRESSION.json"
+  ],
+  "scope_complete_for_independent_consumption": [
+    "continuous signed shoreline and beach envelope",
+    "rocky hill/water edge class across coast/sea/ocean",
+    "monotone shallow depth and source color/height material intake",
+    "canonical reciprocal river curves and exact crossing anchors",
+    "river relief-carving and bank/city/vegetation exclusions",
+    "Q0 corridor-schema adapter and conservative polygon witnesses",
+    "Opt-in shared shoreline callback: exact Q2 source-composed isolated-basin regression visually fixed"
+  ],
+  "convergence_obligations": [
+    "Direct canonical comparison and complete source-coast material refinement; large proxy overview rejected by user",
+    "Q3 exact river curves/carving/corridors in source scene; inherited source river geometry is provisional",
+    "Q2/Q4 source surface and actual rock-face joins; terrain-family appearance",
+    "Q4/Q7/Q8 source-instance clearance and plausible gameplay composition",
+    "Q1 selected sampling policy and final bed detail/river readability",
+    "remaining current-revision matrix rows after coordinated storage pause",
+    "192-tile composed suite, Windows D3D11 parity and full project verification"
+  ],
+  "animation_requested": false,
+  "new_patch_symbols": [],
+  "original_art_fallback_selected": false,
+  "approval": null,
+  "source_revision": "source-mixed-11 (render/direct inspection in progress)"
+}

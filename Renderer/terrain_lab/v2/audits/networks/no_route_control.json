@@ -1,0 +1,58 @@
+{
+  "h12-z1-pan00.bmp": {
+    "mean_absolute_channel_delta": 0.0,
+    "changed_pixels": 0,
+    "total_pixels": 245760,
+    "max_mean_channel_delta": 0.0,
+    "byte_identical": true
+  },
+  "h12-z2-pan00.bmp": {
+    "mean_absolute_channel_delta": 0.0,
+    "changed_pixels": 0,
+    "total_pixels": 61440,
+    "max_mean_channel_delta": 0.0,
+    "byte_identical": true
+  },
+  "h18-z1-pan00.bmp": {
+    "mean_absolute_channel_delta": 0.0,
+    "changed_pixels": 0,
+    "total_pixels": 245760,
+    "max_mean_channel_delta": 0.0,
+    "byte_identical": true
+  },
+  "h18-z2-pan00.bmp": {
+    "mean_absolute_channel_delta": 0.0,
+    "changed_pixels": 0,
+    "total_pixels": 61440,
+    "max_mean_channel_delta": 0.0,
+    "byte_identical": true
+  },
+  "h00-z1-pan00.bmp": {
+    "mean_absolute_channel_delta": 0.0,
+    "changed_pixels": 0,
+    "total_pixels": 245760,
+    "max_mean_channel_delta": 0.0,
+    "byte_identical": true
+  },
+  "h00-z2-pan00.bmp": {
+    "mean_absolute_channel_delta": 0.0,
+    "changed_pixels": 0,
+    "total_pixels": 61440,
+    "max_mean_channel_delta": 0.0,
+    "byte_identical": true
+  },
+  "h06-z1-pan00.bmp": {
+    "mean_absolute_channel_delta": 0.0,
+    "changed_pixels": 0,
+    "total_pixels": 245760,
+    "max_mean_channel_delta": 0.0,
+    "byte_identical": true
+  },
+  "h06-z2-pan00.bmp": {
+    "mean_absolute_channel_delta": 0.0,
+    "changed_pixels": 0,
+    "total_pixels": 61440,
+    "max_mean_channel_delta": 0.0,
+    "byte_identical": true
+  }
+}

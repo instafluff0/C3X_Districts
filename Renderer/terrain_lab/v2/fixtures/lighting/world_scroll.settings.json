@@ -1,0 +1,29 @@
+{
+  "anisotropy": 8,
+  "mip_bias": 0,
+  "samples": 4,
+  "render_scale": 1,
+  "postprocess": {
+    "shader": "Renderer/terrain_lab/v2/shaders/sampling/linear_reconstruct.hlsl",
+    "owner": "Q1-sampling",
+    "contract": 2
+  },
+  "camera_offsets": [
+    [
+      0,
+      0
+    ],
+    [
+      1,
+      0
+    ],
+    [
+      7,
+      -4
+    ],
+    [
+      0,
+      0
+    ]
+  ]
+}

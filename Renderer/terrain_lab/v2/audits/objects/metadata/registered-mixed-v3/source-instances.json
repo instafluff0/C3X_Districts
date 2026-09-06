@@ -1,0 +1,560 @@
+{
+  "schema": "c3x.q7.source_instances.v1",
+  "classification": "source_adaptation",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-v3/fixture.json",
+  "layout_sha256": "86875b0ee631385849fc2c0f7aac41d34b09b8688d6864cc6b7687fc097f9141",
+  "geometry_sha256": "af0c1762847ec8791c61f24b90cc4f12dd94be1af3f0dfd6684969777ce0a2d0",
+  "coordinate_space": "q7_pinned_preprojection_tile_world_v1",
+  "projection": {
+    "tile_pixels": [
+      128,
+      64
+    ],
+    "z_pixels_per_source_world_unit": 80.9543
+  },
+  "exceptions": [
+    "This pinned lab coordinate system is not the Q0 authoritative world-position attribute.",
+    "Real fixtures add a clip-depth grounding bias; source matrix remains uniform, but Q0 world conversion is pending.",
+    "Source UVs are unchanged, including authored high anisotropy/degenerate exceptions audited by Q1.",
+    "Base/emissive display path only; no tangent/normal-map/AO/gloss/owner-color material closure.",
+    "No source-equivalent lamp point lights or animated Light/VFX are inferred."
+  ],
+  "assets": {
+    "city/component/20c6179bd3b7587a": {
+      "landmark": "Renderer/packs/CityComponentsNormalized/compound_landmarks/city_component_20c6179bd3b7587a.json",
+      "landmark_sha256": "f3432aa6ae095d6a2339c9685b1565569478829d71abf79e3b35ef91ba13105e",
+      "parts": [
+        {
+          "mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_20c6179bd3b7587a_00.json",
+          "mesh_sha256": "08498b105d105a8afe8b88486adb4dd00ae7ad4e9e9104836f8354301e684b16",
+          "material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_20c6179bd3b7587a_00.json",
+          "material_sha256": "925e4f81d2ea4f527a69736230b1316796ce91170a282fea0e27caaf32d81394",
+          "source_uv_sha256": "7844e7f250fb07abca1c8a70e9ed9e3b3e58a07417ff207c3d07647ce8b21c1e",
+          "source_normal_sha256": "b027943e89b5e0e6b7382defb325a8ebef372153453c0891d69698a119bbd6c6",
+          "tangent": "absent_in_normalized_mesh_and_runtime",
+          "uv_operation": "identity",
+          "normal_operation": "yaw_rotation_only",
+          "alpha_mode": "opaque",
+          "channels": {
+            "base_color": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_b8c5746583383c9b.dds",
+              "sha256": "605e15699cf5f3f88359dc707eca8a763adbb0960932144f8eb249d410ffa6c9",
+              "runtime_slot": 124,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "emissive": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_ca453871fb78698c.dds",
+              "sha256": "081039114b1cff7c78c3cd89971f5c2b956860ea66c1da851b09ce75f2e89f97",
+              "runtime_slot": 116,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "gloss": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/gloss_72e76516d2442018.dds",
+              "sha256": "d09bcdcfad787716a4b240f0e417c74bec901cb6b68b3bf7df49e27b69e8ebfb",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            },
+            "normal_0": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC5_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_e33f7f5b83d13300.dds",
+              "sha256": "02e5d6e15fbfa71470206e9c4b1ca68af066990451318b43a26f13efa22a2189",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "normal_1": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_1_d6895781c7ddd5b5.dds",
+              "sha256": "08c195ae52817ecc8390593a98e0f278b69293f971f1b40545bc590fc524c00f",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            }
+          },
+          "vertices": 728,
+          "triangles": 396
+        }
+      ],
+      "sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "operational"
+        }
+      ],
+      "socket_runtime": "not_attached; no inferred Light/VFX"
+    },
+    "city/component/6cf90d821d71767d": {
+      "landmark": "Renderer/packs/CityComponentsNormalized/compound_landmarks/city_component_6cf90d821d71767d.json",
+      "landmark_sha256": "c421cf4e661c67876a544f3fed2d0611bdcc95fa6a9a5e925055e6f69990d3f9",
+      "parts": [
+        {
+          "mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_6cf90d821d71767d_00.json",
+          "mesh_sha256": "09e19106b2e53053fd011f690ce469f1288949d69e0fe18fd53a8a9d3354ec0c",
+          "material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_6cf90d821d71767d_00.json",
+          "material_sha256": "925e4f81d2ea4f527a69736230b1316796ce91170a282fea0e27caaf32d81394",
+          "source_uv_sha256": "6abb39655d8fc9def9b569dbb5fa36935b77ee24e62b443bcefd00a74a0e15b7",
+          "source_normal_sha256": "2ec520ace065b6ae2709deee425d06234e01926da4d020dd819ef08629e1fcea",
+          "tangent": "absent_in_normalized_mesh_and_runtime",
+          "uv_operation": "identity",
+          "normal_operation": "yaw_rotation_only",
+          "alpha_mode": "opaque",
+          "channels": {
+            "base_color": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_b8c5746583383c9b.dds",
+              "sha256": "605e15699cf5f3f88359dc707eca8a763adbb0960932144f8eb249d410ffa6c9",
+              "runtime_slot": 124,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "emissive": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_ca453871fb78698c.dds",
+              "sha256": "081039114b1cff7c78c3cd89971f5c2b956860ea66c1da851b09ce75f2e89f97",
+              "runtime_slot": 116,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "gloss": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/gloss_72e76516d2442018.dds",
+              "sha256": "d09bcdcfad787716a4b240f0e417c74bec901cb6b68b3bf7df49e27b69e8ebfb",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            },
+            "normal_0": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC5_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_e33f7f5b83d13300.dds",
+              "sha256": "02e5d6e15fbfa71470206e9c4b1ca68af066990451318b43a26f13efa22a2189",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "normal_1": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_1_d6895781c7ddd5b5.dds",
+              "sha256": "08c195ae52817ecc8390593a98e0f278b69293f971f1b40545bc590fc524c00f",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            }
+          },
+          "vertices": 1127,
+          "triangles": 617
+        }
+      ],
+      "sockets": [],
+      "socket_runtime": "not_attached; no inferred Light/VFX"
+    },
+    "city/component/cc8838bb2062e14e": {
+      "landmark": "Renderer/packs/CityComponentsNormalized/compound_landmarks/city_component_cc8838bb2062e14e.json",
+      "landmark_sha256": "bad6b04d6d4e64fc937ffbeabb101927e9548a4c63326a92b5f93a8da7d86933",
+      "parts": [
+        {
+          "mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_cc8838bb2062e14e_00.json",
+          "mesh_sha256": "e2c92dac29ccaf1bde594a5e6eb2ba20ccbffae160f67c59227c9707b9d93b31",
+          "material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_cc8838bb2062e14e_00.json",
+          "material_sha256": "925e4f81d2ea4f527a69736230b1316796ce91170a282fea0e27caaf32d81394",
+          "source_uv_sha256": "365c2b8c39774ca70c586833aa9d67425f6bde553dc699b4b9ddae30409f09e3",
+          "source_normal_sha256": "3313490564a6713d35fd98cd2ad9a17cfb7dd7874b95c22fd1daad3cd3317dda",
+          "tangent": "absent_in_normalized_mesh_and_runtime",
+          "uv_operation": "identity",
+          "normal_operation": "yaw_rotation_only",
+          "alpha_mode": "opaque",
+          "channels": {
+            "base_color": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_b8c5746583383c9b.dds",
+              "sha256": "605e15699cf5f3f88359dc707eca8a763adbb0960932144f8eb249d410ffa6c9",
+              "runtime_slot": 124,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "emissive": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_ca453871fb78698c.dds",
+              "sha256": "081039114b1cff7c78c3cd89971f5c2b956860ea66c1da851b09ce75f2e89f97",
+              "runtime_slot": 116,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "gloss": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/gloss_72e76516d2442018.dds",
+              "sha256": "d09bcdcfad787716a4b240f0e417c74bec901cb6b68b3bf7df49e27b69e8ebfb",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            },
+            "normal_0": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC5_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_e33f7f5b83d13300.dds",
+              "sha256": "02e5d6e15fbfa71470206e9c4b1ca68af066990451318b43a26f13efa22a2189",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "normal_1": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_1_d6895781c7ddd5b5.dds",
+              "sha256": "08c195ae52817ecc8390593a98e0f278b69293f971f1b40545bc590fc524c00f",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            }
+          },
+          "vertices": 662,
+          "triangles": 368
+        }
+      ],
+      "sockets": [],
+      "socket_runtime": "not_attached; no inferred Light/VFX"
+    },
+    "city/component/19e3fcaaa0e909cb": {
+      "landmark": "Renderer/packs/CityComponentsNormalized/compound_landmarks/city_component_19e3fcaaa0e909cb.json",
+      "landmark_sha256": "2f3c90a42074bdad6dd79092706a982588bd9c94ea94f05b11435201d3dd1a4b",
+      "parts": [
+        {
+          "mesh": "Renderer/packs/CityComponentsNormalized/meshes/compound/city_component_19e3fcaaa0e909cb_00.json",
+          "mesh_sha256": "72df94d0d951f168495b4152bf4f8026dae15344df3a88f9b6a9e9cd7a4f402a",
+          "material": "Renderer/packs/CityComponentsNormalized/materials/compound/city_component_19e3fcaaa0e909cb_00.json",
+          "material_sha256": "925e4f81d2ea4f527a69736230b1316796ce91170a282fea0e27caaf32d81394",
+          "source_uv_sha256": "c9103f38eef9301ef1894c01fe12bd62f2d4b1ef43f029785fe772c0b852eac7",
+          "source_normal_sha256": "07d0ea4476cd1cbba4f15c9d24ee867e56cdec012c86c58f9161cf44da283e92",
+          "tangent": "absent_in_normalized_mesh_and_runtime",
+          "uv_operation": "identity",
+          "normal_operation": "yaw_rotation_only",
+          "alpha_mode": "opaque",
+          "channels": {
+            "base_color": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_b8c5746583383c9b.dds",
+              "sha256": "605e15699cf5f3f88359dc707eca8a763adbb0960932144f8eb249d410ffa6c9",
+              "runtime_slot": 124,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "emissive": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_ca453871fb78698c.dds",
+              "sha256": "081039114b1cff7c78c3cd89971f5c2b956860ea66c1da851b09ce75f2e89f97",
+              "runtime_slot": 116,
+              "binding_state": "bound",
+              "interpretation": "normalized declaration"
+            },
+            "gloss": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "srgb",
+              "format": "BC1_UNORM_SRGB",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/gloss_72e76516d2442018.dds",
+              "sha256": "d09bcdcfad787716a4b240f0e417c74bec901cb6b68b3bf7df49e27b69e8ebfb",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            },
+            "normal_0": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC5_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_e33f7f5b83d13300.dds",
+              "sha256": "02e5d6e15fbfa71470206e9c4b1ca68af066990451318b43a26f13efa22a2189",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration"
+            },
+            "normal_1": {
+              "address_u": "repeat",
+              "address_v": "repeat",
+              "color_space": "linear",
+              "format": "BC4_UNORM",
+              "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_1_d6895781c7ddd5b5.dds",
+              "sha256": "08c195ae52817ecc8390593a98e0f278b69293f971f1b40545bc590fc524c00f",
+              "runtime_slot": null,
+              "binding_state": "unbound",
+              "interpretation": "normalized declaration; secondary normal/gloss engine meaning unconfirmed"
+            }
+          },
+          "vertices": 628,
+          "triangles": 354
+        }
+      ],
+      "sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "operational"
+        }
+      ],
+      "socket_runtime": "not_attached; no inferred Light/VFX"
+    }
+  },
+  "instances": [
+    {
+      "id": "city:0",
+      "asset": "city/component/20c6179bd3b7587a",
+      "pool": "city/pool/american/ancient",
+      "size": 0,
+      "slot": 0,
+      "source_to_preprojection_world_4x4": [
+        [
+          3.437930265357905,
+          -0.0,
+          0.0,
+          -1.7983539813012361
+        ],
+        [
+          0.0,
+          3.437930265357905,
+          0.0,
+          -1.7964906574767148
+        ],
+        [
+          0.0,
+          0.0,
+          3.437930265357905,
+          0.033372092223737146
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 3.437930265357905,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        286.75519098960405,
+        49.30155158109248,
+        305.43389627512835,
+        77.20237745650314
+      ],
+      "footprint": [
+        -0.34699599564976047,
+        -0.3812577898468696,
+        -0.21300400435023958,
+        -0.17874221015313047
+      ]
+    },
+    {
+      "id": "city:1",
+      "asset": "city/component/6cf90d821d71767d",
+      "pool": "city/pool/american/ancient",
+      "size": 0,
+      "slot": 1,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1051251475811847e-16,
+          -3.437930265357905,
+          0.0,
+          -1.86806861589956
+        ],
+        [
+          3.437930265357905,
+          2.1051251475811847e-16,
+          0.0,
+          -1.518471489757706
+        ],
+        [
+          0.0,
+          0.0,
+          3.437930265357905,
+          0.03340568080242969
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 3.437930265357905,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        261.90673885984813,
+        55.121766367354006,
+        284.59707861121035,
+        83.27653440195526
+      ],
+      "footprint": [
+        -0.4525,
+        -0.10196284058568915,
+        -0.24750000000000005,
+        0.10196284058568915
+      ]
+    },
+    {
+      "id": "city:2",
+      "asset": "city/component/cc8838bb2062e14e",
+      "pool": "city/pool/american/ancient",
+      "size": 0,
+      "slot": 2,
+      "source_to_preprojection_world_4x4": [
+        [
+          3.437930265357905,
+          -0.0,
+          0.0,
+          -1.5888240151271158
+        ],
+        [
+          0.0,
+          3.437930265357905,
+          0.0,
+          -1.8686057925035222
+        ],
+        [
+          0.0,
+          0.0,
+          3.437930265357905,
+          0.033388869323432095
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 3.437930265357905,
+      "yaw_radians": 0,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southeast",
+      "screen_bounds": [
+        304.39800799947676,
+        55.533250416638246,
+        323.1454718903082,
+        81.89601696829475
+      ],
+      "footprint": [
+        -0.13830536577062463,
+        -0.4503512935841513,
+        -0.0016946342293753663,
+        -0.24964870641584874
+      ]
+    },
+    {
+      "id": "city:3",
+      "asset": "city/component/19e3fcaaa0e909cb",
+      "pool": "city/pool/american/ancient",
+      "size": 0,
+      "slot": 3,
+      "source_to_preprojection_world_4x4": [
+        [
+          2.1051251475811847e-16,
+          -3.437930265357905,
+          0.0,
+          -1.7964235146986323
+        ],
+        [
+          3.437930265357905,
+          2.1051251475811847e-16,
+          0.0,
+          -1.3082364900344174
+        ],
+        [
+          0.0,
+          0.0,
+          3.437930265357905,
+          0.033388869323432095
+        ],
+        [
+          0,
+          0,
+          0,
+          1
+        ]
+      ],
+      "matrix_convention": "row-major; column homogeneous position",
+      "source_uniform_scale": 3.437930265357905,
+      "yaw_radians": 1.5707963267948966,
+      "front_mapping": "source +X provisionally treated as front; symmetric/ambiguous source fronts not art-verified",
+      "output_front": "southwest",
+      "screen_bounds": [
+        256.81226403975256,
+        70.63601086736978,
+        272.8093815180223,
+        91.95574633635839
+      ],
+      "footprint": [
+        -0.355070421808888,
+        0.13492956100146075,
+        -0.20492957819111207,
+        0.2850704389985393
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "owner-a",
+  "owner": "Q0-platform",
+  "provider": "cpp_packet",
+  "contract": 1,
+  "source": "Renderer/terrain_lab/v2/tests/platform/owner_a/builder.cpp",
+  "shader": "Renderer/terrain_lab/v2/tests/platform/diagnostic.hlsl",
+  "after": []
+}

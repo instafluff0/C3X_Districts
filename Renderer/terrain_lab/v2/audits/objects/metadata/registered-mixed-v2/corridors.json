@@ -1,0 +1,146 @@
+{
+  "schema": "c3x.lab_v2.corridors.v1",
+  "coordinate_space": "civ3_raw_delta_pixels_v1",
+  "terrain_sha256": "8c28cd98fed837aa2925873fd3aa27425452e6cceb9de9835602af62625788f3",
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "region_id": "mixed",
+  "origin_raw": [
+    14,
+    42
+  ],
+  "wrap_period": [
+    6400,
+    0
+  ],
+  "provider": "Q7-presentation",
+  "revision": 1,
+  "classification": "source_adaptation",
+  "envelopes": [
+    {
+      "id": "city:0:building:0",
+      "kind": "building",
+      "polygon": [
+        [
+          194.19275482861508,
+          -238.60824227178455
+        ],
+        [
+          202.7682422717844,
+          -230.032754828615
+        ],
+        [
+          189.80724517138515,
+          -217.07175772821574
+        ],
+        [
+          181.23175772821583,
+          -225.6472451713853
+        ]
+      ],
+      "height_range": [
+        2.5,
+        50.21445058281886
+      ],
+      "clearance": 1.0,
+      "source_geometry_sha256": "e6acf6ac3b1fbde9897cf063a91b61810391db7473b392dd735a335eabf5a61a",
+      "source_asset": "city/component/20c6179bd3b7587a",
+      "envelope_method": "conservative full transformed source mesh XY bounds, including roof overhangs; not a cast shadow"
+    },
+    {
+      "id": "city:0:building:1",
+      "kind": "building",
+      "polygon": [
+        [
+          169.56562179748403,
+          -227.48562179748433
+        ],
+        [
+          182.68562179748415,
+          -214.36562179748444
+        ],
+        [
+          169.63437820251602,
+          -201.31437820251585
+        ],
+        [
+          156.5143782025159,
+          -214.43437820251575
+        ]
+      ],
+      "height_range": [
+        2.5,
+        50.104246232684346
+      ],
+      "clearance": 1.0,
+      "source_geometry_sha256": "e6acf6ac3b1fbde9897cf063a91b61810391db7473b392dd735a335eabf5a61a",
+      "source_asset": "city/component/6cf90d821d71767d",
+      "envelope_method": "conservative full transformed source mesh XY bounds, including roof overhangs; not a cast shadow"
+    },
+    {
+      "id": "city:0:building:2",
+      "kind": "building",
+      "polygon": [
+        [
+          216.45093938006585,
+          -225.19402619870561
+        ],
+        [
+          225.19402619870561,
+          -216.4509393800654
+        ],
+        [
+          212.3490606199341,
+          -203.6059738012941
+        ],
+        [
+          203.60597380129434,
+          -212.34906061993433
+        ]
+      ],
+      "height_range": [
+        2.5,
+        43.97607300839674
+      ],
+      "clearance": 1.0,
+      "source_geometry_sha256": "e6acf6ac3b1fbde9897cf063a91b61810391db7473b392dd735a335eabf5a61a",
+      "source_asset": "city/component/cc8838bb2062e14e",
+      "envelope_method": "conservative full transformed source mesh XY bounds, including roof overhangs; not a cast shadow"
+    },
+    {
+      "id": "city:0:building:3",
+      "kind": "building",
+      "polygon": [
+        [
+          169.60000110013766,
+          -179.20901509167516
+        ],
+        [
+          179.20901509167538,
+          -169.60000110013743
+        ],
+        [
+          169.59999889986238,
+          -159.99098490832466
+        ],
+        [
+          159.99098490832466,
+          -169.59999889986238
+        ]
+      ],
+      "height_range": [
+        2.5,
+        36.89952702474308
+      ],
+      "clearance": 1.0,
+      "source_geometry_sha256": "e6acf6ac3b1fbde9897cf063a91b61810391db7473b392dd735a335eabf5a61a",
+      "source_asset": "city/component/19e3fcaaa0e909cb",
+      "envelope_method": "conservative full transformed source mesh XY bounds, including roof overhangs; not a cast shadow"
+    }
+  ],
+  "source_geometry": {
+    "path": "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-v2/geometry.bin",
+    "sha256": "e6acf6ac3b1fbde9897cf063a91b61810391db7473b392dd735a335eabf5a61a"
+  },
+  "height_units": "Q0 authoring-height pixels; local projected feature Z divided by Q0 vertical_scale",
+  "pending": "Q4 placement adoption and composed re-render; Q5/Q3 exact real corridors"
+}

@@ -1,0 +1,9 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "frozen-l21",
+  "owner": "Q0-platform",
+  "provider": "frozen_l21",
+  "contract": 1,
+  "shader": "Renderer/terrain_lab/v2/shaders/common/frozen_l21.hlsl",
+  "scene": "complete"
+}

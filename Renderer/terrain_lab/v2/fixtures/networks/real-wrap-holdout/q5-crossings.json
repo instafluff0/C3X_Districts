@@ -1,0 +1,12 @@
+{
+  "schema": "c3x.q5.crossing_adaptation.v1",
+  "source": "Q3 Field v1",
+  "edges": [],
+  "classification": "Lab augmentation, not captured state",
+  "terrain_sha256": "e5c0d85d92dc47f5214e892b1729dea6022a16796bffc2365259c0422e8384f6",
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "region_id": "wrap-holdout",
+  "wrap_x": true,
+  "halo": 1,
+  "final_surface_height": "pending shared final surface conversion; null deck heights are deliberate"
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "c3x.q6.scene_linear_adapter.v1",
+  "source": "shaders/common/frozen_l21.hlsl",
+  "source_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
+  "output_sha256": "17f25aa1661ae3400266fedb4e4f726cabefcc80e820aa9de5165c97abf0e946",
+  "display_conversions_removed": 12,
+  "contract": "q6_scene_linear_premultiplied_v1",
+  "limitations": [
+    "Inherited projected shadow triangles remain provisional.",
+    "Frozen source binding completeness is not Q7 composition acceptance."
+  ]
+}

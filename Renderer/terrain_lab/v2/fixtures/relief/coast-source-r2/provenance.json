@@ -1,0 +1,75 @@
+{
+  "schema": "c3x.q4.source_geometry.v1",
+  "class": "synthetic_stress_case",
+  "proxy_inputs": [
+    "Q2 continuous ground",
+    "Q3 signed shore and static water"
+  ],
+  "source_files": {
+    "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json": "45880a451c618f827f1693fa11b3e580520b35524f8ba7e9df74eb446cc9eb3b",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_01_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json": "7d608d1c192c944a765ad5762137a77a199c4f526d7f4adc4e1701023f9cb1a5",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_02_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json": "9f81b6e660f615dfdf317e867e6b1b303a6829e6673fcb2bdd1b2bc47f925a7e",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_03_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json": "a7ef2c648dd415de94c7d3d81b9d376fab49d8d776a49d8e2ab43f4f07ce43af",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_04_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/desert_base_color.dds": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_top_base_color.dds": "7cbbab6c0a8ca26d8729c67766b476636bf820aadd6f1b4c0044754b58117d29"
+  },
+  "transforms": [
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.35,
+      "yaw": 0.0,
+      "translation": [
+        4.15,
+        1.35,
+        -0.045
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json",
+      "uniform_scale": 0.42,
+      "yaw": 0.9,
+      "translation": [
+        4.21,
+        1.65,
+        -0.045
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.28,
+      "yaw": 1.8,
+      "translation": [
+        4.1,
+        2.0,
+        -0.045
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.31,
+      "yaw": 2.7,
+      "translation": [
+        3.9,
+        3.15,
+        -0.045
+      ],
+      "uv_preserved": true
+    }
+  ],
+  "geometry_sha256": "5428464422846a5dfcb5573b8a4a4abbdb5e6dc21879e92a003f2c39e486fe59",
+  "generator_sha256": "0ad4691cd7318fc4c84bb7d3584f129ed24abede91d3b2363b7575080aa78305",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/relief/coast-source-r2/fixture.json",
+  "revision": 2
+}

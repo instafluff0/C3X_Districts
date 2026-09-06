@@ -1,0 +1,23 @@
+{
+  "schema": "c3x.lab_v2.corridors.v1",
+  "coordinate_space": "civ3_raw_delta_pixels_v1",
+  "terrain_sha256": "8c28cd98fed837aa2925873fd3aa27425452e6cceb9de9835602af62625788f3",
+  "region_id": "mixed",
+  "provider": "Q5-networks",
+  "revision": 2,
+  "wrap_period": [
+    6400,
+    0
+  ],
+  "envelopes": [],
+  "relief_clearance": {
+    "path": "Renderer/terrain_lab/v2/fixtures/networks/coastal-r01/clearance.csv",
+    "sha256": "77d8e9bed4b57e3601ce25c5f94ec21b0ca578d28ba85cc5c3998ec4507e4bed"
+  },
+  "source_corridors": {
+    "path": "Renderer/terrain_lab/v2/fixtures/networks/coastal-r01/corridors.json",
+    "sha256": "4b5366b7c9b8736a4c833f66f142490182f3c8a7fa66582c753a2d55f6843a96",
+    "schema": "c3x.lab_v2.corridors.v1",
+    "owner": "Q5-networks"
+  }
+}

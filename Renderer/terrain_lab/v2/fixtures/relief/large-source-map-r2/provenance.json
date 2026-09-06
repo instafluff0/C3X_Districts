@@ -1,0 +1,3092 @@
+{
+  "schema": "c3x.q4.source_geometry.v1",
+  "class": "synthetic_stress_case",
+  "proxy_inputs": [
+    "Q2 continuous ground",
+    "Q3 signed shore and static water"
+  ],
+  "classification": {
+    "rocks": "source_adaptation",
+    "hills": "source_adaptation",
+    "mountains_volcano": "diagnostic: exact source-height pixels, unproven physical coordinate reconstruction",
+    "dunes": "diagnostic_proxy: source material height at macro scale",
+    "water": "diagnostic_proxy"
+  },
+  "selected_beauty": false,
+  "source_files": {
+    "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_01/height_lod0.dds": "baff30c84f277cfb9dbbc9e420870e858c73203ef2d4fe42a140a287632bf021",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_02/height_lod0.dds": "323446622c368828be9cc6dcb87a96a43edfa52e2932c0725b5ea3688bc21f2e",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_03/height_lod0.dds": "9ae00e5df71ccb393c94ce7c33122636f15aa1589f3781644ab17c4b6d53e74e",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_04/height_lod0.dds": "177e528510a2ab4bc727a29a55fb53f72143d736b150188d8ef6c7991dca1c64",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_05/height_lod0.dds": "cbbf9d74b591bc8b7f35cb236e784e7083f0497b13fea00f2d58ed6142ae4552",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_base_base_color.dds": "c298a68129877340f3d5d86b55cb1f72a22656e7397c2a953a496d15dab0ece9",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_01/blend_lod0.dds": "4248af8f9d589420877fbc018e6b3778988fd6f95cdddac42ec60c9920818a0c",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_02/blend_lod0.dds": "2309d7b543f5c32b9f7b233ea920ed5761f68f9978e31d6336e6dd42fbbb47d6",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_03/blend_lod0.dds": "d44fc032ff4a8115245c8f9f6362d2168f4ed68c0ad51d1f7a88f5dd8053f2ea",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_04/blend_lod0.dds": "89c8653ab7d5b00f518762e91f26dea1cf539b9656195fb6027e213304ed318e",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_05/blend_lod0.dds": "a8ebaf823abe6eb3cb0f55ac18d80757e4f10b6b1b9e228ce059587314325833",
+    "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json": "c38a1c1f843d0962eca359e27904cd959e6e7d11843d647fcf9b57fcc6db9ac6",
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_v1_01_base_color.dds": "c2b1d3f81f7d054ba000e456f225713824560f6e48ae79bed4738168f2195fbc",
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_v1_01_normal_0.dds": "0e8568c1da5b606affa68f0e319b6da704629aa9de267821c03cd4562c4d8255",
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_v1_01_gloss.dds": "e199e0d226d62b500396aa240d64f329a2e81198b4e48214cca4231cd63b0e1e",
+    "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json": "9d057a44c0ebe5c05f5e381a059ecacfeb7050601ca4d8e662235a69782cb767",
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_v4_02_base_color.dds": "c2b1d3f81f7d054ba000e456f225713824560f6e48ae79bed4738168f2195fbc",
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_v4_02_normal_0.dds": "0e8568c1da5b606affa68f0e319b6da704629aa9de267821c03cd4562c4d8255",
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_v4_02_gloss.dds": "e199e0d226d62b500396aa240d64f329a2e81198b4e48214cca4231cd63b0e1e",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/desert_base_color.dds": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_top_base_color.dds": "7cbbab6c0a8ca26d8729c67766b476636bf820aadd6f1b4c0044754b58117d29"
+  },
+  "transforms": [
+    {
+      "kind": "source_height_grid",
+      "instance": 0,
+      "uniform_scale": 1.52,
+      "yaw": 0.0,
+      "translation": [
+        2.4000000000000004,
+        3.2,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 1,
+      "uniform_scale": 1.52,
+      "yaw": 1.5707963267948966,
+      "translation": [
+        2.92,
+        3.5200000000000005,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 2,
+      "uniform_scale": 1.52,
+      "yaw": 3.141592653589793,
+      "translation": [
+        3.44,
+        3.84,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 3,
+      "uniform_scale": 1.52,
+      "yaw": 4.71238898038469,
+      "translation": [
+        3.9600000000000004,
+        4.16,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 4,
+      "uniform_scale": 1.52,
+      "yaw": 0.0,
+      "translation": [
+        4.4799999999999995,
+        4.4799999999999995,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 5,
+      "uniform_scale": 1.52,
+      "yaw": 1.5707963267948966,
+      "translation": [
+        5.0,
+        4.800000000000001,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 6,
+      "uniform_scale": 1.52,
+      "yaw": 3.141592653589793,
+      "translation": [
+        5.5200000000000005,
+        5.120000000000001,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 7,
+      "uniform_scale": 1.52,
+      "yaw": 4.71238898038469,
+      "translation": [
+        6.04,
+        5.440000000000001,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 8,
+      "uniform_scale": 1.52,
+      "yaw": 0.0,
+      "translation": [
+        7.2,
+        5.6000000000000005,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 9,
+      "uniform_scale": 1.52,
+      "yaw": 1.5707963267948966,
+      "translation": [
+        7.616,
+        6.072,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 10,
+      "uniform_scale": 1.52,
+      "yaw": 3.141592653589793,
+      "translation": [
+        8.032,
+        6.5440000000000005,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 11,
+      "uniform_scale": 1.52,
+      "yaw": 4.71238898038469,
+      "translation": [
+        8.448,
+        7.016,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 12,
+      "uniform_scale": 1.52,
+      "yaw": 0.0,
+      "translation": [
+        8.864,
+        7.4879999999999995,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 13,
+      "uniform_scale": 1.52,
+      "yaw": 1.5707963267948966,
+      "translation": [
+        9.28,
+        7.96,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 14,
+      "uniform_scale": 1.52,
+      "yaw": 3.141592653589793,
+      "translation": [
+        9.696000000000002,
+        8.432,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 15,
+      "uniform_scale": 1.52,
+      "yaw": 4.71238898038469,
+      "translation": [
+        4.0,
+        8.8,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 16,
+      "uniform_scale": 1.52,
+      "yaw": 0.0,
+      "translation": [
+        4.5200000000000005,
+        8.672,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 17,
+      "uniform_scale": 1.52,
+      "yaw": 1.5707963267948966,
+      "translation": [
+        5.04,
+        8.544,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 18,
+      "uniform_scale": 1.52,
+      "yaw": 3.141592653589793,
+      "translation": [
+        5.5600000000000005,
+        8.416,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 19,
+      "uniform_scale": 1.52,
+      "yaw": 4.71238898038469,
+      "translation": [
+        6.08,
+        8.288,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 20,
+      "uniform_scale": 1.52,
+      "yaw": 0.0,
+      "translation": [
+        9.440000000000001,
+        2.5600000000000005,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 21,
+      "uniform_scale": 1.52,
+      "yaw": 1.5707963267948966,
+      "translation": [
+        9.920000000000002,
+        2.9600000000000004,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 22,
+      "uniform_scale": 1.52,
+      "yaw": 3.141592653589793,
+      "translation": [
+        10.4,
+        3.28,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "normalized_conventional_mesh_available": false
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8270589937136034,
+      "yaw": 5.895623665632295,
+      "translation": [
+        3.6644620920495217,
+        0.5678503377949821,
+        0.19186807365104636
+      ],
+      "uv_preserved": true,
+      "vertex_start": 0
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8121494091779516,
+      "yaw": 5.60526651384874,
+      "translation": [
+        5.326868570104663,
+        4.029577163323866,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 0
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8208441777411059,
+      "yaw": 5.561889646201164,
+      "translation": [
+        4.362078311420224,
+        3.0135165795079395,
+        0.05751947637700613
+      ],
+      "uv_preserved": true,
+      "vertex_start": 123
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9182495594618381,
+      "yaw": 5.275555368972168,
+      "translation": [
+        6.971993331143794,
+        3.691611187851804,
+        0.05966552214776672
+      ],
+      "uv_preserved": true,
+      "vertex_start": 246
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8553227694860178,
+      "yaw": 2.3329209790087395,
+      "translation": [
+        7.422802493508133,
+        1.7990831959032803,
+        0.30991604758628183
+      ],
+      "uv_preserved": true,
+      "vertex_start": 120
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.75146512979622,
+      "yaw": 3.33419688158729,
+      "translation": [
+        10.179948139638286,
+        12.53469803299292,
+        0.2598319572839895
+      ],
+      "uv_preserved": true,
+      "vertex_start": 369
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9044278487350849,
+      "yaw": 5.390540996440483,
+      "translation": [
+        4.291039900404984,
+        1.649318120577209,
+        0.07204610467646719
+      ],
+      "uv_preserved": true,
+      "vertex_start": 240
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9124491445081903,
+      "yaw": 1.1327761160824186,
+      "translation": [
+        12.261107528095804,
+        11.238113835670914,
+        0.18214899993483977
+      ],
+      "uv_preserved": true,
+      "vertex_start": 360
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8941080461688277,
+      "yaw": 2.5285869076731258,
+      "translation": [
+        10.582372351788347,
+        9.816885148481608,
+        0.16306599843897118
+      ],
+      "uv_preserved": true,
+      "vertex_start": 492
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9293248885998647,
+      "yaw": 5.196752126528746,
+      "translation": [
+        6.457817007261555,
+        4.532169943710129,
+        0.08467574024044847
+      ],
+      "uv_preserved": true,
+      "vertex_start": 615
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7663150092244959,
+      "yaw": 3.770182907734125,
+      "translation": [
+        4.34967882081024,
+        1.3071986053829971,
+        0.10927106798942815
+      ],
+      "uv_preserved": true,
+      "vertex_start": 738
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9017891277772878,
+      "yaw": 6.221237064777347,
+      "translation": [
+        9.331077383698126,
+        11.919643535369318,
+        0.29211984845378464
+      ],
+      "uv_preserved": true,
+      "vertex_start": 861
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9367369898472775,
+      "yaw": 5.852345025032073,
+      "translation": [
+        4.05842253378142,
+        2.7782786003191444,
+        0.055168420299931714
+      ],
+      "uv_preserved": true,
+      "vertex_start": 480
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.752258016759986,
+      "yaw": 1.9593218303086026,
+      "translation": [
+        9.521849264448983,
+        11.997237268608147,
+        0.2171709704840311
+      ],
+      "uv_preserved": true,
+      "vertex_start": 600
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9376427155272075,
+      "yaw": 4.470772821742113,
+      "translation": [
+        5.709916827660276,
+        2.5490097844185864,
+        0.11438769864428158
+      ],
+      "uv_preserved": true,
+      "vertex_start": 984
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9436648140058277,
+      "yaw": 3.803091502710228,
+      "translation": [
+        3.3617811027911615,
+        1.5219115667160679,
+        0.09978934561690406
+      ],
+      "uv_preserved": true,
+      "vertex_start": 720
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8244494051150271,
+      "yaw": 4.751087272714733,
+      "translation": [
+        7.513313809811311,
+        2.1728148587119245,
+        0.17234932702054775
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1107
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.876661062047819,
+      "yaw": 5.100331651562698,
+      "translation": [
+        6.451627855907011,
+        1.9391226204081577,
+        0.31868687441461546
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1230
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8028162091879857,
+      "yaw": 4.853315013747282,
+      "translation": [
+        4.859896205431909,
+        11.313244980664496,
+        0.19937200411231396
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1353
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7837219118229164,
+      "yaw": 0.3026677149999564,
+      "translation": [
+        7.061899664544355,
+        4.5018205125059225,
+        0.07432207680843528
+      ],
+      "uv_preserved": true,
+      "vertex_start": 840
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8235654366280788,
+      "yaw": 2.7108404806764197,
+      "translation": [
+        3.487941885123766,
+        1.7806272326376522,
+        0.06669175842073774
+      ],
+      "uv_preserved": true,
+      "vertex_start": 960
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9035425303393125,
+      "yaw": 2.614292807532894,
+      "translation": [
+        4.247962436664158,
+        0.8661060092413951,
+        0.2632770106283051
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1080
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7754144394788076,
+      "yaw": 5.079113825655645,
+      "translation": [
+        4.818130638967187,
+        0.7350583664695036,
+        0.29589095461193204
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1200
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9309589585077452,
+      "yaw": 6.18061204599129,
+      "translation": [
+        6.738244932070865,
+        4.3965014797364095,
+        0.05054071910411256
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1320
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8498226445871495,
+      "yaw": 1.1469975197656133,
+      "translation": [
+        7.077642673008207,
+        1.504067254748637,
+        0.1163207676878315
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1440
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8147080972301687,
+      "yaw": 6.0760617632965195,
+      "translation": [
+        6.871125934757885,
+        2.5960894555448926,
+        0.12719989911750762
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1560
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9199954212658362,
+      "yaw": 3.3320316472310316,
+      "translation": [
+        5.250488034716216,
+        1.7236114266126261,
+        0.11331155249494973
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1476
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9353619400890806,
+      "yaw": 1.8752952065493655,
+      "translation": [
+        9.96484987803799,
+        10.038597467522935,
+        0.21403824195300392
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1599
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.766119537024658,
+      "yaw": 5.6386219244759035,
+      "translation": [
+        4.420881282773266,
+        11.276466826105045,
+        0.14429844854350812
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1680
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.758456522332845,
+      "yaw": 5.923161395681232,
+      "translation": [
+        12.194158933352135,
+        9.284658511105803,
+        0.3034871151055411
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1800
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7512950093848401,
+      "yaw": 0.4394783996072088,
+      "translation": [
+        3.53345875989249,
+        12.500236470843829,
+        0.21551398354744378
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1722
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7640718086647854,
+      "yaw": 5.022981063960003,
+      "translation": [
+        12.402739952087359,
+        10.429149678335715,
+        0.11787406518694948
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1920
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8793845579962021,
+      "yaw": 6.120348934761645,
+      "translation": [
+        3.651843380300928,
+        11.351294229881812,
+        0.18189899624183922
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2040
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9009672250168109,
+      "yaw": 3.009245427667541,
+      "translation": [
+        3.6660946785480513,
+        12.303711961146712,
+        0.16317422117704697
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2160
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7753125023182987,
+      "yaw": 3.6338204231073075,
+      "translation": [
+        5.34650628522367,
+        3.713155259304322,
+        0.06951335687331817
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1845
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9393637317750742,
+      "yaw": 0.6859071633070906,
+      "translation": [
+        3.3338847410577586,
+        4.55396268460108,
+        0.09335082658826638
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2280
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7991132287592199,
+      "yaw": 3.2419509006743823,
+      "translation": [
+        11.953466755895336,
+        11.046630576645288,
+        0.09445176486753706
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2400
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9219492368244973,
+      "yaw": 5.885260759854385,
+      "translation": [
+        6.7921539833469735,
+        2.575588756486492,
+        0.11677610667859159
+      ],
+      "uv_preserved": true,
+      "vertex_start": 1968
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8179988240416488,
+      "yaw": 3.6943145030815185,
+      "translation": [
+        3.5406700509467735,
+        5.010160087245978,
+        0.10169813030337271
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2520
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7744182729055463,
+      "yaw": 4.3729104178776,
+      "translation": [
+        4.476055823647486,
+        3.374489205362885,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2091
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9488327065704703,
+      "yaw": 5.379151606312201,
+      "translation": [
+        12.494341842408488,
+        10.982879580633009,
+        0.13873158921003248
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2640
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8715719228331287,
+      "yaw": 4.3513945070855415,
+      "translation": [
+        7.131698883747005,
+        3.9613174712913874,
+        0.061515746848416306
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2760
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8998320546563506,
+      "yaw": 3.9501407129883694,
+      "translation": [
+        6.07401977589602,
+        3.9956312780380125,
+        0.0646508955807126
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2880
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7994906032403671,
+      "yaw": 2.702663531445916,
+      "translation": [
+        6.680703155047832,
+        4.754687027834337,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3000
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8591199294272552,
+      "yaw": 0.505090572769844,
+      "translation": [
+        3.9522774155448905,
+        11.282077226779741,
+        0.12400446478310825
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3120
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9052097326667217,
+      "yaw": 4.9330851742490465,
+      "translation": [
+        7.249597150600424,
+        1.9013072350896194,
+        0.2100546571447701
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2214
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7874361384893218,
+      "yaw": 5.975856123489586,
+      "translation": [
+        7.554968537963803,
+        4.174276831658725,
+        0.04541894897021628
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3240
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7880119295188179,
+      "yaw": 0.7365156587743303,
+      "translation": [
+        11.503375694665465,
+        12.109655715724285,
+        0.14856197507944705
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2337
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7867747791933942,
+      "yaw": 4.202709932924118,
+      "translation": [
+        12.160402323379595,
+        9.360538986696518,
+        0.34372319729183143
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2460
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8008266360480916,
+      "yaw": 4.447492767554485,
+      "translation": [
+        2.778295767776748,
+        1.6902084358866996,
+        0.041058823529411766
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3360
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7760861942698439,
+      "yaw": 1.6682877349125451,
+      "translation": [
+        6.7977181217503375,
+        3.9997223207358035,
+        0.04763383902334774
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2583
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8748931709638901,
+      "yaw": 2.095339251524046,
+      "translation": [
+        2.842973110495692,
+        2.1799327599759524,
+        0.0736125997522441
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3480
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8657015564030986,
+      "yaw": 5.940833281509391,
+      "translation": [
+        6.416777854044246,
+        1.9434939734287286,
+        0.3204777976007805
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3600
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8600081310058064,
+      "yaw": 5.763554496045241,
+      "translation": [
+        5.674345708549073,
+        2.6442457465816585,
+        0.0900038914705753
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3720
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8289443364057947,
+      "yaw": 4.799246101882543,
+      "translation": [
+        10.085110739482918,
+        11.84707634008552,
+        0.1796679385092071
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3840
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8523901039717094,
+      "yaw": 3.5942069675009125,
+      "translation": [
+        11.106379718736514,
+        11.87950850289316,
+        0.10940272333967038
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3960
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9120508961005687,
+      "yaw": 0.05785572852207824,
+      "translation": [
+        5.402587971718045,
+        1.5982995347657838,
+        0.1166148453455752
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2706
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8205991391874881,
+      "yaw": 3.1808907979828525,
+      "translation": [
+        3.471870824867296,
+        10.95614812162297,
+        0.14355927872248975
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4080
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8012621557737022,
+      "yaw": 1.5697083556082252,
+      "translation": [
+        11.489469278062586,
+        10.264647744793201,
+        0.16894900116537412
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2829
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8604993575944049,
+      "yaw": 4.622143485584815,
+      "translation": [
+        5.4125786568595755,
+        1.2813103424060375,
+        0.10174158272408007
+      ],
+      "uv_preserved": true,
+      "vertex_start": 2952
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7915638097872766,
+      "yaw": 0.9381518777400767,
+      "translation": [
+        2.565191243912207,
+        11.964311256550666,
+        0.15043938911183333
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3075
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8782547532215628,
+      "yaw": 5.304189000005849,
+      "translation": [
+        4.925860119165535,
+        4.185823039788386,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4200
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9343781603909191,
+      "yaw": 0.5376571766395194,
+      "translation": [
+        7.37954529816412,
+        2.8205667300163526,
+        0.17637624797775667
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3198
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7754747795890143,
+      "yaw": 4.146233274254109,
+      "translation": [
+        11.819147793223648,
+        11.756673278810641,
+        0.12544199511250115
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4320
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.899726249061693,
+      "yaw": 5.694670672014736,
+      "translation": [
+        4.3715123171126455,
+        0.6548766409169241,
+        0.20485068390399497
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4440
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9398253212101941,
+      "yaw": 3.413675803144287,
+      "translation": [
+        3.6890323179512206,
+        1.6015145900024526,
+        0.10545723401216062
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3321
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.943954344798386,
+      "yaw": 1.075147756043819,
+      "translation": [
+        4.843655421681593,
+        11.443913761717518,
+        0.21076733044144239
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4560
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8235686891293962,
+      "yaw": 1.782478803727049,
+      "translation": [
+        5.49227447060795,
+        3.927653586255461,
+        0.0845535569043794
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4680
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.902568613095291,
+      "yaw": 0.9954166164794629,
+      "translation": [
+        4.316009433861968,
+        11.0863928401047,
+        0.12790917169729143
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4800
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9310525448053946,
+      "yaw": 4.064311574210253,
+      "translation": [
+        5.049096252083134,
+        0.5362430633464754,
+        0.24446374947496213
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4920
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9302508788051632,
+      "yaw": 4.486291829702572,
+      "translation": [
+        4.269048165813212,
+        1.0553560115881542,
+        0.16434687909240198
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3444
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.846163091761398,
+      "yaw": 4.225479442903701,
+      "translation": [
+        4.036261407194837,
+        11.874967272494292,
+        0.1563806320946986
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3567
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.924742414433974,
+      "yaw": 2.0870541602799437,
+      "translation": [
+        9.275592783218134,
+        11.476328749172657,
+        0.30366395757311215
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5040
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8169081720907013,
+      "yaw": 4.3468079537461835,
+      "translation": [
+        5.813080207805773,
+        3.827876575921792,
+        0.08168335704344269
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5160
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8358098315239059,
+      "yaw": 4.520675828781803,
+      "translation": [
+        5.667076755063833,
+        3.243457421418159,
+        0.05427949244987679
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5280
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8907744267421057,
+      "yaw": 1.8754075840759215,
+      "translation": [
+        12.41895361123873,
+        11.767392635237972,
+        0.16221926567219472
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3690
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8022971965064315,
+      "yaw": 0.648950759648064,
+      "translation": [
+        5.580266767372007,
+        0.4126237152538371,
+        0.1054621230618196
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5400
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8852160805757913,
+      "yaw": 0.8251656154313479,
+      "translation": [
+        6.20410375258975,
+        4.913468593816031,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3813
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8114782541215688,
+      "yaw": 6.1670631686197055,
+      "translation": [
+        4.35657338270228,
+        1.2136340968275134,
+        0.126058533471161
+      ],
+      "uv_preserved": true,
+      "vertex_start": 3936
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7926155393420218,
+      "yaw": 3.82831428970168,
+      "translation": [
+        10.335625825512826,
+        11.630275817841008,
+        0.08750475299231505
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5520
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7682370246057842,
+      "yaw": 4.713753750028164,
+      "translation": [
+        4.160815411924763,
+        12.498012592076293,
+        0.24419496041111402
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5640
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9175352654340189,
+      "yaw": 4.067053990047252,
+      "translation": [
+        3.595313274908618,
+        4.90844019410772,
+        0.08838186328726705
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4059
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7520879769576733,
+      "yaw": 5.129586799200563,
+      "translation": [
+        5.751046911339304,
+        12.3550432201508,
+        0.21005629464689457
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5760
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.85132308327827,
+      "yaw": 3.372480928246782,
+      "translation": [
+        3.253088865825628,
+        2.29777657527697,
+        0.05293493624709708
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5880
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9268862026749913,
+      "yaw": 2.8393539825077694,
+      "translation": [
+        6.079771212652847,
+        0.7412980935481523,
+        0.329838811051411
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4182
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7585142513241057,
+      "yaw": 2.184345131416383,
+      "translation": [
+        4.2813248482054975,
+        2.125695257039687,
+        0.058049930251435386
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6000
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9084671165481325,
+      "yaw": 3.7880419164852435,
+      "translation": [
+        7.19027970775059,
+        3.6346880836946234,
+        0.07470017174348964
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6120
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8614593333524644,
+      "yaw": 3.732517091954595,
+      "translation": [
+        2.9219837108246436,
+        11.507044215914373,
+        0.15526256008443742
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6240
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8645953347764025,
+      "yaw": 2.31047450231547,
+      "translation": [
+        9.659975488490618,
+        12.236090610583934,
+        0.21951842971413987
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4305
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7641762334078821,
+      "yaw": 4.19114610279446,
+      "translation": [
+        5.296252495898736,
+        4.488117946318045,
+        0.0877031902209934
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4428
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8547504410080445,
+      "yaw": 1.0124292474863519,
+      "translation": [
+        9.894799824686071,
+        10.426943236383499,
+        0.13790801245059245
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4551
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8346091748635671,
+      "yaw": 5.437959983650213,
+      "translation": [
+        3.1918047351363747,
+        1.9730834978939622,
+        0.043804054771801604
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6360
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8984827450041267,
+      "yaw": 4.068519344712626,
+      "translation": [
+        4.070082947331732,
+        4.840746995782718,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6480
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8015753932947797,
+      "yaw": 4.086152775130209,
+      "translation": [
+        5.4744208219394475,
+        1.8304401840180424,
+        0.13556208699901057
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4674
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9252421573736807,
+      "yaw": 3.684488263984524,
+      "translation": [
+        4.034266472918604,
+        1.6406592711080838,
+        0.06646159924444311
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6600
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8130484846300061,
+      "yaw": 0.31280873836102635,
+      "translation": [
+        6.278160249706748,
+        2.0085089610817164,
+        0.27933748125124275
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6720
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8310356740155732,
+      "yaw": 3.038598385273494,
+      "translation": [
+        2.426830458559047,
+        3.6944721193669605,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6840
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8418629116613382,
+      "yaw": 2.6221442858949,
+      "translation": [
+        10.03789930317629,
+        11.584053577765772,
+        0.1178335448743327
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6960
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9451806636813783,
+      "yaw": 2.064704248669585,
+      "translation": [
+        3.8869175518507393,
+        12.459376177461504,
+        0.2446596934179781
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4797
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9287149203268664,
+      "yaw": 5.174665255357045,
+      "translation": [
+        5.1563602477926365,
+        11.94805603925236,
+        0.09750775970345224
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7080
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8035772254292126,
+      "yaw": 2.162859041131563,
+      "translation": [
+        5.751905323647069,
+        2.456677624295957,
+        0.13899307873209846
+      ],
+      "uv_preserved": true,
+      "vertex_start": 4920
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8643500479640034,
+      "yaw": 0.8833523110688375,
+      "translation": [
+        11.005776636081679,
+        10.915277952116348,
+        0.14715899205369326
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7200
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8205958120252371,
+      "yaw": 0.42157752078569055,
+      "translation": [
+        2.495568498644248,
+        11.953545406289956,
+        0.1610142203678098
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5043
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9283128474179427,
+      "yaw": 1.0541812239516162,
+      "translation": [
+        5.893007729172222,
+        1.8780215412005221,
+        0.2168167466208098
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7320
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7532864552882258,
+      "yaw": 4.907930897363259,
+      "translation": [
+        6.133311415189155,
+        0.8386751571479669,
+        0.27718572000485076
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5166
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8716503883686729,
+      "yaw": 2.458132744728844,
+      "translation": [
+        2.4103121534754584,
+        11.514385893620815,
+        0.3609224910273552
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7440
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8667091887892245,
+      "yaw": 3.0750783615949286,
+      "translation": [
+        11.704525128521501,
+        9.89775995790956,
+        0.18702362469067293
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7560
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7542771215936351,
+      "yaw": 1.805923141626845,
+      "translation": [
+        3.549553886313242,
+        1.8754551071395331,
+        0.05078766667820469
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7680
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8788107920304917,
+      "yaw": 4.472156642725353,
+      "translation": [
+        2.0676352763790247,
+        12.447568214242716,
+        0.1447777064398905
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7800
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7643287694435551,
+      "yaw": 5.339682040165276,
+      "translation": [
+        12.119111727147304,
+        11.493632198452458,
+        0.0925949436165088
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7920
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7750006699603067,
+      "yaw": 3.406707982958982,
+      "translation": [
+        7.703419999984628,
+        2.321942307708136,
+        0.17948332244552317
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5289
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.799641267284564,
+      "yaw": 2.369741044794206,
+      "translation": [
+        6.63469631537792,
+        5.065405474079701,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5412
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.774059423329584,
+      "yaw": 5.153773549413039,
+      "translation": [
+        12.589914665240848,
+        9.935283123971029,
+        0.10946471128601601
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8040
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8282381278386807,
+      "yaw": 1.6829822611832728,
+      "translation": [
+        6.20356959006745,
+        3.0114596460863123,
+        0.06041678960727553
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5535
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8317554196405776,
+      "yaw": 3.8972270238748625,
+      "translation": [
+        2.963653592839029,
+        4.225795001303462,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5658
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7579465804860895,
+      "yaw": 3.416961711708087,
+      "translation": [
+        2.921929948268334,
+        3.074549387815504,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8160
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9284994353531828,
+      "yaw": 2.3094377853640804,
+      "translation": [
+        4.604665940640598,
+        3.932297593093002,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5781
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8590006545565454,
+      "yaw": 1.8279086419205042,
+      "translation": [
+        3.8045455181653436,
+        0.871603376906106,
+        0.20563156461432192
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8280
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9277203645465798,
+      "yaw": 5.072378474777218,
+      "translation": [
+        9.909511881126413,
+        10.359898782280087,
+        0.1425902540008836
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8400
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7975495226141086,
+      "yaw": 4.572844878091361,
+      "translation": [
+        4.065928351093562,
+        11.134574466098103,
+        0.1036794652222984
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8520
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8188795376752751,
+      "yaw": 3.766299380343422,
+      "translation": [
+        7.41069551887256,
+        4.353217712998215,
+        0.04900761015457252
+      ],
+      "uv_preserved": true,
+      "vertex_start": 5904
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8702310207827652,
+      "yaw": 5.20607550808436,
+      "translation": [
+        6.273012943429747,
+        1.890727077352513,
+        0.3612609105568669
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6027
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8909066241308392,
+      "yaw": 0.6045689557510757,
+      "translation": [
+        5.52619319220519,
+        2.526847148759958,
+        0.08618021843187393
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8640
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7691667307215997,
+      "yaw": 4.348391794024455,
+      "translation": [
+        7.467115834837763,
+        1.7627120614535754,
+        0.3333294285349161
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8760
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7651618912432787,
+      "yaw": 3.862863857399753,
+      "translation": [
+        6.397524357462088,
+        1.4835607051373545,
+        0.21127729590862296
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6150
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8798372696624694,
+      "yaw": 3.6151616235873814,
+      "translation": [
+        3.863168933790518,
+        1.491477521636699,
+        0.09625026840432063
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8880
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8478189504736449,
+      "yaw": 5.740716134349165,
+      "translation": [
+        4.675402842287002,
+        12.551658755027415,
+        0.3119714498773586
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6273
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9343392497887916,
+      "yaw": 5.458176486924007,
+      "translation": [
+        11.718530203101134,
+        9.952383501178584,
+        0.16248787144830112
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6396
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9126303293975492,
+      "yaw": 2.8003075555482217,
+      "translation": [
+        6.43823733425516,
+        1.9867717720512683,
+        0.29733636060042645
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9000
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8426998312830031,
+      "yaw": 0.8551095374516938,
+      "translation": [
+        7.447512142392881,
+        2.947399714508021,
+        0.15943531871249522
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6519
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7766111588538194,
+      "yaw": 3.813104559375971,
+      "translation": [
+        10.688316427917492,
+        11.82364950111792,
+        0.08208538824298234
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6642
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8869047445712841,
+      "yaw": 2.6049126610795468,
+      "translation": [
+        4.816561194690962,
+        11.401578082635591,
+        0.22784871703346207
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6765
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7851797189201003,
+      "yaw": 2.066909063912638,
+      "translation": [
+        5.8651949237217815,
+        3.5163053046788004,
+        0.07295932380984206
+      ],
+      "uv_preserved": true,
+      "vertex_start": 6888
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.892222967993614,
+      "yaw": 2.436735514270081,
+      "translation": [
+        10.550445430677847,
+        12.065518083009394,
+        0.09989711949628455
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7011
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9278603368828436,
+      "yaw": 3.866617580631099,
+      "translation": [
+        10.18885625645395,
+        11.663785487318394,
+        0.11104523921303505
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9120
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.757055992791759,
+      "yaw": 3.6710316609438127,
+      "translation": [
+        4.01788203332005,
+        11.130837559067949,
+        0.0991522660398225
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9240
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7861752416980186,
+      "yaw": 3.8591850167855397,
+      "translation": [
+        6.341466645173943,
+        3.013765890344041,
+        0.060616961099941434
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7134
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8172551995182193,
+      "yaw": 2.2987797432482204,
+      "translation": [
+        6.072041690194093,
+        4.774027562076148,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7257
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8212410178553496,
+      "yaw": 4.3102968746305,
+      "translation": [
+        4.004197149369113,
+        5.549696967253633,
+        0.10419818126339767
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7380
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7774594003878099,
+      "yaw": 3.118435528813495,
+      "translation": [
+        11.941210823445505,
+        11.294379725596047,
+        0.09782913165266108
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7503
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7734831714319446,
+      "yaw": 2.7261600603669836,
+      "translation": [
+        3.071095176519698,
+        11.316576748769181,
+        0.13451437602818772
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9360
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8099228836118499,
+      "yaw": 0.8628422499011676,
+      "translation": [
+        3.987713091116198,
+        12.143777421467115,
+        0.11881532427188327
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9480
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7728298868811109,
+      "yaw": 0.6915488114021903,
+      "translation": [
+        12.193330436696325,
+        11.798631145718188,
+        0.16088269529180765
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9600
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7590970527608116,
+      "yaw": 5.557841050018952,
+      "translation": [
+        7.77724883977395,
+        3.2784059908301018,
+        0.09563730544475446
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7626
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8847321689453341,
+      "yaw": 2.767778280719795,
+      "translation": [
+        6.385131561442839,
+        4.174803932029599,
+        0.05455897094048801
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7749
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8757345035023824,
+      "yaw": 4.360279023781298,
+      "translation": [
+        11.682912006673892,
+        12.16951111842371,
+        0.1720641620707666
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7872
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8631719269140805,
+      "yaw": 2.639171641851164,
+      "translation": [
+        4.091981508782269,
+        3.322384777122703,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9720
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.9319749663356458,
+      "yaw": 4.668461302481337,
+      "translation": [
+        6.753560802241881,
+        2.361693007852329,
+        0.13505265717774145
+      ],
+      "uv_preserved": true,
+      "vertex_start": 7995
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8232198929844509,
+      "yaw": 5.4261925789128185,
+      "translation": [
+        4.918853333910811,
+        12.314235732116611,
+        0.2388906951000121
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8118
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7529136550599147,
+      "yaw": 2.543004239546865,
+      "translation": [
+        2.003367133531014,
+        12.009945131027958,
+        0.21246898951453774
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8241
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8414832203265451,
+      "yaw": 3.0542884590573776,
+      "translation": [
+        2.6792584769158987,
+        11.220670482193396,
+        0.17581605174147152
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8364
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8833976787318693,
+      "yaw": 5.366631318094579,
+      "translation": [
+        3.2460462737887514,
+        11.8619787108543,
+        0.08464648302253874
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9840
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7770254785392262,
+      "yaw": 4.6985105579592865,
+      "translation": [
+        3.857922348816887,
+        1.816654485413708,
+        0.04980904142937242
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8487
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8369289623928002,
+      "yaw": 5.970622743750812,
+      "translation": [
+        3.700711951511955,
+        2.4241399056411805,
+        0.036302697443647926
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9960
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.827521867278285,
+      "yaw": 5.978849302999795,
+      "translation": [
+        6.255111340587917,
+        4.933930340645085,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 10080
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.9314514867261932,
+      "yaw": 3.3811432464862214,
+      "translation": [
+        4.420201434030369,
+        1.4989772503601735,
+        0.08775172043189308
+      ],
+      "uv_preserved": true,
+      "vertex_start": 10200
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.7695712263465042,
+      "yaw": 5.486712409492204,
+      "translation": [
+        10.38157765348136,
+        11.14561121106561,
+        0.11895095283354287
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8610
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8555197326772599,
+      "yaw": 5.122561915201933,
+      "translation": [
+        4.680638645451727,
+        1.5236905176251474,
+        0.09657199995423976
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8733
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8438768619299468,
+      "yaw": 0.8023290152489484,
+      "translation": [
+        12.297665673992464,
+        9.259111368212901,
+        0.2056540525849422
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8856
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8053129421273862,
+      "yaw": 0.29775794568336994,
+      "translation": [
+        6.487188467725415,
+        2.2312357005551617,
+        0.1369656150889763
+      ],
+      "uv_preserved": true,
+      "vertex_start": 10320
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.793312435320977,
+      "yaw": 6.209653510998702,
+      "translation": [
+        12.589026468273005,
+        12.333978840423617,
+        0.18899151417932245
+      ],
+      "uv_preserved": true,
+      "vertex_start": 8979
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8584940041661745,
+      "yaw": 1.249796782680829,
+      "translation": [
+        3.883493318129114,
+        3.3247480090681565,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9102
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8088771489648904,
+      "yaw": 5.553530980388062,
+      "translation": [
+        2.66913226269834,
+        11.45051186228383,
+        0.21496530479009912
+      ],
+      "uv_preserved": true,
+      "vertex_start": 10440
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.8811695888990513,
+      "yaw": 3.50533741143002,
+      "translation": [
+        7.120744471610301,
+        2.352166267750332,
+        0.2584955789946309
+      ],
+      "uv_preserved": true,
+      "vertex_start": 10560
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.902589734694548,
+      "yaw": 5.636484290988528,
+      "translation": [
+        5.827002828242474,
+        4.695796325996589,
+        0.08600000000000001
+      ],
+      "uv_preserved": true,
+      "vertex_start": 10680
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.865060454650833,
+      "yaw": 3.0507995035284257,
+      "translation": [
+        4.080735876678515,
+        1.134569054630647,
+        0.11966835306873996
+      ],
+      "uv_preserved": true,
+      "vertex_start": 10800
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v1_01.json",
+      "material_sha256": "8f6b829b664bbc775f13ddfc4a01bb131be262673e08c9b309433b258a563a6f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.7760674693268931,
+      "yaw": 0.708479920916025,
+      "translation": [
+        11.1532243584771,
+        10.726990913308862,
+        0.13846050301894677
+      ],
+      "uv_preserved": true,
+      "vertex_start": 10920
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.856404663326379,
+      "yaw": 4.740692062008611,
+      "translation": [
+        11.717074825737114,
+        11.459737476606206,
+        0.17811205056307527
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9225
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8978226347401256,
+      "yaw": 3.2976729308169688,
+      "translation": [
+        11.824929771784157,
+        11.922983460475178,
+        0.13060224089635855
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9348
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/Civ5EnvironmentVegetation/materials/features/forest_leafy_v4_02.json",
+      "material_sha256": "39711aade1ae742e284cb161fe40b210826cca5e7e9d668294a98c3ff7c8eb0f",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.8559714209743953,
+      "yaw": 0.6724653328354027,
+      "translation": [
+        11.540955912032059,
+        11.005418704239375,
+        0.13305357913121665
+      ],
+      "uv_preserved": true,
+      "vertex_start": 9471
+    }
+  ],
+  "geometry_sha256": "9d9a0d22fa7d1089f16de81ee547acc6dcda22d33f3551ddc2c6772fd111a0f8",
+  "generator_sha256": "fc3912ed651deb6a6b120139878abf9343ad9d7c17fd20d03f50b62ba68863bf",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/relief/large-source-map-r2/fixture.json",
+  "revision": 2,
+  "q5_envelope": null,
+  "clearance_envelopes": [],
+  "rejected_instances": []
+}

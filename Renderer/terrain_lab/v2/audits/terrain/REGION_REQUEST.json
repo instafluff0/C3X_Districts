@@ -1,0 +1,102 @@
+{
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "regions": [
+    {
+      "requested_id": "q2-dry",
+      "origin": [
+        18,
+        40
+      ],
+      "extent": [
+        4,
+        4
+      ],
+      "halo": 2,
+      "coverage": {
+        "terrain": {
+          "desert": 2,
+          "plains": 1,
+          "grassland": 2,
+          "floodplain": 2,
+          "hills": 2,
+          "mountain": 3,
+          "forest": 4
+        },
+        "river_tiles": 4,
+        "land_water_edges": 0,
+        "terrain_edges": 20
+      },
+      "base_channels": [
+        0,
+        1,
+        2
+      ],
+      "reason": "Existing mixed/wrap regions mostly reduce to grass underlay in base isolation; required source-material witnesses need these additional actual-map regions."
+    },
+    {
+      "requested_id": "q2-cold",
+      "origin": [
+        81,
+        19
+      ],
+      "extent": [
+        4,
+        4
+      ],
+      "halo": 2,
+      "coverage": {
+        "terrain": {
+          "plains": 2,
+          "grassland": 8,
+          "tundra": 1,
+          "mountain": 1,
+          "forest": 3,
+          "coast": 1
+        },
+        "river_tiles": 8,
+        "land_water_edges": 2,
+        "terrain_edges": 14
+      },
+      "base_channels": [
+        0,
+        1,
+        4
+      ],
+      "reason": "Existing mixed/wrap regions mostly reduce to grass underlay in base isolation; required source-material witnesses need these additional actual-map regions."
+    },
+    {
+      "requested_id": "q2-wet",
+      "origin": [
+        83,
+        39
+      ],
+      "extent": [
+        4,
+        4
+      ],
+      "halo": 2,
+      "coverage": {
+        "terrain": {
+          "desert": 1,
+          "plains": 6,
+          "grassland": 2,
+          "hills": 3,
+          "forest": 2,
+          "jungle": 1,
+          "marsh": 1
+        },
+        "river_tiles": 0,
+        "land_water_edges": 0,
+        "terrain_edges": 19
+      },
+      "base_channels": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "reason": "Existing mixed/wrap regions mostly reduce to grass underlay in base isolation; required source-material witnesses need these additional actual-map regions."
+    }
+  ],
+  "required_action": "Q0 register these origins and fixed neighboring holdouts; Q2 will consume registry read-only."
+}

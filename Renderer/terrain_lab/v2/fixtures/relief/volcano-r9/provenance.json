@@ -1,0 +1,47 @@
+{
+  "schema": "c3x.q4.source_geometry.v1",
+  "class": "synthetic_stress_case",
+  "proxy_inputs": [
+    "Q2 continuous ground",
+    "Q3 signed shore and static water"
+  ],
+  "classification": {
+    "rocks": "source_adaptation",
+    "hills": "source_adaptation",
+    "mountains_volcano": "source_adaptation: source-height reconstruction, not a conventional mesh",
+    "dunes": "diagnostic_proxy: source material height at macro scale",
+    "water": "diagnostic_proxy"
+  },
+  "selected_beauty": false,
+  "source_files": {
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/standard/height_lod0.dds": "27ed2ff28b6e1005117d02f22e7397076be74130aac5ce9671bf5437285b4fac",
+    "Renderer/packs/TerrainElementsNormalized/textures/terrain_elements/terrain_feature_volcano/height_lod0.dds": "2a6a4bfd3621b7c4f7679f07c1b2a6eb2512d70bf95f36f6193ef3ae1c331462",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_base_base_color.dds": "c298a68129877340f3d5d86b55cb1f72a22656e7397c2a953a496d15dab0ece9",
+    "Renderer/packs/TerrainElementsNormalized/textures/terrain_elements/terrain_feature_volcano/blend_lod0.dds": "3ebae1f544bf21ee0f187a4f70c79898c4b60b139c45cccad87e04258932c18a",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/desert_base_color.dds": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_top_base_color.dds": "7cbbab6c0a8ca26d8729c67766b476636bf820aadd6f1b4c0044754b58117d29"
+  },
+  "transforms": [
+    {
+      "kind": "source_height_grid",
+      "instance": 0,
+      "uniform_scale": 1.75,
+      "yaw": 0.0,
+      "translation": [
+        3,
+        3,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "original_conventional_mesh_available": false
+    }
+  ],
+  "geometry_sha256": "c5a16ce6186e29cf8da5b75bfcb75867f3e2ce324bb9a3a96165936aeabc4b87",
+  "generator_sha256": "ecdfe1f931d1397b6c4066728631ffb6f99ec1309355737b11205d8270efb823",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/relief/volcano-r9/fixture.json",
+  "revision": 9,
+  "clearance_envelopes": [],
+  "rejected_instances": []
+}

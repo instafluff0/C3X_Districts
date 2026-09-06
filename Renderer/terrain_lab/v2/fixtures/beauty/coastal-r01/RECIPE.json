@@ -1,0 +1,166 @@
+{
+  "schema": "c3x.q8.gameplay_checkpoint.v1",
+  "accepted": false,
+  "owner": "Q8-beauty",
+  "region": {
+    "camera": {
+      "hours": [
+        12,
+        18,
+        0,
+        6
+      ],
+      "viewport": [
+        768,
+        512
+      ],
+      "zooms": [
+        1,
+        2
+      ]
+    },
+    "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+    "coverage": {
+      "land_water_edges": 6,
+      "river_tiles": 0,
+      "terrain": {
+        "coast": 5,
+        "forest": 2,
+        "grassland": 1,
+        "hills": 2,
+        "jungle": 2,
+        "mountain": 2,
+        "plains": 1,
+        "sea": 1
+      },
+      "terrain_edges": 16
+    },
+    "extent": [
+      4,
+      4
+    ],
+    "halo": 2,
+    "id": "mixed",
+    "origin": [
+      14,
+      42
+    ],
+    "role": "primary",
+    "terrain_sha256": "8c28cd98fed837aa2925873fd3aa27425452e6cceb9de9835602af62625788f3",
+    "wrap": {
+      "x": true,
+      "y": false
+    }
+  },
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "placement": {
+    "label": "deterministic Lab augmentation, not captured Civ III state",
+    "objects": [
+      {
+        "domain": "land",
+        "kind": "city",
+        "stable_id": 1,
+        "tile": [
+          0,
+          3
+        ]
+      }
+    ],
+    "profile": "q8_coastal_context_v1",
+    "region_id": "mixed",
+    "routes": [
+      {
+        "domain": "land",
+        "from": [
+          0,
+          3
+        ],
+        "kind": "road",
+        "to": [
+          1,
+          3
+        ]
+      },
+      {
+        "domain": "land",
+        "from": [
+          1,
+          3
+        ],
+        "kind": "road",
+        "to": [
+          2,
+          3
+        ]
+      },
+      {
+        "domain": "land",
+        "from": [
+          2,
+          3
+        ],
+        "kind": "road",
+        "to": [
+          3,
+          3
+        ]
+      },
+      {
+        "domain": "land",
+        "from": [
+          3,
+          2
+        ],
+        "kind": "road",
+        "to": [
+          3,
+          3
+        ]
+      }
+    ],
+    "schema": "c3x.lab_v2.augmentation.v1",
+    "seed": 8,
+    "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+    "terrain_sha256": "8c28cd98fed837aa2925873fd3aa27425452e6cceb9de9835602af62625788f3",
+    "owner": "Q8-beauty",
+    "assumptions": [
+      "One ancient town and a connected land road to its surroundings; no captured city state.",
+      "Small coastal context, not a complete developed-gameplay or Q8 acceptance fixture.",
+      "Frozen source city and road presentation retained until Q7/Q5 compatible modules arrive."
+    ]
+  },
+  "fixed_settings": {
+    "anisotropy": 8,
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ],
+    "mip_bias": 0,
+    "postprocess": {
+      "shader": "Renderer/terrain_lab/v2/shaders/sampling/linear_reconstruct.hlsl",
+      "owner": "Q1-sampling",
+      "contract": 2
+    },
+    "render_scale": 1,
+    "samples": 4
+  },
+  "comparison": "Matched input A/B: prior source linear scene vs Q2/Q3 materials/shore plus Q6 mesh shadows. Not an isolated-variable causal test.",
+  "pending": [
+    "Q7 new city module",
+    "Q5 route candidate",
+    "Q4 source cliff/vegetation clearance",
+    "filled larger gameplay viewport and label envelopes",
+    "phase/zoom/scroll and heldout acceptance"
+  ],
+  "consumed_module_hashes": {
+    "Renderer/terrain_lab/v2/fixtures/lighting/real-mixed/linear.module.json": "7ac6381bfc860228e6678d1699210add5f5c5cd5494a5f92277752dd6c1307e8",
+    "Renderer/terrain_lab/v2/systems/hydrology/source-linear.module.json": "0058ce0e362a897e8c8011aa2225c193511d35bebd889f68a050ff48968dfa30",
+    "Renderer/terrain_lab/v2/fixtures/lighting/real-mixed/world.module.json": "305ddf38544b3b88424f3133c056e0fe033036a3f8ddd2f1931a5d10dbb6ea76"
+  },
+  "reference_hashes": {
+    "Renderer/canonical/sea_and_shore.png": "8a2b7561d5b1fb9a33276196cd5a520c3953373381d2083232d923f75155e3e8",
+    "Renderer/canonical/civ3_real_example.jpg": "0f562c660e6a614e2deb262b29d4b46e30b4a9c8a5c14cb307a134eb362337b6"
+  }
+}

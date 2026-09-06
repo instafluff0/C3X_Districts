@@ -1,0 +1,19 @@
+{
+  "schema": "c3x.q1.validation_summary.v1",
+  "report_pins": 32,
+  "report_pin_errors": [],
+  "portable_files_scanned": 195,
+  "sensitive_hits": [],
+  "core_variants": 536,
+  "portable_tests": 6,
+  "source_metadata_verified": true,
+  "q7_uniform_matrices_verified": 96,
+  "d3d_finalist_pairs_passed": 2,
+  "acceptance_passed": false,
+  "unclosed_gates": [
+    "source_channel_and_alpha_fidelity",
+    "instance_source_transform_equivalence",
+    "combined_192_tile_closure",
+    "caster_geometry_alpha_shared_shadows"
+  ]
+}

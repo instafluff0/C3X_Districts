@@ -1,0 +1,6 @@
+{
+  "schema": "c3x.lab_v2.text_hygiene.v1",
+  "scope": "eligible text within Q0 owned paths; ignored local tools, caches and rendered outputs excluded",
+  "files_scanned": 53,
+  "findings": []
+}

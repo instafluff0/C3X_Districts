@@ -1,0 +1,1242 @@
+{
+  "schema": "c3x.q2.terrain_fixture_recipe.v1",
+  "state": "prepared_not_rendered",
+  "provenance": "synthetic_lab_only",
+  "inventory": "Renderer/inventory/vanilla_conquests_biq_semantics.json",
+  "families": [
+    {
+      "code": 0,
+      "name": "Desert",
+      "base": 0
+    },
+    {
+      "code": 1,
+      "name": "Plains",
+      "base": 1
+    },
+    {
+      "code": 2,
+      "name": "Grassland",
+      "base": 2
+    },
+    {
+      "code": 3,
+      "name": "Tundra",
+      "base": 3
+    },
+    {
+      "code": 4,
+      "name": "Flood Plain",
+      "base": 0
+    },
+    {
+      "code": 5,
+      "name": "Hills",
+      "base": 2
+    },
+    {
+      "code": 6,
+      "name": "Mountains",
+      "base": 2
+    },
+    {
+      "code": 7,
+      "name": "Forest",
+      "base": 2
+    },
+    {
+      "code": 8,
+      "name": "Jungle",
+      "base": 2
+    },
+    {
+      "code": 9,
+      "name": "Marsh",
+      "base": 2
+    },
+    {
+      "code": 10,
+      "name": "Volcano",
+      "base": 2
+    },
+    {
+      "code": 11,
+      "name": "Coast",
+      "base": 11
+    },
+    {
+      "code": 12,
+      "name": "Sea",
+      "base": 12
+    },
+    {
+      "code": 13,
+      "name": "Ocean",
+      "base": 13
+    }
+  ],
+  "pairs": [
+    {
+      "families": [
+        0,
+        0
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        0,
+        1
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        0,
+        2
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        0,
+        3
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        0,
+        4
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        0,
+        5
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        0,
+        6
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        0,
+        7
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        0,
+        8
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        0,
+        9
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        0,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        0,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        0,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        0,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        1,
+        1
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        1,
+        2
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        1,
+        3
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        1,
+        4
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        1,
+        5
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        1,
+        6
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        1,
+        7
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        1,
+        8
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        1,
+        9
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        1,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        1,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        1,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        1,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        2,
+        2
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        2,
+        3
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        2,
+        4
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        2,
+        5
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        2,
+        6
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        2,
+        7
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        2,
+        8
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        2,
+        9
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        2,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        2,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        2,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        2,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        3,
+        3
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        3,
+        4
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        3,
+        5
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        3,
+        6
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        3,
+        7
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        3,
+        8
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        3,
+        9
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        3,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        3,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        3,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        3,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        4,
+        4
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        4,
+        5
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        4,
+        6
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        4,
+        7
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        4,
+        8
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        4,
+        9
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        4,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        4,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        4,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        4,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        5,
+        5
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        5,
+        6
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        5,
+        7
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        5,
+        8
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        5,
+        9
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        5,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        5,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        5,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        5,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        6,
+        6
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        6,
+        7
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        6,
+        8
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        6,
+        9
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        6,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        6,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        6,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        6,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        7,
+        7
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        7,
+        8
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        7,
+        9
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        7,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        7,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        7,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        7,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        8,
+        8
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        8,
+        9
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        8,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        8,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        8,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        8,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        9,
+        9
+      ],
+      "rule": "smooth",
+      "requires": []
+    },
+    {
+      "families": [
+        9,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        9,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        9,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        9,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        10,
+        10
+      ],
+      "rule": "shoulder",
+      "requires": [
+        "Q4-relief"
+      ]
+    },
+    {
+      "families": [
+        10,
+        11
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        10,
+        12
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        10,
+        13
+      ],
+      "rule": "shore-mediated",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        11,
+        11
+      ],
+      "rule": "smooth",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        11,
+        12
+      ],
+      "rule": "smooth",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        11,
+        13
+      ],
+      "rule": "smooth",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        12,
+        12
+      ],
+      "rule": "smooth",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        12,
+        13
+      ],
+      "rule": "smooth",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    },
+    {
+      "families": [
+        13,
+        13
+      ],
+      "rule": "smooth",
+      "requires": [
+        "Q3-hydrology"
+      ]
+    }
+  ],
+  "axes": {
+    "column": [
+      1,
+      1
+    ],
+    "row": [
+      1,
+      -1
+    ]
+  },
+  "reversed": [
+    false,
+    true
+  ],
+  "wrap_origin_x": [
+    -2,
+    98,
+    198
+  ],
+  "map_size": [
+    100,
+    100
+  ],
+  "visible_size": [
+    4,
+    4
+  ],
+  "halo": 2,
+  "three_way": [
+    [
+      0,
+      1,
+      2
+    ],
+    [
+      0,
+      2,
+      3
+    ],
+    [
+      2,
+      9,
+      11
+    ],
+    [
+      2,
+      5,
+      6
+    ],
+    [
+      11,
+      12,
+      13
+    ]
+  ],
+  "base_stress": [
+    {
+      "real": 5,
+      "base": 0
+    },
+    {
+      "real": 5,
+      "base": 1
+    },
+    {
+      "real": 5,
+      "base": 2
+    },
+    {
+      "real": 5,
+      "base": 3
+    },
+    {
+      "real": 6,
+      "base": 0
+    },
+    {
+      "real": 6,
+      "base": 1
+    },
+    {
+      "real": 6,
+      "base": 2
+    },
+    {
+      "real": 6,
+      "base": 3
+    },
+    {
+      "real": 7,
+      "base": 0
+    },
+    {
+      "real": 7,
+      "base": 1
+    },
+    {
+      "real": 7,
+      "base": 2
+    },
+    {
+      "real": 7,
+      "base": 3
+    },
+    {
+      "real": 8,
+      "base": 0
+    },
+    {
+      "real": 8,
+      "base": 1
+    },
+    {
+      "real": 8,
+      "base": 2
+    },
+    {
+      "real": 8,
+      "base": 3
+    },
+    {
+      "real": 10,
+      "base": 0
+    },
+    {
+      "real": 10,
+      "base": 1
+    },
+    {
+      "real": 10,
+      "base": 2
+    },
+    {
+      "real": 10,
+      "base": 3
+    }
+  ],
+  "zoom": [
+    1.0,
+    0.5
+  ],
+  "hours": [
+    12,
+    18,
+    0,
+    6
+  ],
+  "controls": [
+    "complete",
+    "base_only",
+    "weights",
+    "height",
+    "normal",
+    "roughness",
+    "detail_off",
+    "detail_on",
+    "no_clutter",
+    "no_cast_shadows"
+  ],
+  "scroll_pixels": [
+    [
+      0,
+      0
+    ],
+    [
+      1,
+      0
+    ],
+    [
+      0,
+      1
+    ],
+    [
+      16,
+      8
+    ]
+  ],
+  "gates": {
+    "edge_height_normal_weights": "same physical sample from both incident tiles; max absolute delta <= 1e-6",
+    "wrap": "same canonical sample across all three aliases; max absolute delta <= 1e-6",
+    "visual": "direct unsharpened final-size inspection; no cracks, diamonds, speckling or sparkle",
+    "detail": "measure albedo, height, normal and roughness controls independently; macro identity retained",
+    "scope": "fixture coverage is not rendered acceptance; pair rules are proposed until composition proves them"
+  }
+}

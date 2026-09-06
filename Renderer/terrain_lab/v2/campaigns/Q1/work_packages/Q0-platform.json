@@ -19,13 +19,17 @@
   "scope": [
     "Extract portable scene and system construction behind versioned render packets without changing v1 output.",
     "Add headless Metal and preserved D3D11 backends plus quick, check, compose, and promote execution tiers.",
-    "Add content-addressed caches, namespaced output, batch rendering, and cross-backend parity evidence."
+    "Add content-addressed caches, namespaced output, batch rendering, and cross-backend parity evidence.",
+    "Expose capability-checked sampler, MSAA/resolve, render-scale, postprocess, camera-sequence, and cost-reporting interfaces for Q1's sharpness study while preserving baseline defaults.",
+    "Verify the actual user test.biq and publish cached source data, a provenance-bearing named-region registry, and separate augmentation replay support inside owned shared/real_map and app paths before visual-track acceptance."
   ],
   "acceptance": [
     "Routine quick, check, and compose commands run on macOS without invoking Parallels.",
     "Representative Metal output is deterministic and passes bounded D3D11 parity.",
     "The frozen v1 L21 handoff and Windows reference outputs remain unchanged.",
-    "Parallel track owners can edit and render without sharing implementation or output paths."
+    "Parallel track owners can edit and render without sharing implementation or output paths.",
+    "Q1 can batch equal-output-size A/B renders and deterministic pans with effective settings and correct cache identity; unsupported configurations fail explicitly.",
+    "Verified test.biq regions and a separate deterministic object/route layer replay on the Mac; source hash, coordinates, sufficient neighbors/wrap, overlay-off terrain identity, a second region, and stale-source/overlay rejection are evidenced under REAL_MAP_VALIDATION.md."
   ],
   "prompt": "../../../prompts/Q0-platform.md"
 }

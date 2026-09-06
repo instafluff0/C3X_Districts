@@ -1,0 +1,834 @@
+{
+  "schema": "c3x.q4.source_geometry.v1",
+  "class": "synthetic_stress_case",
+  "proxy_inputs": [
+    "Q2 continuous ground",
+    "Q3 signed shore and static water"
+  ],
+  "classification": {
+    "rocks": "source_adaptation",
+    "hills": "source_adaptation",
+    "mountains_volcano": "source_adaptation: source-height reconstruction, not a conventional mesh",
+    "dunes": "diagnostic_proxy: source material height at macro scale",
+    "water": "diagnostic_proxy"
+  },
+  "selected_beauty": false,
+  "source_files": {
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/standard/height_lod0.dds": "27ed2ff28b6e1005117d02f22e7397076be74130aac5ce9671bf5437285b4fac",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json": "45880a451c618f827f1693fa11b3e580520b35524f8ba7e9df74eb446cc9eb3b",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_01_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_01_normal_0.dds": "c27d412f0034312edefc06a8831d312744606cce5f6ef42231a34a39999f62e4",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_01_gloss.dds": "794e96cb6603c51d94961d6d64d4f22040e5d15f3247feee197e2725d7d8302f",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_01.json": "b527cfbdb07075f64c41785001724156d474b11b185b0904862b9489607bb0ed",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_small_01_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_small_01_normal_0.dds": "c27d412f0034312edefc06a8831d312744606cce5f6ef42231a34a39999f62e4",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_small_01_gloss.dds": "794e96cb6603c51d94961d6d64d4f22040e5d15f3247feee197e2725d7d8302f",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json": "a7ef2c648dd415de94c7d3d81b9d376fab49d8d776a49d8e2ab43f4f07ce43af",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_04_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_04_normal_0.dds": "c27d412f0034312edefc06a8831d312744606cce5f6ef42231a34a39999f62e4",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_04_gloss.dds": "794e96cb6603c51d94961d6d64d4f22040e5d15f3247feee197e2725d7d8302f",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json": "7d608d1c192c944a765ad5762137a77a199c4f526d7f4adc4e1701023f9cb1a5",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_02_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_02_normal_0.dds": "c27d412f0034312edefc06a8831d312744606cce5f6ef42231a34a39999f62e4",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_02_gloss.dds": "794e96cb6603c51d94961d6d64d4f22040e5d15f3247feee197e2725d7d8302f",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json": "9f81b6e660f615dfdf317e867e6b1b303a6829e6673fcb2bdd1b2bc47f925a7e",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_03_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_03_normal_0.dds": "c27d412f0034312edefc06a8831d312744606cce5f6ef42231a34a39999f62e4",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_03_gloss.dds": "794e96cb6603c51d94961d6d64d4f22040e5d15f3247feee197e2725d7d8302f",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_02.json": "13182627f637e8a21ed0f439420265dfb8eceb36d4205c06856291176f3d0af5",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_small_02_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_small_02_normal_0.dds": "c27d412f0034312edefc06a8831d312744606cce5f6ef42231a34a39999f62e4",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_small_02_gloss.dds": "794e96cb6603c51d94961d6d64d4f22040e5d15f3247feee197e2725d7d8302f",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/desert_base_color.dds": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_top_base_color.dds": "7cbbab6c0a8ca26d8729c67766b476636bf820aadd6f1b4c0044754b58117d29"
+  },
+  "transforms": [
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 2,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.2675953875836111,
+      "yaw": 1.5750837962763256,
+      "translation": [
+        2.91086289608047,
+        1.2391199537742867,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 3,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_small_01.json",
+      "material_sha256": "1e8aa5c5138693246fd4e8fd198c97e744c9c3aa933ee8941f40afea6cb99ab2",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_01.json",
+      "uniform_scale": 0.12309387828846112,
+      "yaw": 1.9750837962763255,
+      "translation": [
+        2.9116989500678976,
+        1.0441217460550103,
+        -0.05
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 4,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.21909084418840336,
+      "yaw": 10.242698093071688,
+      "translation": [
+        2.619204422306535,
+        1.3829431815673179,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 5,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_02.json",
+      "material_sha256": "0db0a25e2366939424de8b0b867be79086b841716b36951d08b92e777da710be",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json",
+      "uniform_scale": 0.2534536053733612,
+      "yaw": 15.61449127616779,
+      "translation": [
+        3.0964566270635534,
+        1.3387059974628481,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 6,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.44106949060671813,
+      "yaw": 18.359808609254745,
+      "translation": [
+        3.4176718673119004,
+        1.3716520658018396,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 7,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_03.json",
+      "material_sha256": "07158df385b351b462849f1d39f81d6d59c407d63f49b6e98f0c65a361d59956",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.3111320482895677,
+      "yaw": 23.153802809009772,
+      "translation": [
+        3.605489711882775,
+        1.348836799828046,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 8,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_small_01.json",
+      "material_sha256": "1e8aa5c5138693246fd4e8fd198c97e744c9c3aa933ee8941f40afea6cb99ab2",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_01.json",
+      "uniform_scale": 0.14312074221320115,
+      "yaw": 23.55380280900977,
+      "translation": [
+        3.6599422511891198,
+        1.161593853463995,
+        -0.05
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 9,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.23084420625792418,
+      "yaw": 24.69235451181992,
+      "translation": [
+        2.1046584936955917,
+        1.4856209378699672,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 10,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_02.json",
+      "material_sha256": "0db0a25e2366939424de8b0b867be79086b841716b36951d08b92e777da710be",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json",
+      "uniform_scale": 0.2270956626346434,
+      "yaw": 29.211164189036655,
+      "translation": [
+        2.332865351348178,
+        1.4929541361624263,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 11,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.39342747258295296,
+      "yaw": 40.16821054729733,
+      "translation": [
+        3.746362168995145,
+        1.4892734698061385,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 12,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.26156607016293765,
+      "yaw": 40.511334221434836,
+      "translation": [
+        1.930060950984777,
+        1.6251531959703238,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 13,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_03.json",
+      "material_sha256": "07158df385b351b462849f1d39f81d6d59c407d63f49b6e98f0c65a361d59956",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.42391513764366345,
+      "yaw": 48.53448140034779,
+      "translation": [
+        4.039324451543877,
+        1.6858816357199526,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 14,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.4613610517982514,
+      "yaw": 57.18239171236845,
+      "translation": [
+        4.236511591841343,
+        1.7514049181436924,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 15,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_02.json",
+      "material_sha256": "0db0a25e2366939424de8b0b867be79086b841716b36951d08b92e777da710be",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json",
+      "uniform_scale": 0.27963926388970956,
+      "yaw": 56.67527027530708,
+      "translation": [
+        1.7357888319237182,
+        1.8744772896555268,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 16,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.2849039364277413,
+      "yaw": 68.88315542558335,
+      "translation": [
+        4.327589302882747,
+        1.9663340100420363,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 17,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.37843811534529437,
+      "yaw": 68.65187576174284,
+      "translation": [
+        1.5994297707168355,
+        2.0999920266992325,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 18,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.38689779718237305,
+      "yaw": 76.45132013731983,
+      "translation": [
+        4.419213238540728,
+        2.2050253045568913,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 19,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.40615242102122784,
+      "yaw": 77.78245190174665,
+      "translation": [
+        1.4872765558798542,
+        2.334058321182464,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 20,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.48838425986244766,
+      "yaw": 84.57332618631648,
+      "translation": [
+        4.624648229032038,
+        2.393808609055916,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 21,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.30539110419671556,
+      "yaw": 89.04530406562014,
+      "translation": [
+        1.4049980895532734,
+        2.561517871011582,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 22,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_small_02.json",
+      "material_sha256": "e1bd60ebb58494667b4e1d490605ff669282a5787dbba37ea774b68f62f46af9",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_02.json",
+      "uniform_scale": 0.14047990793048917,
+      "yaw": 89.44530406562015,
+      "translation": [
+        1.218438919204057,
+        2.504766871385038,
+        -0.05
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 23,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_03.json",
+      "material_sha256": "07158df385b351b462849f1d39f81d6d59c407d63f49b6e98f0c65a361d59956",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.364671450229244,
+      "yaw": 95.31340834235635,
+      "translation": [
+        4.700291269067821,
+        2.5672669293442794,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 24,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_small_01.json",
+      "material_sha256": "1e8aa5c5138693246fd4e8fd198c97e744c9c3aa933ee8941f40afea6cb99ab2",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_01.json",
+      "uniform_scale": 0.16774886710545225,
+      "yaw": 95.71340834235636,
+      "translation": [
+        4.893691417773606,
+        2.542339384728325,
+        -0.05
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 25,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.3680610488462225,
+      "yaw": 99.59953573899597,
+      "translation": [
+        1.3412976606660771,
+        2.8158866340237134,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 26,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_small_01.json",
+      "material_sha256": "1e8aa5c5138693246fd4e8fd198c97e744c9c3aa933ee8941f40afea6cb99ab2",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_01.json",
+      "uniform_scale": 0.16930808246926235,
+      "yaw": 99.99953573899597,
+      "translation": [
+        1.1501667128712805,
+        2.777234844995743,
+        -0.05
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 27,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_03.json",
+      "material_sha256": "07158df385b351b462849f1d39f81d6d59c407d63f49b6e98f0c65a361d59956",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.28035867039396734,
+      "yaw": 97.74189881884756,
+      "translation": [
+        4.707013104726243,
+        2.807431757311789,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 28,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_03.json",
+      "material_sha256": "07158df385b351b462849f1d39f81d6d59c407d63f49b6e98f0c65a361d59956",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.28072027923674403,
+      "yaw": 109.44798125518989,
+      "translation": [
+        1.3005412221736372,
+        3.076400827539284,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 29,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.27812312985724913,
+      "yaw": 107.77168202006546,
+      "translation": [
+        4.6836406617847635,
+        3.039893158808115,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 30,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.37496937328671937,
+      "yaw": 119.26725273323966,
+      "translation": [
+        1.2896964157233188,
+        3.3099221457167753,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 31,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_03.json",
+      "material_sha256": "07158df385b351b462849f1d39f81d6d59c407d63f49b6e98f0c65a361d59956",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.27098653119100863,
+      "yaw": 117.80343475785843,
+      "translation": [
+        4.633451852195563,
+        3.2976469726010595,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 32,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_small_01.json",
+      "material_sha256": "1e8aa5c5138693246fd4e8fd198c97e744c9c3aa933ee8941f40afea6cb99ab2",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_01.json",
+      "uniform_scale": 0.12465380434786398,
+      "yaw": 118.20343475785843,
+      "translation": [
+        4.822627333974228,
+        3.3449506415265264,
+        -0.05
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 33,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.30283270856075045,
+      "yaw": 128.16694455273353,
+      "translation": [
+        1.3155098765673563,
+        3.5120473254514653,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 34,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.3705488588076149,
+      "yaw": 127.84503430130894,
+      "translation": [
+        4.559922857353947,
+        3.5432072530379033,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 35,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_03.json",
+      "material_sha256": "07158df385b351b462849f1d39f81d6d59c407d63f49b6e98f0c65a361d59956",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.3371259786270426,
+      "yaw": 133.89056229686227,
+      "translation": [
+        1.4367680799356937,
+        3.643611687947256,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 36,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_small_01.json",
+      "material_sha256": "1e8aa5c5138693246fd4e8fd198c97e744c9c3aa933ee8941f40afea6cb99ab2",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_01.json",
+      "uniform_scale": 0.1550779501684396,
+      "yaw": 134.29056229686228,
+      "translation": [
+        1.3329624023450606,
+        3.8086855541403923,
+        -0.05
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 37,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.2932638007840098,
+      "yaw": 139.3080402389422,
+      "translation": [
+        4.462176171243438,
+        3.778662926887667,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 38,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_small_01.json",
+      "material_sha256": "1e8aa5c5138693246fd4e8fd198c97e744c9c3aa933ee8941f40afea6cb99ab2",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_01.json",
+      "uniform_scale": 0.13490134836064452,
+      "yaw": 139.7080402389422,
+      "translation": [
+        4.637794481793452,
+        3.863416740958531,
+        -0.05
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 39,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_02.json",
+      "material_sha256": "0db0a25e2366939424de8b0b867be79086b841716b36951d08b92e777da710be",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json",
+      "uniform_scale": 0.3163775225474485,
+      "yaw": 146.64324775259703,
+      "translation": [
+        1.6331352201416118,
+        3.921182267839072,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 40,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.3023439548694788,
+      "yaw": 148.63042131192682,
+      "translation": [
+        4.335815881090995,
+        4.009649448963352,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 41,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.4196485030882653,
+      "yaw": 156.52194481512618,
+      "translation": [
+        1.7181524345606585,
+        4.169923873624383,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 42,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.2829134528860852,
+      "yaw": 160.09325432609995,
+      "translation": [
+        4.17248483829083,
+        4.251501072644007,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 43,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_03.json",
+      "material_sha256": "07158df385b351b462849f1d39f81d6d59c407d63f49b6e98f0c65a361d59956",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.36718638795882785,
+      "yaw": 164.79043399303106,
+      "translation": [
+        1.8263969897151917,
+        4.291946973058484,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 44,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.37999110254088553,
+      "yaw": 172.91969532075174,
+      "translation": [
+        2.099784109410616,
+        4.357937455957545,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 45,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_small_02.json",
+      "material_sha256": "e1bd60ebb58494667b4e1d490605ff669282a5787dbba37ea774b68f62f46af9",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_small_02.json",
+      "uniform_scale": 0.17479590716880736,
+      "yaw": 173.31969532075175,
+      "translation": [
+        1.9994453735364952,
+        4.525141337740187,
+        -0.05
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 46,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_02.json",
+      "material_sha256": "0db0a25e2366939424de8b0b867be79086b841716b36951d08b92e777da710be",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json",
+      "uniform_scale": 0.3319268441177209,
+      "yaw": 173.02726076495355,
+      "translation": [
+        4.019715709286021,
+        4.427512568640796,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 47,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_04.json",
+      "material_sha256": "3964bb80db6c283a668d8d99519e3037bd2d694785c86c6fabd3046c6aef0669",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_04.json",
+      "uniform_scale": 0.4248510053723125,
+      "yaw": 181.84490047648467,
+      "translation": [
+        2.2933603510804126,
+        4.56898143535987,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 48,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_02.json",
+      "material_sha256": "0db0a25e2366939424de8b0b867be79086b841716b36951d08b92e777da710be",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json",
+      "uniform_scale": 0.25964720703035743,
+      "yaw": 181.8422532842897,
+      "translation": [
+        3.4542612400473356,
+        4.573046652673126,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 49,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_02.json",
+      "material_sha256": "0db0a25e2366939424de8b0b867be79086b841716b36951d08b92e777da710be",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json",
+      "uniform_scale": 0.3457343022426961,
+      "yaw": 188.12547468937515,
+      "translation": [
+        3.8120876477767642,
+        4.5229184950670955,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 50,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_01.json",
+      "material_sha256": "a384697c5c27e74bc39ae12f8d8c81d0614c167cd8c2193af6d643a43ba084bf",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_01.json",
+      "uniform_scale": 0.43801840224642585,
+      "yaw": 194.1827652122166,
+      "translation": [
+        2.4746382198770065,
+        4.650674284694577,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 51,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_03.json",
+      "material_sha256": "07158df385b351b462849f1d39f81d6d59c407d63f49b6e98f0c65a361d59956",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.4987199890654607,
+      "yaw": 198.68345506325244,
+      "translation": [
+        2.725974093797678,
+        4.6092037041043445,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 52,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_03.json",
+      "material_sha256": "07158df385b351b462849f1d39f81d6d59c407d63f49b6e98f0c65a361d59956",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_03.json",
+      "uniform_scale": 0.43130158377324523,
+      "yaw": 207.61137390874075,
+      "translation": [
+        3.030802195845635,
+        4.749100848381072,
+        -0.04
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 53,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_02.json",
+      "material_sha256": "0db0a25e2366939424de8b0b867be79086b841716b36951d08b92e777da710be",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json",
+      "uniform_scale": 0.3656303904896554,
+      "yaw": 210.2332441485701,
+      "translation": [
+        3.195883888154226,
+        4.723839372683793,
+        -0.04
+      ],
+      "uv_preserved": true
+    }
+  ],
+  "geometry_sha256": "ba56d74d62dc85fa64934d27b51fa09a186ed445784bd3faf3d07f7829042fe2",
+  "generator_sha256": "ecdfe1f931d1397b6c4066728631ffb6f99ec1309355737b11205d8270efb823",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/relief/island-r9/fixture.json",
+  "revision": 9,
+  "clearance_envelopes": [],
+  "rejected_instances": []
+}

@@ -1,0 +1,7 @@
+{
+  "schema": "c3x.q2.hygiene.v1",
+  "scope": "Owned portable source, fixtures, tests and audits; excludes ignored generated output and bytecode. Shared and unrelated files are not modified.",
+  "files_scanned": 256,
+  "findings": [],
+  "licensed_render_pixels": "Local ignored out directory only; no source assets copied into portable files."
+}

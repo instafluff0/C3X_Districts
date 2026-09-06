@@ -1,0 +1,47 @@
+{
+  "schema": "c3x.q4.source_geometry.v1",
+  "class": "synthetic_stress_case",
+  "proxy_inputs": [
+    "Q2 continuous ground",
+    "Q3 signed shore and static water"
+  ],
+  "classification": {
+    "rocks": "source_adaptation",
+    "hills": "source_adaptation",
+    "mountains_volcano": "source_adaptation: source-height reconstruction, not a conventional mesh",
+    "dunes": "diagnostic_proxy: source material height at macro scale",
+    "water": "diagnostic_proxy"
+  },
+  "selected_beauty": false,
+  "source_files": {
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/standard/height_lod0.dds": "27ed2ff28b6e1005117d02f22e7397076be74130aac5ce9671bf5437285b4fac",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+    "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json": "7d608d1c192c944a765ad5762137a77a199c4f526d7f4adc4e1701023f9cb1a5",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_02_base_color.dds": "6a9656b5e8386dbbf99cf87e6aa77c1e0c66ffb947c026ab791aab0db9b0fcd2",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_02_normal_0.dds": "c27d412f0034312edefc06a8831d312744606cce5f6ef42231a34a39999f62e4",
+    "Renderer/packs/ShoreNormalized/textures/features/cliff_large_02_gloss.dds": "794e96cb6603c51d94961d6d64d4f22040e5d15f3247feee197e2725d7d8302f",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/desert_base_color.dds": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_top_base_color.dds": "7cbbab6c0a8ca26d8729c67766b476636bf820aadd6f1b4c0044754b58117d29"
+  },
+  "transforms": [
+    {
+      "kind": "normalized_mesh",
+      "draw_index": 1,
+      "material": "Renderer/packs/ShoreNormalized/materials/features/cliff_large_02.json",
+      "material_sha256": "0db0a25e2366939424de8b0b867be79086b841716b36951d08b92e777da710be",
+      "mesh": "Renderer/packs/ShoreNormalized/meshes/features/cliff_large_02.json",
+      "uniform_scale": 0.52,
+      "yaw": 0.4,
+      "translation": [
+        3,
+        3,
+        0.018
+      ],
+      "uv_preserved": true
+    }
+  ],
+  "geometry_sha256": "3f26c8df26dfcea77075b54ae192be5243ac2932fecf350efe6a04d903cb416f",
+  "generator_sha256": "4d265fa4989d24d38e0a1df4aaef41c1cc00e328f7f5802757f3dd895b788bb5",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/relief/source-rock-r7/fixture.json",
+  "revision": 7
+}

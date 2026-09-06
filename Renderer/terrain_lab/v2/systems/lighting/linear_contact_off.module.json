@@ -1,0 +1,9 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "lighting-linear-contact_off",
+  "owner": "Q6-lighting",
+  "provider": "cpp_packet",
+  "contract": 1,
+  "source": "Renderer/terrain_lab/v2/systems/lighting/city_linear.cpp",
+  "shader": "Renderer/terrain_lab/v2/shaders/lighting/linear_contact_off.hlsl"
+}

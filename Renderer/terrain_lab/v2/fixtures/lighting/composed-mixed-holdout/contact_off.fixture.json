@@ -1,0 +1,143 @@
+{
+  "campaign": "Q1",
+  "id": "q6-q7-mixed-holdout-world-contact_off",
+  "isolations": [
+    "terrain",
+    "features"
+  ],
+  "modules": [
+    "Renderer/terrain_lab/v2/fixtures/lighting/composed-mixed-holdout/terrain_contact_off.module.json",
+    "Renderer/terrain_lab/v2/fixtures/lighting/composed-mixed-holdout/city_contact_off.module.json"
+  ],
+  "packs": {
+    "bridges": "Renderer/packs/RouteDoodadsNormalized",
+    "cities": "Renderer/packs/CityComponentsNormalized",
+    "compound_units": "Renderer/packs/CompoundUnitLab",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "improvements": "Renderer/packs/ImprovementsNormalized",
+    "objects": "Renderer/packs/TileObjectsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "resources": "Renderer/packs/ResourceNormalized",
+    "routes": "Renderer/packs/RouteStylesNormalized",
+    "shore": "Renderer/packs/ShoreNormalized",
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "units": "Renderer/packs/UnitFamilyLab",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "walls": "Renderer/packs/CityAdjunctsNormalized",
+    "presentation_geometry": "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-holdout-linear-v1"
+  },
+  "real_map": {
+    "dataset_payload_sha256": "4e5fa91a03586b9b36da1ec3d8ee8249d19e803fe710ecd6659a174697cee837",
+    "fixture_class": "real_terrain_with_lab_augmentations",
+    "overlay": "Renderer/terrain_lab/v2/fixtures/lighting/composed-mixed-holdout/augmentation.json",
+    "overlay_sha256": "b6e4a5d0b80db2fa09a87311e1665ac14912261320bc9657e0852efc4631eda0",
+    "parser": {
+      "adapter": 1,
+      "closure_sha256": "3f1ec44302b61b4fc2ad9ebbe53e25081f0805443872f07a56bfa2dbe0b99fc1",
+      "text_encoding": "windows-1252"
+    },
+    "profile": "q0_real_map_v1",
+    "region": {
+      "camera": {
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ],
+        "viewport": [
+          768,
+          512
+        ],
+        "zooms": [
+          1,
+          2
+        ]
+      },
+      "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+      "coverage": {
+        "land_water_edges": 0,
+        "river_tiles": 4,
+        "terrain": {
+          "forest": 6,
+          "grassland": 2,
+          "jungle": 8
+        },
+        "terrain_edges": 10
+      },
+      "extent": [
+        4,
+        4
+      ],
+      "halo": 2,
+      "id": "mixed-holdout",
+      "origin": [
+        18,
+        46
+      ],
+      "role": "fixed_neighbor_holdout",
+      "terrain_sha256": "f620b8a814b982430fa1e7db600087b722b166bfb5b30411e1df7465eeb701f5",
+      "wrap": {
+        "x": true,
+        "y": false
+      }
+    },
+    "region_id": "mixed-holdout",
+    "scenario_hashes": {
+      "cities": "f9173d8d609f106d111430348835f4d22eeaa30213ba502ff7ff724097f33ec2",
+      "farms": "6583f328fa63adad9d51bbefe69129fd041f7f13cb755dd0c99e5b69362f6e5f",
+      "infrastructure": "a69b4edbe104cc00a4072d8ea967deafbc3790f2a10175ca059602bb89b6436d",
+      "mines": "60bbf6da9d1b82b82a0d1c523ee65e6d5259cd0b11ade47ec2dc10b3d0b59b60",
+      "objects": "cd77d31470c774627dde87cdda77ea6f778901c77010c3fa9140324b6db43392",
+      "railroads": "6ba73d348d15a001952fbf5374b156215cf92b00d39fe97bdb6bc6aa0c9682a5",
+      "resources": "d051a54cf7a4a73cf32d713d33247f2ca5f09c2cf04b8dd32f83bbed45fc7d3d",
+      "roads": "a97c4d9047238268cc5d7d6306daed75ccab5cdfa8af8ec2052dc4f7651cb9d2",
+      "units": "129920051ccfb6ff53719ca9bada2c8be363b9fd9ea5b244fab25423588fd017"
+    },
+    "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e"
+  },
+  "references": [
+    "c3x.lab_v1.l21"
+  ],
+  "scenarios": {
+    "cities": "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-holdout-v2/no-cities.csv",
+    "farms": "Renderer/terrain_lab/v2/fixtures/objects/real-holdout/farms.csv",
+    "infrastructure": "Renderer/terrain_lab/v2/fixtures/objects/real-holdout/infrastructure.csv",
+    "mines": "Renderer/terrain_lab/v2/fixtures/objects/real-holdout/mines.csv",
+    "objects": "Renderer/terrain_lab/v2/fixtures/objects/real-holdout/objects.csv",
+    "railroads": "Renderer/terrain_lab/v2/fixtures/objects/real-holdout/railroads.csv",
+    "resources": "Renderer/terrain_lab/v2/fixtures/objects/real-holdout/resources.csv",
+    "roads": "Renderer/terrain_lab/v2/fixtures/objects/real-holdout/roads.csv",
+    "units": "Renderer/terrain_lab/v2/fixtures/objects/real-holdout/units.csv"
+  },
+  "schema": "c3x.lab_v2.fixture.v1",
+  "settings": {
+    "samples": 4,
+    "anisotropy": 8,
+    "mip_bias": 0,
+    "render_scale": 1,
+    "postprocess": {
+      "owner": "Q1-sampling",
+      "shader": "Renderer/terrain_lab/v2/shaders/sampling/linear_reconstruct.hlsl",
+      "contract": 2
+    },
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "terrain": "Renderer/terrain_lab/v2/fixtures/lighting/composed-mixed-holdout/terrain.csv",
+  "tile_count": 16,
+  "track": "Q6-lighting",
+  "viewport": [
+    592,
+    376
+  ],
+  "packet_postprocessor": {
+    "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp",
+    "owner": "Q6-lighting",
+    "contract": 1
+  }
+}

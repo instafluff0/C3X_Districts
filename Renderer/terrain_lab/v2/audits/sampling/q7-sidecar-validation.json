@@ -1,0 +1,79 @@
+[
+  {
+    "path": "Renderer/terrain_lab/v2/audits/objects/metadata/ancient-earth-02/source-instances.json",
+    "sha256": "06ee5b9643a96038db506b7e678d6957ca256c5e56ef65b9a12809f287261d53",
+    "verified_matrices": 44,
+    "verified_channel_identities": 24,
+    "unbound_semantics": [
+      "ambient_occlusion",
+      "gloss",
+      "normal_0",
+      "normal_1"
+    ],
+    "coordinate_space": "q7_pinned_preprojection_tile_world_v1",
+    "exceptions": [
+      "This pinned lab coordinate system is not the Q0 authoritative world-position attribute.",
+      "Real fixtures add a clip-depth grounding bias; source matrix remains uniform, but Q0 world conversion is pending.",
+      "Source UVs are unchanged, including authored high anisotropy/degenerate exceptions audited by Q1.",
+      "Base/emissive display path only; no tangent/normal-map/AO/gloss/owner-color material closure.",
+      "No source-equivalent lamp point lights or animated Light/VFX are inferred."
+    ]
+  },
+  {
+    "path": "Renderer/terrain_lab/v2/audits/objects/metadata/modern-id-02/source-instances.json",
+    "sha256": "f2984b559277c1c6a7920aaa3e2087a8679dfa11b7c09a5f9442ad7358c0ba79",
+    "verified_matrices": 44,
+    "verified_channel_identities": 48,
+    "unbound_semantics": [
+      "gloss",
+      "normal_0",
+      "normal_1"
+    ],
+    "coordinate_space": "q7_pinned_preprojection_tile_world_v1",
+    "exceptions": [
+      "This pinned lab coordinate system is not the Q0 authoritative world-position attribute.",
+      "Real fixtures add a clip-depth grounding bias; source matrix remains uniform, but Q0 world conversion is pending.",
+      "Source UVs are unchanged, including authored high anisotropy/degenerate exceptions audited by Q1.",
+      "Base/emissive display path only; no tangent/normal-map/AO/gloss/owner-color material closure.",
+      "No source-equivalent lamp point lights or animated Light/VFX are inferred."
+    ]
+  },
+  {
+    "path": "Renderer/terrain_lab/v2/audits/objects/metadata/registered-mixed-v2/source-instances.json",
+    "sha256": "f40348e4b2f1042756f6105b0c9502f3794d3be639589362349bd2b1db205963",
+    "verified_matrices": 4,
+    "verified_channel_identities": 20,
+    "unbound_semantics": [
+      "gloss",
+      "normal_0",
+      "normal_1"
+    ],
+    "coordinate_space": "q7_pinned_preprojection_tile_world_v1",
+    "exceptions": [
+      "This pinned lab coordinate system is not the Q0 authoritative world-position attribute.",
+      "Real fixtures add a clip-depth grounding bias; source matrix remains uniform, but Q0 world conversion is pending.",
+      "Source UVs are unchanged, including authored high anisotropy/degenerate exceptions audited by Q1.",
+      "Base/emissive display path only; no tangent/normal-map/AO/gloss/owner-color material closure.",
+      "No source-equivalent lamp point lights or animated Light/VFX are inferred."
+    ]
+  },
+  {
+    "path": "Renderer/terrain_lab/v2/audits/objects/metadata/registered-mixed-holdout-v2/source-instances.json",
+    "sha256": "6db660e8573d3f1552b6ac7af4a7585c640d3195c2248c0a81aa0b20fd56f157",
+    "verified_matrices": 4,
+    "verified_channel_identities": 20,
+    "unbound_semantics": [
+      "gloss",
+      "normal_0",
+      "normal_1"
+    ],
+    "coordinate_space": "q7_pinned_preprojection_tile_world_v1",
+    "exceptions": [
+      "This pinned lab coordinate system is not the Q0 authoritative world-position attribute.",
+      "Real fixtures add a clip-depth grounding bias; source matrix remains uniform, but Q0 world conversion is pending.",
+      "Source UVs are unchanged, including authored high anisotropy/degenerate exceptions audited by Q1.",
+      "Base/emissive display path only; no tangent/normal-map/AO/gloss/owner-color material closure.",
+      "No source-equivalent lamp point lights or animated Light/VFX are inferred."
+    ]
+  }
+]

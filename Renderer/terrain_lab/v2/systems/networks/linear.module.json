@@ -1,0 +1,11 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "q5-networks-linear-v1",
+  "owner": "Q5-networks",
+  "provider": "cpp_packet",
+  "contract": 1,
+  "source": "Renderer/terrain_lab/v2/systems/networks/linear.cpp",
+  "shader": "Renderer/terrain_lab/v2/shaders/networks/linear.hlsl",
+  "after": [],
+  "color_branch": "q6_scene_linear_premultiplied_v1"
+}

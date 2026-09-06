@@ -1,0 +1,146 @@
+{
+  "schema": "c3x.q4.provisional_source_candidate.v1",
+  "id": "Q4-source-preview-large-r6",
+  "status": "blocked_not_accepted",
+  "baseline_reference": "Renderer/handoffs/L21_complete_beauty_scene.json",
+  "modifies_baseline": false,
+  "accepted": false,
+  "coordinator_action": "Land single continuous terrain height/normal/coverage interface and shared projection/receiver migration. Placement hook is now consumed. Q4 source mountain extent remains unconfirmed; coast placements fail visual acceptance.",
+  "consumed_contracts_at_delivery": {
+    "Renderer/terrain_lab/v2/contracts/packet_v1.h": "0b685ad710fb372d9732264e776867fcad5d448b695745ab7a4ac5b19d49e894",
+    "Renderer/terrain_lab/v2/contracts/platform_v1.json": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+    "Renderer/terrain_lab/v2/contracts/interfaces_v1.h": "b866ddde950140a9532ffa2689b46bd5818631d62f034b1fba306f6bd80d2569",
+    "Renderer/terrain_lab/v2/systems/hydrology/field.h": "ec75252bfba0da40b7329702387b105d2d19cc557d07723b4ef08eaaa090fe87",
+    "Renderer/terrain_lab/v2/systems/terrain/scene_adapter.h": "3fcc1b4885eda29bab6e883dfc7f810a40dd8755f7dfb2ddcdcd1433e3dca679",
+    "Renderer/terrain_lab/v2/systems/networks/clearance.py": "2d9e98bb0e108300b05886dff1e21be5119126c25dfd90c9a1b04834a77f7bc2",
+    "Renderer/terrain_lab/v2/shaders/lighting/response_v1.hlsl": "be03629b1760618cc99d3d3eca0821aff102aa98f952e1c34751d8d1c5485407",
+    "Renderer/terrain_lab/v2/shared/environment_runtime.cpp": "9b27492abebb850420ff2d1fb6d5d67cc8f296c135e0047a98d27087b32cd427",
+    "Renderer/terrain_lab/v2/audits/objects/CITY_VEGETATION_WITNESS.json": "c9cc807f8a80b48185fc614c2757bed3f201b3b21bc5d168747ab20be78171a5",
+    "Renderer/terrain_lab/v2/shared/scene_hooks.h": "aecc9e2f9f5067e75ea1a0d6b47392d032e297f6f7f20a439d533cfc5d3f34dc"
+  },
+  "reports": [
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/source-coast-09-check/report.json",
+      "sha256": "b25415653f9f2742b556c7048d8f5a1df7f2a9d936f2a4e590653080b8defe82"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/real-primary-09-check/report.json",
+      "sha256": "1789bd842f77fbd4ff5ace7dacd502227dd65b09f4218145ed507f0fe0a30222"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/real-holdout-10-check/report.json",
+      "sha256": "a5799da615509d4d4ee3b206ffc6215b665c8a78ef6832ca30110911bff9511f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/biomes-clearance-10-check/report.json",
+      "sha256": "5eea005016cea9c7a7fa2ea2c3da873b013a0166eb09085018eecd36b8b551f2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/source-coast-11/report.json",
+      "sha256": "70256d389144d6de526ff309f0b70b1e38a5636a6dd56e2ce82efdb67427832e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/real-holdout-12/report.json",
+      "sha256": "d2045c95a4c77187f1571f9e1fd7d0d43b24590f9878be4485efae4b206e62e9"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/real-holdout-13/report.json",
+      "sha256": "3aa301263f1991c6fd23e7441f5ebe948036147c94758830120b29d60f46495b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/source-coast-14/report.json",
+      "sha256": "8b78105af6e4af33869bd560bf4185beb590e3ee5d0f8bef03dc91ec4da65969"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/source-coast-15/report.json",
+      "sha256": "b2d3423090c3a58d9b8828cd4e650b582505f9d239527a89b66f5e403f911870"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/large-source-map-03/report.json",
+      "sha256": "704cd1be4e4e6214802ac5a54e98696f543d92db828511df4fc8244e00aadc88"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/large-source-map-04/report.json",
+      "sha256": "588dc9212f03eaf9a784bca0c7812c6ca6b2bf73021c1b01833717b48f1fab7e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/large-source-map-05/report.json",
+      "sha256": "4501c4ea4bdb26d9f4c98bb84ebeaa968960c1d0234fb62d9ba08d7b49f74b9c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/large-source-map-06/report.json",
+      "sha256": "a8f01b18302199cc62941f3976954f3a8c2e8d685ad47d2e62aadac13bb9748e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/city-clearance-live-01/report.json",
+      "sha256": "031ad4da8eeb33824ec9e83d28590f7df064c494ea4104b26c742f7c03524f5a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/city-clearance-off-01/report.json",
+      "sha256": "cb2197355c9eb6f4ddb49a1fdfec6d37813122dd3af6088731b122188f6d966e"
+    }
+  ],
+  "audit": "Renderer/terrain_lab/v2/audits/relief/Q4_AUDIT.md",
+  "source_policy": "Renderer/terrain_lab/v2/audits/relief/SOURCE_FIDELITY.md",
+  "blocked_witness": "Renderer/terrain_lab/v2/fixtures/relief/coast-source-r8/q3-composition-blocker.fixture.json",
+  "tests": {
+    "passed": 14,
+    "scope": "6 Python clearance tests, 2 C++ adapter regressions, 6 source integration tests",
+    "injected_compile": "not applicable; injected source unchanged"
+  },
+  "source_art_selection": {
+    "rocks": "actual normalized source meshes only",
+    "hills": "Selected installed skin payload now extracted into Q4-owned inputs; previous normalized Base payload rejected for this skin.",
+    "mountains": "Excluded from beauty: exact source pixels, but physical coordinate interpretation and material assembly remain unproven; visible spire mismatch.",
+    "volcano": "excluded diagnostic; physical extent calibration unresolved",
+    "dunes": "excluded diagnostic; broad source construction unresolved",
+    "marsh": "not delivered",
+    "textures": "existing selected Civ5EnvironmentSkin and source packs only"
+  },
+  "validation_limits": [
+    "Not all visual acceptance criteria pass.",
+    "Late cliff placement and forest scale changes have native-noon evidence only.",
+    "Q5 corridor witness has halo_complete=false.",
+    "No combined source owner scene or 192-tile/Windows promotion.",
+    "No accepted source-fidelity or gameplay beauty handoff.",
+    "Revisions 14/15 correct selected-skin hill import; previous hill matrices are superseded for source fidelity.",
+    "Current source cliff coast still fails with gaps, repetition and straight grassy faces.",
+    "Q7 clearance leaves zero footprint collisions, but composed city visibility remains pending.",
+    "Q0 must adopt continuous world derivative adapter; current Q2 wet/dry normal seams still fail.",
+    "Large r6 map is synthetic source calibration preview: MountainWidth half-extent interpretation unconfirmed.",
+    "Actual silhouette-shadow metadata is published; shared shadow evaluation remains pending.",
+    "New PlacementHooksV1 is exercised with current Q7 city polygons; four local omissions, no moved retained instances.",
+    "Legacy shader rejection is superseded as a general blocker by Q0 linear module support; Q4 shared projection/ground migration remains pending."
+  ],
+  "hygiene": {
+    "text_paths": "repository-relative",
+    "personal_or_sensitive_text_scan": "pass",
+    "payloads": "ignored local content-reference packets and images; no source art redistributed",
+    "scanned_file_count": 203
+  },
+  "owned_implementation_sha256": {
+    "Renderer/terrain_lab/v2/systems/relief/build_fixture.py": "39d969f22db8053b5f887aaac0138332d07d56ca59b49f1c86a984d54465895a",
+    "Renderer/terrain_lab/v2/systems/relief/clearance.py": "261f1140b73dee4ef0edd92467ecf38572ae031836559c96845d03a198488b8f",
+    "Renderer/terrain_lab/v2/systems/relief/evidence.py": "564dc8504def45a861e63f3dd5725ba748744957fc23c4b36bbe27399ba291ca",
+    "Renderer/terrain_lab/v2/systems/relief/packet.cpp": "198b9dcd496c7e56b3ba1290171e8487c7b3ef56ec7bedd602b1d80567139030",
+    "Renderer/terrain_lab/v2/systems/relief/relief.module.json": "98aeb1d85d90d0b933b58aadec5d5435d94dd2be9d2b1dc0f7f32f6932e1512f",
+    "Renderer/terrain_lab/v2/systems/relief/run_checks.py": "b5c92f53b4d5d630a617051e9fc5c1d48d782678163a7ef4b5bb72beba534bd1",
+    "Renderer/terrain_lab/v2/systems/relief/sample_hydrology.cpp": "e74b60f67a0751981401cd80f5738fdb4e5fec4c97d243a16f918f39cae3966f",
+    "Renderer/terrain_lab/v2/shaders/relief/relief_v1.hlsl": "21db662734019759af5f56af36e65b1e43925bb07d71a6dc00b6b0769c5d6841",
+    "Renderer/terrain_lab/v2/tests/relief/q3_crop_witness.cpp": "23e1499107ce431dcf3c90df6281ee414c05a4c588714fb9501b178f8b9c3f4d",
+    "Renderer/terrain_lab/v2/tests/relief/test_clearance.py": "12962f06f66f7e4f31edeecdfc2e9e65d1b0bd3c0f339672ea1a08d5067e88a4",
+    "Renderer/terrain_lab/v2/tests/relief/test_relief.py": "085db0de681a3e9261f091f7fffaeb3cbb07187be29d5870dd8d753722d0743d",
+    "Renderer/terrain_lab/v2/systems/relief/import_selected_relief.py": "6ec393c511988d4c33fca904e490c158749dc7785833c645ebd6480cc84debd3",
+    "Renderer/terrain_lab/v2/systems/relief/continuous_normal.h": "d3050ab3448d0a46162ca95edb2a0801e19e1414b674b5a756931a5e87464c75",
+    "Renderer/terrain_lab/v2/tests/relief/test_continuous_normal.py": "219784fcc635c1422ff22c191d434e42d9da46c8134ab13d833a661e93ac8888",
+    "Renderer/terrain_lab/v2/systems/relief/placement_adapter.h": "4ebdcc6e0d0d35433a3725d634bf6f6a1398b74c7d76aee20f7678e51617abf9",
+    "Renderer/terrain_lab/v2/systems/relief/prepare_placement.py": "e5368961f65e45b46ef7d10cd2a908bf1eaba587f2e360194402146aeccb038f",
+    "Renderer/terrain_lab/v2/systems/relief/large_map.py": "e15a1e600ca105fef0a832244bb898edf7fb0768708656ae7025176fd7ddd71b",
+    "Renderer/terrain_lab/v2/tests/relief/test_placement_adapter.py": "388f4ddb2f956647abc1b8432269ff25ccbd11ceb314184580765221112296ea"
+  },
+  "source_audit": "Renderer/terrain_lab/v2/audits/relief/SELECTED_SOURCE_AUDIT.json",
+  "city_clearance": "Renderer/terrain_lab/v2/audits/relief/CITY_CLEARANCE_RESULT.json",
+  "large_map_preview": "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/large-source-map-06/map.png",
+  "shadow_caster_manifest": "Renderer/terrain_lab/v2/fixtures/relief/large-source-map-r6/shadow_casters.json",
+  "live_placement": "Renderer/terrain_lab/v2/audits/relief/LIVE_PLACEMENT_RESULT.json"
+}

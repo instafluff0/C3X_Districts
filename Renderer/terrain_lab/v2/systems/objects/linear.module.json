@@ -1,0 +1,10 @@
+{
+  "schema":"c3x.lab_v2.module.v1",
+  "id":"q7-source-city-linear-v1",
+  "owner":"Q7-presentation",
+  "provider":"cpp_packet",
+  "contract":1,
+  "source":"Renderer/terrain_lab/v2/systems/objects/linear_provider.cpp",
+  "shader":"Renderer/terrain_lab/v2/shaders/objects/linear_v1.hlsl",
+  "color_branch":"q6_scene_linear_premultiplied_v1"
+}

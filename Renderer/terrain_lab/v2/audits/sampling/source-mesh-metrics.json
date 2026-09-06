@@ -1,0 +1,4374 @@
+{
+  "schema": "c3x.q1.source_mesh_audit.v1",
+  "interpretation": "Authored baseline; >16 flags investigation, not permission to alter source UVs. Runtime preprojection transforms and source/import equivalence remain separate gates.",
+  "bundles": [
+    {
+      "path": "Renderer/packs/CompoundUnitLab/unit_tank_runtime.bin",
+      "sha256": "c08953faaacf0d2e40c4b66bac6876117f85ed4f95fff5687b10860d6bd66c24",
+      "assets": [
+        {
+          "id": "tank:idle:0:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.248662150233511,
+            "p95": 2.4362832026109507,
+            "p99": 3.9597087803909,
+            "max": 12.513025975142781
+          },
+          "uv_density_percentiles": {
+            "p05": 10.21270839393797,
+            "p50": 13.169963892964553,
+            "p95": 17.599507582984284
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999649313478,
+            1.000000037219307
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:idle:0:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.168951646525501,
+            "p95": 1.4269215763679375,
+            "p99": 1.6111029916558846,
+            "max": 1.8348489661513239
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149249300048506,
+            "p50": 3.9462859886141435,
+            "p95": 6.324451063125281
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999648061436,
+            1.0000000395553343
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:idle:0:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.12571596861451,
+            "p95": 2.8035344877336636,
+            "p99": 3.774539515853927,
+            "max": 6.939310153161293
+          },
+          "uv_density_percentiles": {
+            "p05": 8.056481888716329,
+            "p50": 9.632560485503232,
+            "p95": 11.509425668222898
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999615379943,
+            1.0000000366101
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:idle:0:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.111456915150007,
+            "p95": 2.5758017515250025,
+            "p99": 2.77618141336425,
+            "max": 4.034468378589486
+          },
+          "uv_density_percentiles": {
+            "p05": 9.193314824734905,
+            "p50": 9.81297430441988,
+            "p95": 10.908449811455286
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999651886968,
+            1.0000000407043794
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:idle:0:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1590999653613,
+            "p95": 1.4335158762688403,
+            "p99": 1.4822004893132983,
+            "max": 1.4925734183262749
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626912810164764,
+            "p50": 9.030675953593157,
+            "p95": 10.802391285189099
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.99999996974537,
+            1.0000000327386513
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:idle:0:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0735667004777576,
+            "p95": 1.8377730054540926,
+            "p99": 3.5291678761901406,
+            "max": 9.791694178215723
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2075752882044157,
+            "p50": 1.5250214720058166,
+            "p95": 2.0574877426899083
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999586041995,
+            1.0000000400744424
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:idle:0:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859367420602442,
+            "p95": 1.4986782506533691,
+            "p99": 1.5827623499857009,
+            "max": 1.5870091906531623
+          },
+          "uv_density_percentiles": {
+            "p05": 1.302990869559015,
+            "p50": 1.3541489103378903,
+            "p95": 1.500014561177889
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999705918794,
+            1.0000000288900728
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:fidget:0:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1674878606665229,
+            "p95": 1.6164147178282042,
+            "p99": 2.0511691756392074,
+            "max": 2.8753853740218727
+          },
+          "uv_density_percentiles": {
+            "p05": 10.765221546095894,
+            "p50": 12.857357470189644,
+            "p95": 14.566926603409504
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999605835806,
+            1.0000000375329006
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:fidget:0:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689573797220802,
+            "p95": 1.4269073381342863,
+            "p99": 1.6111213949791727,
+            "max": 1.834832817276969
+          },
+          "uv_density_percentiles": {
+            "p05": 1.214924608129134,
+            "p50": 3.946285257911421,
+            "p95": 6.324460791730688
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999641828639,
+            1.0000000318919557
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:fidget:0:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1367307897344183,
+            "p95": 2.7874708529287977,
+            "p99": 3.109218992574761,
+            "max": 3.4367574438458792
+          },
+          "uv_density_percentiles": {
+            "p05": 8.742037112911001,
+            "p50": 9.680074545178543,
+            "p95": 10.90649711295838
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999675609312,
+            1.0000000378175582
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:fidget:0:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.125696905371014,
+            "p95": 2.5513583120855277,
+            "p99": 2.6968919684867343,
+            "max": 4.034066970533681
+          },
+          "uv_density_percentiles": {
+            "p05": 9.207855757337802,
+            "p50": 9.786243885356878,
+            "p95": 10.544607585917577
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999658632123,
+            1.0000000357407488
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:fidget:0:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.159102016001047,
+            "p95": 1.4335139432858839,
+            "p99": 1.4822007250306093,
+            "max": 1.4925742262861514
+          },
+          "uv_density_percentiles": {
+            "p05": 7.6269045434122775,
+            "p50": 9.030679315055345,
+            "p95": 10.802398889594631
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999675859742,
+            1.000000014935315
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:fidget:0:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0727839973115072,
+            "p95": 1.8376174674439052,
+            "p99": 3.5291677176710787,
+            "max": 9.791702261786337
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2077776908392919,
+            "p50": 1.5250555577448728,
+            "p95": 2.0574879090623335
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999586416566,
+            1.0000000417013015
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:fidget:0:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859368314222514,
+            "p95": 1.4986798206109841,
+            "p99": 1.5827640514971977,
+            "max": 1.5870110813133893
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029903719664728,
+            "p50": 1.3541485103350654,
+            "p95": 1.5000147914727406
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999728124838,
+            1.0000000301475696
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:move:0:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.347718571726172,
+            "p95": 4.2541763190993205,
+            "p99": 7.7247201337228555,
+            "max": 20.690753854075204
+          },
+          "uv_density_percentiles": {
+            "p05": 9.968434339080465,
+            "p50": 13.13449808933855,
+            "p95": 23.622923590132544
+          },
+          "source_triangles_above_16": 1,
+          "normal_length_range": [
+            0.9999999607200137,
+            1.000000038527203
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:move:0:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.168949490389644,
+            "p95": 1.4269076905722344,
+            "p99": 1.6111172914612841,
+            "max": 1.8348417315121963
+          },
+          "uv_density_percentiles": {
+            "p05": 1.214925090904802,
+            "p50": 3.9462890239572737,
+            "p95": 6.3245044832158035
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999673990835,
+            1.0000000309671804
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:move:0:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1543967689891925,
+            "p95": 2.8974251012661036,
+            "p99": 3.833170006458398,
+            "max": 15.108027770118854
+          },
+          "uv_density_percentiles": {
+            "p05": 8.589814940036911,
+            "p50": 9.659618236638643,
+            "p95": 11.650299792711566
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999655005885,
+            1.0000000278736252
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:move:0:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1244714824776745,
+            "p95": 2.5906555794755315,
+            "p99": 3.035432556939646,
+            "max": 4.034599655067268
+          },
+          "uv_density_percentiles": {
+            "p05": 9.153524525255934,
+            "p50": 9.740053394517112,
+            "p95": 10.776158749755622
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999649678604,
+            1.0000000336893817
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:move:0:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1591027894955688,
+            "p95": 1.4335165663400953,
+            "p99": 1.4822003315710854,
+            "max": 1.4925727558188098
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626888109459749,
+            "p50": 9.03067212000189,
+            "p95": 10.802394392684953
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999638961388,
+            1.0000000256103443
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:move:0:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0735952955620334,
+            "p95": 1.838632425871371,
+            "p99": 3.5291678850776274,
+            "max": 9.791705986603825
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2077778378407276,
+            "p50": 1.524768344034274,
+            "p95": 2.057490336844899
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999959364673,
+            1.000000047504886
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:move:0:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.185936809536206,
+            "p95": 1.4986789260761744,
+            "p99": 1.5827634639373418,
+            "max": 1.587010118100511
+          },
+          "uv_density_percentiles": {
+            "p05": 1.302990368408968,
+            "p50": 1.3541485251737702,
+            "p95": 1.5000144878047834
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999728124838,
+            1.0000000301475696
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:move:1:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.348318929763776,
+            "p95": 4.206248183444422,
+            "p99": 8.021226484331835,
+            "max": 19.83307581823517
+          },
+          "uv_density_percentiles": {
+            "p05": 9.968429348974944,
+            "p50": 13.136404381495383,
+            "p95": 23.622889206206494
+          },
+          "source_triangles_above_16": 1,
+          "normal_length_range": [
+            0.9999999606505298,
+            1.0000000383826895
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:move:1:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689615049842899,
+            "p95": 1.4269158900868875,
+            "p99": 1.6111121003270472,
+            "max": 1.8348229146285795
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149239985281295,
+            "p50": 3.946290640263129,
+            "p95": 6.324446173833113
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999658089469,
+            1.0000000376861415
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:move:1:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.15428865275474,
+            "p95": 2.8974678978318615,
+            "p99": 3.859379495264532,
+            "max": 12.143917327446768
+          },
+          "uv_density_percentiles": {
+            "p05": 8.59896412230612,
+            "p50": 9.651239944350685,
+            "p95": 11.560965161331234
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999660025957,
+            1.0000000302900367
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:move:1:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.122594150459217,
+            "p95": 2.5962110923478066,
+            "p99": 3.063869152696775,
+            "max": 4.034196609571442
+          },
+          "uv_density_percentiles": {
+            "p05": 9.147218201278667,
+            "p50": 9.746922393684798,
+            "p95": 10.743742488384742
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999706073104,
+            1.0000000294640379
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:move:1:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1591023275643786,
+            "p95": 1.4335162653527544,
+            "p99": 1.4822010576427405,
+            "max": 1.4925738947367966
+          },
+          "uv_density_percentiles": {
+            "p05": 7.6268999548817185,
+            "p50": 9.03068210070892,
+            "p95": 10.80239118240077
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999964516934,
+            1.0000000330738898
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:move:1:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.073674463334075,
+            "p95": 1.8386335250184431,
+            "p99": 3.5291685808822075,
+            "max": 9.791716798201156
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2077777354613182,
+            "p50": 1.5247683269254786,
+            "p95": 2.0574864322216078
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999604725441,
+            1.0000000417873407
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:move:1:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859366163166871,
+            "p95": 1.4986782745544434,
+            "p99": 1.5827631392156112,
+            "max": 1.5870094230222394
+          },
+          "uv_density_percentiles": {
+            "p05": 1.302990438261759,
+            "p50": 1.354148523057118,
+            "p95": 1.5000144891263212
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999728124838,
+            1.0000000301475696
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:move:2:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.3473131248663486,
+            "p95": 4.278313917217697,
+            "p99": 7.610415561773423,
+            "max": 24.24787251003331
+          },
+          "uv_density_percentiles": {
+            "p05": 9.968431182957795,
+            "p50": 13.141225592839586,
+            "p95": 23.44570748541912
+          },
+          "source_triangles_above_16": 1,
+          "normal_length_range": [
+            0.9999999616718768,
+            1.0000000384778718
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:move:2:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689583326581299,
+            "p95": 1.426922101957862,
+            "p99": 1.6110945152880998,
+            "max": 1.8348461039448036
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149239022523224,
+            "p50": 3.9462913514955122,
+            "p95": 6.324422672521355
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999674220467,
+            1.0000000324031222
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:move:2:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1545457893311175,
+            "p95": 2.8974983472693268,
+            "p99": 3.8025986807656906,
+            "max": 15.880172863643905
+          },
+          "uv_density_percentiles": {
+            "p05": 8.567774915962453,
+            "p50": 9.662703502100921,
+            "p95": 11.65834570761729
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999965066129,
+            1.0000000340965969
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:move:2:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.125394451249578,
+            "p95": 2.58580417577634,
+            "p99": 3.065955131907353,
+            "max": 4.0347512595321975
+          },
+          "uv_density_percentiles": {
+            "p05": 9.138500100443139,
+            "p50": 9.738315171062787,
+            "p95": 10.785731265127566
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999674517195,
+            1.0000000305899284
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:move:2:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1591015783861218,
+            "p95": 1.433516997272715,
+            "p99": 1.482201899033753,
+            "max": 1.492574561058508
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626903360517302,
+            "p50": 9.030682295799355,
+            "p95": 10.802396590737803
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999669158339,
+            1.0000000293105682
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:move:2:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.073594487099614,
+            "p95": 1.8367621875174862,
+            "p99": 3.529167583489342,
+            "max": 9.791745271851875
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2077779264035153,
+            "p50": 1.5247689273761258,
+            "p95": 2.057486239407104
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999537265178,
+            1.0000000417889345
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:move:2:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859368365967016,
+            "p95": 1.4986789260761744,
+            "p99": 1.5827634639373418,
+            "max": 1.587010118100511
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029904213836447,
+            "p50": 1.3541487389463356,
+            "p95": 1.5000144891263212
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999728124838,
+            1.0000000301475696
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:move:3:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.3488798547823353,
+            "p95": 4.253645926167512,
+            "p99": 7.609411936749516,
+            "max": 27.583198860249198
+          },
+          "uv_density_percentiles": {
+            "p05": 9.96843254335842,
+            "p50": 13.142029283461191,
+            "p95": 23.305838877132814
+          },
+          "source_triangles_above_16": 1,
+          "normal_length_range": [
+            0.9999999603856092,
+            1.0000000396220943
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:move:3:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.168954367559857,
+            "p95": 1.4269040004216769,
+            "p99": 1.6111142288587912,
+            "max": 1.8348559401533044
+          },
+          "uv_density_percentiles": {
+            "p05": 1.214924825582488,
+            "p50": 3.9462990556439417,
+            "p95": 6.324474398459779
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999605868602,
+            1.00000002928106
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:move:3:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1559786579965596,
+            "p95": 2.897491584165333,
+            "p99": 3.8104932508375664,
+            "max": 19.24704312926622
+          },
+          "uv_density_percentiles": {
+            "p05": 8.569086112191043,
+            "p50": 9.662707790059077,
+            "p95": 11.661407999121101
+          },
+          "source_triangles_above_16": 1,
+          "normal_length_range": [
+            0.9999999692009887,
+            1.0000000376014893
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:move:3:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.123780605992367,
+            "p95": 2.5850042760828114,
+            "p99": 3.0904597868820245,
+            "max": 4.033938545618848
+          },
+          "uv_density_percentiles": {
+            "p05": 9.127453722418371,
+            "p50": 9.736160092756357,
+            "p95": 10.785554800648487
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999705633758,
+            1.0000000302485983
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:move:3:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1591011018588548,
+            "p95": 1.4335171936761744,
+            "p99": 1.4822015840783374,
+            "max": 1.4925742748015116
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626908901893087,
+            "p50": 9.030681543105146,
+            "p95": 10.802395172190687
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999623942217,
+            1.0000000268885958
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:move:3:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0735935944660902,
+            "p95": 1.8368237544063912,
+            "p99": 3.529168360197077,
+            "max": 9.791680228364715
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2077775000140019,
+            "p50": 1.5247684658925622,
+            "p95": 2.0574900001630763
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999603911958,
+            1.0000000407107512
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:move:3:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859368345388792,
+            "p95": 1.498679856361004,
+            "p99": 1.5827643303473506,
+            "max": 1.5870110813133893
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029903807719732,
+            "p50": 1.3541485103350654,
+            "p95": 1.5000148011858176
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999728124838,
+            1.0000000301475696
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:fortify:0:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.415381996464241,
+            "p95": 4.2845464158944235,
+            "p99": 8.065055830353568,
+            "max": 35.812939818116256
+          },
+          "uv_density_percentiles": {
+            "p05": 10.086282375503322,
+            "p50": 13.21888451969818,
+            "p95": 25.61752616105962
+          },
+          "source_triangles_above_16": 2,
+          "normal_length_range": [
+            0.9999999569091154,
+            1.0000000387798293
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:fortify:0:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.168955280285179,
+            "p95": 1.4269021636102006,
+            "p99": 1.6111274083936362,
+            "max": 1.834835286123978
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149247695053416,
+            "p50": 3.9462869571921866,
+            "p95": 6.324455245558752
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999640792523,
+            1.0000000380481453
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:fortify:0:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.186132669105266,
+            "p95": 3.8935449713247747,
+            "p99": 5.475227294994854,
+            "max": 6.109161628122824
+          },
+          "uv_density_percentiles": {
+            "p05": 8.438382125693234,
+            "p50": 9.775431843690752,
+            "p95": 13.458556544158515
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999683385247,
+            1.0000000354375846
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:fortify:0:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.166844270554477,
+            "p95": 3.3034155219651375,
+            "p99": 3.7063174522864495,
+            "max": 4.0545522914070835
+          },
+          "uv_density_percentiles": {
+            "p05": 9.138502030964181,
+            "p50": 9.790673015522472,
+            "p95": 12.1202031882725
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999652849332,
+            1.0000000356131573
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:fortify:0:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1590996482772395,
+            "p95": 1.4335140657467087,
+            "p99": 1.4821981530272959,
+            "max": 1.4925708992306304
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626904148218227,
+            "p50": 9.030676852773716,
+            "p95": 10.80239401821844
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999731648265,
+            1.000000023335639
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:fortify:0:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0735684898717288,
+            "p95": 1.837774029960759,
+            "p99": 3.5291678761901406,
+            "max": 9.791702261786337
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2075752882044157,
+            "p50": 1.5250214720058166,
+            "p95": 2.057487902926469
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999586041995,
+            1.0000000400742861
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:fortify:0:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859367420602442,
+            "p95": 1.4986782506533691,
+            "p99": 1.5827623499857009,
+            "max": 1.5870091906531623
+          },
+          "uv_density_percentiles": {
+            "p05": 1.302990869559015,
+            "p50": 1.3541489103378903,
+            "p95": 1.500014561177889
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999705918794,
+            1.0000000288900728
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:attack:0:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2158950820669392,
+            "p95": 2.3999333664938907,
+            "p99": 4.349358960759742,
+            "max": 5.794452545557899
+          },
+          "uv_density_percentiles": {
+            "p05": 10.180742773260654,
+            "p50": 13.012523436803301,
+            "p95": 15.815087122490905
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999618993523,
+            1.000000038068449
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:attack:0:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.168962154102037,
+            "p95": 1.4269008719093799,
+            "p99": 1.6111274013146233,
+            "max": 1.8348327782976395
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149248023736312,
+            "p50": 3.9462860648426963,
+            "p95": 6.324449322202317
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999674107384,
+            1.0000000377553608
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:attack:0:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.182115258897128,
+            "p95": 3.7916562458621197,
+            "p99": 5.475123804063042,
+            "max": 5.700252065446927
+          },
+          "uv_density_percentiles": {
+            "p05": 8.598015404921613,
+            "p50": 9.789361172656841,
+            "p95": 13.379000180270882
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999665671625,
+            1.0000000359808376
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:attack:0:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1757367671060237,
+            "p95": 3.6609139166949283,
+            "p99": 5.109752961580318,
+            "max": 6.265971539994932
+          },
+          "uv_density_percentiles": {
+            "p05": 9.176003142975464,
+            "p50": 9.789835519404209,
+            "p95": 11.851462315037823
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999686565535,
+            1.0000000349734244
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:attack:0:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1591008330731194,
+            "p95": 1.4335172718437084,
+            "p99": 1.482200542480223,
+            "max": 1.4925731461874086
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626902371391374,
+            "p50": 9.030682603389339,
+            "p95": 10.802402019570104
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999740841212,
+            1.0000000380234872
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:attack:0:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0735938072308722,
+            "p95": 1.8385611802641453,
+            "p99": 3.529168412255004,
+            "max": 9.791726797363852
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2075747432719077,
+            "p50": 1.525021395775658,
+            "p95": 2.057489700428455
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999585085577,
+            1.0000000394445503
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:attack:0:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859367508074325,
+            "p95": 1.4986783320938861,
+            "p99": 1.5827629484141863,
+            "max": 1.5870091303129201
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029901247297304,
+            "p50": 1.354148611199863,
+            "p95": 1.5000145490548196
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999705918794,
+            1.0000000288900728
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:attack:1:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.221889059953487,
+            "p95": 2.5108089678842105,
+            "p99": 4.0554940130507315,
+            "max": 7.106006103058424
+          },
+          "uv_density_percentiles": {
+            "p05": 10.378834882121257,
+            "p50": 13.018635180202494,
+            "p95": 15.86402048114561
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999634972394,
+            1.0000000351274665
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:attack:1:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689543088274332,
+            "p95": 1.4269136360374084,
+            "p99": 1.6111158434883854,
+            "max": 1.8348303347905326
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149254909901888,
+            "p50": 3.946289958026277,
+            "p95": 6.324462632891714
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999609601723,
+            1.0000000290846187
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:attack:1:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.211181791747453,
+            "p95": 3.8345118242200344,
+            "p99": 5.390464229401381,
+            "max": 5.579981200182078
+          },
+          "uv_density_percentiles": {
+            "p05": 8.673428633148845,
+            "p50": 9.810260072497556,
+            "p95": 13.097419523725796
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999679955879,
+            1.0000000362428987
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:attack:1:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1748205117700907,
+            "p95": 3.4784069983443744,
+            "p99": 4.64865793666575,
+            "max": 5.721826782372681
+          },
+          "uv_density_percentiles": {
+            "p05": 9.181018194689385,
+            "p50": 9.7807110077359,
+            "p95": 11.766213209863563
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999651394885,
+            1.0000000316572275
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:attack:1:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.159102913808923,
+            "p95": 1.4335122237272127,
+            "p99": 1.4821976463425128,
+            "max": 1.4925704086281066
+          },
+          "uv_density_percentiles": {
+            "p05": 7.62690087605267,
+            "p50": 9.030665366543658,
+            "p95": 10.80238629089515
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999722078712,
+            1.0000000359468249
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:attack:1:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0744621727858557,
+            "p95": 1.8361715756796706,
+            "p99": 3.529168164046548,
+            "max": 9.79170698658498
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2069130285233098,
+            "p50": 1.5247777219746808,
+            "p95": 2.0579879173355726
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999586041995,
+            1.0000000393128012
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:attack:1:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.185936518534046,
+            "p95": 1.498679031931566,
+            "p99": 1.582762084838162,
+            "max": 1.5870090402177934
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029908063347468,
+            "p50": 1.354148867224958,
+            "p95": 1.5000145624712384
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999705918794,
+            1.0000000288900728
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:attack:2:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2174281212324174,
+            "p95": 2.4909939421398137,
+            "p99": 3.877340059371096,
+            "max": 5.3087866538063055
+          },
+          "uv_density_percentiles": {
+            "p05": 10.176276642592624,
+            "p50": 13.011863447394122,
+            "p95": 15.793665447588198
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999611884929,
+            1.0000000350332898
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:attack:2:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689467104005558,
+            "p95": 1.4269149422921166,
+            "p99": 1.6111073958871172,
+            "max": 1.8348323093983787
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149247858413854,
+            "p50": 3.946287659728329,
+            "p95": 6.324485042277091
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999655127442,
+            1.00000003634997
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:attack:2:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.182085489561696,
+            "p95": 3.889898797411633,
+            "p99": 5.475261667332154,
+            "max": 5.764657783445642
+          },
+          "uv_density_percentiles": {
+            "p05": 8.531861936636519,
+            "p50": 9.79128306697638,
+            "p95": 13.402923887775748
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999684703251,
+            1.000000037570213
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:attack:2:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1757323650916702,
+            "p95": 3.6374776586923088,
+            "p99": 5.233737282717265,
+            "max": 6.317290803110727
+          },
+          "uv_density_percentiles": {
+            "p05": 9.177397011697403,
+            "p50": 9.78989695960021,
+            "p95": 11.792404635620324
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999584677357,
+            1.0000000384489411
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:attack:2:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1591018991149848,
+            "p95": 1.4335136897067433,
+            "p99": 1.4821980811733788,
+            "max": 1.492570918368917
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626895567928679,
+            "p50": 9.030687091606534,
+            "p95": 10.802392688467156
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999973412658,
+            1.000000031440314
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:attack:2:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.073437493473807,
+            "p95": 1.8375895453342448,
+            "p99": 3.529167884210241,
+            "max": 9.791694540098035
+          },
+          "uv_density_percentiles": {
+            "p05": 1.207574693342504,
+            "p50": 1.5250213141186637,
+            "p95": 2.0574892316887636
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999586041995,
+            1.0000000389108943
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:attack:2:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859365470430738,
+            "p95": 1.4986782808726828,
+            "p99": 1.582760862433999,
+            "max": 1.5870070362765427
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029902173389043,
+            "p50": 1.354148867224958,
+            "p95": 1.5000145624712384
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999705918794,
+            1.0000000288900728
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:attack:3:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2161495724298172,
+            "p95": 2.4083729577015536,
+            "p99": 4.3524559991505605,
+            "max": 5.729136718426555
+          },
+          "uv_density_percentiles": {
+            "p05": 10.180828303081759,
+            "p50": 13.011298109080812,
+            "p95": 15.813510060723182
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999588216711,
+            1.0000000375484903
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:attack:3:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689482359029184,
+            "p95": 1.4269110665765246,
+            "p99": 1.611109921178064,
+            "max": 1.8348290517808699
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149250791388664,
+            "p50": 3.946280582104431,
+            "p95": 6.324477074549649
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999658491737,
+            1.0000000352203746
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:attack:3:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1820639027468185,
+            "p95": 3.7916660699225155,
+            "p99": 5.475176341877296,
+            "max": 5.702862418429775
+          },
+          "uv_density_percentiles": {
+            "p05": 8.598039475695753,
+            "p50": 9.789393191525381,
+            "p95": 13.395829428959562
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999679125254,
+            1.000000035247202
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:attack:3:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.175715017642697,
+            "p95": 3.6634820448189545,
+            "p99": 5.140597436943056,
+            "max": 6.288669105069324
+          },
+          "uv_density_percentiles": {
+            "p05": 9.177136135074022,
+            "p50": 9.789721723813283,
+            "p95": 11.850865394584808
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999648492816,
+            1.0000000335505022
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:attack:3:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1590983602404519,
+            "p95": 1.4335157851615905,
+            "p99": 1.4821998074075615,
+            "max": 1.4925723255002514
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626909787457953,
+            "p50": 9.030679000558322,
+            "p95": 10.802399760753852
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999740289144,
+            1.0000000304844079
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:attack:3:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0734707802654586,
+            "p95": 1.8378718553717937,
+            "p99": 3.5291676185577665,
+            "max": 9.791682639280454
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2075743778349104,
+            "p50": 1.5250215081758032,
+            "p95": 2.057488134971597
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999956518752,
+            1.0000000415915506
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:attack:3:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.185936701892667,
+            "p95": 1.4986786633609244,
+            "p99": 1.5827633371605732,
+            "max": 1.58700973529585
+          },
+          "uv_density_percentiles": {
+            "p05": 1.302990786729794,
+            "p50": 1.3541485931509984,
+            "p95": 1.5000145624712384
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999705918794,
+            1.0000000288900728
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:defend:0:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2166659495385104,
+            "p95": 2.370677215581171,
+            "p99": 3.8837236146141296,
+            "max": 5.646623485237498
+          },
+          "uv_density_percentiles": {
+            "p05": 10.180783826987806,
+            "p50": 13.00469378695815,
+            "p95": 15.820428391160858
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999592383478,
+            1.0000000362649977
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:defend:0:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689523195903342,
+            "p95": 1.4269054359437272,
+            "p99": 1.6111270388083505,
+            "max": 1.8348307538797968
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149259670717225,
+            "p50": 3.946306602195529,
+            "p95": 6.324465429192457
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999696248616,
+            1.0000000410160519
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:defend:0:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1861150576362594,
+            "p95": 3.791689287142823,
+            "p99": 5.475190597794752,
+            "max": 5.729589633855593
+          },
+          "uv_density_percentiles": {
+            "p05": 8.598061296895404,
+            "p50": 9.792887205526444,
+            "p95": 13.42034290176358
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999630607606,
+            1.000000030040015
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:defend:0:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1730656099209056,
+            "p95": 3.669074660514786,
+            "p99": 4.958785243176061,
+            "max": 6.271305081370497
+          },
+          "uv_density_percentiles": {
+            "p05": 9.176076898241414,
+            "p50": 9.790645922318644,
+            "p95": 11.901049917297081
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999653304966,
+            1.000000030807699
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:defend:0:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1591015448904916,
+            "p95": 1.4335161218003485,
+            "p99": 1.4822012283987762,
+            "max": 1.4925742278656793
+          },
+          "uv_density_percentiles": {
+            "p05": 7.6269025157895385,
+            "p50": 9.030664882074642,
+            "p95": 10.802402048594745
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999723321653,
+            1.0000000298430418
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:defend:0:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0735667004777576,
+            "p95": 1.8377730054540926,
+            "p99": 3.5291678761901406,
+            "max": 9.791694178215723
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2075752882044157,
+            "p50": 1.5250214720058166,
+            "p95": 2.0574877426899083
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999586041995,
+            1.0000000400744424
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:defend:0:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859367420602442,
+            "p95": 1.4986782506533691,
+            "p99": 1.5827623499857009,
+            "max": 1.5870091906531623
+          },
+          "uv_density_percentiles": {
+            "p05": 1.302990869559015,
+            "p50": 1.3541489103378903,
+            "p95": 1.500014561177889
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999705918794,
+            1.0000000288900728
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:victory:0:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2161095391676813,
+            "p95": 2.3940230156720395,
+            "p99": 4.353592852281138,
+            "max": 5.865741412436727
+          },
+          "uv_density_percentiles": {
+            "p05": 10.180783685491802,
+            "p50": 13.010171154864306,
+            "p95": 15.813435404429832
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999604076729,
+            1.0000000347013671
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:victory:0:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689558373415232,
+            "p95": 1.4269070465469142,
+            "p99": 1.6111162686319298,
+            "max": 1.8348359879398104
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149251028702235,
+            "p50": 3.9462931680763864,
+            "p95": 6.32446017493034
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999637139643,
+            1.0000000346685474
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:victory:0:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1821093223727166,
+            "p95": 3.7916698267718907,
+            "p99": 5.4752496431006135,
+            "max": 5.697052751359465
+          },
+          "uv_density_percentiles": {
+            "p05": 8.598027062137524,
+            "p50": 9.788601516724526,
+            "p95": 13.344622547573909
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999655096387,
+            1.0000000364206316
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:victory:0:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1757208771198577,
+            "p95": 3.6629581303555727,
+            "p99": 5.137621552261659,
+            "max": 6.28407080201504
+          },
+          "uv_density_percentiles": {
+            "p05": 9.177106922039725,
+            "p50": 9.78987582313348,
+            "p95": 11.850899767065572
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999624849778,
+            1.000000032057239
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:victory:0:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.159102460885804,
+            "p95": 1.4335106190649827,
+            "p99": 1.4821968664047827,
+            "max": 1.4925701364033233
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626881739372555,
+            "p50": 9.030700726841808,
+            "p95": 10.802381589005352
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999673291827,
+            1.000000022127207
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:victory:0:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0735948336366332,
+            "p95": 1.8409236254126655,
+            "p99": 3.5291685798503267,
+            "max": 9.791689082707395
+          },
+          "uv_density_percentiles": {
+            "p05": 1.20757470078199,
+            "p50": 1.525021446577614,
+            "p95": 2.057486749040134
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999586041995,
+            1.0000000397163098
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:victory:0:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859365272812363,
+            "p95": 1.4986791023770316,
+            "p99": 1.5827625975045643,
+            "max": 1.5870089798764322
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029900907549896,
+            "p50": 1.354148544767088,
+            "p95": 1.500014550348169
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999705918794,
+            1.0000000288900728
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:death:0:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1995329253892844,
+            "p95": 2.176154650905554,
+            "p99": 4.9244798812965165,
+            "max": 20.360785071703333
+          },
+          "uv_density_percentiles": {
+            "p05": 10.211486587005298,
+            "p50": 12.957867386906955,
+            "p95": 15.958489145288201
+          },
+          "source_triangles_above_16": 1,
+          "normal_length_range": [
+            0.99999996225833,
+            1.000000038730756
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:death:0:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689497507671547,
+            "p95": 1.4269065394781708,
+            "p99": 1.6111080360504708,
+            "max": 1.8348396602836157
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149252888272628,
+            "p50": 3.946308177769281,
+            "p95": 6.324467452229641
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999961495747,
+            1.0000000323139009
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:death:0:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.198855905954669,
+            "p95": 3.791660650346278,
+            "p99": 5.3840703856255905,
+            "max": 5.905370976424697
+          },
+          "uv_density_percentiles": {
+            "p05": 8.67351723938624,
+            "p50": 9.874502177286576,
+            "p95": 13.036709136852929
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999651276225,
+            1.000000028198201
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:death:0:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1748058665635606,
+            "p95": 3.7175215110262996,
+            "p99": 6.356569329219715,
+            "max": 6.885898346085946
+          },
+          "uv_density_percentiles": {
+            "p05": 9.180540960294138,
+            "p50": 9.794058193642321,
+            "p95": 12.156513400318135
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999959150677,
+            1.0000000345860673
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:death:0:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.159103797644416,
+            "p95": 1.4335158500094387,
+            "p99": 1.4821946759919065,
+            "max": 1.4925655707921022
+          },
+          "uv_density_percentiles": {
+            "p05": 7.6268951804783205,
+            "p50": 9.030671068604587,
+            "p95": 10.802388460970008
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999973494406,
+            1.000000032796693
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:death:0:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0738536095019904,
+            "p95": 1.832620831142576,
+            "p99": 3.529167517207776,
+            "max": 9.791708159745163
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2074642380693286,
+            "p50": 1.5249557966478817,
+            "p95": 2.057487681873335
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999957104948,
+            1.0000000412344447
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:death:0:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.185936717784483,
+            "p95": 1.4986784367179768,
+            "p99": 1.582763000784134,
+            "max": 1.5870093405632943
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029903910667187,
+            "p50": 1.3541483463821256,
+            "p95": 1.5000145127906543
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999689993053,
+            1.0000000278362295
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:death:1:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.204819542819735,
+            "p95": 2.3753319211481347,
+            "p99": 3.8563554981947488,
+            "max": 13.872199780009582
+          },
+          "uv_density_percentiles": {
+            "p05": 9.813671736874998,
+            "p50": 12.918983467428202,
+            "p95": 16.550328717761623
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999605406497,
+            1.0000000394152868
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:death:1:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689459744765824,
+            "p95": 1.4269059208988957,
+            "p99": 1.6111262390218808,
+            "max": 1.8349347852632145
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149254018138156,
+            "p50": 3.946298500158379,
+            "p95": 6.324463819479973
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999700939983,
+            1.0000000334575216
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:death:1:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.198819170557468,
+            "p95": 3.789227683393234,
+            "p99": 5.2948205084065885,
+            "max": 5.662943427787415
+          },
+          "uv_density_percentiles": {
+            "p05": 8.673460373970151,
+            "p50": 9.823121582358887,
+            "p95": 13.24624294468682
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999645786783,
+            1.000000039544108
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:death:1:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1282806096985354,
+            "p95": 2.933412197425308,
+            "p99": 4.591224221135999,
+            "max": 5.115536386384499
+          },
+          "uv_density_percentiles": {
+            "p05": 8.86377911602787,
+            "p50": 9.743793718794866,
+            "p95": 11.522400449547868
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999705835512,
+            1.0000000338769217
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:death:1:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1590994674083486,
+            "p95": 1.4335133572148842,
+            "p99": 1.482200426296322,
+            "max": 1.492573956046143
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626907807419026,
+            "p50": 9.030678920654221,
+            "p95": 10.802393135134816
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999986148543,
+            1.0000000363506996
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:death:1:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0746849083452783,
+            "p95": 1.8409208112619078,
+            "p99": 3.531342554080171,
+            "max": 9.791734455889543
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2062093322886667,
+            "p50": 1.52430136480859,
+            "p95": 2.06175591345602
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999568529754,
+            1.0000000426717142
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:death:1:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859365903732466,
+            "p95": 1.4986786948075475,
+            "p99": 1.582762567858426,
+            "max": 1.5870091750948983
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029908796023009,
+            "p50": 1.35414879650101,
+            "p95": 1.5000146043317961
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999678622788,
+            1.0000000324093605
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:death:2:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.260066473310848,
+            "p95": 3.1782950645704906,
+            "p99": 6.620862584629446,
+            "max": 33.21403388962548
+          },
+          "uv_density_percentiles": {
+            "p05": 9.93583026910458,
+            "p50": 12.98786342142142,
+            "p95": 18.68730009060662
+          },
+          "source_triangles_above_16": 1,
+          "normal_length_range": [
+            0.9999999613269932,
+            1.0000000379162473
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:death:2:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689527262958186,
+            "p95": 1.4269075017063153,
+            "p99": 1.6111182798142396,
+            "max": 1.834840038697865
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149246807841547,
+            "p50": 3.9462856130776682,
+            "p95": 6.324456866391697
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999700825342,
+            1.000000038694352
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:death:2:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.193613065501092,
+            "p95": 3.854463664374236,
+            "p99": 5.257009120132276,
+            "max": 5.579971618174418
+          },
+          "uv_density_percentiles": {
+            "p05": 8.673465027774776,
+            "p50": 9.800522062999509,
+            "p95": 13.157624192338734
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999663345291,
+            1.0000000379278278
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:death:2:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1434330364691405,
+            "p95": 3.0517972691569852,
+            "p99": 3.9380100423288003,
+            "max": 4.773881827575828
+          },
+          "uv_density_percentiles": {
+            "p05": 8.55723006952276,
+            "p50": 9.746592482879564,
+            "p95": 11.76980789720691
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999635000674,
+            1.0000000351571638
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:death:2:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1591010475138557,
+            "p95": 1.4335161076239762,
+            "p99": 1.4822016783528422,
+            "max": 1.4925750265930378
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626903350413728,
+            "p50": 9.030687856542105,
+            "p95": 10.8023979523294
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999716195589,
+            1.0000000268733513
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:death:2:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0744487167668875,
+            "p95": 1.839793855779056,
+            "p99": 3.529167673936539,
+            "max": 9.791704257971197
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2069130675072774,
+            "p50": 1.5246524557650785,
+            "p95": 2.05761458658118
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999586168935,
+            1.000000040109364
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:death:2:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859368362584288,
+            "p95": 1.4986789123607602,
+            "p99": 1.5827631473510002,
+            "max": 1.5870093593879453
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029896472217164,
+            "p50": 1.354148509278625,
+            "p95": 1.5000144799158968
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999681075855,
+            1.0000000264812912
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        },
+        {
+          "id": "tank:death:3:part_0:t0:n5:e0",
+          "vertices": 806,
+          "triangles": 882,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2812098504793692,
+            "p95": 2.665475997097566,
+            "p99": 4.89287406601973,
+            "max": 6.436374533981923
+          },
+          "uv_density_percentiles": {
+            "p05": 9.715312515545321,
+            "p50": 12.917950223001124,
+            "p95": 16.606725425771945
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999610422835,
+            1.0000000376004647
+          ],
+          "source_uv_sha256": "35344c2b02abe012ae85f6e70f2335eb30c7214d571e0216b700b42097cb890e"
+        },
+        {
+          "id": "tank:death:3:part_1:t0:n0:e0",
+          "vertices": 137,
+          "triangles": 172,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1689533852098022,
+            "p95": 1.426910911134976,
+            "p99": 1.6111036164925219,
+            "max": 1.834835588935828
+          },
+          "uv_density_percentiles": {
+            "p05": 1.2149245043584995,
+            "p50": 3.9462938920327604,
+            "p95": 6.324455630518305
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999638656882,
+            1.0000000386097339
+          ],
+          "source_uv_sha256": "7306f68a8ec3247f76db179fcf7b149c48efb161317023c7e928d3ffc83e6ee2"
+        },
+        {
+          "id": "tank:death:3:part_2:t0:n1:e0",
+          "vertices": 208,
+          "triangles": 260,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.193616815854189,
+            "p95": 3.895099271326913,
+            "p99": 5.475237707868378,
+            "max": 5.656817404009681
+          },
+          "uv_density_percentiles": {
+            "p05": 8.525502552734764,
+            "p50": 9.832345773064933,
+            "p95": 13.287765367870813
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999667045532,
+            1.0000000398446889
+          ],
+          "source_uv_sha256": "55e5f98aa391a63967a5be38e96059282a5bb154a380de06ef5e5d1439aaebcd"
+        },
+        {
+          "id": "tank:death:3:part_3:t0:n1:e0",
+          "vertices": 152,
+          "triangles": 198,
+          "texture": "textures/unit/base_color_4091f5d26a14aa01.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1637925782659186,
+            "p95": 3.747007946141872,
+            "p99": 4.480102491884863,
+            "max": 5.532484197576111
+          },
+          "uv_density_percentiles": {
+            "p05": 8.62249508452591,
+            "p50": 9.795521130528032,
+            "p95": 11.93806690971648
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999653184241,
+            1.000000035995553
+          ],
+          "source_uv_sha256": "ab7f82a06685e9299efb867b79efd83d32b4404463cfbc2670f70841b6a31800"
+        },
+        {
+          "id": "tank:death:3:part_4:t1:n0:e0",
+          "vertices": 32,
+          "triangles": 24,
+          "texture": "textures/unit/base_color_23cf521d75dc7559.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.159100962246301,
+            "p95": 1.4335169986645329,
+            "p99": 1.4822006866769593,
+            "max": 1.4925732885288663
+          },
+          "uv_density_percentiles": {
+            "p05": 7.626896128926146,
+            "p50": 9.030677502352798,
+            "p95": 10.802404148713267
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999710609134,
+            1.000000025771764
+          ],
+          "source_uv_sha256": "64075fc81bfd8e4bb2f2a2d6bf40abff9feda96147055db745543ded4795a814"
+        },
+        {
+          "id": "tank:death:3:part_5:t0:n6:e0",
+          "vertices": 7346,
+          "triangles": 6716,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.07468278807211,
+            "p95": 1.8400208594309366,
+            "p99": 3.5291690615293447,
+            "max": 9.791701706092685
+          },
+          "uv_density_percentiles": {
+            "p05": 1.206246553120041,
+            "p50": 1.5246517148033534,
+            "p95": 2.0576149887490605
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999603677817,
+            1.0000000415039105
+          ],
+          "source_uv_sha256": "a525f5762b11d71de432f535507c45f04b229b40456d3f2de36430a858a852d3"
+        },
+        {
+          "id": "tank:death:3:part_6:t2:n0:e0",
+          "vertices": 116,
+          "triangles": 40,
+          "texture": "textures/unit/base_color_41da36444f7aa9b8.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1859366052484348,
+            "p95": 1.4986787720515613,
+            "p99": 1.5827627656994592,
+            "max": 1.5870090289102277
+          },
+          "uv_density_percentiles": {
+            "p05": 1.3029900929961595,
+            "p50": 1.3541487230900762,
+            "p95": 1.5000143867851128
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999698682147,
+            1.0000000276519982
+          ],
+          "source_uv_sha256": "b5709ef9d04ac1ddc24fdad23d8d463e5c367262ee07b4e632384574952e411e"
+        }
+      ]
+    },
+    {
+      "path": "Renderer/packs/CityComponentsNormalized/city_runtime.bin",
+      "sha256": "2e2f480466a23304df7ec655c959757172895b747ea4e163e52c432c98538646",
+      "assets": [
+        {
+          "id": "city/component/20c6179bd3b7587a",
+          "vertices": 728,
+          "triangles": 396,
+          "texture": "textures/compound/base_color_b8c5746583383c9b.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.0050220847870532,
+            "p95": 5.081157655350806,
+            "p99": 6.568904018479648,
+            "max": 10.782230933592647
+          },
+          "uv_density_percentiles": {
+            "p05": 1.5885412209013852,
+            "p50": 3.3920624099933505,
+            "p95": 7.457162804578088
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999624020017,
+            1.0000000417883053
+          ],
+          "source_uv_sha256": "819faa14a4c2c74a3e54d9e3c151e4fe10203ce780d86df337c9862bf75358d0"
+        },
+        {
+          "id": "city/component/19e3fcaaa0e909cb",
+          "vertices": 628,
+          "triangles": 354,
+          "texture": "textures/compound/base_color_b8c5746583383c9b.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.0325397043508113,
+            "p95": 3.657439968071605,
+            "p99": 5.799488837947711,
+            "max": 5.9651180772837105
+          },
+          "uv_density_percentiles": {
+            "p05": 1.8009054032093597,
+            "p50": 5.434407730863507,
+            "p95": 10.949886937661008
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999608230155,
+            1.0000000376806562
+          ],
+          "source_uv_sha256": "3949f998fb0ac237f20d2a2f6add8478776f8501909e04396dbbdf0c2f44948f"
+        },
+        {
+          "id": "city/component/cc8838bb2062e14e",
+          "vertices": 662,
+          "triangles": 368,
+          "texture": "textures/compound/base_color_b8c5746583383c9b.dds",
+          "geometry_or_uv_degenerate": 4,
+          "anisotropy_percentiles": {
+            "p50": 2.0021325625409343,
+            "p95": 3.6084512658421994,
+            "p99": 5.3127019573709875,
+            "max": 5.631937028216958
+          },
+          "uv_density_percentiles": {
+            "p05": 1.865578606310446,
+            "p50": 4.93006765191009,
+            "p95": 7.418890833136755
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999634972013,
+            1.0000000361648547
+          ],
+          "source_uv_sha256": "f072d4b0f5d8ca20288eab6bbaa4a7d1c88a411cdc5b0c6cf244d492dd74e1d6"
+        },
+        {
+          "id": "city/component/6cf90d821d71767d",
+          "vertices": 1127,
+          "triangles": 617,
+          "texture": "textures/compound/base_color_b8c5746583383c9b.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.0930826020917173,
+            "p95": 5.851019567156327,
+            "p99": 10.23179465283213,
+            "max": 11.549409571011283
+          },
+          "uv_density_percentiles": {
+            "p05": 1.6971668394178394,
+            "p50": 5.271496301756717,
+            "p95": 10.275391242796202
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999602119527,
+            1.000000046755093
+          ],
+          "source_uv_sha256": "d7f7535f5e5915f83e0c26dac812911876a66d1f067ed9b80ca3dbe68e807cea"
+        },
+        {
+          "id": "city/component/45e5295deb5e85fb",
+          "vertices": 164,
+          "triangles": 100,
+          "texture": "textures/compound/base_color_21e3ede9be33cd93.dds",
+          "geometry_or_uv_degenerate": 2,
+          "anisotropy_percentiles": {
+            "p50": 1.9952197716603117,
+            "p95": 3.5795837157685706,
+            "p99": 3.6415469369688966,
+            "max": 3.6415469369688966
+          },
+          "uv_density_percentiles": {
+            "p05": 4.079880444077821,
+            "p50": 5.763510889435298,
+            "p95": 7.9684725334449125
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999675316925,
+            1.0000000269618325
+          ],
+          "source_uv_sha256": "a184bd8b81f5096d9aee56e0aac22a22251a57fe4520a9f88c89ae45976f1863"
+        },
+        {
+          "id": "city/component/7139dac17b5b5976",
+          "vertices": 228,
+          "triangles": 134,
+          "texture": "textures/compound/base_color_21e3ede9be33cd93.dds",
+          "geometry_or_uv_degenerate": 2,
+          "anisotropy_percentiles": {
+            "p50": 2.152907476613659,
+            "p95": 4.376121579718255,
+            "p99": 7.089344870154311,
+            "max": 7.089344870154311
+          },
+          "uv_density_percentiles": {
+            "p05": 4.380075210276818,
+            "p50": 6.3844322409649505,
+            "p95": 8.711775093429884
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999675316925,
+            1.0000000369016615
+          ],
+          "source_uv_sha256": "432d037797f33659015f4d02bea93be5f1f47b0c638abe0be72375556ce444d1"
+        },
+        {
+          "id": "city/component/792c9e7ecef6407a",
+          "vertices": 710,
+          "triangles": 419,
+          "texture": "textures/compound/base_color_21e3ede9be33cd93.dds",
+          "geometry_or_uv_degenerate": 5,
+          "anisotropy_percentiles": {
+            "p50": 2.267206927114483,
+            "p95": 4.9163801183282425,
+            "p99": 7.373027771428067,
+            "max": 7.5002425707188936
+          },
+          "uv_density_percentiles": {
+            "p05": 4.296865416583238,
+            "p50": 6.03601492125184,
+            "p95": 8.620522633990449
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999622766123,
+            1.0000000412526697
+          ],
+          "source_uv_sha256": "0148ab4cf3ef5a8d05005a96ccc792a98fcb0b75bcbdcb9e3831e15c2fa68a41"
+        },
+        {
+          "id": "city/component/098e4d380fe565f2",
+          "vertices": 166,
+          "triangles": 102,
+          "texture": "textures/compound/base_color_21e3ede9be33cd93.dds",
+          "geometry_or_uv_degenerate": 2,
+          "anisotropy_percentiles": {
+            "p50": 1.9884175892732494,
+            "p95": 3.5961764155655573,
+            "p99": 3.6415469369688966,
+            "max": 3.6415469369688966
+          },
+          "uv_density_percentiles": {
+            "p05": 4.079880444077821,
+            "p50": 5.763510889435299,
+            "p95": 7.9664764640218735
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999675316925,
+            1.0000000269618325
+          ],
+          "source_uv_sha256": "73319896863e5ff0f37d83cc804540fbc0f0564b1ca9206492884c93e3374580"
+        },
+        {
+          "id": "city/component/41293ee327fcf5f3",
+          "vertices": 1202,
+          "triangles": 611,
+          "texture": "textures/compound/base_color_b623d1a79226e93d.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.0086671522016046,
+            "p95": 5.472800465428374,
+            "p99": 5.916876819985099,
+            "max": 6.365882492649578
+          },
+          "uv_density_percentiles": {
+            "p05": 2.448315607873326,
+            "p50": 4.329488276284328,
+            "p95": 9.034792959263637
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999641241913,
+            1.0000000409764338
+          ],
+          "source_uv_sha256": "99adc15b1ff7fa1589da58a218e6d92f2ae995d53755ae58f8b516f35f89984f"
+        },
+        {
+          "id": "city/component/a8e6e11edb1a5f9e",
+          "vertices": 1140,
+          "triangles": 558,
+          "texture": "textures/compound/base_color_b623d1a79226e93d.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.0559182094505397,
+            "p95": 5.718606263305772,
+            "p99": 6.721356065229966,
+            "max": 6.9277942313227925
+          },
+          "uv_density_percentiles": {
+            "p05": 2.1018048457920075,
+            "p50": 4.123896907340318,
+            "p95": 9.034832257341119
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999689020824,
+            1.0000000306757624
+          ],
+          "source_uv_sha256": "89f73cdb121b40afc7722f49e4ac5dc26a2b365daa6cd6fa7c5c46cbf53dfe6c"
+        },
+        {
+          "id": "city/component/4726112ba59d8613",
+          "vertices": 888,
+          "triangles": 522,
+          "texture": "textures/compound/base_color_b623d1a79226e93d.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 2.1017598050628647,
+            "p95": 3.4865225814002327,
+            "p99": 5.198970385995558,
+            "max": 6.802800360613118
+          },
+          "uv_density_percentiles": {
+            "p05": 2.9321558935054597,
+            "p50": 3.784287529760153,
+            "p95": 7.71192169112371
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999621301748,
+            1.0000000439126242
+          ],
+          "source_uv_sha256": "34eeb9f7c4f8c81f847ab8c41a9539d83fbdd35c679000ca3c63364b87e87e12"
+        },
+        {
+          "id": "city/component/e9d125716296bf6f",
+          "vertices": 514,
+          "triangles": 294,
+          "texture": "textures/compound/base_color_b623d1a79226e93d.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.9973941027853754,
+            "p95": 3.02639636896212,
+            "p99": 4.228416503753129,
+            "max": 5.021543062603055
+          },
+          "uv_density_percentiles": {
+            "p05": 1.7292390725361444,
+            "p50": 2.9146071988208586,
+            "p95": 6.1978833462752165
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999738900215,
+            1.000000039756416
+          ],
+          "source_uv_sha256": "59ffad7906683ab76f3f60066e982bf358197e3ca70d2b0ac3bce8d2c971e908"
+        },
+        {
+          "id": "city/component/1a2cdd77f4c26999",
+          "vertices": 1034,
+          "triangles": 517,
+          "texture": "textures/compound/base_color_e32b91f7eaaa5354.dds",
+          "geometry_or_uv_degenerate": 108,
+          "anisotropy_percentiles": {
+            "p50": 2.067884078168573,
+            "p95": 3.1681970486700797,
+            "p99": 5.108692977599232,
+            "max": 5.556173910908089
+          },
+          "uv_density_percentiles": {
+            "p05": 2.416150273582378,
+            "p50": 4.608566308792716,
+            "p95": 7.375945262800708
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999723574932,
+            1.0000000361846173
+          ],
+          "source_uv_sha256": "93fec00948710dd891665c82ff74083c59b7dcb1a4056aa9b80c6c2957c6e99f"
+        },
+        {
+          "id": "city/component/e18f5ef810f915df",
+          "vertices": 170,
+          "triangles": 116,
+          "texture": "textures/compound/base_color_e32b91f7eaaa5354.dds",
+          "geometry_or_uv_degenerate": 60,
+          "anisotropy_percentiles": {
+            "p50": 2.362597948486056,
+            "p95": 4.0862784915654995,
+            "p99": 4.1019607286862785,
+            "max": 4.10789467232496
+          },
+          "uv_density_percentiles": {
+            "p05": 1.7452872949302283,
+            "p50": 4.9874965980251025,
+            "p95": 5.563456411712245
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999856827911,
+            1.0
+          ],
+          "source_uv_sha256": "66705d94c8f1d6e94ed7ff7b8614bf13e6090404cfb1dc5bf25046b78270bff4"
+        },
+        {
+          "id": "city/component/f65b0689b7acb564",
+          "vertices": 521,
+          "triangles": 303,
+          "texture": "textures/compound/base_color_e32b91f7eaaa5354.dds",
+          "geometry_or_uv_degenerate": 94,
+          "anisotropy_percentiles": {
+            "p50": 2.068146086320643,
+            "p95": 22.749585145511986,
+            "p99": 35.301744378658746,
+            "max": 35.301744378658746
+          },
+          "uv_density_percentiles": {
+            "p05": 1.8786476816450939,
+            "p50": 3.6924432810298864,
+            "p95": 5.197088440806123
+          },
+          "source_triangles_above_16": 20,
+          "normal_length_range": [
+            0.9999999751310273,
+            1.0000000317503903
+          ],
+          "source_uv_sha256": "f4b74fea0ea80f5027ea73f1915996c0dd9b70d91b675a9964f11d0934a96a85"
+        }
+      ]
+    },
+    {
+      "path": "Renderer/packs/ResourceNormalized/resource_runtime.bin",
+      "sha256": "4e66ed69d8483544b1d24ccb4f78a0c106480b7ca4bf762843563671d2d5c3f2",
+      "assets": [
+        {
+          "id": "resource/assets/horse_001",
+          "vertices": 514,
+          "triangles": 671,
+          "texture": "textures/features/horse_001_base_color.dds",
+          "geometry_or_uv_degenerate": 3,
+          "anisotropy_percentiles": {
+            "p50": 1.2725780838281873,
+            "p95": 2.3431114562508606,
+            "p99": 3.714152317237234,
+            "max": 169.10192819641864
+          },
+          "uv_density_percentiles": {
+            "p05": 0.3840118937870818,
+            "p50": 0.5336181740152246,
+            "p95": 0.684737200725126
+          },
+          "source_triangles_above_16": 3,
+          "normal_length_range": [
+            0.9999999612884021,
+            1.0000000380797343
+          ],
+          "source_uv_sha256": "e984c9c387885ff2c589dc95c70bcd1910886f566785fa5c01d9b7056c419309"
+        },
+        {
+          "id": "resource/assets/res_iron_rock01",
+          "vertices": 339,
+          "triangles": 338,
+          "texture": "textures/features/res_iron_rock01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.3799843304959336,
+            "p95": 2.031368800047657,
+            "p99": 2.268939656266596,
+            "max": 2.5471118547271234
+          },
+          "uv_density_percentiles": {
+            "p05": 0.8683608483320164,
+            "p50": 1.1882018554155613,
+            "p95": 1.607922790625932
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999594722723,
+            1.0000000331284884
+          ],
+          "source_uv_sha256": "97556220d2b3c630e00fa1c605abf55825064c8889a8298690aa9f4edc3d2fc5"
+        },
+        {
+          "id": "resource/assets/res_uranium_rock01",
+          "vertices": 427,
+          "triangles": 412,
+          "texture": "textures/features/res_uranium_rock01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.3983776039445233,
+            "p95": 2.127346819952949,
+            "p99": 2.29832424715576,
+            "max": 2.5471118547271234
+          },
+          "uv_density_percentiles": {
+            "p05": 0.8777082424052361,
+            "p50": 1.2816714587632152,
+            "p95": 1.97807996229185
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999594722723,
+            1.00000003378454
+          ],
+          "source_uv_sha256": "a61af996ace150a7ef718bceeff0114e6aa3415975cc223942ac52cfd7ea4117"
+        },
+        {
+          "id": "resource/assets/res_gold_rock01",
+          "vertices": 340,
+          "triangles": 338,
+          "texture": "textures/features/res_gold_rock01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.4228997905872287,
+            "p95": 2.3694333979522693,
+            "p99": 2.7823998004910706,
+            "max": 3.0162164102804656
+          },
+          "uv_density_percentiles": {
+            "p05": 0.8504498914231939,
+            "p50": 1.1869386586710542,
+            "p95": 1.6672959127583542
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999678469527,
+            1.0000000365291297
+          ],
+          "source_uv_sha256": "fc4f3913ef16c1342538da8dd923722fc4f671e1873166e5e702de7069fd8b42"
+        },
+        {
+          "id": "resource/assets/res_dyes_01",
+          "vertices": 715,
+          "triangles": 713,
+          "texture": "textures/features/res_dyes_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0602399623945566,
+            "p95": 2.38758979185144,
+            "p99": 5.949501171016141,
+            "max": 5.968149184622908
+          },
+          "uv_density_percentiles": {
+            "p05": 1.1612112078394738,
+            "p50": 1.872385800054739,
+            "p95": 3.1580155799075107
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999646857021,
+            1.0000000448801825
+          ],
+          "source_uv_sha256": "13d0b81bc5902ba35b635c374db6cb90a83a7606c541260949850483a875c822"
+        },
+        {
+          "id": "resource/assets/res_wheat_tuft01",
+          "vertices": 24,
+          "triangles": 16,
+          "texture": "textures/features/res_wheat_tuft01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0231430970107211,
+            "p95": 1.0328760752321626,
+            "p99": 1.0328760752321626,
+            "max": 1.0328760752321626
+          },
+          "uv_density_percentiles": {
+            "p05": 1.7650398216949512,
+            "p50": 1.7660047060125585,
+            "p95": 1.7666946429198056
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999589688395,
+            1.0000000296668483
+          ],
+          "source_uv_sha256": "abfb4bb48e23c46275fc9db093c1387a55c50d09dd7a807fa4a055cbca014527"
+        },
+        {
+          "id": "resource/assets/res_cattle_cow01",
+          "vertices": 468,
+          "triangles": 626,
+          "texture": "textures/features/res_cattle_cow01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2297581405776912,
+            "p95": 2.1564640280391676,
+            "p99": 4.111323117161202,
+            "max": 33.61803141072914
+          },
+          "uv_density_percentiles": {
+            "p05": 1.203306524785494,
+            "p50": 1.496379661239415,
+            "p95": 3.4877208027657858
+          },
+          "source_triangles_above_16": 2,
+          "normal_length_range": [
+            0.9999999636897582,
+            1.0000000392806248
+          ],
+          "source_uv_sha256": "be715f80dcfceb8ad5bed2fed1f52f4c6aa9d1005ca34ff6a13bb27f652d6978"
+        },
+        {
+          "id": "resource/fish/landmark",
+          "vertices": 1068,
+          "triangles": 720,
+          "texture": "textures/resources/fish_base_color.dds",
+          "geometry_or_uv_degenerate": 24,
+          "anisotropy_percentiles": {
+            "p50": 1.188214636511077,
+            "p95": 4.30105672472884,
+            "p99": 326.5878279575785,
+            "max": 361.41753081641025
+          },
+          "uv_density_percentiles": {
+            "p05": 15.560482885468515,
+            "p50": 20.471317659515357,
+            "p95": 28.243387076205337
+          },
+          "source_triangles_above_16": 24,
+          "normal_length_range": [
+            0.9999999603046131,
+            1.0000000387813657
+          ],
+          "source_uv_sha256": "78bc2fe8ed4d34f6c80944ae96c9d322bd8c96c57f015a84e703ddc7dfef6597"
+        }
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentVegetation/vegetation_runtime.bin",
+      "sha256": "f6a9fce521601e2ba93a4123a43bf77c173b95f3c2da79264de3ddae4b110640",
+      "assets": [
+        {
+          "id": "feature/forest/pine_01",
+          "vertices": 47,
+          "triangles": 39,
+          "texture": "textures/features/forest_pine_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.061542775123307,
+            "p95": 1.0930457121406152,
+            "p99": 1.094166456144482,
+            "max": 1.0947382236693486
+          },
+          "uv_density_percentiles": {
+            "p05": 0.3984126219377603,
+            "p50": 0.4066082484916678,
+            "p95": 0.4221318011575898
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999658408777,
+            1.000000033983802
+          ],
+          "source_uv_sha256": "ae9b91542a929e40acedcf84aa5ccf68f4e0fcc923ef6904b3f39a43c9955126"
+        },
+        {
+          "id": "feature/forest/pine_02",
+          "vertices": 47,
+          "triangles": 39,
+          "texture": "textures/features/forest_pine_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.065214667882474,
+            "p95": 1.3516609095184535,
+            "p99": 1.3984294599093137,
+            "max": 1.4236757248929564
+          },
+          "uv_density_percentiles": {
+            "p05": 0.4013203722326337,
+            "p50": 0.4186158938762675,
+            "p95": 0.4270287441696025
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999672937253,
+            1.0000000358300214
+          ],
+          "source_uv_sha256": "38504d6f40b5480faf3946ebbbe7e1483a3e2f7831c476dd5ff03f0d75a22557"
+        },
+        {
+          "id": "feature/forest/pine_03",
+          "vertices": 44,
+          "triangles": 48,
+          "texture": "textures/features/forest_pine_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.053052548117958,
+            "p95": 1.5481079182532635,
+            "p99": 2.034526983186831,
+            "max": 2.0923348155447234
+          },
+          "uv_density_percentiles": {
+            "p05": 0.33793505069170815,
+            "p50": 0.3912189863588833,
+            "p95": 0.4068515258192899
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999750503822,
+            1.0000000336673656
+          ],
+          "source_uv_sha256": "84b674daa9f89dd0cf8b9ccb5ed055ac20ed214f9f7f8eb2d0f53ae549733827"
+        },
+        {
+          "id": "feature/forest/pine_clump_01",
+          "vertices": 528,
+          "triangles": 512,
+          "texture": "textures/features/forest_pine_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.190518234384146,
+            "p95": 3.067062215062698,
+            "p99": 7.197974231824682,
+            "max": 35.33405464570134
+          },
+          "uv_density_percentiles": {
+            "p05": 0.2393562543100459,
+            "p50": 0.5689519905710052,
+            "p95": 0.8299514518818452
+          },
+          "source_triangles_above_16": 3,
+          "normal_length_range": [
+            0.9999999606755413,
+            1.000000045433654
+          ],
+          "source_uv_sha256": "d22da45e89f8010061f6244030ff905d515df5e009f445cb513eb4790b0db6dd"
+        },
+        {
+          "id": "feature/forest/pine_clump_02",
+          "vertices": 594,
+          "triangles": 593,
+          "texture": "textures/features/forest_pine_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.143312202723756,
+            "p95": 3.1440168074676373,
+            "p99": 7.178278047512448,
+            "max": 39.382336378454234
+          },
+          "uv_density_percentiles": {
+            "p05": 0.2658730319171751,
+            "p50": 0.5504209924104687,
+            "p95": 0.8117863532770682
+          },
+          "source_triangles_above_16": 3,
+          "normal_length_range": [
+            0.9999999611862492,
+            1.0000000400948592
+          ],
+          "source_uv_sha256": "23a9873905b56f3ce80aa2f2b879ce5723e046714ec294642d987127b4cfdb6f"
+        },
+        {
+          "id": "feature/forest/shrub_01",
+          "vertices": 120,
+          "triangles": 188,
+          "texture": "textures/features/forest_shrub_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.3600596484662315,
+            "p95": 2.1034969643159886,
+            "p99": 2.4588134523890837,
+            "max": 3.0093694018025343
+          },
+          "uv_density_percentiles": {
+            "p05": 0.5256112885057121,
+            "p50": 0.7766534388248844,
+            "p95": 1.1892609116089146
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999613309934,
+            1.0000000353739364
+          ],
+          "source_uv_sha256": "8376388d26fb637dfa2385221a941a8e469f5ecab563e4d828a33db12792fba1"
+        },
+        {
+          "id": "feature/forest/shrub_02",
+          "vertices": 60,
+          "triangles": 94,
+          "texture": "textures/features/forest_shrub_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.3191024418901072,
+            "p95": 1.8681054209118313,
+            "p99": 2.515715333667416,
+            "max": 4.141470544539308
+          },
+          "uv_density_percentiles": {
+            "p05": 0.7338606342777646,
+            "p50": 0.9321377053881528,
+            "p95": 1.0650060954231566
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999702127373,
+            1.0000000305476004
+          ],
+          "source_uv_sha256": "e3e606c1e41315789b87c242c50310dc5fca6779b9bee984af88ef0164a036c1"
+        },
+        {
+          "id": "feature/forest_snow/pine_01",
+          "vertices": 47,
+          "triangles": 39,
+          "texture": "textures/features/forest_snow_pine_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.061542775123307,
+            "p95": 1.0930457121406152,
+            "p99": 1.094166456144482,
+            "max": 1.0947382236693486
+          },
+          "uv_density_percentiles": {
+            "p05": 0.3984126219377603,
+            "p50": 0.4066082484916678,
+            "p95": 0.4221318011575898
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999658408777,
+            1.000000033983802
+          ],
+          "source_uv_sha256": "ae9b91542a929e40acedcf84aa5ccf68f4e0fcc923ef6904b3f39a43c9955126"
+        },
+        {
+          "id": "feature/forest_snow/pine_02",
+          "vertices": 47,
+          "triangles": 39,
+          "texture": "textures/features/forest_snow_pine_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.065214667882474,
+            "p95": 1.3516609095184535,
+            "p99": 1.3984294599093137,
+            "max": 1.4236757248929564
+          },
+          "uv_density_percentiles": {
+            "p05": 0.4013203722326337,
+            "p50": 0.4186158938762675,
+            "p95": 0.4270287441696025
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999672937253,
+            1.0000000358300214
+          ],
+          "source_uv_sha256": "38504d6f40b5480faf3946ebbbe7e1483a3e2f7831c476dd5ff03f0d75a22557"
+        },
+        {
+          "id": "feature/forest_snow/pine_03",
+          "vertices": 44,
+          "triangles": 48,
+          "texture": "textures/features/forest_snow_pine_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.053052548117958,
+            "p95": 1.5481079182532635,
+            "p99": 2.034526983186831,
+            "max": 2.0923348155447234
+          },
+          "uv_density_percentiles": {
+            "p05": 0.33793505069170815,
+            "p50": 0.3912189863588833,
+            "p95": 0.4068515258192899
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999750503822,
+            1.0000000336673656
+          ],
+          "source_uv_sha256": "84b674daa9f89dd0cf8b9ccb5ed055ac20ed214f9f7f8eb2d0f53ae549733827"
+        },
+        {
+          "id": "feature/forest_snow/pine_clump_01",
+          "vertices": 528,
+          "triangles": 512,
+          "texture": "textures/features/forest_snow_pine_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.190518234384146,
+            "p95": 3.067062215062698,
+            "p99": 7.197974231824682,
+            "max": 35.33405464570134
+          },
+          "uv_density_percentiles": {
+            "p05": 0.2393562543100459,
+            "p50": 0.5689519905710052,
+            "p95": 0.8299514518818452
+          },
+          "source_triangles_above_16": 3,
+          "normal_length_range": [
+            0.9999999606755413,
+            1.000000045433654
+          ],
+          "source_uv_sha256": "d22da45e89f8010061f6244030ff905d515df5e009f445cb513eb4790b0db6dd"
+        },
+        {
+          "id": "feature/forest_snow/pine_clump_02",
+          "vertices": 594,
+          "triangles": 593,
+          "texture": "textures/features/forest_snow_pine_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.143312202723756,
+            "p95": 3.1440168074676373,
+            "p99": 7.178278047512448,
+            "max": 39.382336378454234
+          },
+          "uv_density_percentiles": {
+            "p05": 0.2658730319171751,
+            "p50": 0.5504209924104687,
+            "p95": 0.8117863532770682
+          },
+          "source_triangles_above_16": 3,
+          "normal_length_range": [
+            0.9999999611862492,
+            1.0000000400948592
+          ],
+          "source_uv_sha256": "23a9873905b56f3ce80aa2f2b879ce5723e046714ec294642d987127b4cfdb6f"
+        },
+        {
+          "id": "feature/jungle/grass_01",
+          "vertices": 62,
+          "triangles": 56,
+          "texture": "textures/features/jungle_grass_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2379719884421803,
+            "p95": 1.4533535465165077,
+            "p99": 1.5463047575082451,
+            "max": 1.5571527089000436
+          },
+          "uv_density_percentiles": {
+            "p05": 0.5961702768311117,
+            "p50": 0.7675555838853421,
+            "p95": 0.9492993948970867
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999635616795,
+            1.000000035466831
+          ],
+          "source_uv_sha256": "81f27ce62f716a31fa8a38d78ed4961b28cf91c4bbcd0e0370320faebe149578"
+        },
+        {
+          "id": "feature/jungle/grass_02",
+          "vertices": 66,
+          "triangles": 56,
+          "texture": "textures/features/jungle_grass_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.111796445726783,
+            "p95": 1.5068798710623437,
+            "p99": 1.7065400816589007,
+            "max": 1.7333055959917718
+          },
+          "uv_density_percentiles": {
+            "p05": 0.7079055088933794,
+            "p50": 0.7363976717434211,
+            "p95": 0.9691095331850922
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999652340693,
+            1.0000000235780286
+          ],
+          "source_uv_sha256": "34d40df11479b13edd9c3f3abf448e89785d697acffdc85f9ba965e252c64e5b"
+        },
+        {
+          "id": "feature/jungle/grass_03",
+          "vertices": 78,
+          "triangles": 72,
+          "texture": "textures/features/jungle_grass_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2573660812676914,
+            "p95": 1.528099885718535,
+            "p99": 1.5575561082970024,
+            "max": 1.5581009967123143
+          },
+          "uv_density_percentiles": {
+            "p05": 0.5971963069789801,
+            "p50": 0.7489247378934656,
+            "p95": 0.983796781774868
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999964595174,
+            1.0000000325900587
+          ],
+          "source_uv_sha256": "980631e53acbdf194e17aea4768af1141d63ade9704d7b7cff16771d42c04b54"
+        },
+        {
+          "id": "feature/jungle/grass_04",
+          "vertices": 168,
+          "triangles": 144,
+          "texture": "textures/features/jungle_grass_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1493825603427155,
+            "p95": 1.4971203399660666,
+            "p99": 1.628712399236056,
+            "max": 1.7342149387282955
+          },
+          "uv_density_percentiles": {
+            "p05": 0.513697631150364,
+            "p50": 0.7157718551796247,
+            "p95": 0.8829188723689025
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999541204908,
+            1.000000040150728
+          ],
+          "source_uv_sha256": "4a3281600547601d92572ce18de72b92591b677f93b1acabfa1713921cace95a"
+        },
+        {
+          "id": "feature/jungle/palm_01",
+          "vertices": 142,
+          "triangles": 141,
+          "texture": "textures/features/jungle_grass_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1275161783459324,
+            "p95": 1.765469800252107,
+            "p99": 4.143560056303835,
+            "max": 5.24358804105141
+          },
+          "uv_density_percentiles": {
+            "p05": 0.5415826090103429,
+            "p50": 0.6307393442623593,
+            "p95": 1.5419977468163366
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999601184206,
+            1.0000000337827057
+          ],
+          "source_uv_sha256": "8616e0ebcfe9849962722e7d77d92655d33c393a59c40a1ee64382b26f2e9816"
+        },
+        {
+          "id": "feature/jungle/palm_02",
+          "vertices": 143,
+          "triangles": 145,
+          "texture": "textures/features/jungle_grass_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.6104371128418946,
+            "p95": 2.7653337993005724,
+            "p99": 3.654208386494481,
+            "max": 3.9724008405348363
+          },
+          "uv_density_percentiles": {
+            "p05": 0.5242389396442246,
+            "p50": 0.553591468258112,
+            "p95": 1.1950949531631574
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999664281737,
+            1.0000000384277492
+          ],
+          "source_uv_sha256": "07581da694cad5358bb04d57e473ea7c6af51d1003bdd605ca87c31f1198ada9"
+        },
+        {
+          "id": "feature/jungle/palm_03",
+          "vertices": 165,
+          "triangles": 169,
+          "texture": "textures/features/jungle_grass_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.9868087448735092,
+            "p95": 2.6271632432299614,
+            "p99": 3.641261748522529,
+            "max": 3.9604111824868196
+          },
+          "uv_density_percentiles": {
+            "p05": 0.3873762105118048,
+            "p50": 0.42858186722830155,
+            "p95": 1.1338153593655667
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999653222974,
+            1.0000000347780624
+          ],
+          "source_uv_sha256": "63e13f014961ccd44148c549c5466d0e3f19771e6201d2ec1fc3bcaf4bb2eff5"
+        },
+        {
+          "id": "feature/jungle/plant_01",
+          "vertices": 142,
+          "triangles": 141,
+          "texture": "textures/features/jungle_grass_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1275161783459324,
+            "p95": 1.765469800252107,
+            "p99": 4.143560056303835,
+            "max": 5.24358804105141
+          },
+          "uv_density_percentiles": {
+            "p05": 0.5415826090103429,
+            "p50": 0.6307393442623593,
+            "p95": 1.5419977468163366
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999601184206,
+            1.0000000337827057
+          ],
+          "source_uv_sha256": "8616e0ebcfe9849962722e7d77d92655d33c393a59c40a1ee64382b26f2e9816"
+        },
+        {
+          "id": "feature/jungle/plant_02",
+          "vertices": 131,
+          "triangles": 129,
+          "texture": "textures/features/jungle_grass_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0495420129699833,
+            "p95": 1.7280314638248533,
+            "p99": 1.7830269839981971,
+            "max": 1.8149006082581374
+          },
+          "uv_density_percentiles": {
+            "p05": 0.8171502146852103,
+            "p50": 0.9542942592667047,
+            "p95": 1.381715343282767
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999682605426,
+            1.0000000356631558
+          ],
+          "source_uv_sha256": "559071ca305285dcb4693c16244a82dd73f320452b36f8c6f77dcc576733757d"
+        },
+        {
+          "id": "feature/jungle/plant_03",
+          "vertices": 70,
+          "triangles": 75,
+          "texture": "textures/features/jungle_grass_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.0881181021851813,
+            "p95": 1.5902101543799343,
+            "p99": 1.9253680555829777,
+            "max": 1.9289823787096783
+          },
+          "uv_density_percentiles": {
+            "p05": 0.5042654383825813,
+            "p50": 0.7232468804314106,
+            "p95": 0.8964166038844947
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999970571968,
+            1.000000033415602
+          ],
+          "source_uv_sha256": "0842d7d37b362df57b619777d3b666ea8b63e43282c5149e54cafc724f2faac1"
+        },
+        {
+          "id": "feature/forest/leafy_v1_01",
+          "vertices": 46,
+          "triangles": 40,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1767317209896895,
+            "p95": 2.137983383661885,
+            "p99": 2.1470570884364295,
+            "max": 2.1475655255255344
+          },
+          "uv_density_percentiles": {
+            "p05": 0.40274842382110976,
+            "p50": 0.4203511241553535,
+            "p95": 0.7890044461680077
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999678250385,
+            1.0000000324110436
+          ],
+          "source_uv_sha256": "cf14a3a3bcee7f0810bb2b7cd35473b86cad896155043db68d604f71e31762ce"
+        },
+        {
+          "id": "feature/forest/leafy_v1_02",
+          "vertices": 40,
+          "triangles": 35,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1760197312129195,
+            "p95": 2.1401616563109833,
+            "p99": 2.147122824672251,
+            "max": 2.1475660774725482
+          },
+          "uv_density_percentiles": {
+            "p05": 0.4319653105991263,
+            "p50": 0.4670241516959346,
+            "p95": 0.7891683827856706
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999693208483,
+            1.000000038151894
+          ],
+          "source_uv_sha256": "b2c988288a0dec3b357eec6876a5a881082e52bca1880c757724a35306b40a9b"
+        },
+        {
+          "id": "feature/forest/leafy_v1_03",
+          "vertices": 50,
+          "triangles": 44,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1983651482778634,
+            "p95": 2.135465909862687,
+            "p99": 2.1470054917381582,
+            "max": 2.147566077323198
+          },
+          "uv_density_percentiles": {
+            "p05": 0.43341992806498236,
+            "p50": 0.4605035894853384,
+            "p95": 0.788768268672465
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999644761097,
+            1.0000000301764982
+          ],
+          "source_uv_sha256": "235eb5f1eb78aa530d4716c0cf99929fb395ce13202c6eeaecbc45c0f59d0624"
+        },
+        {
+          "id": "feature/forest/leafy_v2_01",
+          "vertices": 36,
+          "triangles": 31,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2127039412010427,
+            "p95": 2.135655771755559,
+            "p99": 2.163065889440989,
+            "max": 2.1700865047579243
+          },
+          "uv_density_percentiles": {
+            "p05": 0.3710417871218453,
+            "p50": 0.39353630460603006,
+            "p95": 0.6739546237404145
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999774325142,
+            1.000000023053521
+          ],
+          "source_uv_sha256": "ee935734a82308cd1ae20a2274eec9a88f71fb0528d5d9be13d7914d079968b1"
+        },
+        {
+          "id": "feature/forest/leafy_v2_02",
+          "vertices": 42,
+          "triangles": 36,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2856632253636164,
+            "p95": 1.612289147072853,
+            "p99": 1.6866701727327407,
+            "max": 1.7212940686404488
+          },
+          "uv_density_percentiles": {
+            "p05": 0.3537015258405839,
+            "p50": 0.39189515034349565,
+            "p95": 0.5781201042044298
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999654778331,
+            1.0000000392870907
+          ],
+          "source_uv_sha256": "bdbc53ae01d9bf114b8f5702efe5843327e0f6f7bb26d2abda6269c0c496ef12"
+        },
+        {
+          "id": "feature/forest/leafy_v2_03",
+          "vertices": 52,
+          "triangles": 45,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2394274453485634,
+            "p95": 2.1224542532745496,
+            "p99": 2.1597896871603255,
+            "max": 2.1700865895113197
+          },
+          "uv_density_percentiles": {
+            "p05": 0.3516004732125587,
+            "p50": 0.3900124501720082,
+            "p95": 0.6713080267543489
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999652653169,
+            1.0000000282326924
+          ],
+          "source_uv_sha256": "d06d818a9d1febac6b71b1f3d3d55a3eb288f93704f0a770cdcc7c54145bba3c"
+        },
+        {
+          "id": "feature/forest/leafy_v3_01",
+          "vertices": 45,
+          "triangles": 40,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.1851334545223877,
+            "p95": 2.1261876684660415,
+            "p99": 2.161644220029039,
+            "max": 2.1707462131710673
+          },
+          "uv_density_percentiles": {
+            "p05": 0.26511149265173006,
+            "p50": 0.33349627607124976,
+            "p95": 0.6355831613543921
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999966612399,
+            1.0000000278094856
+          ],
+          "source_uv_sha256": "2fddbacf21725972ca1859340afba6f0a79f9f225057d213d044b7d1032c5a0c"
+        },
+        {
+          "id": "feature/forest/leafy_v3_02",
+          "vertices": 54,
+          "triangles": 48,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2094661543817924,
+            "p95": 2.121340936358538,
+            "p99": 2.1597771046895615,
+            "max": 2.170746173463028
+          },
+          "uv_density_percentiles": {
+            "p05": 0.2683502177540834,
+            "p50": 0.3075076692822949,
+            "p95": 0.6337090048541664
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999696309593,
+            1.000000032876252
+          ],
+          "source_uv_sha256": "b3eb0fc562b8bc0f0c35606994f2959e565262b81868b6b1f6062d53bec0b10a"
+        },
+        {
+          "id": "feature/forest/leafy_v3_03",
+          "vertices": 41,
+          "triangles": 36,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.228176614447102,
+            "p95": 2.130655267899051,
+            "p99": 2.162577229563072,
+            "max": 2.1707456830153173
+          },
+          "uv_density_percentiles": {
+            "p05": 0.2950655596886237,
+            "p50": 0.33097553128110047,
+            "p95": 0.636205783425735
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999679203969,
+            1.000000028073361
+          ],
+          "source_uv_sha256": "496ba523f124511d1d41283a6808cc5ed3da7c36af6338768d4132afccf95082"
+        },
+        {
+          "id": "feature/forest/leafy_v4_01",
+          "vertices": 50,
+          "triangles": 43,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2403430288564374,
+            "p95": 2.831410113820672,
+            "p99": 2.845869570457461,
+            "max": 2.848504897515112
+          },
+          "uv_density_percentiles": {
+            "p05": 0.4063037861535631,
+            "p50": 0.4583353960202544,
+            "p95": 0.707324988834805
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999664463428,
+            1.0000000322000246
+          ],
+          "source_uv_sha256": "6432058130af7248d59377c9eac4b760d5a351b0e913052db7e83ead2b7db900"
+        },
+        {
+          "id": "feature/forest/leafy_v4_02",
+          "vertices": 48,
+          "triangles": 41,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2166697572613878,
+            "p95": 2.7142888540627053,
+            "p99": 2.7265522748951807,
+            "max": 2.7287743184240942
+          },
+          "uv_density_percentiles": {
+            "p05": 0.39084899681991275,
+            "p50": 0.4532411507564595,
+            "p95": 0.6924386116949658
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999706838492,
+            1.000000028067884
+          ],
+          "source_uv_sha256": "01631e18541efd97f54629a37bda4b5c0eba23ab2a4f00a2ac3ea7513bb19c8f"
+        },
+        {
+          "id": "feature/forest/leafy_v4_03",
+          "vertices": 50,
+          "triangles": 43,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.21116322661437,
+            "p95": 2.595659954868007,
+            "p99": 2.6087188198101083,
+            "max": 2.610739609171557
+          },
+          "uv_density_percentiles": {
+            "p05": 0.41480778079970715,
+            "p50": 0.44340212039208027,
+            "p95": 0.6771567614687052
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999970084161,
+            1.0000000299743292
+          ],
+          "source_uv_sha256": "14982096d89f10275e25a97cccd45d43e2c739938c5cfdf0cecb16fc2a5110f3"
+        },
+        {
+          "id": "feature/forest/leafy_clump_01",
+          "vertices": 196,
+          "triangles": 168,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2198587690577176,
+            "p95": 2.6256103256279317,
+            "p99": 3.7185633023753017,
+            "max": 3.7803947925262316
+          },
+          "uv_density_percentiles": {
+            "p05": 0.4309960486063996,
+            "p50": 0.48241266767863167,
+            "p95": 0.9127762789406457
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.999999967096595,
+            1.0000000325974223
+          ],
+          "source_uv_sha256": "ecd5c764aa2fb482bedc2c05ff528b7a970676b656bbd5941b039a6ba829c2ce"
+        },
+        {
+          "id": "feature/forest/leafy_clump_02",
+          "vertices": 174,
+          "triangles": 151,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2005148570582334,
+            "p95": 2.1437985455102595,
+            "p99": 2.69298924539819,
+            "max": 2.732808894788396
+          },
+          "uv_density_percentiles": {
+            "p05": 0.450516822093055,
+            "p50": 0.5339800854074174,
+            "p95": 0.8227995728130593
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999630990253,
+            1.0000000323715437
+          ],
+          "source_uv_sha256": "93ef3913fed32225dede096745c2699d6228718fcc81b666d215de619c86555e"
+        },
+        {
+          "id": "feature/forest/leafy_clump_03",
+          "vertices": 217,
+          "triangles": 188,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2393604687897013,
+            "p95": 2.1634246626601517,
+            "p99": 3.7083322853427334,
+            "max": 3.7723122829351206
+          },
+          "uv_density_percentiles": {
+            "p05": 0.41486971410774126,
+            "p50": 0.4778749671924737,
+            "p95": 0.8279071006286316
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999623258764,
+            1.0000000366032638
+          ],
+          "source_uv_sha256": "c7d8ef86ff362090432f661b154c0e540d2ba9884e96f261ad4f08eeaeb4138f"
+        },
+        {
+          "id": "feature/jungle/leafy_01",
+          "vertices": 36,
+          "triangles": 31,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2127039412010427,
+            "p95": 2.135655771755559,
+            "p99": 2.163065889440989,
+            "max": 2.1700865047579243
+          },
+          "uv_density_percentiles": {
+            "p05": 0.3710417871218453,
+            "p50": 0.39353630460603006,
+            "p95": 0.6739546237404145
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999774325142,
+            1.000000023053521
+          ],
+          "source_uv_sha256": "ee935734a82308cd1ae20a2274eec9a88f71fb0528d5d9be13d7914d079968b1"
+        },
+        {
+          "id": "feature/jungle/leafy_02",
+          "vertices": 42,
+          "triangles": 36,
+          "texture": "textures/features/forest_leafy_v1_01_base_color.dds",
+          "geometry_or_uv_degenerate": 0,
+          "anisotropy_percentiles": {
+            "p50": 1.2856632253636164,
+            "p95": 1.612289147072853,
+            "p99": 1.6866701727327407,
+            "max": 1.7212940686404488
+          },
+          "uv_density_percentiles": {
+            "p05": 0.3537015258405839,
+            "p50": 0.39189515034349565,
+            "p95": 0.5781201042044298
+          },
+          "source_triangles_above_16": 0,
+          "normal_length_range": [
+            0.9999999654778331,
+            1.0000000392870907
+          ],
+          "source_uv_sha256": "bdbc53ae01d9bf114b8f5702efe5843327e0f6f7bb26d2abda6269c0c496ef12"
+        }
+      ]
+    }
+  ]
+}

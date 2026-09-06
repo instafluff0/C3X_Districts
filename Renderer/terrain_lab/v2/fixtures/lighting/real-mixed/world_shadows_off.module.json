@@ -1,0 +1,19 @@
+{
+  "contract": 1,
+  "fit_viewport": true,
+  "id": "q6-real-mixed-world_shadows_off",
+  "owner": "Q6-lighting",
+  "provider": "frozen_l21",
+  "scene": "complete",
+  "schema": "c3x.lab_v2.module.v1",
+  "shader": "Renderer/terrain_lab/v2/shaders/lighting/scene_world_shadows_off.hlsl",
+  "suppress_territory": true,
+  "linear_adapter": 1,
+  "color_branch": "q6_scene_linear_premultiplied_v1",
+  "world_positions": 1,
+  "packet_postprocessor": {
+    "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp",
+    "owner": "Q6-lighting",
+    "contract": 1
+  }
+}

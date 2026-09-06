@@ -1,0 +1,65 @@
+{
+  "atlas_coverage": {
+    "inherited_short_steel_row": 0.58203125,
+    "full_length_rail_a": 1.0,
+    "full_length_rail_b": 1.0
+  },
+  "matched_uv_correction": {
+    "mean_absolute_channel_delta": 0.44741889105902544,
+    "changed_pixels": 14858,
+    "total_pixels": 245760,
+    "max_mean_channel_delta": 64.33333333333333,
+    "byte_identical": false
+  },
+  "rail_width_change": {
+    "mean_absolute_channel_delta": 0.1203219943576387,
+    "changed_pixels": 2869,
+    "total_pixels": 245760,
+    "max_mean_channel_delta": 40.666666666666664,
+    "byte_identical": false
+  },
+  "route_grade": {
+    "sampled_vertices": 9660,
+    "min_offset_pixels": 0.3499939709446558,
+    "max_offset_pixels": 6.561816307514832,
+    "below_ground": 0
+  },
+  "return_to_origin": {
+    "cases": 8,
+    "all_byte_identical": true
+  },
+  "final_frame_hashes": {
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h12-z1-pan00.bmp": "36a8db44884aad06cb842bc5bffe9f1ac24d0d3cec3299a40c99a01187027a9c",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h12-z1-pan01.bmp": "b761ba3dbcc0371e7f201210af12200e7de3d93d1e8c95dc72224bd374d7fcb7",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h12-z1-pan02.bmp": "bcdb7b318c7cde07e59202654e5ebf9b9add4c7f23253fa857a883be582356da",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h12-z1-pan03.bmp": "36a8db44884aad06cb842bc5bffe9f1ac24d0d3cec3299a40c99a01187027a9c",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h12-z2-pan00.bmp": "1595d0f8136f7f0f662ff9722d9d5b7c6062412a4210bb9fc9fd2395591c901b",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h12-z2-pan01.bmp": "1e1a67bcf585c39d74c906cf261c3f0a1f6ad3ad31ea5fd1d3bb40b49526bd5b",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h12-z2-pan02.bmp": "cdb3e8eed68c0ef327e305fac1e06f53f68e3c59519f4003187b01e540f2ec16",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h12-z2-pan03.bmp": "1595d0f8136f7f0f662ff9722d9d5b7c6062412a4210bb9fc9fd2395591c901b",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h18-z1-pan00.bmp": "c969a8ff4b90ae6150f1cd03f075ad953f6cd1705eade824086d5343a8ace1df",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h18-z1-pan01.bmp": "a6e136e1359931d2be9d92904a168b7d485c5615588a4395a12633a31d8b09b5",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h18-z1-pan02.bmp": "2f59779e44f02fb54e4618762c60a9cda09fe76db4ee6f1dcb9c57030bed8012",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h18-z1-pan03.bmp": "c969a8ff4b90ae6150f1cd03f075ad953f6cd1705eade824086d5343a8ace1df",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h18-z2-pan00.bmp": "3daf9b1e758a4a970c4ab88f27945248b67444cfee8ace35b543f9de0ea1ebd7",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h18-z2-pan01.bmp": "5da7be1a0c90d8dbe736c77c6c76e7d9d01e3bf6855bc9c710f98ef10c2bb8e3",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h18-z2-pan02.bmp": "c3e3bbd4d37ee5319fe0d8b8078dc09d78c058fabbeb7d65966e4209010b7cba",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h18-z2-pan03.bmp": "3daf9b1e758a4a970c4ab88f27945248b67444cfee8ace35b543f9de0ea1ebd7",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h00-z1-pan00.bmp": "5c00884eefdf649607255c98c8848112acba227fc6212d840ec2647f3ef31194",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h00-z1-pan01.bmp": "084d9913cdae80a5fa8693a13c82e9413ac889aa6e87bf314053f45fa378bb94",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h00-z1-pan02.bmp": "24f40ed5b3147c8eb1356b0a66d2b4baf3cc5da3ee6ff2741f4316f6f4ebb96f",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h00-z1-pan03.bmp": "5c00884eefdf649607255c98c8848112acba227fc6212d840ec2647f3ef31194",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h00-z2-pan00.bmp": "c1ddffb62990466ebeb6ceb32dbf0597fa88a5c377de3ddeea08d05d9eff336c",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h00-z2-pan01.bmp": "d6935963a88b82361651af322405b1140ed57a311582e1c2f6bbb458a2c9ffbd",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h00-z2-pan02.bmp": "75e5d7a7789d8db5ceeae09099985d9ef897e25c81893621f8a0a0647dc7303d",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h00-z2-pan03.bmp": "c1ddffb62990466ebeb6ceb32dbf0597fa88a5c377de3ddeea08d05d9eff336c",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h06-z1-pan00.bmp": "87620a3b6f10551bb5c6c5fe23af8574954dbd4eb53b2d3c3f28e7977aff4109",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h06-z1-pan01.bmp": "3e07ded62b179ee21b47961db0450cb5c31a01a990d799e95023e081c7d753ee",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h06-z1-pan02.bmp": "629a12ff7e80d9e990726e16bb1d60921009c580dd13cc40bcfe03bd2f44499f",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h06-z1-pan03.bmp": "87620a3b6f10551bb5c6c5fe23af8574954dbd4eb53b2d3c3f28e7977aff4109",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h06-z2-pan00.bmp": "f2afb178676c3e6697972fed3ce96c7f64fd761055598acc5d9ea504f5865f67",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h06-z2-pan01.bmp": "6ed409c0a7d6e84332e30288f18bb170d5d516f570aab84180f14b8fbd908474",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h06-z2-pan02.bmp": "2c09d2273242e57cdf53ae1b0f4907893eeaecac64f0364f219e3f9f5f94b732",
+    "Renderer/terrain_lab/v2/audits/networks/out/Q1/Q5-networks/final-10/h06-z2-pan03.bmp": "f2afb178676c3e6697972fed3ce96c7f64fd761055598acc5d9ea504f5865f67"
+  }
+}

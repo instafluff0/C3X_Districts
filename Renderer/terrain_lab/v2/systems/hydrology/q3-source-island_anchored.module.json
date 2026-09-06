@@ -1,0 +1,27 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "q3-source-island-anchored",
+  "owner": "Q3-hydrology",
+  "provider": "frozen_l21",
+  "contract": 1,
+  "shader": "Renderer/terrain_lab/v2/shaders/hydrology/q3-source-island_anchored.hlsl",
+  "terrain_hooks": {
+    "header": "Renderer/terrain_lab/v2/systems/hydrology/terrain_consumer.h",
+    "initialize": "q2_scene::initialize",
+    "material_weights": "q2_scene::material_weights",
+    "material_uv": "q2_scene::material_uv"
+  },
+  "scene": "complete",
+  "fit_viewport": true,
+  "suppress_territory": true,
+  "linear_adapter": 1,
+  "color_branch": "q6_scene_linear_premultiplied_v1",
+  "hydrology_hooks": {
+    "header": "Renderer/terrain_lab/v2/systems/hydrology/scene_adapter.h",
+    "initialize": "q3_scene::initialize_no_wrap",
+    "signed_shore_distance": "q3_scene::signed_shore_distance",
+    "shore_sample": "q3_scene::shore_sample"
+  },
+  "hydrology_data": 1,
+  "world_positions": 1
+}

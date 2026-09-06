@@ -1,0 +1,46 @@
+{
+  "schema": "c3x.lab_v2.fixture.v1",
+  "id": "island-overview",
+  "track": "Q3-hydrology",
+  "campaign": "Q1",
+  "tile_count": 120,
+  "viewport": [
+    2048,
+    1280
+  ],
+  "terrain": "Renderer/terrain_lab/v2/fixtures/hydrology/island-overview.csv",
+  "modules": [
+    "Renderer/terrain_lab/v2/systems/hydrology/linear.module.json"
+  ],
+  "packs": {
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "shore": "Renderer/packs/ShoreNormalized"
+  },
+  "references": [
+    "civ6.sea_and_shore",
+    "civ6.river",
+    "civ6.rocky_hill_coast"
+  ],
+  "isolations": [
+    "large_synthetic_shore_overview_diagnostic_relief"
+  ],
+  "settings": {
+    "anisotropy": 8,
+    "mip_bias": 0,
+    "samples": 4,
+    "render_scale": 1,
+    "postprocess": "box",
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "scenarios": {
+    "controls": "Renderer/terrain_lab/v2/fixtures/hydrology/island-overview.controls.json"
+  }
+}

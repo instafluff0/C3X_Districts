@@ -1,0 +1,920 @@
+{
+  "schema": "c3x.q2.evidence.v1",
+  "revision": "r06",
+  "metrics": {
+    "detail_difference_z1": {
+      "mean_absolute_rgb": 0.7294438680013021,
+      "p99_rgb": 4,
+      "max_rgb": 6,
+      "changed_channel_fraction": 0.5303522745768229
+    },
+    "baseline_difference_z1": {
+      "mean_absolute_rgb": 1.3224436442057292,
+      "p99_rgb": 9,
+      "max_rgb": 35,
+      "changed_channel_fraction": 0.6257832845052084
+    },
+    "scroll_h12_z1": {
+      "aligned_mean_absolute_rgb": 0.004701376496248291,
+      "max_rgb": 3,
+      "return_to_origin_identical": true
+    },
+    "scroll_h18_z1": {
+      "aligned_mean_absolute_rgb": 0.0038351961428884506,
+      "max_rgb": 2,
+      "return_to_origin_identical": true
+    },
+    "scroll_h0_z1": {
+      "aligned_mean_absolute_rgb": 0.003822151258048694,
+      "max_rgb": 2,
+      "return_to_origin_identical": true
+    },
+    "scroll_h6_z1": {
+      "aligned_mean_absolute_rgb": 0.004143055425106707,
+      "max_rgb": 2,
+      "return_to_origin_identical": true
+    },
+    "detail_difference_z2": {
+      "mean_absolute_rgb": 0.6619873046875,
+      "p99_rgb": 4,
+      "max_rgb": 6,
+      "changed_channel_fraction": 0.5040690104166666
+    },
+    "baseline_difference_z2": {
+      "mean_absolute_rgb": 1.2634480794270833,
+      "p99_rgb": 9,
+      "max_rgb": 32,
+      "changed_channel_fraction": 0.607086181640625
+    },
+    "scroll_h12_z2": {
+      "aligned_mean_absolute_rgb": 0.00857858887032515,
+      "max_rgb": 1,
+      "return_to_origin_identical": true
+    },
+    "scroll_h18_z2": {
+      "aligned_mean_absolute_rgb": 0.007197018378100501,
+      "max_rgb": 1,
+      "return_to_origin_identical": true
+    },
+    "scroll_h0_z2": {
+      "aligned_mean_absolute_rgb": 0.007025660797669537,
+      "max_rgb": 1,
+      "return_to_origin_identical": true
+    },
+    "scroll_h6_z2": {
+      "aligned_mean_absolute_rgb": 0.007550443387739365,
+      "max_rgb": 1,
+      "return_to_origin_identical": true
+    },
+    "rendered_images": 832,
+    "scope": "Base-only contextual proxies and controls; numerical metrics do not grant visual acceptance."
+  },
+  "sheets": [
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-before-after-z1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-baseline-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-off-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-detail-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-baseline-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-off-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-detail-r06/h00-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/isolation-z1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-albedo-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-height-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-normal-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-roughness-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-weights-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-detail-r06/h12-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-before-after-z2.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-baseline-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-off-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-detail-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-baseline-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-off-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-detail-r06/h00-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/isolation-z2.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-albedo-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-height-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-normal-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-roughness-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-weights-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/context-detail-r06/h12-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-mixed-base-only.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-mixed-base-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-mixed-base-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-mixed-base-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-mixed-base-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-mixed-base-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-mixed-base-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-mixed-base-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-mixed-base-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-holdout-base-only.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-holdout-base-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-holdout-base-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-holdout-base-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-holdout-base-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-holdout-base-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-holdout-base-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-holdout-base-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-holdout-base-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-wrap-base-only.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-wrap-base-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-wrap-base-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-wrap-base-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-wrap-base-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-wrap-base-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-wrap-base-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-wrap-base-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-wrap-base-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-base-only.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-base-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-base-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-base-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-base-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-base-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-base-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-base-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-base-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-base-only.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-base-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-base-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-base-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-base-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-base-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-base-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-base-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-base-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-base-only.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-base-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-base-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-base-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-base-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-base-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-base-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-base-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-base-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-holdout-base-only.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-holdout-base-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-holdout-base-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-holdout-base-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-holdout-base-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-holdout-base-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-holdout-base-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-holdout-base-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-dry-holdout-base-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-holdout-base-only.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-holdout-base-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-holdout-base-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-holdout-base-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-holdout-base-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-holdout-base-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-holdout-base-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-holdout-base-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-cold-holdout-base-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-holdout-base-only.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-holdout-base-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-holdout-base-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-holdout-base-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-holdout-base-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-holdout-base-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-holdout-base-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-holdout-base-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/real-q2-wet-holdout-base-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h12-z1-column-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r0_x98-r06/h12-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h12-z1-column-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r1_x98-r06/h12-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h12-z1-row-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r0_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r0_x98-r06/h12-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h12-z1-row-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r1_x98-r06/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r1_x98-r06/h12-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h12-z2-column-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r0_x98-r06/h12-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h12-z2-column-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r1_x98-r06/h12-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h12-z2-row-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r0_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r0_x98-r06/h12-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h12-z2-row-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r1_x98-r06/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r1_x98-r06/h12-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h18-z1-column-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r0_x98-r06/h18-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h18-z1-column-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r1_x98-r06/h18-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h18-z1-row-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r0_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r0_x98-r06/h18-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h18-z1-row-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r1_x98-r06/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r1_x98-r06/h18-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h18-z2-column-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r0_x98-r06/h18-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h18-z2-column-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r1_x98-r06/h18-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h18-z2-row-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r0_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r0_x98-r06/h18-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h18-z2-row-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r1_x98-r06/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r1_x98-r06/h18-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h0-z1-column-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r0_x98-r06/h00-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h0-z1-column-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r1_x98-r06/h00-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h0-z1-row-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r0_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r0_x98-r06/h00-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h0-z1-row-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r1_x98-r06/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r1_x98-r06/h00-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h0-z2-column-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r0_x98-r06/h00-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h0-z2-column-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r1_x98-r06/h00-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h0-z2-row-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r0_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r0_x98-r06/h00-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h0-z2-row-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r1_x98-r06/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r1_x98-r06/h00-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h6-z1-column-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r0_x98-r06/h06-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h6-z1-column-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r1_x98-r06/h06-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h6-z1-row-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r0_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r0_x98-r06/h06-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h6-z1-row-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r1_x98-r06/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r1_x98-r06/h06-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h6-z2-column-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r0_x98-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h6-z2-column-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_column_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_column_r1_x98-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h6-z2-row-r0.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r0_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r0_x98-r06/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pairs-h6-z2-row-r1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_00_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_01_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_02_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_03_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_00_09_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_01_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_02_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_03_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_01_09_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_02_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_03_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_02_09_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_03_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_03_09_row_r1_x98-r06/h06-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/pair_09_09_row_r1_x98-r06/h06-z2-pan00.bmp"
+      ]
+    }
+  ]
+}

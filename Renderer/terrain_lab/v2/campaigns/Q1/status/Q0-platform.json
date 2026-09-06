@@ -2,9 +2,16 @@
   "schema": "c3x.renderer_lab_v2_track_status.v0",
   "id": "Q0-platform",
   "campaign": "Q1",
-  "state": "ready",
-  "candidate": null,
-  "evidence": [],
+  "state": "active",
+  "candidate": "Renderer/terrain_lab/v2/app/Q0_PLATFORM_CANDIDATE.json",
+  "evidence": [
+    "Renderer/terrain_lab/v2/tests/platform/Q0_PLATFORM_AUDIT.md"
+  ],
   "blockers": [],
+  "pending_validation": [
+    "Final packet5/source metadata and placement-hook checks",
+    "Final baseline regression and convergence handoff"
+  ],
+  "execution_note": "Active convergence: verified actual test.biq registry, Q6 linear/post2 and wire5 bindings delivered; small source integration checks underway. No start blockers.",
   "approval": null
 }

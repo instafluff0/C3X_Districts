@@ -2,9 +2,25 @@
   "schema": "c3x.renderer_lab_v2_track_status.v0",
   "id": "Q1-sampling",
   "campaign": "Q1",
-  "state": "blocked_by_dependency",
-  "candidate": null,
-  "evidence": [],
-  "blockers": ["Q0-platform"],
-  "approval": null
+  "state": "blocked",
+  "candidate": "Renderer/terrain_lab/v2/audits/sampling/candidate_v1.json",
+  "evidence": [
+    "Renderer/terrain_lab/v2/audits/sampling/SAMPLING_CANDIDATE_V1.md",
+    "Renderer/terrain_lab/v2/audits/sampling/Q0_INTERFACE_REQUEST.md",
+    "Renderer/terrain_lab/v2/audits/sampling/source-mesh-metrics.json"
+  ],
+  "blockers": [
+    "Q7 directly confirms base/emissive-only runtime; 664cityparts normal0/normal1/gloss and160AO unbound, tangent absent, secondarynormal/gloss interpretation unproven. Legacy familyalpha incomplete; noalternate publishedruntimepath.",
+    "Q0c034 verifies34source meshes/175instances, but all175 declare nonuniform legacy vertical projection. Q7source/world cityaudit passes748fullrankparts +44ancient parts,60planar ambiguity; mainrealmap source-body replacement remains Q7 convergence.",
+    "New shared rule requires actual posed caster mesh plus authored cutout alpha. Legacy projected/source proxy shadow paths cannot pass; no independent Q1 shadows."
+  ],
+  "pending_validation": [
+    "Q7 directly confirms base/emissive-only runtime; 664cityparts normal0/normal1/gloss and160AO unbound, tangent absent, secondarynormal/gloss interpretation unproven. Legacy familyalpha incomplete; noalternate publishedruntimepath.",
+    "Q0c034 verifies34source meshes/175instances, but all175 declare nonuniform legacy vertical projection. Q7source/world cityaudit passes748fullrankparts +44ancient parts,60planar ambiguity; mainrealmap source-body replacement remains Q7 convergence.",
+    "After converged candidate, shared large matrix and closure checks required",
+    "New shared rule requires actual posed caster mesh plus authored cutout alpha. Legacy projected/source proxy shadow paths cannot pass; no independent Q1 shadows."
+  ],
+  "approval": null,
+  "progress": "Samplingcandidate ready:536preserved study variants, realmixed+holdout, allphases/bothzooms, aligned pans/sourceanimation, rawreference andactual-source D3Dparity. IndependentQ7source/worldandQ0metadataaudits prove remainingcross-owner gaps; no acceptancewaiver.",
+  "required_user_action": null
 }

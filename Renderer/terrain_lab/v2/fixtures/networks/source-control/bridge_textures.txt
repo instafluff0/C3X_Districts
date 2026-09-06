@@ -1,0 +1,8 @@
+Renderer/packs/RouteDoodadsNormalized/textures/compound/base_color_edf55ca82fd6da3a.dds
+Renderer/packs/RouteDoodadsNormalized/textures/compound/base_color_edf55ca82fd6da3a.dds
+Renderer/packs/RouteDoodadsNormalized/textures/compound/base_color_edf55ca82fd6da3a.dds
+Renderer/packs/RouteDoodadsNormalized/textures/compound/base_color_edf55ca82fd6da3a.dds
+Renderer/packs/RouteDoodadsNormalized/textures/compound/base_color_edf55ca82fd6da3a.dds
+Renderer/packs/RouteDoodadsNormalized/textures/compound/base_color_edf55ca82fd6da3a.dds
+Renderer/packs/RouteDoodadsNormalized/textures/compound/base_color_72be0fde40069438.dds
+Renderer/packs/RouteDoodadsNormalized/textures/compound/base_color_72be0fde40069438.dds

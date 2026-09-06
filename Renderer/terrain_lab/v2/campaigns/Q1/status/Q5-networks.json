@@ -2,9 +2,24 @@
   "schema": "c3x.renderer_lab_v2_track_status.v0",
   "id": "Q5-networks",
   "campaign": "Q1",
-  "state": "blocked_by_dependency",
-  "candidate": null,
-  "evidence": [],
-  "blockers": ["Q0-platform", "Q2-terrain", "Q3-hydrology"],
-  "approval": null
+  "state": "blocked",
+  "candidate": "Renderer/terrain_lab/v2/audits/networks/CANDIDATE_HANDOFF.json",
+  "evidence": [
+    "Renderer/terrain_lab/v2/audits/networks/Q5_NETWORKS_AUDIT.md",
+    "Renderer/terrain_lab/v2/audits/networks/metrics.json",
+    "Renderer/terrain_lab/v2/audits/networks/no_route_control.json",
+    "Renderer/terrain_lab/v2/fixtures/networks/source-linear/corridors.json"
+  ],
+  "blockers": [
+    "Cross-owner final composition: Q2 base/Q3 static modules fail mixed-branch validation with Q5 linear; final surface/placement witness requires compatible owner revisions."
+  ],
+  "pending_validation": [
+    "Compatible Q2/Q3/Q4 composed surface and coordinate/depth conventions",
+    "Q5 source geometry over actual verified regions and holdout",
+    "Q4/Q7 source-instance corridor clearance and Q8 composed readability",
+    "Final combined scene, 192-tile gate, Windows parity, project closure and approval"
+  ],
+  "approval": null,
+  "required_user_action": null,
+  "execution_note": "Local source-route iterations, 19 tests, masks, grade, controls, phase/zoom/scroll, normalized atlas/bridge reuse and shared corridor/linear witnesses completed. Genuine cross-owner convergence blocker reproduced; no final acceptance or v1/Integration promotion claimed."
 }

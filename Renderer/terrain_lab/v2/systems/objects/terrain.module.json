@@ -1,0 +1,8 @@
+{
+ "schema":"c3x.lab_v2.module.v1",
+ "id":"q7-frozen-terrain",
+ "owner":"Q7-presentation",
+ "provider":"frozen_l21",
+ "contract":1,
+ "shader":"Renderer/terrain_lab/v2/shaders/objects/presentation.hlsl"
+}

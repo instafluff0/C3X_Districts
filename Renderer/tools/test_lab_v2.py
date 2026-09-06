@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from Renderer.tools import lab_v2
 
@@ -22,8 +23,40 @@ class LabV2CampaignTests(unittest.TestCase):
     def _copy_campaign(self, temporary: str) -> Path:
         source = lab_v2.DEFAULT_CAMPAIGN.parents[2]
         target = Path(temporary) / "v2"
-        shutil.copytree(source, target)
+        campaign, packages, statuses = lab_v2.load_campaign()
+        campaign_dir = lab_v2.DEFAULT_CAMPAIGN.parent
+        # These are metadata tests, not renderer/asset tests. Never recursively
+        # copy v2: runtime caches contain large hard-linked blobs, and copytree
+        # expands every link into a separate file in the temporary directory.
+        files = {lab_v2.DEFAULT_CAMPAIGN,
+                 campaign_dir / campaign["reference_catalog"],
+                 campaign_dir / campaign["common_prompt"]}
+        for package in packages.values():
+            files.add(package["_path"])
+            files.add(package["_path"].parent / package["prompt"])
+        files.update(status["_path"] for status in statuses.values())
+        for field in ("visual_benchmark_policy", "source_art_policy",
+                      "placement_clearance_policy"):
+            if field in campaign:
+                files.add(campaign_dir / campaign[field])
+        for path in files:
+            destination = target / path.resolve().relative_to(source.resolve())
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, destination)
         return target / "campaigns/Q1/campaign.json"
+
+    def test_campaign_copy_is_metadata_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.object(shutil, "copytree", side_effect=AssertionError(
+                    "Campaign tests must not copy runtime trees")):
+                campaign_path = self._copy_campaign(temporary)
+            self.assertEqual([], lab_v2.validate_campaign(campaign_path))
+            copied = [p for p in (Path(temporary) / "v2").rglob("*") if p.is_file()]
+            self.assertTrue(copied)
+            self.assertTrue(all(p.suffix in (".json", ".md") for p in copied))
+            self.assertLess(sum(p.stat().st_size for p in copied), 2 * 1024 * 1024)
+            self.assertFalse((Path(temporary) / "v2/app").exists())
+            self.assertFalse((Path(temporary) / "v2/audits").exists())
 
     def test_rejects_overlapping_ownership(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -59,4 +92,3 @@ class LabV2CampaignTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

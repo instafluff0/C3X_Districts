@@ -1,0 +1,143 @@
+{
+  "schema": "c3x.lab_v2.platform.v1",
+  "version": 1,
+  "packet": {
+    "magic": "CLQ2",
+    "version": 2,
+    "byte_order": "little",
+    "vertex_coordinates": "D3D NDC, positive Y up, depth 0..1",
+    "texture_formats": "numeric DXGI storage format, source-independent",
+    "texture_coordinates": "top-left, positive V down",
+    "alpha": "straight",
+    "base_color": "sRGB texture view",
+    "material_channels": "linear",
+    "target": "BGRA8 UNORM, v1 display encoding",
+    "depth": "less_equal",
+    "null_texture": "zero RGBA",
+    "clear": [
+      0.035,
+      0.035,
+      0.035,
+      1
+    ],
+    "reader_compatibility": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "external_resources": "v2 blobs may use a size high-bit marker and 64-byte SHA256 name beneath <packet>.blobs; content verified before GPU use",
+    "extensions": {
+      "3": "Q6 scene-linear premultiplied RGBA16F plus R8 validity; explicit depth/blend; final rect and exposure",
+      "4": "per-draw shader namespaces, compatible attachment contracts",
+      "5": "optional per-draw shared b1 frame buffer; UINT32_MAX means absent",
+      "6": "explicit generic world/normal/UV/alpha/caster/receiver draw semantics"
+    }
+  },
+  "fixture_schema": "c3x.lab_v2.fixture.v1",
+  "module_schema": "c3x.lab_v2.module.v1",
+  "defaults": {
+    "anisotropy": 8,
+    "mip_bias": 0,
+    "samples": 1,
+    "render_scale": 1,
+    "postprocess": "box",
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "tiers": {
+    "quick": {
+      "max_tiles": 64,
+      "phases": [
+        12
+      ],
+      "zooms": [
+        1
+      ]
+    },
+    "check": {
+      "max_tiles": 64,
+      "phases": [
+        12,
+        18,
+        0,
+        6
+      ],
+      "zooms": [
+        1,
+        2
+      ],
+      "repeat": true
+    },
+    "compose": {
+      "max_tiles": 128,
+      "phases": [
+        12
+      ],
+      "zooms": [
+        1,
+        2
+      ]
+    },
+    "promote": {
+      "tiles": 192,
+      "phases": [
+        12,
+        18,
+        0,
+        6
+      ],
+      "zooms": [
+        1,
+        2
+      ],
+      "d3d11_parity": true
+    }
+  },
+  "cache_identity": [
+    "contract",
+    "module closure",
+    "fixture bytes",
+    "pack bytes",
+    "compiler identity",
+    "shader closure",
+    "backend capabilities",
+    "effective sampling settings",
+    "phase",
+    "zoom",
+    "camera offset",
+    "source BIQ hash",
+    "parser closure",
+    "region coordinates and halo",
+    "augmentation profile and hash",
+    "checked scene sidecars",
+    "owned packet postprocessor executable and input"
+  ],
+  "parity_v1": {
+    "rgb_mean_absolute_max": 3.0,
+    "rgb_p99_absolute_max": 20,
+    "silhouette_iou_min": 0.995,
+    "luminance_mean_delta_max": 2.0,
+    "purpose": "controlled same-packet port regression, not art-direction scoring",
+    "silhouette_mask": "nonzero alpha for transparent map frames; frozen RGB != background9 otherwise"
+  },
+  "ownership": "A module and fixture live in its owner's paths. Q0 baseline adapter remains read-only to visual owners. No owner edits another module to render.",
+  "linear_branch": {
+    "id": "q6_scene_linear_premultiplied_v1",
+    "primaries": "Rec709 D65",
+    "alpha": "premultiplied",
+    "color_attachment": "RGBA16F",
+    "validity_attachment": "R8_UNORM; only opaque writes establish map validity",
+    "reconstruction": "invalid source samples contribute zero; average premultiplied color/alpha, then unpremultiply",
+    "display": "Q6 exposure once, max-channel shoulder, exact IEC sRGB, straight BGRA8",
+    "output_conversion": "shared CPU reference; excluded from GPU duration",
+    "postprocess_contract": 2,
+    "source_spec": "Renderer/terrain_lab/v2/systems/lighting/color_alpha_v1.json"
+  }
+}

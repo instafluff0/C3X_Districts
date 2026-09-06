@@ -1,0 +1,9 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "linear-witness",
+  "owner": "Q0-platform",
+  "provider": "cpp_packet",
+  "contract": 1,
+  "source": "Renderer/terrain_lab/v2/tests/platform/linear_witness.cpp",
+  "shader": "Renderer/terrain_lab/v2/shaders/common/linear_witness.hlsl"
+}

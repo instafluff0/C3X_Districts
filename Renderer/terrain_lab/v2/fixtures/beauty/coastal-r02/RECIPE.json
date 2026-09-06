@@ -1,0 +1,28 @@
+{
+  "accepted": false,
+  "parent": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/RECIPE.json",
+  "intentional_changes": [
+    "Replace inherited city with Q7 same-anchor source assembly",
+    "Run Q6 shadow postprocessor after both terrain and city packets compose",
+    "Adopt current Q3 material with authoritative raw-origin anchoring"
+  ],
+  "unchanged": [
+    "verified terrain",
+    "city anchor",
+    "road edges",
+    "camera/viewport",
+    "noon/zoom/sampling"
+  ],
+  "q7_fixture_sha256": "4b45adb6d85f4e74331b49d61212fade2e9cb599a1ae0f02717aae88bf5b2f3e",
+  "geometry_hashes": {
+    "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-linear-v1/fixture.json": "4b45adb6d85f4e74331b49d61212fade2e9cb599a1ae0f02717aae88bf5b2f3e",
+    "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-linear-v1/provenance.json": "fe04fb807ea8231aa3602d0190fa6037ea0a08dc2f3854609cb038521e945550",
+    "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-linear-v1/terrain.module.json": "f393f95e4eda16daf1d35735a08ad4b27d3140484d6eca7382e78d8ce3e076f2",
+    "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-linear-v1/geometry.bin": "007e531badf0cc665f927f66c840d512fedad42725b16b339c7cc4b62a104461"
+  },
+  "pending": [
+    "Q4 cliffs/continuity/clearance",
+    "Q5 route candidate",
+    "full visual gates"
+  ]
+}

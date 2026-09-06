@@ -1,0 +1,218 @@
+{
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "regions": {
+    "mixed": {
+      "terrain": {
+        "plains": 1,
+        "grassland": 1,
+        "hills": 2,
+        "mountain": 2,
+        "forest": 2,
+        "jungle": 2,
+        "coast": 5,
+        "sea": 1
+      },
+      "river_tiles": 0,
+      "land_water_edges": 6,
+      "terrain_edges": 16,
+      "rocky_hill_tiles": 1,
+      "river_coast_adjacent_tiles": 0
+    },
+    "mixed-holdout": {
+      "terrain": {
+        "grassland": 2,
+        "forest": 6,
+        "jungle": 8
+      },
+      "river_tiles": 4,
+      "land_water_edges": 0,
+      "terrain_edges": 10,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 0
+    },
+    "relief": {
+      "terrain": {
+        "plains": 1,
+        "grassland": 1,
+        "hills": 2,
+        "mountain": 2,
+        "forest": 2,
+        "jungle": 2,
+        "coast": 5,
+        "sea": 1
+      },
+      "river_tiles": 0,
+      "land_water_edges": 6,
+      "terrain_edges": 16,
+      "rocky_hill_tiles": 1,
+      "river_coast_adjacent_tiles": 0
+    },
+    "relief-holdout": {
+      "terrain": {
+        "grassland": 2,
+        "forest": 6,
+        "jungle": 8
+      },
+      "river_tiles": 4,
+      "land_water_edges": 0,
+      "terrain_edges": 10,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 0
+    },
+    "wrap": {
+      "terrain": {
+        "jungle": 1,
+        "coast": 3,
+        "sea": 5,
+        "ocean": 7
+      },
+      "river_tiles": 0,
+      "land_water_edges": 2,
+      "terrain_edges": 12,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 0
+    },
+    "wrap-holdout": {
+      "terrain": {
+        "ocean": 16
+      },
+      "river_tiles": 0,
+      "land_water_edges": 0,
+      "terrain_edges": 0,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 0
+    },
+    "q2-dry": {
+      "terrain": {
+        "desert": 2,
+        "plains": 1,
+        "grassland": 2,
+        "floodplain": 2,
+        "hills": 2,
+        "mountain": 3,
+        "forest": 4
+      },
+      "river_tiles": 4,
+      "land_water_edges": 0,
+      "terrain_edges": 20,
+      "rocky_hill_tiles": 1,
+      "river_coast_adjacent_tiles": 0
+    },
+    "q2-dry-holdout": {
+      "terrain": {
+        "grassland": 4,
+        "forest": 6,
+        "jungle": 6
+      },
+      "river_tiles": 5,
+      "land_water_edges": 0,
+      "terrain_edges": 9,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 0
+    },
+    "q2-cold": {
+      "terrain": {
+        "plains": 2,
+        "grassland": 8,
+        "tundra": 1,
+        "mountain": 1,
+        "forest": 3,
+        "coast": 1
+      },
+      "river_tiles": 8,
+      "land_water_edges": 2,
+      "terrain_edges": 14,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 0
+    },
+    "q2-cold-holdout": {
+      "terrain": {
+        "plains": 4,
+        "grassland": 5,
+        "forest": 3,
+        "coast": 4
+      },
+      "river_tiles": 8,
+      "land_water_edges": 4,
+      "terrain_edges": 14,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 5
+    },
+    "q2-wet": {
+      "terrain": {
+        "desert": 1,
+        "plains": 6,
+        "grassland": 2,
+        "hills": 3,
+        "forest": 2,
+        "jungle": 1,
+        "marsh": 1
+      },
+      "river_tiles": 0,
+      "land_water_edges": 0,
+      "terrain_edges": 19,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 0
+    },
+    "q2-wet-holdout": {
+      "terrain": {
+        "grassland": 4,
+        "jungle": 9,
+        "coast": 3
+      },
+      "river_tiles": 7,
+      "land_water_edges": 6,
+      "terrain_edges": 8,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 2
+    },
+    "q3-mouth": {
+      "terrain": {
+        "plains": 5,
+        "grassland": 6,
+        "tundra": 1,
+        "forest": 1,
+        "coast": 3
+      },
+      "river_tiles": 10,
+      "land_water_edges": 4,
+      "terrain_edges": 12,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 5
+    },
+    "q3-mouth-holdout": {
+      "terrain": {
+        "coast": 4,
+        "sea": 5,
+        "ocean": 7
+      },
+      "river_tiles": 0,
+      "land_water_edges": 0,
+      "terrain_edges": 9,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 0
+    }
+  },
+  "requested_mouth_region": [
+    60,
+    [
+      85,
+      21
+    ],
+    {
+      "terrain": {
+        "plains": 5,
+        "grassland": 6,
+        "tundra": 1,
+        "forest": 1,
+        "coast": 3
+      },
+      "river_tiles": 10,
+      "land_water_edges": 4,
+      "terrain_edges": 12,
+      "rocky_hill_tiles": 0,
+      "river_coast_adjacent_tiles": 5
+    }
+  ],
+  "note": "River/coast adjacency is a candidate mouth witness, not inferred flow direction. Shared registry remains unchanged."
+}

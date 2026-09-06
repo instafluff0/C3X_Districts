@@ -1,0 +1,264 @@
+{
+  "schema": "c3x.q2.composed_evidence.v1",
+  "sheets": [
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-r14-four-phases-two-zooms.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h18-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h00-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-composed-detail-controls-z1.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-off-r14/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h12-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-composed-detail-controls-z2.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-off-r14/h12-z2-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h12-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-shore-rectangle-before-after.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-linear-on-r12/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r13/h12-z1-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-h12-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h12-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-h18-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h18-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-h0-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h00-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-h6-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-h12-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-hydro-on-r14/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-hydro-on-r14/h12-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-h18-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-hydro-on-r14/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-hydro-on-r14/h18-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-h0-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-hydro-on-r14/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-hydro-on-r14/h00-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-h6-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-hydro-on-r14/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-hydro-on-r14/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-h12-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-hydro-on-r14/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-hydro-on-r14/h12-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-h18-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-hydro-on-r14/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-hydro-on-r14/h18-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-h0-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-hydro-on-r14/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-hydro-on-r14/h00-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-h6-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-hydro-on-r14/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-hydro-on-r14/h06-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-h12-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-hydro-r14/h12-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-hydro-r14/h12-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-h18-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-hydro-r14/h18-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-hydro-r14/h18-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-h0-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-hydro-r14/h00-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-hydro-r14/h00-z2-pan00.bmp"
+      ]
+    },
+    {
+      "image": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-h6-final-sizes-r14.png",
+      "layout": "row-major, native pixels; no scaling or sharpening",
+      "sources": [
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-hydro-r14/h06-z1-pan00.bmp",
+        "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-hydro-r14/h06-z2-pan00.bmp"
+      ]
+    }
+  ],
+  "detail_difference": {
+    "1": {
+      "mean_absolute_rgb": 0.0982725355360243,
+      "p99_rgb": 1,
+      "max_rgb": 4,
+      "changed_channel_fraction": 0.09258355034722222
+    },
+    "2": {
+      "mean_absolute_rgb": 0.0786709255642361,
+      "p99_rgb": 1,
+      "max_rgb": 3,
+      "changed_channel_fraction": 0.07695855034722222
+    }
+  },
+  "scroll": {
+    "1": {
+      "aligned_mean_rgb": 0.005904651826778533,
+      "max_rgb": 15,
+      "return_to_origin_identical": true
+    },
+    "2": {
+      "aligned_mean_rgb": 0.003936842986974913,
+      "max_rgb": 4,
+      "return_to_origin_identical": true
+    }
+  },
+  "checkpoints": [
+    {
+      "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/report.json",
+      "variants": 8,
+      "tier": "check"
+    },
+    {
+      "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-hydro-on-r14/report.json",
+      "variants": 8,
+      "tier": "check"
+    },
+    {
+      "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-hydro-on-r14/report.json",
+      "variants": 8,
+      "tier": "check"
+    },
+    {
+      "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-hydro-r14/report.json",
+      "variants": 8,
+      "tier": "check"
+    }
+  ],
+  "detail_control_identity": {
+    "on_report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r15/report.json",
+    "off_report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-off-r14/report.json",
+    "stages": {
+      "VSMain": {
+        "byte_identical": true,
+        "identical_after_bijective_generated_identifier_renaming": true
+      },
+      "VSFeature": {
+        "byte_identical": true,
+        "identical_after_bijective_generated_identifier_renaming": true
+      },
+      "PSFeature": {
+        "byte_identical": false,
+        "identical_after_bijective_generated_identifier_renaming": true
+      }
+    },
+    "zooms": {
+      "1": {
+        "packet_bytes_identical": true,
+        "packet_sha256": "45df77c5ed0fc95f61ea895bb34c059f8bd24d24070c59bb0ba22119ffa40ded",
+        "detail_on_image_unchanged_from_r14": true
+      },
+      "2": {
+        "packet_bytes_identical": true,
+        "packet_sha256": "17f67e4d54cb74c16851dfcea56f589c05c38a59178b897c8a430d9985d986d0",
+        "detail_on_image_unchanged_from_r14": true
+      }
+    },
+    "backend_cache_identity": [
+      "33474f9a792d0a385a568a10b9e7bdf66f9e35f870e32c0899a3b34a14b1e5b0"
+    ],
+    "scope": "Re-rendered on control on the off-control backend. Packet bytes match, including all content hashes. Non-material shader stages differ only in compiler-generated identifier names. Exact detail-on images unchanged at both zooms."
+  },
+  "independent_sampling_review": {
+    "metrics": "Renderer/terrain_lab/v2/audits/sampling/out/Q1/Q1-sampling/c030q2-linear-on/detail-on-off-metrics.json",
+    "sha256": "19f9b71b8e0d613950ae32efecb1bb958bc25d5f6817152b09790fd2d1b40231",
+    "directly_inspected_by_q2": [
+      "c030q2-linear-on/finalist-h12-z1-p00.png",
+      "c030q2-linear-on/finalist-h12-z2-p00.png",
+      "c031q2-linear-off/finalist-h12-z1-p00.png",
+      "c031q2-linear-off/finalist-h12-z2-p00.png"
+    ],
+    "scope": "Material-only contextual review; source object assembly/route/scale remains provisional."
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "mode": 0,
+  "legacy": 1,
+  "material_root": "Renderer/packs/Civ5EnvironmentSkin/provenance/terrain_textures",
+  "tile_halfwidth": 64,
+  "padding": 1,
+  "center_x": 3.4,
+  "center_y": 2.4
+}

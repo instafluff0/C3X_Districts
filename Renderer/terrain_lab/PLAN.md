@@ -68,6 +68,12 @@ or make the frame fail visibly. It never silently falls back to native map art.
 
 ## Renderer Lab v2
 
+User scheduling override: Q0-Q8 may all implement and render now in parallel.
+LQ0 platform completion and LQ1 visual acceptance are checkpoints, not serial
+launch barriers. Use current versioned inputs or explicit local proxies while
+shared work finishes; dependencies are validated at convergence. This overrides
+earlier instructions to wait for an upstream track's acceptance before starting.
+
 L9-L21 are frozen as the immutable Lab v1 baseline. At the user's explicit
 direction, further Integration pauses at I19 while the separate LQ0-LQ2 quality
 campaign restructures the Lab for macOS-first iteration and parallel visual

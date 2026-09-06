@@ -1,0 +1,57 @@
+{
+  "schema": "c3x.q5.crossing_adaptation.v1",
+  "source": "Q3 Field v1",
+  "edges": [
+    {
+      "from": [
+        -1,
+        -1
+      ],
+      "to": [
+        0,
+        -1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        -1,
+        -1
+      ],
+      "to": [
+        -1,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        -1
+      ],
+      "to": [
+        0,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        -1,
+        0
+      ],
+      "to": [
+        0,
+        0
+      ],
+      "crossings": []
+    }
+  ],
+  "classification": "Lab augmentation, not captured state",
+  "terrain_sha256": "32d8acd734fd8247dea1c58d2892d557b35a6ceeea16c7ba290478fa8a60b038",
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "region_id": "wrap",
+  "wrap_x": true,
+  "halo": 1,
+  "final_surface_height": "pending shared final surface conversion; null deck heights are deliberate"
+}

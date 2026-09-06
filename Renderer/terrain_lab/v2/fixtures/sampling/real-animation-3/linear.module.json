@@ -1,0 +1,14 @@
+{
+  "contract": 1,
+  "fit_viewport": true,
+  "id": "real-animation-3-scene-linear-v1",
+  "owner": "Q1-sampling",
+  "provider": "frozen_l21",
+  "scene": "complete",
+  "schema": "c3x.lab_v2.module.v1",
+  "shader": "Renderer/terrain_lab/v2/shaders/lighting/generated/scene_linear_v1.hlsl",
+  "suppress_territory": true,
+  "linear_adapter": 1,
+  "color_branch": "q6_scene_linear_premultiplied_v1",
+  "shader_owner": "Q6-lighting"
+}

@@ -1,0 +1,56 @@
+{
+  "schema": "c3x.q7.bounded_checks.v1",
+  "jobs": [
+    {
+      "tier": "quick",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/objects-02/fixture.json",
+      "candidate": "objects-02"
+    },
+    {
+      "tier": "quick",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/context-small/fixture.json",
+      "candidate": "context-small"
+    },
+    {
+      "tier": "quick",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/context-large/fixture.json",
+      "candidate": "context-large"
+    },
+    {
+      "tier": "quick",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/mine-relief-01/fixture.json",
+      "candidate": "mine-relief-01"
+    },
+    {
+      "tier": "quick",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-v2/before.fixture.json",
+      "candidate": "registered-mixed-before-v2"
+    },
+    {
+      "tier": "quick",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-holdout-v2/before.fixture.json",
+      "candidate": "registered-mixed-holdout-before-v2"
+    },
+    {
+      "tier": "quick",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/modern-component-id/fixture.json",
+      "candidate": "modern-component-id"
+    },
+    {
+      "tier": "quick",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/modern-component-depth/fixture.json",
+      "candidate": "modern-component-depth"
+    },
+    {
+      "tier": "quick",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/modern-shadows-off/fixture.json",
+      "candidate": "modern-shadows-off"
+    },
+    {
+      "tier": "check",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/objects/generated/modern-emissive-only/fixture.json",
+      "candidate": "modern-emissive-only"
+    }
+  ],
+  "full_pool_matrix": "deferred_by_coordinator_storage_schedule"
+}

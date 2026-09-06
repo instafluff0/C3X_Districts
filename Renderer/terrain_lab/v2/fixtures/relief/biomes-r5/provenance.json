@@ -1,0 +1,1167 @@
+{
+  "schema": "c3x.q4.source_geometry.v1",
+  "class": "synthetic_stress_case",
+  "proxy_inputs": [
+    "Q2 continuous ground",
+    "Q3 signed shore and static water"
+  ],
+  "source_files": {
+    "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+    "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json": "c38a1c1f843d0962eca359e27904cd959e6e7d11843d647fcf9b57fcc6db9ac6",
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_v1_01_base_color.dds": "c2b1d3f81f7d054ba000e456f225713824560f6e48ae79bed4738168f2195fbc",
+    "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json": "9d057a44c0ebe5c05f5e381a059ecacfeb7050601ca4d8e662235a69782cb767",
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_v4_02_base_color.dds": "c2b1d3f81f7d054ba000e456f225713824560f6e48ae79bed4738168f2195fbc",
+    "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json": "3e666075212e27787abd80343663bfbc02412f5a0351a7cb31b3301f0f7512a4",
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/jungle_palm_02_base_color.dds": "b1cdc61d9145c8e3d7c7ee61dcea40dd493ca2b15bb152d1e2a75b215395c2ac",
+    "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json": "d705bc012ab2ff14e7853429621e01a8c30b84092b3e5e5b5a773eb36b4b4bf6",
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/jungle_plant_01_base_color.dds": "b1cdc61d9145c8e3d7c7ee61dcea40dd493ca2b15bb152d1e2a75b215395c2ac",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/desert_base_color.dds": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_top_base_color.dds": "7cbbab6c0a8ca26d8729c67766b476636bf820aadd6f1b4c0044754b58117d29"
+  },
+  "transforms": [
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.41963374001297404,
+      "yaw": 2.8437556670731956,
+      "translation": [
+        2.734809876297968,
+        4.807668948238338,
+        0.056608487954811104
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.41499290667911126,
+      "yaw": 2.665505833945918,
+      "translation": [
+        2.5273604061549433,
+        3.9847529636771175,
+        0.0675529285950281
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.3264636217880172,
+      "yaw": 4.439461631853852,
+      "translation": [
+        4.293211639267897,
+        3.732042562902837,
+        0.18152281614141838
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.3160523451370328,
+      "yaw": 3.741782963320895,
+      "translation": [
+        0.6925128309679828,
+        1.1055271095677364,
+        0.15305094252937476
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.4237933830667757,
+      "yaw": 4.649120110820628,
+      "translation": [
+        1.1263379912633664,
+        1.9323039297651674,
+        0.1420424120800527
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.342120141842497,
+      "yaw": 2.4968524694127394,
+      "translation": [
+        3.9713152864032737,
+        5.045416001155693,
+        0.07000395443375336
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.39702668057326584,
+      "yaw": 4.190321921788989,
+      "translation": [
+        5.36990010630417,
+        4.727066055665167,
+        0.0739202920157081
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.423073848895131,
+      "yaw": 1.001949851105007,
+      "translation": [
+        4.420009892363794,
+        5.1157280547040225,
+        0.054172777923473095
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.4224632315412574,
+      "yaw": 3.550376877459463,
+      "translation": [
+        1.457007814864101,
+        5.3645577984275485,
+        0.0032747411975775804
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.3221206928036171,
+      "yaw": 0.7190255581061856,
+      "translation": [
+        4.402947587381311,
+        3.3592454274262,
+        0.15539013522565123
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.3799645684603204,
+      "yaw": 5.421827114565952,
+      "translation": [
+        2.81140057274225,
+        1.604105353712701,
+        0.07131225809160327
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.36099067145124336,
+      "yaw": 2.3534843552928164,
+      "translation": [
+        2.8723701472482577,
+        4.31860552520745,
+        0.08482759033645011
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.32138107176203884,
+      "yaw": 5.4128418455946985,
+      "translation": [
+        2.9545036841188286,
+        1.6965373149134868,
+        0.07859574753547416
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.3654283660480123,
+      "yaw": 1.5119762274278579,
+      "translation": [
+        4.32262921418185,
+        1.2411475699971446,
+        0.1160357421836429
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.40737589054608114,
+      "yaw": 2.7628947500080248,
+      "translation": [
+        1.7959028715512042,
+        4.198141265806152,
+        0.047397295559972685
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.4020100918646816,
+      "yaw": 1.7595664297445281,
+      "translation": [
+        1.6703621653638778,
+        4.023516449694091,
+        0.06644485142828273
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.36416246264724667,
+      "yaw": 4.821629741770263,
+      "translation": [
+        2.8780539271499177,
+        2.986193953817689,
+        0.08911527269010908
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.338697128468502,
+      "yaw": 4.14626063743603,
+      "translation": [
+        2.204014748536198,
+        0.7494023213241395,
+        0.07122230683797263
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.3860102259768627,
+      "yaw": 3.3593522573507313,
+      "translation": [
+        3.6673728621470296,
+        4.814166493544265,
+        0.11673522845271532
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.4023815073279924,
+      "yaw": 4.449390180252439,
+      "translation": [
+        3.8531812929323532,
+        1.3986723436393245,
+        0.11871738716114805
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.39210713571497263,
+      "yaw": 6.145401415084286,
+      "translation": [
+        1.658781156033347,
+        1.3066134208504754,
+        0.13549641939850768
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.32225871018423136,
+      "yaw": 4.295755215012617,
+      "translation": [
+        5.348159178797881,
+        0.9478142752958642,
+        0.14639816137125516
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.4399671691778866,
+      "yaw": 4.095278242063078,
+      "translation": [
+        4.593730585703521,
+        2.225473647588465,
+        0.15872133167456912
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.32143433367229085,
+      "yaw": 4.533105629754359,
+      "translation": [
+        4.589515388526016,
+        2.9686885765070032,
+        0.14723792844575062
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.32314502426873354,
+      "yaw": 2.136624591805321,
+      "translation": [
+        4.7984254740658905,
+        4.364911538006602,
+        0.15691148307852848
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.310403646934624,
+      "yaw": 2.7166474321880534,
+      "translation": [
+        2.103082945908185,
+        0.6638235403219285,
+        0.07052292141763948
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.4015429787194879,
+      "yaw": 5.778848544805091,
+      "translation": [
+        2.914551439837731,
+        0.5295427874444039,
+        0.050499331435081674
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.3596663828409235,
+      "yaw": 1.0303881372494446,
+      "translation": [
+        2.9842725316303804,
+        4.725528825491167,
+        0.09053622160416526
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.4346435326450423,
+      "yaw": 1.4183653244210563,
+      "translation": [
+        4.060842529810733,
+        3.4021287517152667,
+        0.15820971733558753
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.3725667475620804,
+      "yaw": 1.4787947726683033,
+      "translation": [
+        5.158344969403916,
+        3.609603252810294,
+        0.10738744792774522
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.39465390412808243,
+      "yaw": 4.440922739246914,
+      "translation": [
+        1.156264809094807,
+        1.611571499499028,
+        0.13398469956633727
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.43613076641802623,
+      "yaw": 0.007964368680345153,
+      "translation": [
+        1.3023565227273854,
+        2.9825377176409127,
+        0.14828935000174823
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.32871606199487635,
+      "yaw": 5.791395003743208,
+      "translation": [
+        3.4098970870031686,
+        1.7266899629482797,
+        0.10273974027631452
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.4325678823619398,
+      "yaw": 3.8455171718255365,
+      "translation": [
+        5.198905060703254,
+        4.767973076747616,
+        0.08921031041909898
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.42619298431113334,
+      "yaw": 5.861580916179675,
+      "translation": [
+        3.7331304830204246,
+        2.1399653809431842,
+        0.14861482140793597
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.3458761120216305,
+      "yaw": 5.253632359255373,
+      "translation": [
+        2.7461234180615355,
+        3.768682163708573,
+        0.09818082724316697
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.327448663643653,
+      "yaw": 1.4600639913937767,
+      "translation": [
+        1.9707919311347968,
+        3.1255788573173353,
+        0.06480418889461555
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.3830595719348201,
+      "yaw": 4.543920035600542,
+      "translation": [
+        1.2009640304817943,
+        2.970458873418976,
+        0.15870558784845837
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.3182710227419539,
+      "yaw": 1.5007818304259046,
+      "translation": [
+        1.5930441641089184,
+        3.0513296277725357,
+        0.10009736512914418
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.37771375623560977,
+      "yaw": 0.8947652373901884,
+      "translation": [
+        3.3730268993009034,
+        2.682356766260792,
+        0.08255814119800599
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.3179112735321198,
+      "yaw": 0.8372376856221052,
+      "translation": [
+        1.525248072207043,
+        1.0079409578961442,
+        0.13704746009421256
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.3282323318046709,
+      "yaw": 2.277507053193477,
+      "translation": [
+        0.8510729186770183,
+        2.595715708624603,
+        0.14994443006088112
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.4173608981280198,
+      "yaw": 4.865015319042727,
+      "translation": [
+        0.6476261824122745,
+        4.0258672999818765,
+        0.0794362387959164
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.3929899265516586,
+      "yaw": 4.978868727071265,
+      "translation": [
+        4.771364925651439,
+        2.841002756899878,
+        0.14007373528426134
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.3039795153655331,
+      "yaw": 1.6155941837956949,
+      "translation": [
+        4.290905321131607,
+        3.357212915611963,
+        0.15837463499920762
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.42572826250011786,
+      "yaw": 3.9134811933906763,
+      "translation": [
+        1.7155319602720267,
+        2.315193346890206,
+        0.06977208061821766
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.39650788887145905,
+      "yaw": 2.3091473916035112,
+      "translation": [
+        1.001428333124843,
+        4.799213996670332,
+        0.07187648586876332
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.318553301653503,
+      "yaw": 4.170081460718416,
+      "translation": [
+        4.307230693372378,
+        4.992493561135873,
+        0.07861134154089276
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.35464332619176675,
+      "yaw": 0.23756877915458743,
+      "translation": [
+        3.0494721345456486,
+        3.1039102775701664,
+        0.08602482453918972
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.4153727829683957,
+      "yaw": 5.711380314186003,
+      "translation": [
+        4.022263618273157,
+        2.2711712158318424,
+        0.16021107826623135
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.43915956133392897,
+      "yaw": 5.050584111517698,
+      "translation": [
+        0.9896613823088479,
+        0.904930850793507,
+        0.16858306476314028
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.3191724663187672,
+      "yaw": 3.049680519510992,
+      "translation": [
+        0.8070203487528107,
+        2.1373340442064666,
+        0.1574776603095992
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.3250917365763045,
+      "yaw": 2.6752688339556276,
+      "translation": [
+        1.926788259062261,
+        5.2683185450740675,
+        0.02249780260275365
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.37683048646226863,
+      "yaw": 2.070601490924064,
+      "translation": [
+        3.6287085268618764,
+        3.2922716723530634,
+        0.13493763791061733
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.4063484523661626,
+      "yaw": 6.220936457698281,
+      "translation": [
+        4.0628224180845365,
+        4.568432394648279,
+        0.14155552914106218
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.32865759977497894,
+      "yaw": 5.809396729733133,
+      "translation": [
+        4.062374391178605,
+        2.231322442090063,
+        0.1635324428791918
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.31874182967263287,
+      "yaw": 0.6087422668632535,
+      "translation": [
+        3.4523724500634483,
+        2.90857829161198,
+        0.08122094115590664
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.36659904023921075,
+      "yaw": 0.5426412145707088,
+      "translation": [
+        1.2614901104883243,
+        2.3160494302833063,
+        0.11247138004296173
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.33104951977551106,
+      "yaw": 0.1994165023746188,
+      "translation": [
+        4.972990300247805,
+        3.3939745276359465,
+        0.12851576216820434
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.41328025955257847,
+      "yaw": 4.170148317898872,
+      "translation": [
+        0.7302932540124345,
+        0.7739152906365221,
+        0.12606779986034644
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.35589602893166766,
+      "yaw": 0.193032870550335,
+      "translation": [
+        0.5580468334391843,
+        2.303383488999249,
+        0.11462471787660233
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.3107901463009333,
+      "yaw": 2.8777771130421463,
+      "translation": [
+        4.00696797363892,
+        2.37823789553498,
+        0.15093937373659333
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.36576414195591767,
+      "yaw": 0.4669918850181126,
+      "translation": [
+        5.255392035824666,
+        2.7621430280819363,
+        0.12692013142738712
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.402908236309822,
+      "yaw": 3.5636020865789835,
+      "translation": [
+        1.0340814935793698,
+        2.8603005515320588,
+        0.16271803708541463
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.3691965064995721,
+      "yaw": 5.7311392542988475,
+      "translation": [
+        2.1874390321199697,
+        3.6599790165837733,
+        0.057425798380342535
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.3282685398242064,
+      "yaw": 2.323494117060616,
+      "translation": [
+        0.65008622036691,
+        2.3586008399091534,
+        0.13570148225818368
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.31244290423752846,
+      "yaw": 3.6313339792241117,
+      "translation": [
+        2.066338439761575,
+        5.23476448876919,
+        0.03132034531964084
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.3424303113932205,
+      "yaw": 0.10948027609620713,
+      "translation": [
+        4.665507148496186,
+        2.682082543893426,
+        0.161805896213957
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.37236486478476655,
+      "yaw": 4.526961017454002,
+      "translation": [
+        4.3578473799865955,
+        2.232442950757714,
+        0.15772515449953953
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.4289170315305642,
+      "yaw": 0.9911202083711788,
+      "translation": [
+        0.8786366222279401,
+        3.9819565227769624,
+        0.09080724385202416
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.36178396836636423,
+      "yaw": 2.0470018406699855,
+      "translation": [
+        2.7151533571313937,
+        5.174649031663545,
+        0.04153383783106247
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.38602667376591404,
+      "yaw": 0.2665123818909358,
+      "translation": [
+        3.440582064185945,
+        2.9645153005474056,
+        0.08251648333023309
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.4367216186176883,
+      "yaw": 1.0974256833666078,
+      "translation": [
+        4.658817484458329,
+        3.746235283521326,
+        0.17945112212707176
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.3943399826851153,
+      "yaw": 2.131240902089568,
+      "translation": [
+        3.082807463245331,
+        2.8212388739778373,
+        0.0789229917531119
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.4007829464479748,
+      "yaw": 0.29654371216647063,
+      "translation": [
+        3.3385330899975094,
+        0.6895817917422233,
+        0.0504413425589096
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.37330429239315516,
+      "yaw": 4.081863187551416,
+      "translation": [
+        1.5830876739971274,
+        2.709328768367229,
+        0.10688134335517818
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.38710433830277935,
+      "yaw": 2.365463717477902,
+      "translation": [
+        0.7777016632453422,
+        5.32876495818044,
+        0.03989668209735697
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.4127574260832234,
+      "yaw": 5.1633907765993445,
+      "translation": [
+        3.4532153251657527,
+        4.498191785680856,
+        0.15475617010932988
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.33325380149676587,
+      "yaw": 3.1404252213443278,
+      "translation": [
+        0.7875524752021769,
+        3.6793908733497447,
+        0.09498314400040525
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.38432421181914866,
+      "yaw": 2.9464115022044974,
+      "translation": [
+        3.8298559163062214,
+        4.904685922100629,
+        0.09153548192910216
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.3534168817860217,
+      "yaw": 3.51845942629133,
+      "translation": [
+        1.7613104266927866,
+        2.101815753609427,
+        0.06179666657395298
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.3209611203167207,
+      "yaw": 3.219658533754131,
+      "translation": [
+        3.652349590384652,
+        2.204004280393673,
+        0.13632910323258252
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.3137303518497625,
+      "yaw": 3.088002125401582,
+      "translation": [
+        4.967495957338216,
+        0.7486850398873852,
+        0.13313302979406685
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.40957213792110964,
+      "yaw": 4.216634386677886,
+      "translation": [
+        4.238414121016136,
+        0.5421266572722029,
+        0.08939622059143801
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.37543707282448907,
+      "yaw": 4.675579623018488,
+      "translation": [
+        0.8733994848793536,
+        4.5003091588684025,
+        0.10944507887325303
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.37105951387570485,
+      "yaw": 3.5842098190488536,
+      "translation": [
+        4.9227355980440946,
+        5.331382463091466,
+        0.021386922650125567
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.30574384351820527,
+      "yaw": 3.5629695948697666,
+      "translation": [
+        4.965933344959625,
+        1.870451407936431,
+        0.1649189467720837
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.39230797603442014,
+      "yaw": 5.911300130437514,
+      "translation": [
+        5.367024015067123,
+        1.4575280663960515,
+        0.13112708581487445
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.3932364923483647,
+      "yaw": 1.7847650316289005,
+      "translation": [
+        0.5165272762438253,
+        1.4580371821693154,
+        0.10444045151806185
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_plant_01.json",
+      "uniform_scale": 0.37958471611440814,
+      "yaw": 1.8363194255582505,
+      "translation": [
+        5.2331623120667805,
+        3.569581912687558,
+        0.099231182620951
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.31267336027494386,
+      "yaw": 6.178743390965594,
+      "translation": [
+        3.9373851279747747,
+        4.133319405860739,
+        0.1730228139171545
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.3502656756077005,
+      "yaw": 0.2104700852557782,
+      "translation": [
+        1.3270689760229302,
+        1.17209401456851,
+        0.1382954785327209
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v1_01.json",
+      "uniform_scale": 0.34484799772586555,
+      "yaw": 3.1283230959655524,
+      "translation": [
+        2.521275699453705,
+        3.1000806444426603,
+        0.08835491549844546
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/forest_leafy_v4_02.json",
+      "uniform_scale": 0.41386855303690734,
+      "yaw": 4.70119678536374,
+      "translation": [
+        0.9968822713386184,
+        4.1857176578848225,
+        0.09798619840661893
+      ],
+      "uv_preserved": true
+    },
+    {
+      "kind": "normalized_mesh",
+      "mesh": "Renderer/packs/Civ5EnvironmentVegetation/meshes/features/jungle_palm_02.json",
+      "uniform_scale": 0.4045318885033401,
+      "yaw": 0.9642067279235782,
+      "translation": [
+        5.188355826040093,
+        5.220612113754912,
+        0.03558947296687919
+      ],
+      "uv_preserved": true
+    }
+  ],
+  "geometry_sha256": "1a764ac30d44d4190737d8ed4e7ca0b0f27009340294f86e9a34e5655e4e018c",
+  "generator_sha256": "e2fa51e4cc31f7687201018521273fee0fceff0c757dcfba379caf1fa7b17f96",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/relief/biomes-r5/fixture.json",
+  "revision": 5
+}

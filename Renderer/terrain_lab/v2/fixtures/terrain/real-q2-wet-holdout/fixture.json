@@ -1,0 +1,107 @@
+{
+  "campaign": "Q1",
+  "id": "q2-q2-wet-holdout-base-only",
+  "isolations": [
+    "base_material_only_pending_external_surfaces"
+  ],
+  "modules": [
+    "Renderer/terrain_lab/v2/systems/terrain/detail.module.json"
+  ],
+  "packs": {
+    "decals": "Renderer/packs/DecalsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "shore": "Renderer/packs/ShoreNormalized",
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation"
+  },
+  "real_map": {
+    "dataset_payload_sha256": "4e5fa91a03586b9b36da1ec3d8ee8249d19e803fe710ecd6659a174697cee837",
+    "fixture_class": "unaltered_real_terrain",
+    "parser": {
+      "adapter": 1,
+      "closure_sha256": "3f1ec44302b61b4fc2ad9ebbe53e25081f0805443872f07a56bfa2dbe0b99fc1",
+      "text_encoding": "windows-1252"
+    },
+    "profile": "q0_real_map_v1",
+    "region": {
+      "camera": {
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ],
+        "viewport": [
+          768,
+          512
+        ],
+        "zooms": [
+          1,
+          2
+        ]
+      },
+      "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+      "coverage": {
+        "land_water_edges": 6,
+        "river_tiles": 7,
+        "terrain": {
+          "coast": 3,
+          "grassland": 4,
+          "jungle": 9
+        },
+        "terrain_edges": 8
+      },
+      "extent": [
+        4,
+        4
+      ],
+      "halo": 2,
+      "id": "q2-wet-holdout",
+      "origin": [
+        87,
+        43
+      ],
+      "request_sha256": "dd969d84e7d973781bdb27c13d932bc6e8f21493b6dace0d708fbb7c4eebb450",
+      "role": "fixed_neighbor_holdout",
+      "terrain_sha256": "0e074bdb1f6b2753998b741b98dc35a9659d65ae6e7045c0a6446e2b7190ec83",
+      "wrap": {
+        "x": true,
+        "y": false
+      }
+    },
+    "region_id": "q2-wet-holdout",
+    "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e"
+  },
+  "references": [
+    "c3x.lab_v1.l21"
+  ],
+  "schema": "c3x.lab_v2.fixture.v1",
+  "settings": {
+    "anisotropy": 8,
+    "camera_offsets": [
+      [
+        0,
+        0
+      ],
+      [
+        1,
+        0
+      ],
+      [
+        0,
+        0
+      ]
+    ],
+    "mip_bias": 0,
+    "postprocess": "box",
+    "render_scale": 1,
+    "samples": 1
+  },
+  "terrain": "Renderer/terrain_lab/v2/fixtures/terrain/real-q2-wet-holdout/terrain.csv",
+  "tile_count": 16,
+  "track": "Q2-terrain",
+  "viewport": [
+    512,
+    320
+  ]
+}

@@ -1,0 +1,151 @@
+{
+  "schema": "c3x.q4.city_clearance_result.v1",
+  "before": "real-holdout-r12",
+  "after": "real-holdout-r13",
+  "before_count": 291,
+  "after_count": 279,
+  "removed_count": 12,
+  "unchanged_retained_count": 279,
+  "new_or_moved_instances": 0,
+  "retained_city_footprint_collisions": 0,
+  "city_anchor": [
+    20.0,
+    44.0
+  ],
+  "envelopes": [
+    {
+      "id": "city:0",
+      "shape": "polygon",
+      "points": [
+        [
+          1.1530040043502385,
+          3.881257789846872
+        ],
+        [
+          1.286995995649761,
+          3.8812577898468703
+        ],
+        [
+          1.286995995649761,
+          3.678742210153132
+        ],
+        [
+          1.1530040043502385,
+          3.6787422101531337
+        ],
+        [
+          1.1530040043502385,
+          3.881257789846872
+        ]
+      ],
+      "half_width": 0.045,
+      "provider": "Q7 city footprint and overhang",
+      "asset": "city/component/20c6179bd3b7587a",
+      "raw_city_anchor": [
+        20.0,
+        44.0
+      ]
+    },
+    {
+      "id": "city:1",
+      "shape": "polygon",
+      "points": [
+        [
+          1.0474999999999977,
+          3.6019628405856903
+        ],
+        [
+          1.2524999999999977,
+          3.601962840585692
+        ],
+        [
+          1.2525000000000013,
+          3.3980371594143115
+        ],
+        [
+          1.0475000000000012,
+          3.3980371594143097
+        ],
+        [
+          1.0474999999999977,
+          3.6019628405856903
+        ]
+      ],
+      "half_width": 0.045,
+      "provider": "Q7 city footprint and overhang",
+      "asset": "city/component/6cf90d821d71767d",
+      "raw_city_anchor": [
+        20.0,
+        44.0
+      ]
+    },
+    {
+      "id": "city:2",
+      "shape": "polygon",
+      "points": [
+        [
+          1.4316946342293768,
+          3.950351293584152
+        ],
+        [
+          1.5683053657706267,
+          3.9503512935841485
+        ],
+        [
+          1.568305365770625,
+          3.7496487064158455
+        ],
+        [
+          1.431694634229375,
+          3.749648706415849
+        ],
+        [
+          1.4316946342293768,
+          3.950351293584152
+        ]
+      ],
+      "half_width": 0.045,
+      "provider": "Q7 city footprint and overhang",
+      "asset": "city/component/cc8838bb2062e14e",
+      "raw_city_anchor": [
+        20.0,
+        44.0
+      ]
+    },
+    {
+      "id": "city:3",
+      "shape": "polygon",
+      "points": [
+        [
+          1.4249295781911133,
+          3.2250704389985376
+        ],
+        [
+          1.5750704218088902,
+          3.2250704389985376
+        ],
+        [
+          1.5750704218088885,
+          3.0749295610014613
+        ],
+        [
+          1.4249295781911115,
+          3.0749295610014613
+        ],
+        [
+          1.4249295781911133,
+          3.2250704389985376
+        ]
+      ],
+      "half_width": 0.045,
+      "provider": "Q7 city footprint and overhang",
+      "asset": "city/component/19e3fcaaa0e909cb",
+      "raw_city_anchor": [
+        20.0,
+        44.0
+      ]
+    }
+  ],
+  "witness_sha256": "c9cc807f8a80b48185fc614c2757bed3f201b3b21bc5d168747ab20be78171a5",
+  "limitation": "Q4-only geometry view: actual Q7 buildings and final screen visibility require shared composition."
+}

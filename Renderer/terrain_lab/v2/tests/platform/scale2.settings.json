@@ -1,0 +1,13 @@
+{
+  "anisotropy": 8,
+  "mip_bias": 0,
+  "samples": 1,
+  "render_scale": 2,
+  "postprocess": "box",
+  "camera_offsets": [
+    [
+      0,
+      0
+    ]
+  ]
+}

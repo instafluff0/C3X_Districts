@@ -1,0 +1,17 @@
+{
+  "contract": 1,
+  "fit_viewport": true,
+  "id": "q4-source-vertex-clearance",
+  "owner": "Q4-relief",
+  "provider": "frozen_l21",
+  "scene": "complete",
+  "schema": "c3x.lab_v2.module.v1",
+  "shader": "Renderer/terrain_lab/v2/shaders/common/frozen_l21.hlsl",
+  "suppress_territory": true,
+  "placement_hooks": {
+    "header": "Renderer/terrain_lab/v2/systems/relief/placement_adapter.h",
+    "owner": "Q4-relief",
+    "initialize": "q4_placement::initialize",
+    "accept_vegetation": "q4_placement::accept_vegetation"
+  }
+}

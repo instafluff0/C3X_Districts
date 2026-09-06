@@ -1,0 +1,466 @@
+{
+  "schema": "c3x.combined_terrain_checkpoint.v1",
+  "beauty_accepted": false,
+  "gate_status": "no milestone closed; no Integration promotion",
+  "intentional_changes": [
+    "mountain tiling material projection",
+    "river absorption and banks",
+    "selected source hill height and source height-scale ratio",
+    "complete desert material bindings",
+    "BIQ desert material coverage",
+    "continuous desert biome skirt and flat water join",
+    "shared clock-driven night ambient and moon lighting"
+  ],
+  "revision": "candidate-v5",
+  "results": [
+    {
+      "region": "coastal",
+      "source_region": {
+        "camera": {
+          "hours": [
+            12,
+            18,
+            0,
+            6
+          ],
+          "viewport": [
+            1360,
+            800
+          ],
+          "zooms": [
+            1,
+            2
+          ]
+        },
+        "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+        "coverage": {
+          "land_water_edges": 25,
+          "river_tiles": 7,
+          "terrain": {
+            "coast": 19,
+            "desert": 20,
+            "forest": 3,
+            "grassland": 21,
+            "hills": 9,
+            "jungle": 7,
+            "marsh": 1,
+            "mountain": 1,
+            "ocean": 2,
+            "plains": 6,
+            "sea": 11
+          },
+          "terrain_edges": 90
+        },
+        "extent": [
+          10,
+          10
+        ],
+        "halo": 6,
+        "id": "beauty-coastal-100-v1",
+        "origin": [
+          76,
+          38
+        ],
+        "request_sha256": "bb15ce877dd85386e4104d27d0663f96bd0e12c4b7d5bb7607f45abc60bff6a6",
+        "role": "user_evaluation",
+        "terrain_sha256": "3163aba788e62f7dfcf3fcc9bfa548f7fe980efe884223dd5ea769ecc4685e93",
+        "wrap": {
+          "x": true,
+          "y": false
+        }
+      },
+      "baseline_identity": "eb93b62efe7554aa0974e1e9959881c3ee67f7f068e56589016900d568f2b765",
+      "candidate_identity": "4245da207324163634b032bd0f63db9d3e29e3ba1a51c3faac90715478029726",
+      "previous_best_identity": "f62e53b9ed568b710664d2eb64c1e1f704608d13b8bd11199073b2c3120fbe24",
+      "matched_frames": {
+        "(12, 1, (0, 0))": {
+          "changed_pixels": 131364,
+          "bounds": [
+            427,
+            59,
+            1033,
+            667
+          ],
+          "output_size": [
+            1360,
+            800
+          ]
+        },
+        "(12, 2, (0, 0))": {
+          "changed_pixels": 33460,
+          "bounds": [
+            213,
+            29,
+            517,
+            334
+          ],
+          "output_size": [
+            680,
+            400
+          ]
+        },
+        "(0, 1, (0, 0))": {
+          "changed_pixels": 410556,
+          "bounds": [
+            40,
+            59,
+            1320,
+            699
+          ],
+          "output_size": [
+            1360,
+            800
+          ]
+        },
+        "(0, 2, (0, 0))": {
+          "changed_pixels": 103040,
+          "bounds": [
+            20,
+            29,
+            660,
+            350
+          ],
+          "output_size": [
+            680,
+            400
+          ]
+        }
+      },
+      "previous_best_frames": {
+        "(12, 1, (0, 0))": {
+          "changed_pixels": 63265,
+          "bounds": [
+            427,
+            59,
+            1032,
+            406
+          ],
+          "output_size": [
+            1360,
+            800
+          ]
+        },
+        "(12, 2, (0, 0))": {
+          "changed_pixels": 15846,
+          "bounds": [
+            213,
+            29,
+            514,
+            203
+          ],
+          "output_size": [
+            680,
+            400
+          ]
+        },
+        "(0, 1, (0, 0))": {
+          "changed_pixels": 410560,
+          "bounds": [
+            40,
+            59,
+            1320,
+            699
+          ],
+          "output_size": [
+            1360,
+            800
+          ]
+        },
+        "(0, 2, (0, 0))": {
+          "changed_pixels": 103040,
+          "bounds": [
+            20,
+            29,
+            660,
+            350
+          ],
+          "output_size": [
+            680,
+            400
+          ]
+        }
+      },
+      "all_desert_relief_materials_bound": true
+    },
+    {
+      "region": "inland",
+      "source_region": {
+        "camera": {
+          "hours": [
+            12,
+            18,
+            0,
+            6
+          ],
+          "viewport": [
+            1360,
+            800
+          ],
+          "zooms": [
+            1,
+            2
+          ]
+        },
+        "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+        "coverage": {
+          "land_water_edges": 7,
+          "river_tiles": 41,
+          "terrain": {
+            "coast": 3,
+            "desert": 1,
+            "forest": 28,
+            "grassland": 40,
+            "hills": 18,
+            "mountain": 10
+          },
+          "terrain_edges": 101
+        },
+        "extent": [
+          10,
+          10
+        ],
+        "halo": 6,
+        "id": "beauty-inland-100-v1",
+        "origin": [
+          60,
+          50
+        ],
+        "request_sha256": "bb15ce877dd85386e4104d27d0663f96bd0e12c4b7d5bb7607f45abc60bff6a6",
+        "role": "user_evaluation",
+        "terrain_sha256": "0bf3a68cf9b12f53ce43344e362c83123bfa74b5a5a3979fb49c25293b141841",
+        "wrap": {
+          "x": true,
+          "y": false
+        }
+      },
+      "baseline_identity": "f8b626761ef4db817a4b49b91795a99d70aea2230a90b887d1df71218560709e",
+      "candidate_identity": "5bb9dd85e896a1054e30009ba3ea257e85b1d111fc959a80e9817c79b95e231f",
+      "previous_best_identity": "a48888d0ecfbad1d5ce8157950ce45a9f30d5f032022daec81f189c0bfd83421",
+      "matched_frames": {
+        "(12, 1, (0, 0))": {
+          "changed_pixels": 193181,
+          "bounds": [
+            100,
+            51,
+            1256,
+            699
+          ],
+          "output_size": [
+            1360,
+            800
+          ]
+        },
+        "(12, 2, (0, 0))": {
+          "changed_pixels": 52562,
+          "bounds": [
+            50,
+            25,
+            628,
+            350
+          ],
+          "output_size": [
+            680,
+            400
+          ]
+        }
+      },
+      "previous_best_frames": {
+        "(12, 1, (0, 0))": {
+          "changed_pixels": 16212,
+          "bounds": [
+            560,
+            75,
+            798,
+            217
+          ],
+          "output_size": [
+            1360,
+            800
+          ]
+        },
+        "(12, 2, (0, 0))": {
+          "changed_pixels": 4034,
+          "bounds": [
+            280,
+            37,
+            399,
+            106
+          ],
+          "output_size": [
+            680,
+            400
+          ]
+        },
+        "(0, 1, (0, 0))": {
+          "changed_pixels": 412818,
+          "bounds": [
+            40,
+            59,
+            1320,
+            699
+          ],
+          "output_size": [
+            1360,
+            800
+          ]
+        },
+        "(0, 2, (0, 0))": {
+          "changed_pixels": 103642,
+          "bounds": [
+            20,
+            29,
+            660,
+            350
+          ],
+          "output_size": [
+            680,
+            400
+          ]
+        }
+      },
+      "all_desert_relief_materials_bound": true
+    },
+    {
+      "region": "wilderness",
+      "source_region": {
+        "camera": {
+          "hours": [
+            12,
+            18,
+            0,
+            6
+          ],
+          "viewport": [
+            1360,
+            800
+          ],
+          "zooms": [
+            1,
+            2
+          ]
+        },
+        "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+        "coverage": {
+          "land_water_edges": 12,
+          "river_tiles": 1,
+          "terrain": {
+            "coast": 10,
+            "desert": 34,
+            "forest": 5,
+            "grassland": 12,
+            "hills": 14,
+            "jungle": 5,
+            "mountain": 1,
+            "plains": 14,
+            "sea": 5
+          },
+          "terrain_edges": 83
+        },
+        "extent": [
+          10,
+          10
+        ],
+        "halo": 6,
+        "id": "beauty-wilderness-100-v1",
+        "origin": [
+          12,
+          62
+        ],
+        "request_sha256": "bb15ce877dd85386e4104d27d0663f96bd0e12c4b7d5bb7607f45abc60bff6a6",
+        "role": "user_evaluation",
+        "terrain_sha256": "57c8014a461a4ff67dbc7660a181efcc854ae80f5928bcf269c04c3b27d9f786",
+        "wrap": {
+          "x": true,
+          "y": false
+        }
+      },
+      "baseline_identity": "1cade333c85aed76f78d67f95b77875ad1a668a806bb27918d8c1fcaa8095156",
+      "candidate_identity": "0eb92bc545b14929e10cb6debe53fee9bb8355f4f6f02a4788039ce1952c2440",
+      "previous_best_identity": "7c664a992ff60c9b0cf5cbfce83c12dd351ad1202f457c715acac06923adc57f",
+      "matched_frames": {
+        "(12, 1, (0, 0))": {
+          "changed_pixels": 207723,
+          "bounds": [
+            40,
+            21,
+            1192,
+            699
+          ],
+          "output_size": [
+            1360,
+            800
+          ]
+        },
+        "(12, 2, (0, 0))": {
+          "changed_pixels": 53775,
+          "bounds": [
+            20,
+            10,
+            596,
+            350
+          ],
+          "output_size": [
+            680,
+            400
+          ]
+        }
+      },
+      "previous_best_frames": {
+        "(12, 1, (0, 0))": {
+          "changed_pixels": 112933,
+          "bounds": [
+            40,
+            139,
+            1192,
+            508
+          ],
+          "output_size": [
+            1360,
+            800
+          ]
+        },
+        "(12, 2, (0, 0))": {
+          "changed_pixels": 28520,
+          "bounds": [
+            20,
+            69,
+            596,
+            254
+          ],
+          "output_size": [
+            680,
+            400
+          ]
+        },
+        "(0, 1, (0, 0))": {
+          "changed_pixels": 417104,
+          "bounds": [
+            40,
+            21,
+            1320,
+            699
+          ],
+          "output_size": [
+            1360,
+            800
+          ]
+        },
+        "(0, 2, (0, 0))": {
+          "changed_pixels": 104908,
+          "bounds": [
+            20,
+            10,
+            660,
+            350
+          ],
+          "output_size": [
+            680,
+            400
+          ]
+        }
+      },
+      "all_desert_relief_materials_bound": true
+    }
+  ],
+  "review": "Renderer/terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md"
+}

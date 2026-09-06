@@ -1,0 +1,111 @@
+{
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "status": "fixed_terrain_foundations_not_visual_acceptance",
+  "terrain_tiles_per_region": 100,
+  "terrain_mutations": false,
+  "object_layers": "deferred by user; no cities, units or improvements",
+  "first_untuned_region": "wilderness",
+  "regions": [
+    {
+      "requested_id": "beauty-coastal-100-v1",
+      "origin": [
+        76,
+        38
+      ],
+      "extent": [
+        10,
+        10
+      ],
+      "halo": 6,
+      "role": "user_evaluation",
+      "camera": {
+        "viewport": [
+          1360,
+          800
+        ],
+        "zooms": [
+          1,
+          2
+        ],
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ]
+      }
+    },
+    {
+      "requested_id": "beauty-inland-100-v1",
+      "origin": [
+        60,
+        50
+      ],
+      "extent": [
+        10,
+        10
+      ],
+      "halo": 6,
+      "role": "user_evaluation",
+      "camera": {
+        "viewport": [
+          1360,
+          800
+        ],
+        "zooms": [
+          1,
+          2
+        ],
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ]
+      }
+    },
+    {
+      "requested_id": "beauty-wilderness-100-v1",
+      "origin": [
+        12,
+        62
+      ],
+      "extent": [
+        10,
+        10
+      ],
+      "halo": 6,
+      "role": "user_evaluation",
+      "camera": {
+        "viewport": [
+          1360,
+          800
+        ],
+        "zooms": [
+          1,
+          2
+        ],
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ]
+      }
+    }
+  ],
+  "native_projection": {
+    "origin": [
+      104,
+      380
+    ],
+    "half_width": 64
+  },
+  "gameplay_crop": [
+    360,
+    220,
+    1000,
+    540
+  ],
+  "comparisons": "identical terrain, source skin, projection, phases and output sizes; candidate features opt-in"
+}

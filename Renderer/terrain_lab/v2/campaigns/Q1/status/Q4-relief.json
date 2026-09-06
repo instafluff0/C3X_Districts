@@ -2,9 +2,36 @@
   "schema": "c3x.renderer_lab_v2_track_status.v0",
   "id": "Q4-relief",
   "campaign": "Q1",
-  "state": "blocked_by_dependency",
-  "candidate": null,
-  "evidence": [],
-  "blockers": ["Q0-platform", "Q1-sampling", "Q2-terrain", "Q3-hydrology"],
+  "state": "blocked",
+  "candidate": "Renderer/terrain_lab/v2/audits/relief/Q4_SOURCE_CANDIDATE.json",
+  "evidence": [
+    "Renderer/terrain_lab/v2/audits/relief/Q4_AUDIT.md",
+    "Renderer/terrain_lab/v2/audits/relief/SOURCE_FIDELITY.md",
+    "Renderer/terrain_lab/v2/audits/relief/INTERFACE_REQUESTS.md",
+    "Renderer/terrain_lab/v2/audits/relief/METRICS.json",
+    "Renderer/terrain_lab/v2/audits/relief/SELECTED_SOURCE_AUDIT.json",
+    "Renderer/terrain_lab/v2/audits/relief/CITY_CLEARANCE_RESULT.json",
+    "Renderer/terrain_lab/v2/audits/relief/out/Q1/Q4-relief/large-source-map-06/map.png",
+    "Renderer/terrain_lab/v2/audits/relief/LIVE_PLACEMENT_RESULT.json",
+    "Renderer/terrain_lab/v2/fixtures/relief/large-source-map-r6/shadow_casters.json"
+  ],
+  "blockers": [
+    "Shared single-ground convergence: continuous surface height/normal and land-coverage hooks offered by Q0 are not yet consumed/proven; Q4 diagnostic ground cannot replace Q2/Q3 by drawing a second plane."
+  ],
+  "pending_validation": [
+    "Not all visual acceptance criteria pass.",
+    "Late cliff placement and forest scale changes have native-noon evidence only.",
+    "Q5 corridor witness has halo_complete=false.",
+    "No combined source owner scene or 192-tile/Windows promotion.",
+    "No accepted source-fidelity or gameplay beauty handoff.",
+    "Revisions 14/15 correct selected-skin hill import; previous hill matrices are superseded for source fidelity.",
+    "Current source cliff coast still fails with gaps, repetition and straight grassy faces.",
+    "Q7 clearance leaves zero footprint collisions, but composed city visibility remains pending.",
+    "Q0 must adopt continuous world derivative adapter; current Q2 wet/dry normal seams still fail.",
+    "Large r6 map is synthetic source calibration preview: MountainWidth half-extent interpretation unconfirmed.",
+    "Actual silhouette-shadow metadata is published; shared shadow evaluation remains pending.",
+    "New PlacementHooksV1 is exercised with current Q7 city polygons; four local omissions, no moved retained instances.",
+    "Legacy shader rejection is superseded as a general blocker by Q0 linear module support; Q4 shared projection/ground migration remains pending."
+  ],
   "approval": null
 }

@@ -1,0 +1,43 @@
+{
+  "schema": "c3x.lab_v2.fixture.v1",
+  "id": "independent-module-compose",
+  "track": "Q0-platform",
+  "campaign": "Q1",
+  "tile_count": 16,
+  "viewport": [
+    768,
+    512
+  ],
+  "terrain": "Renderer/terrain_lab/v2/tests/platform/micro.csv",
+  "modules": [
+    "Renderer/terrain_lab/v2/tests/platform/owner_a/module.json",
+    "Renderer/terrain_lab/v2/tests/platform/owner_b/module.json"
+  ],
+  "packs": {
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "shore": "Renderer/packs/ShoreNormalized"
+  },
+  "references": [
+    "c3x.lab_v1.l21"
+  ],
+  "isolations": [
+    "terrain",
+    "features"
+  ],
+  "settings": {
+    "anisotropy": 8,
+    "mip_bias": 0,
+    "samples": 1,
+    "render_scale": 1,
+    "postprocess": "box",
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ]
+  }
+}

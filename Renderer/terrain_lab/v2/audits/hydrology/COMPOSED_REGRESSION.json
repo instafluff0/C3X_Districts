@@ -1,0 +1,224 @@
+{
+  "schema": "c3x.q3.composed_shore_regression.v1",
+  "directly_inspected": true,
+  "accepted_scope": "isolated-basin support defect only; not whole hydrology art acceptance",
+  "comparison": [
+    {
+      "role": "before",
+      "owner": "Q2-terrain",
+      "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-linear-on-r12/report.json",
+      "report_sha256": "5a7d88f0020e75b821592330f9ea7d5dd8ea7af6c6dab1ca83c0da22a36bbe0a",
+      "render_identity": "2990b43940185b4cbe853f033621a38fdf5351ccd47abbdc7876570be0e9cfbe",
+      "image": "Renderer/terrain_lab/v2/audits/hydrology/out/composed-regression/before.png",
+      "image_sha256": "b0fcba6aaa136292a0bcd402aa638a0d45f961abd14bf5bacf4e65acdebe3e70",
+      "original_bmp_sha256": "ade7744da292a6bc7fd82dc95a4dc8a0c8cad95013a5e4561c818613cf55498d",
+      "module": {
+        "color_branch": "q6_scene_linear_premultiplied_v1",
+        "contract": 1,
+        "fit_viewport": true,
+        "id": "q2-scene-linear-on",
+        "linear_adapter": 1,
+        "owner": "Q2-terrain",
+        "provider": "frozen_l21",
+        "scene": "complete",
+        "schema": "c3x.lab_v2.module.v1",
+        "shader": "Renderer/terrain_lab/v2/shaders/terrain/scene-linear-on.hlsl",
+        "suppress_territory": true,
+        "terrain_hooks": {
+          "header": "Renderer/terrain_lab/v2/systems/terrain/scene_adapter.h",
+          "initialize": "q2_scene::initialize",
+          "material_uv": "q2_scene::material_uv",
+          "material_weights": "q2_scene::material_weights"
+        }
+      },
+      "real_map": {
+        "dataset_payload_sha256": "4e5fa91a03586b9b36da1ec3d8ee8249d19e803fe710ecd6659a174697cee837",
+        "fixture_class": "unaltered_real_terrain",
+        "parser": {
+          "adapter": 1,
+          "closure_sha256": "3f1ec44302b61b4fc2ad9ebbe53e25081f0805443872f07a56bfa2dbe0b99fc1",
+          "text_encoding": "windows-1252"
+        },
+        "profile": "q0_real_map_v1",
+        "region": {
+          "camera": {
+            "hours": [
+              12,
+              18,
+              0,
+              6
+            ],
+            "viewport": [
+              768,
+              512
+            ],
+            "zooms": [
+              1,
+              2
+            ]
+          },
+          "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+          "coverage": {
+            "land_water_edges": 0,
+            "river_tiles": 0,
+            "terrain": {
+              "desert": 1,
+              "forest": 2,
+              "grassland": 2,
+              "hills": 3,
+              "jungle": 1,
+              "marsh": 1,
+              "plains": 6
+            },
+            "terrain_edges": 19
+          },
+          "extent": [
+            4,
+            4
+          ],
+          "halo": 2,
+          "id": "q2-wet",
+          "origin": [
+            83,
+            39
+          ],
+          "request_sha256": "dd969d84e7d973781bdb27c13d932bc6e8f21493b6dace0d708fbb7c4eebb450",
+          "role": "primary",
+          "terrain_sha256": "4ceeaf415e68fa0ea10fcd69a1a83afc67ff88a0586390c701ffcacc575de9b9",
+          "wrap": {
+            "x": true,
+            "y": false
+          }
+        },
+        "region_id": "q2-wet",
+        "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e"
+      }
+    },
+    {
+      "role": "after",
+      "owner": "Q2-terrain",
+      "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r13/report.json",
+      "report_sha256": "0cfda185da4326beca7436232a37bf018ddb904fdc98bbafe4dcd1f9b419cdc7",
+      "render_identity": "47717b0b87bc55b1a0753bc2cac42ffbe15c0d652cb2bf5bbe8780a021f9bb16",
+      "image": "Renderer/terrain_lab/v2/audits/hydrology/out/composed-regression/after.png",
+      "image_sha256": "e7d7b8c18754db8083f636e90e98c3132eeac837d2b403b9cfe9c4fa664628c9",
+      "original_bmp_sha256": "bcdddc7a687c47e337ac7414dde14928c974a8eeade205e2dc9a0c459a7fade2",
+      "module": {
+        "color_branch": "q6_scene_linear_premultiplied_v1",
+        "contract": 1,
+        "fit_viewport": true,
+        "hydrology_hooks": {
+          "header": "Renderer/terrain_lab/v2/systems/terrain/hydrology_consumer.h",
+          "initialize": "q3_scene::initialize",
+          "signed_shore_distance": "q3_scene::signed_shore_distance"
+        },
+        "id": "q2-q3-linear-on",
+        "linear_adapter": 1,
+        "owner": "Q2-terrain",
+        "provider": "frozen_l21",
+        "scene": "complete",
+        "schema": "c3x.lab_v2.module.v1",
+        "shader": "Renderer/terrain_lab/v2/shaders/terrain/scene-linear-on.hlsl",
+        "suppress_territory": true,
+        "terrain_hooks": {
+          "header": "Renderer/terrain_lab/v2/systems/terrain/scene_adapter.h",
+          "initialize": "q2_scene::initialize",
+          "material_uv": "q2_scene::material_uv",
+          "material_weights": "q2_scene::material_weights"
+        }
+      },
+      "real_map": {
+        "dataset_payload_sha256": "4e5fa91a03586b9b36da1ec3d8ee8249d19e803fe710ecd6659a174697cee837",
+        "fixture_class": "unaltered_real_terrain",
+        "parser": {
+          "adapter": 1,
+          "closure_sha256": "3f1ec44302b61b4fc2ad9ebbe53e25081f0805443872f07a56bfa2dbe0b99fc1",
+          "text_encoding": "windows-1252"
+        },
+        "profile": "q0_real_map_v1",
+        "region": {
+          "camera": {
+            "hours": [
+              12,
+              18,
+              0,
+              6
+            ],
+            "viewport": [
+              768,
+              512
+            ],
+            "zooms": [
+              1,
+              2
+            ]
+          },
+          "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+          "coverage": {
+            "land_water_edges": 0,
+            "river_tiles": 0,
+            "terrain": {
+              "desert": 1,
+              "forest": 2,
+              "grassland": 2,
+              "hills": 3,
+              "jungle": 1,
+              "marsh": 1,
+              "plains": 6
+            },
+            "terrain_edges": 19
+          },
+          "extent": [
+            4,
+            4
+          ],
+          "halo": 2,
+          "id": "q2-wet",
+          "origin": [
+            83,
+            39
+          ],
+          "request_sha256": "dd969d84e7d973781bdb27c13d932bc6e8f21493b6dace0d708fbb7c4eebb450",
+          "role": "primary",
+          "terrain_sha256": "4ceeaf415e68fa0ea10fcd69a1a83afc67ff88a0586390c701ffcacc575de9b9",
+          "wrap": {
+            "x": true,
+            "y": false
+          }
+        },
+        "region_id": "q2-wet",
+        "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e"
+      }
+    }
+  ],
+  "matched_inputs": {
+    "contract": true,
+    "pack_hash": true,
+    "settings": true,
+    "shader_hashes": true,
+    "postprocess_hash": true,
+    "terrain": true,
+    "real_map": true,
+    "scenarios": true,
+    "viewport": true,
+    "tile_count": true,
+    "packs": true
+  },
+  "intentional_change": "Enable Q3 signed-shore adapter via Q0 HydrologyHooksV1 with existing Q2/Q6 source-composed module. No material, placement, camera or sampling changes.",
+  "observation": "Before: large pale rectangular land plate with sharp raised lip in front/right marsh. After: plate and lip removed; continuous grass/marsh/source pools and unchanged source vegetation.",
+  "remaining": "Q2 bounded phase/zoom/neighbor checks; Q3 full static material and source rock/river composition pending.",
+  "q2_followup": {
+    "reported_by": "Q2-terrain",
+    "phase_zoom_regions": [
+      "wet",
+      "cold",
+      "dry",
+      "wet-holdout"
+    ],
+    "checked_variants": 32,
+    "scroll_variants": 8,
+    "direct_visual_review_by_owner": true,
+    "q3_independently_inspected": "matched noon before/after; not all Q2 follow-up images",
+    "result": "Pale rectangle absent and neighboring coast contours intact. Q2 reports byte-identical scroll returns. Relief normal defects remain Q4 work."
+  }
+}

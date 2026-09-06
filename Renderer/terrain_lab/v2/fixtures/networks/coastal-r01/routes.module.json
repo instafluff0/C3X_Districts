@@ -1,0 +1,13 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "q5-coastal-routes",
+  "owner": "Q5-networks",
+  "provider": "cpp_packet",
+  "contract": 1,
+  "source": "Renderer/terrain_lab/v2/systems/networks/coastal.cpp",
+  "shader": "Renderer/terrain_lab/v2/shaders/networks/coastal.hlsl",
+  "color_branch": "q6_scene_linear_premultiplied_v1",
+  "after": [
+    "q5-coastal-base"
+  ]
+}

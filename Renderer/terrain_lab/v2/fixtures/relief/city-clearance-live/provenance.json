@@ -1,0 +1,11 @@
+{
+  "schema": "c3x.q4.placement_input.v1",
+  "sources": {
+    "Renderer/terrain_lab/v2/fixtures/objects/real-holdout/fixture.json": "2342a6c8be96fb9e4dfdce836c0e0b2184c1230b15c413de511ebf9750d49653",
+    "Renderer/terrain_lab/v2/audits/objects/metadata/registered-mixed-holdout-v2/corridors.json": "52b8748da497db208806ce54045887b68b5df260080c36c515de2c240848a342",
+    "Renderer/terrain_lab/v2/audits/objects/CITY_VEGETATION_WITNESS.json": "c9cc807f8a80b48185fc614c2757bed3f201b3b21bc5d168747ab20be78171a5"
+  },
+  "polygon_count": 4,
+  "clearance_sha256": "937e91bef4b98735d8e0f3fc98ca553cc73ce84e5fb51ae0b0e3a8983dc29f32",
+  "scope": "Actual source vertex hull versus published polygons; city-only when no corridor sidecars are attached. No claim of complete route/wrap coverage."
+}

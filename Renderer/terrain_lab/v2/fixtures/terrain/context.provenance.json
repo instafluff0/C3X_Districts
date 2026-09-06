@@ -1,0 +1,33 @@
+{
+  "schema": "c3x.q2.context.v1",
+  "class": "synthetic_stress_cases",
+  "purpose": "provisional open countryside base-only gameplay-scale crop; no object placement or source BIQ claim",
+  "seed": 0,
+  "basis_pixels": [
+    128,
+    64
+  ],
+  "normal_viewport": [
+    512,
+    256
+  ],
+  "reduced_viewport": [
+    256,
+    128
+  ],
+  "camera_center_lattice": [
+    4,
+    4
+  ],
+  "halo": 2,
+  "raw_origin": [
+    94,
+    50
+  ],
+  "missing_context": [
+    "Q8 settlements/routes",
+    "Q3 shore and water",
+    "Q4 relief",
+    "verified test.biq"
+  ]
+}

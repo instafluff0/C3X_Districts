@@ -1,0 +1,80 @@
+{
+  "schema": "c3x.q3.source_composition.v1",
+  "accepted": false,
+  "status": "active canonical refinement after user rejection of proxy overview",
+  "contracts": {
+    "Renderer/terrain_lab/v2/shared/scene_hooks.h": "aecc9e2f9f5067e75ea1a0d6b47392d032e297f6f7f20a439d533cfc5d3f34dc",
+    "Renderer/terrain_lab/v2/contracts/packet_v1.h": "124c0da49259ddd7d74d18a10a2da0a1c1f2da76597227a891c92083dfbdd414",
+    "Renderer/terrain_lab/v2/shared/frozen_scene.cpp": "78dbcc3ee6bdafce08576bd529192f33982fd4e5b8f4b5912441c514ba38de91",
+    "Renderer/terrain_lab/v2/shaders/lighting/generated/scene_linear_v1.hlsl": "1fc22e0f8afec20d397d47a5c00fc566f026b9781adfd0114b62ac45faf8d88d",
+    "Renderer/terrain_lab/v2/shaders/lighting/scene_shadow_v1.hlsl": "982b41cb5f98ae52c1c1533b874fd847b6fbe87f6c47520c782320648c0774c0",
+    "Renderer/terrain_lab/v2/systems/hydrology/scene_adapter.h": "a8267e8aad88eed953bb5b768af90c09a80391e64b847ad928fca5fc04d3876e",
+    "Renderer/terrain_lab/v2/shaders/hydrology/scene_linear.hlsl": "a98ae01f56dbbc4e64c342118e7715110e06bcd6b777507317ef141f9b98a45d",
+    "Renderer/terrain_lab/v2/shaders/hydrology/scene_material_v1.hlsl": "5dbda71ebe74509cb56980b8cc42b5882c876e1c8a6a6ee2d8a3d4fca1a2a8af",
+    "Renderer/terrain_lab/v2/systems/hydrology/source-linear.module.json": "0058ce0e362a897e8c8011aa2225c193511d35bebd889f68a050ff48968dfa30"
+  },
+  "assets_added": [
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/base_color_bbba55639c23d574.dds",
+      "sha256": "417e443b0a27deea40e9bfb4efb1aa13e1bec26952d488e8b031635b5a01331b",
+      "role": "authored ocean/coast seabed forms; unchanged source atlas",
+      "classification": "source_reuse"
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/height_6964171784984fe8.dds",
+      "sha256": "9ac38f23e62d942ab0cdf9242296e6d3e481e785562f825ca94b70c520303173",
+      "role": "linear authored seabed height; sampled for static material normals",
+      "classification": "source_reuse"
+    }
+  ],
+  "adapter": {
+    "scene": "frozen source-complete Q2 terrain + Q3 signed shore fields + Q6 linear material/lighting",
+    "coordinate": "Q0 authoritative clip/depth; Q3 callback frozen corner lattice to center (-.5,-.5)",
+    "field": "main hydrology_data float4 TEXCOORD15 after world14: positive-land sd, width, continuous rocky fraction, monotone depth",
+    "output": "raw Rec709 radiance and straight coverage to Q6 wrapper; premul MRT once, exposure/display in shared final pass",
+    "world_attribute_slot": "struct and passthrough world14 retained when Q3 data enabled, independently of Q6 shadow bindings"
+  },
+  "iterations": [
+    {
+      "id": "source-mixed-10",
+      "result": "failed visual: field slot shifted; shader read world coordinates as hydrology. CPU packet had valid samples."
+    },
+    {
+      "id": "source-mixed-11",
+      "result": "field ABI corrected; water present, visually too muddy from bright bed contribution."
+    },
+    {
+      "id": "source-mixed-12",
+      "result": "absorption coefficient12 restores dark blue offshore gradient; shallow bed still too indistinct."
+    },
+    {
+      "id": "source-bed-only-13",
+      "result": "isolation shows bed detail also too weak without water; inspected original atlas and linear height channels."
+    },
+    {
+      "id": "source-mixed-14",
+      "result": "explicit source coast-form atlas selection and height-derived normal reveals cracks; pattern too large."
+    },
+    {
+      "id": "source-island-15",
+      "result": "reduce detail scale1.6 to1.0 tile and normal amplitude28 to14; large120tile source-composed render pending inspection"
+    }
+  ],
+  "packet_field_witness": {
+    "draws": 2,
+    "land_vertex_samples": 74671,
+    "water_vertex_samples": 31145,
+    "min_signed_distance": -2.52219,
+    "max_signed_distance": 3.05474,
+    "max_depth": 0.436336,
+    "max_rockiness": 1
+  },
+  "remaining": [
+    "Q4 actual source rocky cliff bodies and shoreline joins",
+    "Shared source land-pass coverage/height notch at owner tile boundary",
+    "Q3 exact source-scene river geometry and carving; inherited kind9 still provisional",
+    "Q6 actual transformed mesh/cutout silhouette shadows; legacy fallback is not accepted",
+    "World-stable seabed placement across different raw-origin crop exports (camera scrolling within crop is stable)",
+    "Complete revised source acceptance matrix/parity after refinement"
+  ]
+}

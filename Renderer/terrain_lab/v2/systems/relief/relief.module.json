@@ -1,0 +1,1 @@
+{"schema":"c3x.lab_v2.module.v1","id":"q4-relief-v1","owner":"Q4-relief","provider":"cpp_packet","contract":1,"source":"Renderer/terrain_lab/v2/systems/relief/packet.cpp","shader":"Renderer/terrain_lab/v2/shaders/relief/relief_v1.hlsl"}

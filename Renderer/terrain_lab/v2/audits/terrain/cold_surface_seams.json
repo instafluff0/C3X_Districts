@@ -1,0 +1,13 @@
+{
+  "schema": "c3x.q2.composed_surface_audit.v1",
+  "region": "cold",
+  "source_query": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-surface-query.json",
+  "sample_pairs": 408,
+  "max_delta": {
+    "height": 2.399999998736746e-07,
+    "normal": 0.000953327224,
+    "shore": 0
+  },
+  "remaining_failures": [],
+  "scope": "Exact source builder incident edges; geometry failures belong to shared relief/shore composition, not flat Q2 base field."
+}

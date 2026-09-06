@@ -1,0 +1,132 @@
+{
+  "campaign": "Q1",
+  "id": "q6-real-holdout-linear",
+  "isolations": [
+    "terrain",
+    "features"
+  ],
+  "modules": [
+    "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/linear.module.json"
+  ],
+  "packs": {
+    "bridges": "Renderer/packs/RouteDoodadsNormalized",
+    "cities": "Renderer/packs/CityComponentsNormalized",
+    "compound_units": "Renderer/packs/CompoundUnitLab",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "improvements": "Renderer/packs/ImprovementsNormalized",
+    "objects": "Renderer/packs/TileObjectsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "resources": "Renderer/packs/ResourceNormalized",
+    "routes": "Renderer/packs/RouteStylesNormalized",
+    "shore": "Renderer/packs/ShoreNormalized",
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "units": "Renderer/packs/UnitFamilyLab",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "walls": "Renderer/packs/CityAdjunctsNormalized"
+  },
+  "real_map": {
+    "dataset_payload_sha256": "4e5fa91a03586b9b36da1ec3d8ee8249d19e803fe710ecd6659a174697cee837",
+    "fixture_class": "real_terrain_with_lab_augmentations",
+    "overlay": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/augmentation.json",
+    "overlay_sha256": "19b802a4896d89ae0bd67a8ca5539b678977d8fb139ee88bc243b0a84fae5b4e",
+    "parser": {
+      "adapter": 1,
+      "closure_sha256": "3f1ec44302b61b4fc2ad9ebbe53e25081f0805443872f07a56bfa2dbe0b99fc1",
+      "text_encoding": "windows-1252"
+    },
+    "profile": "q0_real_map_v1",
+    "region": {
+      "camera": {
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ],
+        "viewport": [
+          768,
+          512
+        ],
+        "zooms": [
+          1,
+          2
+        ]
+      },
+      "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+      "coverage": {
+        "land_water_edges": 0,
+        "river_tiles": 4,
+        "terrain": {
+          "forest": 6,
+          "grassland": 2,
+          "jungle": 8
+        },
+        "terrain_edges": 10
+      },
+      "extent": [
+        4,
+        4
+      ],
+      "halo": 2,
+      "id": "mixed-holdout",
+      "origin": [
+        18,
+        46
+      ],
+      "role": "fixed_neighbor_holdout",
+      "terrain_sha256": "f620b8a814b982430fa1e7db600087b722b166bfb5b30411e1df7465eeb701f5",
+      "wrap": {
+        "x": true,
+        "y": false
+      }
+    },
+    "region_id": "mixed-holdout",
+    "scenario_hashes": {
+      "cities": "8d4c761d767d78c723ea322b2563daf3279d06656eba3edc709e12aab376c37a",
+      "farms": "6583f328fa63adad9d51bbefe69129fd041f7f13cb755dd0c99e5b69362f6e5f",
+      "infrastructure": "a69b4edbe104cc00a4072d8ea967deafbc3790f2a10175ca059602bb89b6436d",
+      "mines": "60bbf6da9d1b82b82a0d1c523ee65e6d5259cd0b11ade47ec2dc10b3d0b59b60",
+      "objects": "cd77d31470c774627dde87cdda77ea6f778901c77010c3fa9140324b6db43392",
+      "railroads": "6ba73d348d15a001952fbf5374b156215cf92b00d39fe97bdb6bc6aa0c9682a5",
+      "resources": "d051a54cf7a4a73cf32d713d33247f2ca5f09c2cf04b8dd32f83bbed45fc7d3d",
+      "roads": "a97c4d9047238268cc5d7d6306daed75ccab5cdfa8af8ec2052dc4f7651cb9d2",
+      "units": "129920051ccfb6ff53719ca9bada2c8be363b9fd9ea5b244fab25423588fd017"
+    },
+    "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e"
+  },
+  "references": [
+    "c3x.lab_v1.l21"
+  ],
+  "scenarios": {
+    "cities": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/cities.csv",
+    "farms": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/farms.csv",
+    "infrastructure": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/infrastructure.csv",
+    "mines": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/mines.csv",
+    "objects": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/objects.csv",
+    "railroads": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/railroads.csv",
+    "resources": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/resources.csv",
+    "roads": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/roads.csv",
+    "units": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/units.csv"
+  },
+  "schema": "c3x.lab_v2.fixture.v1",
+  "settings": {
+    "anisotropy": 8,
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ],
+    "mip_bias": 0,
+    "postprocess": "box",
+    "render_scale": 1,
+    "samples": 4
+  },
+  "terrain": "Renderer/terrain_lab/v2/fixtures/lighting/real-holdout/terrain.csv",
+  "tile_count": 16,
+  "track": "Q6-lighting",
+  "viewport": [
+    768,
+    512
+  ]
+}

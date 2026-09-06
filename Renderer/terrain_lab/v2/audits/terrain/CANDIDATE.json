@@ -1,0 +1,195 @@
+{
+  "schema": "c3x.q2.candidate.v1",
+  "id": "Q2-terrain-r14",
+  "state": "ready_for_convergence_with_proven_geometry_blocker",
+  "module": "Renderer/terrain_lab/v2/systems/terrain/composed-hydro-on.module.json",
+  "source_classification": "source_adaptation",
+  "source_policy": "Selected normalized alternate skin; no original-art fallback or generated dominant landform. Flat base topology and diagnostic colors explicitly labeled.",
+  "contracts": [
+    "c3x.lab_v2.fixture.v1",
+    "c3x.lab_v2.module.v1",
+    "packet_v2",
+    "TerrainHooksV1",
+    "HydrologyHooksV1",
+    "q6_scene_linear_premultiplied_v1",
+    "Q2MaterialDetailV1"
+  ],
+  "frozen_reference": "Renderer/handoffs/L21_complete_beauty_scene.json",
+  "consumed_inputs": {
+    "Renderer/terrain_lab/v2/contracts/platform_v1.json": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+    "Renderer/terrain_lab/v2/contracts/packet_v1.h": "08855c9302e5911fe20d4152a873d76c3185e08bf05e1b9ddfd18f25504b1183",
+    "Renderer/terrain_lab/v2/shared/scene_hooks.h": "a2a3ea1a7ac1f50c0f7a71951d3d61bde9f104ab7152253e265dba7309ccb0aa",
+    "Renderer/terrain_lab/v2/shared/frozen_scene.cpp": "59f73236cf0f2d17c288a5ee16cd4b73095e38eb37e2509b208b89693d7080db",
+    "Renderer/terrain_lab/v2/systems/hydrology/scene_adapter.h": "87db8b99e51c4a438ae6bfe4de9c051679df81dd3410f0f6df726c0399e97ccc",
+    "Renderer/terrain_lab/v2/systems/hydrology/field.h": "ec75252bfba0da40b7329702387b105d2d19cc557d07723b4ef08eaaa090fe87",
+    "Renderer/terrain_lab/v2/shaders/lighting/generated/scene_linear_v1.hlsl": "d077e313173493fc604cb9df2313b7c2a18dbb6074be2061c8bd89200224309f",
+    "Renderer/terrain_lab/v2/systems/lighting/prepare_linear_scene.py": "55695bc54d80f4ed1ffdf5ba7b591399ef594bf4fb273ce0adda49263908befb",
+    "Renderer/terrain_lab/v2/app/runner.py": "56818f2448743966235f65d53a05c590b24f55cab33f52e7743e1fc60f418cce",
+    "Renderer/terrain_lab/v2/app/surface_query.py": "dd7af1541a7c223098888b5c278c919ed85ff5626aaf184d46f95a7c6938f5e8",
+    "Renderer/terrain_lab/v2/shared/real_map/registry_v1.json": "a09f78278daa2ef79761404206bbdc378375458d85ab66a4195e5c07969ef619",
+    "Renderer/handoffs/L21_complete_beauty_scene.json": "426d65f4733b0587ba9ee22a8c6be0f666e1371999427293ca72072dbb91b059",
+    "Renderer/terrain_lab/v2/prompts/COMMON.md": "a2f717fbe0e827298b9abf67a1c27f44fd43bd303fed35d9b479d02282f46aef"
+  },
+  "owned_source_hashes": {
+    "Renderer/terrain_lab/v2/fixtures/terrain/prepare_context.py": "6ea82cd17fad6e66e73c566000e1f2eb248633439c257fcd89cd0c1bf0645e40",
+    "Renderer/terrain_lab/v2/shaders/terrain/albedo.hlsl": "24b8aeb81123f01f4fad6ae76a36e7ea9f317a71196ad148cd4606b57a907d03",
+    "Renderer/terrain_lab/v2/shaders/terrain/base.hlsl": "28e408ac803d75676c634b6307cc433edfc6e18a9094362f04d2d0a1518456a2",
+    "Renderer/terrain_lab/v2/shaders/terrain/baseline.hlsl": "d0f52a7212fe2fabec5cad1726b21312d964fdb4aa74fdf3c0f7eb026381ff18",
+    "Renderer/terrain_lab/v2/shaders/terrain/detail.hlsl": "e80fcd4523263d0209d8b90d30dcebe2f3cac55d84259831753fa61262daeb0c",
+    "Renderer/terrain_lab/v2/shaders/terrain/height.hlsl": "f7dce305640c584c90c1883456b2181f3d4f4ce46169cab6811fa5d1b4fd0225",
+    "Renderer/terrain_lab/v2/shaders/terrain/material_response_v1.hlsl": "ea2448a7364730414ffc3fd7e900426deb1f0bac147e13ce4e5879dff64a245b",
+    "Renderer/terrain_lab/v2/shaders/terrain/normal.hlsl": "a5cad249a1c7cc41036fb0e4d6be9574138b3c2305002c52a577735190605d7f",
+    "Renderer/terrain_lab/v2/shaders/terrain/off.hlsl": "d0f52a7212fe2fabec5cad1726b21312d964fdb4aa74fdf3c0f7eb026381ff18",
+    "Renderer/terrain_lab/v2/shaders/terrain/roughness.hlsl": "fb56ac685d4b22b4cbbf951aa2e6271e77e4e2570f647956f66b449d3a8d3c70",
+    "Renderer/terrain_lab/v2/shaders/terrain/scene-linear-off.hlsl": "3f8f17de90415fd0b7c2ab1bc167b0d45e4a5d83584bec465e3b169e060b5a05",
+    "Renderer/terrain_lab/v2/shaders/terrain/scene-linear-on.hlsl": "a3ef03fd29e7850cfc26362265f8d5e4b3362e90b94fb3346c5db957f6ba1310",
+    "Renderer/terrain_lab/v2/shaders/terrain/scene_material_v1.hlsl": "1a441cf913acdffb108f9f7565489fcf23904da34ab925ba12f9fdb8ee600d74",
+    "Renderer/terrain_lab/v2/shaders/terrain/scene_weights_debug.hlsl": "a5a9565fca9b5976c1828e5bb8af52c06431395e40f8bd939e654110d3cb6906",
+    "Renderer/terrain_lab/v2/shaders/terrain/surface_kind_debug.hlsl": "fedd86ef22b4e5d7a00bc6d04f884cdb6c921b4a85a50480b6a59a05b1d8af13",
+    "Renderer/terrain_lab/v2/shaders/terrain/weights.hlsl": "18dad03dc0bd6f37a1eebc4bc108094e9e835c78a778dd2135b389dd7c748b30",
+    "Renderer/terrain_lab/v2/systems/terrain/builder.cpp": "145f6e92f6d85164c7168be6edff38a0d9f0adf6c2f597dd63a1b2750ce62879",
+    "Renderer/terrain_lab/v2/systems/terrain/checkpoint.py": "477e2be1e2003e1c19ad36506a9853a107e4551c1d736f187639b963b23c7502",
+    "Renderer/terrain_lab/v2/systems/terrain/composed_surface_audit.py": "7b82f0f67c28bb04097abe6aad3cad5d5e356983e7b5e0c45986e8615d082016",
+    "Renderer/terrain_lab/v2/systems/terrain/evidence.py": "d948b792101d88d9832e04da795b615bf505564938f8056ceee34376cbf49d6d",
+    "Renderer/terrain_lab/v2/systems/terrain/fixture_matrix.py": "d2122c19b04437d7186261f3c9e4c0a2d319d4d43ab8f92349bc48d897fc076d",
+    "Renderer/terrain_lab/v2/systems/terrain/hydrology_consumer.h": "a41be53224a163287944d9060bf54ed8001f6a96e07823f882b6984b2aea8aa1",
+    "Renderer/terrain_lab/v2/systems/terrain/material_audit.py": "b2aa2cfba4e7450f92e6ad05096962c0b440de03a38a7606baa19a5e139eabf1",
+    "Renderer/terrain_lab/v2/systems/terrain/scene_adapter.h": "3fcc1b4885eda29bab6e883dfc7f810a40dd8755f7dfb2ddcdcd1433e3dca679",
+    "Renderer/terrain_lab/v2/systems/terrain/surface.h": "82530048c79209345d4b49267db1cf16a3781231bc26344dc8d50284ffbabfe1",
+    "Renderer/terrain_lab/v2/tests/terrain/acceptance_gate.py": "eaedbe1072868ae5e0f37e4748d38b03bdc2f2d28ad51120ab5aa429f11f647b",
+    "Renderer/terrain_lab/v2/tests/terrain/recapture_test.cpp": "5950961df85cf04c3db0208c29fd93154c0b6d9de853ca6fd453147bfe87c8b6",
+    "Renderer/terrain_lab/v2/tests/terrain/surface_test.cpp": "d518c59039cdba0c724796521bb21f889577dc19f49f091ad4217205b6c5c6dc",
+    "Renderer/terrain_lab/v2/tests/terrain/test_terrain.py": "0058f0c87cad16924fb377d640f7442839923ba5f3e243fb849e7e7737f9bc82",
+    "Renderer/terrain_lab/v2/tests/terrain/verify_evidence.py": "37121c092706ff89133430e920ff993fd418d2c79a0ca9b7cfd9e64dcd33e76a"
+  },
+  "acceptance": [
+    {
+      "criterion": "Continuous Q2 base weights/height/normal: all 14 families, both axes, reversals, wrap and junction recipe",
+      "state": "passed",
+      "evidence": [
+        "fixtures/terrain/matrix_v1.json",
+        "Four portable tests",
+        "832 r06 images",
+        "771 actual neighboring recapture samples"
+      ]
+    },
+    {
+      "criterion": "Source detail controls at both zooms, phase and scroll stability with no sharpening",
+      "state": "passed",
+      "evidence": [
+        "metrics_v1.json",
+        "composed_metrics_v1.json",
+        "Q1 independent review"
+      ]
+    },
+    {
+      "criterion": "User-rejected pale rectangular inland shoreline/lip",
+      "state": "passed",
+      "evidence": [
+        "wet-linear-on-r12 before",
+        "wet-hydro-on-r13/r14 after",
+        "32 composed repeat-verified phase/zoom images including the fixed wet neighbor"
+      ]
+    },
+    {
+      "criterion": "All 14-family composed geometry has matching incident normals and source relief",
+      "state": "blocked",
+      "owner": "Q4-relief/Q0-platform",
+      "evidence": [
+        "wet_surface_seams.json",
+        "dry_surface_seams.json"
+      ],
+      "reason": "145 wet and 153 dry edge pairs exceed .001 normal component tolerance; maxima .421376169 and .826748308. Heights/shore match. Shared source builder clamps derivative samples to ownership tile; continuous raised-surface derivative provider required."
+    },
+    {
+      "criterion": "Final plausible gameplay 192-tile composition and coordinated D3D11 parity",
+      "state": "pending",
+      "owner": "Q0-platform/Q4-relief/Q7-presentation/Q8-beauty",
+      "reason": "Not a package closure while incident normals fail; shared heavy-matrix pause and integration candidates remain relevant."
+    },
+    {
+      "criterion": "Actual caster mesh/cutout silhouette shadows on real receivers",
+      "state": "pending",
+      "owner": "Q6-lighting/Q0-platform/Q4-relief/Q7-presentation",
+      "reason": "New explicit user requirement. Frozen approximate shadow evidence is not accepted; Q2 introduces no separate shadow implementation."
+    }
+  ],
+  "commands": [
+    "python3 -B -m unittest discover -s Renderer/terrain_lab/v2/tests/terrain -p test_*.py",
+    "python3 Renderer/terrain_lab/v2/tests/terrain/verify_evidence.py",
+    "python3 Renderer/terrain_lab/v2/tests/terrain/acceptance_gate.py",
+    "python3 Renderer/terrain_lab/v2/systems/terrain/composed_surface_audit.py wet",
+    "python3 Renderer/terrain_lab/v2/app/runner.py check --fixture Renderer/terrain_lab/v2/fixtures/terrain/composed-hydro-wet-on.fixture.json --candidate wet-hydro-review"
+  ],
+  "artifacts": {
+    "audit": "Renderer/terrain_lab/v2/audits/terrain/Q2_TERRAIN_AUDIT.md",
+    "isolated_metrics": "Renderer/terrain_lab/v2/audits/terrain/metrics_v1.json",
+    "composed_metrics": "Renderer/terrain_lab/v2/audits/terrain/composed_metrics_v1.json",
+    "before_after": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-shore-rectangle-before-after.png"
+  },
+  "approval": null,
+  "required_user_action": null,
+  "render_evidence": [
+    {
+      "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-hydro-on-r14/report.json",
+      "report_sha256": "1d677fd087f71ccb8873ea905049c1b602348a4c915043313becb79369b9099a",
+      "render_identity": "47717b0b87bc55b1a0753bc2cac42ffbe15c0d652cb2bf5bbe8780a021f9bb16",
+      "packet_paths": [
+        "Renderer/terrain_lab/v2/app/.cache/geometry/1c981984488507a48ee21847c81d8a7de39518e49fcd8eba4c5446f173cf4f6e/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/440489b7a9ce5d5466df7777d3d75b8607d6c11421af2a1734b33cd306eeffd6/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/83e91d190b660f252ee5ce2c08d833f8460d990960c46a09f813f27dde55a060/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/8e0ba3f34a0d6b1e9b5fbe51197057bf7c47d40afae0244e4965ba0162e14ca7/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/c05c0d5f2c42eec6da1064e3f81028cd10655b5cb98a3ee1e53f1f7e5c2a3c8a/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/c0e3d03345e9c493bdf2be7a982ef9fd18cbcf7c9e0bfdd74d44505b7364c121/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/d477b3b33160617fca6e935e99601ea723b0abe6d7336460cea253cf07cf8f11/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/e7de1f54b79c10670c71e00e8a3bb2490a6a71caae6a249ad6c792883bad4b47/payload"
+      ]
+    },
+    {
+      "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/cold-hydro-on-r14/report.json",
+      "report_sha256": "a4622b6941c795a785a20995351b1924fee0f21656470fee6b09d2d61ea5c275",
+      "render_identity": "d059e20bf2792c342486bb1b479338d410e7f78fd09354f17105f2d1c50baa55",
+      "packet_paths": [
+        "Renderer/terrain_lab/v2/app/.cache/geometry/24a4f3eeaaf5bc5253747d6b48254f7850db8795cb70444dfff19be9072af0b4/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/3816cf489d21cfd51a0859edd426a5f82313ab36150a14a1ab4d503f3750c188/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/4ada08f7831dbdc805d84db0f97638c9df29c35174680a5f576a842479b08854/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/657e00454d9fdfd03b79842923f57d62bdf5daf2d6d5ecd5e68fe3ab606987d7/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/9dcabc3df55b5de6f69362469641dcc644bc8f45665b2b15c45defce7134a0ec/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/c03743760d8f61958979b8749355d7700268bd3345c154807bdcaa2a578608c3/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/fbc522582a4ffac2603e7dbf9a0c4f053a7d9780fe39443f6a092f29700058f7/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/fd10efd7cf7bdcd238b8ba03db3ce342302a1c7fd912faffd06bdc49673d76ce/payload"
+      ]
+    },
+    {
+      "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/dry-hydro-on-r14/report.json",
+      "report_sha256": "39ddea04c6efcb9d12d24d914d1fef72b3a707d038bcd96fb4a65b9d78386e73",
+      "render_identity": "ef6951a3b92ad35dfcef46dfba8511f683b3b3363802bcfb4b9a9c9d1d7386f6",
+      "packet_paths": [
+        "Renderer/terrain_lab/v2/app/.cache/geometry/3cc88f5d81cfe14471bdd3223dfca291e908621fef26d283839657126d2421db/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/607de2e0f3e3ade84e2519a204f67165b5641180be5f0910d56565a9f167d429/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/614349b3a2be03be4aaa16c9f7d2faff22837637f7aa6817c8334b5368a05338/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/91326e634c2e8f8de20a8d970b1aaa7f994b793601713b4807775fbba7964ae3/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/be89f14a8bf15a197c1bfb2137c6c7525b6c3408f6a22d26867a77bd4ae875eb/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/c875c8bfe80c1ecbae4891b768fca7f3f7314e3c4e7c5a9ee0e93487200f8826/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/d667c1ae0aff0e909d81f26de46681f9b2f66f20f55e17ebb7201bbb554d1fd8/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/d71900fd1b5d02ca29cc23af71db0a87a891996a1ee273044c4c75c6aa28c5ed/payload"
+      ]
+    },
+    {
+      "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/wet-holdout-hydro-r14/report.json",
+      "report_sha256": "40df51037da556f0039d18278cbe2ae5c309b9c3c9f11d0d704f8565d304f0c5",
+      "render_identity": "0d0f8c2617abbb2f7d5b8bdc8e9019158bf456df6929fb2b73f4dfe78cea6cc7",
+      "packet_paths": [
+        "Renderer/terrain_lab/v2/app/.cache/geometry/0115e0e55fd0c40adacbcf174a72215e1e235c2a1884035266b8bdba2462795b/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/2a1a5dab2cd405850ffc82e69186d66a9424fee92f5fc25e06654e6fedf1bc0b/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/31acfc31e3b15c6f7d290e100619b24e33a985182fef534aed71802ad6ffabff/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/3cd9ea49172ba22aac7577b9ed49e267d61694c906a5fda5e6349016aec9368f/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/806083222d8172a5efec0532bca3effffa9e01a4079988e2d9962adfa99c55b2/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/ba968745d7f3d8f3323c6657f9d914c7b4ba0ee3f49bff729e04feba1fc97f81/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/e34b661b2fdb31315e7f5e97b7237a292b6f2ec2002efe7bc6a4e1112729317a/payload",
+        "Renderer/terrain_lab/v2/app/.cache/geometry/fa052e0f9cc87d7fcaf7acc6d2bc404d21c50afe2381714ff3d3a2a10d712c8d/payload"
+      ]
+    }
+  ],
+  "pin_scope": "Consumed-input hashes record publication snapshot. Each immutable report hash/render identity pins its actual render closure; shared owners may advance after a checkpoint."
+}

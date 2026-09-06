@@ -1,0 +1,470 @@
+{
+  "schema": "c3x.q2.source_audit.v1",
+  "selected_pack": "Civ5EnvironmentSkin",
+  "components": [
+    {
+      "classification": "source_adaptation",
+      "asset_id": "terrain/grassland/base",
+      "material": "Renderer/packs/Civ5EnvironmentSkin/materials/grassland.json",
+      "material_sha256": "587794e01cda0a6be0ff0513438563d9937efb37d056b1e657d5681116452e63",
+      "roles": {
+        "base_color": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds",
+          "sha256": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+          "declared_color_space": "srgb",
+          "statistics": {
+            "dimensions": [
+              4096,
+              4096
+            ],
+            "mips": 11,
+            "dxgi_format": 78,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.2823529411764706,
+            "max": 0.5660130718954248,
+            "mean": 0.4191610498366038,
+            "stddev": 0.03909150176312654
+          }
+        },
+        "height": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_height.dds",
+          "sha256": "7ced53bf19f07a083aa66403fb6f4831f7410d63a4243ad4c65266e3cc4bc2d0",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              4096,
+              4096
+            ],
+            "mips": 11,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.34901960784313724,
+            "max": 0.5176470588235295,
+            "mean": 0.41163545496325754,
+            "stddev": 0.016382717446326446
+          }
+        },
+        "specular": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_specular.dds",
+          "sha256": "ff3d5e0d6994edcf4b5116abfd8abcbe42eda97a40b37a4850a84c79e3c8806e",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              4096,
+              4096
+            ],
+            "mips": 11,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.24313725490196078,
+            "max": 0.24313725490196078,
+            "mean": 0.24313725490196655,
+            "stddev": 5.773159728050814e-15
+          }
+        }
+      },
+      "geometry": "generated flat continuous base grid, not source-authored relief",
+      "uv_adaptation": "integer periodic repeats on map extent; same source height sampled at 1x/3x/8x",
+      "engine_claim": "source channels confirmed by normalized descriptor and prior source audits; detail amplitudes and inverse-specular roughness are C3X-authored interpretation"
+    },
+    {
+      "classification": "source_adaptation",
+      "asset_id": "terrain/plains/base",
+      "material": "Renderer/packs/Civ5EnvironmentSkin/materials/plains.json",
+      "material_sha256": "a840f78b324ca0a4ae5362260384a0260a2a2a9cdb9b92d23115dc927fbb58f9",
+      "roles": {
+        "base_color": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/plains_base_color.dds",
+          "sha256": "233a8d7a3c7c4769d66cc2be0f2fc4a3c85375044ed1e9d2e94c1ea1da28b01b",
+          "declared_color_space": "srgb",
+          "statistics": {
+            "dimensions": [
+              4096,
+              4096
+            ],
+            "mips": 11,
+            "dxgi_format": 78,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.3437908496732026,
+            "max": 0.8026143790849672,
+            "mean": 0.5429543887867615,
+            "stddev": 0.04965851942757885
+          }
+        },
+        "height": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/plains_height.dds",
+          "sha256": "4aeb947708e35001a9a25d59ae85a81e96b51756156b318e4b3251a8e8bb72c7",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              4096,
+              4096
+            ],
+            "mips": 11,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.27058823529411763,
+            "max": 0.5686274509803921,
+            "mean": 0.4166609221813846,
+            "stddev": 0.04915884755839624
+          }
+        },
+        "specular": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/plains_specular.dds",
+          "sha256": "ff3d5e0d6994edcf4b5116abfd8abcbe42eda97a40b37a4850a84c79e3c8806e",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              4096,
+              4096
+            ],
+            "mips": 11,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.24313725490196078,
+            "max": 0.24313725490196078,
+            "mean": 0.24313725490196655,
+            "stddev": 5.773159728050814e-15
+          }
+        }
+      },
+      "geometry": "generated flat continuous base grid, not source-authored relief",
+      "uv_adaptation": "integer periodic repeats on map extent; same source height sampled at 1x/3x/8x",
+      "engine_claim": "source channels confirmed by normalized descriptor and prior source audits; detail amplitudes and inverse-specular roughness are C3X-authored interpretation"
+    },
+    {
+      "classification": "source_adaptation",
+      "asset_id": "terrain/desert/base",
+      "material": "Renderer/packs/Civ5EnvironmentSkin/materials/desert.json",
+      "material_sha256": "3d36a43659d8d9e76dc22f287dbf397b600218788376b4d6e463aa9efc6761da",
+      "roles": {
+        "base_color": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/desert_base_color.dds",
+          "sha256": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193",
+          "declared_color_space": "srgb",
+          "statistics": {
+            "dimensions": [
+              2048,
+              2048
+            ],
+            "mips": 10,
+            "dxgi_format": 78,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.6039215686274509,
+            "max": 0.7908496732026143,
+            "mean": 0.7182617187500088,
+            "stddev": 0.016146971660827538
+          }
+        },
+        "height": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/desert_height.dds",
+          "sha256": "0a53005b2ace893649e2f40168987b1e07e57af07ff1b0119893e63aa3d68193",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              2048,
+              2048
+            ],
+            "mips": 10,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.2823529411764706,
+            "max": 0.5490196078431373,
+            "mean": 0.438797296262276,
+            "stddev": 0.035102667484571
+          }
+        },
+        "specular": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/desert_specular.dds",
+          "sha256": "828a10e605c9971a44bbf3b1cb53b859423a9e98629af68e3c56423eaf8e33cb",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              2048,
+              2048
+            ],
+            "mips": 10,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.0,
+            "max": 0.4980392156862745,
+            "mean": 0.08922717524509902,
+            "stddev": 0.09984195742563577
+          }
+        }
+      },
+      "geometry": "generated flat continuous base grid, not source-authored relief",
+      "uv_adaptation": "integer periodic repeats on map extent; same source height sampled at 1x/3x/8x",
+      "engine_claim": "source channels confirmed by normalized descriptor and prior source audits; detail amplitudes and inverse-specular roughness are C3X-authored interpretation"
+    },
+    {
+      "classification": "source_adaptation",
+      "asset_id": "terrain/tundra/base",
+      "material": "Renderer/packs/Civ5EnvironmentSkin/materials/tundra.json",
+      "material_sha256": "075ee9ff7dde8778ccfca75edc0b6557c1f5d2530bf3c3b3d0d6c25468c6938f",
+      "roles": {
+        "base_color": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/tundra_blend_base_color.dds",
+          "sha256": "9c5663ef65e6e48d828bb0788ba03c3a738d548aa20b883935b856ab95bf71e6",
+          "declared_color_space": "srgb",
+          "statistics": {
+            "dimensions": [
+              2048,
+              2048
+            ],
+            "mips": 10,
+            "dxgi_format": 78,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.36339869281045756,
+            "max": 0.9032679738562092,
+            "mean": 0.5243655535130685,
+            "stddev": 0.08454747593526668
+          }
+        },
+        "height": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/tundra_blend_height.dds",
+          "sha256": "3e1b48087c924405442f8748413ef1fef8a84219be00912fd03d9b5477327236",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              2048,
+              2048
+            ],
+            "mips": 10,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.29411764705882354,
+            "max": 0.6705882352941176,
+            "mean": 0.4614142922794247,
+            "stddev": 0.04979843520376945
+          }
+        },
+        "specular": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/tundra_blend_specular.dds",
+          "sha256": "80e7de92ee822790e2c6e00183f773c3795c5fc1ee10e9bae74ad71813018c34",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              2048,
+              2048
+            ],
+            "mips": 10,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.09019607843137255,
+            "max": 0.15294117647058825,
+            "mean": 0.11789502910539477,
+            "stddev": 0.01465583584910659
+          }
+        }
+      },
+      "geometry": "generated flat continuous base grid, not source-authored relief",
+      "uv_adaptation": "integer periodic repeats on map extent; same source height sampled at 1x/3x/8x",
+      "engine_claim": "source channels confirmed by normalized descriptor and prior source audits; detail amplitudes and inverse-specular roughness are C3X-authored interpretation"
+    },
+    {
+      "classification": "source_adaptation",
+      "asset_id": "terrain/marsh/base",
+      "material": "Renderer/packs/Civ5EnvironmentSkin/materials/marsh.json",
+      "material_sha256": "cb49f911ba4aee4febbbd921f2fa40103ee03e87f5a64f8bd30bef3e8c2c0ce5",
+      "roles": {
+        "base_color": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassmarsh_base_color.dds",
+          "sha256": "6ffede9b3380d0ee524643d0cd20b32e1a8ee7bd00b6d30aa290cc1cb142ea10",
+          "declared_color_space": "srgb",
+          "statistics": {
+            "dimensions": [
+              1024,
+              1024
+            ],
+            "mips": 9,
+            "dxgi_format": 78,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.21307189542483662,
+            "max": 0.45359477124183006,
+            "mean": 0.32062046823938256,
+            "stddev": 0.035169148933631315
+          }
+        },
+        "height": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassmarsh_height.dds",
+          "sha256": "92b8b43002bbe9d13e445ed8bc6a817ebdcf00537e77642183bc45e38b25c5b6",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              1024,
+              1024
+            ],
+            "mips": 9,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.30980392156862746,
+            "max": 0.592156862745098,
+            "mean": 0.4332605698529569,
+            "stddev": 0.04534539731068266
+          }
+        },
+        "specular": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassmarsh_specular.dds",
+          "sha256": "85f5901bb7bdc55566d641bec67e9a9a236d7b15772b6a41d130ce6a1c36def8",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              1024,
+              1024
+            ],
+            "mips": 9,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.17254901960784313,
+            "max": 0.40784313725490196,
+            "mean": 0.2888308057597985,
+            "stddev": 0.036296836348076594
+          }
+        }
+      },
+      "geometry": "generated flat continuous base grid, not source-authored relief",
+      "uv_adaptation": "integer periodic repeats on map extent; same source height sampled at 1x/3x/8x",
+      "engine_claim": "source channels confirmed by normalized descriptor and prior source audits; detail amplitudes and inverse-specular roughness are C3X-authored interpretation"
+    },
+    {
+      "classification": "source_adaptation",
+      "asset_id": "terrain/flood_plain/base",
+      "material": "Renderer/packs/Civ5EnvironmentSkin/materials/flood_plain.json",
+      "material_sha256": "2601d63df8802e85fbf759c2fe76db7cfedcd3dee63753d4e005486f03534b5c",
+      "roles": {
+        "base_color": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/plains_base_color.dds",
+          "sha256": "233a8d7a3c7c4769d66cc2be0f2fc4a3c85375044ed1e9d2e94c1ea1da28b01b",
+          "declared_color_space": "srgb",
+          "statistics": {
+            "dimensions": [
+              4096,
+              4096
+            ],
+            "mips": 11,
+            "dxgi_format": 78,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.3437908496732026,
+            "max": 0.8026143790849672,
+            "mean": 0.5429543887867615,
+            "stddev": 0.04965851942757885
+          }
+        },
+        "height": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/plains_height.dds",
+          "sha256": "4aeb947708e35001a9a25d59ae85a81e96b51756156b318e4b3251a8e8bb72c7",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              4096,
+              4096
+            ],
+            "mips": 11,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.27058823529411763,
+            "max": 0.5686274509803921,
+            "mean": 0.4166609221813846,
+            "stddev": 0.04915884755839624
+          }
+        },
+        "specular": {
+          "path": "Renderer/packs/Civ5EnvironmentSkin/textures/plains_specular.dds",
+          "sha256": "ff3d5e0d6994edcf4b5116abfd8abcbe42eda97a40b37a4850a84c79e3c8806e",
+          "declared_color_space": "linear",
+          "statistics": {
+            "dimensions": [
+              4096,
+              4096
+            ],
+            "mips": 11,
+            "dxgi_format": 80,
+            "sample_grid": [
+              64,
+              64
+            ],
+            "measurement": "encoded RGB channel mean for base color; linear scalar for height/specular",
+            "min": 0.24313725490196078,
+            "max": 0.24313725490196078,
+            "mean": 0.24313725490196655,
+            "stddev": 5.773159728050814e-15
+          }
+        }
+      },
+      "geometry": "generated flat continuous base grid, not source-authored relief",
+      "uv_adaptation": "integer periodic repeats on map extent; same source height sampled at 1x/3x/8x",
+      "engine_claim": "source channels confirmed by normalized descriptor and prior source audits; detail amplitudes and inverse-specular roughness are C3X-authored interpretation"
+    }
+  ],
+  "no_original_art_fallback": true,
+  "absent_features": "This candidate adds no dominant rock, hill, dune, mountain, vegetation, water, or object body."
+}

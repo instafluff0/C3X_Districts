@@ -1,0 +1,10 @@
+*.packet
+*.bin
+*.coast
+sample-hydrology
+crop-witness
+.content/
+*.packet.blobs/
+*.compact
+*.exclusions
+selected-source/*.dds

@@ -1,0 +1,22 @@
+{
+  "schema": "c3x.q6.interface_request.v1",
+  "owner": "Q0-platform",
+  "status": "resolved_wire5_implementation_consumed",
+  "blocks": "Full source-map world shadow convergence; independent source/control/native work is exhausted at this checkpoint.",
+  "requested": {
+    "main_vertex": "Authoritative float4(worldXYZ,valid) TEXCOORD14; no depth reconstruction",
+    "feature_vertex": "Authoritative float4(worldXYZ,valid) TEXCOORD2 in same lattice space",
+    "common_buffer": "Per-draw b1: five float4s U/span,V/resolution,L,origin,enabled/contact; wire5 or equivalent explicit version",
+    "shadow_bindings": "Per-draw main t25 and feature t17 aliases; no129thD3Dtexture slot",
+    "owner_postprocessor": "Q6-owned packet input/output callback or CLI invoked by shared runner after authoritative geometry preparation"
+  },
+  "ready_consumer": "Renderer/terrain_lab/v2/shaders/lighting/scene_world_v1.hlsl",
+  "reproducing_fixture": "Renderer/terrain_lab/v2/fixtures/lighting/real-mixed/linear.fixture.json",
+  "why_no_local_workaround": "Frozen projected feature shadows contain screenXY and zero macroUV, and packet has only one constant buffer perdraw; inferring receiverXYZ from depth or creating a competing backend violates the task contract.",
+  "observed_contract_hashes": {
+    "Renderer/terrain_lab/v2/contracts/packet_v1.h": "08855c9302e5911fe20d4152a873d76c3185e08bf05e1b9ddfd18f25504b1183",
+    "Renderer/terrain_lab/v2/app/runner.py": "56818f2448743966235f65d53a05c590b24f55cab33f52e7743e1fc60f418cce"
+  },
+  "required_user_action": null,
+  "resolution": "Q0 binding_contract2, Draw.frame_buffer, world_positions1 and packet_postprocessor contract1 implemented; source-world16 rendered using actualshape field."
+}

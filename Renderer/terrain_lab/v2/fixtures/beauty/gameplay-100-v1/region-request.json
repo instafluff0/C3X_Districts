@@ -1,0 +1,92 @@
+{
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "regions": [
+    {
+      "requested_id": "beauty-coastal-100-v1",
+      "origin": [
+        76,
+        38
+      ],
+      "extent": [
+        10,
+        10
+      ],
+      "halo": 6,
+      "role": "user_evaluation",
+      "camera": {
+        "viewport": [
+          1360,
+          800
+        ],
+        "zooms": [
+          1,
+          2
+        ],
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ]
+      }
+    },
+    {
+      "requested_id": "beauty-inland-100-v1",
+      "origin": [
+        60,
+        50
+      ],
+      "extent": [
+        10,
+        10
+      ],
+      "halo": 6,
+      "role": "user_evaluation",
+      "camera": {
+        "viewport": [
+          1360,
+          800
+        ],
+        "zooms": [
+          1,
+          2
+        ],
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ]
+      }
+    },
+    {
+      "requested_id": "beauty-wilderness-100-v1",
+      "origin": [
+        12,
+        62
+      ],
+      "extent": [
+        10,
+        10
+      ],
+      "halo": 6,
+      "role": "user_evaluation",
+      "camera": {
+        "viewport": [
+          1360,
+          800
+        ],
+        "zooms": [
+          1,
+          2
+        ],
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ]
+      }
+    }
+  ]
+}

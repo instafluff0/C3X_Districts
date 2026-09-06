@@ -1,0 +1,25 @@
+{
+  "schema": "c3x.lab_v2.owner_isolation.v1",
+  "synthetic_owners": true,
+  "overlapping_execution": true,
+  "separate_implementation_and_outputs": true,
+  "results": [
+    {
+      "module": "a",
+      "start": 0.0,
+      "end": 1.015302375,
+      "returncode": 0,
+      "output": "Renderer/terrain_lab/v2/tests/platform/owner_a/out/Q1/Q0-platform/parallel-a",
+      "log": "PASS quick: 1 variants; Renderer/terrain_lab/v2/tests/platform/owner_a/out/Q1/Q0-platform/parallel-a/report.json\n"
+    },
+    {
+      "module": "b",
+      "start": 4.4124999999999026e-05,
+      "end": 1.055598625,
+      "returncode": 0,
+      "output": "Renderer/terrain_lab/v2/tests/platform/owner_b/out/Q1/Q0-platform/parallel-b",
+      "log": "PASS quick: 1 variants; Renderer/terrain_lab/v2/tests/platform/owner_b/out/Q1/Q0-platform/parallel-b/report.json\n"
+    }
+  ],
+  "timing": "relative monotonic seconds from probe start"
+}

@@ -1,0 +1,1 @@
+{"schema":"c3x.lab_v2.module.v1","id":"q5-networks-v1","owner":"Q5-networks","provider":"cpp_packet","contract":1,"source":"Renderer/terrain_lab/v2/systems/networks/module.cpp","shader":"Renderer/terrain_lab/v2/shaders/networks/routes.hlsl","after":[]}

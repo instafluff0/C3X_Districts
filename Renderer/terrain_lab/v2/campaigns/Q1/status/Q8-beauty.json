@@ -2,9 +2,11 @@
   "schema": "c3x.renderer_lab_v2_track_status.v0",
   "id": "Q8-beauty",
   "campaign": "Q1",
-  "state": "blocked_by_dependency",
-  "candidate": null,
-  "evidence": [],
-  "blockers": ["Q1-sampling", "Q2-terrain", "Q3-hydrology", "Q4-relief", "Q5-networks", "Q6-lighting", "Q7-presentation"],
+  "state": "active",
+  "candidate": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/BENCHMARKS.json",
+  "evidence": ["Renderer/terrain_lab/v2/qa/gameplay_terrain.py", "Renderer/terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md", "Renderer/terrain_lab/v2/qa/verify_gameplay_terrain.py", "Renderer/terrain_lab/v2/audits/beauty/GAMEPLAY_TERRAIN_EVIDENCE.json"],
+  "execution_note": "Sole lead owns combined review. Three fixed 100-tile test.biq terrain foundations preserve source tiles, camera, source skin and output sizes. Mountain material projection, river optics, selected hill height, missing desert bindings, biome joins and night response are composed; baselines and rejected shoreline experiments remain preserved. User deferred cities, units and improvements. Dune source construction/seams, source cliffs/shallows and vegetation composition remain visible gaps. No beauty acceptance.",
+  "blockers": [],
+  "pending_validation": ["Final four-phase, scroll, topology, repeat, source-fidelity, D3D parity and human visual approval remain required; no milestone or Integration gate advances."],
   "approval": null
 }

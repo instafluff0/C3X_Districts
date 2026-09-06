@@ -1,0 +1,44 @@
+{
+  "accepted": false,
+  "results": [
+    {
+      "region": "wet",
+      "pairs": 408,
+      "before": {
+        "max_delta": 0.42137616899999997,
+        "failures": 145
+      },
+      "after": {
+        "max_delta": 0.0,
+        "failures": 0
+      },
+      "heights_depth_and_anchors_unchanged": true
+    },
+    {
+      "region": "dry",
+      "pairs": 408,
+      "before": {
+        "max_delta": 0.82674830765,
+        "failures": 153
+      },
+      "after": {
+        "max_delta": 0.0,
+        "failures": 0
+      },
+      "heights_depth_and_anchors_unchanged": true
+    },
+    {
+      "region": "cold",
+      "pairs": 408,
+      "before": {
+        "max_delta": 0.000953327224,
+        "failures": 0
+      },
+      "after": {
+        "max_delta": 0.0,
+        "failures": 0
+      },
+      "heights_depth_and_anchors_unchanged": true
+    }
+  ]
+}

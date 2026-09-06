@@ -2,9 +2,28 @@
   "schema": "c3x.renderer_lab_v2_track_status.v0",
   "id": "Q3-hydrology",
   "campaign": "Q1",
-  "state": "blocked_by_dependency",
-  "candidate": null,
-  "evidence": [],
-  "blockers": ["Q0-platform", "Q1-sampling"],
-  "approval": null
+  "state": "active",
+  "candidate": "Renderer/terrain_lab/v2/audits/hydrology/CANDIDATE.json",
+  "evidence": [
+    "Renderer/terrain_lab/v2/audits/hydrology/REVIEW.md",
+    "Renderer/terrain_lab/v2/audits/hydrology/EVIDENCE.json",
+    "Renderer/terrain_lab/v2/audits/hydrology/SOURCE_PROVENANCE.json",
+    "Renderer/terrain_lab/v2/audits/hydrology/ARCHIVED_OUTPUTS.json",
+    "Renderer/terrain_lab/v2/audits/hydrology/crossing_witness_v1.json",
+    "Renderer/terrain_lab/v2/audits/hydrology/FROZEN_BASIN_BUG.md",
+    "Renderer/terrain_lab/v2/audits/hydrology/COMPOSED_REGRESSION.json"
+  ],
+  "blockers": [],
+  "pending_validation": [
+    "Direct canonical comparison and complete source-coast material refinement; large proxy overview rejected by user",
+    "Q3 exact river curves/carving/corridors in source scene; inherited source river geometry is provisional",
+    "Q2/Q4 source surface and actual rock-face joins; terrain-family appearance",
+    "Q4/Q7/Q8 source-instance clearance and plausible gameplay composition",
+    "Q1 selected sampling policy and final bed detail/river readability",
+    "remaining current-revision matrix rows after coordinated storage pause",
+    "192-tile composed suite, Windows D3D11 parity and full project verification"
+  ],
+  "approval": null,
+  "progress": "Active source-composed canonical refinement. User rejected large proxy overview. Q0/Q6 linear and exact shore-field ABI adopted; first composed material render exposed field-slot mismatch now corrected. Rendering next revision.",
+  "required_user_action": null
 }

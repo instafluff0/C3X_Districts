@@ -1,0 +1,24 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "q2-q3-linear-off",
+  "owner": "Q2-terrain",
+  "provider": "frozen_l21",
+  "contract": 1,
+  "shader": "Renderer/terrain_lab/v2/shaders/terrain/scene-linear-off.hlsl",
+  "terrain_hooks": {
+    "header": "Renderer/terrain_lab/v2/systems/terrain/scene_adapter.h",
+    "initialize": "q2_scene::initialize",
+    "material_weights": "q2_scene::material_weights",
+    "material_uv": "q2_scene::material_uv"
+  },
+  "scene": "complete",
+  "fit_viewport": true,
+  "suppress_territory": true,
+  "linear_adapter": 1,
+  "color_branch": "q6_scene_linear_premultiplied_v1",
+  "hydrology_hooks": {
+    "header": "Renderer/terrain_lab/v2/systems/terrain/hydrology_consumer.h",
+    "initialize": "q3_scene::initialize",
+    "signed_shore_distance": "q3_scene::signed_shore_distance"
+  }
+}

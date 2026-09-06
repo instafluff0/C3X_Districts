@@ -1,0 +1,31 @@
+{
+  "schema": "c3x.q1.sampling_policy.v1",
+  "state": "candidate_pending_convergence",
+  "runtime": "generic normalized assets; no source-game branch",
+  "anisotropy": 8,
+  "mip_bias": 0,
+  "samples": 4,
+  "render_scale": 1,
+  "sharpen": "off",
+  "reconstruction": "integer area box in scene-linear premultiplied HDR",
+  "postprocess": {
+    "shader": "Renderer/terrain_lab/v2/shaders/sampling/linear_reconstruct.hlsl",
+    "owner": "Q1-sampling",
+    "contract": 2
+  },
+  "requires_color_branch": "q6_scene_linear_premultiplied_v1",
+  "input": "RGBA16F scene radiance plus independent R8 validity",
+  "ordering": [
+    "decode source texture according to declared semantic transfer",
+    "scene-linear shade and premultiplied blend",
+    "hardware MSAA resolve",
+    "Q1 integer area reconstruction with half-open map rectangle",
+    "Q6 single exposure and tone response",
+    "single exact sRGB output transfer",
+    "retained Civ III overlays and UI"
+  ],
+  "legacy_comparison_only": "linear_box.hlsl decodes gamma2.2 after old BGRA8 blending; it is not the production policy",
+  "production_status": "not promoted; sample support and cost require platform and Integration acceptance",
+  "unsupported_policy": "fail explicitly; never silently substitute sample count",
+  "telemetry": "GPU pass duration excludes upload/readback; sampled allocation high-water is not driver transient peak"
+}

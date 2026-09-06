@@ -1,0 +1,784 @@
+{
+  "schema": "c3x.q5.crossing_adaptation.v1",
+  "source": "Q3 Field v1",
+  "edges": [
+    {
+      "from": [
+        0,
+        -1
+      ],
+      "to": [
+        1,
+        -1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        -1
+      ],
+      "to": [
+        0,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        1,
+        -1
+      ],
+      "to": [
+        2,
+        -1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        1,
+        -1
+      ],
+      "to": [
+        1,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        -1
+      ],
+      "to": [
+        3,
+        -1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        -1
+      ],
+      "to": [
+        2,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        3,
+        -1
+      ],
+      "to": [
+        4,
+        -1
+      ],
+      "crossings": [
+        {
+          "stable_id": "3530811772611506176",
+          "hydrology_edge": "11894814081686312133",
+          "world_xy": [
+            152.57640930338,
+            280.57640930338
+          ],
+          "route_tangent": [
+            0.70710678118655,
+            0.70710678118655
+          ],
+          "water_tangent": [
+            0.84094826205942,
+            -0.54111553344849
+          ],
+          "span_width": 8.7984361065845,
+          "deck_height": null
+        }
+      ]
+    },
+    {
+      "from": [
+        3,
+        -1
+      ],
+      "to": [
+        3,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        4,
+        -1
+      ],
+      "to": [
+        4,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        -1,
+        0
+      ],
+      "to": [
+        0,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        -1,
+        0
+      ],
+      "to": [
+        -1,
+        1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        0
+      ],
+      "to": [
+        1,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        0
+      ],
+      "to": [
+        0,
+        1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        1,
+        0
+      ],
+      "to": [
+        2,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        1,
+        0
+      ],
+      "to": [
+        1,
+        1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        0
+      ],
+      "to": [
+        3,
+        0
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        0
+      ],
+      "to": [
+        2,
+        1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        3,
+        0
+      ],
+      "to": [
+        4,
+        0
+      ],
+      "crossings": [
+        {
+          "stable_id": "843451315979562560",
+          "hydrology_edge": "9929379323931699269",
+          "world_xy": [
+            220.83986853511,
+            220.83986853511
+          ],
+          "route_tangent": [
+            0.70710678118655,
+            0.70710678118655
+          ],
+          "water_tangent": [
+            0.71585067010433,
+            -0.69825340537027
+          ],
+          "span_width": 8.5990841911115,
+          "deck_height": null
+        }
+      ]
+    },
+    {
+      "from": [
+        3,
+        0
+      ],
+      "to": [
+        3,
+        1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        4,
+        0
+      ],
+      "to": [
+        4,
+        1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        -1,
+        1
+      ],
+      "to": [
+        0,
+        1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        -1,
+        1
+      ],
+      "to": [
+        -1,
+        2
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        1
+      ],
+      "to": [
+        1,
+        1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        1
+      ],
+      "to": [
+        0,
+        2
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        1,
+        1
+      ],
+      "to": [
+        2,
+        1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        1,
+        1
+      ],
+      "to": [
+        1,
+        2
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        1
+      ],
+      "to": [
+        3,
+        1
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        1
+      ],
+      "to": [
+        2,
+        2
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        3,
+        1
+      ],
+      "to": [
+        4,
+        1
+      ],
+      "crossings": [
+        {
+          "stable_id": "1291045914940968960",
+          "hydrology_edge": "10563534295883467845",
+          "world_xy": [
+            289.93908031106,
+            161.93908031106
+          ],
+          "route_tangent": [
+            0.70710678118655,
+            0.70710678118655
+          ],
+          "water_tangent": [
+            0.70168700074731,
+            -0.71248533527522
+          ],
+          "span_width": 8.598669122747,
+          "deck_height": null
+        }
+      ]
+    },
+    {
+      "from": [
+        3,
+        1
+      ],
+      "to": [
+        3,
+        2
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        4,
+        1
+      ],
+      "to": [
+        4,
+        2
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        -1,
+        2
+      ],
+      "to": [
+        0,
+        2
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        -1,
+        2
+      ],
+      "to": [
+        -1,
+        3
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        2
+      ],
+      "to": [
+        1,
+        2
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        2
+      ],
+      "to": [
+        0,
+        3
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        1,
+        2
+      ],
+      "to": [
+        2,
+        2
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        1,
+        2
+      ],
+      "to": [
+        1,
+        3
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        2
+      ],
+      "to": [
+        3,
+        2
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        2
+      ],
+      "to": [
+        2,
+        3
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        3,
+        2
+      ],
+      "to": [
+        4,
+        2
+      ],
+      "crossings": [
+        {
+          "stable_id": "10313225142217193472",
+          "hydrology_edge": "5044779461448863493",
+          "world_xy": [
+            351.60565952128,
+            95.605659521279
+          ],
+          "route_tangent": [
+            0.70710678118655,
+            0.70710678118655
+          ],
+          "water_tangent": [
+            0.7082039593443,
+            -0.70600789795091
+          ],
+          "span_width": 8.5984288261145,
+          "deck_height": null
+        }
+      ]
+    },
+    {
+      "from": [
+        3,
+        2
+      ],
+      "to": [
+        3,
+        3
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        4,
+        2
+      ],
+      "to": [
+        4,
+        3
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        -1,
+        3
+      ],
+      "to": [
+        0,
+        3
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        -1,
+        3
+      ],
+      "to": [
+        -1,
+        4
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        3
+      ],
+      "to": [
+        1,
+        3
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        3
+      ],
+      "to": [
+        0,
+        4
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        1,
+        3
+      ],
+      "to": [
+        2,
+        3
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        1,
+        3
+      ],
+      "to": [
+        1,
+        4
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        3
+      ],
+      "to": [
+        3,
+        3
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        3
+      ],
+      "to": [
+        2,
+        4
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        3,
+        3
+      ],
+      "to": [
+        4,
+        3
+      ],
+      "crossings": [
+        {
+          "stable_id": "1399018317749923840",
+          "hydrology_edge": "3557195626770780805",
+          "world_xy": [
+            409.97760987445,
+            25.977609874447
+          ],
+          "route_tangent": [
+            0.70710678118655,
+            0.70710678118655
+          ],
+          "water_tangent": [
+            0.55335044074767,
+            -0.83294855166712
+          ],
+          "span_width": 8.7715565448248,
+          "deck_height": null
+        }
+      ]
+    },
+    {
+      "from": [
+        3,
+        3
+      ],
+      "to": [
+        3,
+        4
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        4,
+        3
+      ],
+      "to": [
+        4,
+        4
+      ],
+      "crossings": [
+        {
+          "stable_id": "15319636181074758336",
+          "hydrology_edge": "5827253537569321537",
+          "world_xy": [
+            488.04943897745,
+            23.950561022555
+          ],
+          "route_tangent": [
+            0.70710678118655,
+            -0.70710678118655
+          ],
+          "water_tangent": [
+            0.53563814881494,
+            0.84444761444041
+          ],
+          "span_width": 8.81104662026,
+          "deck_height": null
+        }
+      ]
+    },
+    {
+      "from": [
+        -1,
+        4
+      ],
+      "to": [
+        0,
+        4
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        0,
+        4
+      ],
+      "to": [
+        1,
+        4
+      ],
+      "crossings": [
+        {
+          "stable_id": "17526402988028104704",
+          "hydrology_edge": "9615365564142792261",
+          "world_xy": [
+            285.86599787946,
+            -226.13400212054
+          ],
+          "route_tangent": [
+            0.70710678118655,
+            0.70710678118655
+          ],
+          "water_tangent": [
+            0.71302368593736,
+            -0.70113994558312
+          ],
+          "span_width": 8.598722049531,
+          "deck_height": null
+        }
+      ]
+    },
+    {
+      "from": [
+        1,
+        4
+      ],
+      "to": [
+        2,
+        4
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        2,
+        4
+      ],
+      "to": [
+        3,
+        4
+      ],
+      "crossings": []
+    },
+    {
+      "from": [
+        3,
+        4
+      ],
+      "to": [
+        4,
+        4
+      ],
+      "crossings": []
+    }
+  ],
+  "classification": "Lab augmentation, not captured state",
+  "terrain_sha256": "f620b8a814b982430fa1e7db600087b722b166bfb5b30411e1df7465eeb701f5",
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "region_id": "mixed-holdout",
+  "wrap_x": true,
+  "halo": 1,
+  "final_surface_height": "pending shared final surface conversion; null deck heights are deliberate"
+}

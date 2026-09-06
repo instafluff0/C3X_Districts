@@ -1,0 +1,78 @@
+{
+  "label": "deterministic Lab augmentation, not captured Civ III state",
+  "objects": [
+    {
+      "domain": "land",
+      "kind": "city",
+      "stable_id": 1,
+      "tile": [
+        0,
+        3
+      ]
+    }
+  ],
+  "profile": "q8_coastal_context_v1",
+  "region_id": "mixed",
+  "routes": [
+    {
+      "domain": "land",
+      "from": [
+        0,
+        3
+      ],
+      "kind": "road",
+      "to": [
+        1,
+        3
+      ]
+    },
+    {
+      "domain": "land",
+      "from": [
+        1,
+        3
+      ],
+      "kind": "road",
+      "to": [
+        2,
+        3
+      ]
+    },
+    {
+      "domain": "land",
+      "from": [
+        2,
+        3
+      ],
+      "kind": "road",
+      "to": [
+        3,
+        3
+      ]
+    },
+    {
+      "domain": "land",
+      "from": [
+        3,
+        2
+      ],
+      "kind": "road",
+      "to": [
+        3,
+        3
+      ]
+    }
+  ],
+  "schema": "c3x.lab_v2.augmentation.v1",
+  "seed": 8,
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "terrain_sha256": "8c28cd98fed837aa2925873fd3aa27425452e6cceb9de9835602af62625788f3",
+  "owner": "Q8-beauty",
+  "assumptions": [
+    "One ancient town and a connected land road to its surroundings; no captured city state.",
+    "Small coastal context, not a complete developed-gameplay or Q8 acceptance fixture.",
+    "Frozen source city and road presentation retained until Q7/Q5 compatible modules arrive.",
+    "r02 replaces the same-anchor legacy city with Q7's full source-parts town via a separate linear module; Q5/Q4 final candidates still pending."
+  ],
+  "city_recipe": "Renderer/terrain_lab/v2/fixtures/objects/generated/registered-mixed-linear-v1"
+}

@@ -1,0 +1,87 @@
+{
+  "schema": "c3x.q2.user_evaluation.v1",
+  "request": "Large map with various terrain for user evaluation",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/terrain/large-evaluation/overview.fixture.json",
+  "fixture_sha256": "add7fb657c599d4a5822758d102b5720a0786abffdde836b3a0ad2666760b163",
+  "source": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "region": {
+    "camera": {
+      "hours": [
+        12
+      ],
+      "viewport": [
+        2400,
+        1600
+      ],
+      "zooms": [
+        1,
+        2
+      ]
+    },
+    "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+    "coverage": {
+      "land_water_edges": 24,
+      "river_tiles": 21,
+      "terrain": {
+        "coast": 19,
+        "desert": 11,
+        "floodplain": 1,
+        "forest": 26,
+        "grassland": 13,
+        "hills": 12,
+        "jungle": 4,
+        "marsh": 6,
+        "mountain": 12,
+        "ocean": 5,
+        "plains": 4,
+        "sea": 15
+      },
+      "terrain_edges": 129
+    },
+    "extent": [
+      16,
+      8
+    ],
+    "halo": 6,
+    "id": "q2-evaluation-large",
+    "origin": [
+      58,
+      56
+    ],
+    "request_sha256": "66a367320e814131e47187c3be932bc1c79049344d72dee020070e5e8963127d",
+    "role": "user_evaluation",
+    "terrain_sha256": "906d353dabccdf1b7f189ef263c2fe0ff6958b31729256f248ac9fb8487a479d",
+    "wrap": {
+      "x": true,
+      "y": false
+    }
+  },
+  "added_objects": 0,
+  "settings": {
+    "anisotropy": 8,
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ],
+    "mip_bias": 0,
+    "postprocess": "box",
+    "render_scale": 1,
+    "samples": 4
+  },
+  "output_pixels": [
+    2400,
+    1600
+  ],
+  "scope": "Current source-composed candidate preview, not a milestone or visual acceptance claim. Known relief-normal and final shadow convergence requirements remain documented in the Q2 candidate.",
+  "outputs": {
+    "full": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/large-map-evaluation-01/large-terrain-2400.png",
+    "reduced": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/large-map-evaluation-01/large-terrain-1200.png",
+    "report": "Renderer/terrain_lab/v2/audits/terrain/out/Q1/Q2-terrain/large-map-evaluation-01/report.json"
+  },
+  "observations": [
+    "Wide source landscape contains mixed forest/jungle, mountains, low hills, marsh, dunes, rivers, coast/sea/ocean.",
+    "Current shoreline shows angular notches near lower-right sandy coast; source relief has remaining normal/placement weaknesses. These are preserved for evaluation, not hidden or declared accepted."
+  ]
+}

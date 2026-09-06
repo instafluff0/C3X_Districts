@@ -1,0 +1,18 @@
+{
+  "schema": "c3x.q4.source_geometry.v1",
+  "class": "synthetic_stress_case",
+  "proxy_inputs": [
+    "Q2 continuous ground",
+    "Q3 signed shore and static water"
+  ],
+  "source_files": {
+    "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/desert_base_color.dds": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_top_base_color.dds": "7cbbab6c0a8ca26d8729c67766b476636bf820aadd6f1b4c0044754b58117d29"
+  },
+  "transforms": [],
+  "geometry_sha256": "d17bbf875ab3a69dfbd6c80e1eb6c50d2b5979c3084c7351801b64ad8175a949",
+  "generator_sha256": "0ad4691cd7318fc4c84bb7d3584f129ed24abede91d3b2363b7575080aa78305",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/relief/coast-r2/fixture.json",
+  "revision": 2
+}

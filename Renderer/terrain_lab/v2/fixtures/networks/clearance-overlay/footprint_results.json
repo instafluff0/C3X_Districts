@@ -1,0 +1,145 @@
+{
+  "classification": "diagnostic_proxy",
+  "cases": [
+    {
+      "id": 0,
+      "footprint": [
+        [
+          -130.0,
+          278.0
+        ],
+        [
+          -110.0,
+          278.0
+        ],
+        [
+          -110.0,
+          302.0
+        ],
+        [
+          -130.0,
+          302.0
+        ]
+      ],
+      "intersects": true,
+      "color": "red"
+    },
+    {
+      "id": 1,
+      "footprint": [
+        [
+          -130.0,
+          320.0
+        ],
+        [
+          -110.0,
+          320.0
+        ],
+        [
+          -110.0,
+          344.0
+        ],
+        [
+          -130.0,
+          344.0
+        ]
+      ],
+      "intersects": false,
+      "color": "green"
+    },
+    {
+      "id": 2,
+      "footprint": [
+        [
+          90.0,
+          430.0
+        ],
+        [
+          120.0,
+          430.0
+        ],
+        [
+          120.0,
+          450.0
+        ],
+        [
+          90.0,
+          450.0
+        ]
+      ],
+      "intersects": false,
+      "color": "green"
+    },
+    {
+      "id": 3,
+      "footprint": [
+        [
+          108.0,
+          491.0
+        ],
+        [
+          132.0,
+          491.0
+        ],
+        [
+          132.0,
+          519.0
+        ],
+        [
+          108.0,
+          519.0
+        ]
+      ],
+      "intersects": true,
+      "color": "red"
+    },
+    {
+      "id": 4,
+      "footprint": [
+        [
+          -10.0,
+          590.0
+        ],
+        [
+          10.0,
+          590.0
+        ],
+        [
+          10.0,
+          610.0
+        ],
+        [
+          -10.0,
+          610.0
+        ]
+      ],
+      "intersects": false,
+      "color": "green"
+    },
+    {
+      "id": 5,
+      "footprint": [
+        [
+          47.5,
+          287.5
+        ],
+        [
+          72.5,
+          287.5
+        ],
+        [
+          72.5,
+          312.5
+        ],
+        [
+          47.5,
+          312.5
+        ]
+      ],
+      "intersects": true,
+      "color": "red"
+    }
+  ],
+  "envelope": "Renderer/terrain_lab/v2/fixtures/networks/source-clearance/clearance.json",
+  "rule": "source candidate unchanged; yellow clearance outline; red rejected footprint; green allowed footprint"
+}

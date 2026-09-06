@@ -2,9 +2,22 @@
   "schema": "c3x.renderer_lab_v2_track_status.v0",
   "id": "Q6-lighting",
   "campaign": "Q1",
-  "state": "blocked_by_dependency",
-  "candidate": null,
-  "evidence": [],
-  "blockers": ["Q0-platform"],
-  "approval": null
+  "state": "active",
+  "candidate": "lighting-response-v1",
+  "evidence": [
+    "Renderer/terrain_lab/v2/audits/lighting/EVIDENCE_METRICS.json",
+    "Renderer/terrain_lab/v2/audits/lighting/SCENE_LINEAR_ADAPTER_V1.md",
+    "Renderer/terrain_lab/v2/audits/lighting/Q6_CANDIDATE.json",
+    "Renderer/terrain_lab/v2/audits/lighting/out/Q1/Q6-lighting/q7-city-nativefix-13/parity.json",
+    "Renderer/terrain_lab/v2/audits/lighting/INTERFACE_REQUEST_V1.json"
+  ],
+  "blockers": [],
+  "pending_validation": [
+    "Final shared-platform, real-map, and combined-scene validation remains required; it does not block independent implementation."
+  ],
+  "approval": null,
+  "pending_evidence": [
+    "Wire5 authoritative source-map world-shadow rendering and actual-shape acceptance in progress.",
+    "Final real regions, all category controls and192promotion after interface convergence."
+  ]
 }

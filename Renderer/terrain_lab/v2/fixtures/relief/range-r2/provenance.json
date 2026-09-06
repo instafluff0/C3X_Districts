@@ -1,0 +1,64 @@
+{
+  "schema": "c3x.q4.source_geometry.v1",
+  "class": "synthetic_stress_case",
+  "proxy_inputs": [
+    "Q2 continuous ground",
+    "Q3 signed shore and static water"
+  ],
+  "source_files": {
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_01/height_lod0.dds": "baff30c84f277cfb9dbbc9e420870e858c73203ef2d4fe42a140a287632bf021",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_02/height_lod0.dds": "323446622c368828be9cc6dcb87a96a43edfa52e2932c0725b5ea3688bc21f2e",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_03/height_lod0.dds": "9ae00e5df71ccb393c94ce7c33122636f15aa1589f3781644ab17c4b6d53e74e",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_top_base_color.dds": "7cbbab6c0a8ca26d8729c67766b476636bf820aadd6f1b4c0044754b58117d29",
+    "Renderer/packs/Civ5EnvironmentSkin/textures/desert_base_color.dds": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193"
+  },
+  "transforms": [
+    {
+      "kind": "source_height_grid",
+      "instance": 0,
+      "uniform_scale": 1.75,
+      "yaw": 0.0,
+      "translation": [
+        2.1,
+        1.6,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "original_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 1,
+      "uniform_scale": 1.75,
+      "yaw": 0.45,
+      "translation": [
+        3.25,
+        1.75,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "original_conventional_mesh_available": false
+    },
+    {
+      "kind": "source_height_grid",
+      "instance": 2,
+      "uniform_scale": 1.75,
+      "yaw": 0.9,
+      "translation": [
+        4.15,
+        2.35,
+        0.07
+      ],
+      "height_to_width": 0.75471735,
+      "uv_preserved": true,
+      "original_conventional_mesh_available": false
+    }
+  ],
+  "geometry_sha256": "2e6f52b898fbc83b15cc7af925669179568c0ebd2db2aa3ad4f7d27a3ded6bd5",
+  "generator_sha256": "0ad4691cd7318fc4c84bb7d3584f129ed24abede91d3b2363b7575080aa78305",
+  "fixture": "Renderer/terrain_lab/v2/fixtures/relief/range-r2/fixture.json",
+  "revision": 2
+}

@@ -152,6 +152,77 @@ oversized-cloud, and every-cell repetition candidates are not preserved.
 
 ## Next Step: LQ0
 
+Current authorization (2026-09-06): one lead owns the complete Lab v2 path.
+Former Q0-Q8 tasks were idle at takeover. Preserve their work and namespaces;
+exclusive-owner/start blockers are superseded. The current combined checkpoint
+and short defect list live in `terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md`.
+LQ0 remains ready/unaccepted; no acceptance or Integration gate advances merely
+because ownership changed. Ordinary visual iterations run on Mac.
+
+The current user-directed terrain pass fixes three 100-tile `test.biq` windows
+(coastal, inland and previously untuned wilderness) with unchanged source tiles,
+camera and output sizes. Combined mountain material projection, river optics,
+selected-skin hill height, missing desert material bindings, desert boundaries
+and shared night lighting are being compared at both gameplay zooms. Earlier
+baselines and rejected shoreline experiments are preserved. Cities, units and
+improvements are deferred for this pass. This is visible improvement work, not
+source-fidelity or beauty acceptance; dunes, source cliffs, shallow-bed detail
+and vegetation composition remain unresolved. Reproducible images and evidence
+are linked from the current review; the earlier city checkpoint remains history.
+
+Resource incident diagnosed: the campaign-test `_copy_campaign` helper copied
+the entire v2 runtime tree into temporary directories, expanding cache hardlinks
+and exhausting disk space. It now copies only declared campaign metadata,
+prompts, reference catalog and policy documents, with a metadata-only regression
+test. This was a test-harness defect, not evidence of renderer working-set size.
+
+Q8 combined review is now active under the coordinator. The first actual Mac
+coastal comparison is `terrain_lab/v2/audits/beauty/REVIEW.md`: matched verified
+terrain/city/route recipe and camera, before vs current Q2/Q3/Q6 composition.
+It is deliberately unaccepted: source cliff/shallows, current city assembly,
+and route/vegetation clearance are the three visible priorities. Prefer bounded
+fixes in this picture to expanded isolated matrices while these failures remain.
+Report visible improvements separately from enabling engineering and unresolved
+defects. Per-run evidence is not a waiver of full visual or promotion gates.
+
+Shadow-shape requirement confirmed in the Q6 task: every cast shadow follows
+the actual transformed/posed mesh and authored cutout alpha, with Q6 lighting
+and actual receivers. Generic blob/oval/ribbon substitutes and omission cannot
+close visual acceptance. Preserve frozen history; replace legacy approximations
+only in versioned candidates. COMMON.md and Q8 review enforce this across owners.
+
+Placement-clearance update: Q5 publishes final road/rail clearance envelopes,
+Q3 river/bank exclusions, Q4 places forest/jungle around transport corridors,
+and Q7 places city buildings/walls around river and transport corridors. Q0
+supplies shared plumbing and Q8 checks composed results. See
+`terrain_lab/v2/PLACEMENT_CLEARANCE.md`; local interface witnesses permit parallel
+work without altering authoritative city anchors, routes, or river topology.
+
+Source-art policy update: use Civ VI source art and the explicitly selected
+source skin before inventing substitutes. Q4 must investigate source cliff/rock
+pieces and source-height/material construction, not autogenerate dominant rock
+faces as the beauty solution. All tracks distinguish source reuse/adaptation
+from diagnostic proxies; original-art fallback selection needs explicit user
+authorization. See `terrain_lab/v2/SOURCE_ART_POLICY.md`. Continue independent
+source-backed work while missing asset/import capabilities are resolved.
+
+Gameplay-first evidence update: Lab v2 beauty reports now lead with plausible
+actual-gameplay-scale contextual views, followed by focused A/B diagnostics.
+The frozen all-assets diorama remains regression/stress evidence, not the main
+beauty target. Q8 first publishes small runnable shared placement recipes using
+available inputs; all owners continue with labeled local contextual proxies
+until available. See `terrain_lab/v2/GAMEPLAY_BENCHMARKS.md`. This introduces no
+new launch gates or per-edit full-matrix/Windows requirement.
+
+Scheduling override: the user has explicitly authorized Q0-Q8 to start and run
+in parallel. LQ0 remains the next global closure checkpoint, while LQ1 is in
+progress. Track `dependencies` are empty; `integration_inputs` name results to
+adopt at convergence. Q0 completes the platform and verified test.biq registry
+while owners use current Mac interfaces, frozen inputs, or declared local proxy
+fixtures. Q6 supplies color/alpha semantics directly to Q0 without waiting for
+Q0 acceptance. Missing inputs and parity remain pending evidence, not blanket
+stop conditions. Final platform/real-map/composition gates are still required.
+
 Renderer Lab v1 is complete through L21. Its final revision adds
 single-main-color civilization territory ribbons with no same-owner seams, and
 extends the shared authored-normal/self-face plus directionally consistent

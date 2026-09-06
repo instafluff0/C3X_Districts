@@ -1,0 +1,65 @@
+{
+  "schema": "c3x.lab_v2.fixture.v1",
+  "id": "sampling-frozen-crop-v1",
+  "track": "Q1-sampling",
+  "campaign": "Q1",
+  "tile_count": 16,
+  "viewport": [
+    768,
+    512
+  ],
+  "terrain": "Renderer/terrain_lab/v2/fixtures/sampling/mixed.csv",
+  "modules": [
+    "Renderer/terrain_lab/v2/systems/sampling/mixed.module.json"
+  ],
+  "packs": {
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "shore": "Renderer/packs/ShoreNormalized",
+    "routes": "Renderer/packs/RouteStylesNormalized",
+    "bridges": "Renderer/packs/RouteDoodadsNormalized",
+    "resources": "Renderer/packs/ResourceNormalized",
+    "cities": "Renderer/packs/CityComponentsNormalized",
+    "walls": "Renderer/packs/CityAdjunctsNormalized",
+    "improvements": "Renderer/packs/ImprovementsNormalized",
+    "objects": "Renderer/packs/TileObjectsNormalized",
+    "units": "Renderer/packs/UnitFamilyLab",
+    "compound_units": "Renderer/packs/CompoundUnitLab"
+  },
+  "references": [
+    "civ6.unit_materials",
+    "civ6.hills",
+    "civ6.sea_and_shore"
+  ],
+  "isolations": [
+    "augmentation_off",
+    "terrain",
+    "features"
+  ],
+  "settings": {
+    "anisotropy": 8,
+    "mip_bias": 0,
+    "samples": 1,
+    "render_scale": 1,
+    "postprocess": "box",
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "scenarios": {
+    "roads": "Renderer/terrain_lab/v2/fixtures/sampling/roads.csv",
+    "railroads": "Renderer/terrain_lab/v2/fixtures/sampling/railroads.csv",
+    "resources": "Renderer/terrain_lab/v2/fixtures/sampling/resources.csv",
+    "cities": "Renderer/terrain_lab/v2/fixtures/sampling/cities.csv",
+    "units": "Renderer/terrain_lab/v2/fixtures/sampling/units.csv",
+    "mines": "Renderer/terrain_lab/v2/fixtures/sampling/mines.csv",
+    "farms": "Renderer/terrain_lab/v2/fixtures/sampling/farms.csv",
+    "objects": "Renderer/terrain_lab/v2/fixtures/sampling/objects.csv",
+    "infrastructure": "Renderer/terrain_lab/v2/fixtures/sampling/infrastructure.csv"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "q7-source-city-linear-v1-shadows_off",
+  "owner": "Q6-lighting",
+  "provider": "cpp_packet",
+  "contract": 1,
+  "source": "Renderer/terrain_lab/v2/systems/lighting/q7_linear_control.cpp",
+  "shader": "Renderer/terrain_lab/v2/shaders/lighting/q7_shadows_off.hlsl",
+  "color_branch": "q6_scene_linear_premultiplied_v1",
+  "shader_owner": "Q6-lighting"
+}

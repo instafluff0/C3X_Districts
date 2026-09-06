@@ -1,0 +1,447 @@
+{
+  "schema": "c3x.q4.selected_relief_source_audit.v1",
+  "source_locator": "C3X_CIV6_ENVIRONMENT_SKIN or installed Steam workshop item 1702339134",
+  "package_sha256": "28fc31b554c902885d8dc3b52c9557969f84b5919d5eb2f7b1d1e04fde646cd4",
+  "style_sha256": "97aa31e96f4216ff704c90317ca441df50344f54d00dcf9cae64c8d2c2f68db3",
+  "style_values": {
+    "RidgelineMountain": {
+      "MountainHeight": 32.0,
+      "MountainWidth": 42.399979,
+      "SnowHighHeight": 26.0,
+      "SnowLowHeight": 24.0
+    },
+    "StandardHills": {
+      "HighGrassHeight": 10.0,
+      "HighPlainsHeight": 10.0,
+      "HighDesertHeight": 3.75,
+      "HighTundraHeight": 3.75,
+      "HighSnowHeight": 1.5
+    },
+    "DuneDesertHills": {
+      "DuneBase": 0.0,
+      "DuneHeight": 4.0,
+      "DuneWidth": 4.0,
+      "DuneNoise": 0.6,
+      "DuneAngle": 0.300001
+    }
+  },
+  "channels": [
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_HILL",
+      "channel": "height",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 16.0,
+        "height_scale": 10.0
+      },
+      "source_payload_sha256": "3b5ace19f566c3847f39b162e85a3ed018c1a73cfece84249e8cfe44fc6beeab",
+      "normalized_matches_selected_source": false,
+      "owned_output": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds"
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_HILL",
+      "channel": "height",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 16.0,
+        "height_scale": 10.0
+      },
+      "source_payload_sha256": "e91e7c445395284be9bd5a29257701926ed799ad1a7978f26f314a48f61a8e62",
+      "normalized_matches_selected_source": false,
+      "owned_output": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod1.dds"
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN001",
+      "channel": "height",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "fbb5f6204608e3a2835d5ce82eb4a1c18412c6499db92431167ef1544cd20418",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN001",
+      "channel": "height",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "896fb3639e0e14633b9f66d99d2d60d65c78c260fea496541c83ef22d7acb2ea",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN001",
+      "channel": "blend",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "001e9e9f0af806568fc797bba8bb9f824ee4bedff196a6a032178ca07855c72a",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN001",
+      "channel": "blend",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "443eb9d3a15ac7d3b5fbb2078c2488f4bfe878226206d3319271e9d5a15630e4",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN001",
+      "channel": "region_ids",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "8864d87f070796ce4fdcce8fe3ef0a7eea688beaedcf7e284eecd5a66965449e",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN001",
+      "channel": "region_ids",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "190af232007741359004bc21d2487c08f17aaf6ee87582618af5548d5415f1f9",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN002",
+      "channel": "height",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "4c50cfb998d63cf9adc75d8426936604704ab2a314b2807c9c80a5049063e4ef",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN002",
+      "channel": "height",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "e725fd784855c2e9cca28f1a37b770be8898a46c6e9af3eb18909b1afb17a96e",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN002",
+      "channel": "blend",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "5f54d21f54edec121b8d5d50d32d27f1912f42d530055fbc570d904165a0ccad",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN002",
+      "channel": "blend",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "a744a2e64e041735ca9e15bb64999d3aab541678aaf0440f16795de0c21da392",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN002",
+      "channel": "region_ids",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "988b84c9187107d354b95118d1dbfeaa50fe4c7638c3772b75526c249e23cdb4",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN002",
+      "channel": "region_ids",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "629d47c75d2cf574fde18e9457f23ca186b40ce71bdcd715effe4c5f893a7a9d",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN003",
+      "channel": "height",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "871421a65135d97dfb6b6c662f11aba3c51b85b83624c76e271cc51f2134a612",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN003",
+      "channel": "height",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "c12bae62b75582e655c7aca906512ec9213e726471cc9fb2947f013119fd62a9",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN003",
+      "channel": "blend",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "945ead4fef36a10590cef4ace385b74c0f6a8d3949e9baa29138a39265a90034",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN003",
+      "channel": "blend",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "8eeec2c8fb29fcdd8d15f9dc91ae5d69375daca7953a18ed53493c3e2f682382",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN003",
+      "channel": "region_ids",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "dc6c321cd3e3c38a869cc6fab2a414a4e2c40e4600fdca470e655fd784f031fa",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN003",
+      "channel": "region_ids",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "9970c6ccda9ae0a238bc09c3fde544f561cf63cb69f6c1e399a2e82fc61ee0ea",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN004",
+      "channel": "height",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "c77cf78d5e48db9872245f4e95a874bec5ec556b3f1327ae02dae7fca881c713",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN004",
+      "channel": "height",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "262f479bbd9cdcc262381fae47f3c8cc3f62d2c1a1c3bde4c8c9b3e1701eed79",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN004",
+      "channel": "blend",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "a051e8f4a685462cb64cf0f8031118530c0ee206a2de2f9d7c96e7a84ba991fa",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN004",
+      "channel": "blend",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "42c2a1878e42d5b55e60a379037587997d4e90c573766d869faec798f4741519",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN004",
+      "channel": "region_ids",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "81df72de0f1faa82dd8b6d923f21c48c087b15e030cfb1bc19426cf136a87702",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN004",
+      "channel": "region_ids",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "9ec308749c27f92f75e6e9a02a94627d2b53507b4cd29759b92f27fd62a2d568",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN005",
+      "channel": "height",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "ea6f0245e746b4307103f80a3e57bf176bded3b4c07c2900410674eb18448f40",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN005",
+      "channel": "height",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "be3c0adaf2a2494682c8cc4215487917c9c701dedcf9c8724fb3555301fd8e03",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN005",
+      "channel": "blend",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "7b2aac0168cc19afe7825bcd211c4709192a43cd33e4c11cc47d2b8a500371a6",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN005",
+      "channel": "blend",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "f1e6f493ece9ac0c5bab76b3635cbcfac4e2dd5c62af3a8ba8fde07b37d0bcea",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN005",
+      "channel": "region_ids",
+      "lod": 0,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "b08d6c392de9c57241e1e87c1f66e3aca46c384ebc0d7a9ec10ee229d45f6357",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    },
+    {
+      "entry": "ART_DEF_TERRAIN_ELEMENT_FEATURE_SINGLEMOUNTAIN005",
+      "channel": "region_ids",
+      "lod": 1,
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 0.0,
+        "height_scale": 25.0
+      },
+      "source_payload_sha256": "187ce16637b6a46e8490f38cda0340815de0151d6a6b2ab2f142ad3b4411f518",
+      "normalized_matches_selected_source": true,
+      "owned_output": null
+    }
+  ],
+  "interpretation": "Selected skin overrides hill pixels and height_scale (10 versus base 14). Standard mountain payloads match; scalar ArtDef values do not prove our coordinate interpretation or source-engine composition."
+}

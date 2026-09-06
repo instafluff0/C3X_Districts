@@ -1,0 +1,52 @@
+{
+  "schema": "c3x.lab_v2.fixture.v1",
+  "id": "source-clearance",
+  "track": "Q5-networks",
+  "campaign": "Q1",
+  "tile_count": 49,
+  "viewport": [
+    640,
+    384
+  ],
+  "terrain": "Renderer/terrain_lab/v2/fixtures/networks/source-clearance/terrain.csv",
+  "modules": [
+    "Renderer/terrain_lab/v2/systems/networks/module.json"
+  ],
+  "packs": {
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "shore": "Renderer/packs/ShoreNormalized",
+    "routes": "Renderer/packs/RouteStylesNormalized",
+    "bridges": "Renderer/packs/RouteDoodadsNormalized"
+  },
+  "references": [
+    "civ6.roads",
+    "civ3.real_gameplay_layout"
+  ],
+  "isolations": [
+    "no_routes",
+    "networks_only"
+  ],
+  "settings": {
+    "anisotropy": 8,
+    "mip_bias": 0,
+    "samples": 4,
+    "render_scale": 1,
+    "postprocess": "box",
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ]
+  },
+  "scenarios": {
+    "network_mesh": "Renderer/terrain_lab/v2/fixtures/networks/source-clearance/scene.bin",
+    "network_provenance": "Renderer/terrain_lab/v2/fixtures/networks/source-clearance/provenance.json",
+    "route_clearance": "Renderer/terrain_lab/v2/fixtures/networks/source-clearance/clearance.json",
+    "bridge_textures": "Renderer/terrain_lab/v2/fixtures/networks/source-clearance/bridge_textures.txt",
+    "source_art": "Renderer/terrain_lab/v2/fixtures/networks/source-clearance/source_art.json"
+  }
+}

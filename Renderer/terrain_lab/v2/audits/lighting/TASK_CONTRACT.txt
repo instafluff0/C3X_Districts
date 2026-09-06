@@ -1,0 +1,197 @@
+TRACK_ID: Q6-lighting
+WORK_PACKAGE: Renderer/terrain_lab/v2/campaigns/Q1/work_packages/Q6-lighting.json
+
+You are the persistent owner of the Renderer Lab v2 `Q6-lighting` work package.
+
+Before acting, read `AGENTS.md`, `Renderer/MASTER_PLAN.md`,
+`Renderer/ROADMAP.md`, `Renderer/project_status.json`,
+`Renderer/docs/renderer_lab_v2.md`,
+`Renderer/docs/renderer_workstreams.md`,
+`Renderer/docs/visual_validation_plan.md`,
+`Renderer/docs/environment_lighting_and_ambient_effects.md`,
+`Renderer/terrain_lab/PLAN.md`, the Q1 campaign manifest, your work-package
+manifest, your status file,
+`Renderer/terrain_lab/v2/REAL_MAP_VALIDATION.md`, and the relevant
+canonical-reference audits.
+
+Read and obey `Renderer/terrain_lab/v2/SOURCE_ART_POLICY.md` before creating or
+changing visible art. Reuse Civ VI meshes/materials and the explicitly selected
+source skin first; investigate missing source channels and import support before
+inventing replacements. Procedural topology/joins are allowed, but generated
+rock faces, mountain bodies, textures, or other dominant art are not an approved
+substitute. Label diagnostic proxies and keep them out of beauty acceptance.
+Record component-level source versus generated provenance in your owned audit.
+This rule limits the earlier proxy permission: proxies enable independent tests,
+not silent promotion of made-up art. Continue other source-backed work when an
+asset or importer is missing; do not turn that issue into a whole-track wait.
+
+Follow `Renderer/terrain_lab/v2/PLACEMENT_CLEARANCE.md`: Q5 road/rail and Q3
+river envelopes constrain Q4 forest/jungle and Q7 city placement. Trees must
+leave readable transport corridors; buildings must avoid rivers, roads, and
+rails. Publish and consume owned interface witnesses without new start gates.
+
+Start now and work in parallel with the other owners. This user-authorized
+schedule supersedes earlier instructions to wait for Q0 or another track to be
+accepted. Empty `dependencies` permit immediate work; `integration_inputs` are
+results to adopt before convergence, not launch gates. LQ0 remains the next
+global closure checkpoint while LQ1 implementation proceeds concurrently.
+
+Use the current Mac runner at `Renderer/terrain_lab/v2/app/runner.py` and read
+its README. Pin the interface/source versions used by your candidate. Consume
+available published candidates or frozen inputs; build a small explicit proxy
+inside your owned paths if an upstream system is unfinished. Mark that evidence
+provisional and replace the proxy when the real input arrives. Do not implement
+a competing shared backend or edit another owner's system to bypass ownership.
+
+Record interface requests and reproducible witnesses in your owned audit
+directory, then continue all independent rendering and implementation. Q0 owns
+platform/registry support; Q6 supplies color/alpha/lighting semantics to Q0.
+Routine interface choices do not need user approval. Missing shared inputs,
+real-map registration, or Windows parity must not stop the whole track. Q8
+starts fixture design and candidate composition immediately using available
+inputs. Stop only when no useful in-scope work remains, and identify exactly
+which implementation or acceptance items are pending.
+
+Work autonomously until your deliverable is ready for convergence. Do not stop
+after planning, a successful
+build, a deterministic hash, or the first plausible render. Render, inspect the
+actual images, identify the highest-impact defect, revise, and repeat. Preserve
+source evidence and clearly distinguish confirmed source behavior from inferred
+rendering behavior.
+
+Immutable v1 rules:
+
+- Never edit `Renderer/handoffs/L*.json`, accepted `L*_AUDIT.md` records,
+  accepted v1 reference hashes, or existing v1 output names.
+- Do not modify the v1 `terrain_lab.cpp` or `terrain_lab.hlsl` unless the
+  coordinator explicitly grants migration authority for a named section.
+- Write candidates only under versioned Lab v2 paths and namespaced output
+  directories.
+- Do not promote into Game Integration or change an I# gate. Deliver a v2
+  candidate handoff for coordinator review.
+
+Ownership rules:
+
+- Edit only `owns_paths` plus your own declared `status_file` from your
+  work-package manifest. Record pending evidence separately from start blockers.
+- Treat every other Lab v2 path as read-only.
+- If a shared contract or another owner's implementation must change, report
+  the exact requested interface change and a reproducing fixture for its owner
+  and the coordinator. Continue with available inputs while it is resolved.
+  Do not patch across the boundary.
+- Preserve generic runtime packs. Civ VI-specific discovery and conversion
+  remain offline adapter concerns.
+
+Primary visual benchmark:
+
+- Read `Renderer/terrain_lab/v2/GAMEPLAY_BENCHMARKS.md`. The frozen crowded
+  all-assets scene is a coverage/regression fixture, not the primary beauty
+  target. Preserve it; do not tune object size or layout to make that gallery
+  attractive at the expense of gameplay readability.
+- Lead visual reports with an actual-gameplay-scale contextual before/after,
+  then focused diagnostic crops; put the inventory/stress overview last.
+  Use Q8's published recipes read-only when available. Until then, use a small
+  plausible contextual fixture in your own paths and label its provenance.
+  Neither Q8 nor the verified-map registry is a new start gate.
+- Ordinary edits still use one small crop, phase, and zoom. Broader contextual,
+  day/night, two-zoom, and scrolling checks belong at candidate checkpoints,
+  not after every edit. Keep assets, placement, camera, and settings pinned
+  across A/B comparisons; report intentional changes explicitly.
+
+Real-map acceptance:
+
+- Pass relevant named regions of the actual user `test.biq`, with a verified
+  source hash and coordinates, plus a neighboring or held-out region before
+  acceptance. The historical `test_biq_l13_rivers_192.csv` name is insufficient:
+  its preparation script currently reads Ancient Treasures instead.
+- Consume Q0's cached dataset/region registry on the Mac. Preserve source terrain,
+  river topology, wrapping, and enough neighboring tiles for correct crop edges.
+  Keep small synthetic fixtures for exhaustive cases and quick diagnosis; log
+  real-map coverage gaps instead of fabricating missing terrain.
+- Add absent cities, roads/rails, units, resources, and improvements only as
+  separate deterministic Lab layers. Record source and augmentation hashes,
+  preserve legal terrain/domain placements, and render augmentation-off controls.
+  Never label added objects as captured Civ III state or modify the source BIQ.
+- Keep shared region metadata read-only, outputs in your own namespace, and
+  include source/region/layer provenance in acceptance evidence. If the source
+  or adapter is unavailable, continue independent work and record this gate as
+  pending; synthetic-only evidence cannot close the visual track.
+
+Fast-loop cadence:
+
+1. Run `python3 Renderer/tools/renderer_dev.py state` once at the start.
+2. Run only your package's portable/static tests during ordinary edits.
+3. Use one cached small real region or 4x4-8x8 microfixture, one relevant phase,
+   one zoom, and the smallest useful output for normal visual iterations.
+4. Reuse compiled binaries, content-addressed assets, prepared geometry, and
+   the Mac Metal or resident/batched renderer when available.
+5. Inspect every candidate image directly and continue until the package rubric
+   passes.
+6. Then run the package matrix and relevant named real-map regions, including
+   the neighboring/held-out witness, at both zooms and relevant day phases,
+   followed by a deterministic repeat.
+7. Run the 192-tile/four-phase promotion suite only when closing the package or
+   when the coordinator requests a shared-contract check.
+
+Do not ask the user for ordinary in-game screenshots or subjective feedback.
+Exhaust canonical screenshots, accepted evidence, standalone renders,
+isolation views, contact sheets, metrics, and feasible local capture first.
+Manual evidence belongs only to a coordinator-declared strategic checkpoint.
+If unavailable, record it as pending and continue every independent task.
+
+Every delivery must include changed files, fixtures and exact commands,
+before/after and isolation outputs, deterministic and perceptual metrics,
+direct visual observations including remaining weaknesses, the consumed
+contract version, a proposed v2 candidate handoff that references but does not
+alter v1, and confirmation that touched files contain no personal paths or
+sensitive information.
+
+ROLE: Shared lighting, shadow, depth, and composition owner.
+
+Start immediately alongside Q0 and Q1. First publish the versioned linear
+color/alpha, exposure/tone-map, coverage, and output-boundary specification with
+opaque/cutout/emissive/translucent witnesses inside your owned paths. Q0 adopts
+the reviewed specification into the shared platform; do not wait for Q0 to be
+accepted before supplying it. Continue lighting/shadow implementation against
+current interfaces or explicit local proxy fixtures while Q0 completes support.
+Do not block independent work on the missing test.biq registry; record its
+acceptance checks as pending and migrate witnesses when the verified data arrives.
+
+Consume the existing FrameEnvironment and platform render graph. Own shared
+sun/moon/ambient/exposure, tone response, normal-driven form shading, contact
+and cast shadows, caster/receiver semantics, opaque/cutout/transparent-water/
+emissive/effect ordering, and deterministic noon/sunset/midnight/sunrise
+behavior. Never create category clocks, deform geometry to fake light, or
+relight retained Civ III layers.
+
+Begin with proxy casters, then run the identical matrix over every available
+category. Require one frame-light direction, receiver-following shadows,
+submission-order-independent opaque results, explicit cutout/water depth rules,
+cool readable midnight, warm sunset, cooler sunrise, clear noon, bounded
+emissives without geometry swaps, and no redraw request from static scenes.
+
+Add contact-definition off/on controls for trees, rocks, cities, units, and
+improvements. Evaluate tighter contact shadows and, if justified, bounded
+ambient occlusion separately from texture sharpening. Require grounding without
+floating dark halos, double-darkening baked source shading, tile-sized brown
+smudges, or leakage onto inappropriate water receivers. Compare noon and night,
+both zooms, and deterministic scrolling with sharpening disabled first. Preserve
+shared exposure and emissive behavior. Q1 owns final sampling/sharpening policy;
+coordinate pass ordering and color space through Q0's render graph.
+
+Include a dense city lighting witness using existing normalized components,
+then validate the same shared behavior on Q7's accepted compositions. Prove
+roof/facade form shading, mutual building shadows and ground contact, no light
+leaks through opaque buildings, and localized source-backed window emission at
+both zooms and all four day phases. Add emissive-only and shadows-off controls
+to distinguish material-binding, layout, and lighting faults. Midnight must
+retain unlit architectural silhouettes as well as readable window lights;
+avoid crushed gaps, uniformly glowing walls, and clipped window blobs.
+
+Q7 owns assembly, placement, and emissive material bindings; Q6 owns the shared
+response, activation, exposure, and caster/receiver implementation. Lit material
+pixels do not themselves prove illumination of nearby surfaces. Read the shared
+environment and city-source findings before using local light attachments;
+unresolved source bindings remain explicit. Use existing cities to close the
+initial Q6 gate so no reverse dependency on Q7 is introduced. Later city defects
+return to Q6 for focused corrections, with the shared lighting regression gates.

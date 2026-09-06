@@ -26,7 +26,14 @@
     "plan": "docs/renderer_lab_v2.md",
     "manifest": "terrain_lab/v2/campaigns/Q1/campaign.json",
     "baseline": "handoffs/L21_complete_beauty_scene.json",
-    "rule": "Historical L9-L21 handoffs are immutable. LQ0 establishes modular contracts and the macOS fast path; LQ1 owns parallel visual tracks; LQ2 freezes versioned v2 handoffs before deliberate Integration refresh work.",
+    "rule": "Historical L9-L21 handoffs are immutable. The user assigned sole lead ownership of the complete Lab v2 implementation and combined visual review. Q0-Q8 are requirement categories; exclusive ownership and cross-owner start blockers are superseded. LQ0/LQ1/LQ2 acceptance gates remain; Game Integration is paused.",
+    "execution_policy": "single_lead; LQ0 remains the next global closure checkpoint while the authorized lead improves the combined Lab scene",
+    "combined_visual_checkpoint": {
+      "scope": "terrain and lighting; cities, units and improvements deferred by user",
+      "benchmarks": "terrain_lab/v2/fixtures/beauty/gameplay-100-v1/BENCHMARKS.json",
+      "review": "terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md",
+      "approval": null
+    },
     "ordinary_backend": "macos_metal",
     "promotion_parity_backend": "windows_d3d11"
   },
@@ -168,7 +175,7 @@
       "Campaign manifests, per-track status, reference metadata, and generated prompts validate, and the complete project-state and relevant Lab verification suites pass."
     ],
     "must_not": [
-      "Do not retune visual appearance, overwrite v1 handoffs or accepted output names, or begin an LQ1 beauty implementation during the LQ0 neutrality refactor.",
+      "Do not overwrite v1 handoffs or accepted output names. Q0 preserves the frozen baseline while Q1-Q8 are explicitly authorized to implement and render visual candidates concurrently in their owned v2 paths.",
       "Do not modify injected code, Civ III capture, native suppression, or resume I19 and later Integration gates during LQ0.",
       "Do not create Metal-only visual behavior, source-specific runtime branches, or require cross-backend byte identity where bounded parity is the correct contract."
     ]
@@ -1327,7 +1334,8 @@
         {
           "id": "LQ1",
           "title": "Run parallel visual-quality tracks",
-          "status": "blocked_by_previous",
+          "status": "in_progress",
+          "execution_note": "User-authorized parallel implementation alongside unfinished LQ0; final acceptance still requires converged platform and real-map evidence.",
           "promotion_required": true,
           "work_packages": [
             "Q1-sampling",

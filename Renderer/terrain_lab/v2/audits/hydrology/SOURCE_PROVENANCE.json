@@ -1,0 +1,83 @@
+{
+  "schema": "c3x.q3.source_provenance.v1",
+  "assets": [
+    {
+      "asset": "grassland_base_color",
+      "pack": "Civ5EnvironmentSkin",
+      "path": "Renderer/packs/Civ5EnvironmentSkin/provenance/terrain_textures/grassland_base_color.dds",
+      "sha256": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+      "classification": "diagnostic_proxy",
+      "use": "Q2 ground receiver using actual alternate-skin material",
+      "uv": "world lattice, repeat scale rounded to integral world-wrap periods; no texture edits",
+      "geometry": "generated shore/bed topology; generated smooth hill receiver is diagnostic only"
+    },
+    {
+      "asset": "cliff_base_color",
+      "pack": "Civ5EnvironmentSkin",
+      "path": "Renderer/packs/Civ5EnvironmentSkin/provenance/terrain_textures/cliff_base_color.dds",
+      "sha256": "e93c7275099e1a6e01fad0a2e0a5d5bb0e46219ffc920e130a473ef9eba61937",
+      "classification": "diagnostic_proxy",
+      "use": "Q4 cliff receiver material on generated smooth slope; NOT source cliff geometry",
+      "uv": "world lattice, repeat scale rounded to integral world-wrap periods; no texture edits",
+      "geometry": "generated shore/bed topology; generated smooth hill receiver is diagnostic only"
+    },
+    {
+      "asset": "beach_base_color",
+      "pack": "Civ5EnvironmentSkin",
+      "path": "Renderer/packs/Civ5EnvironmentSkin/provenance/terrain_textures/beach_base_color.dds",
+      "sha256": "e3dcc79b4abe70a85cc1415b9fb737d69fd0c72b4771d42b91a67055b1638637",
+      "classification": "source_adaptation",
+      "use": "source sand on generated Civ III shoreline topology",
+      "uv": "world lattice, repeat scale rounded to integral world-wrap periods; no texture edits",
+      "geometry": "generated shore/bed topology; generated smooth hill receiver is diagnostic only"
+    },
+    {
+      "asset": "shallows_base_color",
+      "pack": "Civ5EnvironmentSkin",
+      "path": "Renderer/packs/Civ5EnvironmentSkin/provenance/terrain_textures/shallows_base_color.dds",
+      "sha256": "78b790fb1f524e910cf1181e50a12aedc96daa4ae36582e24234a781fff0e17f",
+      "classification": "source_adaptation",
+      "use": "source shallow bed on monotone generic bathymetry",
+      "uv": "world lattice, repeat scale rounded to integral world-wrap periods; no texture edits",
+      "geometry": "generated shore/bed topology; generated smooth hill receiver is diagnostic only"
+    },
+    {
+      "asset": "shallows_height",
+      "pack": "Civ5EnvironmentSkin",
+      "path": "Renderer/packs/Civ5EnvironmentSkin/provenance/terrain_textures/shallows_height.dds",
+      "sha256": "14cb9fdc3d81120dccf39ebaba5bec1cb0266aea60f5dacb28d924d1d5d9cac7",
+      "classification": "source_reuse",
+      "use": "unaltered authored height texture for material normals only",
+      "uv": "world lattice, repeat scale rounded to integral world-wrap periods; no texture edits",
+      "geometry": "generated shore/bed topology; generated smooth hill receiver is diagnostic only"
+    }
+  ],
+  "contracts": {
+    "Renderer/terrain_lab/v2/shared/scene_hooks.h": "a2a3ea1a7ac1f50c0f7a71951d3d61bde9f104ab7152253e265dba7309ccb0aa",
+    "Renderer/terrain_lab/v2/contracts/scene_exchange_v1.md": "e4d22ac197a2abc8c7914bb3cf5ba115cb8a548fb3e945f72de1fd92cb0d71d9",
+    "Renderer/terrain_lab/v2/systems/hydrology/scene_adapter.h": "87db8b99e51c4a438ae6bfe4de9c051679df81dd3410f0f6df726c0399e97ccc",
+    "Renderer/terrain_lab/v2/systems/hydrology/publish_corridors.py": "e1c4ae8fc11260285a356c43c88ece549d571fd448f6834c16a279abdda00dd7",
+    "Renderer/terrain_lab/v2/contracts/packet_v1.h": "08855c9302e5911fe20d4152a873d76c3185e08bf05e1b9ddfd18f25504b1183",
+    "Renderer/terrain_lab/v2/contracts/interfaces_v1.h": "b866ddde950140a9532ffa2689b46bd5818631d62f034b1fba306f6bd80d2569",
+    "Renderer/terrain_lab/v2/contracts/platform_v1.json": "d8840e86b07c741c59d8868af5e5a471323c76601ed853561411b6cb6f8a25fa",
+    "Renderer/terrain_lab/v2/shaders/lighting/response_v1.hlsl": "be03629b1760618cc99d3d3eca0821aff102aa98f952e1c34751d8d1c5485407",
+    "Renderer/terrain_lab/v2/shared/environment_runtime.cpp": "9b27492abebb850420ff2d1fb6d5d67cc8f296c135e0047a98d27087b32cd427",
+    "Renderer/terrain_lab/v2/shared/environment_runtime.h": "4da550dd9e57289ddf5f188be124f80f9b93f5c451517d5bafdfa085f48713c2",
+    "Renderer/terrain_lab/v2/systems/hydrology/field.h": "ec75252bfba0da40b7329702387b105d2d19cc557d07723b4ef08eaaa090fe87",
+    "Renderer/terrain_lab/v2/systems/hydrology/packet.cpp": "3b0f82482c71dfc68c80fdefd0e448096b3efce6a21cdc2fb2c289153139b10b",
+    "Renderer/terrain_lab/v2/shaders/hydrology/static.hlsl": "b222d7bdaf35cdb214e2711efc29911ebb8d5c99846344895897bb65496b5dd0",
+    "Renderer/handoffs/L21_complete_beauty_scene.json": "426d65f4733b0587ba9ee22a8c6be0f666e1371999427293ca72072dbb91b059"
+  },
+  "packet_wire_version": 2,
+  "semantic_interface_version": 1,
+  "hydrology_interface_version": 1,
+  "source_evidence": [
+    "Renderer/terrain_lab/CANONICAL_REFERENCE_AUDIT.md",
+    "Renderer/terrain_lab/L9_5_SHORELINE_AUDIT.md",
+    "Renderer/terrain_lab/L13_RIVER_AUDIT.md"
+  ],
+  "confirmed": "Normalized alternate-skin DDS roles and source ArtDef records documented in existing audits.",
+  "inferred": "B-spline shoreline, bounded erosion, bathymetry/absorption calibration and Bezier topology are native adaptations, not recovered source engine behavior.",
+  "deferred": "Wave/surf/foam animation, caustics and river flow; no time-driven hydrology redraws.",
+  "original_art_fallback_selected": false
+}
