@@ -1,0 +1,34 @@
+{
+  "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "regions": [
+    {
+      "requested_id": "beauty-longcoast-128-v1",
+      "origin": [
+        64,
+        38
+      ],
+      "extent": [
+        16,
+        8
+      ],
+      "halo": 6,
+      "role": "user_evaluation",
+      "camera": {
+        "viewport": [
+          1616,
+          888
+        ],
+        "zooms": [
+          1,
+          2
+        ],
+        "hours": [
+          12,
+          18,
+          0,
+          6
+        ]
+      }
+    }
+  ]
+}

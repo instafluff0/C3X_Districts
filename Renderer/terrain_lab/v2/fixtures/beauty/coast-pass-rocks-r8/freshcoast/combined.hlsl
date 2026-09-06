@@ -1,0 +1,13 @@
+#define Q3_SOURCE_WATER_NORMALS 1
+#define Q4_COASTAL_ROCKS 1
+#define Q3_COAST_DETAIL 1
+#define Q6_GAMEPLAY_NIGHT 1
+#define Q4_BIQ_CONTINUOUS_DESERT 1
+#define Q4_BIQ_DUNE_COVERAGE 1
+#define Q4_COMBINED_ROCK_PROJECTION 1
+#define Q3_STATIC_OPTICS_V2 1
+#define Q6_WORLD_SHADOWS 1
+#define Q3_MATERIAL_ORIGIN_X 24.5
+#define Q3_MATERIAL_ORIGIN_Y -5.5
+#define Q3_MATERIAL_WRAP_WIDTH 100
+#include "../../../../shaders/hydrology/scene_linear.hlsl"

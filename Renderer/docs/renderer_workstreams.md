@@ -96,8 +96,11 @@ Natural wonders, constructed wonders, and C3X districts remain deferred to
 M9, M10, and M11 respectively and cannot be pulled forward by this promotion
 model.
 
-At the user's explicit direction, Integration is currently paused after I18
-while LQ0-LQ2 prepare and execute the Lab v2 quality campaign. This pause does
+At the user's explicit direction, new system Integration is paused after I18
+while LQ0-LQ2 prepare and execute the Lab v2 quality campaign. On 2026-09-06 the
+user independently resumed performance/caching/diagnostic maintenance of the
+existing production path without waiting for Lab updates. This exception does
+not promote additional visual systems. The system-integration pause does
 not undo completed I9-I18 ownership and does not authorize M9-M11 work early.
 Any accepted Lab v2 change reaches production only through an explicit,
 versioned Integration refresh gate.

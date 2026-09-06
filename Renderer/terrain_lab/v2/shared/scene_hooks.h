@@ -12,6 +12,8 @@ struct HydrologyHooksV1 {
   void (*initialize)(const char* terrain_csv)=nullptr;
   void (*shore_sample)(float x,float y,float data[4])=nullptr; // positive-land distance, width, rocky fraction, depth
   float (*signed_shore_distance)(float x,float y)=nullptr; // water-positive [-1,1]
+  // Optional contour witness: corner-lattice ax,ay,bx,by,rocky fraction.
+  bool (*coast_segment)(unsigned index,float data[5])=nullptr;
 };
 inline HydrologyHooksV1 hydrology_hooks;
 struct PlacementHooksV1 {

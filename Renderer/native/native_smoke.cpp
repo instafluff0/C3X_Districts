@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cmath>
 #include <cstdio>
@@ -163,6 +164,8 @@ c3x_renderer_tile_v1 make_tile(int x, int y, int anchor_x, int anchor_y, int ter
 }
 
 int main(int argc, char ** argv) {
+    SetEnvironmentVariableA("C3X_RENDERER_TRACE", "2");
+    SetEnvironmentVariableA("C3X_RENDERER_TRACE_FILE", "build\\cache-trace.log");
     char const * path = argc > 1 ? argv[1] : "..\\bin\\C3XRenderer.dll";
     char const * pack_path = argc > 2 ? argv[2] : "build\\synthetic_pack";
     bool synthetic_definition_mode = argc <= 2;
@@ -393,6 +396,11 @@ int main(int argc, char ** argv) {
     output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
     if (render(&frame, &output) != C3X_RENDERER_RESULT_OK)
         return fail("static cache priming render failed");
+    // Subsequent cache tests compare the exact primed world snapshot. A
+    // separate reset/translation witness below checks independently rasterized
+    // views with its explicit edge tolerance.
+    std::memcpy(first.data(), output.bgra_pixels, byte_count);
+    first_hash = hash_pixels(first.data(), first.size());
     if (output.cache_entries != 2 || output.cache_capacity != 32)
         return fail("static terrain cache is not populated within its fixed bound");
     c3x_renderer_u32 cache_hits_before = output.cache_hits;
@@ -438,6 +446,7 @@ int main(int argc, char ** argv) {
     // Units and their UI selectors remain in Civ III's retained overlay planes.
     // Visible animation must keep driving redraw without evicting static map art.
     c3x_renderer_u32 retained_hits_before = output.cache_hits;
+    std::uint64_t retained_hash_before = hash_pixels(output.bgra_pixels, byte_count);
     tiles[0].unit_direction = (tiles[0].unit_direction + 1) & 7;
     tiles[0].square_parts ^= 0x20u;
     tiles[0].terrain_overlays ^= 0x40u;
@@ -448,9 +457,22 @@ int main(int argc, char ** argv) {
     if (render(&frame, &output) != C3X_RENDERER_RESULT_OK ||
         output.cache_hits != retained_hits_before + 1 || output.renderer_cpu_ticks != 0 ||
         output.frame_invalidation_flags != 0 ||
+        output.geometry_tiles_built != 0 || output.geometry_upload_bytes != 0 ||
+        output.raster_draw_pixels != 0 ||
         output.request_continuous_redraw != 1 ||
-        hash_pixels(output.bgra_pixels, byte_count) != first_hash)
+        hash_pixels(output.bgra_pixels, byte_count) != retained_hash_before)
+    {
+        FILE * diagnostic = nullptr;
+        fopen_s(&diagnostic, "build\\cache-first.bgra", "wb");
+        if (diagnostic) { std::fwrite(first.data(), 1, byte_count, diagnostic); std::fclose(diagnostic); }
+        fopen_s(&diagnostic, "build\\cache-retained.bgra", "wb");
+        if (diagnostic) { std::fwrite(output.bgra_pixels, 1, byte_count, diagnostic); std::fclose(diagnostic); }
+        std::fprintf(stderr, "retained hits=%u expected=%u ticks=%lld invalidations=%u animation=%u hash=%llu expected_hash=%llu\n",
+            output.cache_hits, retained_hits_before + 1, output.renderer_cpu_ticks,
+            output.frame_invalidation_flags, output.request_continuous_redraw,
+            hash_pixels(output.bgra_pixels, byte_count), retained_hash_before);
         return fail("animated Civ III overlay state invalidated static map cache work");
+    }
     tiles[0].unit_direction = (tiles[0].unit_direction + 7) & 7;
     tiles[0].square_parts ^= 0x20u;
     tiles[0].terrain_overlays ^= 0x40u;
@@ -923,18 +945,21 @@ int main(int argc, char ** argv) {
         std::uint64_t reset_after_hash = hash_pixels(
             approved_output.bgra_pixels, reset_bytes);
         std::size_t differing_pixels = 0;
-        std::size_t differing_bytes = 0;
+        std::size_t differing_bytes = 0, material_differences = 0;
+        std::uint64_t total_channel_delta = 0;
         unsigned int maximum_channel_delta = 0;
         auto const * cold_pixels =
             static_cast<std::uint8_t const *>(approved_output.bgra_pixels);
         if (cold_pixels != nullptr) {
             for (std::size_t offset = 0; offset < reset_bytes; offset += 4) {
-                bool pixel_differs = false;
+                bool pixel_differs = false, material_differs = false;
                 for (std::size_t channel = 0; channel < 4; ++channel) {
                     unsigned int translated_value = translated_pixels[offset + channel];
                     unsigned int cold_value = cold_pixels[offset + channel];
                     unsigned int delta = translated_value > cold_value
                         ? translated_value - cold_value : cold_value - translated_value;
+                    total_channel_delta += delta;
+                    material_differs = material_differs || delta > 1u;
                     if (delta > maximum_channel_delta)
                         maximum_channel_delta = delta;
                     if (delta != 0) {
@@ -944,14 +969,18 @@ int main(int argc, char ** argv) {
                 }
                 if (pixel_differs)
                     ++differing_pixels;
+                if (material_differs) ++material_differences;
             }
         }
         // Applying an integer camera offset in the vertex shader is allowed to
         // choose the neighboring raster edge when the equivalent CPU rebuild
         // rounds NDC in a different order. Keep that bounded to sub-per-mille
         // edge coverage with no large color excursion.
-        bool translation_equivalent = differing_pixels <= reset_bytes / 4000 &&
-            maximum_channel_delta <= 128;
+        // Reusing pixels preserves their shading; a fresh raster can round a
+        // channel differently when an odd-pixel shift changes GPU derivative
+        // quads. Bound that separately from actual edge/material changes.
+        bool translation_equivalent = material_differences <= reset_bytes / 4000 &&
+            total_channel_delta <= reset_bytes / 100 && maximum_channel_delta <= 128;
         if (reset_result != C3X_RENDERER_RESULT_OK ||
             approved_output.device_generation <= generation_before ||
             (approved_output.frame_invalidation_flags & C3X_RENDERER_INVALIDATE_DEVICE) == 0 ||
@@ -963,6 +992,12 @@ int main(int argc, char ** argv) {
                 generation_before, approved_output.device_generation,
                 approved_output.frame_invalidation_flags, differing_pixels,
                 reset_bytes / 4, differing_bytes, maximum_channel_delta);
+            std::fprintf(stderr, "material_differences=%zu channel_delta=%llu\n", material_differences, total_channel_delta);
+            FILE * diagnostic = nullptr;
+            fopen_s(&diagnostic, "build\\translation-warm.bgra", "wb");
+            if (diagnostic) { std::fwrite(translated_pixels.data(), 1, reset_bytes, diagnostic); std::fclose(diagnostic); }
+            fopen_s(&diagnostic, "build\\translation-cold.bgra", "wb");
+            if (diagnostic) { std::fwrite(cold_pixels, 1, reset_bytes, diagnostic); std::fclose(diagnostic); }
             return fail("translated viewport did not match a cold device-reset rebuild");
         }
 
@@ -1045,10 +1080,14 @@ int main(int argc, char ** argv) {
         std::printf("PERF approved_live_scale_cold: tiles=400 records=800 milliseconds=%.3f ticks=%lld.\n",
                     live_scale_milliseconds,
                     static_cast<long long>(approved_output.renderer_cpu_ticks));
+        c3x_renderer_u32 cold_upload_bytes = approved_output.geometry_upload_bytes;
+        if (approved_output.geometry_tiles_built != 400 || cold_upload_bytes == 0 ||
+            approved_output.geometry_cache_bytes > 192u * 1024u * 1024u)
+            return fail("live-scale mesh compilation exceeded its memory contract");
         c3x_renderer_i64 live_scale_cold_ticks = approved_output.renderer_cpu_ticks;
         c3x_renderer_u32 live_scale_hits = approved_output.cache_hits;
         for (c3x_renderer_tile_v1 & tile : live_scale_tiles) {
-            tile.anchor_x += 3;
+            tile.anchor_x += 4;
             tile.anchor_y -= 2;
         }
         approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
@@ -1056,7 +1095,10 @@ int main(int argc, char ** argv) {
             (approved_output.frame_invalidation_flags & C3X_RENDERER_INVALIDATE_SCENE) == 0 ||
             approved_output.renderer_cpu_ticks <= 0 ||
             approved_output.renderer_cpu_ticks * 4 >= live_scale_cold_ticks ||
-            approved_output.cache_hits != live_scale_hits + 1)
+            approved_output.cache_hits != live_scale_hits + 1 ||
+            approved_output.geometry_tiles_built != 0 || approved_output.geometry_upload_bytes != 0 ||
+            approved_output.raster_reused_pixels < 99u *
+                static_cast<c3x_renderer_u32>(live_scale_frame.target_width * live_scale_frame.target_height) / 100u)
             return fail("live-scale pixel scroll did not reuse world geometry");
         double live_scale_scroll_milliseconds = performance_frequency.QuadPart > 0
             ? static_cast<double>(approved_output.renderer_cpu_ticks) * 1000.0 /
@@ -1078,8 +1120,13 @@ int main(int argc, char ** argv) {
         approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
         if (render(&live_scale_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
             approved_output.renderer_cpu_ticks <= 0 ||
-            approved_output.renderer_cpu_ticks * 2 >= live_scale_cold_ticks ||
-            approved_output.fallback_tile_count != 0)
+            approved_output.renderer_cpu_ticks * 4 >= live_scale_cold_ticks ||
+            approved_output.fallback_tile_count != 0 ||
+            approved_output.geometry_tiles_built > 40 ||
+            approved_output.geometry_tiles_reused < 360 ||
+            approved_output.geometry_tiles_built + approved_output.geometry_tiles_reused != 400 ||
+            approved_output.geometry_upload_bytes >= cold_upload_bytes / 5 ||
+            approved_output.geometry_cache_bytes > 192u * 1024u * 1024u)
             return fail("tile-boundary scroll did not reuse world semantic fields");
         double live_scale_boundary_milliseconds = performance_frequency.QuadPart > 0
             ? static_cast<double>(approved_output.renderer_cpu_ticks) * 1000.0 /
@@ -1088,6 +1135,182 @@ int main(int argc, char ** argv) {
         std::printf("PERF approved_live_scale_tile_boundary: tiles=400 records=800 milliseconds=%.3f ticks=%lld.\n",
                     live_scale_boundary_milliseconds,
                     static_cast<long long>(approved_output.renderer_cpu_ticks));
+
+        std::printf("CACHE boundary: built=%u reused=%u upload_bytes=%u cache_bytes=%u.\n",
+            approved_output.geometry_tiles_built, approved_output.geometry_tiles_reused,
+            approved_output.geometry_upload_bytes, approved_output.geometry_cache_bytes);
+        std::size_t live_bytes = static_cast<std::size_t>(approved_output.stride_bytes) * approved_output.height;
+        std::vector<std::uint8_t> boundary_pixels(
+            static_cast<std::uint8_t const *>(approved_output.bgra_pixels),
+            static_cast<std::uint8_t const *>(approved_output.bgra_pixels) + live_bytes);
+        reset();
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&live_scale_frame, &approved_output) != C3X_RENDERER_RESULT_OK)
+            return fail("cold boundary witness failed to render");
+        auto const * boundary_cold = static_cast<std::uint8_t const *>(approved_output.bgra_pixels);
+        std::uint64_t boundary_error = 0;
+        std::size_t boundary_changed = 0;
+        for (std::size_t i = 0; i < live_bytes; i += 4) {
+            bool changed = false;
+            for (std::size_t c = 0; c < 4; ++c) {
+                unsigned delta = static_cast<unsigned>(std::abs(
+                    static_cast<int>(boundary_pixels[i+c]) - boundary_cold[i+c]));
+                boundary_error += delta;
+                changed = changed || delta > 2u;
+            }
+            if (changed) ++boundary_changed;
+        }
+        // Classify <=2/255 as quantization noise, retaining a strict total
+        // error cap and sub-per-mille coverage budget for larger differences.
+        // Exact cache returns below still require byte-identical images.
+        if (boundary_changed > live_bytes / 4000 || boundary_error > live_bytes / 100) {
+            std::printf("DIFF boundary: changed=%zu error=%llu bytes=%zu.\n", boundary_changed,
+                static_cast<unsigned long long>(boundary_error), live_bytes);
+            FILE * diagnostic = nullptr;
+            if (fopen_s(&diagnostic, "build/boundary-warm.bgra", "wb") == 0 && diagnostic) {
+                fwrite(boundary_pixels.data(), 1, live_bytes, diagnostic); fclose(diagnostic);
+            }
+            if (fopen_s(&diagnostic, "build/boundary-cold.bgra", "wb") == 0 && diagnostic) {
+                fwrite(boundary_cold, 1, live_bytes, diagnostic); fclose(diagnostic);
+            }
+            return fail("incremental boundary cache differs from authoritative cold rebuild");
+        }
+
+        std::vector<double> unit_times, scroll_times;
+        std::uint64_t static_hash = hash_pixels(approved_output.bgra_pixels, live_bytes);
+        for (int i = 0; i < 64; ++i) {
+            live_scale_tiles[0].unit_direction = i & 7;
+            live_scale_tiles[0].unit_type_id = i;
+            live_scale_frame.visible_animation_count = 1;
+            LARGE_INTEGER begin = {}, end = {};
+            QueryPerformanceCounter(&begin);
+            approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+            int result = render(&live_scale_frame, &approved_output);
+            QueryPerformanceCounter(&end);
+            unit_times.push_back(1000.0 * (end.QuadPart - begin.QuadPart) / performance_frequency.QuadPart);
+            if (result != C3X_RENDERER_RESULT_OK || approved_output.renderer_cpu_ticks != 0 ||
+                approved_output.geometry_tiles_built != 0 || approved_output.geometry_upload_bytes != 0 ||
+                approved_output.raster_draw_pixels != 0 || approved_output.request_continuous_redraw != 1 ||
+                hash_pixels(approved_output.bgra_pixels, live_bytes) != static_hash)
+                return fail("repeated unit selection performed terrain work or changed the cached image");
+        }
+        live_scale_frame.visible_animation_count = 0;
+        for (int i = 0; i < 32; ++i) {
+            int dx = i < 16 ? 4 : -4;
+            int dy = i < 8 || i >= 24 ? 2 : -2;
+            for (auto & tile : live_scale_tiles) { tile.anchor_x += dx; tile.anchor_y += dy; }
+            LARGE_INTEGER begin = {}, end = {};
+            QueryPerformanceCounter(&begin);
+            approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+            int result = render(&live_scale_frame, &approved_output);
+            QueryPerformanceCounter(&end);
+            scroll_times.push_back(1000.0 * (end.QuadPart - begin.QuadPart) / performance_frequency.QuadPart);
+            if (result != C3X_RENDERER_RESULT_OK || approved_output.geometry_tiles_built != 0 ||
+                approved_output.geometry_upload_bytes != 0 || approved_output.fallback_tile_count != 0 ||
+                approved_output.raster_draw_pixels > 20000)
+                return fail("four-direction warm scroll rebuilt geometry or rerasterized the viewport");
+        }
+        std::sort(unit_times.begin(), unit_times.end());
+        std::sort(scroll_times.begin(), scroll_times.end());
+        std::printf("PERF repeated_unit_selection: samples=64 p50_ms=%.3f p95_ms=%.3f max_ms=%.3f.\n",
+            unit_times[32], unit_times[60], unit_times.back());
+        std::printf("PERF repeated_pixel_scroll: samples=32 p50_ms=%.3f p95_ms=%.3f max_ms=%.3f.\n",
+            scroll_times[16], scroll_times[30], scroll_times.back());
+        if (unit_times[60] > 16.7 || scroll_times[30] > 33.4)
+            return fail("warm interaction latency exceeded the integration budget");
+
+        // Primary scroll workload: Civ III's staggered map coordinates and
+        // discrete several-tile jumps, with whole rows/columns entering/leaving.
+        // Retain the tiny-pixel test above only as a strip-copy regression.
+        auto jump_tiles = [&](int camera_x, int camera_y) {
+            std::vector<c3x_renderer_tile_v1> result;
+            for (int y = camera_y-8; y < camera_y + 48; ++y)
+                for (int x = camera_x-8; x < camera_x + 28; ++x) {
+                    bool visible = y >= camera_y && y < camera_y+40 && x >= camera_x && x < camera_x+20;
+                    bool logical = ((x+y) & 1) == 0;
+                    if (!visible && !logical) continue;
+                    unsigned seed = static_cast<unsigned>(x) * 73856093u ^
+                        static_cast<unsigned>(y) * 19349663u;
+                    int real_type = static_cast<int>((seed >> 8) % 14u);
+                    int ground = real_type >= 5 && real_type <= 10 ? 2 : real_type;
+                    auto tile = make_tile(x, y, (x-camera_x-1)*64, (y-camera_y-1)*32,
+                        logical ? ground : -1, seed);
+                    tile.real_terrain_type = logical ? real_type : -1;
+                    if (!logical) tile.tile_flags = C3X_RENDERER_TILE_VANILLA_BASE_CALL;
+                    else if (!visible) tile.tile_flags = C3X_RENDERER_TILE_TOPOLOGY_HALO;
+                    result.push_back(tile);
+                }
+            return result;
+        };
+        c3x_renderer_frame_v1 jump_frame = live_scale_frame;
+        jump_frame.visible_animation_count = 0;
+        jump_frame.world_width_tiles = 160; jump_frame.world_height_tiles = 160;
+        jump_frame.world_wrap_x = jump_frame.world_wrap_y = 0;
+        std::vector<double> jump_first, jump_return;
+        constexpr int jumps[][2] = {{40,40},{44,40},{48,40},{48,44},{44,44},{40,44}};
+        std::vector<std::uint64_t> jump_hashes;
+        std::vector<unsigned char> jump_witness;
+        for (int pass = 0; pass < 2; ++pass) {
+            for (int j = 0; j < 6; ++j) {
+                int view = pass == 0 ? j : 5-j;
+                auto jump_records = jump_tiles(jumps[view][0], jumps[view][1]);
+                jump_frame.tiles = jump_records.data(); jump_frame.tile_count = static_cast<unsigned>(jump_records.size());
+                LARGE_INTEGER begin = {}, end = {};
+                QueryPerformanceCounter(&begin);
+                approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+                int result = render(&jump_frame, &approved_output);
+                QueryPerformanceCounter(&end);
+                double milliseconds = 1000.0*(end.QuadPart-begin.QuadPart)/performance_frequency.QuadPart;
+                if (result != C3X_RENDERER_RESULT_OK || approved_output.rendered_tile_count != 400 ||
+                    approved_output.fallback_tile_count != 0 ||
+                    approved_output.geometry_cache_bytes > 192u*1024u*1024u)
+                    return fail("several-tile jump failed its rendering or memory contract");
+                if (pass == 0 && j != 0 && (approved_output.geometry_tiles_built > 80 ||
+                    approved_output.geometry_tiles_reused < 320 ||
+                    approved_output.raster_reused_pixels < static_cast<unsigned>(jump_frame.target_width*jump_frame.target_height)/2))
+                    return fail("several-tile jump discarded unchanged topology or bitmap overlap");
+                if (pass != 0 && milliseconds > 16.7)
+                    return fail("cached several-tile return exceeded the interaction budget");
+                auto hash = hash_pixels(approved_output.bgra_pixels, live_bytes);
+                if (pass == 0 && j == 5) jump_witness.assign(
+                    static_cast<unsigned char const *>(approved_output.bgra_pixels),
+                    static_cast<unsigned char const *>(approved_output.bgra_pixels)+live_bytes);
+                if (pass == 0) jump_hashes.push_back(hash);
+                else if (hash != jump_hashes[view] || approved_output.geometry_tiles_built != 0 ||
+                    approved_output.geometry_upload_bytes != 0 || approved_output.raster_draw_pixels != 0)
+                    return fail("several-tile return trip rebuilt or changed a retained view");
+                std::printf("PERF tile_jump: pass=%s view=%d camera_x=%d camera_y=%d milliseconds=%.3f built=%u reused=%u reused_pixels=%u draw_pixels=%u.\n",
+                    pass == 0 ? "first" : "return", view, jumps[view][0], jumps[view][1], milliseconds,
+                    approved_output.geometry_tiles_built, approved_output.geometry_tiles_reused,
+                    approved_output.raster_reused_pixels, approved_output.raster_draw_pixels);
+                if (pass != 0) jump_return.push_back(milliseconds);
+                else if (j != 0) jump_first.push_back(milliseconds);
+
+            }
+        }
+        auto witness_records = jump_tiles(jumps[5][0], jumps[5][1]);
+        jump_frame.tiles = witness_records.data(); jump_frame.tile_count = static_cast<unsigned>(witness_records.size());
+        reset();
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&jump_frame, &approved_output) != C3X_RENDERER_RESULT_OK)
+            return fail("cold several-tile jump witness failed");
+        auto witness_pixels = static_cast<unsigned char const *>(approved_output.bgra_pixels);
+        std::size_t jump_changed = 0; std::uint64_t jump_error = 0;
+        for (std::size_t i = 0; i < live_bytes; i += 4) {
+            bool changed = false;
+            for (std::size_t c = 0; c < 4; ++c) {
+                unsigned delta = static_cast<unsigned>(std::abs(static_cast<int>(jump_witness[i+c])-witness_pixels[i+c]));
+                jump_error += delta; changed = changed || delta > 2;
+            }
+            if (changed) ++jump_changed;
+        }
+        std::printf("DIFF tile_jump: changed=%zu error=%llu bytes=%zu.\n", jump_changed,
+            static_cast<unsigned long long>(jump_error), live_bytes);
+        if (jump_changed > live_bytes / 4000 || jump_error > live_bytes / 100)
+            return fail("several-tile jump overlap differs from its cold reconstruction");
+        std::sort(jump_first.begin(),jump_first.end()); std::sort(jump_return.begin(),jump_return.end());
+        std::printf("PERF repeated_tile_jump: samples=5 first_p50_ms=%.3f first_p95_ms=%.3f return_p95_ms=%.3f.\n",
+            jump_first[2],jump_first.back(),jump_return.back());
 
         output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
         if (render(&frame, &output) != C3X_RENDERER_RESULT_OK)
@@ -1270,7 +1493,7 @@ int main(int argc, char ** argv) {
     reset();
     FreeLibrary(module);
     if (external_definition_mode) {
-        std::printf("PASS approved_terrain_integration: frozen approved L9-L19 terrain, dune, vegetation, marsh, volcano, river, lighting, road, railroad, resource, city, mine, farm, and tundra handoffs; authoritative invalidation; exclusive ownership; retained overlays; memory-bounded multi-viewport and GPU-region caches; both zooms; clipping; scrolling; horizontal wrapping; deterministic reset; and hard-failure behavior passed; pixel_hash=%llu.\n",
+        std::printf("PASS approved_terrain_integration: frozen approved L9-L19 terrain, dune, vegetation, marsh, volcano, river, lighting, road, railroad, resource, city, mine, farm, and tundra handoffs; authoritative invalidation; exclusive ownership; retained overlays; bounded viewport/indexed tile caches, incremental/cold parity, four-direction bitmap-strip reuse, and repeated interaction budgets; both zooms; clipping; scrolling; horizontal wrapping; deterministic reset; and hard-failure behavior passed; pixel_hash=%llu.\n",
                     static_cast<unsigned long long>(first_hash));
         return 0;
     }

@@ -149,6 +149,9 @@ def generate():
 #endif
 #include "../../relief/combined_material.hlsl"
 #include "../scene_shadow_v1.hlsl"
+#ifdef Q4_COASTAL_ROCKS
+#include "../../relief/coast_rocks.hlsl"
+#endif
 #ifdef Q3_WATER_MATERIAL
 float4 q3_water_material(PixelInput input);
 #endif
@@ -192,6 +195,21 @@ Q6SceneOutput PSMain(PixelInput input) { return q6_scene_output(q6_raw_main(inpu
 Q6SceneOutput PSFeature(FeaturePixelInput input) { return q6_scene_output(q6_raw_feature(input)); }
 '''
     target = V2 / 'shaders/lighting/generated/scene_linear_v1.hlsl'
+    marker='float2 volcano_uv = frac(world_position);'
+    assert s.count(marker)==3
+    s=s.replace(marker,'''float2 volcano_uv = frac(world_position);
+#ifdef Q4_VOLCANO_SOURCE_MAPPING
+            // Same local-v orientation and uniform footprint as the height
+            // sampler. All dormant/active/slope/specular channels agree.
+            volcano_uv=.5+(float2(volcano_uv.x,1-volcano_uv.y)-.5)*.62;
+#endif''')
+    marker='float4 q6_raw_feature(FeaturePixelInput input)\n{'
+    assert s.count(marker)==1
+    s=s.replace(marker,marker+'''
+#ifdef Q4_COASTAL_ROCKS
+    if(abs(input.material_index-.48)<.001)return q4_coastal_rock(input);
+#endif
+''')
     target.parent.mkdir(exist_ok=True)
     target.write_text(s)
     record = {'schema': 'c3x.q6.scene_linear_adapter.v1',

@@ -52,6 +52,9 @@ float3 q3_scene_bed(PixelInput input) {
  bed*=1+(sample_water_clutter_height(world)-.5)*authored.a*.30;
  float3 rock=cliff_base_texture.Sample(material_sampler,uv).rgb;
  float3 color=lerp(sand,bed,smoothstep(0,.40,-sd));
+#ifdef Q3_COAST_DETAIL
+ color=lerp(sand,bed,smoothstep(0,.12,-sd));
+#endif
  color=lerp(color,lerp(rock,bed,smoothstep(0,.70,-sd)),rocky);
  color*=lerp(.72,1.0,smoothstep(0,.32,-sd));
  float height=water_height_texture.Sample(material_sampler,uv).r;
@@ -88,6 +91,24 @@ float4 q3_water_material(PixelInput input) {
  if(kind>5.5&&kind<6.5){clip(-1);return 0;}
  float sd=input.hydrology_data.x,depth=max(0,input.hydrology_data.w);
  float3 normal=float3(0,0,1);
+ float source_roughness=1;
+#ifdef Q3_SOURCE_WATER_NORMALS
+ if(kind>4.5&&kind<5.5){
+  // Static source surface phase, sampled in the same wrapped world basis as
+  // the bed. Source slopes/moments drive lighting; this is a C3X adaptation,
+  // not a recovered source-engine LEAN or wave animation equation.
+  float2 world=q3_source_world(input);
+  float2 large_uv=world*float2(q3_source_repeat(.36),q3_source_repeat(.47));
+  float2 small_uv=world*float2(q3_source_repeat(2.4),q3_source_repeat(3.05))+float2(.31,.17);
+  float2 large=water_large_lean0_texture.Sample(material_sampler,large_uv).rg*2-1;
+  float2 small=water_small_lean0_texture.Sample(material_sampler,small_uv).rg*2-1;
+  float2 variance=water_large_lean1_texture.Sample(material_sampler,large_uv).rg
+   +water_small_lean1_texture.Sample(material_sampler,small_uv).rg;
+  float2 lean=large*.64+small*.24;
+  normal=normalize(float3(-lean,1));
+  source_roughness=rcp(1+dot(variance,float2(2,2)));
+ }
+#endif
  float3 illumination=q6_receiver_illumination(input,normal,1,1);
  if(kind>8.5&&kind<9.5){
   // Source corridor geometry still carries the frozen analytic distance. This
@@ -124,7 +145,7 @@ float4 q3_water_material(PixelInput input) {
  float3 moonhalf=normalize(view+environment_moon_direction);
  float3 glint=environment_sun_color*environment_sun_intensity*pow(saturate(dot(normal,sunhalf)),180)
   +environment_moon_color*environment_moon_intensity*pow(saturate(dot(normal,moonhalf)),180);
- tint+=reflection*fresnel*environment_water_fresnel+glint*.12*environment_water_specular
+ tint+=reflection*fresnel*environment_water_fresnel+glint*.12*source_roughness*environment_water_specular
   *q6_receiver_visibility(input,normal,1);
  return float4(tint,alpha);
 }

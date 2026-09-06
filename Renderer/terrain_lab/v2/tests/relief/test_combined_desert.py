@@ -26,6 +26,9 @@ struct BiqWindowTile {int column,row,base,real,source_x,source_y;unsigned river_
 BiqWindowTile tiles[8][8];
 bool dune_scene_enabled=true,biq_scene_enabled=true;
 bool volcano_geometry_enabled=false,l13_scene_enabled=false;
+int lab_v2_coastal_cliff_join=0;
+namespace labv2 {struct Hooks {void(*shore_sample)(float,float,float*)=nullptr;} hydrology_hooks;}
+void rocky_shore(float x,float,float*out){out[0]=2-x;out[1]=.1f;out[2]=1;out[3]=0;}
 int lab_v2_continuous_desert=3;
 float lab_v2_hill_height_multiplier=1;
 float smoothstep01(float x){x=std::clamp(x,0.f,1.f);return x*x*(3-2*x);}
@@ -60,6 +63,16 @@ int main(int argc,char**argv){
  // at the contour. Version 2 fails this regression while inland relief stays.
  for(int i=0;i<16;i++)assert(h(1,0,.88f+i*.12f/16,.6f)==2.5f);
  assert(h(1,0,.3f,.6f)>2.6f);
+ // The optional source-cliff shoulder also preserves the actual water datum
+ // and common-edge vertices while adding support behind the source bodies.
+ lab_v2_coastal_cliff_join=4;labv2::hydrology_hooks.shore_sample=rocky_shore;
+ for(int i=0;i<12;i++)assert(h(1,0,.965f+i*.035f/12,.6f)==2.5f);
+ assert(h(1,0,.70f,.6f)>15.f);
+ for(int y=0;y<3;y++)for(int x=0;x<3;x++)for(int k=0;k<=32;k++){
+  float t=k/32.f;
+  assert(std::abs(h(x,y,1,t)-h(x+1,y,0,t))<1e-5);
+  assert(std::abs(h(x,y,t,0)-h(x,y+1,t,1))<1e-5);
+ }
 }
 '''
         with tempfile.TemporaryDirectory() as tmp:

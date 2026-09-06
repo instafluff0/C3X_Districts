@@ -2,6 +2,28 @@
   "schema": "c3x.renderer_project_status.v0",
   "last_updated": "2026-09-06",
   "current_milestone": "LAB_V2",
+  "integration_performance_maintenance": {
+    "authorization": "2026-09-06: user resumed production cache, scrolling, unit-selection performance and timestamped diagnostics independently of Lab updates.",
+    "status": "in_progress",
+    "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
+    "scope": "Optimize the existing production map plane without promoting new Lab systems or advancing I19/M9-M11.",
+    "existing_symbols": [
+      "Map_Renderer_m71_Draw_Tiles",
+      "Map_Renderer_m19_Draw_Tile_by_XY_and_Flags",
+      "QueryPerformanceCounter",
+      "OutputDebugStringA",
+      "Main_Screen_Form_tile_to_screen_coords"
+    ],
+    "audit_candidates": [],
+    "required_user_action": [],
+    "verified_increment": "Fixed several-tile jump replay, checked native topology halo, changed-set bitmap damage, bounded neighborhood scratch and equivalent shadow cutoffs: full workflow and injected smoke passed.",
+    "remaining_work": [
+      "Hide first-exposure mesh construction using bounded idle prewarming; fixed tile-jump first-exposure p95 is 365.848 ms while cached return p95 is 2.617 ms.",
+      "Prewarming must capture complete appearance metadata, preserve bitmap pointer lifetime and prioritize foreground jobs without stale presentation or backlog.",
+      "Audit global river-node dependency locality and measure native halo projection-guard hit rate, actual injected capture and whole-map latency before claiming game-wide parity."
+    ],
+    "evidence": "evidence/integration_cache_worker/README.md"
+  },
   "manual_evidence_policy": {
     "mode": "strategic_batched_checkpoints",
     "ordinary_iterations": "automated_and_replayable_evidence_only",
@@ -11,12 +33,34 @@
     "must_not": "repeatedly request screenshots, request one image per matrix variant, or treat missing review as approval"
   },
   "lab_promotion_policy": {
-    "applies_to": ["L12", "L13", "L13A", "L14", "L15", "L16", "L17", "L18", "L19", "L19A", "L19B", "L20", "L21"],
+    "applies_to": [
+      "L12",
+      "L13",
+      "L13A",
+      "L14",
+      "L15",
+      "L16",
+      "L17",
+      "L18",
+      "L19",
+      "L19A",
+      "L19B",
+      "L20",
+      "L21"
+    ],
     "minimum_contiguous_tiles": 192,
     "viewport_from_l12": "A deterministic 16x12 parallelogram whose local axes follow the two true Civ III edge-adjacency directions, rendered as a diamond-shaped map patch from an authoritative installed Windows BIQ selected to contain the current system.",
-    "accepted_legacy_promotions": {"L9": 48, "L10": 96, "L11": 96},
+    "accepted_legacy_promotions": {
+      "L9": 48,
+      "L10": 96,
+      "L11": 96
+    },
     "required_content": "The current lab system, every preceding accepted terrain and object layer, mixed relevant terrain families, shared edges, blends, depth, shadows, and a nontrivial adjacency or overlap.",
-    "required_outputs": ["native inspection render", "reduced readability render", "deterministic input and output hashes"],
+    "required_outputs": [
+      "native inspection render",
+      "reduced readability render",
+      "deterministic input and output hashes"
+    ],
     "lab_object_augmentation": "When the selected authoritative BIQ viewport lacks a map-object family needed by the current or future Lab gate, preserve every BIQ terrain cell and native field unchanged and add a separate deterministic, source-independent Lab-only object scenario. Dense network systems such as roads and railroads must exercise long connected runs, loops, branches, junctions, dead ends, crossings, relief, and wrap continuations. Record augmentation provenance explicitly and never represent it as captured Civ III state.",
     "layer_isolation": "Required when the current system can obscure a previously accepted layer.",
     "required_user_visual_approval": true,
@@ -32,7 +76,16 @@
       "scope": "terrain and lighting; cities, units and improvements deferred by user",
       "benchmarks": "terrain_lab/v2/fixtures/beauty/gameplay-100-v1/BENCHMARKS.json",
       "review": "terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md",
-      "approval": null
+      "approval": null,
+      "retained_candidate": "coast-pass-rocks-r4",
+      "supplemental_witness": "volcano-witness-r2; explicitly synthetic because test.biq contains no volcanoes",
+      "additional_benchmark": "terrain_lab/v2/fixtures/beauty/coast-pass-foundation/BENCHMARKS.json",
+      "latest_evidence": "terrain_lab/v2/audits/beauty/COAST_rocks-r4_EVIDENCE.json",
+      "remaining_visible_gaps": [
+        "Hill/cliff join still reads as separated source boulders",
+        "Soft shallows obscure source bed detail",
+        "Diagnostic dune seams and unproven mountain/volcano physical reconstruction"
+      ]
     },
     "ordinary_backend": "macos_metal",
     "promotion_parity_backend": "windows_d3d11"
@@ -73,7 +126,11 @@
         "reason": "The standalone audio-bearing SDI FLC bypasses the existing animated-effect inlead; a post-load hook must clear only its draw-enable byte after custom ownership succeeds.",
         "capability": "change define to inlead",
         "signature": "void (__fastcall *)(Units_Image_Data * this, int edx, char * asset_string, FLC_Animation * anim, int civ_id, int param_4, int param_5, bool param_6)",
-        "supported_build_addresses": {"gog": "0x4062A0", "steam": "0x406810", "pcgames": "0x4062D0"},
+        "supported_build_addresses": {
+          "gog": "0x4062A0",
+          "steam": "0x406810",
+          "pcgames": "0x4062D0"
+        },
         "call_site": "function entry; existing civ_prog_objects.csv row",
         "fallback": "Leave standalone SDI pixels and the complete custom nuclear-interception presentation native.",
         "verification": "SDI pixels suppressed with native sound, advancement, wait, and cleanup preserved."
@@ -84,7 +141,11 @@
         "reason": "This is the exact authoritative detonation branch in offline play and multiplayer replay; delivery, missile despawn, fallout, and victim despawn are not equivalent signals.",
         "capability": "inlead",
         "signature": "void (__fastcall *)(Unit * this, int edx, int tile_x, int tile_y, int affected_civs)",
-        "supported_build_addresses": {"gog": "0x5B4070", "steam": "0x5C29C0", "pcgames": "0x5B3D80"},
+        "supported_build_addresses": {
+          "gog": "0x5B4070",
+          "steam": "0x5C29C0",
+          "pcgames": "0x5B3D80"
+        },
         "call_site": "function entry; Unit::nuke_tile offline branch and nuclear multiplayer sync callback",
         "fallback": "Do not start a custom detonation; leave the nuclear strike wholly native.",
         "verification": "Exact-target deterministic detonation events before native visual, despawn, and damage work."
@@ -95,7 +156,11 @@
         "reason": "This is the exact authoritative intercepted branch in offline play and multiplayer replay; delivery and missile despawn are shared with successful strikes.",
         "capability": "inlead",
         "signature": "void (__fastcall *)(Unit * this, int edx, int tile_x, int tile_y, int intercepting_civ_id, int affected_civs)",
-        "supported_build_addresses": {"gog": "0x5B4A00", "steam": "0x5C3350", "pcgames": "0x5B4710"},
+        "supported_build_addresses": {
+          "gog": "0x5B4A00",
+          "steam": "0x5C3350",
+          "pcgames": "0x5B4710"
+        },
         "call_site": "function entry; Unit::nuke_tile offline branch and nuclear multiplayer sync callback",
         "fallback": "Do not start a custom interception effect; leave the nuclear strike wholly native.",
         "verification": "Deterministic intercepted events with target and interceptor and no detonation children."
@@ -872,17 +937,50 @@
           "status": "complete",
           "workstream": "game_integration",
           "lab_handoffs": [
-            {"gate": "L9", "record": "handoffs/L9_terrain.json"},
-            {"gate": "L10", "record": "handoffs/L10_dunes.json"},
-            {"gate": "L11", "record": "handoffs/L11_marsh.json"},
-            {"gate": "L12", "record": "handoffs/L12_volcano.json"},
-            {"gate": "L13", "record": "handoffs/L13_rivers.json"},
-            {"gate": "L13A", "record": "handoffs/L13A_lighting.json"},
-            {"gate": "L14", "record": "handoffs/L14_roads.json"},
-            {"gate": "L15", "record": "handoffs/L15_railroads.json"},
-            {"gate": "L16", "record": "handoffs/L16_resources.json"},
-            {"gate": "L17", "record": "handoffs/L17_cities.json"},
-            {"gate": "L18", "record": "handoffs/L18_mines.json"}
+            {
+              "gate": "L9",
+              "record": "handoffs/L9_terrain.json"
+            },
+            {
+              "gate": "L10",
+              "record": "handoffs/L10_dunes.json"
+            },
+            {
+              "gate": "L11",
+              "record": "handoffs/L11_marsh.json"
+            },
+            {
+              "gate": "L12",
+              "record": "handoffs/L12_volcano.json"
+            },
+            {
+              "gate": "L13",
+              "record": "handoffs/L13_rivers.json"
+            },
+            {
+              "gate": "L13A",
+              "record": "handoffs/L13A_lighting.json"
+            },
+            {
+              "gate": "L14",
+              "record": "handoffs/L14_roads.json"
+            },
+            {
+              "gate": "L15",
+              "record": "handoffs/L15_railroads.json"
+            },
+            {
+              "gate": "L16",
+              "record": "handoffs/L16_resources.json"
+            },
+            {
+              "gate": "L17",
+              "record": "handoffs/L17_cities.json"
+            },
+            {
+              "gate": "L18",
+              "record": "handoffs/L18_mines.json"
+            }
           ],
           "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
           "scope": [
@@ -947,7 +1045,10 @@
             "date": "2026-09-05",
             "scope": "User-directed private local terrain-material experiment; this does not advance the formal M6.8 gate.",
             "result": "One-command adapter and deterministic equivalence reporting produced an ignored local pack with 14 replaced logical terrain IDs and zero missing IDs. Renderer Lab and native integration workflows pass with the alternate pack selected through external configuration.",
-            "inherited_components": ["baseline relief", "baseline animated-water resources"],
+            "inherited_components": [
+              "baseline relief",
+              "baseline animated-water resources"
+            ],
             "evidence": [
               "tools/import_source.py",
               "tools/test_import_source.py",
@@ -989,8 +1090,38 @@
         "terrain_lab_l21_complete_beauty_scene_and_authorized_critical_visual_approval"
       ],
       "steps": [
-        {"id": "L9", "title": "Terrain beauty scene and 48-tile promotion approval", "status": "complete", "promotion_required": true, "evidence": ["terrain_lab/L9_PROMOTION_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl"], "verification": ["terrain_lab_l9_replayable_render_and_explicit_visual_approval"]},
-        {"id": "L10", "title": "Source-backed desert dunes and 96-tile promotion approval", "status": "complete", "promotion_required": true, "approved_on": "2026-09-05", "source_audit": "terrain_lab/DUNE_SOURCE_AUDIT.md", "evidence": ["terrain_lab/L10_DUNE_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "tools/asset_compiler/test_dune_source_probe.py", "tools/asset_compiler/test_generic_decal_compiler.py"], "verification": ["terrain_lab_l10_replayable_render_and_explicit_visual_approval"]},
+        {
+          "id": "L9",
+          "title": "Terrain beauty scene and 48-tile promotion approval",
+          "status": "complete",
+          "promotion_required": true,
+          "evidence": [
+            "terrain_lab/L9_PROMOTION_AUDIT.md",
+            "terrain_lab/terrain_lab.cpp",
+            "terrain_lab/terrain_lab.hlsl"
+          ],
+          "verification": [
+            "terrain_lab_l9_replayable_render_and_explicit_visual_approval"
+          ]
+        },
+        {
+          "id": "L10",
+          "title": "Source-backed desert dunes and 96-tile promotion approval",
+          "status": "complete",
+          "promotion_required": true,
+          "approved_on": "2026-09-05",
+          "source_audit": "terrain_lab/DUNE_SOURCE_AUDIT.md",
+          "evidence": [
+            "terrain_lab/L10_DUNE_AUDIT.md",
+            "terrain_lab/terrain_lab.cpp",
+            "terrain_lab/terrain_lab.hlsl",
+            "tools/asset_compiler/test_dune_source_probe.py",
+            "tools/asset_compiler/test_generic_decal_compiler.py"
+          ],
+          "verification": [
+            "terrain_lab_l10_replayable_render_and_explicit_visual_approval"
+          ]
+        },
         {
           "id": "L11",
           "title": "Marshes and 96-tile test.biq promotion approval",
@@ -1015,8 +1146,17 @@
             "Do not modify injected game code, transfer native marsh ownership, or begin L12 before the L11 visual approval.",
             "Do not infer approval from automated hashes or technical success."
           ],
-          "evidence": ["terrain_lab/L11_MARSH_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "tools/export_biq_terrain_scene.js", "tools/test_export_biq_terrain_scene.js", "handoffs/L11_marsh.json"],
-          "verification": ["terrain_lab_l11_replayable_render_and_explicit_visual_approval"]
+          "evidence": [
+            "terrain_lab/L11_MARSH_AUDIT.md",
+            "terrain_lab/terrain_lab.cpp",
+            "terrain_lab/terrain_lab.hlsl",
+            "tools/export_biq_terrain_scene.js",
+            "tools/test_export_biq_terrain_scene.js",
+            "handoffs/L11_marsh.json"
+          ],
+          "verification": [
+            "terrain_lab_l11_replayable_render_and_explicit_visual_approval"
+          ]
         },
         {
           "id": "L12",
@@ -1053,8 +1193,17 @@
             "Do not invent source geometry or claim inferred engine behavior as confirmed asset data.",
             "Do not begin L13 or transfer volcano ownership before explicit visual approval."
           ],
-          "evidence": ["terrain_lab/L12_VOLCANO_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "tools/export_biq_terrain_scene.js", "tools/test_export_biq_terrain_scene.js", "handoffs/L12_volcano.json"],
-          "verification": ["terrain_lab_l12_replayable_render_and_explicit_visual_approval"]
+          "evidence": [
+            "terrain_lab/L12_VOLCANO_AUDIT.md",
+            "terrain_lab/terrain_lab.cpp",
+            "terrain_lab/terrain_lab.hlsl",
+            "tools/export_biq_terrain_scene.js",
+            "tools/test_export_biq_terrain_scene.js",
+            "handoffs/L12_volcano.json"
+          ],
+          "verification": [
+            "terrain_lab_l12_replayable_render_and_explicit_visual_approval"
+          ]
         },
         {
           "id": "L13",
@@ -1081,19 +1230,92 @@
             "Do not infer waterfall location or flow direction from BIQ masks that do not encode either state.",
             "Do not regress to baseline terrain or vegetation packs in L13 or later promotion previews."
           ],
-          "evidence": ["terrain_lab/L13_RIVER_AUDIT.md", "terrain_lab/CANONICAL_REFERENCE_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "tools/export_biq_terrain_scene.js", "tools/test_export_biq_terrain_scene.js", "handoffs/L13_rivers.json"],
-          "verification": ["terrain_lab_l13_replayable_render_and_explicit_visual_approval"]
+          "evidence": [
+            "terrain_lab/L13_RIVER_AUDIT.md",
+            "terrain_lab/CANONICAL_REFERENCE_AUDIT.md",
+            "terrain_lab/terrain_lab.cpp",
+            "terrain_lab/terrain_lab.hlsl",
+            "tools/export_biq_terrain_scene.js",
+            "tools/test_export_biq_terrain_scene.js",
+            "handoffs/L13_rivers.json"
+          ],
+          "verification": [
+            "terrain_lab_l13_replayable_render_and_explicit_visual_approval"
+          ]
         },
-        {"id": "L13A", "title": "Shared shadows, lighting, and day-night with 192-tile promotion approval", "status": "complete", "approved_on": "2026-09-05", "promotion_required": true, "evidence": ["terrain_lab/L13A_LIGHTING_AUDIT.md", "terrain_lab/CANONICAL_REFERENCE_AUDIT.md", "docs/environment_lighting_and_ambient_effects.md", "native/environment_runtime.cpp", "environment/contract.py", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "handoffs/L13A_lighting.json"], "verification": ["terrain_lab_l13a_replayable_render_and_explicit_visual_approval"]},
-        {"id": "L14", "title": "Roads and 192-tile promotion approval", "status": "complete", "approved_on": "2026-09-05", "promotion_required": true, "evidence": ["terrain_lab/L14_ROAD_AUDIT.md", "terrain_lab/RUN_L14.bat", "terrain_lab/fixtures/l14_roads_192.csv", "terrain_lab/build_l14_road_scenario.py", "tools/asset_compiler/build_route_bridge_runtime.py", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "handoffs/L14_roads.json"], "verification": ["terrain_lab_l14_replayable_render_and_explicit_visual_approval"]},
-        {"id": "L15", "title": "Railroads and 192-tile promotion approval", "status": "complete", "approved_on": "2026-09-05", "promotion_required": true, "evidence": ["terrain_lab/L15_RAILROAD_AUDIT.md", "terrain_lab/RUN_L15.bat", "terrain_lab/fixtures/l15_railroads_192.csv", "terrain_lab/build_l15_railroad_scenario.py", "tools/asset_compiler/build_route_bridge_runtime.py", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "handoffs/L15_railroads.json"], "verification": ["terrain_lab_l15_replayable_render_and_authorized_critical_visual_approval"]},
+        {
+          "id": "L13A",
+          "title": "Shared shadows, lighting, and day-night with 192-tile promotion approval",
+          "status": "complete",
+          "approved_on": "2026-09-05",
+          "promotion_required": true,
+          "evidence": [
+            "terrain_lab/L13A_LIGHTING_AUDIT.md",
+            "terrain_lab/CANONICAL_REFERENCE_AUDIT.md",
+            "docs/environment_lighting_and_ambient_effects.md",
+            "native/environment_runtime.cpp",
+            "environment/contract.py",
+            "terrain_lab/terrain_lab.cpp",
+            "terrain_lab/terrain_lab.hlsl",
+            "handoffs/L13A_lighting.json"
+          ],
+          "verification": [
+            "terrain_lab_l13a_replayable_render_and_explicit_visual_approval"
+          ]
+        },
+        {
+          "id": "L14",
+          "title": "Roads and 192-tile promotion approval",
+          "status": "complete",
+          "approved_on": "2026-09-05",
+          "promotion_required": true,
+          "evidence": [
+            "terrain_lab/L14_ROAD_AUDIT.md",
+            "terrain_lab/RUN_L14.bat",
+            "terrain_lab/fixtures/l14_roads_192.csv",
+            "terrain_lab/build_l14_road_scenario.py",
+            "tools/asset_compiler/build_route_bridge_runtime.py",
+            "terrain_lab/terrain_lab.cpp",
+            "terrain_lab/terrain_lab.hlsl",
+            "handoffs/L14_roads.json"
+          ],
+          "verification": [
+            "terrain_lab_l14_replayable_render_and_explicit_visual_approval"
+          ]
+        },
+        {
+          "id": "L15",
+          "title": "Railroads and 192-tile promotion approval",
+          "status": "complete",
+          "approved_on": "2026-09-05",
+          "promotion_required": true,
+          "evidence": [
+            "terrain_lab/L15_RAILROAD_AUDIT.md",
+            "terrain_lab/RUN_L15.bat",
+            "terrain_lab/fixtures/l15_railroads_192.csv",
+            "terrain_lab/build_l15_railroad_scenario.py",
+            "tools/asset_compiler/build_route_bridge_runtime.py",
+            "terrain_lab/terrain_lab.cpp",
+            "terrain_lab/terrain_lab.hlsl",
+            "handoffs/L15_railroads.json"
+          ],
+          "verification": [
+            "terrain_lab_l15_replayable_render_and_authorized_critical_visual_approval"
+          ]
+        },
         {
           "id": "L16",
           "title": "Resources and 192-tile promotion approval",
           "status": "complete",
           "completed_on": "2026-09-05",
-          "evidence": ["handoffs/L16_resources.json", "terrain_lab/L16_RESOURCE_AUDIT.md", "terrain_lab/RUN_L16.bat"],
-          "verification": ["terrain_lab_l16_replayable_render_and_authorized_critical_visual_approval"],
+          "evidence": [
+            "handoffs/L16_resources.json",
+            "terrain_lab/L16_RESOURCE_AUDIT.md",
+            "terrain_lab/RUN_L16.bat"
+          ],
+          "verification": [
+            "terrain_lab_l16_replayable_render_and_authorized_critical_visual_approval"
+          ],
           "promotion_required": true,
           "offline_preparation": {
             "status": "complete",
@@ -1113,8 +1335,14 @@
           "status": "complete",
           "completed_on": "2026-09-05",
           "approved_on": "2026-09-05",
-          "evidence": ["handoffs/L17_cities.json", "terrain_lab/L17_CITY_AUDIT.md", "terrain_lab/RUN_L17.bat"],
-          "verification": ["terrain_lab_l17_replayable_render_and_authorized_critical_visual_approval"],
+          "evidence": [
+            "handoffs/L17_cities.json",
+            "terrain_lab/L17_CITY_AUDIT.md",
+            "terrain_lab/RUN_L17.bat"
+          ],
+          "verification": [
+            "terrain_lab_l17_replayable_render_and_authorized_critical_visual_approval"
+          ],
           "promotion_required": true,
           "offline_preparation": {
             "status": "complete",
@@ -1140,8 +1368,14 @@
           "status": "complete",
           "completed_on": "2026-09-06",
           "approved_on": "2026-09-06",
-          "evidence": ["handoffs/L18_mines.json", "terrain_lab/L18_MINE_AUDIT.md", "terrain_lab/RUN_L18.bat"],
-          "verification": ["terrain_lab_l18_replayable_render_and_authorized_critical_visual_approval"],
+          "evidence": [
+            "handoffs/L18_mines.json",
+            "terrain_lab/L18_MINE_AUDIT.md",
+            "terrain_lab/RUN_L18.bat"
+          ],
+          "verification": [
+            "terrain_lab_l18_replayable_render_and_authorized_critical_visual_approval"
+          ],
           "promotion_required": true,
           "offline_preparation": {
             "status": "complete",
@@ -1232,18 +1466,18 @@
               "docs/upstream_asset_family_backlog.md",
               "tools/asset_compiler/tile_object_asset_importer.py",
               "tools/asset_compiler/tile_object_render_strategy.json",
-              "tools/asset_compiler/infrastructure_source_sets.json"
-              ,"tools/asset_compiler/future_gate_candidate_sets.json"
-              ,"tools/asset_compiler/future_gate_candidate_strategy.json"
-              ,"tools/integration_contract_compiler.py"
-              ,"tools/lab_promotion_kit.py"
-              ,"tools/asset_compiler/effect_graph_compiler.py"
-              ,"tools/asset_compiler/tile_fit_calibrator.py"
-              ,"preview/render_compound_tile_fit_sheet.py"
-              ,"tools/visual_qa.py"
-              ,"docs/offline_crosscutting_preparation.md"
-              ,"terrain_lab/L19B_INFRASTRUCTURE_AUDIT.md"
-              ,"handoffs/L19B_remaining_tile_infrastructure.json"
+              "tools/asset_compiler/infrastructure_source_sets.json",
+              "tools/asset_compiler/future_gate_candidate_sets.json",
+              "tools/asset_compiler/future_gate_candidate_strategy.json",
+              "tools/integration_contract_compiler.py",
+              "tools/lab_promotion_kit.py",
+              "tools/asset_compiler/effect_graph_compiler.py",
+              "tools/asset_compiler/tile_fit_calibrator.py",
+              "preview/render_compound_tile_fit_sheet.py",
+              "tools/visual_qa.py",
+              "docs/offline_crosscutting_preparation.md",
+              "terrain_lab/L19B_INFRASTRUCTURE_AUDIT.md",
+              "handoffs/L19B_remaining_tile_infrastructure.json"
             ]
           }
         },
@@ -1259,7 +1493,9 @@
             "packs/UnitFamilyLab/unit_worker_runtime.bin",
             "packs/CompoundUnitLab/unit_tank_runtime.bin"
           ],
-          "verification": ["terrain_lab_l20_replayable_render_and_authorized_critical_visual_approval"],
+          "verification": [
+            "terrain_lab_l20_replayable_render_and_authorized_critical_visual_approval"
+          ],
           "offline_preparation": {
             "status": "complete",
             "scope": "Five-family non-Warrior static conversion including a multi-mesh naval body, eight-action basic semantic contract, 37 unique raw clips/44 logical bindings, 93 deduplicated model-aware component pose caches serving 100 logical component/action bindings, pose-versus-motion policy, native timing and attack-slot alias policy, quantized skin-weight evidence, facing strategy, runtime-selected Civ III owner-color contract, an authoritative two-child Army contract using dedicated Great General art, and a generic arbitrary-tree compiler for Horseman, Classical Great General, Catapult, and Tank producing eight independently animated nodes, four resolved sockets, 30 components, 50 textures, 52 unique converted node/action clips, 62 logical bindings across 31 actions, 52 deterministic model-aware pose caches, and four-phase zero-separation proof. Worker specialty preparation covers all 13 authoritative Job_ID values, state fallbacks, CAPTURE and generic BUILD, an exclusive action-selected tool group, and 11 structurally validated normalized Builder work/repair/capture clips. Horseman, Tank, and Classical General cover all eight basic actions; Catapult death remains an explicit truthful-art gap. The executable calibration contract covers eight Civ III facings and both 128x64/64x32 zoom bases, freezes single-body default/optional humanoid triad/Army two-body formation policy, and records an exact installed-GOG body-only replacement boundary without enabling it; no L20 rendering gate, actual all-facing/both-zoom visual measurements, final scale/facing-offset approval, Catapult death selection, Builder body/tool binding, worker VFX calibration, or runtime unit ownership transfer.",
@@ -1314,7 +1550,9 @@
             "terrain_lab/RUN_L21.bat",
             "terrain_lab/test_l21_complete_scene_contract.py"
           ],
-          "verification": ["terrain_lab_l21_complete_beauty_scene_and_authorized_critical_visual_approval"]
+          "verification": [
+            "terrain_lab_l21_complete_beauty_scene_and_authorized_critical_visual_approval"
+          ]
         }
       ]
     },
@@ -1362,22 +1600,292 @@
       "status": "in_progress",
       "pairing_rule": "Each I# consumes only the frozen, approved L# handoff with the same suffix. Lab owns appearance; Integration owns authoritative game state, placement, caching, compositing, exclusive suppression, telemetry, reset behavior, and hard failure without native replay.",
       "steps": [
-        {"id": "I9", "lab_gate": "L9", "title": "Integrate terrain foundation", "status": "complete", "evidence": ["handoffs/L9_terrain.json", "docs/approved_terrain_integration.md", "native/c3x_renderer.cpp", "../injected_code.c"], "verification": ["m6_7_approved_terrain_integration"]},
-        {"id": "I10", "lab_gate": "L10", "title": "Integrate desert dunes", "status": "complete", "evidence": ["handoffs/L10_dunes.json", "terrain/m6_7_handoff_fidelity.json", "native/terrain_scene_runtime.cpp", "native/native_smoke.cpp"], "verification": ["m6_7_approved_terrain_integration"]},
-        {"id": "I11", "lab_gate": "L11", "title": "Integrate marshes", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L11_marsh.json", "terrain/m6_7_handoff_fidelity.json", "native/terrain_scene_runtime.h", "native/terrain_scene_runtime.cpp", "native/c3x_renderer.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "evidence/i11/README.md", "../C3X.h", "../injected_code.c"], "verification": ["i11_approved_marsh_integration"], "local_verification": ["i11_local_approved_marsh_payload"]},
-        {"id": "I12", "lab_gate": "L12", "title": "Integrate volcanoes and the approved L12 shared terrain stack", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L12_volcano.json", "terrain/i12_handoff_fidelity.json", "terrain_lab/terrain_lab.hlsl", "native/terrain_rendering.hlsl", "native/integrated_terrain.hlsl", "native/terrain_scene_runtime.cpp", "native/c3x_renderer.cpp", "native/native_smoke.cpp", "native/biq_preview.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i12/README.md", "../injected_code.c"], "verification": ["i12_approved_volcano_integration"], "local_verification": ["i12_local_approved_volcano_payload"]},
-        {"id": "I13", "lab_gate": "L13", "title": "Integrate rivers", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L13_rivers.json", "terrain/i13_handoff_fidelity.json", "native/terrain_rendering.hlsl", "native/integrated_terrain.hlsl", "native/terrain_scene_runtime.cpp", "native/c3x_renderer.cpp", "native/biq_preview.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i13/README.md", "../injected_code.c"], "verification": ["i13_approved_river_integration"], "local_verification": ["i13_local_approved_river_payload"]},
-        {"id": "I13A", "lab_gate": "L13A", "title": "Integrate shared shadows, lighting, and day-night", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L13A_lighting.json", "terrain/i13a_handoff_fidelity.json", "native/environment_runtime.cpp", "native/terrain_rendering.hlsl", "native/c3x_renderer.cpp", "native/biq_preview.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/environment_lighting_and_ambient_effects.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i13a/README.md"], "verification": ["i13a_approved_lighting_integration"], "local_verification": ["i13a_local_approved_lighting_payload"]},
-        {"id": "I14", "lab_gate": "L14", "title": "Integrate roads", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L14_roads.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
-        {"id": "I15", "lab_gate": "L15", "title": "Integrate railroads", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L15_railroads.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
-        {"id": "I16", "lab_gate": "L16", "title": "Integrate resources", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L16_resources.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
-        {"id": "I17", "lab_gate": "L17", "title": "Integrate civilization-, size-, and era-specific cities", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L17_cities.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
-        {"id": "I18", "lab_gate": "L18", "title": "Integrate mines", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L18_mines.json", "native/c3x_renderer_api.h", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/terrain_scene_runtime.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
-        {"id": "I19", "lab_gate": "L19", "title": "Integrate farms and irrigation", "status": "blocked_by_lab"},
-        {"id": "I19A", "lab_gate": "L19A", "title": "Integrate goody huts and colony outposts", "status": "blocked_by_previous"},
-        {"id": "I19B", "lab_gate": "L19B", "title": "Integrate remaining tile infrastructure", "status": "blocked_by_previous"},
-        {"id": "I20", "lab_gate": "L20", "title": "Integrate units and animation", "status": "blocked_by_previous"},
-        {"id": "I21", "lab_gate": "L21", "title": "Complete combined release integration", "status": "blocked_by_previous"}
+        {
+          "id": "I9",
+          "lab_gate": "L9",
+          "title": "Integrate terrain foundation",
+          "status": "complete",
+          "evidence": [
+            "handoffs/L9_terrain.json",
+            "docs/approved_terrain_integration.md",
+            "native/c3x_renderer.cpp",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "m6_7_approved_terrain_integration"
+          ]
+        },
+        {
+          "id": "I10",
+          "lab_gate": "L10",
+          "title": "Integrate desert dunes",
+          "status": "complete",
+          "evidence": [
+            "handoffs/L10_dunes.json",
+            "terrain/m6_7_handoff_fidelity.json",
+            "native/terrain_scene_runtime.cpp",
+            "native/native_smoke.cpp"
+          ],
+          "verification": [
+            "m6_7_approved_terrain_integration"
+          ]
+        },
+        {
+          "id": "I11",
+          "lab_gate": "L11",
+          "title": "Integrate marshes",
+          "status": "complete",
+          "completed_on": "2026-09-05",
+          "evidence": [
+            "handoffs/L11_marsh.json",
+            "terrain/m6_7_handoff_fidelity.json",
+            "native/terrain_scene_runtime.h",
+            "native/terrain_scene_runtime.cpp",
+            "native/c3x_renderer.cpp",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "docs/approved_terrain_integration.md",
+            "evidence/i11/README.md",
+            "../C3X.h",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "i11_approved_marsh_integration"
+          ],
+          "local_verification": [
+            "i11_local_approved_marsh_payload"
+          ]
+        },
+        {
+          "id": "I12",
+          "lab_gate": "L12",
+          "title": "Integrate volcanoes and the approved L12 shared terrain stack",
+          "status": "complete",
+          "completed_on": "2026-09-05",
+          "evidence": [
+            "handoffs/L12_volcano.json",
+            "terrain/i12_handoff_fidelity.json",
+            "terrain_lab/terrain_lab.hlsl",
+            "native/terrain_rendering.hlsl",
+            "native/integrated_terrain.hlsl",
+            "native/terrain_scene_runtime.cpp",
+            "native/c3x_renderer.cpp",
+            "native/native_smoke.cpp",
+            "native/biq_preview.cpp",
+            "native/test_native_bridge_contract.py",
+            "docs/approved_terrain_integration.md",
+            "docs/civ3_patch_dependency_ledger.md",
+            "evidence/i12/README.md",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "i12_approved_volcano_integration"
+          ],
+          "local_verification": [
+            "i12_local_approved_volcano_payload"
+          ]
+        },
+        {
+          "id": "I13",
+          "lab_gate": "L13",
+          "title": "Integrate rivers",
+          "status": "complete",
+          "completed_on": "2026-09-05",
+          "evidence": [
+            "handoffs/L13_rivers.json",
+            "terrain/i13_handoff_fidelity.json",
+            "native/terrain_rendering.hlsl",
+            "native/integrated_terrain.hlsl",
+            "native/terrain_scene_runtime.cpp",
+            "native/c3x_renderer.cpp",
+            "native/biq_preview.cpp",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "docs/approved_terrain_integration.md",
+            "docs/civ3_patch_dependency_ledger.md",
+            "evidence/i13/README.md",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "i13_approved_river_integration"
+          ],
+          "local_verification": [
+            "i13_local_approved_river_payload"
+          ]
+        },
+        {
+          "id": "I13A",
+          "lab_gate": "L13A",
+          "title": "Integrate shared shadows, lighting, and day-night",
+          "status": "complete",
+          "completed_on": "2026-09-05",
+          "evidence": [
+            "handoffs/L13A_lighting.json",
+            "terrain/i13a_handoff_fidelity.json",
+            "native/environment_runtime.cpp",
+            "native/terrain_rendering.hlsl",
+            "native/c3x_renderer.cpp",
+            "native/biq_preview.cpp",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "docs/approved_terrain_integration.md",
+            "docs/environment_lighting_and_ambient_effects.md",
+            "docs/civ3_patch_dependency_ledger.md",
+            "evidence/i13a/README.md"
+          ],
+          "verification": [
+            "i13a_approved_lighting_integration"
+          ],
+          "local_verification": [
+            "i13a_local_approved_lighting_payload"
+          ]
+        },
+        {
+          "id": "I14",
+          "lab_gate": "L14",
+          "title": "Integrate roads",
+          "status": "complete",
+          "completed_on": "2026-09-06",
+          "evidence": [
+            "handoffs/L14_roads.json",
+            "native/c3x_renderer.cpp",
+            "native/terrain_rendering.hlsl",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "docs/approved_terrain_integration.md",
+            "docs/civ3_patch_dependency_ledger.md",
+            "evidence/i14_i18/README.md",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "i18_approved_map_stack_integration"
+          ],
+          "local_verification": [
+            "i18_local_approved_map_stack_payload"
+          ]
+        },
+        {
+          "id": "I15",
+          "lab_gate": "L15",
+          "title": "Integrate railroads",
+          "status": "complete",
+          "completed_on": "2026-09-06",
+          "evidence": [
+            "handoffs/L15_railroads.json",
+            "native/c3x_renderer.cpp",
+            "native/terrain_rendering.hlsl",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "evidence/i14_i18/README.md",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "i18_approved_map_stack_integration"
+          ],
+          "local_verification": [
+            "i18_local_approved_map_stack_payload"
+          ]
+        },
+        {
+          "id": "I16",
+          "lab_gate": "L16",
+          "title": "Integrate resources",
+          "status": "complete",
+          "completed_on": "2026-09-06",
+          "evidence": [
+            "handoffs/L16_resources.json",
+            "native/c3x_renderer.cpp",
+            "native/terrain_rendering.hlsl",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "evidence/i14_i18/README.md",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "i18_approved_map_stack_integration"
+          ],
+          "local_verification": [
+            "i18_local_approved_map_stack_payload"
+          ]
+        },
+        {
+          "id": "I17",
+          "lab_gate": "L17",
+          "title": "Integrate civilization-, size-, and era-specific cities",
+          "status": "complete",
+          "completed_on": "2026-09-06",
+          "evidence": [
+            "handoffs/L17_cities.json",
+            "native/c3x_renderer.cpp",
+            "native/terrain_rendering.hlsl",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "evidence/i14_i18/README.md",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "i18_approved_map_stack_integration"
+          ],
+          "local_verification": [
+            "i18_local_approved_map_stack_payload"
+          ]
+        },
+        {
+          "id": "I18",
+          "lab_gate": "L18",
+          "title": "Integrate mines",
+          "status": "complete",
+          "completed_on": "2026-09-06",
+          "evidence": [
+            "handoffs/L18_mines.json",
+            "native/c3x_renderer_api.h",
+            "native/c3x_renderer.cpp",
+            "native/terrain_rendering.hlsl",
+            "native/terrain_scene_runtime.cpp",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "docs/approved_terrain_integration.md",
+            "docs/civ3_patch_dependency_ledger.md",
+            "evidence/i14_i18/README.md",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "i18_approved_map_stack_integration"
+          ],
+          "local_verification": [
+            "i18_local_approved_map_stack_payload"
+          ]
+        },
+        {
+          "id": "I19",
+          "lab_gate": "L19",
+          "title": "Integrate farms and irrigation",
+          "status": "blocked_by_lab"
+        },
+        {
+          "id": "I19A",
+          "lab_gate": "L19A",
+          "title": "Integrate goody huts and colony outposts",
+          "status": "blocked_by_previous"
+        },
+        {
+          "id": "I19B",
+          "lab_gate": "L19B",
+          "title": "Integrate remaining tile infrastructure",
+          "status": "blocked_by_previous"
+        },
+        {
+          "id": "I20",
+          "lab_gate": "L20",
+          "title": "Integrate units and animation",
+          "status": "blocked_by_previous"
+        },
+        {
+          "id": "I21",
+          "lab_gate": "L21",
+          "title": "Complete combined release integration",
+          "status": "blocked_by_previous"
+        }
       ]
     },
     {
@@ -1388,18 +1896,42 @@
         "plan": "terrain_lab/PLAN.md",
         "rule": "Each system waits only for its matching Renderer Lab technical gate and required visual approval, then passes an independent game-integration gate. L21 is a final combined release gate, not a global integration prerequisite.",
         "by_system": {
-          "rivers": ["L13"],
-          "shared_lighting_and_day_night": ["L13A"],
-          "roads": ["L14"],
-          "railroads": ["L15"],
-          "resources": ["L16"],
-          "cities": ["L17"],
-          "mines": ["L18"],
-          "farms_and_irrigation": ["L19"],
-          "goody_huts_and_colonies": ["L19A"],
-          "remaining_tile_infrastructure": ["L19B"],
-          "units": ["L20"],
-          "combined_release_scene": ["L21"]
+          "rivers": [
+            "L13"
+          ],
+          "shared_lighting_and_day_night": [
+            "L13A"
+          ],
+          "roads": [
+            "L14"
+          ],
+          "railroads": [
+            "L15"
+          ],
+          "resources": [
+            "L16"
+          ],
+          "cities": [
+            "L17"
+          ],
+          "mines": [
+            "L18"
+          ],
+          "farms_and_irrigation": [
+            "L19"
+          ],
+          "goody_huts_and_colonies": [
+            "L19A"
+          ],
+          "remaining_tile_infrastructure": [
+            "L19B"
+          ],
+          "units": [
+            "L20"
+          ],
+          "combined_release_scene": [
+            "L21"
+          ]
         }
       },
       "steps": [
@@ -1407,7 +1939,16 @@
           "id": "M7.1",
           "title": "Render infrastructure and tile-bound overlays",
           "status": "blocked_by_previous",
-          "lab_handoffs_by_family": {"rivers": "L13", "roads": "L14", "railroads": "L15", "mines": "L18", "farms_and_irrigation": "L19", "goody_huts": "L19A", "colonies": "L19A", "fortresses_barricades_airfields_outposts_radar_pollution_craters_victory_locations": "L19B"},
+          "lab_handoffs_by_family": {
+            "rivers": "L13",
+            "roads": "L14",
+            "railroads": "L15",
+            "mines": "L18",
+            "farms_and_irrigation": "L19",
+            "goody_huts": "L19A",
+            "colonies": "L19A",
+            "fortresses_barricades_airfields_outposts_radar_pollution_craters_victory_locations": "L19B"
+          },
           "lab_plan": "terrain_lab/PLAN.md",
           "scope": [
             "As each matching lab gate is approved, consume its frozen pack, definition, scene, reference, ownership, cache-input, and custom-coverage handoff without waiting for unrelated lab systems.",
@@ -1433,7 +1974,9 @@
           "id": "M7.2",
           "title": "Render resources with visibility and animation",
           "status": "blocked_by_previous",
-          "lab_handoffs": ["L16"],
+          "lab_handoffs": [
+            "L16"
+          ],
           "scope": [
             "Use the validated 26-resource BIQ mapping seed to compile normalized Civ VI/source candidates while allowing scenario and user definitions to replace every target.",
             "Capture authoritative resource ID/name/class, selected map PCX index, tile/pixel anchor, terrain context, and player-specific visibility/fog state.",
@@ -1457,7 +2000,9 @@
           "id": "M7.3",
           "title": "Render culture, era, and size-specific cities",
           "status": "blocked_by_previous",
-          "lab_handoffs": ["L17"],
+          "lab_handoffs": [
+            "L17"
+          ],
           "lab_plan": "terrain_lab/PLAN.md",
           "scope": [
             "After L17 and its visual approval, consume the accepted city matrix across owner/civilization identity, culture group, all reachable eras, and Civ III city sizes without waiting for unrelated lab gates.",
@@ -1480,9 +2025,17 @@
           "id": "M7.4",
           "title": "Render animated units and movement/combat states",
           "status": "blocked_by_previous",
-          "lab_handoffs": ["L20"],
+          "lab_handoffs": [
+            "L20"
+          ],
           "lab_plan": "terrain_lab/PLAN.md",
-          "preimplementation_evidence": ["docs/i20_native_unit_animation_handoff.md", "docs/army_rendering_strategy.md", "docs/compound_unit_asset_conversion.md", "docs/civ3_render_loop_viability.md", "docs/civ3_patch_dependency_ledger.md"],
+          "preimplementation_evidence": [
+            "docs/i20_native_unit_animation_handoff.md",
+            "docs/army_rendering_strategy.md",
+            "docs/compound_unit_asset_conversion.md",
+            "docs/civ3_render_loop_viability.md",
+            "docs/civ3_patch_dependency_ledger.md"
+          ],
           "scope": [
             "After L20 and its visual approval, consume the accepted static, directional, skeleton, clip, movement, combat, stacking, and interruption results without waiting for unrelated lab gates or redesigning their art direction during production integration.",
             "Capture stable unit and action/event IDs, eight-direction facing, action/clip state, timing, loop/completion policy, hit points, visibility, stack order, and current/active/selected flags.",
@@ -1515,8 +2068,20 @@
           "id": "M7.5",
           "title": "Render transient effects and synchronized projectiles",
           "status": "blocked_by_previous",
-          "lab_handoffs": ["L12", "L13A", "L17", "L20"],
-          "preimplementation_evidence": ["docs/bombardment_and_explosion_effects.md", "tools/asset_compiler/combat_effect_contract.json", "tools/asset_compiler/effect_graph_profiles.json", "tools/asset_compiler/effect_graph_compiler.py", "docs/offline_crosscutting_preparation.md", "docs/civ3_patch_dependency_ledger.md"],
+          "lab_handoffs": [
+            "L12",
+            "L13A",
+            "L17",
+            "L20"
+          ],
+          "preimplementation_evidence": [
+            "docs/bombardment_and_explosion_effects.md",
+            "tools/asset_compiler/combat_effect_contract.json",
+            "tools/asset_compiler/effect_graph_profiles.json",
+            "tools/asset_compiler/effect_graph_compiler.py",
+            "docs/offline_crosscutting_preparation.md",
+            "docs/civ3_patch_dependency_ledger.md"
+          ],
           "boundary_audit": {
             "status": "complete",
             "pixel_suppression": "Tick and native sound run before FLC byte 0x184 gates the direct blit; ordinary effects reuse the existing animated-effect loader, while standalone SDI needs the animation loader upgraded to inlead.",

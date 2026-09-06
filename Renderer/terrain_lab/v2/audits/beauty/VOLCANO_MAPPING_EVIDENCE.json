@@ -1,0 +1,66 @@
+{
+  "classification": "synthetic_supplemental_witness",
+  "visual_accepted": false,
+  "frames": [
+    {
+      "hour": 12,
+      "zoom": 1,
+      "changed_pixels": 3801,
+      "bounds": [
+        680,
+        334,
+        791,
+        403
+      ],
+      "output_size": [
+        1360,
+        800
+      ]
+    },
+    {
+      "hour": 12,
+      "zoom": 2,
+      "changed_pixels": 983,
+      "bounds": [
+        346,
+        167,
+        393,
+        201
+      ],
+      "output_size": [
+        680,
+        400
+      ]
+    },
+    {
+      "hour": 0,
+      "zoom": 1,
+      "changed_pixels": 3822,
+      "bounds": [
+        683,
+        334,
+        799,
+        405
+      ],
+      "output_size": [
+        1360,
+        800
+      ]
+    },
+    {
+      "hour": 0,
+      "zoom": 2,
+      "changed_pixels": 974,
+      "bounds": [
+        345,
+        167,
+        397,
+        202
+      ],
+      "output_size": [
+        680,
+        400
+      ]
+    }
+  ]
+}

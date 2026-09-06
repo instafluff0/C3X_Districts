@@ -1,0 +1,55 @@
+{
+  "schema": "c3x.coastal_composition_evidence.v1",
+  "revision": "rocks-r3",
+  "visual_accepted": false,
+  "approval": null,
+  "results": [
+    {
+      "region": "longcoast",
+      "source_region": "beauty-longcoast-128-v1",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "baseline_identity": "12947b8b9b9107ab652c7b2763ea76fb022a47d2003a8fb1c9cf886fca7cad26",
+      "candidate_identity": "1d2dccbdd03bf71880af9f24c753e7a006c48c0e93615626a6d2db0122a3bcb2",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "cliff_instances": 23,
+          "complete_cliff_material_draws": 4,
+          "difference": {
+            "changed_pixels": 233404,
+            "bounds": [
+              92,
+              59,
+              1574,
+              820
+            ],
+            "output_size": [
+              1616,
+              888
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "cliff_instances": 23,
+          "complete_cliff_material_draws": 4,
+          "difference": {
+            "changed_pixels": 61589,
+            "bounds": [
+              46,
+              29,
+              787,
+              410
+            ],
+            "output_size": [
+              808,
+              444
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

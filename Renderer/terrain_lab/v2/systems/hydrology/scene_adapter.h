@@ -7,6 +7,21 @@ inline hydro::Field field;
 // assign field.wraps from its dataset policy before the final field.build().
 inline void initialize(char const* csv){field=hydro::Field(csv);field.wraps=true;field.build();}
 inline void initialize_no_wrap(char const* csv){field=hydro::Field(csv);field.wraps=false;field.build();}
+inline void initialize_varied(char const* csv){
+ field=hydro::Field();field.load(csv);field.wraps=true;
+ field.shoreline_profile=1;field.build();
+}
+inline void initialize_articulated(char const* csv){
+ field=hydro::Field();field.load(csv);field.wraps=true;
+ field.shoreline_profile=2;field.build();
+}
+inline bool coast_segment(unsigned index,float out[5]){
+ if(index>=field.coast.size())return false;
+ auto const& s=field.coast[index];
+ out[0]=float(s.a.x+.5);out[1]=float(s.a.y+.5);
+ out[2]=float(s.b.x+.5);out[3]=float(s.b.y+.5);out[4]=float(s.rocky);
+ return true;
+}
 inline void shore_sample(float corner_x,float corner_y,float out[4]){
  auto sample=field.sample({double(corner_x)-.5,double(corner_y)-.5});
  out[0]=float(sample.shore_distance);out[1]=float(sample.beach_width);

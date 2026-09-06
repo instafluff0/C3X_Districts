@@ -1,0 +1,69 @@
+{
+  "id": "beauty-freshcoast-100-v1",
+  "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "region": {
+    "camera": {
+      "hours": [
+        12,
+        0
+      ],
+      "viewport": [
+        1360,
+        800
+      ],
+      "zooms": [
+        1,
+        2
+      ]
+    },
+    "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+    "coverage": {
+      "land_water_edges": 10,
+      "river_tiles": 3,
+      "terrain": {
+        "coast": 12,
+        "desert": 1,
+        "floodplain": 1,
+        "forest": 4,
+        "grassland": 3,
+        "hills": 3,
+        "mountain": 3,
+        "ocean": 59,
+        "sea": 14
+      },
+      "terrain_edges": 51
+    },
+    "extent": [
+      10,
+      10
+    ],
+    "halo": 6,
+    "id": "beauty-freshcoast-100-v1",
+    "origin": [
+      20,
+      30
+    ],
+    "request_sha256": "f9c27e3c57f088068b32b8747f41dc69a737cdf44e997cf02218ee7ef961ad82",
+    "role": "user_evaluation",
+    "terrain_sha256": "9081b6e17604eea61667503645fcd65e9852cc813a61f6676c9b29d405ddf0e6",
+    "wrap": {
+      "x": true,
+      "y": false
+    }
+  },
+  "projection": {
+    "origin": [
+      104,
+      380
+    ],
+    "half_width": 64
+  },
+  "gameplay_crop": [
+    360,
+    220,
+    1000,
+    540
+  ],
+  "selection": "Selected by terrain coverage before rendering r8; no region-specific tuning.",
+  "classification": "unaltered_real_terrain"
+}

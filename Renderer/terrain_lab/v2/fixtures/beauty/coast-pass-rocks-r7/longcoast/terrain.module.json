@@ -1,0 +1,50 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "coast-pass-rocks-r7-longcoast",
+  "owner": "Q8-beauty",
+  "provider": "frozen_l21",
+  "contract": 1,
+  "shader": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-rocks-r7/longcoast/combined.hlsl",
+  "terrain_hooks": {
+    "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+    "initialize": "q2_scene::initialize",
+    "material_weights": "q2_scene::material_weights",
+    "material_uv": "q2_scene::material_uv"
+  },
+  "scene": "complete",
+  "fit_viewport": true,
+  "suppress_territory": true,
+  "linear_adapter": 1,
+  "color_branch": "q6_scene_linear_premultiplied_v1",
+  "hydrology_hooks": {
+    "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+    "initialize": "q3_scene::initialize_articulated",
+    "signed_shore_distance": "q3_scene::signed_shore_distance",
+    "shore_sample": "q3_scene::shore_sample",
+    "coast_segment": "q3_scene::coast_segment"
+  },
+  "hydrology_data": 1,
+  "world_positions": 1,
+  "projection": {
+    "origin": [
+      104,
+      316
+    ],
+    "half_width": 64
+  },
+  "continuous_normals": 1,
+  "hill_source": {
+    "path": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds",
+    "sha256": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976",
+    "height_multiplier": 0.7142857142857143
+  },
+  "complete_materials": 1,
+  "continuous_desert": 3,
+  "coastal_rocks": {
+    "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/coastal_rocks.bin",
+    "sha256": "9c9c14c1b7203ef3d2ce3789928a5a5cfe1bffdb3a3fa46c09cc72effe0fa49f",
+    "placement_version": 4
+  },
+  "omit_replaced_shadow_surface": 1,
+  "direct_hill_source": 1
+}

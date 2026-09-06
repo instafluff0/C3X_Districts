@@ -147,6 +147,13 @@ def fixture(path):
             if not source.is_file() or source.suffix != ".cpp":
                 raise ValueError("missing C++ packet module")
         shader = local(m["shader"])
+        if m.get('coastal_rocks'):
+            resource=m['coastal_rocks']
+            if (set(resource)-{'path','sha256','placement_version'} or
+                not {'path','sha256'}.issubset(resource) or
+                resource.get('placement_version',1) not in (1,2,3,4) or
+                file_hash(local(resource['path']))!=resource['sha256']):
+                raise ValueError('invalid pinned coastal rock bundle')
         if m.get('hill_source'):
             resource=m['hill_source']
             if (set(resource)!={'path','sha256','height_multiplier'} or
@@ -481,7 +488,7 @@ def packet(cache, f, module, scene, phase, zoom, pack_hash, query=None):
             includes += ['#define LAB_V2_CONTINUOUS_NORMALS 1',
                          '#include "'+str(V2/'systems/relief/continuous_normal.h')+'"']
             hook_identity['continuous_normals'] = 1
-        for family,required,optional in [('terrain_hooks',{'initialize','material_weights'},{'material_uv'}),('hydrology_hooks',{'initialize','signed_shore_distance'},{'shore_sample'}),('placement_hooks',{'initialize','accept_vegetation'},set())]:
+        for family,required,optional in [('terrain_hooks',{'initialize','material_weights'},{'material_uv'}),('hydrology_hooks',{'initialize','signed_shore_distance'},{'shore_sample','coast_segment'}),('placement_hooks',{'initialize','accept_vegetation'},set())]:
             if not module.get(family):continue
             hooks=module[family];header=local(hooks['header']);owned(header,hooks.get('owner',module['owner']))
             if not (required|{'header'}).issubset(hooks) or set(hooks)-required-optional-{'header','owner'} or any(not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_:]*',hooks[k]) for k in hooks if k not in ('header','owner')):
@@ -588,6 +595,28 @@ def packet(cache, f, module, scene, phase, zoom, pack_hash, query=None):
         environment.pop('C3X_LAB_V2_HILL_MULTIPLIER',None)
         environment.pop('C3X_LAB_V2_COMPLETE_MATERIALS',None)
         environment.pop('C3X_LAB_V2_CONTINUOUS_DESERT',None)
+        environment.pop('C3X_LAB_V2_COASTAL_ROCKS',None)
+        environment.pop('C3X_LAB_V2_COASTAL_ROCK_PLACEMENT',None)
+        environment.pop('C3X_LAB_V2_VOLCANO_SOURCE_MAPPING',None)
+        environment.pop('C3X_LAB_V2_DIRECT_HILL_SOURCE',None)
+        environment.pop('C3X_LAB_V2_OMIT_REPLACED_SHADOW',None)
+        if module.get('omit_replaced_shadow_surface'):
+            processor=f.get('packet_postprocessor',{})
+            if (module['omit_replaced_shadow_surface']!=1 or not module.get('world_positions') or
+                processor.get('source')!='Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp'):
+                raise ValueError('Omitting replaced shadow surface requires Q6 world shadows')
+            environment['C3X_LAB_V2_OMIT_REPLACED_SHADOW']='1'
+        if module.get('direct_hill_source'):
+            if module['direct_hill_source'] != 1:
+                raise ValueError('Unsupported direct hill source mapping')
+            environment['C3X_LAB_V2_DIRECT_HILL_SOURCE']='1'
+        if module.get('volcano_source_mapping'):
+            if module['volcano_source_mapping'] != 1:
+                raise ValueError('Unsupported volcano source mapping')
+            environment['C3X_LAB_V2_VOLCANO_SOURCE_MAPPING']='1'
+        if module.get('coastal_rocks'):
+            environment['C3X_LAB_V2_COASTAL_ROCKS']=str(local(module['coastal_rocks']['path']))
+            environment['C3X_LAB_V2_COASTAL_ROCK_PLACEMENT']=str(module['coastal_rocks'].get('placement_version',1))
         if module.get('continuous_desert'):
             if module['continuous_desert'] not in (1,2,3):
                 raise ValueError('Unsupported continuous desert version')

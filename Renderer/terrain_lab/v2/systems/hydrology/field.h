@@ -31,6 +31,7 @@ struct Field {
  std::map<std::pair<int,int>,Tile> tiles;
  std::vector<Segment> coast;
  std::vector<River> rivers;
+ int shoreline_profile=0; // 0 preserves the original Q3 candidate.
  Field()=default;
  explicit Field(std::string const& path){load(path);build();}
  void load(std::string const& path){
@@ -74,7 +75,38 @@ struct Field {
   if(total<=0)throw std::runtime_error("empty sampling support");return sum/total;
  }
  double shore_rockiness(P p)const{return smooth(.10,.80,occupancy(p,true)/std::max(.001,occupancy(p)));}
+ double world_noise(P p,double frequency,unsigned salt)const {
+  // Canonical lattice origin makes every crop see the same field. Quantized
+  // frequency closes exactly across the raw-X wrap; never seed per tile/crop.
+  if(wraps)frequency=std::max(1.,std::round(frequency*map_width*.5))/(map_width*.5);
+  double gx=(p.x+(origin_x+origin_y)*.5)*frequency;
+  double gy=(p.y+(origin_x-origin_y)*.5)*frequency;
+  int ix=int(std::floor(gx)),iy=int(std::floor(gy));
+  double u=smooth(0,1,gx-ix),v=smooth(0,1,gy-iy);
+  auto value=[&](int x,int y){int rx=x+y,ry=x-y;
+   if(wraps)rx=mod(rx,int(std::round(map_width*frequency)));
+   return double(hash(uint32_t(rx)*73856093u^uint32_t(ry)*19349663u^salt))/4294967295.;};
+  return (1-v)*((1-u)*value(ix,iy)+u*value(ix+1,iy))+
+         v*((1-u)*value(ix,iy+1)+u*value(ix+1,iy+1));
+ }
  double signed_coverage(P p)const{
+  if(shoreline_profile>=1){
+   auto displacement=[&](unsigned seed){return
+    (world_noise(p,.24,seed)-.5)*(shoreline_profile==2?.68:.42)+
+    (world_noise(p,.82,seed+1)-.5)*(shoreline_profile==2?.38:.22)+
+    (world_noise(p,2.40,seed+2)-.5)*(shoreline_profile==2?.16:.095);};
+   P q=p+P{displacement(781),displacement(2183)};
+   double shape=occupancy(q)-(.525+(world_noise(p,.38,8191)-.5)*.08);
+   // Reserve a stable domain around authoritative centers. Irregular coast
+   // cannot erase a playable land/water center or create an island offshore.
+   int x=int(std::floor(p.x+.5)),y=int(std::floor(p.y+.5));
+   auto t=tiles.find({x,y});
+   if(t!=tiles.end()){
+    double core=1-smooth(.16,.36,length(p-P{double(x),double(y)}));
+    shape=shape*(1-core)+(water(t->second.base)?-.475:.475)*core;
+   }
+   return shape;
+  }
   P q=p+P{noise(p,127)-.5,noise(p,923)-.5}*.18;
   return occupancy(q)-.525; // bounded erosion separates corner-only land contacts
  }
@@ -130,6 +162,8 @@ struct Field {
   s.shore_distance=nearest*(signed_coverage(p)>=0?1:-1);
   // Width varies ALONG the contour; offshore depth cannot reverse due to noise.
   s.beach_width=(.16+.20*noise(foot,628))*(1-s.rocky);
+  if(shoreline_profile>=1)
+   s.beach_width=(.065+.18*world_noise(foot,.66,628))*(1-s.rocky);
   double offshore=std::max(0.,-s.shore_distance);
   s.depth=.46*(1-std::exp(-offshore/.85));
   s.wetness=1-smooth(-.035,.13,s.shore_distance);

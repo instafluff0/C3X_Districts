@@ -1,0 +1,232 @@
+{
+  "classification": "supporting_evidence_only",
+  "visual_accepted": false,
+  "approval": null,
+  "records": [
+    {
+      "change": "selected_source_material",
+      "before": "coast-pass-rocks-r4",
+      "after": "coast-pass-rocks-r5",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "e343de5b7e02e90a6f1d6d0a2431ff8d69b67434ad599f3008995dfa9dd0a6eb",
+          "after_sha256": "3642bc44ea4c2ffd6fde77c5fe833edfdabab039dab3c5654530ebc7b5c6520c",
+          "instances_identical": true,
+          "pixels": {
+            "changed_pixels": 7541,
+            "bounds": [
+              420,
+              132,
+              1449,
+              722
+            ],
+            "output_size": [
+              1616,
+              888
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "b8376b99968b3fcfddafbcd81281fe5b93d784c97745e510b3da97a32a1b8cc1",
+          "after_sha256": "14fae8db1751470597a3e290915c599f4ff93f7b153372412d4994ec9c2ddf13",
+          "instances_identical": true,
+          "pixels": {
+            "changed_pixels": 2155,
+            "bounds": [
+              210,
+              66,
+              725,
+              361
+            ],
+            "output_size": [
+              808,
+              444
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "change": "rejected_buried_join",
+      "before": "coast-pass-rocks-r5",
+      "after": "coast-pass-rocks-r6",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "3642bc44ea4c2ffd6fde77c5fe833edfdabab039dab3c5654530ebc7b5c6520c",
+          "after_sha256": "12d8930e478aad3ad79275ad52c81e8a90aba797c7a7bc58ea91924b98728198",
+          "instances_identical": false,
+          "pixels": {
+            "changed_pixels": 28869,
+            "bounds": [
+              292,
+              119,
+              1573,
+              820
+            ],
+            "output_size": [
+              1616,
+              888
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "14fae8db1751470597a3e290915c599f4ff93f7b153372412d4994ec9c2ddf13",
+          "after_sha256": "c922bd4ef19ec3c3af75f6db385b226baacf8c6256e8be2952f276d1c6aa33cd",
+          "instances_identical": false,
+          "pixels": {
+            "changed_pixels": 10539,
+            "bounds": [
+              146,
+              59,
+              787,
+              410
+            ],
+            "output_size": [
+              808,
+              444
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "change": "source_shoulder",
+      "before": "coast-pass-rocks-r5",
+      "after": "coast-pass-rocks-r7",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "3642bc44ea4c2ffd6fde77c5fe833edfdabab039dab3c5654530ebc7b5c6520c",
+          "after_sha256": "828851056257c651b4d3f149b27905251b36ef65dd0ae04ba972a26a27bb71b6",
+          "instances_identical": false,
+          "pixels": {
+            "changed_pixels": 53295,
+            "bounds": [
+              296,
+              117,
+              1573,
+              819
+            ],
+            "output_size": [
+              1616,
+              888
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "14fae8db1751470597a3e290915c599f4ff93f7b153372412d4994ec9c2ddf13",
+          "after_sha256": "3c9823001841b586847e18271c806bbc07d71a244aa7acaaa4f4ec9c0a10cac1",
+          "instances_identical": false,
+          "pixels": {
+            "changed_pixels": 15530,
+            "bounds": [
+              148,
+              58,
+              787,
+              410
+            ],
+            "output_size": [
+              808,
+              444
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "change": "source_water_normals",
+      "before": "coast-pass-rocks-r7",
+      "after": "coast-pass-rocks-r8",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "828851056257c651b4d3f149b27905251b36ef65dd0ae04ba972a26a27bb71b6",
+          "after_sha256": "540b012cc432e4aa45b8db614b3c8187310be770a4dc0f6fca256c0ba1196e03",
+          "instances_identical": true,
+          "pixels": {
+            "changed_pixels": 135181,
+            "bounds": [
+              118,
+              90,
+              1483,
+              718
+            ],
+            "output_size": [
+              1616,
+              888
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "3c9823001841b586847e18271c806bbc07d71a244aa7acaaa4f4ec9c0a10cac1",
+          "after_sha256": "002ba1cd5e431b61f644b27569162d8727f5432456be6020ee414cfeb329c208",
+          "instances_identical": true,
+          "pixels": {
+            "changed_pixels": 32003,
+            "bounds": [
+              60,
+              46,
+              740,
+              359
+            ],
+            "output_size": [
+              808,
+              444
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "change": "shadow_build_only",
+      "before": "coast-pass-rocks-r5",
+      "after": "shadow-build-fast-v1",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "3642bc44ea4c2ffd6fde77c5fe833edfdabab039dab3c5654530ebc7b5c6520c",
+          "after_sha256": "3642bc44ea4c2ffd6fde77c5fe833edfdabab039dab3c5654530ebc7b5c6520c",
+          "instances_identical": true,
+          "pixels": {
+            "changed_pixels": 0,
+            "bounds": null,
+            "output_size": [
+              1616,
+              888
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "14fae8db1751470597a3e290915c599f4ff93f7b153372412d4994ec9c2ddf13",
+          "after_sha256": "14fae8db1751470597a3e290915c599f4ff93f7b153372412d4994ec9c2ddf13",
+          "instances_identical": true,
+          "pixels": {
+            "changed_pixels": 0,
+            "bounds": null,
+            "output_size": [
+              808,
+              444
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

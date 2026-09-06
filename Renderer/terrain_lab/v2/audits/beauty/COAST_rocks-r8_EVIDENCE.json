@@ -1,0 +1,554 @@
+{
+  "schema": "c3x.coastal_composition_evidence.v1",
+  "revision": "rocks-r8",
+  "visual_accepted": false,
+  "approval": null,
+  "previous": "rocks-r4",
+  "results": [
+    {
+      "region": "coastal",
+      "source_region": "beauty-coastal-100-v1",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "baseline_identity": "3ac22e1aa253c42dcb1dd2956d2456066ffadd5581ed4723cb592b18b38c167c",
+      "candidate_identity": "0af735a4fbc2bc35508722e329f4d6fa11c259dd86df4ca5765749b99ad6c322",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "cliff_instances": 11,
+          "complete_cliff_material_draws": 3,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 112701,
+            "bounds": [
+              40,
+              67,
+              1320,
+              711
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "cliff_instances": 11,
+          "complete_cliff_material_draws": 3,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 30644,
+            "bounds": [
+              20,
+              33,
+              660,
+              356
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "cliff_instances": 11,
+          "complete_cliff_material_draws": 3,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 141987,
+            "bounds": [
+              40,
+              67,
+              1320,
+              711
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "cliff_instances": 11,
+          "complete_cliff_material_draws": 3,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 35872,
+            "bounds": [
+              20,
+              34,
+              660,
+              356
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "inland",
+      "source_region": "beauty-inland-100-v1",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "baseline_identity": "edcaca1679e7679102986b9e7996c26850c98c8357e016d8083bec92131d2776",
+      "candidate_identity": "9e7a3761eb13bf656b0f385ea42ea78de9b095c330749d132043b16cf600ffb6",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "cliff_instances": 12,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 75272,
+            "bounds": [
+              40,
+              55,
+              1304,
+              693
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "cliff_instances": 12,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 28192,
+            "bounds": [
+              20,
+              27,
+              652,
+              346
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "cliff_instances": 12,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 70334,
+            "bounds": [
+              42,
+              55,
+              1306,
+              698
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "cliff_instances": 12,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 17251,
+            "bounds": [
+              21,
+              27,
+              653,
+              349
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "wilderness",
+      "source_region": "beauty-wilderness-100-v1",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "baseline_identity": "43049a6ba944eb4a545499bc9a91f7f9ee0627e39ee38ecff31a01af8c8c728f",
+      "candidate_identity": "245f253b09d1c7f77623b0ce4ca118b4c7c9b65f7ecbbfda6e25acc6a2652e51",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "cliff_instances": 0,
+          "complete_cliff_material_draws": 0,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 37401,
+            "bounds": [
+              877,
+              313,
+              1320,
+              562
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "cliff_instances": 0,
+          "complete_cliff_material_draws": 0,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 8862,
+            "bounds": [
+              440,
+              157,
+              660,
+              280
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "cliff_instances": 0,
+          "complete_cliff_material_draws": 0,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 53256,
+            "bounds": [
+              877,
+              311,
+              1320,
+              560
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "cliff_instances": 0,
+          "complete_cliff_material_draws": 0,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 13375,
+            "bounds": [
+              440,
+              156,
+              660,
+              279
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "longcoast",
+      "source_region": "beauty-longcoast-128-v1",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "baseline_identity": "13831d3a45b1132e294f030b24662b72c17b056008e9446e55557d9ce4be3390",
+      "candidate_identity": "810f1f874964698251e2a80217a33302f3756e486bd8160bfc3d111e4a234322",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "cliff_instances": 34,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 188229,
+            "bounds": [
+              118,
+              90,
+              1573,
+              819
+            ],
+            "output_size": [
+              1616,
+              888
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "cliff_instances": 34,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 47395,
+            "bounds": [
+              60,
+              46,
+              787,
+              410
+            ],
+            "output_size": [
+              808,
+              444
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "cliff_instances": 34,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 243932,
+            "bounds": [
+              115,
+              89,
+              1562,
+              821
+            ],
+            "output_size": [
+              1616,
+              888
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "cliff_instances": 34,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 61594,
+            "bounds": [
+              57,
+              46,
+              781,
+              411
+            ],
+            "output_size": [
+              808,
+              444
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "freshcoast",
+      "source_region": "beauty-freshcoast-100-v1",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "baseline_identity": "c5d3cfe182b2347c799dae2ff0e21db219db3718261ea2390a9e06bd322e78ed",
+      "candidate_identity": "c90f780c3a9fdffc891bdde1adabfa382891c99c07db5b9e46f7e69e5594bb05",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "cliff_instances": 6,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 233758,
+            "bounds": [
+              40,
+              59,
+              1320,
+              687
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "cliff_instances": 6,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 57092,
+            "bounds": [
+              20,
+              29,
+              660,
+              344
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "cliff_instances": 6,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 353340,
+            "bounds": [
+              40,
+              59,
+              1320,
+              689
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "cliff_instances": 6,
+          "complete_cliff_material_draws": 4,
+          "source_water_channel_sha256": [
+            "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+            "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+            "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+            "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5"
+          ],
+          "difference": {
+            "changed_pixels": 88754,
+            "bounds": [
+              20,
+              29,
+              660,
+              345
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

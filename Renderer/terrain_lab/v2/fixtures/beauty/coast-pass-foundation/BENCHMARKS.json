@@ -1,0 +1,76 @@
+{
+  "id": "beauty-longcoast-128-v1",
+  "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "region": {
+    "camera": {
+      "hours": [
+        12,
+        18,
+        0,
+        6
+      ],
+      "viewport": [
+        1616,
+        888
+      ],
+      "zooms": [
+        1,
+        2
+      ]
+    },
+    "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+    "coverage": {
+      "land_water_edges": 48,
+      "river_tiles": 14,
+      "terrain": {
+        "coast": 37,
+        "desert": 1,
+        "floodplain": 2,
+        "forest": 6,
+        "grassland": 28,
+        "hills": 15,
+        "jungle": 4,
+        "marsh": 4,
+        "mountain": 5,
+        "ocean": 4,
+        "plains": 8,
+        "sea": 14
+      },
+      "terrain_edges": 128
+    },
+    "extent": [
+      16,
+      8
+    ],
+    "halo": 6,
+    "id": "beauty-longcoast-128-v1",
+    "origin": [
+      64,
+      38
+    ],
+    "request_sha256": "0b4b5c47d5eb30003765917138568f78b20cd08c989cfef03c0a10c1ae870070",
+    "role": "user_evaluation",
+    "terrain_sha256": "8695c519f0700bd9a7cd60e617fb2b41f63931b45ce4c4aec5b30027c5dc206d",
+    "wrap": {
+      "x": true,
+      "y": false
+    }
+  },
+  "projection": {
+    "origin": [
+      104,
+      316
+    ],
+    "half_width": 64
+  },
+  "gameplay_crop": [
+    520,
+    390,
+    1160,
+    710
+  ],
+  "selection": "New region selected before shoreline/rock tuning; now a regression witness.",
+  "classification": "unaltered_real_terrain",
+  "full_images_required": true,
+  "synthetic_volcano_is_separate": true
+}

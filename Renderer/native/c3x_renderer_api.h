@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 10u
+#define C3X_RENDERER_API_VERSION 11u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -191,6 +191,16 @@ struct c3x_renderer_output_v1 {
     c3x_renderer_u32 device_generation;
     c3x_renderer_u32 device_recoveries;
     c3x_renderer_i64 content_revision;
+    c3x_renderer_u32 geometry_tiles_built;
+    c3x_renderer_u32 geometry_tiles_reused;
+    c3x_renderer_u32 geometry_tiles_evicted;
+    c3x_renderer_u32 geometry_cache_bytes;
+    c3x_renderer_u32 geometry_upload_bytes;
+    c3x_renderer_i64 geometry_ticks;
+    c3x_renderer_i64 draw_ticks;
+    c3x_renderer_i64 readback_ticks;
+    c3x_renderer_u32 raster_reused_pixels;
+    c3x_renderer_u32 raster_draw_pixels;
 };
 
 struct c3x_renderer_schedule_v1 {

@@ -13,6 +13,39 @@ The end state is a one-command offline source importer plus authored mapping pro
 
 ## Current Position
 
+Lab v2's 2026-09-06 coastal pass retains `coast-pass-rocks-r4` as incremental
+work in progress, with all three fixed 100-tile test.biq regions plus a new
+128-tile long coast at noon/midnight and both gameplay zooms. Shoreline variation,
+direct selected-source hill sampling and source cliff material batches are
+composed. The rocks still lack the canonical continuous hill/cliff join. A
+separate synthetic volcano witness fixes inconsistent height/material coordinates;
+the verified source map contains no volcanoes. Previous best and rejected passes
+are preserved. See `terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md` and
+`COAST_VOLCANO_PASS.md` there. This does not close LQ0, assert Civ VI quality,
+request Integration promotion or record human approval.
+
+Production performance maintenance was explicitly resumed on 2026-09-06,
+independently of Lab v2. It preserves the installed production system coverage
+and does not advance I19 or any visual gate. The active work replaces expanded
+viewport geometry and world-sample caches with a bounded, indexed tile-mesh
+cache, records actual neighbor dependencies (including missing neighbors),
+and reuses bitmap overlap during uniform scrolling. API 11 adds executable
+per-frame build/reuse/upload/raster counters and phase timings. Timestamped DLL
+tracing is opt-in; injected slow-frame summaries cover the entire map pass.
+The fixed-scroll increment adds an eight-coordinate native topology halo,
+validated against every captured native anchor, and dependency-validated damage
+rectangles for changed visible tile sets. Halo-only records do not change mesh
+LOD. Bounded integer-neighborhood scratch and equivalent shadow-ray cutoffs
+reduce cold construction to 1455.690 ms in the latest full run. The primary
+benchmark now crosses several tiles at once: first-exposure p95 is 365.848 ms,
+return-trip p95 is 2.617 ms. Entering horizontal strips build 80 meshes, reuse
+320, and retain about 74% of pixels. Full verification, native/production
+replays, both zoom previews and injected compilation pass. Newly exposed art
+still builds synchronously, so the goal remains incomplete. Next work is
+bounded idle prewarming with complete authoritative appearance snapshots and
+foreground priority, plus actual injected whole-map timing. See
+`evidence/integration_cache_worker/README.md`. The global Lab checkpoint stays LQ0.
+
 Milestone M0 is complete. The renderer workspace, source-agnostic pack shape, isometric preview, project contract, and local tool references exist.
 
 Milestone M1 is complete. We can:

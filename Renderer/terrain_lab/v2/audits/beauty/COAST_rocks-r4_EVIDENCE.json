@@ -1,0 +1,348 @@
+{
+  "schema": "c3x.coastal_composition_evidence.v1",
+  "revision": "rocks-r4",
+  "visual_accepted": false,
+  "approval": null,
+  "results": [
+    {
+      "region": "coastal",
+      "source_region": "beauty-coastal-100-v1",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "baseline_identity": "4245da207324163634b032bd0f63db9d3e29e3ba1a51c3faac90715478029726",
+      "candidate_identity": "3ac22e1aa253c42dcb1dd2956d2456066ffadd5581ed4723cb592b18b38c167c",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "cliff_instances": 8,
+          "complete_cliff_material_draws": 3,
+          "difference": {
+            "changed_pixels": 219664,
+            "bounds": [
+              41,
+              67,
+              1314,
+              709
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "cliff_instances": 8,
+          "complete_cliff_material_draws": 3,
+          "difference": {
+            "changed_pixels": 57427,
+            "bounds": [
+              22,
+              33,
+              654,
+              355
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "cliff_instances": 8,
+          "complete_cliff_material_draws": 3,
+          "difference": {
+            "changed_pixels": 207748,
+            "bounds": [
+              40,
+              67,
+              1305,
+              709
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "cliff_instances": 8,
+          "complete_cliff_material_draws": 3,
+          "difference": {
+            "changed_pixels": 52193,
+            "bounds": [
+              23,
+              33,
+              649,
+              355
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "inland",
+      "source_region": "beauty-inland-100-v1",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "baseline_identity": "5bb9dd85e896a1054e30009ba3ea257e85b1d111fc959a80e9817c79b95e231f",
+      "candidate_identity": "edcaca1679e7679102986b9e7996c26850c98c8357e016d8083bec92131d2776",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "cliff_instances": 8,
+          "complete_cliff_material_draws": 3,
+          "difference": {
+            "changed_pixels": 174509,
+            "bounds": [
+              40,
+              59,
+              1320,
+              699
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "cliff_instances": 8,
+          "complete_cliff_material_draws": 3,
+          "difference": {
+            "changed_pixels": 49968,
+            "bounds": [
+              20,
+              29,
+              660,
+              350
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "cliff_instances": 8,
+          "complete_cliff_material_draws": 3,
+          "difference": {
+            "changed_pixels": 158236,
+            "bounds": [
+              40,
+              59,
+              1320,
+              699
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "cliff_instances": 8,
+          "complete_cliff_material_draws": 3,
+          "difference": {
+            "changed_pixels": 40296,
+            "bounds": [
+              20,
+              29,
+              660,
+              350
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "wilderness",
+      "source_region": "beauty-wilderness-100-v1",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "baseline_identity": "0eb92bc545b14929e10cb6debe53fee9bb8355f4f6f02a4788039ce1952c2440",
+      "candidate_identity": "43049a6ba944eb4a545499bc9a91f7f9ee0627e39ee38ecff31a01af8c8c728f",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "cliff_instances": 0,
+          "complete_cliff_material_draws": 0,
+          "difference": {
+            "changed_pixels": 176296,
+            "bounds": [
+              41,
+              25,
+              1320,
+              699
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "cliff_instances": 0,
+          "complete_cliff_material_draws": 0,
+          "difference": {
+            "changed_pixels": 46378,
+            "bounds": [
+              21,
+              12,
+              660,
+              350
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "cliff_instances": 0,
+          "complete_cliff_material_draws": 0,
+          "difference": {
+            "changed_pixels": 170100,
+            "bounds": [
+              41,
+              27,
+              1320,
+              698
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "cliff_instances": 0,
+          "complete_cliff_material_draws": 0,
+          "difference": {
+            "changed_pixels": 43082,
+            "bounds": [
+              21,
+              13,
+              660,
+              349
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "longcoast",
+      "source_region": "beauty-longcoast-128-v1",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "baseline_identity": "12947b8b9b9107ab652c7b2763ea76fb022a47d2003a8fb1c9cf886fca7cad26",
+      "candidate_identity": "13831d3a45b1132e294f030b24662b72c17b056008e9446e55557d9ce4be3390",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "cliff_instances": 22,
+          "complete_cliff_material_draws": 4,
+          "difference": {
+            "changed_pixels": 321940,
+            "bounds": [
+              90,
+              59,
+              1574,
+              820
+            ],
+            "output_size": [
+              1616,
+              888
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "cliff_instances": 22,
+          "complete_cliff_material_draws": 4,
+          "difference": {
+            "changed_pixels": 82965,
+            "bounds": [
+              47,
+              29,
+              787,
+              410
+            ],
+            "output_size": [
+              808,
+              444
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "cliff_instances": 22,
+          "complete_cliff_material_draws": 4,
+          "difference": {
+            "changed_pixels": 303842,
+            "bounds": [
+              89,
+              59,
+              1563,
+              823
+            ],
+            "output_size": [
+              1616,
+              888
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "cliff_instances": 22,
+          "complete_cliff_material_draws": 4,
+          "difference": {
+            "changed_pixels": 76434,
+            "bounds": [
+              45,
+              29,
+              782,
+              411
+            ],
+            "output_size": [
+              808,
+              444
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

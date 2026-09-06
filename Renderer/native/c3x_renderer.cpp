@@ -24,15 +24,16 @@
 #include "terrain_scene_runtime.h"
 #include "environment_runtime.h"
 #include "terrain_definition_runtime.h"
+#include "renderer_trace.h"
+#include "scroll_damage.h"
 
 namespace {
 
 constexpr c3x_renderer_u32 viewport_cache_capacity = 32u;
 constexpr std::size_t viewport_cache_budget = 128u * 1024u * 1024u;
-constexpr std::size_t geometry_region_cache_capacity = 2u;
-constexpr std::size_t geometry_region_cache_budget = 192u * 1024u * 1024u;
-constexpr std::size_t geometry_region_entry_budget = 96u * 1024u * 1024u;
-constexpr std::size_t world_sample_cache_budget = 96u * 1024u * 1024u;
+// Includes active buffers: a frame pins its entries, never a second copy.
+constexpr std::size_t tile_geometry_cache_budget = 192u * 1024u * 1024u;
+constexpr std::size_t tile_geometry_cache_capacity = 2048u;
 
 struct Vertex {
     float x, y, z;
@@ -80,6 +81,8 @@ struct ViewportShaderSettings {
     float translation[2];
     float depth_translation;
     float padding;
+    float inverse_size[2];
+    float reserved[2];
 };
 
 struct TerrainTexture {
@@ -134,18 +137,6 @@ struct CachedViewport {
 struct CachedGeometry {
     c3x_renderer::TerrainFrameSignature signature;
     std::vector<c3x_renderer_tile_v1> tiles;
-    std::vector<Vertex> underlay;
-    std::vector<Vertex> land;
-    std::vector<Vertex> bed;
-    std::vector<Vertex> water;
-    std::vector<Vertex> river;
-    std::vector<Vertex> route;
-    std::vector<Vertex> shadow;
-    std::vector<Vertex> feature;
-    std::vector<Vertex> city;
-    std::vector<Vertex> wall;
-    std::vector<Vertex> mine;
-    std::vector<Vertex> farm;
     std::vector<c3x_renderer_u32> replacement_flags;
     std::vector<c3x_renderer_u32> fallback_indices;
     c3x_renderer_u32 rendered_tile_count = 0;
@@ -154,21 +145,9 @@ struct CachedGeometry {
     bool valid = false;
 
     void clear() {
-        std::vector<c3x_renderer_tile_v1>().swap(tiles);
-        std::vector<Vertex>().swap(underlay);
-        std::vector<Vertex>().swap(land);
-        std::vector<Vertex>().swap(bed);
-        std::vector<Vertex>().swap(water);
-        std::vector<Vertex>().swap(river);
-        std::vector<Vertex>().swap(route);
-        std::vector<Vertex>().swap(shadow);
-        std::vector<Vertex>().swap(feature);
-        std::vector<Vertex>().swap(city);
-        std::vector<Vertex>().swap(wall);
-        std::vector<Vertex>().swap(mine);
-        std::vector<Vertex>().swap(farm);
-        std::vector<c3x_renderer_u32>().swap(replacement_flags);
-        std::vector<c3x_renderer_u32>().swap(fallback_indices);
+        tiles.clear();
+        replacement_flags.clear();
+        fallback_indices.clear();
         rendered_tile_count = fallback_tile_count = textured_tile_count = 0;
         valid = false;
     }
@@ -176,8 +155,11 @@ struct CachedGeometry {
 
 struct CachedVertexChunk {
     ID3D11Buffer * buffer = nullptr;
-    UINT vertex_count = 0;
+    ID3D11Buffer * indices = nullptr;
+    UINT index_count = 0;
     std::size_t byte_count = 0;
+    int translation_x = 0, translation_y = 0;
+    D3D11_RECT bounds = {};
 };
 
 enum GeometryLayer : std::size_t {
@@ -196,11 +178,34 @@ enum GeometryLayer : std::size_t {
     geometry_layer_count
 };
 
-struct CachedGeometryRegion {
-    CachedGeometry geometry;
+struct CachedTileGeometry {
+    std::uint64_t signature = 0, version = 0;
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> dependencies;
     std::array<std::vector<CachedVertexChunk>, geometry_layer_count> buffers;
+    std::vector<std::pair<std::uint64_t, std::array<int, 2>>> anchor_dependencies;
     std::size_t byte_count = 0;
     std::uint64_t last_used = 0;
+    int anchor_x = 0, anchor_y = 0;
+};
+
+// Hash bytes, then compare all bytes: repeated triangle vertices share storage
+// without merging seams, normals, materials, or merely similar positions.
+struct VertexHash {
+    std::size_t operator()(Vertex const & vertex) const {
+        auto bytes = reinterpret_cast<unsigned char const *>(&vertex);
+        std::uint64_t result = 1469598103934665603ull;
+        for (std::size_t i = 0; i < sizeof(vertex); i += sizeof(std::uint32_t)) {
+            std::uint32_t word;
+            std::memcpy(&word, bytes + i, sizeof(word));
+            result = (result ^ word) * 1099511628211ull;
+        }
+        return static_cast<std::size_t>(result);
+    }
+};
+struct VertexEqual {
+    bool operator()(Vertex const & a, Vertex const & b) const {
+        return std::memcmp(&a, &b, sizeof(a)) == 0;
+    }
 };
 
 struct GroundPoint {
@@ -216,18 +221,11 @@ struct GroundPoint {
     bool terrain_ready = false;
 };
 
-struct WorldTileSemantic {
-    std::uint64_t content_signature = 0;
-    c3x_renderer_u32 generation = 0;
-    std::uint64_t shadow_signature = 0;
-    std::vector<float> shadow_visibility;
-    std::uint64_t sample_signature = 0;
-    std::vector<GroundPoint> ground_samples;
-    std::uint64_t sample_last_used = 0;
-};
-
 class RendererState {
 public:
+    RendererTrace trace;
+    char const * frame_cache_path = "cold";
+    c3x_renderer_i64 frame_geometry_ticks = 0, frame_draw_ticks = 0, frame_readback_ticks = 0;
     ID3D11Device * device = nullptr;
     ID3D11DeviceContext * context = nullptr;
     ID3D11VertexShader * vertex_shader = nullptr;
@@ -347,17 +345,18 @@ public:
     CachedGeometry geometry_cache;
     std::array<std::vector<CachedVertexChunk>, geometry_layer_count>
         geometry_vertex_buffers;
-    std::vector<CachedGeometryRegion> geometry_region_cache;
-    std::size_t geometry_region_cache_bytes = 0;
-    std::uint64_t geometry_region_use_clock = 0;
-    std::unordered_map<std::uint64_t, WorldTileSemantic> world_tile_cache;
-    std::size_t world_sample_cache_bytes = 0;
-    std::uint64_t world_sample_use_clock = 0;
-    c3x_renderer_u32 world_tile_generation = 1;
-    int cached_world_width = 0;
-    int cached_world_height = 0;
-    c3x_renderer_u32 cached_world_wrap_x = 0;
-    c3x_renderer_u32 cached_world_wrap_y = 0;
+    std::unordered_multimap<std::uint64_t, CachedTileGeometry> tile_geometry_cache;
+    std::size_t tile_geometry_cache_bytes = 0;
+    std::uint64_t tile_geometry_epoch = 0, tile_geometry_version = 0;
+    std::vector<c3x_renderer::TileFootprint> geometry_footprints, bitmap_footprints;
+    c3x_renderer::TerrainFrameSignature bitmap_footprint_signature;
+    unsigned frame_tiles_built = 0, frame_tiles_reused = 0;
+    unsigned frame_tiles_evicted = 0;
+    std::size_t frame_upload_bytes = 0;
+    ViewportShaderSettings geometry_viewport_settings = {};
+    std::vector<D3D11_RECT> raster_rects;
+    c3x_renderer_u32 raster_reused_pixels = 0, raster_draw_pixels = 0;
+
     HDC blit_dc = nullptr;
     HBITMAP blit_bitmap = nullptr;
     HGDIOBJ blit_previous_bitmap = nullptr;
@@ -487,7 +486,7 @@ public:
         release(terrain_settings_buffer);
         release(viewport_settings_buffer);
         clear_geometry_vertex_buffers();
-        clear_geometry_region_cache();
+        clear_tile_geometry_cache();
         release(feature_pixel_shader);
         release(feature_vertex_shader);
         release(pixel_shader);
@@ -971,14 +970,9 @@ public:
         viewport_cache.clear();
         viewport_cache_bytes = 0;
         clear_geometry_vertex_buffers();
-        clear_geometry_region_cache();
+        clear_tile_geometry_cache();
         geometry_cache.clear();
-        world_tile_cache.clear();
-        world_sample_cache_bytes = 0;
-        world_sample_use_clock = 0;
-        world_tile_generation = 1;
-        cached_world_width = cached_world_height = 0;
-        cached_world_wrap_x = cached_world_wrap_y = 0;
+
     }
 
     void mix_content_revision(std::vector<std::uint8_t> const & data) {
@@ -2231,6 +2225,31 @@ public:
         output.device_generation = device_generation;
         output.device_recoveries = device_recoveries;
         output.content_revision = static_cast<c3x_renderer_i64>(content_revision);
+        output.geometry_tiles_built = frame_tiles_built;
+        output.geometry_tiles_reused = frame_tiles_reused;
+        output.geometry_tiles_evicted = frame_tiles_evicted;
+        output.geometry_cache_bytes = static_cast<c3x_renderer_u32>(tile_geometry_cache_bytes);
+        output.geometry_upload_bytes = static_cast<c3x_renderer_u32>(frame_upload_bytes);
+        output.geometry_ticks = frame_geometry_ticks;
+        output.draw_ticks = frame_draw_ticks;
+        output.readback_ticks = frame_readback_ticks;
+        output.raster_reused_pixels = raster_reused_pixels;
+        output.raster_draw_pixels = raster_draw_pixels;
+        if (trace.level) {
+            char detail[640];
+            std::snprintf(detail, sizeof(detail),
+                "cache=%s invalidations=%u camera=%u scene=%u environment=%u wrap=%u content=%u ownership=%u device=%u "
+                "tiles=%u built=%u reused=%u evicted=%u gpu_bytes=%zu upload_bytes=%zu viewport_bytes=%zu "
+                "reused_pixels=%u draw_pixels=%u render_ms=%.3f geometry_ms=%.3f draw_submit_ms=%.3f readback_wait_ms=%.3f",
+                frame_cache_path, invalidations, (invalidations & 1u) != 0, (invalidations & 2u) != 0,
+                (invalidations & 4u) != 0, (invalidations & 8u) != 0, (invalidations & 16u) != 0,
+                (invalidations & 32u) != 0, (invalidations & 64u) != 0, frame.tile_count,
+                frame_tiles_built, frame_tiles_reused, frame_tiles_evicted,
+                tile_geometry_cache_bytes, frame_upload_bytes, viewport_cache_bytes,
+                raster_reused_pixels, raster_draw_pixels, trace.milliseconds(renderer_ticks), trace.milliseconds(frame_geometry_ticks),
+                trace.milliseconds(frame_draw_ticks), trace.milliseconds(frame_readback_ticks));
+            trace.write("frame", detail, invalidations != 0);
+        }
     }
 
     c3x_renderer_u32 invalidations_for(c3x_renderer::TerrainFrameSignature const & signature) const {
@@ -2255,71 +2274,145 @@ public:
     void release_geometry_vertex_buffers(
         std::array<std::vector<CachedVertexChunk>, geometry_layer_count> & buffers) {
         for (std::vector<CachedVertexChunk> & layer : buffers) {
-            for (CachedVertexChunk & chunk : layer)
+            for (CachedVertexChunk & chunk : layer) {
                 release(chunk.buffer);
+                release(chunk.indices);
+            }
             std::vector<CachedVertexChunk>().swap(layer);
         }
     }
 
     void clear_geometry_vertex_buffers() {
+        geometry_footprints.clear();
         release_geometry_vertex_buffers(geometry_vertex_buffers);
     }
 
-    void clear_geometry_region_cache() {
-        for (CachedGeometryRegion & region : geometry_region_cache)
-            release_geometry_vertex_buffers(region.buffers);
-        std::vector<CachedGeometryRegion>().swap(geometry_region_cache);
-        geometry_region_cache_bytes = 0;
+    void clear_tile_geometry_cache() {
+        bitmap_footprints.clear();
+        for (auto & entry : tile_geometry_cache)
+            release_geometry_vertex_buffers(entry.second.buffers);
+        tile_geometry_cache.clear();
+        tile_geometry_cache_bytes = 0;
+    }
+
+    bool make_tile_cache_room(std::size_t bytes) {
+        while (tile_geometry_cache_bytes + bytes > tile_geometry_cache_budget ||
+               tile_geometry_cache.size() >= tile_geometry_cache_capacity) {
+            auto oldest = tile_geometry_cache.end();
+            for (auto it = tile_geometry_cache.begin(); it != tile_geometry_cache.end(); ++it) {
+                if (it->second.last_used == tile_geometry_epoch)
+                    continue; // active frame references this immutable storage
+                if (oldest == tile_geometry_cache.end() ||
+                    it->second.last_used < oldest->second.last_used)
+                    oldest = it;
+            }
+            if (oldest == tile_geometry_cache.end())
+                return false;
+            tile_geometry_cache_bytes -= oldest->second.byte_count;
+            release_geometry_vertex_buffers(oldest->second.buffers);
+            tile_geometry_cache.erase(oldest);
+            ++frame_tiles_evicted;
+            if (cache_evictions != 0xffffffffu) ++cache_evictions;
+        }
+        return true;
     }
 
     bool cache_geometry_layer(std::vector<Vertex> & vertices,
                               std::vector<CachedVertexChunk> & output) {
-        std::size_t const chunk_capacity = 262143u;
-        for (std::size_t first = 0; first < vertices.size(); first += chunk_capacity) {
-            UINT count = static_cast<UINT>(std::min(
-                chunk_capacity, vertices.size() - first));
-            D3D11_BUFFER_DESC buffer_desc = {};
-            buffer_desc.ByteWidth = count * sizeof(Vertex);
-            buffer_desc.Usage = D3D11_USAGE_IMMUTABLE;
-            buffer_desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-            D3D11_SUBRESOURCE_DATA initial = {};
-            initial.pSysMem = vertices.data() + first;
-            CachedVertexChunk chunk;
-            chunk.vertex_count = count;
-            chunk.byte_count = buffer_desc.ByteWidth;
-            if (FAILED(device->CreateBuffer(&buffer_desc, &initial, &chunk.buffer))) {
-                OutputDebugStringA("[C3X renderer] native-failure=geometry-buffer\n");
-                return false;
-            }
-            output.push_back(chunk);
+        if (vertices.empty()) return true;
+        std::unordered_map<Vertex, UINT, VertexHash, VertexEqual> unique;
+        unique.reserve(vertices.size() / 3u);
+        std::vector<Vertex> packed;
+        std::vector<UINT> indices;
+        indices.reserve(vertices.size());
+        for (Vertex const & vertex : vertices) {
+            auto inserted = unique.try_emplace(vertex, static_cast<UINT>(packed.size()));
+            if (inserted.second) packed.push_back(vertex);
+            indices.push_back(inserted.first->second);
         }
-        std::vector<Vertex>().swap(vertices);
+        CachedVertexChunk chunk;
+        chunk.bounds = {LONG_MAX, LONG_MAX, LONG_MIN, LONG_MIN};
+        for (Vertex const & vertex : packed) {
+            chunk.bounds.left = std::min(chunk.bounds.left, static_cast<LONG>(std::floor(vertex.x)) - 2);
+            chunk.bounds.top = std::min(chunk.bounds.top, static_cast<LONG>(std::floor(vertex.y)) - 2);
+            chunk.bounds.right = std::max(chunk.bounds.right, static_cast<LONG>(std::ceil(vertex.x)) + 2);
+            chunk.bounds.bottom = std::max(chunk.bounds.bottom, static_cast<LONG>(std::ceil(vertex.y)) + 2);
+        }
+        chunk.index_count = static_cast<UINT>(indices.size());
+        chunk.byte_count = packed.size() * sizeof(Vertex) + indices.size() * sizeof(UINT);
+        if (!make_tile_cache_room(chunk.byte_count)) return false;
+        D3D11_BUFFER_DESC desc = {};
+        desc.ByteWidth = static_cast<UINT>(packed.size() * sizeof(Vertex));
+        desc.Usage = D3D11_USAGE_IMMUTABLE;
+        desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        D3D11_SUBRESOURCE_DATA initial = {};
+        initial.pSysMem = packed.data();
+        if (FAILED(device->CreateBuffer(&desc, &initial, &chunk.buffer))) return false;
+        desc.ByteWidth = static_cast<UINT>(indices.size() * sizeof(UINT));
+        desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+        initial.pSysMem = indices.data();
+        if (FAILED(device->CreateBuffer(&desc, &initial, &chunk.indices))) {
+            release(chunk.buffer);
+            return false;
+        }
+        tile_geometry_cache_bytes += chunk.byte_count;
+        frame_upload_bytes += chunk.byte_count;
+        output.push_back(chunk);
+        vertices.clear(); // bounded scratch reused for the next tile
         return true;
     }
 
-    bool cache_geometry_vertex_buffers() {
-        clear_geometry_vertex_buffers();
-        std::array<std::vector<Vertex> *, geometry_layer_count> layers = {
-            &geometry_cache.underlay, &geometry_cache.land, &geometry_cache.bed,
-            &geometry_cache.water, &geometry_cache.river, &geometry_cache.route,
-            &geometry_cache.shadow, &geometry_cache.feature, &geometry_cache.city,
-            &geometry_cache.wall, &geometry_cache.mine, &geometry_cache.farm};
-        for (std::size_t layer = 0; layer < layers.size(); ++layer) {
-            if (!cache_geometry_layer(*layers[layer], geometry_vertex_buffers[layer])) {
-                clear_geometry_vertex_buffers();
-                return false;
+    void append_tile_geometry(CachedTileGeometry & tile, c3x_renderer_tile_v1 const & record) {
+        int anchor_x = record.anchor_x, anchor_y = record.anchor_y;
+        c3x_renderer::TileFootprint footprint;
+        footprint.coordinate = (static_cast<std::uint64_t>(static_cast<std::uint32_t>(record.tile_x)) << 32) |
+            static_cast<std::uint32_t>(record.tile_y);
+        footprint.mesh = tile.version;
+        footprint.anchor_x = anchor_x; footprint.anchor_y = anchor_y;
+        footprint.bounds = {INT_MAX, INT_MAX, INT_MIN, INT_MIN};
+        for (auto const & layer : tile.buffers)
+            for (auto const & chunk : layer) {
+                footprint.bounds.left = std::min(footprint.bounds.left, static_cast<int>(chunk.bounds.left));
+                footprint.bounds.top = std::min(footprint.bounds.top, static_cast<int>(chunk.bounds.top));
+                footprint.bounds.right = std::max(footprint.bounds.right, static_cast<int>(chunk.bounds.right));
+                footprint.bounds.bottom = std::max(footprint.bounds.bottom, static_cast<int>(chunk.bounds.bottom));
             }
-        }
-        return true;
+        if (tile.byte_count != 0) geometry_footprints.push_back(footprint);
+        tile.last_used = tile_geometry_epoch;
+        for (std::size_t layer = 0; layer < geometry_layer_count; ++layer)
+            for (CachedVertexChunk chunk : tile.buffers[layer]) {
+                chunk.buffer->AddRef();
+                chunk.indices->AddRef();
+                chunk.translation_x = anchor_x - tile.anchor_x;
+                chunk.translation_y = anchor_y - tile.anchor_y;
+                geometry_vertex_buffers[layer].push_back(chunk);
+            }
     }
 
     bool draw_cached_geometry(GeometryLayer layer) {
+        ViewportShaderSettings previous = {};
+        bool first = true;
+        for (D3D11_RECT const & rect : raster_rects) {
+        context->RSSetScissorRects(1, &rect);
         for (CachedVertexChunk const & chunk : geometry_vertex_buffers[layer]) {
-            UINT stride = sizeof(Vertex);
-            UINT offset = 0;
-            context->IASetVertexBuffers(
-                0, 1, &chunk.buffer, &stride, &offset);
-            context->Draw(chunk.vertex_count, 0);
+            int dx = chunk.translation_x + static_cast<int>(geometry_viewport_settings.translation[0]);
+            int dy = chunk.translation_y + static_cast<int>(geometry_viewport_settings.translation[1]);
+            if (chunk.bounds.right + dx <= rect.left || chunk.bounds.left + dx >= rect.right ||
+                chunk.bounds.bottom + dy <= rect.top || chunk.bounds.top + dy >= rect.bottom) continue;
+            ViewportShaderSettings settings = geometry_viewport_settings;
+            settings.translation[0] += static_cast<float>(chunk.translation_x);
+            settings.translation[1] += static_cast<float>(chunk.translation_y);
+            settings.depth_translation = -settings.translation[1] / height;
+            if (first || std::memcmp(&previous, &settings, sizeof(settings)) != 0) {
+                context->UpdateSubresource(viewport_settings_buffer, 0, nullptr, &settings, 0, 0);
+                previous = settings;
+                first = false;
+            }
+            UINT stride = sizeof(Vertex), offset = 0;
+            context->IASetVertexBuffers(0, 1, &chunk.buffer, &stride, &offset);
+            context->IASetIndexBuffer(chunk.indices, DXGI_FORMAT_R32_UINT, 0);
+            context->DrawIndexed(chunk.index_count, 0, 0);
+        }
         }
         return true;
     }
@@ -2335,7 +2428,6 @@ public:
         };
         for (auto value : {tile.terrain_type, tile.real_terrain_type,
                            static_cast<c3x_renderer_i32>(tile.variant_seed),
-                           static_cast<c3x_renderer_i32>(tile.tile_flags),
                            static_cast<c3x_renderer_i32>(tile.feature_flags),
                            static_cast<c3x_renderer_i32>(tile.improvement_flags),
                            static_cast<c3x_renderer_i32>(tile.irrigation_mask),
@@ -2349,6 +2441,19 @@ public:
                            static_cast<c3x_renderer_i32>(tile.city_flags)})
             mix(&value, sizeof(value));
         mix(tile.resource_name, sizeof(tile.resource_name));
+        return hash;
+    }
+
+    std::uint64_t tile_topology_signature(c3x_renderer_tile_v1 const & tile) const {
+        // Neighbor sampling consumes terrain, river and route connectivity.
+        // Retained units and unrelated city/resource changes do not alter it;
+        // a lightweight halo supplies exactly these same authoritative fields.
+        std::uint64_t hash = 1469598103934665603ull;
+        for (auto value : {tile.terrain_type, tile.real_terrain_type,
+                static_cast<c3x_renderer_i32>(tile.river_code),
+                static_cast<c3x_renderer_i32>(tile.road_mask),
+                static_cast<c3x_renderer_i32>(tile.railroad_mask)})
+            hash = (hash ^ static_cast<std::uint32_t>(value)) * 1099511628211ull;
         return hash;
     }
 
@@ -2367,71 +2472,6 @@ public:
             tile.tile_y, frame.world_height_tiles, frame.world_wrap_y);
         return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(x)) << 32) |
             static_cast<std::uint32_t>(y);
-    }
-
-    void update_world_tile_cache(c3x_renderer_frame_v1 const & frame) {
-        bool new_world = cached_world_width != frame.world_width_tiles ||
-            cached_world_height != frame.world_height_tiles ||
-            cached_world_wrap_x != frame.world_wrap_x ||
-            cached_world_wrap_y != frame.world_wrap_y;
-        if (new_world) {
-            world_tile_cache.clear();
-            world_sample_cache_bytes = 0;
-            world_sample_use_clock = 0;
-            world_tile_generation = 1;
-            cached_world_width = frame.world_width_tiles;
-            cached_world_height = frame.world_height_tiles;
-            cached_world_wrap_x = frame.world_wrap_x;
-            cached_world_wrap_y = frame.world_wrap_y;
-        }
-        for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
-            c3x_renderer_tile_v1 const & tile = frame.tiles[index];
-            if ((tile.tile_flags & (C3X_RENDERER_TILE_RENDER |
-                                    C3X_RENDERER_TILE_TOPOLOGY_HALO)) == 0)
-                continue;
-            std::uint64_t key = world_tile_key(tile, frame);
-            std::uint64_t signature = tile_content_signature(tile);
-            auto found = world_tile_cache.find(key);
-            if (found == world_tile_cache.end()) {
-                WorldTileSemantic semantic;
-                semantic.content_signature = signature;
-                semantic.generation = world_tile_generation;
-                world_tile_cache.emplace(key, semantic);
-            } else if (found->second.content_signature != signature) {
-                if (world_tile_generation != 0xffffffffu)
-                    ++world_tile_generation;
-                world_sample_cache_bytes -= found->second.ground_samples.size() *
-                    sizeof(GroundPoint);
-                found->second.content_signature = signature;
-                found->second.generation = world_tile_generation;
-                found->second.shadow_signature = 0;
-                found->second.shadow_visibility.clear();
-                found->second.sample_signature = 0;
-                found->second.ground_samples.clear();
-            }
-        }
-    }
-
-    void trim_world_sample_cache() {
-        while (world_sample_cache_bytes > world_sample_cache_budget) {
-            auto oldest = world_tile_cache.end();
-            for (auto candidate = world_tile_cache.begin();
-                 candidate != world_tile_cache.end(); ++candidate) {
-                if (candidate->second.ground_samples.empty())
-                    continue;
-                if (oldest == world_tile_cache.end() ||
-                    candidate->second.sample_last_used < oldest->second.sample_last_used)
-                    oldest = candidate;
-            }
-            if (oldest == world_tile_cache.end())
-                break;
-            world_sample_cache_bytes -= oldest->second.ground_samples.size() *
-                sizeof(GroundPoint);
-            oldest->second.sample_signature = 0;
-            oldest->second.ground_samples.clear();
-            if (cache_evictions != 0xffffffffu)
-                ++cache_evictions;
-        }
     }
 
     bool geometry_matches(CachedGeometry const & candidate,
@@ -2453,65 +2493,6 @@ public:
                 return false;
         }
         return !require_translation || translation_x != 0 || translation_y != 0;
-    }
-
-    std::size_t geometry_buffer_bytes(
-        std::array<std::vector<CachedVertexChunk>, geometry_layer_count> const & buffers) const {
-        std::size_t result = 0;
-        for (std::vector<CachedVertexChunk> const & layer : buffers)
-            for (CachedVertexChunk const & chunk : layer)
-                result += chunk.byte_count;
-        return result;
-    }
-
-    void retain_current_geometry_region() {
-        if (!geometry_cache.valid) {
-            clear_geometry_vertex_buffers();
-            geometry_cache.clear();
-            return;
-        }
-        CachedGeometryRegion region;
-        region.geometry = std::move(geometry_cache);
-        geometry_cache = {};
-        region.buffers = std::move(geometry_vertex_buffers);
-        geometry_vertex_buffers = {};
-        region.byte_count = geometry_buffer_bytes(region.buffers);
-        region.last_used = ++geometry_region_use_clock;
-        if (region.byte_count > geometry_region_entry_budget) {
-            release_geometry_vertex_buffers(region.buffers);
-            return;
-        }
-        geometry_region_cache_bytes += region.byte_count;
-        geometry_region_cache.push_back(std::move(region));
-        while (geometry_region_cache.size() > geometry_region_cache_capacity ||
-               geometry_region_cache_bytes > geometry_region_cache_budget) {
-            geometry_region_cache_bytes -= geometry_region_cache.front().byte_count;
-            release_geometry_vertex_buffers(geometry_region_cache.front().buffers);
-            geometry_region_cache.erase(geometry_region_cache.begin());
-            if (cache_evictions != 0xffffffffu)
-                ++cache_evictions;
-        }
-    }
-
-    bool restore_geometry_region(
-        c3x_renderer_frame_v1 const & frame,
-        c3x_renderer::TerrainFrameSignature const & signature,
-        int & translation_x, int & translation_y) {
-        for (std::size_t index = geometry_region_cache.size(); index-- > 0;) {
-            CachedGeometryRegion & candidate = geometry_region_cache[index];
-            if (!geometry_matches(candidate.geometry, frame, signature,
-                                  translation_x, translation_y, false))
-                continue;
-            CachedGeometryRegion selected = std::move(candidate);
-            geometry_region_cache.erase(geometry_region_cache.begin() +
-                static_cast<std::ptrdiff_t>(index));
-            geometry_region_cache_bytes -= selected.byte_count;
-            retain_current_geometry_region();
-            geometry_cache = std::move(selected.geometry);
-            geometry_vertex_buffers = std::move(selected.buffers);
-            return true;
-        }
-        return false;
     }
 
     bool same_terrain_content(c3x_renderer_tile_v1 const & left,
@@ -2587,6 +2568,10 @@ public:
     bool render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output) {
         LARGE_INTEGER started = {}, finished = {};
         QueryPerformanceCounter(&started);
+        frame_geometry_ticks = frame_draw_ticks = frame_readback_ticks = 0;
+        frame_cache_path = "tiles";
+        ++trace.sequence;
+        trace.write("render-begin", "", false);
         if (!initialize()) {
             OutputDebugStringA("[C3X renderer] native-failure=initialize\n");
             return false;
@@ -2602,13 +2587,16 @@ public:
             OutputDebugStringA("[C3X renderer] native-failure=terrain-textures\n");
             return false;
         }
-        update_world_tile_cache(frame);
+        frame_tiles_built = frame_tiles_reused = frame_tiles_evicted = 0;
+        frame_upload_bytes = 0;
+        raster_reused_pixels = raster_draw_pixels = 0;
         c3x_renderer::TerrainFrameSignature signature = c3x_renderer::terrain_frame_signature(
             frame, content_revision, device_generation);
         if (cache_valid &&
             signature.complete == cached_signature.complete) {
             if (cache_hits != 0xffffffffu)
                 ++cache_hits;
+            frame_cache_path = "viewport-current";
             replacement_tile_flags = cached_replacement_tile_flags;
             fallback_tile_indices.clear();
             fill_output(frame, output, 0, 0);
@@ -2618,6 +2606,7 @@ public:
             for (std::size_t cache_index = 0; cache_index < viewport_cache.size(); ++cache_index) {
                 if (viewport_cache[cache_index].signature.complete != signature.complete)
                     continue;
+                frame_cache_path = "viewport-lru";
                 CachedViewport hit = std::move(viewport_cache[cache_index]);
                 viewport_cache.erase(viewport_cache.begin() + static_cast<std::ptrdiff_t>(cache_index));
                 pixels = hit.pixels;
@@ -2640,6 +2629,7 @@ public:
             }
         }
         if (reuse_cached_subset(frame, signature)) {
+            frame_cache_path = "viewport-subset";
             if (cache_hits != 0xffffffffu)
                 ++cache_hits;
             fill_output(frame, output, 0, 0);
@@ -2650,25 +2640,64 @@ public:
             if (cache_stale_rejections != 0xffffffffu)
                 ++cache_stale_rejections;
         }
+        // The previous bitmap may belong to a recent-view LRU entry instead of
+        // the active geometry owner. Validate its own snapshot before shifting.
+        int raster_dx = 0, raster_dy = 0;
+        bool reuse_raster = cache_valid && frame.tile_count != 0 &&
+            cached_tiles.size() == frame.tile_count && signature.geometry == cached_signature.geometry;
+        if (reuse_raster) {
+            raster_dx = frame.tiles[0].anchor_x - cached_tiles[0].anchor_x;
+            raster_dy = frame.tiles[0].anchor_y - cached_tiles[0].anchor_y;
+            // Preserve the GPU derivative-quad phase. Native tile steps are
+            // even; odd-pixel diagnostic/camera moves reuse meshes but reraster.
+            reuse_raster = (raster_dx != 0 || raster_dy != 0) &&
+                (raster_dx & 1) == 0 && (raster_dy & 1) == 0 &&
+                std::abs(raster_dx) < width && std::abs(raster_dy) < height;
+            for (c3x_renderer_u32 i = 0; reuse_raster && i < frame.tile_count; ++i)
+                reuse_raster = same_terrain_content(frame.tiles[i], cached_tiles[i]) &&
+                    frame.tiles[i].anchor_x - cached_tiles[i].anchor_x == raster_dx &&
+                    frame.tiles[i].anchor_y - cached_tiles[i].anchor_y == raster_dy;
+        }
+        D3D11_RECT overlap = {std::max(0, raster_dx), std::max(0, raster_dy),
+                             std::min(width, width + raster_dx), std::min(height, height + raster_dy)};
+        raster_rects.clear();
+        auto dirty_rect = [&](LONG left, LONG top, LONG right, LONG bottom) {
+            if (left < right && top < bottom) {
+                raster_rects.push_back({left, top, right, bottom});
+                raster_draw_pixels += static_cast<c3x_renderer_u32>((right - left) * (bottom - top));
+            }
+        };
+        if (reuse_raster) {
+            dirty_rect(0, 0, width, overlap.top);
+            dirty_rect(0, overlap.bottom, width, height);
+            dirty_rect(0, overlap.top, overlap.left, overlap.bottom);
+            dirty_rect(overlap.right, overlap.top, width, overlap.bottom);
+            raster_reused_pixels = static_cast<c3x_renderer_u32>(width * height) - raster_draw_pixels;
+        } else dirty_rect(0, 0, width, height);
         int geometry_translation_x = 0;
         int geometry_translation_y = 0;
         bool reuse_geometry = reuse_geometry_for_translation(
             frame, signature, geometry_translation_x, geometry_translation_y);
-        if (!reuse_geometry)
-            reuse_geometry = restore_geometry_region(
-                frame, signature, geometry_translation_x, geometry_translation_y);
         if (reuse_geometry) {
+            frame_cache_path = "geometry-translation";
             if (cache_hits != 0xffffffffu)
                 ++cache_hits;
         } else if (cache_misses != 0xffffffffu) {
             ++cache_misses;
         }
         if (!reuse_geometry) {
-            retain_current_geometry_region();
+            geometry_translation_x = geometry_translation_y = 0;
+            clear_geometry_vertex_buffers();
+            geometry_cache.clear();
+            ++tile_geometry_epoch;
         }
 
+        c3x_renderer_u32 draw_record_count = 0;
+        for (c3x_renderer_u32 i = 0; i < frame.tile_count; ++i)
+            if ((frame.tiles[i].tile_flags & C3X_RENDERER_TILE_TOPOLOGY_HALO) == 0 ||
+                (frame.tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER) != 0) ++draw_record_count;
         int const base_ground_grid = frame.tile_width >= 96 ?
-            (frame.tile_count <= 768 ? 16 : 12) : 8;
+            (draw_record_count <= 768 ? 16 : 12) : 8;
         std::vector<Vertex> underlay_vertices;
         std::vector<Vertex> land_vertices;
         std::vector<Vertex> bed_vertices;
@@ -2681,31 +2710,14 @@ public:
         std::vector<Vertex> wall_vertices;
         std::vector<Vertex> mine_vertices;
         std::vector<Vertex> farm_vertices;
-        std::size_t rendered_reserve = 0, land_reserve = 0, river_reserve = 0;
-        if (!reuse_geometry) {
-            for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
-                c3x_renderer_tile_v1 const & tile = frame.tiles[index];
-                if ((tile.tile_flags & C3X_RENDERER_TILE_RENDER) == 0)
-                    continue;
-                ++rendered_reserve;
-                if (ground_type(tile) < 11)
-                    ++land_reserve;
-                if ((tile.river_code & 170u) != 0)
-                    ++river_reserve;
-            }
-        }
-        std::size_t const ground_vertices_per_tile =
-            static_cast<std::size_t>(base_ground_grid) * base_ground_grid * 6u;
-        underlay_vertices.reserve(rendered_reserve * ground_vertices_per_tile);
-        land_vertices.reserve(land_reserve * ground_vertices_per_tile);
-        bed_vertices.reserve(rendered_reserve * ground_vertices_per_tile);
-        water_vertices.reserve(rendered_reserve * ground_vertices_per_tile);
-        river_vertices.reserve(river_reserve * ground_vertices_per_tile);
-        shadow_vertices.reserve(land_reserve * ground_vertices_per_tile);
+        std::array<std::vector<Vertex> *, geometry_layer_count> tile_layers = {
+            &underlay_vertices, &land_vertices, &bed_vertices, &water_vertices,
+            &river_vertices, &route_vertices, &shadow_vertices, &feature_vertices,
+            &city_vertices, &wall_vertices, &mine_vertices, &farm_vertices};
         float half_w = static_cast<float>(frame.tile_width) * 0.5f;
         float half_h = static_cast<float>(frame.tile_height) * 0.5f;
-        auto ndc_x = [&frame](float x) { return 2.0f * x / frame.target_width - 1.0f; };
-        auto ndc_y = [&frame](float y) { return 1.0f - 2.0f * y / frame.target_height; };
+        auto ndc_x = [](float x) { return x; };
+        auto ndc_y = [](float y) { return y; };
         c3x_renderer_u32 textured_tile_count = 0;
         c3x_renderer_u32 fallback_tile_count = 0;
         fallback_tile_indices.clear();
@@ -2740,15 +2752,16 @@ public:
         frame_settings.hour = static_cast<float>(frame.hour);
         ViewportShaderSettings viewport_settings = {};
         viewport_settings.translation[0] =
-            2.0f * static_cast<float>(geometry_translation_x) / frame.target_width;
+            static_cast<float>(geometry_translation_x);
         viewport_settings.translation[1] =
-            -2.0f * static_cast<float>(geometry_translation_y) / frame.target_height;
+            static_cast<float>(geometry_translation_y);
         viewport_settings.depth_translation =
             -static_cast<float>(geometry_translation_y) / frame.target_height;
         context->UpdateSubresource(terrain_settings_buffer, 0, nullptr,
                                    &frame_settings, 0, 0);
-        context->UpdateSubresource(viewport_settings_buffer, 0, nullptr,
-                                   &viewport_settings, 0, 0);
+        viewport_settings.inverse_size[0] = 1.0f / frame.target_width;
+        viewport_settings.inverse_size[1] = 1.0f / frame.target_height;
+        geometry_viewport_settings = viewport_settings;
         if (!reuse_geometry) {
         auto canonical_component = [](int value, int size, c3x_renderer_u32 wraps) {
             if (wraps == 0 || size <= 0)
@@ -2767,6 +2780,8 @@ public:
         std::unordered_map<std::uint64_t, int> relief_by_coordinate;
         std::unordered_map<std::uint64_t, int> surface_by_coordinate;
         std::unordered_map<std::uint64_t, c3x_renderer_tile_v1 const *> tile_by_coordinate;
+        std::unordered_map<std::uint64_t, std::uint64_t> semantic_by_coordinate;
+        semantic_by_coordinate.reserve(frame.tile_count);
         ground_by_coordinate.reserve(frame.tile_count);
         real_by_coordinate.reserve(frame.tile_count);
         relief_by_coordinate.reserve(frame.tile_count);
@@ -2780,6 +2795,7 @@ public:
             int ground = ground_type(tile);
             int relief = relief_type(tile);
             tile_by_coordinate[coordinate_key(tile.tile_x, tile.tile_y)] = &tile;
+            semantic_by_coordinate[coordinate_key(tile.tile_x, tile.tile_y)] = tile_topology_signature(tile);
             if (relief == 10 && !volcano_assets_ready)
                 relief = -1;
             ground_by_coordinate[coordinate_key(tile.tile_x, tile.tile_y)] =
@@ -2902,10 +2918,8 @@ public:
             float ground_base_screen_y = center_y + ground_height_screen;
             auto make_shadow_vertex = [&](float screen_x, float screen_y, float u, float v) {
                 float projected_base_y = ground_base_screen_y + (screen_y - center_y);
-                float depth = std::max(0.001f, std::clamp(
-                    1.0f - projected_base_y / static_cast<float>(frame.target_height) -
-                    ground_height_screen * 0.75f / static_cast<float>(frame.target_height),
-                    0.001f, 0.999f) - 0.004f);
+                float depth =
+                    projected_base_y + ground_height_screen * 0.75f;
                 return Vertex{
                     ndc_x(screen_x), ndc_y(screen_y), depth, u, v, 1.0f,
                     0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
@@ -2975,8 +2989,20 @@ public:
             if (farm_assets_ready &&
                 (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_IRRIGATION) != 0)
                 replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
-            float left = static_cast<float>(tile.anchor_x);
-            float top = static_cast<float>(tile.anchor_y);
+            std::unordered_map<std::uint64_t, std::uint64_t> dependencies;
+            std::vector<std::pair<std::uint64_t, std::array<int, 2>>> anchor_dependencies;
+            auto observed_coordinate_key = [&](int x, int y) {
+                auto key = coordinate_key(x, y);
+                // Zero denotes a missing captured neighbor; revealing it must invalidate.
+                auto inserted = dependencies.try_emplace(key, 0);
+                if (inserted.second) {
+                    auto found = semantic_by_coordinate.find(key);
+                    inserted.first->second = found == semantic_by_coordinate.end() ? 0 : found->second;
+                }
+                return key;
+            };
+            float left = 0.0f; // mesh origin is local; Civ III supplies the draw anchor
+            float top = 0.0f;
             // The source terrain materials are detail textures, not one enormous
             // decal per viewport.  This scale puts a repeat across roughly six
             // Civ III tiles and is close to the cell-relative density used by
@@ -2999,7 +3025,7 @@ public:
             };
             bool relief_neighborhood = relief == 5 || relief == 6 || relief == 10 || draw_dunes;
             for (int edge = 0; edge < 4; ++edge) {
-                auto found = relief_by_coordinate.find(coordinate_key(
+                auto found = relief_by_coordinate.find(observed_coordinate_key(
                     neighbor_coordinates[edge][0], neighbor_coordinates[edge][1]));
                 relief_neighborhood = relief_neighborhood || (found != relief_by_coordinate.end() &&
                     (found->second == 5 || found->second == 6 || found->second == 10));
@@ -3009,94 +3035,96 @@ public:
             // wider views.  Unbounded 24x24 patches can exhaust the 32-bit
             // preview/game process and exceed D3D11's per-buffer size limit.
             int const relief_grid = frame.tile_width >= 96 ?
-                (frame.tile_count <= 512 ? 24 : (frame.tile_count <= 768 ? 16 : 12)) :
-                (frame.tile_count <= 2048 ? 12 : 8);
+                (draw_record_count <= 512 ? 24 : (draw_record_count <= 768 ? 16 : 12)) :
+                (draw_record_count <= 2048 ? 12 : 8);
             int const tile_ground_grid = relief_neighborhood ? relief_grid : base_ground_grid;
-            int const shadow_grid = frame.tile_width >= 96 && frame.tile_count <= 512
+            int const shadow_grid = frame.tile_width >= 96 && draw_record_count <= 512
                 ? 16 : 8;
-            // Cache the expensive cast-visibility field per canonical world tile,
-            // not per viewport. Its key covers the local terrain neighborhood
-            // reached by the approved 48-step ray and all environmental inputs,
-            // while deliberately excluding screen anchors and retained overlays.
-            std::uint64_t tile_sample_signature = 1469598103934665603ull;
-            auto hash_tile_sample_value = [&tile_sample_signature](auto value) {
-                auto const * bytes = reinterpret_cast<std::uint8_t const *>(&value);
-                for (std::size_t byte = 0; byte < sizeof(value); ++byte) {
-                    tile_sample_signature ^= bytes[byte];
-                    tile_sample_signature *= 1099511628211ull;
+            std::uint64_t tile_signature = 1469598103934665603ull;
+            auto mix_tile = [&](auto value) {
+                auto bytes = reinterpret_cast<std::uint8_t const *>(&value);
+                for (std::size_t i = 0; i < sizeof(value); ++i)
+                    tile_signature = (tile_signature ^ bytes[i]) * 1099511628211ull;
+            };
+            mix_tile(tile.tile_x); mix_tile(tile.tile_y);
+            mix_tile(tile_content_signature(tile));
+            mix_tile(frame.target_width); mix_tile(frame.target_height);
+            mix_tile(frame.tile_width); mix_tile(frame.tile_height);
+            mix_tile(frame.world_wrap_x ? frame.world_width_tiles : 0);
+            mix_tile(frame.world_wrap_y ? frame.world_height_tiles : 0);
+            mix_tile(frame.world_wrap_x); mix_tile(frame.world_wrap_y);
+            mix_tile(content_revision); mix_tile(device_generation);
+            mix_tile(frame.hour); mix_tile(frame.season);
+            mix_tile(tile_ground_grid); mix_tile(shadow_grid);
+            // The approved river shader consumes distances to every node.
+            // Preserve that global dependency only on actual river surfaces.
+            if (river_assets_ready && (tile.river_code & 170u) != 0)
+                for (RiverNode const & node : river_nodes) {
+                    mix_tile(node.lattice_x); mix_tile(node.lattice_y);
+                    mix_tile(node.degree); mix_tile(node.touches_water);
                 }
-            };
-            hash_tile_sample_value(frame.tile_width);
-            hash_tile_sample_value(frame.tile_height);
-            hash_tile_sample_value(frame.world_width_tiles);
-            hash_tile_sample_value(frame.world_height_tiles);
-            hash_tile_sample_value(frame.world_wrap_x);
-            hash_tile_sample_value(frame.world_wrap_y);
-            hash_tile_sample_value(content_revision);
-            std::vector<std::pair<std::uint64_t, std::uint64_t>> shadow_neighbors;
-            shadow_neighbors.reserve(196);
-            for (c3x_renderer_u32 neighbor_index = 0;
-                 neighbor_index < frame.tile_count; ++neighbor_index) {
-                c3x_renderer_tile_v1 const & neighbor = frame.tiles[neighbor_index];
-                if ((neighbor.tile_flags & (C3X_RENDERER_TILE_RENDER |
-                                            C3X_RENDERER_TILE_TOPOLOGY_HALO)) == 0 ||
-                    std::abs(neighbor.tile_x - tile.tile_x) > 14 ||
-                    std::abs(neighbor.tile_y - tile.tile_y) > 14)
-                    continue;
-                shadow_neighbors.push_back({
-                    world_tile_key(neighbor, frame), tile_content_signature(neighbor)});
-            }
-            std::sort(shadow_neighbors.begin(), shadow_neighbors.end());
-            for (auto const & neighbor : shadow_neighbors) {
-                hash_tile_sample_value(neighbor.first);
-                hash_tile_sample_value(neighbor.second);
-            }
-            std::uint64_t tile_shadow_signature = 1469598103934665603ull;
-            auto hash_tile_shadow_value = [&tile_shadow_signature](auto value) {
-                auto const * bytes = reinterpret_cast<std::uint8_t const *>(&value);
-                for (std::size_t byte = 0; byte < sizeof(value); ++byte) {
-                    tile_shadow_signature ^= bytes[byte];
-                    tile_shadow_signature *= 1099511628211ull;
+            auto candidates = tile_geometry_cache.equal_range(tile_signature);
+            bool reused_tile = false;
+            for (auto cached_tile = candidates.first; cached_tile != candidates.second; ++cached_tile) {
+                bool valid = true;
+                for (auto const & dependency : cached_tile->second.dependencies) {
+                    auto current = semantic_by_coordinate.find(dependency.first);
+                    auto value = current == semantic_by_coordinate.end() ? 0 : current->second;
+                    if (value != dependency.second) { valid = false; break; }
                 }
+                for (auto const & dependency : cached_tile->second.anchor_dependencies) {
+                    auto current = tile_by_coordinate.find(dependency.first);
+                    if (current == tile_by_coordinate.end() ||
+                        current->second->anchor_x - tile.anchor_x != dependency.second[0] ||
+                        current->second->anchor_y - tile.anchor_y != dependency.second[1]) valid = false;
+                }
+                if (valid) {
+                    append_tile_geometry(cached_tile->second, tile);
+                    ++frame_tiles_reused;
+                    reused_tile = true;
+                    break;
+                }
+            }
+            if (reused_tile) continue;
+            ++frame_tiles_built;
+            // Thousands of height/material/shadow samples revisit a tiny
+            // integer neighborhood. Record each dependency once and resolve
+            // its semantic maps once, using bounded per-tile scratch storage.
+            struct NeighborhoodSample {
+                bool ready = false;
+                float ground = 0, surface = 0;
+                int relief = -1;
             };
-            hash_tile_shadow_value(tile_sample_signature);
-            hash_tile_shadow_value(frame.hour);
-            hash_tile_shadow_value(frame.season);
-            hash_tile_shadow_value(shadow_grid);
-            WorldTileSemantic & tile_semantic =
-                world_tile_cache[world_tile_key(tile, frame)];
-            std::size_t expected_shadow_samples =
-                static_cast<std::size_t>(shadow_grid + 1) * (shadow_grid + 1);
-            bool reuse_tile_shadow = tile_semantic.shadow_signature == tile_shadow_signature &&
-                tile_semantic.shadow_visibility.size() == expected_shadow_samples;
-            std::size_t tile_shadow_index = 0;
-            std::vector<float> next_tile_shadow;
-            if (!reuse_tile_shadow)
-                next_tile_shadow.reserve(expected_shadow_samples);
-            auto ground_at = [&](int x, int y) {
-                auto found = ground_by_coordinate.find(coordinate_key(x, y));
-                return found == ground_by_coordinate.end() ? ground_slot : static_cast<float>(found->second);
+            constexpr int neighborhood_radius = 16;
+            constexpr int neighborhood_side = neighborhood_radius * 2 + 1;
+            std::array<NeighborhoodSample, neighborhood_side * neighborhood_side> neighborhood = {};
+            auto neighborhood_at = [&](int x, int y) {
+                int local_x = x - tile.tile_x + neighborhood_radius;
+                int local_y = y - tile.tile_y + neighborhood_radius;
+                NeighborhoodSample * cached = local_x >= 0 && local_x < neighborhood_side &&
+                    local_y >= 0 && local_y < neighborhood_side
+                    ? &neighborhood[local_y * neighborhood_side + local_x] : nullptr;
+                if (cached != nullptr && cached->ready) return *cached;
+                auto key = observed_coordinate_key(x, y);
+                auto base = ground_by_coordinate.find(key);
+                auto surface = surface_by_coordinate.find(key);
+                auto relief = relief_by_coordinate.find(key);
+                NeighborhoodSample value{true,
+                    base == ground_by_coordinate.end() ? ground_slot : static_cast<float>(base->second),
+                    surface == surface_by_coordinate.end() ? surface_slot : static_cast<float>(surface->second),
+                    relief == relief_by_coordinate.end() ? -1 : relief->second};
+                if (cached != nullptr) *cached = value;
+                return value;
             };
-            auto surface_at = [&](int x, int y) {
-                auto found = surface_by_coordinate.find(coordinate_key(x, y));
-                return found == surface_by_coordinate.end() ? surface_slot : static_cast<float>(found->second);
-            };
+            auto ground_at = [&](int x, int y) { return neighborhood_at(x, y).ground; };
+            auto surface_at = [&](int x, int y) { return neighborhood_at(x, y).surface; };
             auto terrain_at_lattice = [&](int lattice_u, int lattice_v) {
                 int x = lattice_u + lattice_v;
                 int y = lattice_u - lattice_v;
                 return surface_at(x, y);
             };
-            auto ground_at_lattice = [&](int lattice_u, int lattice_v) {
-                int x = lattice_u + lattice_v;
-                int y = lattice_u - lattice_v;
-                return ground_at(x, y);
-            };
-            auto relief_at_lattice = [&](int lattice_u, int lattice_v) {
-                int x = lattice_u + lattice_v;
-                int y = lattice_u - lattice_v;
-                auto found = relief_by_coordinate.find(coordinate_key(x, y));
-                return found == relief_by_coordinate.end() ? -1 : found->second;
-            };
+            auto ground_at_lattice = [&](int u, int v) { return ground_at(u + v, u - v); };
+            auto relief_at_lattice = [&](int u, int v) { return neighborhood_at(u + v, u - v).relief; };
             auto periodic_surface_uv = [&](float world_u, float world_v, float frequency) {
                 float map_x = world_u + world_v - 1.0f;
                 float map_y = world_u - world_v;
@@ -3521,7 +3549,7 @@ public:
                 // authored hills, mountain/volcano chains, and dunes.
                 int owner_u = static_cast<int>(std::floor(world_u));
                 int owner_v = static_cast<int>(std::floor(world_v));
-                auto owner_found = tile_by_coordinate.find(coordinate_key(
+                auto owner_found = tile_by_coordinate.find(observed_coordinate_key(
                     owner_u + owner_v, owner_u - owner_v));
                 c3x_renderer_tile_v1 const & height_tile =
                     owner_found == tile_by_coordinate.end() ? tile : *owner_found->second;
@@ -3580,7 +3608,7 @@ public:
                     local_u, local_v, 1.0f - local_u, 1.0f - local_v};
                 float hill_compatibility = 1.0f;
                 for (int edge = 0; edge < 4; ++edge) {
-                    auto neighbor = ground_by_coordinate.find(coordinate_key(
+                    auto neighbor = ground_by_coordinate.find(observed_coordinate_key(
                         height_tile.tile_x + source_offsets[edge][0],
                         height_tile.tile_y + source_offsets[edge][1]));
                     bool compatible = neighbor != ground_by_coordinate.end() &&
@@ -3588,8 +3616,9 @@ public:
                     if (!compatible)
                         hill_compatibility *= smoothstep01(distances[edge] / 0.22f);
                 }
-                float height = hill_value(world_u, world_v) * 52.0f *
-                    hill_support() * hill_compatibility;
+                float support = hill_support();
+                float height = support > 0.0f && hill_compatibility > 0.0f
+                    ? hill_value(world_u, world_v) * 52.0f * support * hill_compatibility : 0.0f;
                 float authored_height = 0.0f;
                 float authored_blend = 0.0f;
                 int current_real = height_tile.real_terrain_type;
@@ -3597,7 +3626,7 @@ public:
                     float relief_envelope = 1.0f;
                     if (current_real == 6 || current_real == 10) {
                         for (int edge = 0; edge < 4; ++edge) {
-                            auto neighbor = relief_by_coordinate.find(coordinate_key(
+                            auto neighbor = relief_by_coordinate.find(observed_coordinate_key(
                                 height_tile.tile_x + source_offsets[edge][0],
                                 height_tile.tile_y + source_offsets[edge][1]));
                             int neighbor_real = neighbor == relief_by_coordinate.end()
@@ -3612,7 +3641,7 @@ public:
                     if (current_real == 5) {
                         transition_envelope = 0.0f;
                         for (int edge = 0; edge < 4; ++edge) {
-                            auto neighbor = relief_by_coordinate.find(coordinate_key(
+                            auto neighbor = relief_by_coordinate.find(observed_coordinate_key(
                                 height_tile.tile_x + source_offsets[edge][0],
                                 height_tile.tile_y + source_offsets[edge][1]));
                             if (neighbor != relief_by_coordinate.end() &&
@@ -3644,7 +3673,7 @@ public:
                     else {
                         material_envelope = 1.0f;
                         for (int edge = 0; edge < 4; ++edge) {
-                            auto neighbor = relief_by_coordinate.find(coordinate_key(
+                            auto neighbor = relief_by_coordinate.find(observed_coordinate_key(
                                 height_tile.tile_x + source_offsets[edge][0],
                                 height_tile.tile_y + source_offsets[edge][1]));
                             int neighbor_real = neighbor == relief_by_coordinate.end()
@@ -3662,7 +3691,7 @@ public:
                 if (height_tile_has_dunes) {
                     float dune_envelope = 1.0f;
                     for (int edge = 0; edge < 4; ++edge) {
-                        std::uint64_t key = coordinate_key(
+                        std::uint64_t key = observed_coordinate_key(
                             height_tile.tile_x + source_offsets[edge][0],
                             height_tile.tile_y + source_offsets[edge][1]);
                         auto neighbor_ground = ground_by_coordinate.find(key);
@@ -3691,13 +3720,9 @@ public:
             };
             auto cast_shadow_visibility = [&](float world_u, float world_v,
                                               float origin_height) {
-                if (reuse_tile_shadow &&
-                    tile_shadow_index < tile_semantic.shadow_visibility.size())
-                    return tile_semantic.shadow_visibility[tile_shadow_index++];
                 float horizontal = std::sqrt(key_light[0] * key_light[0] +
                                              key_light[1] * key_light[1]);
                 if (horizontal < 0.001f) {
-                    next_tile_shadow.push_back(1.0f);
                     return 1.0f;
                 }
                 float direction_u = key_light[0] / horizontal;
@@ -3714,16 +3739,25 @@ public:
                                          perpendicular_u * lane_offset;
                         float sample_v = world_v + direction_v * distance +
                                          perpendicular_v * lane_offset;
-                        float sample_height = relief_at_world(sample_u, sample_v)[0];
                         float ray_height = origin_height + 96.0f * distance + 0.8f;
+                        // The frozen production height path is bounded: normalized
+                        // relief <=104, smooth maximum adds <=3, dunes <=18.6;
+                        // hill height <=52 and river carving only lowers it.
+                        // Above 128 no later sample can obstruct this rising ray.
+                        // This preserves the 48-step result without sampling the
+                        // far-away terrain that cannot contribute to its shadow.
+                        if (ray_height >= 128.0f) break;
+                        float sample_height = relief_at_world(sample_u, sample_v)[0];
                         greatest_obstruction = std::max(
                             greatest_obstruction, sample_height - ray_height);
+                        // The lane's final occlusion is already saturated;
+                        // subsequent maxima cannot change the result.
+                        if (greatest_obstruction >= 10.0f) break;
                     }
                     occlusion += std::clamp(
                         (greatest_obstruction - 0.5f) / 12.0f, 0.0f, 0.78f);
                 }
                 float visibility = 1.0f - occlusion / 3.0f;
-                next_tile_shadow.push_back(visibility);
                 return visibility;
             };
             std::unordered_map<std::uint64_t, GroundPoint> ground_point_cache;
@@ -3734,16 +3768,6 @@ public:
                 std::memcpy(&v_bits, &v, sizeof(v_bits));
                 return (static_cast<std::uint64_t>(u_bits) << 32) | v_bits;
             };
-            if (tile_semantic.sample_signature == tile_sample_signature) {
-                for (GroundPoint const & point : tile_semantic.ground_samples)
-                    ground_point_cache.emplace(ground_point_key(point.u, point.v), point);
-            } else {
-                world_sample_cache_bytes -= tile_semantic.ground_samples.size() *
-                    sizeof(GroundPoint);
-                tile_semantic.ground_samples.clear();
-                tile_semantic.sample_signature = tile_sample_signature;
-            }
-            tile_semantic.sample_last_used = ++world_sample_use_clock;
             auto ground_point_at = [&](float u, float v) -> GroundPoint & {
                 std::uint64_t key = ground_point_key(u, v);
                 auto found = ground_point_cache.find(key);
@@ -3814,8 +3838,7 @@ public:
                 // Elevation moves toward the isometric camera as well as up on
                 // screen.  Keeping flat-ground depth made steep micro-quads
                 // fold over one another and appear as bright contour seams.
-                float depth = std::clamp(1.0f - ground_y / static_cast<float>(frame.target_height) -
-                    h * 0.75f / static_cast<float>(frame.target_height), 0.001f, 0.999f);
+                float depth = ground_y + h * 0.75f;
                 float normal_x = terrain_conforming_surface ? point.normal[0] : 0.0f;
                 float normal_y = terrain_conforming_surface ? point.normal[1] : 0.0f;
                 float normal_z = terrain_conforming_surface ? point.normal[2] : 1.0f;
@@ -3829,10 +3852,6 @@ public:
                 bool river_surface = layer > 8.5f && layer < 9.5f;
                 float river_surface_distance = river_surface
                     ? river_distance(tile, u, v) : 1000.0f;
-                if (layer > 8.5f && layer < 9.5f)
-                    depth = std::max(0.001f, depth - 0.025f);
-                else if (layer > 9.5f)
-                    depth = std::max(0.001f, depth - 0.003f);
                 return Vertex{
                     ndc_x(ground_x), ndc_y(ground_y - h), depth,
                     point.material_u, point.material_v,
@@ -3920,10 +3939,9 @@ public:
                         (local_x + local_y) * half_h;
                     float feature_height_tiles = local_z * 150.0f *
                         feature_projection_scale / relief_projection_scale;
-                    float depth = std::clamp(
-                        1.0f - base_ground_y / static_cast<float>(frame.target_height) -
-                        ground_height_pixels * 0.75f / static_cast<float>(frame.target_height) -
-                        feature_height_tiles * 0.0012f, 0.001f, 0.999f);
+                    float depth =
+                        base_ground_y + ground_height_pixels * 0.75f +
+                        feature_height_tiles * 0.0012f * static_cast<float>(frame.target_height);
                     transformed[vertex_index] = Vertex{
                         ndc_x(screen_x), ndc_y(screen_y), depth,
                         source.uv[0], source.uv[1], 1.0f,
@@ -3989,10 +4007,8 @@ public:
                     float ground_x = left + half_w + (route_u - route_v) * half_w;
                     float ground_y = top + (route_u + route_v) * half_h;
                     float h = ground_sample[0] * relief_projection_scale;
-                    float depth = std::max(0.003f, std::clamp(
-                        1.0f - ground_y / static_cast<float>(frame.target_height) -
-                        h * 0.75f / static_cast<float>(frame.target_height),
-                        0.001f, 0.999f) - 0.010f);
+                    float depth =
+                        ground_y + h * 0.75f;
                     return Vertex{
                         ndc_x(ground_x), ndc_y(ground_y - h), depth,
                         atlas_u, atlas_v, 1.0f, 0.0f, 0.0f, 1.0f,
@@ -4033,10 +4049,6 @@ public:
                 // interpolates visibility across the unchanged terrain body.
                 append_ground_layer(shadow_vertices, 10.0f,
                                     shadow_grid);
-                if (!reuse_tile_shadow) {
-                    tile_semantic.shadow_signature = tile_shadow_signature;
-                    tile_semantic.shadow_visibility = std::move(next_tile_shadow);
-                }
             }
             if (route_assets_ready && (tile.road_mask != 0 || tile.railroad_mask != 0)) {
                 constexpr int route_offsets[4][2] = {
@@ -4049,7 +4061,7 @@ public:
                 for (int direction = 0; direction < 4; ++direction) {
                     int neighbor_x = tile.tile_x + route_offsets[direction][0];
                     int neighbor_y = tile.tile_y + route_offsets[direction][1];
-                    auto found = tile_by_coordinate.find(coordinate_key(neighbor_x, neighbor_y));
+                    auto found = tile_by_coordinate.find(observed_coordinate_key(neighbor_x, neighbor_y));
                     if (found == tile_by_coordinate.end())
                         continue;
                     c3x_renderer_tile_v1 const & neighbor = *found->second;
@@ -4174,12 +4186,9 @@ public:
                                 (local_x + local_y) * half_h;
                             float feature_height_tiles = local_z * 150.0f *
                                 feature_projection_scale / relief_projection_scale;
-                            float depth = std::clamp(
-                                1.0f - base_ground_y / static_cast<float>(frame.target_height) -
-                                ground_height_pixels * 0.75f /
-                                    static_cast<float>(frame.target_height) -
-                                feature_height_tiles * 0.0012f,
-                                0.001f, 0.999f);
+                            float depth =
+                                base_ground_y + ground_height_pixels * 0.75f +
+                        feature_height_tiles * 0.0012f * static_cast<float>(frame.target_height);
                             transformed[vertex_index] = Vertex{
                                 ndc_x(screen_x), ndc_y(screen_y), depth,
                                 source.uv[0], source.uv[1], 1.0f,
@@ -4229,7 +4238,7 @@ public:
                     float local_u = edge.north_edge ? along : 0.975f;
                     float local_v = edge.north_edge ? 0.025f : along;
                     auto neighbor = tile_by_coordinate.find(
-                        coordinate_key(edge.neighbor_x, edge.neighbor_y));
+                        observed_coordinate_key(edge.neighbor_x, edge.neighbor_y));
                     if (ground_type(*owner) >= 11 && neighbor != tile_by_coordinate.end() &&
                         ground_type(*neighbor->second) < 11) {
                         owner = neighbor->second;
@@ -4252,9 +4261,11 @@ public:
                         static_cast<float>(owner->tile_x - owner->tile_y) * 0.5f;
                     std::array<float, 3> ground_sample = relief_at_world(
                         owner_world_u + local_u, owner_world_v + (1.0f - local_v));
-                    float center_x = static_cast<float>(owner->anchor_x) + half_w +
+                    anchor_dependencies.push_back({coordinate_key(owner->tile_x, owner->tile_y),
+                        {owner->anchor_x - tile.anchor_x, owner->anchor_y - tile.anchor_y}});
+                    float center_x = static_cast<float>(owner->anchor_x - tile.anchor_x) + half_w +
                         (local_u - local_v) * half_w;
-                    float center_y = static_cast<float>(owner->anchor_y) +
+                    float center_y = static_cast<float>(owner->anchor_y - tile.anchor_y) +
                         (local_u + local_v) * half_h -
                         ground_sample[0] * relief_projection_scale;
                     append_object_shadow(asset, scale, center_x, center_y,
@@ -4280,12 +4291,9 @@ public:
                             (local_x + local_y) * half_h;
                         float feature_height_tiles = local_z * 150.0f *
                             feature_projection_scale / relief_projection_scale;
-                        float depth = std::clamp(
-                            1.0f - base_ground_y / static_cast<float>(frame.target_height) -
-                            ground_height_pixels * 0.75f /
-                                static_cast<float>(frame.target_height) -
-                            feature_height_tiles * 0.0012f,
-                            0.001f, 0.999f);
+                        float depth =
+                            base_ground_y + ground_height_pixels * 0.75f +
+                        feature_height_tiles * 0.0012f * static_cast<float>(frame.target_height);
                         transformed[vertex_index] = Vertex{
                             ndc_x(screen_x), ndc_y(screen_y), depth,
                             source.uv[0], source.uv[1], 1.0f,
@@ -4466,45 +4474,75 @@ public:
                     }
                 }
             }
-            world_sample_cache_bytes -= tile_semantic.ground_samples.size() *
-                sizeof(GroundPoint);
-            tile_semantic.ground_samples.clear();
-            tile_semantic.ground_samples.reserve(ground_point_cache.size());
-            for (auto const & entry : ground_point_cache)
-                tile_semantic.ground_samples.push_back(entry.second);
-            world_sample_cache_bytes += tile_semantic.ground_samples.size() *
-                sizeof(GroundPoint);
+            CachedTileGeometry compiled;
+            compiled.signature = tile_signature;
+            compiled.version = ++tile_geometry_version;
+            compiled.anchor_x = 0;
+            compiled.anchor_y = 0;
+            compiled.last_used = tile_geometry_epoch;
+            compiled.dependencies.assign(dependencies.begin(), dependencies.end());
+            compiled.anchor_dependencies = std::move(anchor_dependencies);
+            for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
+                if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer])) {
+                    for (auto const & chunks : compiled.buffers)
+                        for (auto const & chunk : chunks) tile_geometry_cache_bytes -= chunk.byte_count;
+                    release_geometry_vertex_buffers(compiled.buffers);
+                    return false;
+                }
+                for (auto const & chunk : compiled.buffers[layer]) compiled.byte_count += chunk.byte_count;
+            }
+            auto inserted = tile_geometry_cache.emplace(tile_signature, std::move(compiled));
+            append_tile_geometry(inserted->second, tile);
         }
-        trim_world_sample_cache();
         geometry_cache.signature = signature;
         if (frame.tile_count != 0)
             geometry_cache.tiles.assign(frame.tiles, frame.tiles + frame.tile_count);
-        geometry_cache.underlay = std::move(underlay_vertices);
-        geometry_cache.land = std::move(land_vertices);
-        geometry_cache.bed = std::move(bed_vertices);
-        geometry_cache.water = std::move(water_vertices);
-        geometry_cache.river = std::move(river_vertices);
-        geometry_cache.route = std::move(route_vertices);
-        geometry_cache.shadow = std::move(shadow_vertices);
-        geometry_cache.feature = std::move(feature_vertices);
-        geometry_cache.city = std::move(city_vertices);
-        geometry_cache.wall = std::move(wall_vertices);
-        geometry_cache.mine = std::move(mine_vertices);
-        geometry_cache.farm = std::move(farm_vertices);
         geometry_cache.replacement_flags = replacement_tile_flags;
         geometry_cache.fallback_indices = fallback_tile_indices;
         geometry_cache.rendered_tile_count = textured_tile_count;
         geometry_cache.fallback_tile_count = fallback_tile_count;
         geometry_cache.textured_tile_count = textured_tile_count;
         geometry_cache.valid = true;
-        if (!cache_geometry_vertex_buffers())
-            return false;
+        if (frame_tiles_built == 0 && frame_tiles_reused != 0) {
+            if (cache_hits != 0xffffffffu) ++cache_hits;
+            if (cache_misses != 0) --cache_misses;
+        }
         } else {
             replacement_tile_flags = geometry_cache.replacement_flags;
             fallback_tile_indices = geometry_cache.fallback_indices;
             textured_tile_count = geometry_cache.textured_tile_count;
+            frame_tiles_reused = textured_tile_count;
             fallback_tile_count = geometry_cache.fallback_tile_count;
         }
+        std::vector<c3x_renderer::TileFootprint> current_footprints = geometry_footprints;
+        for (auto & footprint : current_footprints) {
+            footprint.anchor_x += geometry_translation_x;
+            footprint.anchor_y += geometry_translation_y;
+        }
+        // Only the exact bitmap that owns these footprints can donate pixels.
+        // An LRU/subset hit may have changed the bitmap without rebuilding meshes.
+        if (!reuse_raster && cache_valid &&
+            bitmap_footprint_signature.complete == cached_signature.complete &&
+            signature.camera == cached_signature.camera &&
+            signature.environment == cached_signature.environment &&
+            signature.wrap == cached_signature.wrap) {
+            std::vector<c3x_renderer::PixelRect> damage;
+            if (c3x_renderer::scroll_damage(bitmap_footprints, current_footprints,
+                    width, height, raster_dx, raster_dy, damage) &&
+                (raster_dx & 1) == 0 && (raster_dy & 1) == 0) {
+                raster_rects.clear(); raster_draw_pixels = 0;
+                for (auto const & rect : damage) dirty_rect(rect.left, rect.top, rect.right, rect.bottom);
+                raster_reused_pixels = static_cast<c3x_renderer_u32>(width * height) - raster_draw_pixels;
+                reuse_raster = raster_reused_pixels != 0;
+                overlap = {std::max(0, raster_dx), std::max(0, raster_dy),
+                           std::min(width, width + raster_dx), std::min(height, height + raster_dy)};
+            }
+        }
+        if (reuse_raster) frame_cache_path = "raster-scroll";
+        LARGE_INTEGER geometry_finished = {}, draw_finished = {}, readback_finished = {};
+        QueryPerformanceCounter(&geometry_finished);
+        frame_geometry_ticks = geometry_finished.QuadPart - started.QuadPart;
+        trace.write("geometry-ready", frame_cache_path);
         float clear[4] = {0, 0, 0, 0};
         context->ClearRenderTargetView(render_target, clear);
         context->ClearDepthStencilView(depth_target, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
@@ -4653,6 +4691,9 @@ public:
             }
         }
 
+        QueryPerformanceCounter(&draw_finished);
+        frame_draw_ticks = draw_finished.QuadPart - geometry_finished.QuadPart;
+        trace.write("readback-begin", "includes pending GPU execution");
         context->CopyResource(readback_texture, render_texture);
         D3D11_MAPPED_SUBRESOURCE mapped = {};
         HRESULT hr = context->Map(readback_texture, 0, D3D11_MAP_READ, 0, &mapped);
@@ -4660,13 +4701,29 @@ public:
             OutputDebugStringA("[C3X renderer] native-failure=readback\n");
             return false;
         }
-        for (int y = 0; y < height; ++y) {
-            std::memcpy(pixels.data() + static_cast<std::size_t>(y) * width,
-                        static_cast<std::uint8_t const *>(mapped.pData) + static_cast<std::size_t>(y) * mapped.RowPitch,
-                        static_cast<std::size_t>(width) * sizeof(std::uint32_t));
+        if (reuse_raster) {
+            // Copy in the safe vertical direction, using memmove for horizontal
+            // overlap. No second full-resolution CPU scratch bitmap is needed.
+            int y = raster_dy > 0 ? overlap.bottom - 1 : overlap.top;
+            int end = raster_dy > 0 ? overlap.top - 1 : overlap.bottom;
+            int step = raster_dy > 0 ? -1 : 1;
+            for (; y != end; y += step)
+                std::memmove(pixels.data() + static_cast<std::size_t>(y) * width + overlap.left,
+                    pixels.data() + static_cast<std::size_t>(y - raster_dy) * width + overlap.left - raster_dx,
+                    static_cast<std::size_t>(overlap.right - overlap.left) * sizeof(std::uint32_t));
         }
+        for (D3D11_RECT const & rect : raster_rects)
+            for (LONG y = rect.top; y < rect.bottom; ++y)
+                std::memcpy(pixels.data() + static_cast<std::size_t>(y) * width + rect.left,
+                    static_cast<std::uint8_t const *>(mapped.pData) + static_cast<std::size_t>(y) * mapped.RowPitch +
+                        static_cast<std::size_t>(rect.left) * sizeof(std::uint32_t),
+                    static_cast<std::size_t>(rect.right - rect.left) * sizeof(std::uint32_t));
         context->Unmap(readback_texture, 0);
+        QueryPerformanceCounter(&readback_finished);
+        frame_readback_ticks = readback_finished.QuadPart - draw_finished.QuadPart;
 
+        bitmap_footprints = std::move(current_footprints);
+        bitmap_footprint_signature = signature;
         cached_rendered_tile_count = textured_tile_count;
         cached_fallback_tile_count = fallback_tile_count;
         cached_textured_tile_count = textured_tile_count;
@@ -4690,7 +4747,9 @@ public:
                 }
             }
             CachedViewport stored;
-            stored.byte_count = pixels.size() * sizeof(std::uint32_t);
+            stored.byte_count = pixels.size() * sizeof(std::uint32_t) +
+                cached_tiles.size() * sizeof(c3x_renderer_tile_v1) +
+                cached_replacement_tile_flags.size() * sizeof(c3x_renderer_u32);
             while (!viewport_cache.empty() &&
                    (viewport_cache.size() >= viewport_cache_capacity ||
                     viewport_cache_bytes + stored.byte_count > viewport_cache_budget)) {
@@ -4803,16 +4862,25 @@ public:
     }
 
     int render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output) {
-        std::vector<c3x_renderer_tile_v1> immutable_tiles;
-        if (frame.tile_count != 0)
-            immutable_tiles.assign(frame.tiles, frame.tiles + frame.tile_count);
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();
         job_frame = frame;
-        job_tiles = std::move(immutable_tiles);
+        // Reuse bounded snapshot capacity; no allocation/copy on a second vector.
+        job_tiles.clear();
+        if (frame.tile_count != 0)
+            job_tiles.assign(frame.tiles, frame.tiles + frame.tile_count);
         job_frame.tiles = job_tiles.empty() ? nullptr : job_tiles.data();
+        LARGE_INTEGER submitted = {}, returned = {};
+        QueryPerformanceCounter(&submitted);
         int result = submit_locked(lock, Command::render);
+        QueryPerformanceCounter(&returned);
+        if (renderer_state.trace.level) {
+            char detail[160];
+            std::snprintf(detail, sizeof(detail), "result=%d wait_ms=%.3f tiles=%u",
+                result, renderer_state.trace.milliseconds(returned.QuadPart - submitted.QuadPart), frame.tile_count);
+            renderer_state.trace.write("worker-complete", detail, result != C3X_RENDERER_RESULT_OK);
+        }
         output = completed_output;
         return result;
     }
@@ -4822,8 +4890,19 @@ public:
         // gate keeps the worker idle and the returned pixel pointer stable until
         // the final GDI copy into Civ III's surface is complete.
         std::lock_guard<std::mutex> call_guard(call_mutex);
-        return renderer_state.blit(output, destination)
+        LARGE_INTEGER started = {}, finished = {};
+        QueryPerformanceCounter(&started);
+        int result = renderer_state.blit(output, destination)
             ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_ERROR;
+        QueryPerformanceCounter(&finished);
+        if (renderer_state.trace.level) {
+            char detail[160];
+            std::snprintf(detail, sizeof(detail), "result=%d blit_ms=%.3f clip=%d,%d,%d,%d",
+                result, renderer_state.trace.milliseconds(finished.QuadPart - started.QuadPart),
+                output.clip_left, output.clip_top, output.clip_right, output.clip_bottom);
+            renderer_state.trace.write("blit", detail, result != C3X_RENDERER_RESULT_OK);
+        }
+        return result;
     }
 
     void reset_and_stop() {
@@ -4928,14 +5007,16 @@ private:
                 if (renderer_state.render(job_frame, output)) {
                     result = C3X_RENDERER_RESULT_OK;
                 } else {
-                    renderer_state.reset();
+                    renderer_state.trace.write("reset", "device and all caches", true);
+            renderer_state.reset();
                     if (renderer_state.device_recoveries != 0xffffffffu)
                         ++renderer_state.device_recoveries;
                     result = renderer_state.render(job_frame, output)
                         ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_DEVICE_ERROR;
                 }
             } else if (command == Command::reset) {
-                renderer_state.reset();
+                renderer_state.trace.write("reset", "device and all caches", true);
+            renderer_state.reset();
                 result = C3X_RENDERER_RESULT_OK;
             }
             lock.lock();

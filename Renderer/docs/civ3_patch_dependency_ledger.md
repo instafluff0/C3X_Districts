@@ -10,6 +10,22 @@ Agents do not edit `civ_prog_objects.csv` or `ref/Civ3Conquests.h`.
 
 ## Current Human Action
 
+The user-authorized 2026-09-06 production performance maintenance needs no new
+CSV entries. It uses the existing `Map_Renderer_m71_Draw_Tiles` lifecycle,
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture/composite boundary,
+`QueryPerformanceCounter`, and `OutputDebugStringA`. Native topology capture now
+also calls the existing `Main_Screen_Form_tile_to_screen_coords` definition:
+`void (__fastcall *)(Main_Screen_Form *, int edx, int tile_x, int tile_y, int *, int *)`,
+at GOG `0x4E3B10`, Steam `0x4EC360`, PCGames `0x4E3BD0`. It is an existing callable,
+not a new patch. Every captured logical anchor must agree before adding a halo;
+on mismatch the original capture and dependency validation remain the fallback.
+Cache compilation, dependency validation, changed-set bitmap damage, diagnostics,
+and the existing single-worker handoff remain DLL responsibilities.
+`audit_candidates = []` and
+`required_user_action = []` for this increment. The API 11 header is shared by
+the DLL and injected compilation; the approved smoke must verify both together.
+The deferred M7.5 requests below remain unchanged.
+
 **M7.5 needs two new nuclear-outcome inleads and one existing loader upgraded
 from `define` to `inlead`.** Exact requests are recorded below. They do not
 authorize early M7.5 runtime implementation; until its preceding gates pass,

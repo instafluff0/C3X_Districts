@@ -33,6 +33,10 @@ bool l16_scene_enabled = false;
 bool l17_scene_enabled = false;
 bool biq_scene_enabled = false;
 bool volcano_geometry_enabled = false;
+bool lab_v2_volcano_source_mapping = false;
+bool lab_v2_direct_hill_source = false;
+int lab_v2_coastal_cliff_join = 0;
+bool lab_v2_omit_legacy_relief_shadow = false;
 bool river_geometry_enabled = false;
 bool road_geometry_enabled = false;
 bool railroad_geometry_enabled = false;
@@ -1015,7 +1019,7 @@ bool load_feature_bundle(std::string const & path, FeatureBundle & output) {
     std::uint32_t version = 0, texture_count = 0, asset_count = 0, group_count = 0;
     if (!consume_u32(data, cursor, version) || !consume_u32(data, cursor, texture_count) ||
         !consume_u32(data, cursor, asset_count) || !consume_u32(data, cursor, group_count) ||
-        version != 1 || texture_count == 0 || texture_count > 8 || asset_count == 0 ||
+        version != 1 || texture_count == 0 || texture_count > 128 || asset_count == 0 ||
         asset_count > 256 || group_count == 0 || group_count > 64) {
         std::fprintf(stderr, "terrain_lab: unsupported vegetation runtime bundle header\n");
         return false;
@@ -1092,7 +1096,9 @@ bool load_dds(ID3D11Device * device, std::string const & path, DXGI_FORMAT expec
     DXGI_FORMAT format = static_cast<DXGI_FORMAT>(read_u32(dds, 128));
     bool format_matches = format == expected ||
         (expected == DXGI_FORMAT_BC3_UNORM_SRGB && format == DXGI_FORMAT_BC3_UNORM) ||
-        (expected == DXGI_FORMAT_BC1_UNORM_SRGB && format == DXGI_FORMAT_BC1_UNORM);
+        (expected == DXGI_FORMAT_BC1_UNORM_SRGB && format == DXGI_FORMAT_BC1_UNORM) ||
+        (expected == DXGI_FORMAT_BC3_UNORM && format == DXGI_FORMAT_BC3_UNORM_SRGB) ||
+        (expected == DXGI_FORMAT_BC1_UNORM && format == DXGI_FORMAT_BC1_UNORM_SRGB);
     if (!format_matches || width == 0 || height == 0 || width > 16384 || height > 16384 || mip_count > 15) {
         std::fprintf(stderr, "terrain_lab: unsupported DDS dimensions or format: %s\n", path.c_str());
         return false;
@@ -1363,9 +1369,9 @@ void biq_volcano_sample(BiqWindowTile const & tile, float local_x, float local_y
     unsigned seed = static_cast<unsigned>(tile.source_x) * 73856093u ^
                     static_cast<unsigned>(tile.source_y) * 19349663u;
     seed ^= seed >> 13;
-    if ((seed & 1u) != 0)
+    if (!lab_v2_volcano_source_mapping && (seed & 1u) != 0)
         std::swap(local_x, local_y);
-    if ((seed & 2u) != 0)
+    if (!lab_v2_volcano_source_mapping && (seed & 2u) != 0)
         local_x = 1.0f - local_x;
     // Preserve the complete normalized terrain element. Only a rigid
     // orientation and the Civ III projection/height calibration are applied;
@@ -1380,6 +1386,7 @@ void biq_volcano_sample(BiqWindowTile const & tile, float local_x, float local_y
     }
     float footprint_scale = has_relief_neighbor ? 0.60f : 1.0f;
     float aspect = (seed & 4u) != 0 ? 0.88f : 1.12f;
+    if (lab_v2_volcano_source_mapping) { footprint_scale=0.62f; aspect=1.0f; }
     float source_u = 0.5f + (local_x - 0.5f) * footprint_scale * aspect;
     float source_v = 0.5f + (local_y - 0.5f) * footprint_scale / aspect;
     if (source_u < 0.0f || source_u > 1.0f ||
@@ -1449,6 +1456,17 @@ float promotion_hill_value(float world_x, float world_y) {
         // topology transition and lets an authored skirt cross onto adjacent
         // land instead of stopping at the diamond edge.
         HeightField const * field = promotion_hill_height_fields[0];
+        if (lab_v2_direct_hill_source) {
+            // Sample the selected source scalar directly. The old nonlinear
+            // threshold erased its lower relief. Canonical raw coordinates
+            // and four periods per 100-wide map preserve crop/wrap identity.
+            auto const& first=biq_window.tiles.front();
+            float origin_x=first.source_x-first.column-first.row;
+            float origin_y=first.source_y-first.column+first.row;
+            float source_u=.11f+(world_x+(origin_x+origin_y)*.5f)*.08f;
+            float source_v=.19f+(world_y+(origin_x-origin_y)*.5f)*.08f;
+            return field->sample(source_u-std::floor(source_u),source_v-std::floor(source_v));
+        }
         float authored_macro = sample_hill_macro(
             *field, 0.11f + world_x * 0.035f, 0.17f + world_y * 0.035f);
         // Let the authored scalar's broad irregular contours define the hill
@@ -2301,8 +2319,26 @@ float biq_tile_height(BiqWindowTile const & tile, float u, float v,
     float relief_envelope = biq_relief_envelope(tile, u, v);
     float coastal_envelope = biq_coastal_relief_envelope(tile, u, v);
     float height = 2.5f;
+    float hill_coastal_envelope=coastal_envelope;
+    if (lab_v2_coastal_cliff_join && labv2::hydrology_hooks.shore_sample) {
+        float shore[4];labv2::hydrology_hooks.shore_sample(world_x,world_y,shore);
+        // Retain a real flat collar at the water contour, but let the selected
+        // hill height reach its shoulder behind the source cliff bodies.
+        float rocky=smoothstep01((shore[2]-.55f)/.40f);
+        float cliff=smoothstep01((shore[0]-.04f)/.08f);
+        hill_coastal_envelope=coastal_envelope*(1-rocky)+cliff*rocky;
+        if(lab_v2_coastal_cliff_join>=4){
+            // Selected Cliff ArtDef has Height=5. Its 12-unit normalized body
+            // basis and this Lab's .5 placement scale define a provisional
+            // shore shoulder. This is a C3X join calibration, not recovered
+            // source-engine height reconstruction; source meshes cover it.
+            float shoulder=1-smoothstep01((shore[0]-.20f)/.65f);
+            height+=(5.f/12.f)*.5f*112.f*rocky*cliff*shoulder*
+                biq_hill_compatibility_envelope(tile,u,v);
+        }
+    }
     float hill_support = biq_hill_support(world_x, world_y) *
-        biq_hill_compatibility_envelope(tile, u, v) * coastal_envelope;
+        biq_hill_compatibility_envelope(tile, u, v) * hill_coastal_envelope;
     float hill_displacement = promotion_hill_value(world_x, world_y) *
                               52.0f * hill_support * lab_v2_hill_height_multiplier;
     float authored_displacement = 0.0f;
@@ -2723,7 +2759,7 @@ void add_biq_patch(std::vector<Vertex> & vertices, float uv_scale,
             if (tile.river_mask != 0)
                 add_biq_tile_surface(vertices, tile, uv_scale, 9.0f,
                                      authored_height, authored_blend, 32);
-    if (l13a_scene_enabled)
+    if (l13a_scene_enabled && !lab_v2_omit_legacy_relief_shadow)
         for (BiqWindowTile const & tile : biq_window.tiles)
             if (!is_water_terrain(tile.base))
                 add_biq_shadow_surface(vertices, tile, uv_scale,
@@ -3729,6 +3765,8 @@ bool add_river_rock_scene(FeatureBundle const & bundle,
     return true;
 }
 
+#include "../systems/relief/coast_rocks.h"
+
 bool add_route_bridge_scene(FeatureBundle const & bundle,
                             RoadScenario const & scenario,
                             bool railroad,
@@ -4690,6 +4728,11 @@ int main(int argc, char ** argv) {
     if (auto version = std::getenv("C3X_LAB_V2_CONTINUOUS_DESERT"))
         lab_v2_continuous_desert = std::atoi(version);
     volcano_geometry_enabled = l12_scene_enabled && !beauty_volcano_no_volcano_mode;
+    lab_v2_volcano_source_mapping = std::getenv("C3X_LAB_V2_VOLCANO_SOURCE_MAPPING") != nullptr;
+    lab_v2_direct_hill_source = std::getenv("C3X_LAB_V2_DIRECT_HILL_SOURCE") != nullptr;
+    if(auto placement=std::getenv("C3X_LAB_V2_COASTAL_ROCK_PLACEMENT"))
+        lab_v2_coastal_cliff_join=std::atoi(placement)>=3?std::atoi(placement):0;
+    lab_v2_omit_legacy_relief_shadow=std::getenv("C3X_LAB_V2_OMIT_REPLACED_SHADOW")!=nullptr;
     river_geometry_enabled = l13_mode && !beauty_rivers_no_rivers_mode &&
         !beauty_roads_only_mode && !beauty_roads_styles_mode &&
         !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_mines_only_mode &&
@@ -5071,6 +5114,7 @@ int main(int argc, char ** argv) {
     ID3D11ShaderResourceView * ground_state_base_views[2] = {};
     ID3D11ShaderResourceView * unit_base_views[10][8] = {};
     FeatureBundle feature_bundle;
+    lab_coast_rocks::Runtime coastal_rocks;
     FeatureBundle river_feature_bundle;
     FeatureBundle road_bridge_bundle;
     FeatureBundle resource_bundle;
@@ -5793,6 +5837,7 @@ int main(int argc, char ** argv) {
         release(feature_pixel_blob);
     }
 
+    if(ok)ok=coastal_rocks.load(device);
     std::vector<Vertex> vertices;
     std::vector<FeatureVertex> feature_vertices;
     std::vector<FeatureVertex> city_vertices;
@@ -5909,6 +5954,9 @@ int main(int argc, char ** argv) {
                                    beauty_relief_enabled ? &authored_blend : nullptr,
                                    beauty_shore_enabled,
                                    vertices, feature_vertices);
+        if(ok)ok=coastal_rocks.build(device,
+            beauty_relief_enabled ? &authored_height : nullptr,
+            beauty_relief_enabled ? &authored_blend : nullptr);
         if (ok && river_geometry_enabled)
             ok = add_river_rock_scene(
                 river_feature_bundle,
@@ -6377,6 +6425,18 @@ int main(int argc, char ** argv) {
             context->PSSetShaderResources(116, 8, resource_base_views);
             context->Draw(static_cast<UINT>(feature_vertices.size()), 0);
             context->OMSetDepthStencilState(nullptr, 0);
+        }
+        for(auto& rock:coastal_rocks.batches)if(rock.buffer){
+            context->OMSetRenderTargets(1,&render_target,feature_depth_view);
+            context->OMSetDepthStencilState(feature_depth_state,0);
+            UINT stride=sizeof(FeatureVertex),offset=0;
+            context->IASetInputLayout(feature_input_layout);
+            context->VSSetShader(feature_vertex_shader,nullptr,0);
+            context->PSSetShader(feature_pixel_shader,nullptr,0);
+            context->IASetVertexBuffers(0,1,&rock.buffer,&stride,&offset);
+            context->PSSetShaderResources(25,4,rock.views);
+            context->Draw(static_cast<UINT>(rock.vertices.size()),0);
+            context->OMSetDepthStencilState(nullptr,0);
         }
         if (mine_geometry_enabled && mine_vertex_buffer != nullptr) {
             context->OMSetRenderTargets(1, &render_target, feature_depth_view);

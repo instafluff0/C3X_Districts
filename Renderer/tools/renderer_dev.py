@@ -82,7 +82,9 @@ def windows_live_target() -> PureWindowsPath:
 def windows_command_result(relative_cwd: str, command: str) -> dict[str, Any]:
     vm = os.environ.get("C3X_RENDERER_VM", DEFAULT_VM)
     cwd = windows_root() / PureWindowsPath(relative_cwd)
-    remote = f'cd /d "{cwd}" && {command}'
+    # Noninteractive Parallels sessions may not inherit desktop drive mappings.
+    # pushd also supports a configured UNC checkout without copying any sources.
+    remote = f'pushd "{cwd}" && {command}'
     started = datetime.now(timezone.utc)
     result = subprocess.run(
         ["prlctl", "exec", vm, "cmd", "/d", "/s", "/c", remote],
@@ -295,6 +297,8 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
         ]
         results.append(command_result(command))
         if results[-1]["status"] == "pass":
+            results.append(command_result([python, "-m", "unittest", "Renderer.native.test_scroll_damage"]))
+        if results[-1]["status"] == "pass":
             results.append(native_command_result("Renderer/native", "call BUILD.bat portable"))
         if results[-1]["status"] == "pass":
             results.append(approved_terrain_smoke_result())
@@ -410,8 +414,10 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
         "Renderer.tools.test_project_state",
         "Renderer.tools.test_verification",
         "Renderer.tools.test_state_provenance_compiler",
+        "Renderer.tools.test_analyze_renderer_trace",
         "Renderer.tools.asset_compiler.test_pack_loader_abi",
         "Renderer.native.test_native_bridge_contract",
+        "Renderer.native.test_scroll_damage",
     ]))
     if results[-1]["status"] == "pass":
         results.append(native_command_result("Renderer/native", "call BUILD.bat portable"))
