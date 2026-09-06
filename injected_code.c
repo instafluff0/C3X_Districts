@@ -19971,6 +19971,7 @@ patch_init_floating_point ()
 		{"add_natural_wonders_to_scenarios_if_none"              , false, offsetof (struct c3x_config, add_natural_wonders_to_scenarios_if_none)},
 		{"enable_custom_animations"                              , false, offsetof (struct c3x_config, enable_custom_animations)},
 		{"enable_custom_rendering"                               , false, offsetof (struct c3x_config, enable_custom_rendering)},
+		{"enable_custom_rendered_units"                         , false, offsetof (struct c3x_config, enable_custom_rendered_units)},
 		{"enable_named_tiles"                                    , false, offsetof (struct c3x_config, enable_named_tiles)},
 		{"enable_distribution_hub_districts"                     , false, offsetof (struct c3x_config, enable_distribution_hub_districts)},
 		{"enable_aerodrome_districts"                            , false, offsetof (struct c3x_config, enable_aerodrome_districts)},
@@ -26863,7 +26864,18 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 			if (record->real_terrain_type == SQ_Jungle) record->feature_flags |= C3X_RENDERER_FEATURE_JUNGLE;
 			if (record->real_terrain_type == SQ_Swamp) record->feature_flags |= C3X_RENDERER_FEATURE_MARSH;
 			if (record->real_terrain_type == SQ_Volcano) record->feature_flags |= C3X_RENDERER_FEATURE_VOLCANO;
-			if (tile->vtable->m17_Check_Irrigation (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+			if (tile->vtable->m17_Check_Irrigation (tile, __, visible_to_civ_id)) {
+				record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+				int neighbor_x[4] = {tile_x - 1, tile_x + 1, tile_x - 1, tile_x + 1};
+				int neighbor_y[4] = {tile_y - 1, tile_y - 1, tile_y + 1, tile_y + 1};
+				for (int neighbor_index = 0; neighbor_index < 4; neighbor_index++) {
+					wrap_tile_coords (&p_bic_data->Map, &neighbor_x[neighbor_index], &neighbor_y[neighbor_index]);
+					Tile * neighbor = tile_at (neighbor_x[neighbor_index], neighbor_y[neighbor_index]);
+					if ((neighbor != NULL) && (neighbor != p_null_tile) &&
+					    neighbor->vtable->m17_Check_Irrigation (neighbor, __, visible_to_civ_id))
+						record->irrigation_mask |= 1u << neighbor_index;
+				}
+			}
 			if (tile->vtable->m18_Check_Mines (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_MINE;
 			if (tile->vtable->m26_Check_Tile_Building (tile)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_TILE_BUILDING;
 			if (tile->vtable->m20_Check_Pollution (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_POLLUTION;
@@ -26968,7 +26980,8 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 		C3X_RENDERER_TILE_CUSTOM_FEATURE_REPLACED | C3X_RENDERER_TILE_CUSTOM_DUNES_REPLACED |
 		C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED | C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED |
 		C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED | C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED |
-		C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED | C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED;
+		C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED | C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED |
+		C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
 	for (unsigned int n = 0; n < output->replacement_tile_count; n++) {
 		unsigned int flags = output->replacement_tile_flags[n];
 		struct c3x_renderer_tile_v1 const * captured = &is->custom_renderer_tiles[n];
@@ -26997,6 +27010,9 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 		if (((flags & C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED) != 0) &&
 		    ((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) == 0))
 			return false;
+		if (((flags & C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED) != 0) &&
+		    ((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_IRRIGATION) == 0))
+			return false;
 		if (((flags & (C3X_RENDERER_TILE_CUSTOM_FEATURE_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_DUNES_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED |
@@ -27004,7 +27020,8 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 		               C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED |
-		               C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED)) != 0) &&
+		               C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED |
+		               C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED)) != 0) &&
 		    ((flags & C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED) == 0))
 			return false;
 	}

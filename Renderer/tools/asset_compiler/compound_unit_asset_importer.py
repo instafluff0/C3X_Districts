@@ -22,6 +22,7 @@ from Renderer.tools.asset_compiler.unit_family_action_validator import _best_gro
 from Renderer.tools.asset_compiler.unit_family_asset_importer import (
     _initial_entry,
     _physical_package,
+    default_owner_color_for_component,
     load_owner_color_contract,
 )
 from Renderer.tools.asset_compiler.unit_member_resolver import ASSETS_ROOT, resolve_unit
@@ -83,6 +84,21 @@ def load_source_sets(path: Path = DEFAULT_SOURCE_SETS) -> dict[str, Any]:
         for node in [parent, *children]:
             if not isinstance(node.get("variation"), str) or not node["variation"]:
                 raise ValueError(f"{slug}/{node.get('id')} has no source variation")
+            component_attachment_bones = node.get("component_attachment_bones", {})
+            if (
+                not isinstance(component_attachment_bones, dict)
+                or any(
+                    not isinstance(point, str)
+                    or not point
+                    or not isinstance(candidates, list)
+                    or not candidates
+                    or any(not isinstance(candidate, str) or not candidate for candidate in candidates)
+                    for point, candidates in component_attachment_bones.items()
+                )
+            ):
+                raise ValueError(
+                    f"{slug}/{node.get('id')} has invalid component_attachment_bones"
+                )
         available = {parent["id"]}
         for child in children:
             if child.get("parent") not in available:
@@ -175,6 +191,15 @@ def _validate_generic_recipe(recipe: dict[str, Any], manifest: dict[str, Any], p
             raise ValueError(f"compound-unit node {node_id} has no valid animation driver")
         if any(component["asset"] not in manifest["assets"] for component in node["components"]):
             raise ValueError(f"compound-unit node {node_id} references an unknown component")
+        skeleton = normalized_skin.load_skeleton(pack / node["skeleton"])
+        skeleton_names = {bone["name"] for bone in skeleton["bones"]}
+        for component in node["components"]:
+            attachment_bone = component.get("attachment_bone")
+            if attachment_bone is not None and attachment_bone not in skeleton_names:
+                raise ValueError(
+                    f"compound-unit node {node_id} component references unknown attachment bone "
+                    f"{attachment_bone}"
+                )
     if not isinstance(recipe.get("actions"), dict) or not recipe["actions"]:
         raise ValueError("compound-unit recipe has no action bindings")
     for action, binding in recipe["actions"].items():
@@ -291,20 +316,8 @@ def compile_compound_units(
                 asset_id = f"unit/{compile_slug}/{key}"
                 document_path = pack / asset["component"]
                 document = json.loads(document_path.read_text(encoding="utf-8"))
-                document["owner_color"] = (
-                    {
-                        "mode": "source_mask",
-                        "mask_source": "base_color_alpha_inverse",
-                        "strength": tint_strength,
-                        "representative_palette_index": 6,
-                    }
-                    if component["tint"] == "USE_CIV_COLOR"
-                    else {
-                        "mode": "none",
-                        "mask_source": "constant_one",
-                        "strength": 0.0,
-                        "representative_palette_index": 6,
-                    }
+                document["owner_color"] = default_owner_color_for_component(
+                    component, tint_strength
                 )
                 _write_json(document_path, document)
                 assets[asset_id] = asset
@@ -329,6 +342,15 @@ def compile_compound_units(
                 )
             driver_candidates.sort(key=lambda item: (-item[0], item[1]))
             _, driver_id, skeleton_path, skeleton = driver_candidates[0]
+            attachment_overrides = node.get("component_attachment_bones", {})
+            for component_record in component_records:
+                candidates = attachment_overrides.get(component_record["attachment_point"])
+                if candidates:
+                    component_record["attachment_bone"] = _select_bone(
+                        candidates,
+                        skeleton,
+                        f"{slug}/{node_id}/{component_record['role']} attachment",
+                    )
             compiled_nodes[node_id] = {
                 "components": component_records,
                 "animation_driver": driver_id,

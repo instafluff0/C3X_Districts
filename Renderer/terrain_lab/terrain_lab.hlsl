@@ -683,6 +683,9 @@ float4 PSFeature(FeaturePixelInput input) : SV_TARGET
         (1.0 - step(0.195, material_fraction)) * source_decal_weight;
     float unit_weight = step(0.395, material_fraction) *
         (1.0 - step(0.445, material_fraction)) * source_decal_weight;
+    float resource_weight = step(20.5, input.material_index) *
+        (1.0 - step(28.5, input.material_index)) *
+        (1.0 - step(0.005, material_fraction));
     float mine_weight = source_decal_weight *
         (1.0 - tile_object_weight) * (1.0 - infrastructure_weight) *
         (1.0 - unit_weight);
@@ -809,17 +812,55 @@ float4 PSFeature(FeaturePixelInput input) : SV_TARGET
     albedo *= lerp(float3(1.0, 1.0, 1.0), infrastructure_tint,
                    raised_infrastructure_weight * 0.07);
     float unit_owner = floor((material_fraction - 0.40) * 100.0 + 0.05);
-    float unit_team_code = floor(material_fraction * 1000.0 + 0.5) -
-        floor(material_fraction * 100.0 + 0.5) * 10.0;
-    float3 unit_color = unit_owner < 0.5 ? float3(0.22, 0.52, 0.95) :
-        (unit_owner < 1.5 ? float3(0.92, 0.22, 0.16) :
-        (unit_owner < 2.5 ? float3(0.20, 0.76, 0.30) :
-                            float3(0.96, 0.74, 0.14)));
+    float unit_style_fraction = material_fraction - 0.40 - unit_owner * 0.01;
+    float unit_team_code = floor(unit_style_fraction * 1000.0 + 0.05);
+    float unit_source_tint_code = floor(
+        (unit_style_fraction - unit_team_code * 0.001) * 10000.0 + 0.5);
+    float3 unit_color = unit_owner < 0.5 ? float3(0.08, 0.36, 0.95) :
+        (unit_owner < 1.5 ? float3(0.90, 0.08, 0.05) :
+        (unit_owner < 2.5 ? float3(0.08, 0.64, 0.14) :
+                            float3(0.98, 0.70, 0.04)));
+    // Civ VI component textures are deliberately neutral calibration maps;
+    // their ArtDef Tint names supply the actual material color. These values
+    // are the installed Base Units.artdef colors selected by the imported
+    // components, applied before the separate civilization-color mask.
+    float3 unit_neutral_tint = unit_source_tint_code < 0.5 ? float3(1.0, 1.0, 1.0) :
+        (unit_source_tint_code < 1.5 ? float3(0.878, 0.765, 0.647) :
+        (unit_source_tint_code < 2.5 ? float3(0.631, 0.067, 0.059) :
+        (unit_source_tint_code < 3.5 ? float3(0.529, 0.286, 0.059) :
+        (unit_source_tint_code < 4.5 ? float3(0.404, 0.345, 0.239) :
+        (unit_source_tint_code < 5.5 ? float3(0.651, 0.514, 0.239) :
+        (unit_source_tint_code < 6.5 ? float3(0.431, 0.596, 0.290) :
+                                       float3(0.784, 0.580, 0.302)))))));
+    float unit_source_tint_weight = step(0.5, unit_source_tint_code) * unit_weight;
+    albedo = lerp(albedo, albedo * unit_neutral_tint, unit_source_tint_weight);
+    // The normalized component metadata distinguishes source-alpha masks from
+    // deliberately solid insignia pieces and carries strong/medium/restrained
+    // authoring strengths. This keeps horses, skin, wood, steel, and cloth
+    // neutral while shields, armbands, barding, sails, and vehicle panels read
+    // clearly at Civ III scale.
+    float unit_source_mask = smoothstep(0.06, 0.94, 1.0 - mine_sample.a);
     float unit_team_mask = unit_team_code < 0.5 ? 0.0 :
-        (unit_team_code < 1.5 ? 1.0 - mine_sample.a : 1.0);
-    float3 unit_tinted = albedo * 0.28 + unit_color * 0.72;
+        (unit_team_code < 1.5 ? unit_source_mask :
+        (unit_team_code < 2.5 ? 1.0 :
+        (unit_team_code < 3.5 ? unit_source_mask :
+        (unit_team_code < 4.5 ? 1.0 :
+        (unit_team_code < 5.5 ? unit_source_mask : 1.0)))));
+    float unit_team_strength = unit_team_code < 0.5 ? 0.0 :
+        (unit_team_code < 2.5 ? 0.82 :
+        (unit_team_code < 4.5 ? 0.58 : 0.35));
+    // Map the neutral source value through a compact owner-color ramp instead
+    // of replacing it with a flat hue. Light folds stay bright, recesses stay
+    // dark, and a small source contribution preserves material texture.
+    float unit_source_value = dot(albedo, float3(0.2126, 0.7152, 0.0722));
+    float3 unit_color_dark = unit_color * 0.32;
+    float3 unit_color_light = saturate(unit_color * 0.90 +
+                                        float3(0.24, 0.24, 0.20));
+    float3 unit_color_ramp = lerp(unit_color_dark, unit_color_light,
+                                  smoothstep(0.08, 0.86, unit_source_value));
+    float3 unit_tinted = lerp(unit_color_ramp, albedo, 0.14);
     albedo = lerp(albedo, unit_tinted,
-                  unit_weight * unit_team_mask * 0.82);
+                  unit_weight * unit_team_mask * unit_team_strength);
     // Persistent damage is source art blended into the terrain, not a square
     // replacement tile.  The crater-ground layer supplies a subdued dead-soil
     // footprint while the radiation atlas contributes only its authored alpha
@@ -827,15 +868,23 @@ float4 PSFeature(FeaturePixelInput input) : SV_TARGET
     albedo = lerp(albedo, float3(0.13, 0.115, 0.055), pollution_weight);
     float3 normal = normalize(input.geometry_normal);
     float3 light_direction = frame_light_direction();
-    // The source vegetation meshes use broad, mostly upward canopy normals.
-    // Preserve those authored normals, but expand their horizontal component
-    // for lighting so a tree has a legible light-facing and opposing face at
-    // map scale. River/shore rocks retain their unmodified geometric normals.
+    // Small vegetation, resource, and unit bodies otherwise collapse toward
+    // flat ambient color at Civ III scale. Preserve their authored normals,
+    // but expand the horizontal response so each has the same legible lit and
+    // opposing faces as larger relief. River/shore rocks and flat decals keep
+    // their unmodified geometric normals.
     float vegetation_weight = 1.0 - step(7.5, input.material_index);
     float3 vegetation_normal = normalize(float3(
         normal.xy * 2.40, max(0.18, normal.z * 0.70)));
     float3 form_normal = normalize(lerp(normal, vegetation_normal,
                                          vegetation_weight));
+    float raised_detail_weight = saturate(resource_weight + unit_weight);
+    float horizontal_gain = 1.0 + resource_weight * 0.95 + unit_weight * 1.10;
+    float vertical_gain = 1.0 - resource_weight * 0.18 - unit_weight * 0.22;
+    float3 raised_detail_normal = normalize(float3(
+        normal.xy * horizontal_gain, max(0.18, normal.z * vertical_gain)));
+    form_normal = normalize(lerp(form_normal, raised_detail_normal,
+                                  raised_detail_weight));
     float signed_diffuse = saturate(dot(form_normal, light_direction));
     float diffuse = l13a_layout > 0.5
         ? signed_diffuse : abs(dot(normal, light_direction));
@@ -980,6 +1029,15 @@ float4 PSMain(PixelInput input) : SV_TARGET
                       frame_cast_shadow_strength() * 0.74;
         clip(alpha - 0.004);
         return float4(0.018, 0.022, 0.030, alpha);
+    }
+    if (input.panel > 0.5 && input.surface_kind > 10.5 && input.surface_kind < 11.5)
+    {
+        // Animated unit bodies cast their actual projected source triangles.
+        // Multiple facing surfaces naturally build a denser umbra while thin
+        // limbs, weapons, turrets, mounts, and attachments retain their shape.
+        float alpha = frame_cast_shadow_strength() * 0.42;
+        clip(alpha - 0.004);
+        return float4(0.010, 0.014, 0.019, alpha);
     }
     if (input.panel > 0.5 && input.surface_kind > 7.5 && input.surface_kind < 8.5)
         return float4(0.09, 0.13, 0.30, biq_layout > 0.5 ? 0.20 : 0.58);

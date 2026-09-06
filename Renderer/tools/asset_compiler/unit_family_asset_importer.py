@@ -201,7 +201,7 @@ def load_owner_color_overrides(path: Path | None) -> dict[str, dict[str, Any]]:
     for asset_id, record in overrides.items():
         if not isinstance(asset_id, str) or not asset_id.startswith("unit/") or not isinstance(record, dict):
             raise ValueError("unit owner-color override has an invalid logical asset ID")
-        if record.get("mode") not in {"none", "source_mask", "authored_mask"}:
+        if record.get("mode") not in {"none", "source_mask", "authored_mask", "solid_color"}:
             raise ValueError(f"unit owner-color override {asset_id} has an invalid mode")
         strength = record.get("strength", 0.0)
         if not isinstance(strength, (int, float)) or not 0.0 <= strength <= 1.0:
@@ -212,6 +212,26 @@ def load_owner_color_overrides(path: Path | None) -> dict[str, dict[str, Any]]:
         if not isinstance(palette_index, int) or not 0 <= palette_index < 64:
             raise ValueError(f"unit owner-color override {asset_id} has an invalid palette index")
     return overrides
+
+
+def default_owner_color_for_component(
+    component: dict[str, Any], tint_strength: float
+) -> dict[str, Any]:
+    """Translate Civ VI's generic tint semantics into pack-local mask metadata."""
+    if component.get("tint") != "USE_CIV_COLOR":
+        return {
+            "mode": "none",
+            "mask_source": "constant_one",
+            "strength": 0.0,
+            "representative_palette_index": 6,
+        }
+    dedicated_geometry = component.get("role") == "TeamColor"
+    return {
+        "mode": "solid_color" if dedicated_geometry else "source_mask",
+        "mask_source": "constant_one" if dedicated_geometry else "base_color_alpha_inverse",
+        "strength": tint_strength,
+        "representative_palette_index": 6,
+    }
 
 
 def _physical_package(assets_root: Path, content: str, logical: str) -> Path:
@@ -303,20 +323,8 @@ def compile_unit_families(
             asset_id = f"unit/{slug}/{key}"
             owner_color = owner_color_overrides.get(asset_id)
             if owner_color is None:
-                owner_color = (
-                    {
-                        "mode": "source_mask",
-                        "mask_source": "base_color_alpha_inverse",
-                        "strength": default_tint_strength,
-                        "representative_palette_index": 6,
-                    }
-                    if component["tint"] == "USE_CIV_COLOR"
-                    else {
-                        "mode": "none",
-                        "mask_source": "constant_one",
-                        "strength": 0.0,
-                        "representative_palette_index": 6,
-                    }
+                owner_color = default_owner_color_for_component(
+                    component, default_tint_strength
                 )
             component_path = pack / asset["component"]
             component_document = json.loads(component_path.read_text(encoding="utf-8"))

@@ -603,6 +603,8 @@ int main(int argc, char ** argv) {
         approved_tiles[1].route_style = 2;
         approved_tiles[2].road_mask = 1u;
         approved_tiles[2].route_style = 2;
+        approved_tiles[2].improvement_flags |= C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+        approved_tiles[2].irrigation_mask = 15u;
         approved_tiles[3].railroad_mask = 1u;
         approved_tiles[4].railroad_mask = 1u;
         approved_tiles[5].resource_id = 4;
@@ -652,7 +654,7 @@ int main(int argc, char ** argv) {
                     approved_output.replacement_tile_count);
                 for (c3x_renderer_u32 index = 0; index < approved_output.fallback_tile_count; ++index)
                     std::fprintf(stderr, " fallback_index=%u\n", approved_output.fallback_tile_indices[index]);
-                return fail("approved L9-L18 category fixture did not render with exclusive ownership");
+                return fail("approved L9-L19 category fixture did not render with exclusive ownership");
             }
             c3x_renderer_u32 const * flags = approved_output.replacement_tile_flags;
             if ((flags[0] & (C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED |
@@ -670,6 +672,7 @@ int main(int argc, char ** argv) {
                 (flags[5] & C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED) == 0 ||
                 (flags[3] & C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED) == 0 ||
                 (flags[6] & C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED) == 0 ||
+                (flags[2] & C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED) == 0 ||
                 flags[10] != (C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED |
                               C3X_RENDERER_TILE_CUSTOM_FEATURE_REPLACED) ||
                 flags[11] != (C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED |
@@ -683,7 +686,7 @@ int main(int argc, char ** argv) {
                 approved_output.height;
             zoom_hashes[zoom] = hash_pixels(approved_output.bgra_pixels, approved_bytes);
             if (zoom_hashes[zoom] == 0)
-                return fail("approved L9-L18 zoom fixture was blank");
+                return fail("approved L9-L19 zoom fixture was blank");
 
             approved_tiles[10].has_effect = 1;
             approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
@@ -815,6 +818,38 @@ int main(int argc, char ** argv) {
         if (render(&approved_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
             hash_pixels(approved_output.bgra_pixels, ownership_bytes) != owned_hash)
             return fail("approved mine fixture did not restore deterministically");
+        approved_tiles[2].improvement_flags &= ~C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&approved_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
+            (approved_output.frame_invalidation_flags & C3X_RENDERER_INVALIDATE_SCENE) == 0 ||
+            (approved_output.replacement_tile_flags[2] &
+             C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED) != 0 ||
+            hash_pixels(approved_output.bgra_pixels, ownership_bytes) == owned_hash)
+            return fail("approved farm body was absent or retained after ownership changed");
+        approved_tiles[2].improvement_flags |= C3X_RENDERER_IMPROVEMENT_IRRIGATION;
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        int farm_restore_result = render(&approved_frame, &approved_output);
+        if (farm_restore_result != C3X_RENDERER_RESULT_OK)
+            return fail("approved farm fixture restore render failed");
+        std::uint64_t farm_restore_hash = hash_pixels(
+            approved_output.bgra_pixels, ownership_bytes);
+        if (farm_restore_hash != owned_hash)
+            return fail("approved farm fixture did not restore deterministically");
+        approved_tiles[2].irrigation_mask = 7u;
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        int farm_topology_result = render(&approved_frame, &approved_output);
+        if (farm_topology_result != C3X_RENDERER_RESULT_OK)
+            return fail("farm topology render failed");
+        std::uint64_t farm_topology_hash = hash_pixels(
+            approved_output.bgra_pixels, ownership_bytes);
+        if ((approved_output.frame_invalidation_flags & C3X_RENDERER_INVALIDATE_SCENE) == 0 ||
+            farm_topology_hash == owned_hash)
+            return fail("farm topology did not invalidate static terrain");
+        approved_tiles[2].irrigation_mask = 15u;
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&approved_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
+            hash_pixels(approved_output.bgra_pixels, ownership_bytes) != owned_hash)
+            return fail("farm topology fixture did not restore deterministically");
         approved_tiles[11].real_terrain_type = 2;
         approved_tiles[11].feature_flags = 0;
         approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
@@ -938,6 +973,7 @@ int main(int argc, char ** argv) {
                     live_scale_milliseconds,
                     static_cast<long long>(approved_output.renderer_cpu_ticks));
         c3x_renderer_i64 live_scale_cold_ticks = approved_output.renderer_cpu_ticks;
+        c3x_renderer_u32 live_scale_hits = approved_output.cache_hits;
         for (c3x_renderer_tile_v1 & tile : live_scale_tiles) {
             tile.anchor_x += 3;
             tile.anchor_y -= 2;
@@ -946,8 +982,12 @@ int main(int argc, char ** argv) {
         if (render(&live_scale_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
             (approved_output.frame_invalidation_flags & C3X_RENDERER_INVALIDATE_SCENE) == 0 ||
             approved_output.renderer_cpu_ticks <= 0 ||
-            approved_output.renderer_cpu_ticks * 2 >= live_scale_cold_ticks)
-            return fail("live-scale pixel scroll did not reuse the bounded shadow field");
+            approved_output.renderer_cpu_ticks * 4 >= live_scale_cold_ticks ||
+            approved_output.cache_hits != live_scale_hits + 1)
+            return fail("live-scale pixel scroll did not reuse world geometry");
+        std::uint64_t translated_scroll_hash = hash_pixels(
+            approved_output.bgra_pixels,
+            static_cast<std::size_t>(approved_output.stride_bytes) * approved_output.height);
         double live_scale_scroll_milliseconds = performance_frequency.QuadPart > 0
             ? static_cast<double>(approved_output.renderer_cpu_ticks) * 1000.0 /
                 static_cast<double>(performance_frequency.QuadPart)
@@ -955,6 +995,13 @@ int main(int argc, char ** argv) {
         std::printf("PERF approved_live_scale_scroll: tiles=400 records=800 milliseconds=%.3f ticks=%lld.\n",
                     live_scale_scroll_milliseconds,
                     static_cast<long long>(approved_output.renderer_cpu_ticks));
+        reset();
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&live_scale_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
+            hash_pixels(approved_output.bgra_pixels,
+                static_cast<std::size_t>(approved_output.stride_bytes) *
+                    approved_output.height) != translated_scroll_hash)
+            return fail("translated geometry cache differs from a cold scrolled rebuild");
 
         output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
         if (render(&frame, &output) != C3X_RENDERER_RESULT_OK)
@@ -1137,7 +1184,7 @@ int main(int argc, char ** argv) {
     reset();
     FreeLibrary(module);
     if (external_definition_mode) {
-        std::printf("PASS approved_terrain_integration: frozen approved L9-L18 terrain, dune, vegetation, marsh, volcano, river, lighting, road, railroad, resource, city, and mine handoffs; authoritative invalidation; exclusive ownership; retained overlays; eight-viewport bounded cache; both zooms; clipping; scrolling; horizontal wrapping; deterministic reset; and hard-failure behavior passed; pixel_hash=%llu.\n",
+        std::printf("PASS approved_terrain_integration: frozen approved L9-L19 terrain, dune, vegetation, marsh, volcano, river, lighting, road, railroad, resource, city, mine, farm, and tundra handoffs; authoritative invalidation; exclusive ownership; retained overlays; eight-viewport bounded cache; both zooms; clipping; scrolling; horizontal wrapping; deterministic reset; and hard-failure behavior passed; pixel_hash=%llu.\n",
                     static_cast<unsigned long long>(first_hash));
         return 0;
     }

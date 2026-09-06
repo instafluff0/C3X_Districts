@@ -1121,9 +1121,10 @@ def check_m6_7_local_approved_terrain_payload() -> dict[str, Any]:
         RENDERER_ROOT / "packs" / "CityComponentsNormalized" / "city_runtime.bin",
         RENDERER_ROOT / "packs" / "CityAdjunctsNormalized" / "wall_runtime.bin",
         RENDERER_ROOT / "packs" / "ImprovementsNormalized" / "mine_runtime.bin",
+        RENDERER_ROOT / "packs" / "ImprovementsNormalized" / "farm_runtime.bin",
     ]
     if any(not path.is_file() for path in required):
-        return skipped("Ignored normalized L9-L18 payloads are unavailable")
+        return skipped("Ignored normalized L9-L19 payloads are unavailable")
     native = run_native_build()
     native_output = native.stdout + native.stderr
     if native.returncode != 0 or "PASS approved_terrain_integration" not in native_output:
@@ -1133,7 +1134,7 @@ def check_m6_7_local_approved_terrain_payload() -> dict[str, Any]:
     if injected.returncode != 0 or "Injected code compiled successfully." not in injected_output:
         return failed(injected_output.strip() or "M6.7 injected ownership bridge compile failed")
     return passed(
-        "Real normalized L9-L18 terrain and object payloads passed both zooms, clipping, scrolling, wrap occurrences, bounded multi-viewport cache/invalidation, reset, exact ownership, and zero native fallback."
+        "Real normalized L9-L19 terrain and object payloads passed both zooms, clipping, scrolling, wrap occurrences, bounded multi-viewport cache/invalidation, reset, exact ownership, and zero native fallback."
     )
 
 

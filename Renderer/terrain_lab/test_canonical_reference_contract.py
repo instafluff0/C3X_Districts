@@ -11,6 +11,7 @@ RUN_L13 = (ROOT / "Renderer" / "terrain_lab" / "RUN_L13.bat").read_text(
 )
 
 EXPECTED = {
+    "Screenshot 2026-09-06 at 6.35.02 AM.png": ((3662, 1962), "bf3d6b85013b2ec0d0de6722bd661a1082d6f599ba7e9bcde4ea65e4539c4041"),
     "daynight.png": ((1608, 1368), "5e210083753c9938478c636815bf50ae6d2f5d82f4fe9cd2a45c33357db65c5a"),
     "desert.png": ((1008, 620), "e270f22003589504e22de2b0f4a7365de8a109e437c44e12b5f21e079ef8b61f"),
     "forest.png": ((660, 502), "4c94f820423486ef056b4a7fc3e41d3f985efc022ff48f3a09dc5bf3b8dee36f"),
@@ -21,6 +22,8 @@ EXPECTED = {
     "river.png": ((1954, 970), "ebfbcc875f4469601b961b609188d4026afbeadac9fdb4c03ff9e0d7726a9766"),
     "roads.png": ((824, 780), "2452e917565a69eadbef8bd972f7a98be09104292be3ac438e778cf15b090817"),
     "sea_and_shore.png": ((3430, 1750), "8a2b7561d5b1fb9a33276196cd5a520c3953373381d2083232d923f75155e3e8"),
+    "unit_texture_and_civ_colors2.png": ((2340, 1202), "63fcbb06414d59f7096d885fc13874c19dfc75d269ab1cb5592c29f70085fcd7"),
+    "unit_texture_and_civ_colors3.png": ((314, 342), "6870763c1d65cf0a3f53752d6551af29615fbdab69401fdf657bbdcb918e566d"),
 }
 
 

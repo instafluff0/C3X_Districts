@@ -15,7 +15,9 @@ from Renderer.preview.render_unit_turntable import (
     _multiply, _rigid_mesh, _skinned_mesh, _transform_point, _transform_vector,
 )
 from Renderer.tools.asset_compiler import normalized_animation, normalized_pose_cache, normalized_skin
-from Renderer.tools.asset_compiler.build_l20_unit_runtime import ACTIONS
+from Renderer.tools.asset_compiler.build_l20_unit_runtime import (
+    ACTIONS, owner_color_style, source_tint_style,
+)
 from Renderer.tools.asset_compiler.build_mine_runtime import (
     MAGIC, bundle_string, group_payload, merged_asset,
 )
@@ -106,9 +108,8 @@ def posed_parts(pack: Path, manifest: dict, recipe: dict, action: str, phase: fl
         for record in node["components"]:
             document = load_json(pack / manifest["assets"][record["asset"]]["component"])
             skeleton = normalized_skin.load_skeleton(pack / document["skeleton"])
-            owner_contract = document.get("owner_color", {})
-            owner = (0 if owner_contract.get("mode") == "none" else
-                     (1 if owner_contract.get("mask_source") == "base_color_alpha_inverse" else 2))
+            owner = owner_color_style(record["asset"], document)
+            source_tint = source_tint_style(document)
             for draw in document["draw_bindings"]:
                 mesh_paths = document.get("meshes", [document.get("mesh")])
                 if document["binding_mode"] == "vertex_skin":
@@ -128,7 +129,7 @@ def posed_parts(pack: Path, manifest: dict, recipe: dict, action: str, phase: fl
                     mesh = load_json(pack / mesh_paths[draw["mesh"]])
                     attachment = document["attachment_point"]
                     profile = SOCKET_PROFILE.get(attachment, {"bone": "Root"})
-                    requested_bone = profile["bone"]
+                    requested_bone = record.get("attachment_bone", profile["bone"])
                     if attachment == "ArmBand" and requested_bone not in driver_names:
                         requested_bone = "LForearm"
                     socket_names = driver_names
@@ -146,7 +147,9 @@ def posed_parts(pack: Path, manifest: dict, recipe: dict, action: str, phase: fl
                 material_paths = document.get("materials", [document.get("material")])
                 material = load_json(pack / material_paths[draw["material"]])
                 texture = material["channels"]["base_color"]["texture"]
-                parts.append((transformed(local_mesh, composition[node_id]), texture, owner))
+                parts.append((
+                    transformed(local_mesh, composition[node_id]), texture, owner, source_tint,
+                ))
     return parts
 
 
@@ -158,7 +161,7 @@ def write_bundle(pack: Path, manifest: dict, slug: str):
         for phase in phases:
             parts = posed_parts(pack, manifest, recipe, action, phase)
             cached[(action, phase)] = parts
-            for _mesh, texture, _owner in parts:
+            for _mesh, texture, _owner, _source_tint in parts:
                 if texture not in textures:
                     textures.append(texture)
     if len(textures) > 8:
@@ -169,14 +172,14 @@ def write_bundle(pack: Path, manifest: dict, slug: str):
     for action, phases in ACTIONS.items():
         for phase_index, phase in enumerate(phases):
             parts = cached[(action, phase)]
-            positions = [vertex["position"] for mesh, _texture, _owner in parts
+            positions = [vertex["position"] for mesh, _texture, _owner, _source_tint in parts
                          for vertex in mesh["vertices"]]
             minimum = [min(position[axis] for position in positions) for axis in range(3)]
             maximum = [max(position[axis] for position in positions) for axis in range(3)]
             center_x = (minimum[0] + maximum[0]) * 0.5
             center_y = (minimum[1] + maximum[1]) * 0.5
             placements = []
-            for part_index, (mesh, texture, owner) in enumerate(parts):
+            for part_index, (mesh, texture, owner, source_tint) in enumerate(parts):
                 for vertex in mesh["vertices"]:
                     position = vertex["position"]
                     vertex["position"] = [
@@ -189,7 +192,7 @@ def write_bundle(pack: Path, manifest: dict, slug: str):
                         bounds[axis * 2 + 1] = max(bounds[axis * 2 + 1], vertex["position"][axis])
                 asset_index = len(assets)
                 assets.append(merged_asset(
-                    f"{slug}:{action}:{phase_index}:part_{part_index}:t{owner}",
+                    f"{slug}:{action}:{phase_index}:part_{part_index}:t{owner}:n{source_tint}",
                     textures.index(texture), 0, [mesh]))
                 placements.append((asset_index, 1.0))
             groups.append(group_payload(f"{action}_{phase_index}", placements))

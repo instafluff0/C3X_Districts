@@ -1,6 +1,66 @@
 {
   "schema": "c3x.unit_owner_color_overrides.v0",
   "overrides": {
+    "unit/archer/armor": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.58,
+      "representative_palette_index": 6
+    },
+    "unit/catapult_operator/armor": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.58,
+      "representative_palette_index": 6
+    },
+    "unit/catapult_operator/hair": {
+      "mode": "none",
+      "mask_source": "constant_one",
+      "strength": 0.0,
+      "representative_palette_index": 6
+    },
+    "unit/fighter/body": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.58,
+      "representative_palette_index": 6
+    },
+    "unit/galley/ship": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.58,
+      "representative_palette_index": 6
+    },
+    "unit/great_general_classical_mount/armor": {
+      "mode": "authored_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.35,
+      "representative_palette_index": 6
+    },
+    "unit/great_general_classical_rider/armor": {
+      "mode": "authored_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.58,
+      "representative_palette_index": 6
+    },
+    "unit/horseman_mount/armor": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.58,
+      "representative_palette_index": 6
+    },
+    "unit/horseman_rider/armor": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.82,
+      "representative_palette_index": 6
+    },
+    "unit/horseman_rider/hats": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.58,
+      "representative_palette_index": 6
+    },
     "unit/infantry/armband": {
       "mode": "authored_mask",
       "mask_source": "constant_one",
@@ -11,6 +71,30 @@
       "mode": "authored_mask",
       "mask_source": "base_color_alpha_inverse",
       "strength": 0.35,
+      "representative_palette_index": 6
+    },
+    "unit/swordsman/armor": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.58,
+      "representative_palette_index": 6
+    },
+    "unit/swordsman/hats": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.58,
+      "representative_palette_index": 6
+    },
+    "unit/swordsman/shield": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.82,
+      "representative_palette_index": 6
+    },
+    "unit/tank_gunner/armband": {
+      "mode": "source_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.82,
       "representative_palette_index": 6
     }
   }

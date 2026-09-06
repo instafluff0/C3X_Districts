@@ -34,6 +34,14 @@
     "tile_count": 192,
     "audit": "terrain_lab/L16_RESOURCE_AUDIT.md"
   },
+  "lighting_revision": {
+    "approved_on": "2026-09-06",
+    "reason": "land-resource self/face and cast shadows were too subtle in the complete beauty scene",
+    "contract": "authored normals receive map-scale face emphasis; source-scaled land-resource cast footprints have a seven-pixel minimum and use the shared L13A direction/strength; fish cast no false water-surface shadow",
+    "complete_no_units_output": "preview/out/terrain_lab/terrain_beauty_l21_complete_no_units.bmp",
+    "complete_no_units_sha256": "6582747ec96995cca34cc8de996305ec7ccf1d58732562a2042988aa488ddfd0",
+    "verification": "terrain_lab/test_l16_resource_contract.py"
+  },
   "ownership_intent": {
     "map_resource_bodies": "custom_when_renderer_enabled_after_I16",
     "resource_visibility": "authoritative Civ III visibility state",

@@ -102,7 +102,10 @@
       "member_index": 0,
       "parent": {
         "id": "vehicle",
-        "variation": "A"
+        "variation": "A",
+        "component_attachment_bones": {
+          "TeamColor": ["tankAll", "tankBody"]
+        }
       },
       "children": [
         {

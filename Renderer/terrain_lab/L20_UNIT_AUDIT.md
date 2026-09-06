@@ -18,17 +18,66 @@ Status: complete; deterministic 192-tile alternate-skin candidate critically ins
 - Units use the accepted shared face/contact/cast lighting. They remain non-emissive at night; existing source-authored city and infrastructure emission is preserved unchanged.
 - The no-unit control is byte-identical to the approved L19B noon render, proving the unit pass does not alter earlier layers.
 
+## Civilization-color refinement
+
+The user reopened L20 on 2026-09-06 against the registered canonical infantry,
+cavalry, naval, and vehicle references. The earlier Lab shader flattened every
+active mask toward one hue and discarded component-authored strength, which made
+some aircraft, ships, and clothing look dipped in player color. The accepted
+revision keeps the source alpha mask per material, encodes strong (`0.82`),
+medium (`0.58`), and restrained (`0.35`) authoring strengths, and maps neutral
+source value through a dark-to-light owner-color ramp with a small source-detail
+contribution. Skin, horse bodies, hair, wood, and steel remain neutral while
+shields, armbands, barding, sails/hull markings, and dedicated vehicle panels
+carry the readable owner cue.
+
+The Great General's rider and mount armor receive explicit source-independent
+pack-authoring masks because the source recipe supplied no active ownership cue;
+the false-positive Catapult operator hair mask is disabled. These decisions live
+in generic per-component metadata rather than unit-name shader branches. Close,
+full-scene, night, action, eight-facing, and reduced-scale inspection confirmed
+four distinct owner samples without changing unit scale, animation, placement,
+lighting, shadows, or any non-unit layer. Two unchanged native runs were
+byte-identical.
+
+The first owner-color revision exposed a second source-material problem during
+native inspection: several Civ VI base textures are intentionally near-white
+calibration maps whose retained ArtDef `Tint` name supplies their actual color.
+Ignoring that metadata left tanks and infantry looking unnaturally white. The
+generic component pipeline now carries a separate source-tint marker for
+`BaseMale_SkinColor_Caucasian`, `GreatPeople_Military`, `Horse_Default`,
+`Horse_Secondary`, `Infantry_European`, `Vehicle_Woodland`, and `Wood`. The Lab
+applies the exact selected installed `Units.artdef` RGB color to the textured
+material before the independent civilization-color mask. Tanks therefore read
+as olive vehicles, infantry as khaki, skin as warm skin, and horses/wood as
+their authored browns while folds, recesses, owner panels, normals, and shadows
+remain visible. A hierarchical marker decoder prevents lower decimal fields
+from carrying into higher fields. Native close, complete, reduced, and night
+inspection confirms the white-calibration failure is gone.
+
+## Shared-shadow correction
+
+The user reopened the final beauty gate on 2026-09-06 because unit lighting was
+technically present but too subtle at map scale. Every ordinary, compound,
+worker, and Army body now preserves its authored normals while receiving the
+same horizontal face emphasis used for other small raised forms. Every visible
+formation member has a source-scaled cast/contact footprint with a six-pixel
+minimum and the exact shared L13A direction and time-of-day strength. The
+corrected complete noon witness is
+`0d516a393ed529eb839ef037a45999a0a224f29877739e1196cb49140c2300db`;
+two unchanged L21 runs were byte-identical.
+
 ## Deterministic evidence
 
 Two final unchanged `python3 Renderer/tools/renderer_dev.py lab` runs produced byte-identical outputs:
 
-- noon complete: `cc13bf4fdfe0debaefca3c3ab1e8f4609f5370b40e75902118db510c90c7f6e7`
-- midnight complete: `ed6ef1ec2d212442ed928cb935533cebd8255d2094d54d2f4bfe24d17022ae57`
-- reduced: `12bc58fa16a53828358396da95633fad68d17847cc341943370f59154829f9b2`
-- no units: `f9ede652e3eb47dbcbb8f0943ef8f2654a6f65735094a69dae35136a880d7fa1`
-- unit isolation: `bd5347e8bda69362e5553060b3ff75a532cec640e851ec5f219d7df5a0c2b10e`
-- eight-facing turntable: `de282e8225d6881417506115ab857b3e99148c8b7363241ce5aa1b4ddd29fdeb`
-- action/worker matrix: `20647804ec000cf8f8764bae3a8121f239693bec7903fb68eae3a869562f645a`
+- noon complete: `8814a86a6886b941a266da399eb9c53a6a88a20cfc6219c911bba5730614723e`
+- midnight complete: `c17d8d4f20a8732d4544a0b33d489f2cbde54e1359b561b21b2b6af8e5b580e8`
+- reduced: `e2703a52bc82f75f141b02aea94b7d1e219f33a0ac934be21c51aeafa6f53036`
+- no units: `6582747ec96995cca34cc8de996305ec7ccf1d58732562a2042988aa488ddfd0`
+- unit isolation: `d2069f5030127ca551a358d80dd70e199ccfefcc2974f0e0c9686fa240ea502b`
+- eight-facing turntable: `3ccef1c3dcc8c1fabe4126967e5484b2c4170759ce87691e8111604c8113cb98`
+- action/worker matrix: `bf9caae116f76e751976592a01bdcb46e3b22ac391096fd2448add15fd7acb38`
 - Lab scenario: `b85d570959920564b2baa42f04ffc0abdd3ff7c528d5223864d55779aefe643b`
 
 The no-unit hash exactly matches approved L19B noon.

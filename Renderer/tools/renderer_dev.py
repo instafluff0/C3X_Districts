@@ -139,7 +139,7 @@ def integrated_terrain_preview_results() -> list[dict[str, Any]]:
 
 
 def approved_terrain_smoke_result() -> dict[str, Any]:
-    """Replay the complete approved L9-L18 production payload in its own VM command.
+    """Replay the complete approved L9-L19 production payload in its own VM command.
 
     Parallels can stop relaying output from one long remote command after the
     compile/synthetic-smoke phase. Keeping this licensed-payload replay in a
@@ -159,10 +159,11 @@ def approved_terrain_smoke_result() -> dict[str, Any]:
         "CityComponentsNormalized/city_runtime.bin",
         "CityAdjunctsNormalized/wall_runtime.bin",
         "ImprovementsNormalized/mine_runtime.bin",
+        "ImprovementsNormalized/farm_runtime.bin",
     )
     missing = [entry for entry in required if not (RENDERER_ROOT / "packs" / entry).is_file()]
     if missing:
-        detail = "ignored normalized L9-L18 payloads are unavailable: " + ", ".join(missing)
+        detail = "ignored normalized L9-L19 payloads are unavailable: " + ", ".join(missing)
         print(f"SKIP approved_terrain_integration: {detail}")
         return {"name": "approved_terrain_integration", "status": "skip", "reason": detail}
     command = (

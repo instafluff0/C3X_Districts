@@ -55,6 +55,11 @@ class CompoundUnitAssetImporterTests(unittest.TestCase):
             "recipe_data_only_no_unit_name_branches",
             source["instance_contract"]["runtime_dispatch"],
         )
+        tank = source["compositions"][3]
+        self.assertEqual(
+            ["tankAll", "tankBody"],
+            tank["parent"]["component_attachment_bones"]["TeamColor"],
+        )
         general = source["compositions"][1]
         self.assertEqual("defend", general["actions"]["attack"]["alias"])
         self.assertEqual("idle", general["actions"]["victory"]["alias"])
@@ -157,6 +162,12 @@ class CompoundUnitAssetImporterTests(unittest.TestCase):
             tank = json.loads((root / "pack/units/tank_composition.json").read_text(encoding="utf-8"))
             self.assertEqual("RiderAttach", horse["joints"][0]["parent_bone"])
             self.assertEqual("GunnerAttach", tank["joints"][0]["parent_bone"])
+            team_color = next(
+                component
+                for component in tank["nodes"]["vehicle"]["components"]
+                if component["role"] == "TeamColor"
+            )
+            self.assertEqual("tankAll", team_color["attachment_bone"])
             self.assertEqual("atomic_complete_unit_body", horse["instance_contract"]["failure"])
             self.assertEqual(
                 {"idle", "fidget", "move", "fortify", "attack", "defend", "death", "victory"},

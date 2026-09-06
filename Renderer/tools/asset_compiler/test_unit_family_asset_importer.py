@@ -7,6 +7,7 @@ from pathlib import Path
 
 from Renderer.tools.asset_compiler.unit_family_asset_importer import (
     _initial_entry,
+    default_owner_color_for_component,
     load_action_contract,
     load_owner_color_contract,
     load_owner_color_overrides,
@@ -15,6 +16,22 @@ from Renderer.tools.asset_compiler.unit_family_asset_importer import (
 
 
 class UnitFamilyAssetImporterTests(unittest.TestCase):
+    def test_dedicated_team_color_geometry_uses_a_generic_solid_mask(self) -> None:
+        dedicated = default_owner_color_for_component(
+            {"role": "TeamColor", "tint": "USE_CIV_COLOR"}, 0.82
+        )
+        mixed = default_owner_color_for_component(
+            {"role": "Armor", "tint": "USE_CIV_COLOR"}, 0.82
+        )
+        neutral = default_owner_color_for_component(
+            {"role": "Root", "tint": "Vehicle_Woodland"}, 0.82
+        )
+        self.assertEqual(("solid_color", "constant_one"),
+                         (dedicated["mode"], dedicated["mask_source"]))
+        self.assertEqual(("source_mask", "base_color_alpha_inverse"),
+                         (mixed["mode"], mixed["mask_source"]))
+        self.assertEqual("none", neutral["mode"])
+
     def test_strategy_spans_unique_non_warrior_archetypes_and_basic_actions(self) -> None:
         strategy = load_strategy()
         self.assertEqual(

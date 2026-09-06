@@ -143,16 +143,15 @@ shoreline clipping. The same generic pass adds restrained grassland, plains,
 and grassland-hill surface clutter. The rejected transparency, whole-atlas,
 oversized-cloud, and every-cell repetition candidates are not preserved.
 
-## Next Step: I19
+## Next Step: L20
 
-L21 is complete and approved under the user's explicit autonomous-review
-authorization. The frozen 192-tile alternate-skin beauty handoff composes every
-approved L9-L20 system at noon, sunset, midnight, sunrise, and both Civ III zoom
-bases. Its no-unit control is byte-identical to L19B/L20, and two unchanged Lab
-runs produced byte-identical outputs after 121 passing tests. Renderer Lab is
-therefore complete through L21. The sole ready project step is now I19, owned by
-Game Integration, consuming `handoffs/L19_farms_tundra.json` via
-`python3 Renderer/tools/renderer_dev.py integration`.
+Direct canonical tank comparison reopened L20: the neutral woodland body is now
+correctly olive, but the dedicated owner-color plates remain gray-green because
+their standalone TeamColor geometry incorrectly reused the source texture's
+alpha as a mask. The sole ready task treats that already-localized geometry as
+the constant owner mask, reruns the 192-tile L20 matrix, and proves every
+non-tank unit plus the no-unit witness unchanged. L21 and Integration-owned I19
+remain blocked until the correction is frozen.
 
 Ahead of that visual gate, all 24 animated clutter bodies now compile with
 model-aware pose caches, including single-animal elephant selection and one
@@ -236,14 +235,14 @@ instead of comparing unrelated map regions.
 13a. L13A complete / I13A handoff available — the approved alternate-skin lighting gate covers shared shadows, coherent face and cast direction, water response, non-visual emissive activation, and deterministic noon/sunset/midnight/sunrise fixtures at both Civ III zoom scales. Visible city lights remain owned by L17.
 14. L14 / I14 complete — the approved 98-node / 109-edge Lab road graph uses gently curved exact-node centerlines, source-backed continuity coverage, normalized bridge bodies, wrap continuity, four styles, and pillage coverage without changing the approved L13A control.
 15. L15 / I15 complete — the approved connected railroad subset uses narrow authored sleepers/ballast, paired source-colored rails, exact river bridges, road coexistence, relief, wrap, and deterministic both-zoom evidence without changing L14.
-16. L16 / I16 complete — the approved normalized resource gate covers strategic, luxury, land-bonus, and aquatic-bonus bodies, corrected Civ III-scale clustering, shared lighting/grounding, visibility suppression, and deterministic both-zoom evidence without changing L15.
+16. L16 / I16 complete — the approved normalized resource gate covers strategic, luxury, land-bonus, and aquatic-bonus bodies, corrected Civ III-scale clustering, visibility suppression, and deterministic both-zoom evidence without changing L15. Its final L21 lighting revision gives every land resource authored-normal face separation and a readable source-scaled cast/contact shadow while preserving submerged fish without a false water-surface shadow.
 17. L17 / I17 complete — the approved normalized city gate covers four eras, all three Civ III size bands, culture/owner metadata, wall/capital states, compact source-backed compositions, retained-label clearance, shared lighting, and source-authored night emissives without changing L16.
 18. L18 / I18 complete — the approved recursive normalized mine gate covers preindustrial/industrial families, three variants, terrain-following excavation, mineral and relief adjacency, coherent compound shadows, source emissives, and deterministic isolation without changing L17.
 19. L19 complete / I19 handoff available — the approved crop-first farm gate covers all sixteen irrigation masks, four eras, mixed terrain and adjacency cases, source-only sparse accents, and the independent alternate-skin tundra material path without changing L18 when farms are disabled.
 19a. L19A complete / I19A handoff available — the approved source-backed hut/colony gate covers viewer-hidden huts, the deterministic eight-to-three variant map, all four colony eras and owners, extraterritorial ownership, resource coexistence, both zooms, and shared lighting without changing L19 when disabled.
 19b. L19B complete / I19B handoff available — the approved pass covers all remaining persistent tile infrastructure, both zooms, shared lighting, and source-only night emission without changing L19A when disabled.
-20. L20 complete / I20 handoff available — representative ordinary, mounted, crewed, vehicle, naval, air, worker, and Army bodies pass the 192-tile/two-zoom/action matrix without regressing L19B.
-21. L21 complete: the complete approved alternate-skin beauty scene passed noon, sunset, midnight, sunrise, reduced-zoom, no-unit regression, critical visual review, and byte-identical replay.
+20. L20 complete / I20 handoff available — representative ordinary, mounted, crewed, vehicle, naval, air, worker, and Army bodies pass the 192-tile/two-zoom/action matrix without regressing L19B. Its final L21 lighting revision gives every visible formation member authored-normal face separation and a readable source-scaled cast/contact shadow using the shared environment direction.
+21. L21 complete: the corrected complete alternate-skin beauty scene passed noon, sunset, midnight, sunrise, reduced-zoom, no-unit regression, critical visual review, 123 tests, and byte-identical replay.
 
 Offline L14/L15 intake is prepared ahead without advancing either gate. The
 source-independent route packs now cover four road stages, railroad ballast and

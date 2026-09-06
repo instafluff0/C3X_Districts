@@ -20,6 +20,20 @@ from Renderer.tools.asset_compiler.unit_family_action_validator import SOCKET_PR
 
 
 UNITS = ("archer", "swordsman", "infantry", "fighter", "galley")
+OWNER_COLOR_OVERRIDES = json.loads(
+    Path(__file__).with_name("unit_family_owner_color_overrides.json").read_text(
+        encoding="utf-8"
+    )
+)["overrides"]
+SOURCE_TINT_CODES = {
+    "BaseMale_SkinColor_Caucasian": 1,
+    "GreatPeople_Military": 2,
+    "Horse_Default": 3,
+    "Horse_Secondary": 4,
+    "Infantry_European": 5,
+    "Vehicle_Woodland": 6,
+    "Wood": 7,
+}
 ACTIONS = {
     "idle": (0.37,),
     "fidget": (0.61,),
@@ -54,6 +68,22 @@ def component_document(pack: Path, manifest: dict, asset_id: str):
     return load_json(pack / manifest["assets"][asset_id]["component"])
 
 
+def owner_color_style(asset_id: str, document: dict) -> int:
+    """Encode mask source and authored strength in the Lab material marker."""
+    contract = OWNER_COLOR_OVERRIDES.get(asset_id, document.get("owner_color", {}))
+    if contract.get("mode") == "none" or float(contract.get("strength", 0.0)) <= 0.0:
+        return 0
+    source_code = 1 if contract.get("mask_source") == "base_color_alpha_inverse" else 2
+    strength = float(contract.get("strength", 0.0))
+    tier_offset = 0 if strength >= 0.70 else (2 if strength >= 0.46 else 4)
+    return source_code + tier_offset
+
+
+def source_tint_style(document: dict) -> int:
+    """Encode the named Civ VI material tint retained by the generic component."""
+    return SOURCE_TINT_CODES.get(document.get("tint"), 0)
+
+
 def posed_parts(pack: Path, manifest: dict, recipe: dict, action: str, phase: float):
     animation = manifest["animations"][recipe["actions"][action]]
     clip = normalized_animation.load_clip(pack / animation["clip"])
@@ -86,9 +116,8 @@ def posed_parts(pack: Path, manifest: dict, recipe: dict, action: str, phase: fl
         asset_id = record["asset"]
         document = documents[asset_id]
         skeleton = skeletons[asset_id]
-        owner_contract = document.get("owner_color", {})
-        owner = (0 if owner_contract.get("mode") == "none" else
-                 (1 if owner_contract.get("mask_source") == "base_color_alpha_inverse" else 2))
+        owner = owner_color_style(asset_id, document)
+        source_tint = source_tint_style(document)
         for binding in document["draw_bindings"]:
             mesh_paths = document.get("meshes")
             if mesh_paths is None:
@@ -111,7 +140,7 @@ def posed_parts(pack: Path, manifest: dict, recipe: dict, action: str, phase: fl
             material_path = material_paths[binding["material"]]
             material = load_json(pack / material_path)
             texture = material["channels"]["base_color"]["texture"]
-            parts.append((posed, texture, owner))
+            parts.append((posed, texture, owner, source_tint))
     return parts
 
 
@@ -123,7 +152,7 @@ def write_unit_bundle(pack: Path, manifest: dict, slug: str):
         for phase in phases:
             parts = posed_parts(pack, manifest, recipe, action, phase)
             cached[(action, phase)] = parts
-            for _mesh, texture, _owner in parts:
+            for _mesh, texture, _owner, _source_tint in parts:
                 if texture not in textures:
                     textures.append(texture)
     if len(textures) > 8:
@@ -137,13 +166,13 @@ def write_unit_bundle(pack: Path, manifest: dict, slug: str):
         for phase_index, phase in enumerate(phases):
             placements = []
             group_parts = cached[(action, phase)]
-            positions = [vertex["position"] for mesh, _texture, _owner in group_parts
+            positions = [vertex["position"] for mesh, _texture, _owner, _source_tint in group_parts
                          for vertex in mesh["vertices"]]
             minimum = [min(position[axis] for position in positions) for axis in range(3)]
             maximum = [max(position[axis] for position in positions) for axis in range(3)]
             center_x = (minimum[0] + maximum[0]) * 0.5
             center_y = (minimum[1] + maximum[1]) * 0.5
-            for part_index, (mesh, texture, owner) in enumerate(group_parts):
+            for part_index, (mesh, texture, owner, source_tint) in enumerate(group_parts):
                 for vertex in mesh["vertices"]:
                     position = vertex["position"]
                     vertex["position"] = [
@@ -156,7 +185,7 @@ def write_unit_bundle(pack: Path, manifest: dict, slug: str):
                         bounds[axis * 2 + 1] = max(bounds[axis * 2 + 1], vertex["position"][axis])
                 asset_index = len(assets)
                 assets.append(merged_asset(
-                    f"{slug}:{action}:{phase_index}:part_{part_index}:t{owner}",
+                    f"{slug}:{action}:{phase_index}:part_{part_index}:t{owner}:n{source_tint}",
                     textures.index(texture), 0, [mesh]))
                 placements.append((asset_index, 1.0))
             groups.append(group_payload(f"{action}_{phase_index}", placements))
@@ -189,9 +218,8 @@ def worker_parts(pack: Path, manifest: dict, recipe: dict, clip_path: Path,
         pose = normalized_skin.sample_pose(
             skeleton, clip, group_index, clip.duration * phase, loop)
         worlds = normalized_skin.world_matrices(skeleton, pose)
-        owner_contract = document.get("owner_color", {})
-        owner = (0 if owner_contract.get("mode") == "none" else
-                 (1 if owner_contract.get("mask_source") == "base_color_alpha_inverse" else 2))
+        owner = owner_color_style(asset_id, document)
+        source_tint = source_tint_style(document)
         for binding in document["draw_bindings"]:
             mesh_paths = document.get("meshes", [document.get("mesh")])
             mesh = normalized_skin.load_mesh(
@@ -199,7 +227,7 @@ def worker_parts(pack: Path, manifest: dict, recipe: dict, clip_path: Path,
             material_paths = document.get("materials", [document.get("material")])
             material = load_json(pack / material_paths[binding["material"]])
             texture = material["channels"]["base_color"]["texture"]
-            parts.append((_skinned_mesh(mesh, skeleton, worlds), texture, owner))
+            parts.append((_skinned_mesh(mesh, skeleton, worlds), texture, owner, source_tint))
     return parts
 
 
@@ -218,7 +246,7 @@ def write_worker_bundle(pack: Path, manifest: dict, worker_pack: Path):
                     f"{clip_name}.c3anim", action in ("work_ground", "work_heavy", "work_cut"),
                     phase)
             cached[(action, phase)] = parts
-            for _mesh, texture, _owner in parts:
+            for _mesh, texture, _owner, _source_tint in parts:
                 if texture not in textures:
                     textures.append(texture)
     assets, groups = [], []
@@ -226,14 +254,14 @@ def write_worker_bundle(pack: Path, manifest: dict, worker_pack: Path):
     for action, (_source, _clip_name, phases) in WORKER_ACTIONS.items():
         for phase_index, phase in enumerate(phases):
             parts = cached[(action, phase)]
-            positions = [vertex["position"] for mesh, _texture, _owner in parts
+            positions = [vertex["position"] for mesh, _texture, _owner, _source_tint in parts
                          for vertex in mesh["vertices"]]
             minimum = [min(position[axis] for position in positions) for axis in range(3)]
             maximum = [max(position[axis] for position in positions) for axis in range(3)]
             center_x = (minimum[0] + maximum[0]) * 0.5
             center_y = (minimum[1] + maximum[1]) * 0.5
             placements = []
-            for part_index, (mesh, texture, owner) in enumerate(parts):
+            for part_index, (mesh, texture, owner, source_tint) in enumerate(parts):
                 for vertex in mesh["vertices"]:
                     position = vertex["position"]
                     vertex["position"] = [position[0] - center_x,
@@ -244,7 +272,7 @@ def write_worker_bundle(pack: Path, manifest: dict, worker_pack: Path):
                         bounds[axis * 2 + 1] = max(bounds[axis * 2 + 1], vertex["position"][axis])
                 asset_index = len(assets)
                 assets.append(merged_asset(
-                    f"worker:{action}:{phase_index}:part_{part_index}:t{owner}",
+                    f"worker:{action}:{phase_index}:part_{part_index}:t{owner}:n{source_tint}",
                     textures.index(texture), 0, [mesh]))
                 placements.append((asset_index, 1.0))
             groups.append(group_payload(f"{action}_{phase_index}", placements))

@@ -319,6 +319,7 @@ struct VertexInput
     float2 authored_relief : TEXCOORD10;
     float shore_distance : TEXCOORD11;
     float4 river_data : TEXCOORD12;
+    float material_tundra : TEXCOORD13;
 };
 
 struct PixelInput
@@ -338,6 +339,7 @@ struct PixelInput
     float shore_distance : TEXCOORD10;
     float4 river_data : TEXCOORD11;
     float active_effect : TEXCOORD12;
+    float material_tundra : TEXCOORD13;
 };
 
 PixelInput VSMain(VertexInput input)
@@ -358,6 +360,7 @@ PixelInput VSMain(VertexInput input)
     output.shore_distance = input.shore_distance;
     output.river_data = input.river_data;
     output.active_effect = -1.0;
+    output.material_tundra = input.material_tundra;
     return output;
 }
 
@@ -1274,18 +1277,22 @@ float4 PSMain(PixelInput input) : SV_TARGET
     if (biq_layout > 0.5)
     {
         float4 weights = input.material_weights;
+        float tundra_weight = input.material_tundra;
         if (marsh_enabled < 0.5)
         {
             weights.x += weights.w;
             weights.w = 0.0;
         }
-        weights /= max(0.001, dot(weights, 1.0));
+        float material_total = max(0.001, dot(weights, 1.0) + tundra_weight);
+        weights /= material_total;
+        tundra_weight /= material_total;
         float3 grass = base_color_texture.Sample(material_sampler, input.uv).rgb;
         float3 plains = plains_base_texture.Sample(material_sampler, input.uv).rgb;
         float3 desert = desert_base_texture.Sample(material_sampler, input.uv).rgb;
         float3 marsh = marsh_base_texture.Sample(material_sampler, input.uv).rgb;
+        float3 tundra = feature_base_texture_4.Sample(material_sampler, input.uv).rgb;
         albedo = grass * weights.x + plains * weights.y + desert * weights.z +
-                 marsh * weights.w;
+                 marsh * weights.w + tundra * tundra_weight;
         float grass_scale = abs(input.real_terrain - 5.0) < 0.25 ? 3.85 : 4.65;
         float4 grass_clutter = sample_land_clutter(
             grassland_decal_base_texture, world_position, grass_scale,
@@ -1569,8 +1576,11 @@ float4 PSMain(PixelInput input) : SV_TARGET
         if (biq_layout > 0.5 && input.surface_kind < 1.5)
         {
             float4 weights = input.material_weights;
+            float tundra_weight = input.material_tundra;
             if (marsh_enabled < 0.5) { weights.x += weights.w; weights.w = 0.0; }
-            weights /= max(0.001, dot(weights, 1.0));
+            float material_total = max(0.001, dot(weights, 1.0) + tundra_weight);
+            weights /= material_total;
+            tundra_weight /= material_total;
             float4 sample_left = float4(
                 height_left,
                 plains_height_texture.Sample(material_sampler, input.uv - float2(height_texel.x, 0.0)).r,
@@ -1591,10 +1601,18 @@ float4 PSMain(PixelInput input) : SV_TARGET
                 plains_height_texture.Sample(material_sampler, input.uv + float2(0.0, height_texel.y)).r,
                 desert_height_texture.Sample(material_sampler, input.uv + float2(0.0, height_texel.y)).r,
                 marsh_height_texture.Sample(material_sampler, input.uv + float2(0.0, height_texel.y)).r);
-            height_left = dot(sample_left, weights);
-            height_right = dot(sample_right, weights);
-            height_down = dot(sample_down, weights);
-            height_up = dot(sample_up, weights);
+            float tundra_left = feature_base_texture_5.Sample(material_sampler,
+                input.uv - float2(height_texel.x, 0.0)).r;
+            float tundra_right = feature_base_texture_5.Sample(material_sampler,
+                input.uv + float2(height_texel.x, 0.0)).r;
+            float tundra_down = feature_base_texture_5.Sample(material_sampler,
+                input.uv - float2(0.0, height_texel.y)).r;
+            float tundra_up = feature_base_texture_5.Sample(material_sampler,
+                input.uv + float2(0.0, height_texel.y)).r;
+            height_left = dot(sample_left, weights) + tundra_left * tundra_weight;
+            height_right = dot(sample_right, weights) + tundra_right * tundra_weight;
+            height_down = dot(sample_down, weights) + tundra_down * tundra_weight;
+            height_up = dot(sample_up, weights) + tundra_up * tundra_weight;
         }
         if (input.surface_kind > 2.5)
         {
@@ -1649,7 +1667,7 @@ float4 PSMain(PixelInput input) : SV_TARGET
             abs(input.real_terrain - 10.0) > 0.25)
         {
             float4 clutter_weights = input.material_weights;
-            clutter_weights /= max(0.001, dot(clutter_weights, 1.0));
+            clutter_weights /= max(0.001, dot(clutter_weights, 1.0) + input.material_tundra);
             float clutter_step = 0.012;
             float grass_scale = abs(input.real_terrain - 5.0) < 0.25 ? 3.85 : 4.65;
             float2 grass_offset = float2(0.13, 0.37);
@@ -1775,12 +1793,17 @@ float4 PSMain(PixelInput input) : SV_TARGET
         if (biq_layout > 0.5 && input.surface_kind < 1.5)
         {
             float4 weights = input.material_weights;
+            float tundra_weight = input.material_tundra;
             if (marsh_enabled < 0.5) { weights.x += weights.w; weights.w = 0.0; }
-            weights /= max(0.001, dot(weights, 1.0));
+            float material_total = max(0.001, dot(weights, 1.0) + tundra_weight);
+            weights /= material_total;
+            tundra_weight /= material_total;
             float plains_specular = plains_specular_texture.Sample(material_sampler, input.uv).r;
             float desert_specular = desert_specular_texture.Sample(material_sampler, input.uv).r;
             float marsh_specular = marsh_specular_texture.Sample(material_sampler, input.uv).r;
-            specular = dot(float4(specular, plains_specular, desert_specular, marsh_specular), weights);
+            float tundra_specular = feature_base_texture_6.Sample(material_sampler, input.uv).r;
+            specular = dot(float4(specular, plains_specular, desert_specular, marsh_specular), weights) +
+                       tundra_specular * tundra_weight;
             if (weights.w > 0.001 && marsh_enabled > 0.5)
             {
                 float decal_specular = marsh_decal_specular_texture.Sample(

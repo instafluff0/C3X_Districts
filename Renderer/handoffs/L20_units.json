@@ -28,16 +28,53 @@
   ],
   "reference": {
     "native_output": "preview/out/terrain_lab/terrain_beauty_l20_units_noon.bmp",
-    "native_sha256": "cc13bf4fdfe0debaefca3c3ab1e8f4609f5370b40e75902118db510c90c7f6e7",
-    "night_sha256": "ed6ef1ec2d212442ed928cb935533cebd8255d2094d54d2f4bfe24d17022ae57",
-    "reduced_sha256": "12bc58fa16a53828358396da95633fad68d17847cc341943370f59154829f9b2",
-    "no_units_sha256": "f9ede652e3eb47dbcbb8f0943ef8f2654a6f65735094a69dae35136a880d7fa1",
-    "unit_isolation_sha256": "bd5347e8bda69362e5553060b3ff75a532cec640e851ec5f219d7df5a0c2b10e",
-    "turntable_sha256": "de282e8225d6881417506115ab857b3e99148c8b7363241ce5aa1b4ddd29fdeb",
-    "actions_sha256": "20647804ec000cf8f8764bae3a8121f239693bec7903fb68eae3a869562f645a",
+    "native_sha256": "8814a86a6886b941a266da399eb9c53a6a88a20cfc6219c911bba5730614723e",
+    "night_sha256": "c17d8d4f20a8732d4544a0b33d489f2cbde54e1359b561b21b2b6af8e5b580e8",
+    "reduced_sha256": "e2703a52bc82f75f141b02aea94b7d1e219f33a0ac934be21c51aeafa6f53036",
+    "no_units_sha256": "6582747ec96995cca34cc8de996305ec7ccf1d58732562a2042988aa488ddfd0",
+    "unit_isolation_sha256": "d2069f5030127ca551a358d80dd70e199ccfefcc2974f0e0c9686fa240ea502b",
+    "turntable_sha256": "3ccef1c3dcc8c1fabe4126967e5484b2c4170759ce87691e8111604c8113cb98",
+    "actions_sha256": "bf9caae116f76e751976592a01bdcb46e3b22ac391096fd2448add15fd7acb38",
     "scenario_sha256": "b85d570959920564b2baa42f04ffc0abdd3ff7c528d5223864d55779aefe643b",
     "tile_count": 192,
     "audit": "terrain_lab/L20_UNIT_AUDIT.md"
+  },
+  "owner_color_revision": {
+    "approved_on": "2026-09-06",
+    "canonical_references": [
+      "canonical/Screenshot 2026-09-06 at 6.35.02 AM.png",
+      "canonical/unit_texture_and_civ_colors2.png",
+      "canonical/unit_texture_and_civ_colors3.png"
+    ],
+    "contract": "generic per-component source or authored mask plus strong, medium, or restrained strength; neutral source value maps through a dark-to-light owner ramp while preserving material detail",
+    "localized_regions": "shields, armbands, barding, sails or hull markings, and dedicated vehicle panels; skin, horse bodies, hair, wood, and steel remain neutral",
+    "authoring_corrections": "Great General rider and mount armor gain bounded authored masks; false-positive Catapult operator hair tint is disabled",
+    "verification": "terrain_lab/test_l20_unit_contract.py"
+  },
+  "source_material_tint_revision": {
+    "approved_on": "2026-09-06",
+    "reason": "near-white Civ VI calibration textures were rendered without the named ArtDef material tint",
+    "contract": "generic per-component source-tint marker applied to textured albedo before the independent civilization-color mask",
+    "supported_tints": [
+      "BaseMale_SkinColor_Caucasian",
+      "GreatPeople_Military",
+      "Horse_Default",
+      "Horse_Secondary",
+      "Infantry_European",
+      "Vehicle_Woodland",
+      "Wood"
+    ],
+    "source_evidence": "installed Civ VI Base/ArtDefs/Units.artdef RGB values selected by normalized component metadata",
+    "visual_result": "olive tanks, khaki infantry, warm skin, and authored horse/wood browns without white calibration bodies; texture, owner accents, face shading, and cast shadows retained",
+    "verification": "terrain_lab/test_l20_unit_contract.py"
+  },
+  "lighting_revision": {
+    "approved_on": "2026-09-06",
+    "reason": "unit self/face and cast shadows were too subtle in the complete beauty scene",
+    "contract": "authored normals receive map-scale face emphasis; every visible formation member receives a source-scaled cast/contact footprint with a six-pixel minimum and the shared L13A direction/strength",
+    "complete_noon_output": "preview/out/terrain_lab/terrain_beauty_l21_complete_noon.bmp",
+    "complete_noon_sha256": "0d516a393ed529eb839ef037a45999a0a224f29877739e1196cb49140c2300db",
+    "verification": "terrain_lab/test_l20_unit_contract.py"
   },
   "ownership_intent": {
     "unit_bodies": "custom_when_renderer_enabled_after_I20",

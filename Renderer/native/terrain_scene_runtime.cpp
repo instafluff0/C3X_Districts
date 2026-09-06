@@ -207,6 +207,10 @@ float stable_random(std::uint32_t value) {
     return static_cast<float>(feature_hash(value) & 0x00ffffffu) / 16777215.0f;
 }
 
+std::uint32_t stable_hash(std::uint32_t value) {
+    return feature_hash(value);
+}
+
 float dune_height(float world_x, float world_y, float desert_weight) {
     if (desert_weight <= 0.0f)
         return 0.0f;
@@ -240,18 +244,27 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
                        frame.tile_width, frame.tile_height})
         hash_value(result.camera, value);
     result.scene = fnv_offset;
+    result.geometry = fnv_offset;
     result.ownership = fnv_offset;
+    hash_value(result.scene, frame.tile_count);
+    hash_value(result.geometry, frame.tile_count);
+    for (auto value : {frame.target_width, frame.target_height,
+                       frame.tile_width, frame.tile_height})
+        hash_value(result.geometry, value);
     for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
         c3x_renderer_tile_v1 const & tile = frame.tiles[index];
         for (auto value : {tile.tile_x, tile.tile_y, tile.anchor_x, tile.anchor_y,
                            tile.terrain_type, tile.real_terrain_type})
             hash_value(result.scene, value);
+        for (auto value : {tile.tile_x, tile.tile_y,
+                           tile.terrain_type, tile.real_terrain_type})
+            hash_value(result.geometry, value);
         // Cache only state that changes custom-renderer pixels. Civ III draw
         // selectors, native overlay bits, fog traversal, and exact population
         // remain authoritative capture data but do not belong to this static
         // terrain plane.
         for (auto value : {tile.variant_seed, tile.tile_flags, tile.feature_flags,
-                           tile.improvement_flags,
+                           tile.improvement_flags, tile.irrigation_mask,
                            tile.has_effect, tile.river_code, tile.road_mask,
                            tile.railroad_mask, static_cast<c3x_renderer_u32>(tile.route_style),
                            static_cast<c3x_renderer_u32>(tile.resource_id),
@@ -262,7 +275,20 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
                            static_cast<c3x_renderer_u32>(tile.city_culture_group),
                            static_cast<c3x_renderer_u32>(tile.city_era), tile.city_flags})
             hash_value(result.scene, value);
+        for (auto value : {tile.variant_seed, tile.tile_flags, tile.feature_flags,
+                           tile.improvement_flags, tile.irrigation_mask,
+                           tile.has_effect, tile.river_code, tile.road_mask,
+                           tile.railroad_mask, static_cast<c3x_renderer_u32>(tile.route_style),
+                           static_cast<c3x_renderer_u32>(tile.resource_id),
+                           static_cast<c3x_renderer_u32>(tile.resource_class),
+                           static_cast<c3x_renderer_u32>(tile.city_id),
+                           static_cast<c3x_renderer_u32>(tile.city_owner_id),
+                           static_cast<c3x_renderer_u32>(tile.city_size),
+                           static_cast<c3x_renderer_u32>(tile.city_culture_group),
+                           static_cast<c3x_renderer_u32>(tile.city_era), tile.city_flags})
+            hash_value(result.geometry, value);
         hash_bytes(result.scene, tile.resource_name, sizeof(tile.resource_name));
+        hash_bytes(result.geometry, tile.resource_name, sizeof(tile.resource_name));
         hash_value(result.ownership, tile.tile_flags);
         hash_value(result.ownership, tile.feature_flags);
     }
@@ -282,6 +308,11 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
     hash_value(result.complete, result.ownership);
     hash_value(result.complete, content_revision);
     hash_value(result.complete, device_generation);
+    hash_value(result.geometry, result.environment);
+    hash_value(result.geometry, result.wrap);
+    hash_value(result.geometry, result.ownership);
+    hash_value(result.geometry, content_revision);
+    hash_value(result.geometry, device_generation);
     return result;
 }
 

@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 9u
+#define C3X_RENDERER_API_VERSION 10u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -35,7 +35,8 @@ enum c3x_renderer_tile_flags {
     C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED = 256u,
     C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED = 512u,
     C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED = 1024u,
-    C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED = 2048u
+    C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED = 2048u,
+    C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED = 4096u
 };
 
 enum c3x_renderer_invalidation_flags {
@@ -119,6 +120,7 @@ struct c3x_renderer_tile_v1 {
     c3x_renderer_i32 route_style;
     c3x_renderer_u32 feature_flags;
     c3x_renderer_u32 improvement_flags;
+    c3x_renderer_u32 irrigation_mask;
     c3x_renderer_u32 city_flags;
     c3x_renderer_u32 has_effect;
     c3x_renderer_i32 territory_owner_id;

@@ -130,7 +130,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn('"feature/forest/leafy"', renderer)
         self.assertIn("texture_count > 8", native)
         self.assertIn("feature_base_texture_7 : register(t97)", shader)
-        self.assertIn("views[90 + index] = feature_texture_views[index]", renderer)
+        self.assertIn("PSSetShaderResources(94, 4, feature_texture_views.data() + 4)", renderer)
         self.assertIn("tile.real_terrain_type == 7 ? 0.42f : 0.40f", renderer)
 
     def test_m6_7_cache_key_is_terrain_specific_and_revision_aware(self) -> None:
@@ -162,6 +162,14 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("cache_stale_rejections", renderer)
         self.assertIn("C3X_RENDERER_INVALIDATE_PACK_DEFINITION", renderer)
         self.assertIn("frame_invalidation_flags", api)
+        self.assertIn("result.geometry = fnv_offset", signature)
+        self.assertIn("reuse_geometry_for_translation", renderer)
+        self.assertIn("current.anchor_x - cached.anchor_x != translation_x", renderer)
+        self.assertIn("signature.geometry != geometry_cache.signature.geometry", renderer)
+        self.assertIn("c3x_viewport_translation", (
+            Path(__file__).parent / "integrated_terrain.hlsl"
+        ).read_text(encoding="utf-8"))
+        self.assertIn("VSSetConstantBuffers(1, 1, &viewport_settings_buffer)", renderer)
 
     def test_m6_7_feature_ownership_is_exact_and_post_composite(self) -> None:
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
@@ -222,7 +230,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn('#include "terrain_rendering.hlsl"', adapter)
         self.assertNotIn("terrain_lab", adapter)
         self.assertEqual(
-            "2a55c59b085b0125e53127f516621261db3b4d6cf21d11d301beac177ebe6eb9",
+            "e1216eb007348fee650c8583e4d90dcb800cdfce0850aa76e34a2fccd8ec5dec",
             hashlib.sha256(production_shader_path.read_bytes()).hexdigest(),
         )
         self.assertIn("return PSMain(input);", adapter)
@@ -392,7 +400,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("record->city_population", injected)
         self.assertIn("has_active_building (city, improvement_id)", injected)
 
-    def test_i18_consumes_approved_mines_without_reaching_into_l19(self) -> None:
+    def test_i19_consumes_approved_mines_farms_and_tundra(self) -> None:
         renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
             encoding="utf-8"
         ).casefold()
@@ -413,8 +421,13 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED", api)
         self.assertIn("improvements = replace", default_definition)
         self.assertIn("id = improvements_normalized", default_definition)
-        self.assertNotIn("farm_runtime.bin", renderer)
-        self.assertNotIn("irrigation_vertices", renderer)
+        self.assertIn("farm_runtime.bin", renderer)
+        self.assertIn("farm_vertices", renderer)
+        self.assertIn('"farm_" + std::to_string', renderer)
+        self.assertIn("C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED", api)
+        self.assertIn("irrigation_mask", api)
+        self.assertIn("material_tundra", renderer)
+        self.assertIn("feature_base_texture_4", shader)
 
     def test_live_terrain_mesh_reuses_shared_corners_and_bounds_shadow_density(self) -> None:
         renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
@@ -672,7 +685,9 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("chunk_capacity = 262143u", native)
         self.assertNotIn("shore_vertices", native)
         self.assertNotIn("bool rugged_shore", native)
-        self.assertIn("draw_batches(water_vertices)", native)
+        self.assertIn("draw_streaming_batches(geometry_cache.water)", native)
+        self.assertIn("D3D11_USAGE_DYNAMIC", native)
+        self.assertIn("D3D11_MAP_WRITE_DISCARD", native)
         self.assertIn("(seed >> 3) % 5u", native)
         self.assertIn("has_relief_neighbor ? 0.50f : 0.68f", native)
         self.assertIn("constexpr int candidates[5][2]", native)
@@ -702,9 +717,11 @@ class NativeBridgeContractTests(unittest.TestCase):
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
         blit = native[native.index('extern "C" __declspec(dllexport) int c3x_renderer_blit') :]
         blit = blit[:blit.index('extern "C" __declspec(dllexport) void c3x_renderer_reset')]
-        self.assertIn("BitBlt", blit)
-        self.assertIn("SRCCOPY", blit)
-        self.assertIn("output->clip_left, output->clip_top, blit_width, blit_height", blit)
+        self.assertIn("renderer.blit(*output", blit)
+        self.assertIn("BitBlt", native)
+        self.assertIn("SRCCOPY", native)
+        self.assertIn("output.clip_right - output.clip_left", native)
+        self.assertIn("blit_width != output.width", native)
         self.assertNotIn("AlphaBlend", blit)
         self.assertNotIn("AC_SRC_ALPHA", blit)
         self.assertIn("output.surface_kind = input.surface_kind", adapter)
@@ -718,10 +735,10 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("append_ground_layer(bed_vertices, 4.0f,", native)
 
         self.assertIn("append_ground_layer(water_vertices, 5.0f,", native)
-        self.assertIn("draw_batches(underlay_vertices)", native)
-        self.assertIn("draw_batches(land_vertices)", native)
-        self.assertIn("draw_batches(bed_vertices)", native)
-        self.assertIn("draw_batches(water_vertices)", native)
+        self.assertIn("draw_streaming_batches(geometry_cache.underlay)", native)
+        self.assertIn("draw_streaming_batches(geometry_cache.land)", native)
+        self.assertIn("draw_streaming_batches(geometry_cache.bed)", native)
+        self.assertIn("draw_streaming_batches(geometry_cache.water)", native)
         self.assertIn("beach_base_texture.Sample", shader)
         self.assertIn("float3 water_normal = normalize", shader)
         self.assertIn("float sun_glint =", shader)
@@ -730,7 +747,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("water_foam_texture : register(t24)", shader)
         self.assertIn("DXGI_FORMAT_R16G16B16A16_UNORM", native)
         self.assertIn("c3x_renderer_i32 clip_left", api)
-        self.assertIn("#define C3X_RENDERER_API_VERSION 9u", api)
+        self.assertIn("#define C3X_RENDERER_API_VERSION 10u", api)
         self.assertIn("DXGI_FORMAT_R16G16_UNORM", native)
         self.assertIn("float2 combined_lean =", shader)
         self.assertIn("water_foam_texture.Sample", shader)

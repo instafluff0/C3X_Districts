@@ -17,6 +17,18 @@ Status: complete; deterministic 192-tile alternate-skin candidate critically ins
 - Minerals and crops use compact deterministic clusters; horses and cattle remain single subjects; fish sit visually within the water material without terrestrial cast shadows.
 - Every raised land body uses the accepted L13A face, contact, and shared-direction cast lighting. The hidden and no-resource controls are byte-identical to the approved L15 scene.
 
+## Shared-shadow correction
+
+The user reopened the final beauty gate on 2026-09-06 because resource lighting
+was technically present but not sufficiently readable. Land resources now use
+their authored normals with the same map-scale horizontal face emphasis as
+vegetation and relief, plus a seven-pixel minimum source-scaled cast footprint.
+The cast direction and strength still come exclusively from the shared L13A
+environment. Fish remain submerged and deliberately do not paint a false
+shadow on the water surface. The corrected complete-scene/no-unit witness is
+`6582747ec96995cca34cc8de996305ec7ccf1d58732562a2042988aa488ddfd0`;
+two unchanged L21 runs were byte-identical.
+
 ## Deterministic evidence
 
 Two corrected `python3 Renderer/tools/renderer_dev.py lab` runs produced byte-identical outputs:

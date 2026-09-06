@@ -49,6 +49,7 @@ struct TerrainFrameSignature {
     std::uint64_t complete = 0;
     std::uint64_t camera = 0;
     std::uint64_t scene = 0;
+    std::uint64_t geometry = 0;
     std::uint64_t environment = 0;
     std::uint64_t wrap = 0;
     std::uint64_t ownership = 0;
@@ -62,6 +63,7 @@ FeaturePlacement const * find_feature_placement_by_suffix(FeatureBundle const & 
                                                           FeatureGroup const & group,
                                                           char const * suffix);
 float stable_random(std::uint32_t value);
+std::uint32_t stable_hash(std::uint32_t value);
 float dune_height(float world_x, float world_y, float desert_weight);
 TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & frame,
                                                std::uint64_t content_revision,

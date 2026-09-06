@@ -97,7 +97,11 @@ def build(viewport: Path, cities: Path, tile_objects: Path,
             if action == 2 and tiles.get((point[0], point[1] + 1),
                                          (0, 0, 0, 0, 11))[4] >= 11:
                 move = (1, 0, 600)
-            add_land(kind, (kind + index) % 4, (kind * 2 + index * 3) % 8,
+            # Keep the three tank owner-color witnesses on the same readable
+            # broadside. This is fixture composition only: runtime color and
+            # dispatch remain entirely generic and data-driven.
+            facing = 4 if kind == 7 else (kind * 2 + index * 3) % 8
+            add_land(kind, (kind + index) % 4, facing,
                      action, phase, move=move, point=point)
 
     # Builder-only source clips: light work, heavy work, cutting, and capture.

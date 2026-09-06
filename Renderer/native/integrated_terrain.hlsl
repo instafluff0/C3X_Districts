@@ -5,6 +5,12 @@
 #define C3X_GAME_RENDERER 1
 #include "terrain_rendering.hlsl"
 
+cbuffer C3XViewportSettings : register(b1)
+{
+    float2 c3x_viewport_translation;
+    float2 c3x_viewport_translation_padding;
+};
+
 struct IntegratedVertexInput
 {
     float3 position : POSITION;
@@ -27,7 +33,8 @@ struct IntegratedVertexInput
 PixelInput VSIntegrated(IntegratedVertexInput input)
 {
     PixelInput output;
-    output.position = float4(input.position, 1.0);
+    output.position = float4(input.position.xy + c3x_viewport_translation,
+                             input.position.z, 1.0);
     output.uv = input.uv;
     output.panel = input.panel;
     output.geometry_normal = input.geometry_normal;
@@ -53,7 +60,8 @@ float4 PSIntegrated(PixelInput input) : SV_TARGET
 FeaturePixelInput VSIntegratedFeature(IntegratedVertexInput input)
 {
     FeaturePixelInput output;
-    output.position = float4(input.position, 1.0);
+    output.position = float4(input.position.xy + c3x_viewport_translation,
+                             input.position.z, 1.0);
     output.uv = input.uv;
     output.geometry_normal = input.geometry_normal;
     output.material_index = input.base_terrain;

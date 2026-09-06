@@ -1,7 +1,7 @@
 {
   "schema": "c3x.renderer_project_status.v0",
   "last_updated": "2026-09-06",
-  "current_milestone": "INTEGRATION",
+  "current_milestone": "LAB",
   "manual_evidence_policy": {
     "mode": "strategic_batched_checkpoints",
     "ordinary_iterations": "automated_and_replayable_evidence_only",
@@ -26,13 +26,13 @@
     "renderer_lab": {
       "responsibility": "Standalone asset use, rendering technique, visual quality, and approval for all map graphics.",
       "plan": "terrain_lab/PLAN.md",
-      "current_step": "L21",
+      "current_step": "L20",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py lab"
     },
     "game_integration": {
       "responsibility": "Civ III state capture, cache/invalidation, redraws, anchoring, compositing, exclusive native suppression, retained layers, telemetry, and hard failure without native replay.",
     "current_step": "I19",
-    "status": "i19_ready",
+    "status": "paused_for_l20_visual_revision",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py integration"
     },
     "promotion_rule": "Every L# visual gate has a same-numbered I# game-integration gate. I# cannot start before L# approval; after L# is approved, I# consumes that frozen handoff before the next system is considered integrated. L21/I21 remain the final combined release gates.",
@@ -140,35 +140,26 @@
     "handoffs/L21_complete_beauty_scene.json"
   ],
   "next_step": {
-    "id": "I19",
-    "title": "Integrate farms and irrigation",
+    "id": "L20",
+    "title": "Units and animation and 192-tile promotion approval",
     "status": "ready",
-    "workstream": "game_integration",
-    "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
-    "promotion_required": false,
-    "lab_handoffs": [
-      {
-        "gate": "L19",
-        "record": "handoffs/L19_farms_tundra.json"
-      }
-    ],
+    "workstream": "renderer_lab",
+    "iteration_command": "python3 Renderer/tools/renderer_dev.py lab",
+    "promotion_required": true,
     "scope": [
-      "Consume the frozen approved L19 farm/tundra handoff without redesigning its appearance.",
-      "Capture authoritative Civ III irrigation adjacency, terrain, era, ownership, visibility, zoom, and anchors through the existing map-scene boundary.",
-      "Integrate deterministic farm payload selection, cache invalidation, compositing, exclusive native irrigation suppression, retained overlays, telemetry, reset behavior, and visible hard failure.",
-      "Preserve the independent alternate-skin tundra material correction through the already-integrated terrain path."
+      "Correct the dedicated Tank TeamColor component against the registered canonical tank reference.",
+      "Keep the authored woodland vehicle tint on the neutral body while applying owner color to the dedicated panel geometry.",
+      "Re-run the unchanged deterministic 192-tile L20 matrix at both zooms and at night."
     ],
     "acceptance": [
-      "All sixteen authoritative irrigation connection masks select the matching approved L19 farm presentation at both Civ III zoom levels.",
-      "Authoritative state changes invalidate only affected cached payloads; scrolling, wrap, redraw, save/load, and renderer reset remain stable.",
-      "Custom-on owns the complete integrated farm presentation with native irrigation pixels suppressed; custom-off remains fully vanilla.",
-      "Failure is visible and atomic, with no native/custom double draw or silent native replay."
+      "Tank owner-color panels are saturated and localized like the canonical example rather than remaining gray-green.",
+      "The neutral vehicle body remains olive with readable source texture and face shading.",
+      "Every non-tank unit and the no-unit control remain unchanged; two identical runs are byte-deterministic."
     ],
     "must_not": [
-      "Do not redesign the approved L19 farm/tundra art in Integration.",
-      "Do not infer irrigation topology from screen pixels when authoritative tile state is available.",
-      "Do not transfer ownership partially or suppress native irrigation before the complete replacement payload succeeds.",
-      "Do not begin I19A, I19B, I20, or I21 before I19 is complete."
+      "Do not tint the complete tank body with owner color.",
+      "Do not alter unit scale, animation, lighting, shadows, or another accepted art system.",
+      "Do not resume Integration until L20 and L21 are frozen again."
     ]
   },
   "milestones": [
@@ -1233,8 +1224,7 @@
         {
           "id": "L20",
           "title": "Units and animation and 192-tile promotion approval",
-          "status": "complete",
-          "completed_on": "2026-09-06",
+          "status": "ready",
           "promotion_required": true,
           "evidence": [
             "handoffs/L20_units.json",
@@ -1289,8 +1279,7 @@
         {
           "id": "L21",
           "title": "Complete 192-tile beauty scene and final user visual approval",
-          "status": "complete",
-          "completed_on": "2026-09-06",
+          "status": "blocked_by_previous",
           "promotion_required": true,
           "evidence": [
             "handoffs/L21_complete_beauty_scene.json",
@@ -1319,7 +1308,7 @@
         {"id": "I16", "lab_gate": "L16", "title": "Integrate resources", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L16_resources.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
         {"id": "I17", "lab_gate": "L17", "title": "Integrate civilization-, size-, and era-specific cities", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L17_cities.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
         {"id": "I18", "lab_gate": "L18", "title": "Integrate mines", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L18_mines.json", "native/c3x_renderer_api.h", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/terrain_scene_runtime.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
-        {"id": "I19", "lab_gate": "L19", "title": "Integrate farms and irrigation", "status": "ready"},
+        {"id": "I19", "lab_gate": "L19", "title": "Integrate farms and irrigation", "status": "blocked_by_previous"},
         {"id": "I19A", "lab_gate": "L19A", "title": "Integrate goody huts and colony outposts", "status": "blocked_by_previous"},
         {"id": "I19B", "lab_gate": "L19B", "title": "Integrate remaining tile infrastructure", "status": "blocked_by_previous"},
         {"id": "I20", "lab_gate": "L20", "title": "Integrate units and animation", "status": "blocked_by_previous"},

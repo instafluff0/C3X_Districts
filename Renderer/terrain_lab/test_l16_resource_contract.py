@@ -33,6 +33,13 @@ class L16ResourceContractTests(unittest.TestCase):
         self.assertIn("resources_hidden", RUN)
         self.assertNotIn("smoke", RUN.lower())
 
+    def test_land_resources_share_face_and_cast_shadow_contract(self):
+        self.assertIn("float resource_weight", HLSL)
+        self.assertIn("resource_weight * 0.95", HLSL)
+        self.assertIn("resource_weight * 0.18", HLSL)
+        self.assertIn("output, 7.0f, 1.05f", CPP)
+        self.assertIn("instance.resource == 7u ? submerged_shadows : shadows", CPP)
+
     def test_checked_in_fixture_hash_is_stable(self):
         self.assertEqual(
             "4bee2c83af59ffdbb076796c7747f4c067b5b3e964aa30d9687b9a5751c527ee",

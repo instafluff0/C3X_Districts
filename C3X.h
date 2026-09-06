@@ -540,6 +540,7 @@ struct c3x_config {
 
 	bool enable_custom_animations;
 	bool enable_custom_rendering;
+	bool enable_custom_rendered_units;
 	char * aircraft_victory_animation; // NULL if set to "none" in config
 
 	int day_night_cycle_mode;

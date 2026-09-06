@@ -39,7 +39,9 @@ for %%F in (unit_archer_runtime.bin unit_swordsman_runtime.bin unit_infantry_run
 for %%F in (unit_horseman_runtime.bin unit_catapult_runtime.bin unit_tank_runtime.bin unit_great_general_classical_runtime.bin) do if not exist "%C3X_LAB_COMPOUND_UNITS%\%%F" goto missing
 if not exist "%C3X_LAB_UNIT_SCENARIO%" goto missing
 
-for %%M in (units_noon units_night units_zoom2 units_no_units units_only units_turntable units_actions) do (
+set "C3X_L20_MODES=units_noon units_night units_zoom2 units_no_units units_only units_turntable units_actions"
+if not "%~1"=="" set "C3X_L20_MODES=%~1"
+for %%M in (%C3X_L20_MODES%) do (
   build\terrain_lab.exe "%C3X_LAB_PACK%" "terrain_lab.hlsl" "%C3X_LAB_OUTPUT%\terrain_beauty_l20_%%M.bmp" beauty_%%M 0.26 4.0 1.0 72 0.085 "%C3X_LAB_VEGETATION%" "%C3X_LAB_DECALS%" "%C3X_LAB_BIQ_VIEW%" "%C3X_LAB_TERRAIN_ELEMENTS%" "%C3X_LAB_SHORE_FEATURES%" "%C3X_LAB_ROUTE_STYLES%" "%C3X_LAB_ROAD_SCENARIO%" "%C3X_LAB_ROUTE_DOODADS%" "%C3X_LAB_RAILROAD_SCENARIO%" "%C3X_LAB_RESOURCES%" "%C3X_LAB_RESOURCE_SCENARIO%" "%C3X_LAB_CITIES%" "%C3X_LAB_CITY_ADJUNCTS%" "%C3X_LAB_CITY_SCENARIO%" "%C3X_LAB_IMPROVEMENTS%" "%C3X_LAB_MINE_SCENARIO%" "%C3X_LAB_IMPROVEMENTS%" "%C3X_LAB_FARM_SCENARIO%" "%C3X_LAB_TILE_OBJECTS%" "%C3X_LAB_TILE_OBJECT_SCENARIO%" "%C3X_LAB_TILE_OBJECTS%" "%C3X_LAB_INFRASTRUCTURE_SCENARIO%" "%C3X_LAB_UNITS%" "%C3X_LAB_COMPOUND_UNITS%" "%C3X_LAB_UNIT_SCENARIO%"
   if errorlevel 1 goto failed
 )

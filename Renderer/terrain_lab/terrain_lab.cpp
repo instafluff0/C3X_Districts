@@ -3039,12 +3039,21 @@ Vertex make_feature_shadow_vertex(float screen_x, float screen_y, float depth,
                   2.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, depth};
 }
 
+Vertex make_projected_feature_shadow_vertex(float screen_x, float screen_y, float depth) {
+    return Vertex{ndc_x(screen_x), ndc_y(screen_y), 0.0f, 0.0f, 1.0f,
+                  0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 11.0f, 0.0f,
+                  2.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, depth};
+}
+
 void add_feature_instance(FeatureBundle const & bundle, FeaturePlacement const & placement,
                           float world_x, float world_y, float rotation, float scale,
                           HeightField const * authored_height, HeightField const * authored_blend,
                           bool integrated_shore,
                           std::vector<Vertex> & shadows,
-                          std::vector<FeatureVertex> & output) {
+                          std::vector<FeatureVertex> & output,
+                          float shadow_width_floor = 4.0f,
+                          float shadow_length_scale = 1.0f,
+                          bool project_shadow_mesh = false) {
     FeatureAsset const & asset = bundle.assets[placement.asset_index];
     float land_edge = coast_position(world_y, false, integrated_shore) -
                       beach_width_at(world_y, integrated_shore);
@@ -3084,7 +3093,8 @@ void add_feature_instance(FeatureBundle const & bundle, FeaturePlacement const &
                                             vertex.position[1] * vertex.position[1]) * scale);
         feature_height = std::max(feature_height, vertex.position[2] * scale);
     }
-    float shadow_width = std::max(4.0f, radius * coast_projection.half_width * 0.65f);
+    float shadow_width = std::max(shadow_width_floor,
+                                  radius * coast_projection.half_width * 0.65f);
     float horizontal = std::sqrt(active_light_direction[0] * active_light_direction[0] +
                                  active_light_direction[1] * active_light_direction[1]);
     float cast_world_x = horizontal > 0.001f
@@ -3100,19 +3110,21 @@ void add_feature_instance(FeatureBundle const & bundle, FeaturePlacement const &
         cast_screen_x /= cast_length;
         cast_screen_y /= cast_length;
     }
-    float radial_shadow_length = shadow_width * 2.40f;
+    float radial_shadow_length = shadow_width * 2.40f * shadow_length_scale;
     float projected_height_ratio = 0.72f;
     float height_shadow_length = feature_height * feature_height_pixels_per_tile *
-        projected_height_ratio;
+        projected_height_ratio * shadow_length_scale;
     // Direction rotates with the shared light, but the canonical stylization
     // does not dramatically stretch the footprint at dawn or dusk.
-    float minimum_shadow_length = shadow_width * 2.55f;
+    float minimum_shadow_length = shadow_width * 2.55f * shadow_length_scale;
     float shadow_length = std::clamp(
         std::max(radial_shadow_length, height_shadow_length),
         minimum_shadow_length, std::min(180.0f, shadow_width * 10.0f));
     float perpendicular_x = -cast_screen_y;
     float perpendicular_y = cast_screen_x;
     float ground_base_screen_y = center_y + ground_height * coast_projection.vertical_scale;
+    float cosine = std::cos(rotation);
+    float sine = std::sin(rotation);
     // Screen-space feature shadows must follow the receiver's depth gradient.
     // A single depth sampled at the feature origin is hidden by terrain when
     // the quad extends down-screen (the canonical 18:00 direction).
@@ -3122,35 +3134,61 @@ void add_feature_instance(FeatureBundle const & bundle, FeaturePlacement const &
             0.94f - projected_base_y / static_cast<float>(output_height) * 0.75f -
             ground_height * 0.0012f, 0.01f, 0.99f) - 0.004f);
     };
-    float near_left_x = center_x - perpendicular_x * shadow_width * 0.42f;
-    float near_left_y = center_y - perpendicular_y * shadow_width * 0.42f;
-    float near_right_x = center_x + perpendicular_x * shadow_width * 0.42f;
-    float near_right_y = center_y + perpendicular_y * shadow_width * 0.42f;
-    float far_right_x = center_x + cast_screen_x * shadow_length +
-                        perpendicular_x * shadow_width * 0.72f;
-    float far_right_y = center_y + cast_screen_y * shadow_length +
-                        perpendicular_y * shadow_width * 0.72f;
-    float far_left_x = center_x + cast_screen_x * shadow_length -
-                       perpendicular_x * shadow_width * 0.72f;
-    float far_left_y = center_y + cast_screen_y * shadow_length -
-                       perpendicular_y * shadow_width * 0.72f;
-    Vertex shadow_near_left = make_feature_shadow_vertex(
-        near_left_x, near_left_y, shadow_depth_at(near_left_y),
-        0.0f, 0.0f);
-    Vertex shadow_near_right = make_feature_shadow_vertex(
-        near_right_x, near_right_y, shadow_depth_at(near_right_y),
-        1.0f, 0.0f);
-    Vertex shadow_far_right = make_feature_shadow_vertex(
-        far_right_x, far_right_y, shadow_depth_at(far_right_y), 1.0f, 1.0f);
-    Vertex shadow_far_left = make_feature_shadow_vertex(
-        far_left_x, far_left_y, shadow_depth_at(far_left_y), 0.0f, 1.0f);
     if (!biq_scene_enabled || l13a_scene_enabled) {
-        add_triangle(shadows, shadow_near_left, shadow_near_right, shadow_far_right);
-        add_triangle(shadows, shadow_near_left, shadow_far_right, shadow_far_left);
+        if (project_shadow_mesh) {
+            // Project the actual animated source triangles onto the receiver.
+            // The light's screen direction stays shared across every object;
+            // a fixed stylized height ratio preserves the already-approved
+            // near-constant Civ VI-like shadow length over the day/night cycle.
+            for (std::size_t index = 0; index + 2 < asset.indices.size(); index += 3) {
+                Vertex projected[3];
+                for (unsigned corner = 0; corner < 3u; ++corner) {
+                    FeatureSourceVertex const & source = asset.vertices[
+                        asset.indices[index + corner]];
+                    float local_x =
+                        (source.position[0] * cosine - source.position[1] * sine) * scale;
+                    float local_y =
+                        (source.position[0] * sine + source.position[1] * cosine) * scale;
+                    float local_z = std::max(0.0f, source.position[2] * scale);
+                    float base_x = center_x +
+                        (local_x - local_y) * coast_projection.half_width;
+                    float base_y = center_y +
+                        (local_x + local_y) * coast_projection.half_height;
+                    float cast = local_z * feature_height_pixels_per_tile *
+                                 projected_height_ratio * shadow_length_scale;
+                    float screen_x = base_x + cast_screen_x * cast;
+                    float screen_y = base_y + cast_screen_y * cast;
+                    projected[corner] = make_projected_feature_shadow_vertex(
+                        screen_x, screen_y, shadow_depth_at(screen_y));
+                }
+                add_triangle(shadows, projected[0], projected[1], projected[2]);
+            }
+        } else {
+            float near_left_x = center_x - perpendicular_x * shadow_width * 0.42f;
+            float near_left_y = center_y - perpendicular_y * shadow_width * 0.42f;
+            float near_right_x = center_x + perpendicular_x * shadow_width * 0.42f;
+            float near_right_y = center_y + perpendicular_y * shadow_width * 0.42f;
+            float far_right_x = center_x + cast_screen_x * shadow_length +
+                                perpendicular_x * shadow_width * 0.72f;
+            float far_right_y = center_y + cast_screen_y * shadow_length +
+                                perpendicular_y * shadow_width * 0.72f;
+            float far_left_x = center_x + cast_screen_x * shadow_length -
+                               perpendicular_x * shadow_width * 0.72f;
+            float far_left_y = center_y + cast_screen_y * shadow_length -
+                               perpendicular_y * shadow_width * 0.72f;
+            Vertex shadow_near_left = make_feature_shadow_vertex(
+                near_left_x, near_left_y, shadow_depth_at(near_left_y), 0.0f, 0.0f);
+            Vertex shadow_near_right = make_feature_shadow_vertex(
+                near_right_x, near_right_y, shadow_depth_at(near_right_y), 1.0f, 0.0f);
+            Vertex shadow_far_right = make_feature_shadow_vertex(
+                far_right_x, far_right_y, shadow_depth_at(far_right_y), 1.0f, 1.0f);
+            Vertex shadow_far_left = make_feature_shadow_vertex(
+                far_left_x, far_left_y, shadow_depth_at(far_left_y), 0.0f, 1.0f);
+            add_triangle(shadows, shadow_near_left, shadow_near_right, shadow_far_right);
+            add_triangle(shadows, shadow_near_left, shadow_far_right, shadow_far_left);
+        }
     }
 
-    float cosine = std::cos(rotation);
-    float sine = std::sin(rotation);
     std::vector<FeatureVertex> transformed(asset.vertices.size());
     for (std::size_t index = 0; index < asset.vertices.size(); ++index) {
         FeatureSourceVertex const & source = asset.vertices[index];
@@ -3513,7 +3551,7 @@ bool add_resource_scene(FeatureBundle const & bundle,
             add_feature_instance(bundle, placement, world_x, world_y, rotation, scale,
                                  authored_height, authored_blend, true,
                                  instance.resource == 7u ? submerged_shadows : shadows,
-                                 output);
+                                 output, 7.0f, 1.05f);
         }
     }
     return true;
@@ -3865,7 +3903,6 @@ bool add_unit_scene(FeatureBundle const unit_bundles[10],
         0.63f, 0.76f, 1.45f, 3.30f, 3.00f,
         1.50f, 1.55f, 1.25f, 1.65f, 0.82f
     };
-    std::vector<Vertex> discarded_child_shadows;
     for (UnitInstance const & instance : unit_scenario.instances) {
         if (instance.visible == 0u)
             continue;
@@ -3903,17 +3940,13 @@ bool add_unit_scene(FeatureBundle const unit_bundles[10],
                              static_cast<float>(instance.stack_slot) * 0.10f;
             float offset_y = local_x * sine + local_y * cosine +
                              static_cast<float>(instance.stack_slot) * 0.07f;
-            bool shadow_emitted = false;
             for (FeaturePlacement const & placement : group->placements) {
                 std::size_t first = unit_output[instance.kind].size();
-                std::vector<Vertex> & part_shadows = !shadow_emitted
-                    ? shadows : discarded_child_shadows;
                 add_feature_instance(unit_bundles[instance.kind], placement,
                                      anchor_x + offset_x, anchor_y + offset_y,
                                      rotation, placement.scale * family_scales[instance.kind],
                                      authored_height, authored_blend, true,
-                                     part_shadows, unit_output[instance.kind]);
-                shadow_emitted = true;
+                                     shadows, unit_output[instance.kind], 6.0f, 1.10f, true);
                 FeatureAsset const & asset = unit_bundles[instance.kind].assets[
                     placement.asset_index];
                 unsigned team_code = 0u;
@@ -3921,9 +3954,15 @@ bool add_unit_scene(FeatureBundle const unit_bundles[10],
                 if (marker != std::string::npos)
                     team_code = static_cast<unsigned>(std::strtoul(
                         asset.id.c_str() + marker + 2u, nullptr, 10));
+                unsigned source_tint_code = 0u;
+                marker = asset.id.rfind(":n");
+                if (marker != std::string::npos)
+                    source_tint_code = static_cast<unsigned>(std::strtoul(
+                        asset.id.c_str() + marker + 2u, nullptr, 10));
                 float material_marker = 0.40f +
                     static_cast<float>(instance.owner) * 0.01f +
-                    static_cast<float>(team_code) * 0.001f;
+                    static_cast<float>(team_code) * 0.001f +
+                    static_cast<float>(source_tint_code) * 0.0001f;
                 for (std::size_t index = first;
                      index < unit_output[instance.kind].size(); ++index)
                     unit_output[instance.kind][index].material_index += material_marker;
@@ -3936,17 +3975,13 @@ bool add_unit_scene(FeatureBundle const unit_bundles[10],
                 unit_bundles[1], group_name.c_str());
             if (member_group == nullptr || member_group->placements.empty())
                 return false;
-            bool shadow_emitted = false;
             for (FeaturePlacement const & placement : member_group->placements) {
                 std::size_t first = unit_output[1].size();
-                std::vector<Vertex> & part_shadows = !shadow_emitted
-                    ? shadows : discarded_child_shadows;
                 add_feature_instance(unit_bundles[1], placement,
                                      anchor_x + 0.13f, anchor_y + 0.06f,
                                      rotation, placement.scale * family_scales[1],
                                      authored_height, authored_blend, true,
-                                     part_shadows, unit_output[1]);
-                shadow_emitted = true;
+                                     shadows, unit_output[1], 6.0f, 1.10f, true);
                 FeatureAsset const & asset = unit_bundles[1].assets[
                     placement.asset_index];
                 unsigned team_code = 0u;
@@ -3954,9 +3989,15 @@ bool add_unit_scene(FeatureBundle const unit_bundles[10],
                 if (marker != std::string::npos)
                     team_code = static_cast<unsigned>(std::strtoul(
                         asset.id.c_str() + marker + 2u, nullptr, 10));
+                unsigned source_tint_code = 0u;
+                marker = asset.id.rfind(":n");
+                if (marker != std::string::npos)
+                    source_tint_code = static_cast<unsigned>(std::strtoul(
+                        asset.id.c_str() + marker + 2u, nullptr, 10));
                 float material_marker = 0.40f +
                     static_cast<float>(instance.owner) * 0.01f +
-                    static_cast<float>(team_code) * 0.001f;
+                    static_cast<float>(team_code) * 0.001f +
+                    static_cast<float>(source_tint_code) * 0.0001f;
                 for (std::size_t index = first; index < unit_output[1].size(); ++index)
                     unit_output[1][index].material_index += material_marker;
             }
