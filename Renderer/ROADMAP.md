@@ -13,15 +13,17 @@ The end state is a one-command offline source importer plus authored mapping pro
 
 ## Current Position
 
-Lab v2's 2026-09-06 coastal pass retains `coast-pass-rocks-r4` as incremental
-work in progress, with all three fixed 100-tile test.biq regions plus a new
-128-tile long coast at noon/midnight and both gameplay zooms. Shoreline variation,
-direct selected-source hill sampling and source cliff material batches are
-composed. The rocks still lack the canonical continuous hill/cliff join. A
-separate synthetic volcano witness fixes inconsistent height/material coordinates;
-the verified source map contains no volcanoes. Previous best and rejected passes
-are preserved. See `terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md` and
-`COAST_VOLCANO_PASS.md` there. This does not close LQ0, assert Civ VI quality,
+Lab v2's 2026-09-06 coastal continuation retains `coast-pass-rocks-r8` as
+incremental work in progress. All three fixed 100-tile test.biq regions, the
+128-tile long coast and a previously untuned 100-tile coast have matched
+noon/midnight frames at both gameplay zooms. Selected-source gray cliff materials,
+a subordinate grassy shoulder behind source rock bodies, and already-bound water
+normal channels now survive composition. A buried-rock join was rejected.
+Abrupt grass/rock joins, soft shallows and source relief reconstruction remain
+visible gaps. The separate synthetic volcano witness stays r2 because verified
+test.biq has no volcanoes. Previous best r4 and intermediate evidence are
+preserved. See `terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md` and
+`COAST_SOURCE_JOIN_PASS.md` there. This does not close LQ0, assert Civ VI quality,
 request Integration promotion or record human approval.
 
 Production performance maintenance was explicitly resumed on 2026-09-06,

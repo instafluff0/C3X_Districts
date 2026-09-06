@@ -5,6 +5,8 @@
 #include <d3dcompiler.h>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <array>
 #include <cctype>
 #include <condition_variable>
@@ -180,6 +182,7 @@ enum GeometryLayer : std::size_t {
 
 struct CachedTileGeometry {
     std::uint64_t signature = 0, version = 0;
+    bool prefetched = false;
     std::vector<std::pair<std::uint64_t, std::uint64_t>> dependencies;
     std::array<std::vector<CachedVertexChunk>, geometry_layer_count> buffers;
     std::vector<std::pair<std::uint64_t, std::array<int, 2>>> anchor_dependencies;
@@ -346,7 +349,7 @@ public:
     std::array<std::vector<CachedVertexChunk>, geometry_layer_count>
         geometry_vertex_buffers;
     std::unordered_multimap<std::uint64_t, CachedTileGeometry> tile_geometry_cache;
-    std::size_t tile_geometry_cache_bytes = 0;
+    std::size_t tile_geometry_cache_bytes = 0, prefetched_geometry_bytes = 0;
     std::uint64_t tile_geometry_epoch = 0, tile_geometry_version = 0;
     std::vector<c3x_renderer::TileFootprint> geometry_footprints, bitmap_footprints;
     c3x_renderer::TerrainFrameSignature bitmap_footprint_signature;
@@ -2293,6 +2296,7 @@ public:
             release_geometry_vertex_buffers(entry.second.buffers);
         tile_geometry_cache.clear();
         tile_geometry_cache_bytes = 0;
+        prefetched_geometry_bytes = 0;
     }
 
     bool make_tile_cache_room(std::size_t bytes) {
@@ -2309,6 +2313,7 @@ public:
             if (oldest == tile_geometry_cache.end())
                 return false;
             tile_geometry_cache_bytes -= oldest->second.byte_count;
+            if (oldest->second.prefetched) prefetched_geometry_bytes -= oldest->second.byte_count;
             release_geometry_vertex_buffers(oldest->second.buffers);
             tile_geometry_cache.erase(oldest);
             ++frame_tiles_evicted;
@@ -2318,7 +2323,8 @@ public:
     }
 
     bool cache_geometry_layer(std::vector<Vertex> & vertices,
-                              std::vector<CachedVertexChunk> & output) {
+                              std::vector<CachedVertexChunk> & output,
+                              std::size_t available_bytes = tile_geometry_cache_budget) {
         if (vertices.empty()) return true;
         std::unordered_map<Vertex, UINT, VertexHash, VertexEqual> unique;
         unique.reserve(vertices.size() / 3u);
@@ -2340,7 +2346,7 @@ public:
         }
         chunk.index_count = static_cast<UINT>(indices.size());
         chunk.byte_count = packed.size() * sizeof(Vertex) + indices.size() * sizeof(UINT);
-        if (!make_tile_cache_room(chunk.byte_count)) return false;
+        if (chunk.byte_count > available_bytes || !make_tile_cache_room(chunk.byte_count)) return false;
         D3D11_BUFFER_DESC desc = {};
         desc.ByteWidth = static_cast<UINT>(packed.size() * sizeof(Vertex));
         desc.Usage = D3D11_USAGE_IMMUTABLE;
@@ -2363,6 +2369,10 @@ public:
     }
 
     void append_tile_geometry(CachedTileGeometry & tile, c3x_renderer_tile_v1 const & record) {
+        if (tile.prefetched) {
+            tile.prefetched = false;
+            prefetched_geometry_bytes -= tile.byte_count;
+        }
         int anchor_x = record.anchor_x, anchor_y = record.anchor_y;
         c3x_renderer::TileFootprint footprint;
         footprint.coordinate = (static_cast<std::uint64_t>(static_cast<std::uint32_t>(record.tile_x)) << 32) |
@@ -2565,11 +2575,18 @@ public:
         return true;
     }
 
-    bool render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output) {
+    bool render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output,
+                int prewarm_index = -1, std::atomic<bool> const * foreground_pending = nullptr) {
+        bool const prewarming = prewarm_index >= 0;
+        auto cancelled = [&] { return prewarming && foreground_pending->load(std::memory_order_relaxed); };
+        if (prewarming && (static_cast<unsigned>(prewarm_index) >= frame.tile_count ||
+            (frame.tiles[prewarm_index].tile_flags & C3X_RENDERER_TILE_PREFETCH) == 0 ||
+            !cache_valid || cancelled())) return false;
         LARGE_INTEGER started = {}, finished = {};
         QueryPerformanceCounter(&started);
         frame_geometry_ticks = frame_draw_ticks = frame_readback_ticks = 0;
         frame_cache_path = "tiles";
+        if (!prewarming) {
         ++trace.sequence;
         trace.write("render-begin", "", false);
         if (!initialize()) {
@@ -2587,11 +2604,14 @@ public:
             OutputDebugStringA("[C3X renderer] native-failure=terrain-textures\n");
             return false;
         }
+        }
         frame_tiles_built = frame_tiles_reused = frame_tiles_evicted = 0;
         frame_upload_bytes = 0;
         raster_reused_pixels = raster_draw_pixels = 0;
         c3x_renderer::TerrainFrameSignature signature = c3x_renderer::terrain_frame_signature(
             frame, content_revision, device_generation);
+        c3x_renderer_u32 invalidations = 0;
+        if (!prewarming) {
         if (cache_valid &&
             signature.complete == cached_signature.complete) {
             if (cache_hits != 0xffffffffu)
@@ -2635,15 +2655,16 @@ public:
             fill_output(frame, output, 0, 0);
             return true;
         }
-        c3x_renderer_u32 invalidations = invalidations_for(signature);
+        invalidations = invalidations_for(signature);
         if (cache_valid) {
             if (cache_stale_rejections != 0xffffffffu)
                 ++cache_stale_rejections;
         }
+        }
         // The previous bitmap may belong to a recent-view LRU entry instead of
         // the active geometry owner. Validate its own snapshot before shifting.
         int raster_dx = 0, raster_dy = 0;
-        bool reuse_raster = cache_valid && frame.tile_count != 0 &&
+        bool reuse_raster = !prewarming && cache_valid && frame.tile_count != 0 &&
             cached_tiles.size() == frame.tile_count && signature.geometry == cached_signature.geometry;
         if (reuse_raster) {
             raster_dx = frame.tiles[0].anchor_x - cached_tiles[0].anchor_x;
@@ -2660,9 +2681,9 @@ public:
         }
         D3D11_RECT overlap = {std::max(0, raster_dx), std::max(0, raster_dy),
                              std::min(width, width + raster_dx), std::min(height, height + raster_dy)};
-        raster_rects.clear();
+        if (!prewarming) raster_rects.clear();
         auto dirty_rect = [&](LONG left, LONG top, LONG right, LONG bottom) {
-            if (left < right && top < bottom) {
+            if (!prewarming && left < right && top < bottom) {
                 raster_rects.push_back({left, top, right, bottom});
                 raster_draw_pixels += static_cast<c3x_renderer_u32>((right - left) * (bottom - top));
             }
@@ -2676,22 +2697,25 @@ public:
         } else dirty_rect(0, 0, width, height);
         int geometry_translation_x = 0;
         int geometry_translation_y = 0;
-        bool reuse_geometry = reuse_geometry_for_translation(
+        bool reuse_geometry = !prewarming && reuse_geometry_for_translation(
             frame, signature, geometry_translation_x, geometry_translation_y);
         if (reuse_geometry) {
             frame_cache_path = "geometry-translation";
             if (cache_hits != 0xffffffffu)
                 ++cache_hits;
-        } else if (cache_misses != 0xffffffffu) {
+        } else if (!prewarming && cache_misses != 0xffffffffu) {
             ++cache_misses;
         }
-        if (!reuse_geometry) {
+        if (!reuse_geometry && !prewarming) {
             geometry_translation_x = geometry_translation_y = 0;
             clear_geometry_vertex_buffers();
             geometry_cache.clear();
             ++tile_geometry_epoch;
         }
 
+        std::vector<c3x_renderer_u32> prewarm_replacement, prewarm_fallback;
+        auto & build_replacement = prewarming ? prewarm_replacement : replacement_tile_flags;
+        auto & build_fallback = prewarming ? prewarm_fallback : fallback_tile_indices;
         c3x_renderer_u32 draw_record_count = 0;
         for (c3x_renderer_u32 i = 0; i < frame.tile_count; ++i)
             if ((frame.tiles[i].tile_flags & C3X_RENDERER_TILE_TOPOLOGY_HALO) == 0 ||
@@ -2720,8 +2744,8 @@ public:
         auto ndc_y = [](float y) { return y; };
         c3x_renderer_u32 textured_tile_count = 0;
         c3x_renderer_u32 fallback_tile_count = 0;
-        fallback_tile_indices.clear();
-        replacement_tile_flags.assign(frame.tile_count, 0u);
+        build_fallback.clear();
+        build_replacement.assign(frame.tile_count, 0u);
         c3x_renderer::EnvironmentState environment = c3x_renderer::evaluate_environment(
             static_cast<float>(frame.hour), frame.season);
         TerrainShaderSettings frame_settings = {};
@@ -2757,11 +2781,11 @@ public:
             static_cast<float>(geometry_translation_y);
         viewport_settings.depth_translation =
             -static_cast<float>(geometry_translation_y) / frame.target_height;
-        context->UpdateSubresource(terrain_settings_buffer, 0, nullptr,
+        if (!prewarming) context->UpdateSubresource(terrain_settings_buffer, 0, nullptr,
                                    &frame_settings, 0, 0);
         viewport_settings.inverse_size[0] = 1.0f / frame.target_width;
         viewport_settings.inverse_size[1] = 1.0f / frame.target_height;
-        geometry_viewport_settings = viewport_settings;
+        if (!prewarming) geometry_viewport_settings = viewport_settings;
         if (!reuse_geometry) {
         auto canonical_component = [](int value, int size, c3x_renderer_u32 wraps) {
             if (wraps == 0 || size <= 0)
@@ -2951,8 +2975,9 @@ public:
         };
         for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
-            if ((tile.tile_flags & C3X_RENDERER_TILE_RENDER) == 0)
-                continue;
+            if (prewarming ? static_cast<int>(index) != prewarm_index :
+                (tile.tile_flags & C3X_RENDERER_TILE_RENDER) == 0) continue;
+            if (cancelled()) return false;
             int ground = ground_type(tile);
             int relief = relief_type(tile);
             if (relief == 10 && !volcano_assets_ready)
@@ -2970,25 +2995,25 @@ public:
             bool draw_dunes = dune_assets_ready &&
                 tile.real_terrain_type == 0 && tile.terrain_type == 0;
             ++textured_tile_count;
-            replacement_tile_flags[index] = C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED;
+            build_replacement[index] = C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED;
             if (draw_feature || draw_marsh || draw_volcano)
-                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_FEATURE_REPLACED;
+                build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_FEATURE_REPLACED;
             if (draw_dunes)
-                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_DUNES_REPLACED;
+                build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_DUNES_REPLACED;
             if (river_assets_ready && (tile.river_code & 170u) != 0)
-                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED;
+                build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED;
             if (route_assets_ready && tile.road_mask != 0)
-                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED;
+                build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED;
             if (route_assets_ready && tile.railroad_mask != 0)
-                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED;
+                build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED;
             if (city_assets_ready && tile.city_id >= 0)
-                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED;
+                build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED;
             if (mine_assets_ready &&
                 (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) != 0)
-                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED;
+                build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED;
             if (farm_assets_ready &&
                 (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_IRRIGATION) != 0)
-                replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
+                build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
             std::unordered_map<std::uint64_t, std::uint64_t> dependencies;
             std::vector<std::pair<std::uint64_t, std::array<int, 2>>> anchor_dependencies;
             auto observed_coordinate_key = [&](int x, int y) {
@@ -3079,6 +3104,7 @@ public:
                         current->second->anchor_y - tile.anchor_y != dependency.second[1]) valid = false;
                 }
                 if (valid) {
+                    if (prewarming) { ++frame_tiles_reused; return true; }
                     append_tile_geometry(cached_tile->second, tile);
                     ++frame_tiles_reused;
                     reused_tile = true;
@@ -3880,6 +3906,7 @@ public:
                 std::vector<Vertex> grid_vertices(
                     static_cast<std::size_t>(row_width) * row_width);
                 for (int grid_v = 0; grid_v <= subdivisions; ++grid_v) {
+                    if (cancelled()) return;
                     for (int grid_u = 0; grid_u <= subdivisions; ++grid_u) {
                         float u = static_cast<float>(grid_u) / subdivisions;
                         float v = static_cast<float>(grid_v) / subdivisions;
@@ -4050,6 +4077,7 @@ public:
                 append_ground_layer(shadow_vertices, 10.0f,
                                     shadow_grid);
             }
+            if (cancelled()) return false;
             if (route_assets_ready && (tile.road_mask != 0 || tile.railroad_mask != 0)) {
                 constexpr int route_offsets[4][2] = {
                     {1, -1}, {2, 0}, {1, 1}, {0, 2}
@@ -4324,7 +4352,7 @@ public:
                 c3x_renderer::FeatureGroup const * group = group_name == nullptr ? nullptr :
                     c3x_renderer::find_feature_group(resource_bundle, group_name);
                 if (group != nullptr && !group->placements.empty()) {
-                    replacement_tile_flags[index] |= C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
+                    build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
                     c3x_renderer::FeaturePlacement const & placement = group->placements.front();
                     unsigned count = std::max(1u, placement.count);
                     for (unsigned body = 0; body < count; ++body) {
@@ -4474,16 +4502,22 @@ public:
                     }
                 }
             }
+            if (cancelled()) return false;
             CachedTileGeometry compiled;
             compiled.signature = tile_signature;
             compiled.version = ++tile_geometry_version;
             compiled.anchor_x = 0;
             compiled.anchor_y = 0;
-            compiled.last_used = tile_geometry_epoch;
+            compiled.last_used = prewarming ? tile_geometry_epoch - 1 : tile_geometry_epoch;
+            compiled.prefetched = prewarming;
             compiled.dependencies.assign(dependencies.begin(), dependencies.end());
             compiled.anchor_dependencies = std::move(anchor_dependencies);
             for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
-                if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer])) {
+                constexpr std::size_t prewarm_budget = 64u * 1024u * 1024u;
+                std::size_t available = prewarming
+                    ? prewarm_budget - std::min(prewarm_budget, prefetched_geometry_bytes + compiled.byte_count)
+                    : tile_geometry_cache_budget;
+                if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer], available)) {
                     for (auto const & chunks : compiled.buffers)
                         for (auto const & chunk : chunks) tile_geometry_cache_bytes -= chunk.byte_count;
                     release_geometry_vertex_buffers(compiled.buffers);
@@ -4492,13 +4526,18 @@ public:
                 for (auto const & chunk : compiled.buffers[layer]) compiled.byte_count += chunk.byte_count;
             }
             auto inserted = tile_geometry_cache.emplace(tile_signature, std::move(compiled));
+            if (prewarming) {
+                prefetched_geometry_bytes += inserted->second.byte_count;
+                return true;
+            }
             append_tile_geometry(inserted->second, tile);
         }
+        if (prewarming) return true;
         geometry_cache.signature = signature;
         if (frame.tile_count != 0)
             geometry_cache.tiles.assign(frame.tiles, frame.tiles + frame.tile_count);
-        geometry_cache.replacement_flags = replacement_tile_flags;
-        geometry_cache.fallback_indices = fallback_tile_indices;
+        geometry_cache.replacement_flags = build_replacement;
+        geometry_cache.fallback_indices = build_fallback;
         geometry_cache.rendered_tile_count = textured_tile_count;
         geometry_cache.fallback_tile_count = fallback_tile_count;
         geometry_cache.textured_tile_count = textured_tile_count;
@@ -4508,8 +4547,8 @@ public:
             if (cache_misses != 0) --cache_misses;
         }
         } else {
-            replacement_tile_flags = geometry_cache.replacement_flags;
-            fallback_tile_indices = geometry_cache.fallback_indices;
+            build_replacement = geometry_cache.replacement_flags;
+            build_fallback = geometry_cache.fallback_indices;
             textured_tile_count = geometry_cache.textured_tile_count;
             frame_tiles_reused = textured_tile_count;
             fallback_tile_count = geometry_cache.fallback_tile_count;
@@ -4865,6 +4904,7 @@ public:
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();
+        foreground_pending.store(true, std::memory_order_relaxed);
         job_frame = frame;
         // Reuse bounded snapshot capacity; no allocation/copy on a second vector.
         job_tiles.clear();
@@ -4938,6 +4978,14 @@ private:
     bool running = false;
     bool stop_requested = false;
     bool has_job = false;
+    std::atomic<bool> foreground_pending{false};
+    c3x_renderer_frame_v1 warm_frame = {};
+    std::vector<c3x_renderer_tile_v1> warm_tiles;
+    std::vector<unsigned> warm_order;
+    std::size_t warm_cursor = 0;
+    std::uint64_t warm_signature = 0;
+    unsigned prepared_tiles = 0, cancelled_tiles = 0;
+    c3x_renderer_i64 preparation_ticks = 0;
     Command job_command = Command::none;
     std::uint64_t latest_job_sequence = 0;
     std::uint64_t completed_job_sequence = 0;
@@ -4966,6 +5014,7 @@ private:
     }
 
     int submit_locked(std::unique_lock<std::mutex> & lock, Command command) {
+        foreground_pending.store(true, std::memory_order_relaxed);
         job_command = command;
         has_job = true;
         std::uint64_t sequence = ++latest_job_sequence;
@@ -4980,9 +5029,87 @@ private:
         return present ? path.c_str() : nullptr;
     }
 
+    void prepare_neighborhood() {
+        auto signature = c3x_renderer::terrain_frame_signature(job_frame,
+            renderer_state.content_revision, renderer_state.device_generation).complete;
+        // Repeated unit/UI redraws must not restart preparation at the first tile.
+        if (signature == warm_signature) return;
+        int direction_x = 0, direction_y = 0;
+        if (!warm_tiles.empty()) {
+            auto const & reference = warm_tiles[warm_tiles.size()/2];
+            for (auto const & tile : job_tiles)
+                if (tile.tile_x == reference.tile_x && tile.tile_y == reference.tile_y) {
+                    direction_x = reference.anchor_x - tile.anchor_x;
+                    direction_y = reference.anchor_y - tile.anchor_y;
+                    break;
+                }
+        }
+        warm_signature = signature;
+        warm_frame = job_frame;
+        warm_tiles.assign(job_tiles.begin(), job_tiles.end());
+        warm_frame.tiles = warm_tiles.data();
+        warm_order.clear(); warm_cursor = 0;
+        int left = INT_MAX, top = INT_MAX, right = INT_MIN, bottom = INT_MIN;
+        for (auto const & tile : warm_tiles)
+            if ((tile.tile_flags & C3X_RENDERER_TILE_RENDER) != 0) {
+                left = std::min(left, tile.anchor_x); right = std::max(right, tile.anchor_x);
+                top = std::min(top, tile.anchor_y); bottom = std::max(bottom, tile.anchor_y);
+            }
+        if (left > right || top > bottom) return;
+        for (unsigned i = 0; i < warm_tiles.size(); ++i)
+            if ((warm_tiles[i].tile_flags & C3X_RENDERER_TILE_PREFETCH) != 0 &&
+                (warm_tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER) == 0) warm_order.push_back(i);
+        auto priority = [&](unsigned index) {
+            auto const & tile = warm_tiles[index];
+            int x = tile.anchor_x, y = tile.anchor_y;
+            int distance_x = std::max({left-x, x-right, 0}) * 2 / warm_frame.tile_width;
+            int distance_y = std::max({top-y, y-bottom, 0}) * 2 / warm_frame.tile_height;
+            int away = ((direction_x > 0 && x < left) || (direction_x < 0 && x > right) ||
+                        (direction_y > 0 && y < top) || (direction_y < 0 && y > bottom)) ? 16 : 0;
+            return std::max(distance_x, distance_y) + away;
+        };
+        std::stable_sort(warm_order.begin(), warm_order.end(), [&](unsigned a, unsigned b) {
+            return priority(a) < priority(b);
+        });
+        if (warm_order.size() > 384u) warm_order.resize(384u);
+    }
+
     void run() {
         std::unique_lock<std::mutex> lock(state_mutex);
         for (;;) {
+            if (!has_job && !stop_requested && warm_cursor < warm_order.size()) {
+                // Yield between individual tiles. A foreground request wakes
+                // this delay and cancels CPU construction before GPU upload.
+                if (wake.wait_for(lock, std::chrono::milliseconds(2), [this] {
+                    return has_job || stop_requested;
+                })) continue;
+                unsigned index = warm_order[warm_cursor];
+                lock.unlock();
+                LARGE_INTEGER begin = {}, end = {};
+                QueryPerformanceCounter(&begin);
+                c3x_renderer_output_v1 unused = {};
+                bool ok = renderer_state.render(warm_frame, unused, static_cast<int>(index), &foreground_pending);
+                QueryPerformanceCounter(&end);
+                lock.lock();
+                preparation_ticks += end.QuadPart - begin.QuadPart;
+                if (foreground_pending.load(std::memory_order_relaxed)) {
+                    if (!ok) ++cancelled_tiles;
+                } else {
+                    if (ok) { ++warm_cursor; prepared_tiles += renderer_state.frame_tiles_built; }
+                    else warm_cursor = warm_order.size(); // bounded cache pressure is not a game failure
+                }
+                if (warm_cursor == warm_order.size() || !ok) {
+                    char detail[240];
+                    std::snprintf(detail, sizeof(detail),
+                        "result=%s pending=%zu built=%u cancelled=%u prefetch_bytes=%zu cumulative_ms=%.3f",
+                        ok ? "ready" : (foreground_pending.load() ? "interrupted" : "capacity"),
+                        warm_order.size()-warm_cursor, prepared_tiles, cancelled_tiles,
+                        renderer_state.prefetched_geometry_bytes,
+                        renderer_state.trace.milliseconds(preparation_ticks));
+                    renderer_state.trace.write("prewarm", detail);
+                }
+                continue;
+            }
             wake.wait(lock, [this] { return has_job || stop_requested; });
             if (stop_requested && !has_job)
                 break;
@@ -5020,11 +5147,23 @@ private:
                 result = C3X_RENDERER_RESULT_OK;
             }
             lock.lock();
+            if (command == Command::render && result == C3X_RENDERER_RESULT_OK) {
+                prepare_neighborhood();
+                output.prefetch_tiles_pending = static_cast<unsigned>(warm_order.size()-warm_cursor);
+                output.prefetch_tiles_built = prepared_tiles;
+                output.prefetch_tiles_cancelled = cancelled_tiles;
+                output.prefetch_cache_bytes = static_cast<unsigned>(renderer_state.prefetched_geometry_bytes);
+                output.prefetch_ticks = preparation_ticks;
+            } else {
+                warm_order.clear(); warm_cursor = 0; warm_signature = 0;
+                warm_tiles.clear();
+            }
             completed_output = output;
             completed_result = result;
             completed_job_sequence = sequence;
             job_command = Command::none;
             has_job = false;
+            foreground_pending.store(false, std::memory_order_relaxed);
             completed.notify_all();
         }
     }

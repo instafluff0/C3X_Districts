@@ -26982,7 +26982,7 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 void
 capture_custom_renderer_topology (int viewer, int visibility_mask)
 {
-	int const halo = 8;
+	int const halo = 12;
 	int count = is->custom_renderer_tile_count;
 	int reference = -1;
 	for (int i = 0; i < count; i++)
@@ -27011,6 +27011,8 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 		if (dx < min_x) min_x = dx; if (dx > max_x) max_x = dx;
 		if (dy < min_y) min_y = dy; if (dy > max_y) max_y = dy;
 	}
+	int warm_min_x = min_x - 4, warm_max_x = max_x + 4;
+	int warm_min_y = min_y - 4, warm_max_y = max_y + 4;
 	min_x -= halo; max_x += halo; min_y -= halo; max_y += halo;
 	int width = max_x - min_x + 1, height = max_y - min_y + 1;
 	if (width <= 0 || height <= 0 || width > 256 || height > 256 ||
@@ -27034,12 +27036,17 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 			Tile * tile = tile_at (x, y);
 			if (tile == NULL || tile == p_null_tile) continue;
 			Main_Screen_Form_tile_to_screen_coords (p_main_screen_form, __, x, y, &native_x, &native_y);
+			bool prepare_appearance = dx >= warm_min_x && dx <= warm_max_x &&
+				dy >= warm_min_y && dy <= warm_max_y;
 			if (! capture_custom_renderer_tile (viewer, native_x + offset_x, native_y + offset_y,
-				is->custom_renderer_target, visibility_mask, x, y, tile, true)) {
+				is->custom_renderer_target, visibility_mask, x, y, tile, ! prepare_appearance)) {
 				is->custom_renderer_tile_count = count;
 				free (captured);
 				return;
 			}
+			if (prepare_appearance)
+				is->custom_renderer_tiles[is->custom_renderer_tile_count - 1].tile_flags =
+					C3X_RENDERER_TILE_TOPOLOGY_HALO | C3X_RENDERER_TILE_PREFETCH;
 		}
 	}
 	free (captured);

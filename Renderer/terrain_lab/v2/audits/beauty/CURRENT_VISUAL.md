@@ -1,49 +1,52 @@
-# Combined terrain checkpoint — varied coast and volcano witness
+# Combined terrain checkpoint — selected source cliffs and water
 
-2026-09-06. Sole lead, local Metal. Current retained work in progress:
-**coast-pass-rocks-r4**, with **volcano-witness-r2** as a separate synthetic
-supplement. All three fixed 100-tile real-map regions and the new 128-tile long
-coast were rendered at noon/midnight and both gameplay zooms. Matched crops,
-full scenes and the native zoom-2 matrices were directly inspected.
+2026-09-06. Sole lead, local Metal. Retained work in progress:
+**coast-pass-rocks-r8**, with **volcano-witness-r2** as a separate synthetic
+supplement. All three fixed 100-tile test.biq regions, the 128-tile long coast,
+and a previously untuned 100-tile coast were rendered at noon/midnight and both
+fixed gameplay zooms. Native crops and full zoom-2 scenes were directly inspected.
 
 This is an incremental visual improvement, not Civ VI-level acceptance.
-No human approval, milestone closure, Integration promotion or injected change
-belongs to this pass. Cities, units and improvements remain deferred.
+No human approval, milestone closure or Integration promotion is recorded.
+Cities, units and improvements remain deferred.
 
-- [Long shoreline before/after — native gameplay pixels](out/coast-pass-rocks-r4/review/longcoast-day-comparison.png)
-- [Fixed coast before/after](out/coast-pass-rocks-r4/review/coastal-day-comparison.png)
-- [Inland before/after](out/coast-pass-rocks-r4/review/inland-day-comparison.png)
-- [Wilderness before/after](out/coast-pass-rocks-r4/review/wilderness-day-comparison.png)
-- [Matched long-coast night comparison](out/coast-pass-rocks-r4/review/longcoast-night-comparison.png)
-- [Supplemental volcano mapping before/after](out/coast-pass-rocks-r4/review/synthetic-volcano-day-comparison.png)
-- [All regions at native zoom 2, day](out/coast-pass-rocks-r4/review/all-regions-z2-day.png)
-- [All regions at native zoom 2, night](out/coast-pass-rocks-r4/review/all-regions-z2-night.png)
-- [Canonical Civ VI detail and Civ III shoreline references](out/coast-pass-rocks-r4/review/canonical-shore-references.png)
-- [Full 128-tile long coastline](out/coast-pass-rocks-r4/longcoast/h12-z1-pan00.png)
+- [Long coastline before/after — unchanged gameplay pixels](out/coast-pass-rocks-r8/review/longcoast-day-comparison.png)
+- [Fixed coastal benchmark before/after](out/coast-pass-rocks-r8/review/coastal-day-comparison.png)
+- [Inland before/after](out/coast-pass-rocks-r8/review/inland-day-comparison.png)
+- [Wilderness before/after](out/coast-pass-rocks-r8/review/wilderness-day-comparison.png)
+- [Long coast at night](out/coast-pass-rocks-r8/review/longcoast-night-comparison.png)
+- [Previously untuned coast — full native zoom 2](out/coast-pass-rocks-r8/review/freshcoast-z2-day-comparison.png)
+- [Previously untuned coast at night](out/coast-pass-rocks-r8/review/freshcoast-z2-night-comparison.png)
+- [All fixed regions at native zoom 2, day](out/coast-pass-rocks-r8/review/all-regions-z2-day.png)
+- [All fixed regions at native zoom 2, night](out/coast-pass-rocks-r8/review/all-regions-z2-night.png)
+- [Canonical Civ VI and Civ III references](out/coast-pass-rocks-r8/review/canonical-shore-references.png)
+- [Full 128-tile long coastline](out/coast-pass-rocks-r8/longcoast/h12-z1-pan00.png)
+- [Supplemental volcano mapping](out/coast-pass-rocks-r8/review/synthetic-volcano-day-comparison.png)
 
-The new headlands and coves replace the previous smoother outline. Source cliff
-bodies distinguish rocky hill edges from sandy lowlands. Direct source hill
-sampling restores lower relief erased by the old threshold and makes its UVs
-stable across crops. The supplemental volcano has a broader, clearer crater;
-its height, dormant/active color, slope and specular channels now share one
-coordinate mapping. Detailed findings and limitations are in
-[COAST_VOLCANO_PASS.md](COAST_VOLCANO_PASS.md).
+Gray selected-source cliff materials replace the incorrectly inherited Base
+materials. A subordinate grassy shoulder supports overlapping source bodies,
+turning several rows of detached boulders into connected rocky banks. The
+source water normal/moment textures now affect shared lighting instead of
+remaining bound but unused. The retained varied shoreline itself stays fixed.
+The first buried-rock join was rejected; all attempts and previous best r4
+remain preserved. Source controls, adaptation limits, changed-pixel locations,
+and checks are recorded in [COAST_SOURCE_JOIN_PASS.md](COAST_SOURCE_JOIN_PASS.md).
 
 The three largest visible gaps remain:
 
-1. Rock-to-hill composition: source bodies still read as separate brown boulders
-   or rings around ponds. They do not yet form the reference's continuous,
-   exposed cliff faces. Further random scale changes are not the remedy;
-   investigate the coastal relief envelope, grass shoulder and material response.
-2. Coast material structure: broad soft shallows and weak submerged detail still
-   hide fine shoreline character. The terrain/water join must remain seamless.
-3. Relief appearance: inherited analytic dunes remain diagnostic proxies with
-   thin seams; mountain/volcano proportions and side texture projection still
-   fall short. Source height hashes do not establish source physical geometry.
+1. Some grass/rock joins are abrupt, and pond banks still lack the reference's
+   natural exposed face and shoulder relationship.
+2. Soft shallows hide bed structure. Static water normals improve the open
+   surface, but shoreline interaction and reference-like water layering remain.
+3. Inherited analytic dunes are unapproved diagnostic proxies with seams;
+   mountain/volcano physical extent and side projection remain unresolved.
 
-`candidate-v5` remains the preserved previous best. Its earlier improvements,
-rejected dune/coast experiments and evidence are archived in
-[GAMEPLAY_TERRAIN_PASS.md](GAMEPLAY_TERRAIN_PASS.md). New source/fixture hashes,
-matched-camera checks, actual draw-channel bindings and changed-pixel locations
-are in [COAST_rocks-r4_EVIDENCE.json](COAST_rocks-r4_EVIDENCE.json). These support
-inspection; they do not decide visual acceptance. LQ0 remains ready/unaccepted.
+The new coast is now a regression witness, not an untuned witness for future
+acceptance. Source terrain and cameras remain pinned in its foundation fixture.
+[COAST_rocks-r8_EVIDENCE.json](COAST_rocks-r8_EVIDENCE.json) verifies the matched
+20-frame composition and actual material bindings; it does not decide quality.
+[COAST_SOURCE_BINDING_DIAGNOSTICS.json](COAST_SOURCE_BINDING_DIAGNOSTICS.json)
+separates source material, shoulder, water and rejected geometry experiments.
+Earlier retained passes are documented in
+[COAST_VOLCANO_PASS.md](COAST_VOLCANO_PASS.md) and
+[GAMEPLAY_TERRAIN_PASS.md](GAMEPLAY_TERRAIN_PASS.md). LQ0 remains ready/unaccepted.

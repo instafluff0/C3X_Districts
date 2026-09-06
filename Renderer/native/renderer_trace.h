@@ -1,10 +1,11 @@
 #pragma once
 
 // Diagnostics are opt-in, bounded, and serialized by the existing worker call
-// gate. No tile loop performs I/O. QPC timestamps match injected capture logs.
+// gate and a short trace mutex. No tile loop performs I/O. QPC timestamps match injected capture logs.
 #include <cstdio>
 
 struct RendererTrace {
+    std::mutex write_mutex;
     int level = 0;
     FILE * file = nullptr;
     std::size_t bytes = 0;
@@ -31,6 +32,7 @@ struct RendererTrace {
 
     void write(char const * stage, char const * detail, bool important = false) {
         if (!level) return;
+        std::lock_guard<std::mutex> guard(write_mutex);
         LARGE_INTEGER now = {};
         QueryPerformanceCounter(&now);
         if (level < 2 && !important &&

@@ -1,8 +1,9 @@
 # Coast, hill and supplemental volcano iteration
 
-2026-09-06. Terrain-only combined scene, local Metal, sole lead. The latest
-retained work in progress is `coast-pass-rocks-r4`; the preceding `candidate-v5`
-and every attempted coastal revision remain available. No visual gate is passed.
+2026-09-06. Terrain-only combined scene, local Metal, sole lead. This historical
+checkpoint retained `coast-pass-rocks-r4`; the preceding `candidate-v5`
+and every attempted coastal revision remain available. The later retained r8
+checkpoint is documented in `COAST_SOURCE_JOIN_PASS.md`. No visual gate is passed.
 
 ## Fixed inputs and evidence
 

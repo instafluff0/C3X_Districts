@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 11u
+#define C3X_RENDERER_API_VERSION 12u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -36,7 +36,10 @@ enum c3x_renderer_tile_flags {
     C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED = 512u,
     C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED = 1024u,
     C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED = 2048u,
-    C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED = 4096u
+    C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED = 4096u,
+    // Full authoritative appearance, captured outside the visible draw set.
+    // Paired with TOPOLOGY_HALO; permits bounded idle mesh preparation only.
+    C3X_RENDERER_TILE_PREFETCH = 8192u
 };
 
 enum c3x_renderer_invalidation_flags {
@@ -201,6 +204,13 @@ struct c3x_renderer_output_v1 {
     c3x_renderer_i64 readback_ticks;
     c3x_renderer_u32 raster_reused_pixels;
     c3x_renderer_u32 raster_draw_pixels;
+    // Idle preparation telemetry. Pending belongs to the current snapshot;
+    // built/cancelled/ticks are cumulative for this worker lifetime.
+    c3x_renderer_u32 prefetch_tiles_pending;
+    c3x_renderer_u32 prefetch_tiles_built;
+    c3x_renderer_u32 prefetch_tiles_cancelled;
+    c3x_renderer_u32 prefetch_cache_bytes;
+    c3x_renderer_i64 prefetch_ticks;
 };
 
 struct c3x_renderer_schedule_v1 {

@@ -799,7 +799,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("water_foam_texture : register(t24)", shader)
         self.assertIn("DXGI_FORMAT_R16G16B16A16_UNORM", native)
         self.assertIn("c3x_renderer_i32 clip_left", api)
-        self.assertIn("#define C3X_RENDERER_API_VERSION 11u", api)
+        self.assertIn("#define C3X_RENDERER_API_VERSION 12u", api)
         self.assertIn("DXGI_FORMAT_R16G16_UNORM", native)
         self.assertIn("float2 combined_lean =", shader)
         self.assertIn("water_foam_texture.Sample", shader)

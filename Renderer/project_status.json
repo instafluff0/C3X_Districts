@@ -77,15 +77,16 @@
       "benchmarks": "terrain_lab/v2/fixtures/beauty/gameplay-100-v1/BENCHMARKS.json",
       "review": "terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md",
       "approval": null,
-      "retained_candidate": "coast-pass-rocks-r4",
+      "retained_candidate": "coast-pass-rocks-r8",
       "supplemental_witness": "volcano-witness-r2; explicitly synthetic because test.biq contains no volcanoes",
       "additional_benchmark": "terrain_lab/v2/fixtures/beauty/coast-pass-foundation/BENCHMARKS.json",
-      "latest_evidence": "terrain_lab/v2/audits/beauty/COAST_rocks-r4_EVIDENCE.json",
+      "latest_evidence": "terrain_lab/v2/audits/beauty/COAST_rocks-r8_EVIDENCE.json",
       "remaining_visible_gaps": [
-        "Hill/cliff join still reads as separated source boulders",
-        "Soft shallows obscure source bed detail",
+        "Abrupt grass/rock joins and insufficiently natural pond-bank composition",
+        "Soft shallows and missing shoreline water interaction",
         "Diagnostic dune seams and unproven mountain/volcano physical reconstruction"
-      ]
+      ],
+      "untuned_region_evidence": "terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/BENCHMARKS.json"
     },
     "ordinary_backend": "macos_metal",
     "promotion_parity_backend": "windows_d3d11"
