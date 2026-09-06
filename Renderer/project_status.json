@@ -1,7 +1,7 @@
 {
   "schema": "c3x.renderer_project_status.v0",
   "last_updated": "2026-09-06",
-  "current_milestone": "LAB",
+  "current_milestone": "LAB_V2",
   "manual_evidence_policy": {
     "mode": "strategic_batched_checkpoints",
     "ordinary_iterations": "automated_and_replayable_evidence_only",
@@ -22,18 +22,26 @@
     "required_user_visual_approval": true,
     "advance_rule": "Do not begin the next lab gate until the user explicitly approves the current 192-tile promotion render. Missing approval is pending, never implied."
   },
+  "lab_v2_campaign": {
+    "plan": "docs/renderer_lab_v2.md",
+    "manifest": "terrain_lab/v2/campaigns/Q1/campaign.json",
+    "baseline": "handoffs/L21_complete_beauty_scene.json",
+    "rule": "Historical L9-L21 handoffs are immutable. LQ0 establishes modular contracts and the macOS fast path; LQ1 owns parallel visual tracks; LQ2 freezes versioned v2 handoffs before deliberate Integration refresh work.",
+    "ordinary_backend": "macos_metal",
+    "promotion_parity_backend": "windows_d3d11"
+  },
   "workstreams": {
     "renderer_lab": {
-      "responsibility": "Standalone asset use, rendering technique, visual quality, and approval for all map graphics.",
-      "plan": "terrain_lab/PLAN.md",
-      "current_step": "complete",
-      "status": "complete",
+      "responsibility": "Standalone asset use, rendering technique, visual quality, approval, and the modular macOS-first Lab v2 campaign for all map graphics.",
+      "plan": "docs/renderer_lab_v2.md",
+      "current_step": "LQ0",
+      "status": "in_progress",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py lab"
     },
     "game_integration": {
       "responsibility": "Civ III state capture, cache/invalidation, redraws, anchoring, compositing, exclusive native suppression, retained layers, telemetry, and hard failure without native replay.",
       "current_step": "I19",
-      "status": "ready",
+      "status": "blocked_by_lab",
       "iteration_command": "python3 Renderer/tools/renderer_dev.py integration"
     },
     "promotion_rule": "Every L# visual gate has a same-numbered I# game-integration gate. I# cannot start before L# approval; after L# is approved, I# consumes that frozen handoff before the next system is considered integrated. L21/I21 remain the final combined release gates.",
@@ -43,7 +51,7 @@
     "windows_vm": {
       "name": "Windows 11",
       "shared_repository": "Y:\\fun\\Civilization III Complete\\Conquests\\C3X_Districts",
-      "dispatch": "Python checks run locally; Windows-only phases dispatch automatically through prlctl on non-Windows hosts.",
+      "dispatch": "Lab v2 quick, check, and compose work runs through the future headless macOS Metal backend. D3D11 parity, production builds, authoritative Civ III capture, injected compilation, and in-game verification dispatch through prlctl.",
       "civ3_conquests": "C:\\Program Files (x86)\\GOG Galaxy\\Games\\Civilization III Complete\\Conquests",
       "live_mod_link": "C:\\Program Files (x86)\\GOG Galaxy\\Games\\Civilization III Complete\\Conquests\\C3X_Districts -> \\\\Mac\\Home\\fun\\Civilization III Complete\\Conquests\\C3X_Districts",
       "injected_verify_link": "C3X_Shared_Verify"
@@ -86,12 +94,9 @@
         "verification": "Deterministic intercepted events with target and interceptor and no detonation children."
       }
     ],
-    "current_step_existing_symbols": [
-      "Map_Renderer_m71_Draw_Tiles",
-      "Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"
-    ],
+    "current_step_existing_symbols": [],
     "current_step_audit_candidates": [
-      "I12 reuses the existing m71/m19 capture and suppression boundary, m49/m50 terrain accessors, and Tile.Body.active_tile_effect; no new Civ III patch symbol is required"
+      "LQ0 is standalone Lab and tooling restructuring; it requires no Civ III patch symbol or civ_prog_objects.csv change."
     ],
     "reporting_rule": "When a new CSV entry is proven necessary, update this block and the ledger and tell the user immediately with exact patch capability, signature, supported-build addresses, reason, fallback, and verification."
   },
@@ -105,6 +110,7 @@
     "docs/fixture_matrix.md",
     "docs/source_adapter_contract.md",
     "docs/renderer_workstreams.md",
+    "docs/renderer_lab_v2.md",
     "docs/environment_lighting_and_ambient_effects.md",
     "docs/civ6_lighting_findings.md",
     "docs/civ6_lighting_probe.json",
@@ -134,6 +140,8 @@
     "docs/vanilla_terrain_scene.md",
     "docs/terrain_visual_direction.md",
     "terrain_lab/PLAN.md",
+    "terrain_lab/v2/README.md",
+    "terrain_lab/v2/campaigns/Q1/campaign.json",
     "terrain_lab/DUNE_SOURCE_AUDIT.md",
     "terrain_lab/L20_UNIT_AUDIT.md",
     "handoffs/L20_units.json",
@@ -141,23 +149,28 @@
     "handoffs/L21_complete_beauty_scene.json"
   ],
   "next_step": {
-    "id": "I19",
-    "title": "Integrate farms and irrigation",
+    "id": "LQ0",
+    "title": "Modularize Renderer Lab and establish the macOS fast path",
     "status": "ready",
-    "workstream": "game_integration",
-    "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
+    "workstream": "renderer_lab",
+    "iteration_command": "python3 Renderer/tools/renderer_dev.py lab",
     "promotion_required": false,
     "scope": [
-      "Consume the already-approved L19 farm and irrigation handoff without changing Renderer Lab appearance.",
-      "Preserve the frozen L21 territory-border and unified raised-object lighting contracts for their matching later integration gates."
+      "Freeze the completed L21/D3D11 appearance and historical handoffs while extracting portable scene, system, render-packet, presentation, fixture, and composition contracts under terrain_lab/v2.",
+      "Add a headless macOS Metal backend and quick, check, compose, and promote workflows; ordinary Lab iteration must not invoke Parallels.",
+      "Preserve the off-screen D3D11 backend as the promotion-parity target and establish bounded deterministic Metal/D3D11 comparison evidence.",
+      "Provide exclusive per-track ownership, namespaced output, content-addressed caches, microfixtures, and validated prompts for parallel LQ1 agents."
     ],
     "acceptance": [
-      "Authoritative Civ III farm and irrigation state is captured, cached, composited, and invalidated through the established custom-renderer boundary.",
-      "Configuration-off and hard-failure fallback behavior remain unchanged."
+      "Mac-default quick, check, and compose workflows render deterministically without invoking the Windows VM, while the promotion workflow retains an explicit D3D11 parity phase.",
+      "The frozen v1 L21 output and handoff contracts remain unchanged through a representative no-intended-visual-change parity gate.",
+      "Two visual-system owners can edit, test, and render through exclusive implementation and output paths without touching shared core files.",
+      "Campaign manifests, per-track status, reference metadata, and generated prompts validate, and the complete project-state and relevant Lab verification suites pass."
     ],
     "must_not": [
-      "Do not reopen Renderer Lab appearance work during I19.",
-      "Do not integrate later object, unit, or final territory systems ahead of their ordered gates."
+      "Do not retune visual appearance, overwrite v1 handoffs or accepted output names, or begin an LQ1 beauty implementation during the LQ0 neutrality refactor.",
+      "Do not modify injected code, Civ III capture, native suppression, or resume I19 and later Integration gates during LQ0.",
+      "Do not create Metal-only visual behavior, source-specific runtime branches, or require cross-backend byte identity where bounded parity is the correct contract."
     ]
   },
   "milestones": [
@@ -958,8 +971,16 @@
     {
       "id": "LAB",
       "title": "Renderer Lab visual development",
-      "status": "in_progress",
+      "status": "complete",
+      "completed_on": "2026-09-06",
       "plan": "terrain_lab/PLAN.md",
+      "evidence": [
+        "handoffs/L21_complete_beauty_scene.json",
+        "terrain_lab/L21_COMPLETE_BEAUTY_AUDIT.md"
+      ],
+      "verification": [
+        "terrain_lab_l21_complete_beauty_scene_and_authorized_critical_visual_approval"
+      ],
       "steps": [
         {"id": "L9", "title": "Terrain beauty scene and 48-tile promotion approval", "status": "complete", "promotion_required": true, "evidence": ["terrain_lab/L9_PROMOTION_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl"], "verification": ["terrain_lab_l9_replayable_render_and_explicit_visual_approval"]},
         {"id": "L10", "title": "Source-backed desert dunes and 96-tile promotion approval", "status": "complete", "promotion_required": true, "approved_on": "2026-09-05", "source_audit": "terrain_lab/DUNE_SOURCE_AUDIT.md", "evidence": ["terrain_lab/L10_DUNE_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "tools/asset_compiler/test_dune_source_probe.py", "tools/asset_compiler/test_generic_decal_compiler.py"], "verification": ["terrain_lab_l10_replayable_render_and_explicit_visual_approval"]},
@@ -1291,6 +1312,43 @@
       ]
     },
     {
+      "id": "LAB_V2",
+      "title": "Renderer Lab v2 modular macOS-first quality campaign",
+      "status": "in_progress",
+      "plan": "docs/renderer_lab_v2.md",
+      "campaign": "terrain_lab/v2/campaigns/Q1/campaign.json",
+      "steps": [
+        {
+          "id": "LQ0",
+          "title": "Modularize Renderer Lab and establish the macOS fast path",
+          "status": "ready",
+          "promotion_required": false
+        },
+        {
+          "id": "LQ1",
+          "title": "Run parallel visual-quality tracks",
+          "status": "blocked_by_previous",
+          "promotion_required": true,
+          "work_packages": [
+            "Q1-sampling",
+            "Q2-terrain",
+            "Q3-hydrology",
+            "Q4-relief",
+            "Q5-networks",
+            "Q6-lighting",
+            "Q7-presentation",
+            "Q8-beauty"
+          ]
+        },
+        {
+          "id": "LQ2",
+          "title": "Converge the complete scene and freeze Lab v2 handoffs",
+          "status": "blocked_by_previous",
+          "promotion_required": true
+        }
+      ]
+    },
+    {
       "id": "INTEGRATION",
       "title": "Paired Game Integration gates",
       "status": "in_progress",
@@ -1307,7 +1365,7 @@
         {"id": "I16", "lab_gate": "L16", "title": "Integrate resources", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L16_resources.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
         {"id": "I17", "lab_gate": "L17", "title": "Integrate civilization-, size-, and era-specific cities", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L17_cities.json", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
         {"id": "I18", "lab_gate": "L18", "title": "Integrate mines", "status": "complete", "completed_on": "2026-09-06", "evidence": ["handoffs/L18_mines.json", "native/c3x_renderer_api.h", "native/c3x_renderer.cpp", "native/terrain_rendering.hlsl", "native/terrain_scene_runtime.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i14_i18/README.md", "../injected_code.c"], "verification": ["i18_approved_map_stack_integration"], "local_verification": ["i18_local_approved_map_stack_payload"]},
-        {"id": "I19", "lab_gate": "L19", "title": "Integrate farms and irrigation", "status": "ready"},
+        {"id": "I19", "lab_gate": "L19", "title": "Integrate farms and irrigation", "status": "blocked_by_lab"},
         {"id": "I19A", "lab_gate": "L19A", "title": "Integrate goody huts and colony outposts", "status": "blocked_by_previous"},
         {"id": "I19B", "lab_gate": "L19B", "title": "Integrate remaining tile infrastructure", "status": "blocked_by_previous"},
         {"id": "I20", "lab_gate": "L20", "title": "Integrate units and animation", "status": "blocked_by_previous"},

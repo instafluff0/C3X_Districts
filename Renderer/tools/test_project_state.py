@@ -117,11 +117,11 @@ class ProjectStateTests(unittest.TestCase):
         self.assertEqual("complete", lab_steps["L19A"]["status"])
         for integration_id in ("I14", "I15", "I16", "I17", "I18"):
             self.assertEqual("complete", integration_steps[integration_id]["status"])
-        self.assertEqual("blocked_by_previous", integration_steps["I19"]["status"])
+        self.assertEqual("blocked_by_lab", integration_steps["I19"]["status"])
         self.assertEqual("complete", lab_steps["L19B"]["status"])
         self.assertEqual("complete", lab_steps["L20"]["status"])
-        self.assertEqual("ready", lab_steps["L21"]["status"])
-        self.assertEqual("L21", source["next_step"]["id"])
+        self.assertEqual("complete", lab_steps["L21"]["status"])
+        self.assertEqual("LQ0", source["next_step"]["id"])
         environment_scope = " ".join(
             m6_steps["M6.4"][field][index]
             for field in ("scope", "acceptance", "must_not")
@@ -197,13 +197,34 @@ class ProjectStateTests(unittest.TestCase):
         source = json.loads(check_project_state.DEFAULT_STATUS.read_text(encoding="utf-8"))
         workstreams = source["workstreams"]
 
-        self.assertEqual("L21", workstreams["renderer_lab"]["current_step"])
+        self.assertEqual("LQ0", workstreams["renderer_lab"]["current_step"])
         self.assertEqual("I19", workstreams["game_integration"]["current_step"])
+        self.assertEqual("in_progress", workstreams["renderer_lab"]["status"])
+        self.assertEqual("blocked_by_lab", workstreams["game_integration"]["status"])
         self.assertIn("renderer_dev.py lab", workstreams["renderer_lab"]["iteration_command"])
         self.assertIn("renderer_dev.py integration", workstreams["game_integration"]["iteration_command"])
         self.assertEqual("Windows 11", workstreams["windows_vm"]["name"])
         self.assertTrue(workstreams["windows_vm"]["shared_repository"].startswith("Y:\\"))
         self.assertIn("same-numbered I#", workstreams["promotion_rule"])
+
+    def test_lab_v2_campaign_is_the_sole_ready_work(self) -> None:
+        source = json.loads(check_project_state.DEFAULT_STATUS.read_text(encoding="utf-8"))
+        milestones = {milestone["id"]: milestone for milestone in source["milestones"]}
+        lab_v2_steps = {step["id"]: step for step in milestones["LAB_V2"]["steps"]}
+        ready = [
+            step["id"]
+            for milestone in source["milestones"]
+            for step in milestone.get("steps", [])
+            if step["status"] == "ready"
+        ]
+
+        self.assertEqual("complete", milestones["LAB"]["status"])
+        self.assertEqual("in_progress", milestones["LAB_V2"]["status"])
+        self.assertEqual("LAB_V2", source["current_milestone"])
+        self.assertEqual("LQ0", source["next_step"]["id"])
+        self.assertFalse(lab_v2_steps["LQ0"]["promotion_required"])
+        self.assertEqual(["LQ0"], ready)
+        self.assertIn("docs/renderer_lab_v2.md", source["required_docs"])
 
     def test_every_lab_gate_has_a_same_numbered_integration_gate(self) -> None:
         source = json.loads(check_project_state.DEFAULT_STATUS.read_text(encoding="utf-8"))

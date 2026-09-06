@@ -1,0 +1,15 @@
+{
+  "schema": "c3x.renderer_lab_v2_work_package.v0",
+  "id": "Q1-sampling",
+  "campaign": "Q1",
+  "title": "Sampling and material fidelity",
+  "status_file": "../status/Q1-sampling.json",
+  "dependencies": ["Q0-platform"],
+  "owns_paths": ["Renderer/terrain_lab/v2/systems/sampling/", "Renderer/terrain_lab/v2/shaders/sampling/", "Renderer/terrain_lab/v2/fixtures/sampling/", "Renderer/terrain_lab/v2/tests/sampling/", "Renderer/terrain_lab/v2/audits/sampling/"],
+  "reads_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/terrain_lab/v2/references/catalog.json"],
+  "forbidden_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/native/", "injected_code.c", "C3X.h", "Renderer/handoffs/"],
+  "references": ["civ6.unit_materials", "civ6.hills", "civ6.sea_and_shore"],
+  "scope": ["Own sRGB/linear handling, filtering, mip/LOD, tangent basis, texel density, source UV preservation, and stretch diagnostics."],
+  "acceptance": ["Detail survives both zooms without shimmer, exaggerated normals, clipped contrast, nonuniform source-body distortion, or out-of-bounds UV anisotropy."],
+  "prompt": "../../../prompts/Q1-sampling.md"
+}

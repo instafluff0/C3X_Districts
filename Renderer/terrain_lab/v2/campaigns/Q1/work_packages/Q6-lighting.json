@@ -1,0 +1,15 @@
+{
+  "schema": "c3x.renderer_lab_v2_work_package.v0",
+  "id": "Q6-lighting",
+  "campaign": "Q1",
+  "title": "Shared lighting, shadows, depth, and composition",
+  "status_file": "../status/Q6-lighting.json",
+  "dependencies": ["Q0-platform"],
+  "owns_paths": ["Renderer/terrain_lab/v2/systems/lighting/", "Renderer/terrain_lab/v2/shaders/lighting/", "Renderer/terrain_lab/v2/fixtures/lighting/", "Renderer/terrain_lab/v2/tests/lighting/", "Renderer/terrain_lab/v2/audits/lighting/"],
+  "reads_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/native/environment_runtime.cpp", "Renderer/terrain_lab/v2/references/catalog.json"],
+  "forbidden_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/native/", "injected_code.c", "C3X.h", "Renderer/handoffs/"],
+  "references": ["civ6.daynight"],
+  "scope": ["Own shared sun, moon, ambient, exposure, form shading, caster/receiver behavior, contact and cast shadows, depth, transparency, and emissive ordering."],
+  "acceptance": ["Every category shares one environment and coherent shadow direction; noon, sunset, midnight, and sunrise match the reference ordering; overlap and transparency are physically plausible and deterministic."],
+  "prompt": "../../../prompts/Q6-lighting.md"
+}

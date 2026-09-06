@@ -49,6 +49,15 @@ configuration on owns the complete `m19` map plane and never replays native
 terrain after a partial or failed custom frame. See
 [docs/renderer_workstreams.md](docs/renderer_workstreams.md).
 
+After the complete L9-L21 Lab v1 stack was frozen, the user authorized a
+separate Renderer Lab v2 quality campaign before the remaining Integration
+gates. Lab v2 preserves every historical handoff, first performs a
+zero-intended-visual-change modularization and macOS Metal port, then runs
+ownership-separated visual tracks and freezes separately versioned v2
+candidates. Windows D3D11 remains the promotion-parity target and Civ III
+Integration remains Windows-only. See
+[docs/renderer_lab_v2.md](docs/renderer_lab_v2.md).
+
 ## End-State Import And Mapping Workflow
 
 The intended authoring experience is a single offline importer command once a source adapter and mapping profile exist. Conceptually:

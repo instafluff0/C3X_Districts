@@ -1,0 +1,15 @@
+{
+  "schema": "c3x.renderer_lab_v2_work_package.v0",
+  "id": "Q5-networks",
+  "campaign": "Q1",
+  "title": "Road and railroad networks",
+  "status_file": "../status/Q5-networks.json",
+  "dependencies": ["Q0-platform", "Q2-terrain", "Q3-hydrology"],
+  "owns_paths": ["Renderer/terrain_lab/v2/systems/networks/", "Renderer/terrain_lab/v2/shaders/networks/", "Renderer/terrain_lab/v2/fixtures/networks/", "Renderer/terrain_lab/v2/tests/networks/", "Renderer/terrain_lab/v2/audits/networks/"],
+  "reads_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/terrain_lab/v2/systems/terrain/", "Renderer/terrain_lab/v2/systems/hydrology/", "Renderer/terrain_lab/v2/references/catalog.json"],
+  "forbidden_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/native/", "injected_code.c", "C3X.h", "Renderer/handoffs/"],
+  "references": ["civ6.roads"],
+  "scope": ["Own road and railroad graph interpretation, all legal directions, curves, junctions, grades, route states, coexistence, and bridge bodies."],
+  "acceptance": ["Connectivity is exact; routes wind naturally, traverse relief without floating or tunneling, include visually north-south paths, align with hydrology crossings, and remain readable at both zooms."],
+  "prompt": "../../../prompts/Q5-networks.md"
+}

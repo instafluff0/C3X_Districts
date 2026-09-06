@@ -1,0 +1,10 @@
+{
+  "schema": "c3x.renderer_lab_v2_track_status.v0",
+  "id": "Q1-sampling",
+  "campaign": "Q1",
+  "state": "blocked_by_dependency",
+  "candidate": null,
+  "evidence": [],
+  "blockers": ["Q0-platform"],
+  "approval": null
+}

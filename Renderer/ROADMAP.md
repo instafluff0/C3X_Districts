@@ -150,17 +150,33 @@ shoreline clipping. The same generic pass adds restrained grassland, plains,
 and grassland-hill surface clutter. The rejected transparency, whole-atlas,
 oversized-cloud, and every-cell repetition candidates are not preserved.
 
-## Next Step: I19
+## Next Step: LQ0
 
-The Renderer Lab iteration is complete through L21. Its final revision adds
+Renderer Lab v1 is complete through L21. Its final revision adds
 single-main-color civilization territory ribbons with no same-owner seams, and
 extends the shared authored-normal/self-face plus directionally consistent
 source-mesh cast-shadow system to cities, walls, mines, farm buildings, goody
 huts, colonies, fortresses, barricades, airfields, outposts, radar towers, and
 victory locations. Flat borders, pollution, and crater decals correctly remain
 non-casters. At the user's explicit request, the last full validation matrix was
-waived and the visually inspected result was frozen immediately. Integration
-may resume at I19; Lab appearance is closed unless explicitly reopened.
+waived and the visually inspected result was frozen immediately. Those L9-L21
+handoffs are now the immutable Lab v1 baseline.
+
+The user has explicitly reopened standalone appearance work as Renderer Lab v2
+before I19. Integration is paused at I19 while LQ0 modularizes the Lab and
+establishes a headless macOS Metal fast path with D3D11 promotion parity. LQ0 is
+a zero-intended-visual-change step: it must preserve the frozen v1 results while
+adding stable system ownership, render-packet and composition contracts,
+namespaced outputs, content-addressed caches, microfixtures, and quick/check/
+compose/promote workflows. The detailed campaign is in
+`docs/renderer_lab_v2.md`; the machine-readable work packages and reusable
+agent prompts are under `terrain_lab/v2/`.
+
+Renderer Lab v2 has one recorded terrain-family audit prerequisite in
+`docs/terrain_visual_direction.md`: revalidate grassland, plains, desert,
+tundra, and flood plains first, then relief, vegetation/wetland, and water families plus all
+cross-family transitions. Tile-shaped brown or dark smudges are explicitly
+logged as invalid overlay/shadow leakage rather than legitimate terrain.
 
 Ahead of that visual gate, all 24 animated clutter bodies now compile with
 model-aware pose caches, including single-animal elephant selection and one
@@ -178,7 +194,9 @@ moves through matching gates: L9 -> I9, L10 -> I10, L11 -> I11, and so on.
 The L# gate owns standalone quality and freezes the handoff; the I# gate owns
 live capture, cache/invalidation, compositing, exclusive native suppression,
 telemetry, reset behavior, and visible hard failure without native replay.
-L21/I21 are the combined release-level gates. See `docs/renderer_workstreams.md` and
+L21/I21 are the historical v1 combined release-level gates. Lab v2 produces
+separately versioned replacement candidates and never overwrites them. See
+`docs/renderer_workstreams.md`, `docs/renderer_lab_v2.md`, and
 `terrain_lab/PLAN.md`.
 
 User-directed M6.8 preparation began on 2026-09-05 without advancing its formal

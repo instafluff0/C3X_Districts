@@ -1,0 +1,15 @@
+{
+  "schema": "c3x.renderer_lab_v2_work_package.v0",
+  "id": "Q2-terrain",
+  "campaign": "Q1",
+  "title": "Continuous terrain materials and universal blending",
+  "status_file": "../status/Q2-terrain.json",
+  "dependencies": ["Q0-platform", "Q1-sampling"],
+  "owns_paths": ["Renderer/terrain_lab/v2/systems/terrain/", "Renderer/terrain_lab/v2/shaders/terrain/", "Renderer/terrain_lab/v2/fixtures/terrain/", "Renderer/terrain_lab/v2/tests/terrain/", "Renderer/terrain_lab/v2/audits/terrain/"],
+  "reads_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/terrain_lab/v2/systems/sampling/", "Renderer/terrain_lab/v2/references/catalog.json"],
+  "forbidden_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/native/", "injected_code.c", "C3X.h", "Renderer/handoffs/"],
+  "references": ["civ6.desert", "civ6.hills", "civ6.marsh"],
+  "scope": ["Own continuous ground fields, material weights, world-space detail, wrap-safe sampling, and an explicit transition policy for every reachable terrain pair."],
+  "acceptance": ["All unordered terrain pairs, both adjacency axes, reversed ownership, wrap, and selected multiway junctions have continuous geometry and intentional material transitions without cracks or tile-frequency diamonds."],
+  "prompt": "../../../prompts/Q2-terrain.md"
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "c3x.renderer_lab_v2_campaign.v0",
+  "id": "Q1",
+  "title": "Civ VI-directed visual quality",
+  "project_steps": ["LQ0", "LQ1", "LQ2"],
+  "baseline": {
+    "lab_gate": "L21",
+    "handoff": "Renderer/handoffs/L21_complete_beauty_scene.json",
+    "immutability": "reference_only"
+  },
+  "ordinary_backend": "macos_metal",
+  "promotion_parity_backend": "windows_d3d11",
+  "reference_catalog": "../../references/catalog.json",
+  "common_prompt": "../../prompts/COMMON.md",
+  "output_root_template": "Renderer/preview/out/terrain_lab/v2/{campaign}/{track}/{candidate}",
+  "tracks": [
+    {"id": "Q0-platform", "manifest": "work_packages/Q0-platform.json", "status": "status/Q0-platform.json"},
+    {"id": "Q1-sampling", "manifest": "work_packages/Q1-sampling.json", "status": "status/Q1-sampling.json"},
+    {"id": "Q2-terrain", "manifest": "work_packages/Q2-terrain.json", "status": "status/Q2-terrain.json"},
+    {"id": "Q3-hydrology", "manifest": "work_packages/Q3-hydrology.json", "status": "status/Q3-hydrology.json"},
+    {"id": "Q4-relief", "manifest": "work_packages/Q4-relief.json", "status": "status/Q4-relief.json"},
+    {"id": "Q5-networks", "manifest": "work_packages/Q5-networks.json", "status": "status/Q5-networks.json"},
+    {"id": "Q6-lighting", "manifest": "work_packages/Q6-lighting.json", "status": "status/Q6-lighting.json"},
+    {"id": "Q7-presentation", "manifest": "work_packages/Q7-presentation.json", "status": "status/Q7-presentation.json"},
+    {"id": "Q8-beauty", "manifest": "work_packages/Q8-beauty.json", "status": "status/Q8-beauty.json"}
+  ],
+  "promotion_rule": "LQ2 requires every non-platform track accepted, one combined Metal promotion matrix, bounded D3D11 parity, deterministic repeats, and a versioned v2 handoff set."
+}

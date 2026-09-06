@@ -1,0 +1,10 @@
+{
+  "schema": "c3x.renderer_lab_v2_track_status.v0",
+  "id": "Q5-networks",
+  "campaign": "Q1",
+  "state": "blocked_by_dependency",
+  "candidate": null,
+  "evidence": [],
+  "blockers": ["Q0-platform", "Q2-terrain", "Q3-hydrology"],
+  "approval": null
+}

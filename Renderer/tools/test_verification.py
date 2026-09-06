@@ -75,6 +75,10 @@ class VerificationTests(unittest.TestCase):
         self.assertEqual("L13A", check.call_args.args[1])
         self.assertEqual(192, check.call_args.args[2])
 
+    def test_l21_explicit_closure_direction_is_a_valid_approval_basis(self) -> None:
+        result = verify_project.check_terrain_lab_l21_handoff()
+        self.assertEqual(result["status"], "pass", result["detail"])
+
     def test_synthetic_civblp_probe_gate_passes(self) -> None:
         result = verify_project.check_civblp_probe_synthetic()
         self.assertEqual(result["status"], "pass", result["detail"])

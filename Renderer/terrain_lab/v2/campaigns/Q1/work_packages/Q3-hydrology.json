@@ -1,0 +1,15 @@
+{
+  "schema": "c3x.renderer_lab_v2_work_package.v0",
+  "id": "Q3-hydrology",
+  "campaign": "Q1",
+  "title": "Coasts, shallow water, ocean, and rivers",
+  "status_file": "../status/Q3-hydrology.json",
+  "dependencies": ["Q0-platform", "Q1-sampling"],
+  "owns_paths": ["Renderer/terrain_lab/v2/systems/hydrology/", "Renderer/terrain_lab/v2/shaders/hydrology/", "Renderer/terrain_lab/v2/fixtures/hydrology/", "Renderer/terrain_lab/v2/tests/hydrology/", "Renderer/terrain_lab/v2/audits/hydrology/"],
+  "reads_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/terrain_lab/v2/systems/terrain/", "Renderer/terrain_lab/v2/references/catalog.json"],
+  "forbidden_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/native/", "injected_code.c", "C3X.h", "Renderer/handoffs/"],
+  "references": ["civ6.sea_and_shore", "civ6.river"],
+  "scope": ["Own shoreline topology, beach, bathymetry, visible shallows, water, surf, river corridors, banks, junctions, mouths, relief-carving inputs, and crossing anchors."],
+  "acceptance": ["Coves, points, islands, channels, long runs, sources, junctions, mouths, relief, and wrap contain no periodic S-template, water plate, detached surf, or disconnected river."],
+  "prompt": "../../../prompts/Q3-hydrology.md"
+}

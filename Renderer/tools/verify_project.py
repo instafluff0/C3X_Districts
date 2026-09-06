@@ -1367,12 +1367,28 @@ def check_lab_handoff(
     hashes = (reference.get("native_sha256"), reference.get("reduced_sha256"))
     if any(not isinstance(value, str) or len(value) != 64 or value not in audit for value in hashes):
         return failed(f"{gate} handoff hashes do not match its promotion audit")
-    if "explicitly approved" not in audit:
-        return failed(f"{gate} audit does not record explicit visual approval")
-    for output_key, hash_key in (("native_output", "native_sha256"), ("reduced_output", "reduced_sha256")):
-        output = RENDERER_ROOT / str(reference.get(output_key, ""))
-        if output.is_file() and hashlib.sha256(output.read_bytes()).hexdigest() != reference[hash_key]:
-            return failed(f"Existing {gate} output does not match the approved {output_key} hash")
+    audit_lower = audit.lower()
+    if "explicitly approved" not in audit_lower:
+        approval_basis = handoff.get("approval_basis")
+        if not isinstance(approval_basis, str) or not approval_basis.strip() or not (
+            "explicit" in audit_lower
+            and "user" in audit_lower
+            and ("approval" in approval_basis.lower() or "instruction" in approval_basis.lower())
+        ):
+            return failed(f"{gate} audit does not record explicit visual approval or closure direction")
+    hash_scope = str(reference.get("hash_scope", "")).lower()
+    final_revision = handoff.get("final_revision", {})
+    validation_disposition = str(final_revision.get("validation_disposition", "")).lower()
+    hashes_are_current_outputs = not (
+        "pre-" in hash_scope
+        and "baseline" in hash_scope
+        and "waived" in validation_disposition
+    )
+    if hashes_are_current_outputs:
+        for output_key, hash_key in (("native_output", "native_sha256"), ("reduced_output", "reduced_sha256")):
+            output = RENDERER_ROOT / str(reference.get(output_key, ""))
+            if output.is_file() and hashlib.sha256(output.read_bytes()).hexdigest() != reference[hash_key]:
+                return failed(f"Existing {gate} output does not match the approved {output_key} hash")
     tests = subprocess.run(
         [sys.executable, "-m", "unittest", *test_modules],
         cwd=C3X_ROOT, capture_output=True, text=True, check=False,

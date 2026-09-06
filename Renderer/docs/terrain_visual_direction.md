@@ -80,6 +80,25 @@ Judge each fixed-camera render in this order:
 5. **Material:** vegetation, soil, rock, snow, wet shore, and water differ through roughness/normal/specular response as well as hue.
 6. **Accent:** foam, snow, sun glints, and saturated biome color are sparse focal accents, not the base exposure.
 
+## Renderer Lab v2 terrain-family audit backlog
+
+Before Lab v2 promotes another combined scene, audit every visible terrain
+family and verify that its Civ VI source material has a sensible Civ III
+semantic destination. The primary land-material audit must cover **grassland,
+plains, desert, tundra, and flood plains** individually. It must then cover
+their interaction with **hills, mountains, volcanoes, forests, jungles, marshes,
+coasts, sea, and ocean**, including every relevant adjacency and transition.
+
+For each family, record the source material/texture role, Civ III terrain code,
+height and relief behavior, clutter/decal contribution, shoreline behavior,
+lighting response, and legal neighboring families. Use isolated, mixed-
+adjacency, and no-layer controls so a shadow, decal, or relief mask cannot be
+mistaken for terrain. In particular, reject any tile-sized brown or dark
+smudge with a visible diamond boundary: that is evidence of a leaking overlay
+or cast-shadow receiver, not a valid base terrain type. The audit should prefer
+clear semantic mappings over visual approximation and must not let a Civ VI
+asset's source name silently decide its Civ III role.
+
 ## Superseded Implementation Ladder
 
 The former M6.7a-M6.7g production-art ladder is retired. Its technical findings

@@ -99,6 +99,8 @@ class RendererDevTests(unittest.TestCase):
     def test_lab_workflow_runs_the_authorized_gate_script(self) -> None:
         source = Path(renderer_dev.__file__).read_text(encoding="utf-8")
         self.assertIn('f"RUN_{results[0][\'next_step\']}.bat"', source)
+        self.assertIn('results[0]["next_step"].startswith("LQ")', source)
+        self.assertIn('str(RENDERER_ROOT / "tools" / "lab_v2.py")', source)
         self.assertIn('"Renderer.terrain_lab.test_canonical_reference_contract"', source)
         self.assertNotIn('call RUN_L12.bat', source)
 

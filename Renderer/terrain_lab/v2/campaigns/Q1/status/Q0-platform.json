@@ -1,0 +1,10 @@
+{
+  "schema": "c3x.renderer_lab_v2_track_status.v0",
+  "id": "Q0-platform",
+  "campaign": "Q1",
+  "state": "ready",
+  "candidate": null,
+  "evidence": [],
+  "blockers": [],
+  "approval": null
+}

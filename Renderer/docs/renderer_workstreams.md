@@ -25,6 +25,15 @@ The lab answers: **given a complete source-independent scene, can C3X render the
 right, good-looking picture?**  It never patches Civ III, suppresses native
 draws, owns game state, or treats a successful build/hash as visual approval.
 
+The post-L21 Lab v2 campaign retains this ownership while changing the
+development shape. Routine quick, system, and composition renders use a
+headless macOS Metal backend over portable scene/system contracts. A preserved
+off-screen D3D11 backend supplies bounded promotion parity. New work is divided
+into exclusive per-system paths and namespaced outputs so agents can iterate in
+parallel without editing a shared monolith. Historical L9-L21 handoffs remain
+immutable; Lab v2 emits separately versioned candidates. See
+[renderer_lab_v2.md](renderer_lab_v2.md).
+
 ## Game Integration
 
 The **Game Integration** path begins at the established off-screen bridge and
@@ -86,6 +95,12 @@ does not hold previously approved terrain or object systems out of integration.
 Natural wonders, constructed wonders, and C3X districts remain deferred to
 M9, M10, and M11 respectively and cannot be pulled forward by this promotion
 model.
+
+At the user's explicit direction, Integration is currently paused after I18
+while LQ0-LQ2 prepare and execute the Lab v2 quality campaign. This pause does
+not undo completed I9-I18 ownership and does not authorize M9-M11 work early.
+Any accepted Lab v2 change reaches production only through an explicit,
+versioned Integration refresh gate.
 
 ## Verification Cadence
 

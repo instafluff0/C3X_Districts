@@ -1,0 +1,15 @@
+{
+  "schema": "c3x.renderer_lab_v2_work_package.v0",
+  "id": "Q8-beauty",
+  "campaign": "Q1",
+  "title": "Cross-system beauty composition and visual QA",
+  "status_file": "../status/Q8-beauty.json",
+  "dependencies": ["Q1-sampling", "Q2-terrain", "Q3-hydrology", "Q4-relief", "Q5-networks", "Q6-lighting", "Q7-presentation"],
+  "owns_paths": ["Renderer/terrain_lab/v2/fixtures/beauty/", "Renderer/terrain_lab/v2/references/", "Renderer/terrain_lab/v2/qa/", "Renderer/terrain_lab/v2/audits/beauty/", "Renderer/terrain_lab/v2/handoffs/candidates/"],
+  "reads_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/terrain_lab/v2/systems/", "Renderer/terrain_lab/v2/references/catalog.json"],
+  "forbidden_paths": ["Renderer/terrain_lab/v2/contracts/", "Renderer/terrain_lab/v2/systems/", "Renderer/native/", "injected_code.c", "C3X.h", "Renderer/handoffs/"],
+  "references": ["civ6.daynight", "civ6.desert", "civ6.forest", "civ6.hills", "civ6.jungle", "civ6.marsh", "civ6.mountain", "civ6.river", "civ6.roads", "civ6.sea_and_shore", "civ6.unit_materials", "civ6.unit_color_closeup", "civ6.city_object_scale"],
+  "scope": ["Own reference metadata, contact sheets, visual-defect routing, combined fixtures, convergence review, and candidate v2 handoff assembly without editing visual implementations."],
+  "acceptance": ["No release-blocking seam, stretch, repetitive shoreline, route break, raised diamond, floating body, inconsistent shadow, depth inversion, scale anomaly, or facing violation remains in the combined two-zoom/four-phase matrix."],
+  "prompt": "../../../prompts/Q8-beauty.md"
+}

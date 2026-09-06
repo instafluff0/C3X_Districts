@@ -1,0 +1,21 @@
+{
+  "schema": "c3x.renderer_lab_v2_reference_catalog.v0",
+  "reference_root_env": "C3X_LAB_REFERENCE_ROOT",
+  "default_relative_root": "Renderer/canonical",
+  "references": [
+    {"id": "c3x.lab_v1.l21", "kind": "accepted_c3x_baseline", "relative_path": "../preview/out/terrain_lab/l21_noon.png", "comparison": "regression", "criteria": ["frozen_lab_v1_composition"]},
+    {"id": "civ6.city_object_scale", "kind": "art_direction", "relative_path": "Screenshot 2026-09-06 at 6.35.02 AM.png", "pixels": [3662, 1962], "sha256": "bf3d6b85013b2ec0d0de6722bd661a1082d6f599ba7e9bcde4ea65e4539c4041", "comparison": "qualitative", "criteria": ["category_scale", "city_density", "grounding"]},
+    {"id": "civ6.daynight", "kind": "art_direction", "relative_path": "daynight.png", "pixels": [1608, 1368], "sha256": "5e210083753c9938478c636815bf50ae6d2f5d82f4fe9cd2a45c33357db65c5a", "comparison": "qualitative", "criteria": ["phase_ordering", "shadow_direction", "night_readability"]},
+    {"id": "civ6.desert", "kind": "art_direction", "relative_path": "desert.png", "pixels": [1008, 620], "sha256": "e270f22003589504e22de2b0f4a7365de8a109e437c44e12b5f21e079ef8b61f", "comparison": "qualitative", "criteria": ["broad_dunes", "fine_ripples", "soft_boundary"]},
+    {"id": "civ6.forest", "kind": "art_direction", "relative_path": "forest.png", "pixels": [660, 502], "sha256": "4c94f820423486ef056b4a7fc3e41d3f985efc022ff48f3a09dc5bf3b8dee36f", "comparison": "qualitative", "criteria": ["dense_canopy", "irregular_perimeter"]},
+    {"id": "civ6.hills", "kind": "art_direction", "relative_path": "hills.png", "pixels": [600, 382], "sha256": "c0f10967a42915efef0d7b518f453439dd10c3b8cb2b46cad11430b7a1b98c1f", "comparison": "qualitative", "criteria": ["broad_low_relief", "grass_shoulders", "restrained_rock"]},
+    {"id": "civ6.jungle", "kind": "art_direction", "relative_path": "jungle.png", "pixels": [1036, 598], "sha256": "2a665669fdd56176e034f127459c4054e3a3dca8ab0073bd1607039fe9b9c2c1", "comparison": "qualitative", "criteria": ["layered_palms", "understory", "hidden_tile_outline"]},
+    {"id": "civ6.marsh", "kind": "art_direction", "relative_path": "marsh.png", "pixels": [398, 258], "sha256": "1f1ad37936013598e74261ea868c27bd7940ffad4007d1d39be5bea0614367b3", "comparison": "qualitative", "criteria": ["irregular_pools", "wet_ground"]},
+    {"id": "civ6.mountain", "kind": "art_direction", "relative_path": "mountain.png", "pixels": [584, 506], "sha256": "18bc5ea32b6276786a5db444a928fec153b4ada25ff21015eefa677dc05b4661", "comparison": "qualitative", "criteria": ["interlocked_mass", "valleys", "shared_shoulders"]},
+    {"id": "civ6.river", "kind": "art_direction", "relative_path": "river.png", "pixels": [1954, 970], "sha256": "ebfbcc875f4469601b961b609188d4026afbeadac9fdb4c03ff9e0d7726a9766", "comparison": "qualitative", "criteria": ["smooth_bends", "thin_banks", "grounded_junctions", "coast_mouths"]},
+    {"id": "civ6.roads", "kind": "art_direction", "relative_path": "roads.png", "pixels": [824, 780], "sha256": "2452e917565a69eadbef8bd972f7a98be09104292be3ac438e778cf15b090817", "comparison": "qualitative", "criteria": ["natural_curves", "all_direction_runs", "relief_conformance"]},
+    {"id": "civ6.sea_and_shore", "kind": "art_direction", "relative_path": "sea_and_shore.png", "pixels": [3430, 1750], "sha256": "8a2b7561d5b1fb9a33276196cd5a520c3953373381d2083232d923f75155e3e8", "comparison": "qualitative", "criteria": ["visible_shallows", "underwater_detail", "narrow_surf", "gradual_depth_shift"]},
+    {"id": "civ6.unit_materials", "kind": "art_direction", "relative_path": "unit_texture_and_civ_colors2.png", "pixels": [2340, 1202], "sha256": "63fcbb06414d59f7096d885fc13874c19dfc75d269ab1cb5592c29f70085fcd7", "comparison": "qualitative", "criteria": ["source_material_color", "localized_owner_color", "surface_detail"]},
+    {"id": "civ6.unit_color_closeup", "kind": "art_direction", "relative_path": "unit_texture_and_civ_colors3.png", "pixels": [314, 342], "sha256": "6870763c1d65cf0a3f53752d6551af29615fbdab69401fdf657bbdcb918e566d", "comparison": "qualitative", "criteria": ["localized_owner_color", "preserved_body_material"]}
+  ]
+}

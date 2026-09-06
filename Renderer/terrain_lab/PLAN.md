@@ -65,3 +65,23 @@ integration of a previously approved system. Promotion never transfers runtime
 ownership by itself. Before its I# gate a new category is intentionally absent
 from the custom-on map plane; after its I# gate it is custom-owned and must draw
 or make the frame fail visibly. It never silently falls back to native map art.
+
+## Renderer Lab v2
+
+L9-L21 are frozen as the immutable Lab v1 baseline. At the user's explicit
+direction, further Integration pauses at I19 while the separate LQ0-LQ2 quality
+campaign restructures the Lab for macOS-first iteration and parallel visual
+ownership. The campaign does not reopen or overwrite the historical handoffs.
+
+- **LQ0:** modularize portable scene/system construction, add stable contracts,
+  a headless Metal backend, preserved D3D11 parity, content caches, namespaced
+  outputs, and quick/check/compose/promote workflows without changing appearance.
+- **LQ1:** run independently owned sampling, terrain, hydrology, relief,
+  network, lighting/composition, object-presentation, and beauty-QA tracks.
+- **LQ2:** converge the complete two-zoom/four-phase scene and freeze versioned
+  v2 candidate handoffs before deliberate Integration refresh gates.
+
+`../docs/renderer_lab_v2.md` is the canonical Lab v2 plan. Machine-readable
+ownership, dependencies, local status, reference metadata, and agent prompts
+live in `v2/`. Exactly one LQ step remains globally ready; parallel track status
+does not replace `project_status.json`.

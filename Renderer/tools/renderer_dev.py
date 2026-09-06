@@ -310,6 +310,7 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
         results.append(command_result([
             python, "-m", "unittest",
             "Renderer.tools.test_project_state",
+            "Renderer.tools.test_lab_v2",
             "Renderer.tools.asset_compiler.test_generic_decal_compiler",
             "Renderer.tools.asset_compiler.test_clutter_blp_extractor",
             "Renderer.tools.asset_compiler.test_route_doodad_importer",
@@ -381,7 +382,13 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
                     "l19b_infrastructure_192.csv"),
                 str(RENDERER_ROOT / "terrain_lab" / "fixtures" / "l20_units_192.csv"),
             ]))
-        if results[-1]["status"] == "pass":
+        if results[-1]["status"] == "pass" and results[0]["next_step"].startswith("LQ"):
+            results.append(command_result([
+                python,
+                str(RENDERER_ROOT / "tools" / "lab_v2.py"),
+                "validate",
+            ]))
+        elif results[-1]["status"] == "pass":
             lab_script_name = f"RUN_{results[0]['next_step']}.bat"
             lab_script = RENDERER_ROOT / "terrain_lab" / lab_script_name
             if lab_script.is_file():

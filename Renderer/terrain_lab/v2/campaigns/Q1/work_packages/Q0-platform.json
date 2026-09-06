@@ -1,0 +1,31 @@
+{
+  "schema": "c3x.renderer_lab_v2_work_package.v0",
+  "id": "Q0-platform",
+  "campaign": "Q1",
+  "title": "Lab platform, contracts, macOS Metal backend, and fast runner",
+  "status_file": "../status/Q0-platform.json",
+  "dependencies": [],
+  "owns_paths": [
+    "Renderer/terrain_lab/v2/app/",
+    "Renderer/terrain_lab/v2/backends/",
+    "Renderer/terrain_lab/v2/contracts/",
+    "Renderer/terrain_lab/v2/shared/",
+    "Renderer/terrain_lab/v2/shaders/common/",
+    "Renderer/terrain_lab/v2/tests/platform/"
+  ],
+  "reads_paths": ["Renderer/terrain_lab/", "Renderer/handoffs/L21_complete_beauty_scene.json"],
+  "forbidden_paths": ["Renderer/native/", "injected_code.c", "C3X.h", "Renderer/handoffs/"],
+  "references": ["c3x.lab_v1.l21"],
+  "scope": [
+    "Extract portable scene and system construction behind versioned render packets without changing v1 output.",
+    "Add headless Metal and preserved D3D11 backends plus quick, check, compose, and promote execution tiers.",
+    "Add content-addressed caches, namespaced output, batch rendering, and cross-backend parity evidence."
+  ],
+  "acceptance": [
+    "Routine quick, check, and compose commands run on macOS without invoking Parallels.",
+    "Representative Metal output is deterministic and passes bounded D3D11 parity.",
+    "The frozen v1 L21 handoff and Windows reference outputs remain unchanged.",
+    "Parallel track owners can edit and render without sharing implementation or output paths."
+  ],
+  "prompt": "../../../prompts/Q0-platform.md"
+}
