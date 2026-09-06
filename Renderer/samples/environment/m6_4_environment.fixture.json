@@ -1,0 +1,51 @@
+{
+  "schema": "c3x.environment_fixture.v0",
+  "viewports": [[320, 200], [640, 480]],
+  "hours": {"noon": 12, "sunset": 18, "midnight": 0, "sunrise": 6},
+  "material": {
+    "schema": "c3x.material.v0",
+    "base_color": {"texture": "textures/synthetic_base_color.dds"},
+    "emissive": {
+      "mask": "constant",
+      "color": [1.0, 0.42, 0.12],
+      "intensity": 2.0,
+      "activation": "night",
+      "missing_policy": "non-emissive"
+    }
+  },
+  "analytic_lights": [
+    {
+      "id": "fixture.fire.light",
+      "type": "point",
+      "local_transform": {
+        "translation": [0.0, 0.0, 1.15],
+        "rotation_degrees": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "color": [1.0, 0.36, 0.08],
+      "intensity": 3.0,
+      "radius": 2.25,
+      "activation": "night"
+    }
+  ],
+  "ambient_attachments": [
+    {
+      "id": "fixture.fire.flame",
+      "effect_asset": "effects/flame/loop",
+      "light_id": "fixture.fire.light",
+      "local_transform": {
+        "translation": [0.0, 0.0, 1.0],
+        "rotation_degrees": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0]
+      },
+      "bounds": {"center": [0.0, 0.0, 1.0], "radius": 2.5},
+      "activation": "night",
+      "state_requirements": ["operational"],
+      "stable_phase_seed": 1777,
+      "period_ticks": 1000000,
+      "animated": true,
+      "missing_policy": "owner-fallback"
+    }
+  ],
+  "retained_civ3_layers": ["fog", "labels", "selection", "minimap", "hud", "ui"]
+}

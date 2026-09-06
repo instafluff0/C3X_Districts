@@ -1,0 +1,109 @@
+{
+  "schema": "c3x.source_improvement_strategy.v0",
+  "source_units_per_tile": 100.0,
+  "mine": {
+    "source_package": "Base/Platforms/Windows/BLPs/landmarks/tilebases.blp",
+    "eras": [
+      {
+        "civ3_eras": [0, 1],
+        "id": "preindustrial",
+        "source_entries": ["IMP_Mine_AN_01", "IMP_Mine_AN_02", "IMP_Mine_AN_03"]
+      },
+      {
+        "civ3_eras": [2, 3],
+        "id": "industrial",
+        "source_entries": ["IMP_Mine_IND", "IMP_Mine_IND_02", "IMP_Mine_IND_03"]
+      }
+    ],
+    "runtime": {
+      "selection_seed": ["world_seed", "map_x", "map_y", "civ3_era"],
+      "variant_policy": "stable_hash",
+      "terrain_fit": "renderer_terrain_surface",
+      "resource_condition_policy": "exclude_until_civ3_resource_mapping_is_explicit",
+      "pillaged_policy": "use_component_state_when_available",
+      "environment": "shared_c3x_environment"
+    }
+  },
+  "farm": {
+    "packages": {
+      "base": "Base/Platforms/Windows/BLPs/landmarks/tilebases.blp",
+      "maize": "DLC/GranColombia_Maya/Platforms/Windows/BLPs/landmarks/tilebases.blp"
+    },
+    "eras": [
+      {
+        "civ3_eras": [0, 1],
+        "id": "preindustrial",
+        "building_entries": [
+          "IMP_Farm_AN_Angled_01_A",
+          "IMP_Farm_AN_Square_01_A",
+          "IMP_Farm_AN_Transition_01_A"
+        ],
+        "tile_entries": ["IMP_FarmTile_00_AN_A"]
+      },
+      {
+        "civ3_eras": [2],
+        "id": "industrial",
+        "building_entries": [
+          "IMP_Farm_IND_Angled_01_A",
+          "IMP_Farm_IND_Square_01_A",
+          "IMP_Farm_IND_Transition_01_A"
+        ],
+        "tile_entries": ["IMP_FarmTile_00_IND_A"]
+      },
+      {
+        "civ3_eras": [3],
+        "id": "modern",
+        "building_entries": [
+          "IMP_Farm_MD_Angled_01_A",
+          "IMP_Farm_MD_Square_01_A",
+          "IMP_Farm_MD_Transition_01_A"
+        ],
+        "tile_entries": ["IMP_FarmTile_00_MD_A"]
+      }
+    ],
+    "crop_styles": [
+      {
+        "id": "default",
+        "package": "base",
+        "runtime_policy": "default",
+        "source_entries": [
+          "IMP_Farm_Decal_Angled_01",
+          "IMP_Farm_Decal_Square_01",
+          "IMP_Farm_Decal_Transition_01",
+          "IMP_Farm_Decal_Filler_01"
+        ]
+      },
+      {
+        "id": "grain",
+        "package": "base",
+        "runtime_policy": "optional_resource_override",
+        "source_entries": ["IMP_Farm_Wheat_Decal_Square_01"]
+      },
+      {
+        "id": "paddy",
+        "package": "base",
+        "runtime_policy": "optional_resource_override",
+        "source_entries": ["IMP_Farm_Rice_Decal_Square_01"]
+      },
+      {
+        "id": "maize",
+        "package": "maize",
+        "runtime_policy": "optional_resource_override",
+        "source_entries": ["IMP_Farm_Maize_Decal_Square_01"]
+      }
+    ],
+    "runtime": {
+      "civ3_adjacency_bits": 4,
+      "civ3_adjacency_masks": 16,
+      "source_piece_roles": ["square", "angled", "transition", "filler", "tile_base"],
+      "mask_to_piece_mapping": "lab_required",
+      "terrain_families": ["grassland", "desert", "plains", "tundra"],
+      "terrain_fit": "renderer_terrain_surface",
+      "edge_policy": "clip_and_blend_at_irrigation_ownership_boundary",
+      "selection_seed": ["world_seed", "map_x", "map_y", "civ3_era", "adjacency_mask"],
+      "season_policy": "shared_environment_material_or_variant",
+      "resource_crop_policy": "default_until_explicit_same_tile_resource_override"
+    }
+  },
+  "runtime_integration": "not_enabled"
+}

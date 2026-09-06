@@ -1,0 +1,17 @@
+{
+  "schema": "c3x.unit_owner_color_overrides.v0",
+  "overrides": {
+    "unit/infantry/armband": {
+      "mode": "authored_mask",
+      "mask_source": "constant_one",
+      "strength": 0.82,
+      "representative_palette_index": 6
+    },
+    "unit/infantry/armor": {
+      "mode": "authored_mask",
+      "mask_source": "base_color_alpha_inverse",
+      "strength": 0.35,
+      "representative_palette_index": 6
+    }
+  }
+}

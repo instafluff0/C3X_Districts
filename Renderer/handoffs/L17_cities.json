@@ -1,0 +1,45 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L17",
+  "system": "cities",
+  "status": "approved",
+  "approved_on": "2026-09-05",
+  "approval_basis": "critical autonomous visual review explicitly authorized by the user",
+  "depends_on": ["handoffs/L16_resources.json", "handoffs/L13A_lighting.json"],
+  "source_contract": {
+    "pack_roots": ["packs/CityComponentsNormalized", "packs/CityAdjunctsNormalized"],
+    "definition": "terrain_lab/RUN_L17.bat",
+    "scenario": "terrain_lab/fixtures/l17_cities_192.csv",
+    "scenario_provenance": "deterministic source-independent Lab-only city augmentation over unchanged authoritative BIQ terrain",
+    "runtime_bundles": ["packs/CityComponentsNormalized/city_runtime.bin", "packs/CityAdjunctsNormalized/wall_runtime.bin"],
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "shader": "terrain_lab/terrain_lab.hlsl"
+  },
+  "coverage": [
+    "ancient, medieval, industrial, and modern source-backed city silhouettes",
+    "town, city, and metropolis density; culture and owner metadata; walls and capital states",
+    "coast, river, relief, vegetation, resource, road, railroad, crowded, and wrap-near placements",
+    "noon, midnight, complete, no-city, city-only, native, and reduced controls"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l17_cities_noon.bmp",
+    "native_sha256": "53d9717775789cee0e3b1cc779f57ca6e566ad36ad56fc7c04968be8b34d02dc",
+    "night_output": "preview/out/terrain_lab/terrain_beauty_l17_cities_night.bmp",
+    "night_sha256": "5910b2088685cb54ee3b1cc779f57ca6e566ad36ad56fc7c04968be8b34d02dc",
+    "reduced_sha256": "8a26cd75c6494ec8822457e957c89cf647427c5f60481458e3cfc597e07129fe",
+    "no_cities_sha256": "3c112b32e677df37950498d681637e8e5c1a668710bccac9f2a10b0089533a9a",
+    "cities_only_sha256": "73bff06a14142036428aa4e0da6a87c7444cc1d7f42791979c3fa7540401e5b4",
+    "scenario_sha256": "ef7b24cb0cec97c7b6de7971552ebdea9725c09ec666f3eb57a5423aeab8ed47",
+    "city_runtime_sha256": "2e2f480466a23304df7ec655c959757172895b747ea4e163e52c432c98538646",
+    "wall_runtime_sha256": "7a6516ff61a9ba72765dcf99612f54047934b6c9db1e4da0fce9cdff10de1bf7",
+    "tile_count": 192,
+    "audit": "terrain_lab/L17_CITY_AUDIT.md"
+  },
+  "ownership_intent": {
+    "map_city_bodies": "custom_when_renderer_enabled_after_I17",
+    "authoritative_state": "Civ III city owner, culture/style, era, population size, walls, capital, visibility, and environment state",
+    "retained_layers": "city labels, names, population displays, production/status indicators, borders, fog, units, HUD, and UI"
+  },
+  "update_mode": "static except when authoritative city, visibility, owner/style, population, wall/capital, environment, or visible-scene state changes",
+  "fallback": "After I17, unresolved or failed custom city rendering fails the custom frame visibly; it never replays native city pixels."
+}

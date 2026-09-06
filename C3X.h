@@ -2,6 +2,7 @@
 
 #define NOVIRTUALKEYCODES // Keycodes defined in Civ3Conquests.h instead
 #include "windows.h"
+#include "Renderer/native/c3x_renderer_api.h"
 
 typedef unsigned char byte;
 
@@ -538,6 +539,7 @@ struct c3x_config {
 	bool enable_named_tiles;
 
 	bool enable_custom_animations;
+	bool enable_custom_rendering;
 	char * aircraft_victory_animation; // NULL if set to "none" in config
 
 	int day_night_cycle_mode;
@@ -1712,6 +1714,7 @@ struct injected_state {
 	enum init_state tile_already_worked_zoomed_out_sprite_init_state;
 	enum init_state day_night_cycle_img_state;
 	enum init_state large_minimap_frame_img_state;
+	enum init_state custom_renderer_init_state;
 
 	// ==========
 	// } These fields are valid at any time after patch_init_floating_point runs (which is at the program launch). {
@@ -1742,6 +1745,7 @@ struct injected_state {
 
 	// Win32 funcs from user32.dll
 	int (WINAPI * MessageBoxA) (HWND, LPCSTR, LPCSTR, UINT);
+	HWND (WINAPI * GetFocus) (void);
 
 	// Win32 funcs from Msimg32.dll
 	BOOL (WINAPI * TransparentBlt) (HDC, int, int, int, int, HDC, int, int, int, int, UINT);
@@ -2636,6 +2640,48 @@ struct district_button_image_set {
 	Tile * current_render_tile;
 	struct district_instance * current_render_tile_district;
 	int current_render_tile_x, current_render_tile_y;
+
+	// The injected bridge owns only capture/lifecycle state. Rendering lives in Renderer/native/C3XRenderer.dll.
+	HMODULE custom_renderer_module;
+	c3x_renderer_get_api_version_fn custom_renderer_get_api_version;
+	c3x_renderer_set_pack_path_fn custom_renderer_set_pack_path;
+	c3x_renderer_set_definition_paths_fn custom_renderer_set_definition_paths;
+	c3x_renderer_render_fn custom_renderer_render;
+	c3x_renderer_blit_fn custom_renderer_blit;
+	c3x_renderer_export_scene_fn custom_renderer_export_scene;
+	c3x_renderer_schedule_fn custom_renderer_schedule;
+	c3x_renderer_reset_fn custom_renderer_reset;
+	struct c3x_renderer_tile_v1 * custom_renderer_tiles;
+	int custom_renderer_tile_count;
+	int custom_renderer_tile_capacity;
+	bool custom_renderer_frame_active;
+	bool custom_renderer_capture_failed;
+	bool custom_renderer_composited;
+	bool custom_renderer_export_requested;
+	bool custom_renderer_draw_in_progress;
+	bool custom_renderer_redraw_pending;
+	bool custom_renderer_modal;
+	Map_Renderer * custom_renderer_target;
+	unsigned int custom_renderer_dirty_flags;
+	unsigned int custom_renderer_visible_animation_count;
+	unsigned int custom_renderer_requested_frames;
+	unsigned int custom_renderer_presented_frames;
+	unsigned int custom_renderer_skipped_frames;
+	unsigned int custom_renderer_cache_hits;
+	unsigned int custom_renderer_cache_misses;
+	unsigned int custom_renderer_cache_evictions;
+	unsigned int custom_renderer_cache_stale_rejections;
+	unsigned int custom_renderer_last_invalidation_flags;
+	unsigned int custom_renderer_device_generation;
+	unsigned int custom_renderer_device_recoveries;
+	LARGE_INTEGER custom_renderer_qpc_frequency;
+	LARGE_INTEGER custom_renderer_frame_timestamp;
+	LARGE_INTEGER custom_renderer_last_presented_at;
+	LARGE_INTEGER custom_renderer_frame_started_at;
+	long long custom_renderer_max_capture_ticks;
+	long long custom_renderer_max_render_ticks;
+	long long custom_renderer_max_blit_ticks;
+	long long custom_renderer_max_map_pass_ticks;
 
 	// Used in patch_Map_Renderer_m08_Draw_Tile_Forests_Jungle_Swamp and so on for flagging whether to draw forests over roads on the tile being rendered
 	bool draw_forests_over_roads_on_tile;

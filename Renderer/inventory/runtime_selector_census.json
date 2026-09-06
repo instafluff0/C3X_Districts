@@ -1,0 +1,33 @@
+{
+  "schema": "c3x.civ3_runtime_selector_census.v0",
+  "method": "executable selector replay plus captured M5 bridge scene",
+  "evidence": [
+    "Renderer/native native-smoke.scene.json exercises every renderer definition category",
+    "Map_Renderer::load_images establishes every atlas-backed runtime selector family",
+    "M5 bridge tests prove retained Civ III overlays remain after the custom map bitmap insertion"
+  ],
+  "families": [
+    {"id": "terrain_base", "classification": "vanilla_fallback", "owner": "renderer_candidate", "tested": true},
+    {"id": "terrain_transition", "classification": "vanilla_fallback", "owner": "renderer_candidate", "tested": true},
+    {"id": "terrain_feature", "classification": "vanilla_fallback", "owner": "renderer_candidate", "tested": true},
+    {"id": "water", "classification": "vanilla_fallback", "owner": "renderer_candidate", "tested": true},
+    {"id": "river", "classification": "vanilla_fallback", "owner": "renderer_candidate", "tested": true},
+    {"id": "infrastructure", "classification": "vanilla_fallback", "owner": "renderer_candidate", "tested": true},
+    {"id": "resource", "classification": "vanilla_fallback", "owner": "renderer_candidate", "tested": true},
+    {"id": "city", "classification": "vanilla_fallback", "owner": "renderer_candidate", "tested": true},
+    {"id": "unit", "classification": "vanilla_fallback", "owner": "renderer_candidate", "tested": true},
+    {"id": "effect", "classification": "vanilla_fallback", "owner": "renderer_candidate", "tested": true},
+    {"id": "fog_of_war", "classification": "vanilla_fallback", "owner": "retained_civ3", "tested": true},
+    {"id": "territory_border", "classification": "vanilla_fallback", "owner": "retained_civ3", "tested": true},
+    {"id": "map_grid", "classification": "vanilla_fallback", "owner": "retained_civ3", "tested": true},
+    {"id": "selection_highlight", "classification": "vanilla_fallback", "owner": "retained_civ3", "tested": true},
+    {"id": "movement_path", "classification": "vanilla_fallback", "owner": "retained_civ3", "tested": true},
+    {"id": "city_label", "classification": "vanilla_fallback", "owner": "retained_civ3", "tested": true},
+    {"id": "unit_status", "classification": "vanilla_fallback", "owner": "retained_civ3", "tested": true},
+    {"id": "map_cursor", "classification": "vanilla_fallback", "owner": "retained_civ3", "tested": true},
+    {"id": "editor_marker", "classification": "not_map_rendered", "owner": "out_of_runtime_scope", "tested": true},
+    {"id": "minimap", "classification": "vanilla_fallback", "owner": "retained_civ3", "tested": true},
+    {"id": "hud", "classification": "vanilla_fallback", "owner": "retained_civ3", "tested": true}
+  ],
+  "unknown_selectors": []
+}

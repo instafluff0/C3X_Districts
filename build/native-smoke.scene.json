@@ -1,0 +1,26 @@
+{
+  "schema": "c3x.visible_scene.v0",
+  "scene_id": "scene:424242:800:-928:320x200:12:summer",
+  "profile_id": "default",
+  "world": {"seed": 424242, "width_tiles": 100, "height_tiles": 80, "wrap_x": true, "wrap_y": false},
+  "viewport": {"width_px": 320, "height_px": 200, "map_rect_px": {"x": 0, "y": 0, "width": 320, "height": 200}, "scroll_px": {"x": 800, "y": -928}},
+  "projection": {"type": "civ3-isometric-pixel", "origin_tile": {"x": 10, "y": 20}, "origin_px": {"x": 160, "y": 32}, "tile_x_basis_px": {"x": 64, "y": 32}, "tile_y_basis_px": {"x": -64, "y": 32}, "elevation_basis_px": {"x": 0, "y": -32}},
+  "environment": {"id": "earthlike", "hour": 12, "season": "summer"},
+  "tiles": [
+    {"id":"tile:10:20","map_x":10,"map_y":20,"anchor_px":{"x":160,"y":32},"terrain":{"id":"terrain:10:20:0","variant_seed":3096776778222987538,"resolver_input":{"category":"terrain","map_x":10,"map_y":20,"terrain_type":"grassland","real_terrain_type":"grassland","sprite_index":0,"visibility_mask":1,"fog_status":0,"territory_owner_id":-1}}},
+    {"id":"tile:11:20","map_x":11,"map_y":20,"anchor_px":{"x":224,"y":64},"terrain":{"id":"terrain:11:20:0","variant_seed":3108385700789525742,"resolver_input":{"category":"terrain","map_x":11,"map_y":20,"terrain_type":"desert","real_terrain_type":"desert","sprite_index":0,"visibility_mask":1,"fog_status":0,"territory_owner_id":-1}}},
+    {"id":"tile:10:21","map_x":10,"map_y":21,"anchor_px":{"x":96,"y":64},"terrain":{"id":"terrain:10:21:0","variant_seed":2123939716888705439,"resolver_input":{"category":"terrain","map_x":10,"map_y":21,"terrain_type":"coast","real_terrain_type":"coast","sprite_index":0,"visibility_mask":1,"fog_status":0,"territory_owner_id":-1}}},
+    {"id":"tile:11:21","map_x":11,"map_y":21,"anchor_px":{"x":160,"y":96},"terrain":{"id":"terrain:11:21:0","variant_seed":10763358322718985377,"resolver_input":{"category":"terrain","map_x":11,"map_y":21,"terrain_type":"plains","real_terrain_type":"plains","sprite_index":0,"visibility_mask":1,"fog_status":0,"territory_owner_id":-1}}}
+  ],
+  "instances": [
+    {"id":"feature:10:20:0","category":"feature","tile_id":"tile:10:20","ordinal":0,"anchor_px":{"x":160,"y":32},"variant_seed":3120485622075479706,"resolver_input":{"category":"feature","map_x":10,"map_y":20,"has_forest":true,"has_jungle":false,"has_marsh":false,"sprite_index":0}},
+    {"id":"road:10:20:0","category":"road","tile_id":"tile:10:20","ordinal":0,"anchor_px":{"x":160,"y":32},"variant_seed":8828381721097290651,"resolver_input":{"category":"road","map_x":10,"map_y":20,"road_mask":1,"railroad_mask":1}},
+    {"id":"river:10:20:0","category":"river","tile_id":"tile:10:20","ordinal":0,"anchor_px":{"x":160,"y":32},"variant_seed":4309232540294886480,"resolver_input":{"category":"river","map_x":10,"map_y":20,"river_mask":3}},
+    {"id":"improvement:10:20:0","category":"improvement","tile_id":"tile:10:20","ordinal":0,"anchor_px":{"x":160,"y":32},"variant_seed":9817786479527146336,"resolver_input":{"category":"improvement","map_x":10,"map_y":20,"improvement":"irrigation"}},
+    {"id":"improvement:10:20:1","category":"improvement","tile_id":"tile:10:20","ordinal":1,"anchor_px":{"x":160,"y":32},"variant_seed":15015796223994838714,"resolver_input":{"category":"improvement","map_x":10,"map_y":20,"improvement":"tile-building","tile_building_id":7}},
+    {"id":"resource:10:20:0","category":"resource","tile_id":"tile:10:20","ordinal":0,"anchor_px":{"x":160,"y":32},"variant_seed":9733591494123990264,"resolver_input":{"category":"resource","map_x":10,"map_y":20,"resource_id":5,"resource_name":"Horses","resource_class":"strategic","pcx_index":5}},
+    {"id":"city:10:20:0","category":"city","tile_id":"tile:10:20","ordinal":0,"anchor_px":{"x":160,"y":32},"variant_seed":15475807828169031265,"resolver_input":{"category":"city","map_x":10,"map_y":20,"city_id":12,"city_owner_id":1,"city_population":5,"owner":"Romans","civilization":"Roman","culture_group":"culture-group-2","era":"Ancient Times","city_style_index":2,"city_size":"town","is_capital":true}},
+    {"id":"unit:10:20:0","category":"unit","tile_id":"tile:10:20","ordinal":0,"anchor_px":{"x":160,"y":32},"variant_seed":18233929020966742333,"resolver_input":{"category":"unit","map_x":10,"map_y":20,"unit_id":2,"unit_owner_id":1,"unit_state":1,"unit_damage":0,"unit_direction":3,"unit_type":"Warrior","unit_class":"land","owner":"Romans","civilization":"Roman","era":"Ancient Times","direction":"southeast","action":"fortify","fortified":true,"hit_point_band":"healthy"}},
+    {"id":"effect:10:20:0","category":"effect","tile_id":"tile:10:20","ordinal":0,"anchor_px":{"x":160,"y":32},"variant_seed":8532775985848807360,"resolver_input":{"category":"effect","map_x":10,"map_y":20,"sprite_index":0}}
+  ]
+}

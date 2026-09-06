@@ -1,0 +1,17 @@
+{
+  "schema": "c3x.source_compound_landmark_mapping.v0",
+  "packages": [
+    {
+      "source_package": "Base/Platforms/Windows/BLPs/landmarks/tilebases.blp",
+      "shared_data": "Base/Platforms/Windows/BLPs/SHARED_DATA",
+      "source_units_per_tile": 100.0,
+      "assets": [
+        {"source_entry": "IMP_Fort_Medieval_Base", "asset_id": "infrastructure/fort/medieval"},
+        {"source_entry": "IMP_Fort_Industrial_Base", "asset_id": "infrastructure/fort/industrial"},
+        {"source_entry": "IMP_Airstrip", "asset_id": "infrastructure/airfield/airstrip"},
+        {"source_entry": "IMP_Airstrip_Tower", "asset_id": "infrastructure/outpost/airstrip_tower_candidate"},
+        {"source_entry": "VIL_BAR_IND_Tower", "asset_id": "infrastructure/outpost/industrial_watchtower_candidate"}
+      ]
+    }
+  ]
+}

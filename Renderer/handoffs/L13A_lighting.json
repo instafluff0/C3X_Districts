@@ -1,0 +1,90 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L13A",
+  "system": "shared_environment_lighting",
+  "status": "approved",
+  "approved_on": "2026-09-05",
+  "depends_on": [
+    "handoffs/L9_terrain.json",
+    "handoffs/L10_dunes.json",
+    "handoffs/L11_marsh.json",
+    "handoffs/L12_volcano.json",
+    "handoffs/L13_rivers.json"
+  ],
+  "source_contract": {
+    "pack_roots": [
+      "packs/Civ5EnvironmentSkin",
+      "packs/Civ5EnvironmentVegetation",
+      "packs/DecalsNormalized",
+      "packs/TerrainElementsNormalized",
+      "packs/ShoreNormalized"
+    ],
+    "definition": "terrain_lab/RUN_L13A.bat",
+    "environment_evaluator": "native/environment_runtime.cpp",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "scene_modes": [
+      "beauty_lighting_noon",
+      "beauty_lighting_sunset",
+      "beauty_lighting_midnight",
+      "beauty_lighting_sunrise"
+    ],
+    "projection": "civ3_pixel_defined_isometric",
+    "authoritative_fixture": "preview/out/terrain_lab/test_biq_l13_rivers_192.csv",
+    "canonical_reference": "canonical/daynight.png"
+  },
+  "coverage": [
+    "continuous shared sun, moon, ambient, exposure, shadow, water, and emissive activation state",
+    "one screen-space cast direction per frame across hills, mountains, volcanoes, forest, jungle, shore bodies, and river clutter",
+    "normal-driven self shading plus neighboring cast shadows for every raised renderer-owned class",
+    "fixed stylized shadow length by caster height with phase-driven direction, strength, and color",
+    "deterministic noon, 18:00, midnight, and 06:00 renders at both Civ III zoom scales",
+    "approved alternate environment terrain and vegetation stack over the L13 river scene"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l13a_noon.bmp",
+    "native_sha256": "379ac9ff2effc36654a2ad1118b6c67f1de2fc140cfeff013172aac37617a920",
+    "reduced_output": "preview/out/terrain_lab/terrain_beauty_l13a_noon_zoom2.bmp",
+    "reduced_sha256": "d1c4cc3974833722827bd717d0134a5d858b6721c724812b53f47a6713d575bb",
+    "noon_output": "preview/out/terrain_lab/terrain_beauty_l13a_noon.bmp",
+    "noon_sha256": "379ac9ff2effc36654a2ad1118b6c67f1de2fc140cfeff013172aac37617a920",
+    "noon_reduced_output": "preview/out/terrain_lab/terrain_beauty_l13a_noon_zoom2.bmp",
+    "noon_reduced_sha256": "d1c4cc3974833722827bd717d0134a5d858b6721c724812b53f47a6713d575bb",
+    "sunset_output": "preview/out/terrain_lab/terrain_beauty_l13a_sunset.bmp",
+    "sunset_sha256": "08b1a6582346e2df9ededbb8f9732482743492e158b109e5221bb915eb4ed95b",
+    "sunset_reduced_output": "preview/out/terrain_lab/terrain_beauty_l13a_sunset_zoom2.bmp",
+    "sunset_reduced_sha256": "6cebf187edb02e03b0a6562196fb9f2b27e4d1e3cde7c265c04c9be00e0f7474",
+    "midnight_output": "preview/out/terrain_lab/terrain_beauty_l13a_midnight.bmp",
+    "midnight_sha256": "e5f7a62491d877430cd83d2ee9fecb75556243d1cf52bc02c6b330ff2bc4d8dc",
+    "midnight_reduced_output": "preview/out/terrain_lab/terrain_beauty_l13a_midnight_zoom2.bmp",
+    "midnight_reduced_sha256": "0e2993b5faedc05bdc3dcf89deb41e6e355e72c723a4430f557ab8f2280b51cc",
+    "sunrise_output": "preview/out/terrain_lab/terrain_beauty_l13a_sunrise.bmp",
+    "sunrise_sha256": "d2042d5d436db1f327a6c8b4ac3476d63528b4b8afe9b4d26cfeb3cf88493c29",
+    "sunrise_reduced_output": "preview/out/terrain_lab/terrain_beauty_l13a_sunrise_zoom2.bmp",
+    "sunrise_reduced_sha256": "ee592df81e611319ea1923fb27a05f0b940622104f7286fa11917dc92e04e326",
+    "fixture_sha256": "1500c085e88425796fb150db4a96a904722d1f8b0cce1d614d46db58bc3c0b4b",
+    "tile_count": 192,
+    "audit": "terrain_lab/L13A_LIGHTING_AUDIT.md"
+  },
+  "visible_light_boundary": {
+    "l13a": "global environment and non-visual emissive policy only",
+    "first_visible_fixture": "L17 cities using real city windows, lamps, emissives, and analytic attachments",
+    "later_improvements": "each improvement gate may add only source-backed lights owned by that improvement",
+    "roads": "inherit the environment; no invented streetlights in L14"
+  },
+  "ownership_intent": {
+    "shared_environment": "custom_when_renderer_enabled_after_I13A",
+    "object_emissives_and_lights": "remain absent until their own approved lab and integration gates",
+    "retained_layers": "Civ III overlays, labels, fog, selection, HUD, and UI"
+  },
+  "cache_inputs": [
+    "approved L9-L13 system revisions",
+    "environment contract revision",
+    "hour and transition state",
+    "pack and definition revision",
+    "authoritative visible scene and geometry",
+    "viewport, zoom, scroll, clip, and wrap representation",
+    "device generation"
+  ],
+  "update_mode": "static except when environment or visible scene state changes",
+  "fallback": "If I13A cannot resolve the approved environment state, fail the custom frame visibly; never relight retained Civ III layers or replay native map terrain."
+}

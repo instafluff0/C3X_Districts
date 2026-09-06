@@ -1,0 +1,121 @@
+{
+  "schema": "c3x.m6_7_handoff_fidelity.v0",
+  "scope": "game_integration",
+  "approved_inputs": [
+    {
+      "gate": "L9",
+      "record": "handoffs/L9_terrain.json",
+      "record_fnv1a64": "33f279163408f4d6",
+      "native_reference_sha256": "52c0238eacbff8b08128267038c4516f059b862ca749529d2d7eb25015cbb753",
+      "reduced_reference_sha256": "a21bf4f1d809b644d7cbff7717af79e09ee89cc334bc20ea20cfdad430b09129"
+    },
+    {
+      "gate": "L10",
+      "record": "handoffs/L10_dunes.json",
+      "record_fnv1a64": "1eb8dcf0c8976277",
+      "native_reference_sha256": "5b2a145196afd62e7cacf4b9b0af15d780a0f64e7820a62e817e1e27e9b3bc7d",
+      "reduced_reference_sha256": "06477a205ec2f48076e354e7fcf680cee3e558a2b63da2ec6d3042bfcc24de6a"
+    },
+    {
+      "gate": "L11",
+      "record": "handoffs/L11_marsh.json",
+      "record_fnv1a64": "7ab6b0689ed100b3",
+      "native_reference_sha256": "1b954f2190ceda40c13ac8b0f5a8c01af6a03d0633e2938d37bb67e1d7002544",
+      "reduced_reference_sha256": "59904531efd9fe5ea2667f3defa8f99083f10855721221d4629f853ee399405c"
+    }
+  ],
+  "frozen_component_mapping": [
+    {
+      "component": "base terrain, authored relief, beach, shallows, water, and surf",
+      "runtime_source": "source-independent TerrainNormalized logical assets and channels named by Renderer/default.custom_rendering.txt",
+      "allowed_adaptation": "Civ III authoritative viewport, tile basis, occurrence anchors, clip rectangle, and shared environment state only"
+    },
+    {
+      "component": "forest and jungle bodies",
+      "runtime_source": "VegetationNormalized/vegetation_runtime.bin plus its four BC1 atlases",
+      "constants": {
+        "forest_instances_per_tile": 11,
+        "jungle_instances_per_tile": 20,
+        "scale": 0.55,
+        "forest_named_anchors": ["pine_01", "pine_clump_01", "shrub_01"],
+        "jungle_named_anchors": ["grass_04", "palm_01", "palm_02", "plant_01", "plant_02", "plant_03"]
+      }
+    },
+    {
+      "component": "flat-desert dunes",
+      "runtime_source": "approved L10 macro-height formula, TerrainNormalized desert-hills material, and DecalsNormalized sand base/height channels",
+      "constants": {
+        "angle": 0.300001,
+        "width": 4.0,
+        "noise": 0.6,
+        "macro_height_px": 17.0,
+        "material_mix": 0.86,
+        "decal_alpha_mix": 0.42
+      }
+    },
+    {
+      "component": "marsh material and projected surface breakup",
+      "runtime_source": "TerrainNormalized GrassMarsh base/height/specular channels and DecalsNormalized CLUTTER_MARSH base/height/specular channels frozen by L11",
+      "constants": {
+        "primary_center": [0.48, 0.52],
+        "primary_scale": 1.42,
+        "secondary_center": [0.24, 0.70],
+        "secondary_scale": 0.86,
+        "secondary_rotation_offset": 1.91,
+        "tertiary_center": [0.76, 0.28],
+        "tertiary_scale": 0.72,
+        "tertiary_rotation_offset": -1.37,
+        "decal_alpha_mix": 0.88,
+        "normal_strength": 0.72,
+        "specular_mix": 0.54
+      }
+    }
+  ],
+  "deterministic_tolerances": {
+    "same_frame_pixels": "byte_exact",
+    "same_frame_ownership": "exact",
+    "screen_anchor_error_px": 0,
+    "pixels_modified_outside_clip": 0,
+    "stale_pixels_after_scroll_zoom_or_wrap": 0,
+    "static_frame_renderer_requested_redraws": 0,
+    "cache_entries_max": 1,
+    "fallback_ownership_flags": 0,
+    "production_native_fallback_tiles": 0,
+    "custom_on_failure_policy": "hard_failure_without_native_replay"
+  },
+  "perceptual_tolerances": {
+    "asset_identity": "exact logical asset and channel identity",
+    "macro_geometry_parameters": "exact approved scalar constants",
+    "feature_density_and_named_anchors": "exact",
+    "accepted_variance": "Only projection, clipping, sampling, and lighting differences forced by the authoritative Civ III viewport and shared environment contract; no substitute geometry, color grading, proxy vegetation, invented cliff, or shoreline-rock dressing",
+    "comparison_rule": "The game fixture is not required to be byte-identical to the differently framed lab beauty scene, but every approved component and exclusion must be structurally present and deterministic. Any art-direction change returns to Renderer Lab."
+  },
+  "retained_civ3_layers": [
+    "units",
+    "borders",
+    "fog and shroud",
+    "grid",
+    "selection and paths",
+    "labels and status overlays",
+    "cursor",
+    "minimap",
+    "HUD and UI"
+  ],
+  "exclusive_custom_map_plane": {
+    "configuration_off": "Civ III draws the complete native map",
+    "configuration_on": "C3X owns the complete m19 map plane and never replays native terrain",
+    "unapproved_or_missing_system": "fail the custom frame visibly; never mix in native art",
+    "temporarily_absent_until_matching_integration_gate": [
+      "volcanoes",
+      "rivers",
+      "roads",
+      "railroads",
+      "irrigation",
+      "mines",
+      "tile buildings",
+      "pollution",
+      "resources",
+      "cities"
+    ]
+  }
+}

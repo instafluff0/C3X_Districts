@@ -1,0 +1,115 @@
+{
+  "schema": "c3x.army_render_strategy.v0",
+  "runtime_status": "not_enabled",
+  "authority": {
+    "army_identity": "civ3_unit_id",
+    "displayed_member": "civ3_army_displayed_member_id",
+    "member_count": "civ3_army_member_count",
+    "actions_and_timing": "civ3_animator",
+    "anchors_and_facing": "civ3_animator",
+    "owner_color": "civ3_viewer_conditioned_display_palette",
+    "selection_and_hud": "civ3_retained_once_for_parent_army"
+  },
+  "composition": {
+    "parent_kind": "army",
+    "children": ["displayed_member", "commander"],
+    "displayed_member_asset": "ordinary_unit_resolver_by_active_member_type",
+    "displayed_member_selection": "use_native_id_exactly_never_choose_or_sort_in_renderer",
+    "commander_asset": "era_profile",
+    "additional_loaded_members": "not_rendered",
+    "empty_army": "commander_only",
+    "hud_instances": 1,
+    "stable_child_ids": {
+      "displayed_member": "army/<army_id>/member/<displayed_member_id>",
+      "commander": "army/<army_id>/commander"
+    }
+  },
+  "placement": {
+    "displayed_member_anchor": "native_displayed_member_pixel_anchor",
+    "commander_anchor": "native_army_pixel_anchor",
+    "fallback_offset_basis": "projection_right_and_slightly_rear_from_displayed_member",
+    "native_reference_pixels": {
+      "normal_zoom_horizontal": 40,
+      "reduced_zoom_horizontal": 20
+    },
+    "runtime_rule": "prefer_both_captured_native_anchors; use_calibrated_projection_relative_offset_only_when_the_commander_anchor_is_unavailable",
+    "scale_rule": "commander_is_secondary_but_remains_readable_at_both_civ3_zoom_scales"
+  },
+  "era_profiles": {
+    "ancient": {
+      "asset_id": "unit/army/commander/classical_mounted",
+      "source_unit": "UNIT_GREAT_GENERAL",
+      "source_member": "GreatGeneral_Classical_Male",
+      "composition": "horse_plus_virtual_rider",
+      "source_variations": ["Horse", "Rider"],
+      "conversion_status": "blocked_by_mounted_compound_support"
+    },
+    "middle_ages": {
+      "asset_id": "unit/army/commander/classical_mounted",
+      "source_unit": "UNIT_GREAT_GENERAL",
+      "source_member": "GreatGeneral_Classical_Male",
+      "composition": "horse_plus_virtual_rider",
+      "source_variations": ["Horse", "Rider"],
+      "conversion_status": "blocked_by_mounted_compound_support"
+    },
+    "industrial": {
+      "asset_id": "unit/army/commander/modern_foot",
+      "source_unit": "UNIT_GREAT_GENERAL_MODERN",
+      "source_member": "GreatGeneral_Modern_Male",
+      "source_variation": "General",
+      "composition": "foot_officer",
+      "conversion_status": "resolver_proven_static_conversion_pending"
+    },
+    "modern": {
+      "asset_id": "unit/army/commander/modern_foot",
+      "source_unit": "UNIT_GREAT_GENERAL_MODERN",
+      "source_member": "GreatGeneral_Modern_Male",
+      "source_variation": "General",
+      "composition": "foot_officer",
+      "conversion_status": "resolver_proven_static_conversion_pending",
+      "optional_upgrade": "unit/army/commander/modern_jeep"
+    }
+  },
+  "commander_presentation": {
+    "silhouette_priority": "secondary_to_displayed_member",
+    "owner_color_regions": ["armband", "sash", "banner_or_small_standard"],
+    "whole_body_owner_tint": false,
+    "default_action": "use_native_army_action_with_restrained_clip_mapping",
+    "combat_rule": "displayed_member_owns_the_primary_attack_or_defend_read; commander_uses_a_restrained_command_or_brace motion",
+    "member_change_rule": "replace_only_the_displayed_member_child_at_the_authoritative_native_change; do_not_restart_the_commander",
+    "whole_army_death_rule": "play_commander_death_only for authoritative parent army death",
+    "member_death_rule": "never_infer_parent_death_from_a_member_animation_or_displayed_member_change"
+  },
+  "fallback": {
+    "missing_commander_asset": "visible_custom_asset_failure_after_army_ownership_is_enabled",
+    "missing_displayed_member_asset": "atomic_native_army_before_ownership_or_visible_custom_failure_after_ownership",
+    "forbid_mixed_native_custom_composite": true,
+    "forbid_baked_army_member_combinations": true
+  },
+  "source_evidence": {
+    "confirmed_civ3": [
+      "Unit::tick_anim enters a dedicated two-body army path when the displayed-member field is set",
+      "the dedicated path draws the army body at a 40-pixel normal or 20-pixel reduced-zoom horizontal offset and the displayed member at its ordinary anchor",
+      "Animator advances both the army animation and the displayed member animation",
+      "movement updates the displayed member anchor and direction with the containing army",
+      "load and combat selection update the displayed-member unit ID, so the renderer must not choose the top member"
+    ],
+    "confirmed_civ6": [
+      "UNIT_GREAT_GENERAL resolves to GreatGeneral_Classical_Male with horse body and a virtual Rider attachment",
+      "UNIT_GREAT_GENERAL_MODERN resolves to GreatGeneral_Modern_Male and exposes a foot General variation; the same member also declares driver and jeep composition variations"
+    ],
+    "inferred": [
+      "the decompiled army fields are semantically displayed_member_id and member_count",
+      "projection-relative commander tuning should preserve the native side-by-side read rather than hard-code source pixels into pack geometry"
+    ]
+  },
+  "lab_matrix": {
+    "army_states": ["empty", "homogeneous_loaded", "mixed_loaded", "displayed_member_change"],
+    "actions": ["idle", "fidget", "move", "fortify", "attack", "defend", "victory", "death"],
+    "directions": 8,
+    "zooms": ["normal", "reduced"],
+    "lighting": ["noon", "midnight"],
+    "required_contexts": ["open_tile", "stack", "city", "horizontal_wrap", "viewport_clip"],
+    "approval_owner": "L20"
+  }
+}

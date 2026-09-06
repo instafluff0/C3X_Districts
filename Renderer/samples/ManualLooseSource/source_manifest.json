@@ -1,0 +1,59 @@
+{
+  "schema": "c3x.loose_source.v0",
+  "name": "ManualLoosePrototype",
+  "display_name": "Manual Loose Source Prototype",
+  "source_policy": "Sample pack using placeholder paths only.",
+  "projection": {
+    "tile_width_px": 128,
+    "tile_height_px": 64,
+    "height_scale_px": 54,
+    "basis": {
+      "x": [64, 32],
+      "y": [-64, 32],
+      "z": [0, -54]
+    }
+  },
+  "terrains": {
+    "grassland": {
+      "albedo": null,
+      "normal": null,
+      "roughness": null,
+      "height": null,
+      "preview_color": [78, 142, 83]
+    },
+    "plains": {
+      "albedo": null,
+      "normal": null,
+      "roughness": null,
+      "height": null,
+      "preview_color": [178, 154, 84]
+    },
+    "desert": {
+      "albedo": null,
+      "normal": null,
+      "roughness": null,
+      "height": null,
+      "preview_color": [205, 174, 99]
+    },
+    "tundra": {
+      "albedo": null,
+      "normal": null,
+      "roughness": null,
+      "height": null,
+      "preview_color": [130, 151, 143]
+    }
+  },
+  "relief": {
+    "mountains": {
+      "variants": [
+        {
+          "id": "manual_mountain_placeholder",
+          "model": "models/manual_mountain_placeholder.glb",
+          "weight": 1,
+          "preview_height": 1.0,
+          "preview_color": [120, 120, 110]
+        }
+      ]
+    }
+  }
+}

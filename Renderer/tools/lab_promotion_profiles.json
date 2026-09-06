@@ -1,0 +1,14 @@
+{
+  "schema": "c3x.lab_promotion_profiles.v0",
+  "fixture": {"height_tiles": 12, "tile_count": 192, "width_tiles": 16},
+  "profiles": {
+    "L16": {"category": "resources", "selectors": ["strategic", "luxury", "bonus", "animal_single_subject", "animated_clutter", "hidden"], "states": ["visible", "depleted", "fogged"]},
+    "L17": {"category": "cities", "selectors": ["capital", "town", "city", "metropolis", "ancient", "medieval", "industrial", "modern", "culture_variant"], "states": ["day", "night", "walls", "unwalled"]},
+    "L18": {"category": "mines", "selectors": ["ancient", "medieval", "industrial", "modern", "resource_overlay"], "states": ["day", "night", "fogged"]},
+    "L19": {"category": "farms", "selectors": ["irrigated", "dry", "ancient", "industrial", "modern", "resource_overlay"], "states": ["day", "night", "seasonal"]},
+    "L19A": {"category": "tile_objects", "selectors": ["goody_hut", "colony_strategic", "colony_luxury", "colony_bonus"], "states": ["day", "night", "fogged"]},
+    "L19B": {"category": "infrastructure", "selectors": ["airfield", "outpost", "radar_tower", "pollution", "crater", "victory_location", "fortress", "barricade"], "states": ["day", "night", "fogged"]},
+    "L20": {"category": "units", "selectors": ["infantry", "cavalry", "archer", "siege", "naval", "air", "army", "arbitrary_custom"], "states": ["default", "fidget", "run", "attack", "defend", "fortify", "death", "victory"]}
+  },
+  "zooms": [{"id": "normal", "scale_percent": 100}, {"id": "reduced", "scale_percent": 50}]
+}

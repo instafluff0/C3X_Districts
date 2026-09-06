@@ -1,0 +1,377 @@
+{
+  "schema": "c3x.civblp_material_binding.v0",
+  "source": "Z:\\Library\\Application Support\\Steam\\steamapps\\common\\Sid Meier's Civilization VI\\Civ6.app\\Contents\\Assets\\Base\\Platforms\\Windows\\BLPs\\terrain\\TerrainMaterialSet_Base.blp",
+  "target": "ART_DEF_TERRAIN_MATERIAL_GRASSLAND",
+  "read_policy": "read exactly the 28-byte header and package-data region; validated but did not read embedded big-data payloads",
+  "file_header": {
+    "magic": "CIVBLP",
+    "version": 2,
+    "package_data": {
+      "offset": 1024,
+      "offset_hex": "0x00000400",
+      "bytes": 61952
+    },
+    "big_data": {
+      "offset": 62976,
+      "offset_hex": "0x0000f600",
+      "entry_count": 79
+    },
+    "declared_file_bytes": 306968576
+  },
+  "layout_analysis": {
+    "allocation_table_file_offset": 51906,
+    "material_record_count": 31,
+    "material_record_bytes": 128,
+    "texture_record_count": 79,
+    "texture_record_bytes": 104,
+    "texture_string_field_candidates": [
+      {
+        "field_offset": 8,
+        "field_offset_hex": "0x08",
+        "resolved_records": 79,
+        "unique_values": 79,
+        "values": [
+          "FOW_Ground_Cliff",
+          "FOW_Ground_Desert",
+          "FOW_Ground_Desert_Top",
+          "FOW_Ground_Galapagos",
+          "FOW_Ground_Grass_2k",
+          "FOW_Ground_Grass_Top",
+          "FOW_Ground_Ice",
+          "FOW_Ground_Marsh",
+          "FOW_Ground_Mountain",
+          "FOW_Ground_Mountain_Desert_Stripe01",
+          "FOW_Ground_Mountain_Snow",
+          "FOW_Ground_Plains_2k",
+          "FOW_Ground_Plains_Top",
+          "FOW_Ground_Salt_Base",
+          "FOW_Ground_Snow",
+          "FOW_Ground_Temp_1024",
+          "FOW_Ground_Temp_512",
+          "FOW_Ground_Tundra",
+          "FOW_Ground_Tundra_Blend",
+          "TER_Cliff_B",
+          "TER_Cliff_G",
+          "TER_Cliff_H",
+          "TER_Cliff_White_B",
+          "TER_Coast_B",
+          "TER_Coast_H",
+          "TER_Desert_B",
+          "TER_Desert_G",
+          "TER_Desert_H",
+          "TER_Desert_Hills_B",
+          "TER_Desert_Hills_H",
+          "TER_Flat_H",
+          "TER_Galapagos_B",
+          "TER_Galapagos_G",
+          "TER_Galapagos_H",
+          "TER_Grass_B",
+          "TER_Grass_G",
+          "TER_Grass_H",
+          "TER_Grass_Top_B",
+          "TER_Ice_B",
+          "TER_Ice_G",
+          "TER_Ice_H",
+          "TER_Marsh_B",
+          "TER_Marsh_G",
+          "TER_Marsh_H",
+          "TER_Mountain_B",
+          "TER_Mountain_Dark_B",
+          "TER_Mountain_Desert_B",
+          "TER_Mountain_Desert_Stripe01_B",
+          "TER_Mountain_Desert_Stripe01_G",
+          "TER_Mountain_Desert_Stripe01_H",
+          "TER_Mountain_Desert_Stripe02_B",
+          "TER_Mountain_Desert_Stripe03_B",
+          "TER_Mountain_G",
+          "TER_Mountain_H",
+          "TER_Mountain_Snow_B",
+          "TER_Mountain_Snow_H",
+          "TER_Mountain_Top_B",
+          "TER_Mountain_Top_H",
+          "TER_Ocean_H",
+          "TER_Ocean_Shallow_B",
+          "TER_Plains_B",
+          "TER_Plains_H",
+          "TER_Plains_Top_B",
+          "TER_River_B",
+          "TER_Salt_B",
+          "TER_Salt_G",
+          "TER_Salt_H",
+          "TER_Snow_B",
+          "TER_Snow_G",
+          "TER_Snow_H",
+          "TER_Spec_1024",
+          "TER_Spec_512",
+          "TER_Tundra_B",
+          "TER_Tundra_Blend_B",
+          "TER_Tundra_Blend_G",
+          "TER_Tundra_Blend_H",
+          "TER_Tundra_G",
+          "TER_Tundra_H",
+          "TER_White_B"
+        ]
+      },
+      {
+        "field_offset": 64,
+        "field_offset_hex": "0x40",
+        "resolved_records": 79,
+        "unique_values": 4,
+        "values": [
+          "Terrain_BaseColor",
+          "Terrain_FOWColor",
+          "Terrain_Heightmap",
+          "Terrain_Spec"
+        ]
+      }
+    ],
+    "texture_metadata_candidates": [
+      {
+        "field_offset": 88,
+        "field_offset_hex": "0x58",
+        "validated_records": 79
+      }
+    ],
+    "embedded_resource_candidates": [
+      {
+        "offset_field": 32,
+        "offset_field_hex": "0x20",
+        "size_field": 40,
+        "size_field_hex": "0x28",
+        "validated_records": 79
+      }
+    ],
+    "material_role_fields": [
+      {
+        "role": "base_color",
+        "texture_class": "Terrain_BaseColor",
+        "field_offset": 72,
+        "field_offset_hex": "0x48",
+        "consistent_records": 31
+      },
+      {
+        "role": "height",
+        "texture_class": "Terrain_Heightmap",
+        "field_offset": 80,
+        "field_offset_hex": "0x50",
+        "consistent_records": 31
+      },
+      {
+        "role": "specular",
+        "texture_class": "Terrain_Spec",
+        "field_offset": 88,
+        "field_offset_hex": "0x58",
+        "consistent_records": 31
+      },
+      {
+        "role": "fow_color",
+        "texture_class": "Terrain_FOWColor",
+        "field_offset": 96,
+        "field_offset_hex": "0x60",
+        "consistent_records": 31
+      }
+    ],
+    "confidence": "high",
+    "evidence": [
+      "all texture layouts were inferred across every typed texture record",
+      "all non-null material roles were inferred across every typed material record",
+      "all embedded texture byte ranges are bounded by the CIVBLP big-data region"
+    ]
+  },
+  "resource_resolution": {
+    "rule": "follow the material's typed texture pointer, then use that TextureEntry's embedded resource offset and byte count relative to the CIVBLP big-data region",
+    "mode": "embedded_blp_big_data",
+    "standalone_shared_data_required": false,
+    "correction": "The probed material textures are embedded in TerrainMaterialSet_Base.blp; matching standalone SHARED_DATA files are neither present nor required."
+  },
+  "roles": [
+    {
+      "role": "base_color",
+      "status": "resolved",
+      "confidence": "high",
+      "material_field_offset": 72,
+      "material_field_offset_hex": "0x48",
+      "allocation_pointer": 88,
+      "logical_name": "TER_Grass_B",
+      "texture_class": "Terrain_BaseColor",
+      "texture_record": {
+        "file_offset": 38076,
+        "bytes": 104
+      },
+      "metadata": {
+        "field_offset": 88,
+        "field_offset_hex": "0x58",
+        "format": {
+          "dxgi": 78,
+          "name": "BC3_UNORM_SRGB",
+          "color_space": "srgb",
+          "block_bytes": 16
+        },
+        "width": 4096,
+        "height": 4096,
+        "depth": 1,
+        "unknown_u16_after_depth": 1,
+        "mip_count": 11
+      },
+      "storage": {
+        "mode": "embedded_blp_big_data",
+        "relative_offset": 91411456,
+        "absolute_file_offset": 91474432,
+        "bytes": 22369616,
+        "end_exclusive": 113844048,
+        "bounds_valid": true
+      },
+      "evidence": [
+        "the same material offset resolves to class Terrain_BaseColor in all 31 material records",
+        "logical name and class come from independently inferred typed string fields",
+        "embedded byte count exactly matches the declared BC mip chain"
+      ]
+    },
+    {
+      "role": "height",
+      "status": "resolved",
+      "confidence": "high",
+      "material_field_offset": 80,
+      "material_field_offset_hex": "0x50",
+      "allocation_pointer": 89,
+      "logical_name": "TER_Grass_H",
+      "texture_class": "Terrain_Heightmap",
+      "texture_record": {
+        "file_offset": 38284,
+        "bytes": 104
+      },
+      "metadata": {
+        "field_offset": 88,
+        "field_offset_hex": "0x58",
+        "format": {
+          "dxgi": 80,
+          "name": "BC4_UNORM",
+          "color_space": "linear",
+          "block_bytes": 8
+        },
+        "width": 4096,
+        "height": 4096,
+        "depth": 1,
+        "unknown_u16_after_depth": 1,
+        "mip_count": 11
+      },
+      "storage": {
+        "mode": "embedded_blp_big_data",
+        "relative_offset": 124966400,
+        "absolute_file_offset": 125029376,
+        "bytes": 11184808,
+        "end_exclusive": 136214184,
+        "bounds_valid": true
+      },
+      "evidence": [
+        "the same material offset resolves to class Terrain_Heightmap in all 31 material records",
+        "logical name and class come from independently inferred typed string fields",
+        "embedded byte count exactly matches the declared BC mip chain"
+      ]
+    },
+    {
+      "role": "specular",
+      "status": "resolved",
+      "confidence": "high",
+      "material_field_offset": 88,
+      "material_field_offset_hex": "0x58",
+      "allocation_pointer": 90,
+      "logical_name": "TER_Grass_G",
+      "texture_class": "Terrain_Spec",
+      "texture_record": {
+        "file_offset": 38180,
+        "bytes": 104
+      },
+      "metadata": {
+        "field_offset": 88,
+        "field_offset_hex": "0x58",
+        "format": {
+          "dxgi": 80,
+          "name": "BC4_UNORM",
+          "color_space": "linear",
+          "block_bytes": 8
+        },
+        "width": 4096,
+        "height": 4096,
+        "depth": 1,
+        "unknown_u16_after_depth": 1,
+        "mip_count": 11
+      },
+      "storage": {
+        "mode": "embedded_blp_big_data",
+        "relative_offset": 113781248,
+        "absolute_file_offset": 113844224,
+        "bytes": 11184808,
+        "end_exclusive": 125029032,
+        "bounds_valid": true
+      },
+      "evidence": [
+        "the same material offset resolves to class Terrain_Spec in all 31 material records",
+        "logical name and class come from independently inferred typed string fields",
+        "embedded byte count exactly matches the declared BC mip chain"
+      ]
+    },
+    {
+      "role": "fow_color",
+      "status": "resolved",
+      "confidence": "high",
+      "material_field_offset": 96,
+      "material_field_offset_hex": "0x60",
+      "allocation_pointer": 91,
+      "logical_name": "FOW_Ground_Grass_2k",
+      "texture_class": "Terrain_FOWColor",
+      "texture_record": {
+        "file_offset": 34956,
+        "bytes": 104
+      },
+      "metadata": {
+        "field_offset": 88,
+        "field_offset_hex": "0x58",
+        "format": {
+          "dxgi": 72,
+          "name": "BC1_UNORM_SRGB",
+          "color_space": "srgb",
+          "block_bytes": 8
+        },
+        "width": 4096,
+        "height": 4096,
+        "depth": 1,
+        "unknown_u16_after_depth": 1,
+        "mip_count": 11
+      },
+      "storage": {
+        "mode": "embedded_blp_big_data",
+        "relative_offset": 5943296,
+        "absolute_file_offset": 6006272,
+        "bytes": 11184808,
+        "end_exclusive": 17191080,
+        "bounds_valid": true
+      },
+      "evidence": [
+        "the same material offset resolves to class Terrain_FOWColor in all 31 material records",
+        "logical name and class come from independently inferred typed string fields",
+        "embedded byte count exactly matches the declared BC mip chain"
+      ]
+    },
+    {
+      "role": "fuzz",
+      "status": "null",
+      "confidence": "medium",
+      "material_field_offset": 104,
+      "material_field_offset_hex": "0x68",
+      "logical_name": null,
+      "texture_class": null,
+      "storage": null,
+      "evidence": [
+        "m_pFuzzTexture follows m_pFOWColorTexture in the package's reflected field-name sequence",
+        "the next qword after the four proven role fields is null in all 31 material records",
+        "the exact fuzz offset remains inferred because the package does not expose a non-null typed instance"
+      ]
+    }
+  ],
+  "limitations": [
+    "This resolves material-to-texture bindings and metadata only; it does not decode payloads.",
+    "The unknown u16 following depth is preserved without assigning a semantic name.",
+    "Fuzz is inferred from reflection order and consistent null values rather than a live typed pointer."
+  ]
+}

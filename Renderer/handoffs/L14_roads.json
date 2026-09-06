@@ -1,0 +1,73 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L14",
+  "system": "roads",
+  "status": "approved",
+  "approved_on": "2026-09-05",
+  "depends_on": [
+    "handoffs/L9_terrain.json",
+    "handoffs/L10_dunes.json",
+    "handoffs/L11_marsh.json",
+    "handoffs/L12_volcano.json",
+    "handoffs/L13_rivers.json",
+    "handoffs/L13A_lighting.json"
+  ],
+  "source_contract": {
+    "pack_roots": [
+      "packs/Civ5EnvironmentSkin",
+      "packs/Civ5EnvironmentVegetation",
+      "packs/DecalsNormalized",
+      "packs/TerrainElementsNormalized",
+      "packs/ShoreNormalized",
+      "packs/RouteStylesNormalized",
+      "packs/RouteDoodadsNormalized"
+    ],
+    "definition": "terrain_lab/RUN_L14.bat",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "shader": "terrain_lab/terrain_lab.hlsl",
+    "scenario": "terrain_lab/fixtures/l14_roads_192.csv",
+    "scenario_provenance": "deterministic source-independent Lab-only object augmentation over unchanged authoritative BIQ terrain",
+    "projection": "civ3_pixel_defined_isometric",
+    "authoritative_fixture": "preview/out/terrain_lab/test_biq_l13_rivers_192.csv"
+  },
+  "coverage": [
+    "one connected 98-node and 109-edge player-like network",
+    "long runs, loops, 32 junctions, 14 intentional ends, slopes, and relief occlusion",
+    "17 exact shared-edge river crossings with normalized source-backed bridge bodies",
+    "six horizontal-wrap continuations",
+    "ancient, medieval, industrial, and modern normal and pillaged route styles",
+    "deterministic restrained curvature returning exactly to graph nodes",
+    "source-colored continuity guard and bounded node overlap",
+    "complete, reduced, no-roads, roads-only, and style-isolation fixtures"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l14_roads.bmp",
+    "native_sha256": "038328159315349f56e86090bc491ba964d8ba84a8508b34bcd78c12d3bbf93f",
+    "reduced_output": "preview/out/terrain_lab/terrain_beauty_l14_roads_zoom2.bmp",
+    "reduced_sha256": "d57f67e67a152354dd0862b86e68c080f849cedaba2eb784ad0aa753a957eeb3",
+    "no_roads_output": "preview/out/terrain_lab/terrain_beauty_l14_roads_no_roads.bmp",
+    "no_roads_sha256": "379ac9ff2effc36654a2ad1118b6c67f1de2fc140cfeff013172aac37617a920",
+    "roads_only_output": "preview/out/terrain_lab/terrain_beauty_l14_roads_only.bmp",
+    "roads_only_sha256": "9d7a63e956255d454bff454221f22d4c5553487f52e4f86e68e6fcd05a61d02c",
+    "styles_output": "preview/out/terrain_lab/terrain_beauty_l14_roads_styles.bmp",
+    "styles_sha256": "a13f2f40e386079830c646b4c1a9003534be9851484475c51aaf11863aacdf08",
+    "scenario_sha256": "e9bef85d65543e30bf7c1caade36cdd5b69ed097f984d8ddb75148bee70e88e2",
+    "bridge_runtime_sha256": "8908785abd8eb87e1a790c10a05fab6e75524e0852f7270dc0ed69d38ef01797",
+    "tile_count": 192,
+    "audit": "terrain_lab/L14_ROAD_AUDIT.md"
+  },
+  "ownership_intent": {
+    "roads": "custom_when_renderer_enabled_after_I14",
+    "railroads": "absent_until_L15_and_I15",
+    "retained_layers": "Civ III overlays, labels, fog, selection, HUD, and UI"
+  },
+  "cache_inputs": [
+    "approved L9-L13A system revisions",
+    "road graph and route-style revision",
+    "road era/style and pillaged state",
+    "terrain, river, relief, and wrap topology",
+    "environment, viewport, zoom, scroll, clip, and device generation"
+  ],
+  "update_mode": "static except when authoritative route, environment, or visible-scene state changes",
+  "fallback": "After I14, unresolved or failed custom road rendering fails the custom frame visibly; it never replays the native road body over custom terrain."
+}

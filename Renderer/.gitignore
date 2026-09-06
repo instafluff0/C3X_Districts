@@ -1,0 +1,23 @@
+# Generated local prototype packs may contain derived or source-referenced game art.
+/packs/*
+!/packs/README.md
+
+# Preview outputs are reproducible.
+/preview/out/
+
+# Local renderer-definition override; tracked examples live under samples/config.
+/custom.custom_rendering.txt
+
+# Local discovery reports can include machine-specific paths.
+/docs/*_report.json
+/verification/*.json
+/validation/*
+/inventory/generated/
+
+__pycache__/
+*.pyc
+/bin/
+/native/build/
+/terrain_lab/build/
+/terrain_lab/local_paths.bat
+/canonical/

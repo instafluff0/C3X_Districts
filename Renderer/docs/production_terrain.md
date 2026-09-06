@@ -1,0 +1,11 @@
+# M6.1 Production Terrain Contract
+
+M6.1 converts the closed Civ III terrain inventory into generic C3X logical assets. Runtime selection knows only semantic terrain names such as `grassland`, `mountains`, and `ocean`; legacy PCX names occur only in the inventory-to-logical-ID coverage ledger.
+
+`terrain/production_terrain.py` is the executable CPU reference. It builds one shared height lattice for the complete visible scene, projects it with the authoritative Civ III pixel basis and anchors, depth-tests it into the map-sized target, and clips it before the retained HUD region. Adjacent cells share corner heights, so relief and feature terrain cannot separate into isolated tile cards. A stable scene seed chooses variants, while four-neighbor masks include wrapped world coordinates.
+
+The 14 BIQ terrain types map to `terrain/<semantic-id>/base`. Land transitions use `transition/land/blend`, shore transitions use `transition/water/shore`, and polar ice uses `feature/polar_ice`. Landmark state is a semantic variation of the underlying terrain. `m6_1_selector_coverage.json` accounts for every basename and authored cell in the relevant M6.0 atlas contracts. Fog remains Civ III-owned; waterfalls, mountain rivers, deltas, and irrigation explicitly remain per-item vanilla fallback until M7.1.
+
+Rendering is bounded by a visible-tile budget and an LRU material-cache capacity. Diagnostics expose the budget, resident/miss/hit/eviction counts, topology and variants, logical dependencies, authoritative anchors, shared-vertex count, fallbacks, and retained instances. A missing or corrupt surface, transition, or polar-ice dependency falls back only the affected terrain item. The renderer never draws object instances; Civ III therefore retains resource, city, unit, infrastructure, label, fog, selection, minimap, and HUD layers exactly once.
+
+The replayable fixture `samples/scenes/m6_1_terrain.fixture.json` expands into strict `c3x.visible_scene.v0` scenes at 640x480 and 800x600. It covers every BIQ terrain type, a wrapped grassland edge, relief, landmark state, polar ice, scroll-adjusted anchors, three environments, and representative retained instances. Automated tests cover deterministic pixels, clipping, depth, missing/corrupt dependencies, cache eviction, tile-budget rejection, and reset.

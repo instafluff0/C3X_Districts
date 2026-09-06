@@ -1,0 +1,27 @@
+{
+  "schema": "c3x.m6_6_runtime_coverage.v0",
+  "terrain_types": [
+    {"id": 0, "name": "desert", "ground": "custom_material", "relief": "source_height_detail", "feature": "none"},
+    {"id": 1, "name": "plains", "ground": "custom_material", "relief": "source_height_detail", "feature": "none"},
+    {"id": 2, "name": "grassland", "ground": "custom_material", "relief": "source_height_detail", "feature": "none"},
+    {"id": 3, "name": "tundra", "ground": "custom_material", "relief": "source_height_detail", "feature": "none"},
+    {"id": 4, "name": "flood_plain", "ground": "custom_material", "relief": "source_height_detail", "feature": "civ3_retained"},
+    {"id": 5, "name": "hills", "ground": "custom_material", "relief": "source_height_connected_hills", "feature": "none"},
+    {"id": 6, "name": "mountains", "ground": "custom_material", "relief": "source_height_mountain_atlas", "feature": "none"},
+    {"id": 7, "name": "forest", "ground": "custom_underlying_material", "relief": "source_height_detail", "feature": "civ3_retained"},
+    {"id": 8, "name": "jungle", "ground": "custom_underlying_material", "relief": "source_height_detail", "feature": "civ3_retained"},
+    {"id": 9, "name": "marsh", "ground": "custom_underlying_material", "relief": "source_height_detail", "feature": "civ3_retained"},
+    {"id": 10, "name": "volcano", "ground": "custom_material", "relief": "source_height_mountain_atlas", "feature": "civ3_retained"},
+    {"id": 11, "name": "coast", "ground": "custom_source_water_material", "relief": "water_surface", "feature": "none"},
+    {"id": 12, "name": "sea", "ground": "custom_source_water_material", "relief": "water_surface", "feature": "none"},
+    {"id": 13, "name": "ocean", "ground": "custom_source_water_material", "relief": "water_surface", "feature": "none"}
+  ],
+  "compositions": [
+    {"family": "base_material_transitions", "ownership": "custom", "strategy": "symmetric source-material edge blend"},
+    {"family": "vegetation_and_marsh_bodies", "ownership": "civ3", "strategy": "retained overlay above custom underlying ground"},
+    {"family": "polar_ice", "ownership": "civ3", "strategy": "atomic retained overlay with native water-edge dependencies"},
+    {"family": "landmarks", "ownership": "civ3", "strategy": "atomic fallback; exact selector remains unclaimed"},
+    {"family": "shoreline_detail", "ownership": "civ3", "strategy": "retained above custom coast/shallow-water transition"}
+  ],
+  "retained_layers": ["roads", "railroads", "rivers", "resources", "cities", "units", "borders", "fog", "labels", "selection", "hud", "ui"]
+}

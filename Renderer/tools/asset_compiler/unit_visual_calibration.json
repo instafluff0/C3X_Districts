@@ -1,0 +1,36 @@
+{
+  "schema": "c3x.unit_visual_calibration.v0",
+  "runtime_integration": "not_enabled",
+  "facing": {
+    "model_forward": "north",
+    "rotation_axis": "+z",
+    "rotation_policy": "one_instance_transform_not_eight_mesh_copies",
+    "facings": [
+      {"name": "N", "civ3_direction": 8, "yaw_degrees": 0},
+      {"name": "NE", "civ3_direction": 1, "yaw_degrees": 45},
+      {"name": "E", "civ3_direction": 2, "yaw_degrees": 90},
+      {"name": "SE", "civ3_direction": 3, "yaw_degrees": 135},
+      {"name": "S", "civ3_direction": 4, "yaw_degrees": 180},
+      {"name": "SW", "civ3_direction": 5, "yaw_degrees": 225},
+      {"name": "W", "civ3_direction": 6, "yaw_degrees": 270},
+      {"name": "NW", "civ3_direction": 7, "yaw_degrees": 315}
+    ],
+    "per_asset_adjustment": "facing_offset_degrees_pack_metadata"
+  },
+  "zooms": [
+    {"id": "normal", "tile_pixels": [128, 64], "projection_scale": 1.0},
+    {"id": "reduced", "tile_pixels": [64, 32], "projection_scale": 0.5}
+  ],
+  "zoom_policy": {
+    "geometry": "same_normalized_mesh",
+    "pose": "same_model_aware_pose_cache",
+    "formation": "same_tile_relative_offsets",
+    "filtering": "render_at_target_resolution_no_downsampled_sprite_cache"
+  },
+  "actions": ["idle", "fidget", "move", "fortify", "attack", "defend", "death", "victory"],
+  "visual_gate": {
+    "required_cells_per_action": 16,
+    "measurements": ["projected_bounds", "tile_footprint", "owner_color_changed_pixels", "attachment_stability", "silhouette_readability"],
+    "approval": "deferred_to_authorized_l20_render"
+  }
+}

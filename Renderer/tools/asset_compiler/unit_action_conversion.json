@@ -1,0 +1,84 @@
+{
+  "schema": "c3x.unit_action_conversion.v0",
+  "scope": "basic_map_unit_actions_only",
+  "civ3_inventory_evidence": {
+    "effective_unit_directories": 90,
+    "slot_counts": {
+      "DEFAULT": 90,
+      "RUN": 90,
+      "DEATH": 90,
+      "FIDGET": 83,
+      "FORTIFY": 73,
+      "ATTACK1": 44,
+      "VICTORY": 24,
+      "ATTACK2": 9
+    },
+    "source": "Layered vanilla Civilization III Complete unit INI inventory",
+    "note": "DEFEND is not an INI/FLC slot; it is a target-side presentation reaction to an authoritative combat event."
+  },
+  "actions": {
+    "idle": {
+      "civ3_slots": ["DEFAULT"],
+      "playback": "loop",
+      "completion": "continue_until_native_state_changes"
+    },
+    "fidget": {
+      "civ3_slots": ["FIDGET"],
+      "playback": "clamp",
+      "completion": "return_to_idle_when_native_state_changes"
+    },
+    "move": {
+      "civ3_slots": ["RUN"],
+      "playback": "loop",
+      "completion": "snap_to_authoritative_native_segment_endpoint"
+    },
+    "fortify": {
+      "civ3_slots": ["FORTIFY"],
+      "playback": "clamp",
+      "completion": "hold_last_pose_while_native_unit_remains_fortified"
+    },
+    "attack": {
+      "civ3_slots": ["ATTACK1", "ATTACK2", "ATTACK3"],
+      "playback": "clamp",
+      "slot_policy": "all_attack_slots_alias_one_logical_clip_unless_an_authored_unit_mapping_overrides_one",
+      "completion": "native_attack_transition_is_authoritative"
+    },
+    "defend": {
+      "civ3_slots": [],
+      "native_source": "authoritative_target_side_combat_or_hit_event",
+      "playback": "clamp",
+      "completion": "return_to_native_idle_fortified_or_death_state"
+    },
+    "victory": {
+      "civ3_slots": ["VICTORY"],
+      "playback": "clamp",
+      "completion": "return_to_idle_when_native_state_changes"
+    },
+    "death": {
+      "civ3_slots": ["DEATH"],
+      "playback": "clamp",
+      "completion": "hold_last_pose_until_authoritative_despawn"
+    }
+  },
+  "timing": {
+    "authority": "civ3_effective_native_action_duration",
+    "sampling": "normalized_phase_into_converted_clip",
+    "frame_accumulation": false,
+    "loop_count_changes_gameplay": false,
+    "missing_native_fidget_fortify_or_victory": "idle_without_inventing_a_native_transition"
+  },
+  "pose_clip_conversion": {
+    "classification": "a converted clip with two frames is a target pose rather than a self-contained motion",
+    "fidget": "crossfade idle_to_pose_to_idle across authoritative native FIDGET progress",
+    "fortify": "crossfade current_pose_to_fortify_pose and hold the final pose while native state remains fortified",
+    "idle": "hold the authored pose without requesting continuous frames when it contains no motion",
+    "other_actions": "require an authored motion clip unless the unit mapping explicitly aliases a semantically safe action"
+  },
+  "attack_effect_split": {
+    "unit_clip_owns": ["body_pose", "weapon_pose", "recoil"],
+    "effect_pipeline_owns": ["projectile", "muzzle_flash", "impact", "damage_visual"],
+    "event_markers": "authored normalized phase metadata; never inferred from renderer frames"
+  },
+  "deferred_slots": ["CAPTURE", "BUILD", "FORTRESS", "worker_jobs", "paradrop", "load_unload", "scenario_specific"],
+  "runtime_integration": "not_enabled"
+}

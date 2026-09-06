@@ -1,0 +1,10 @@
+LIBRARY C3XRenderer
+EXPORTS
+    c3x_renderer_get_api_version
+    c3x_renderer_set_pack_path
+    c3x_renderer_set_definition_paths
+    c3x_renderer_render
+    c3x_renderer_blit
+    c3x_renderer_export_scene
+    c3x_renderer_schedule
+    c3x_renderer_reset

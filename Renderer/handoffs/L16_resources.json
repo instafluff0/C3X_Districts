@@ -1,0 +1,44 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L16",
+  "system": "resources",
+  "status": "approved",
+  "approved_on": "2026-09-05",
+  "approval_basis": "critical autonomous visual review explicitly authorized by the user",
+  "depends_on": ["handoffs/L15_railroads.json", "handoffs/L13A_lighting.json"],
+  "source_contract": {
+    "pack_roots": ["packs/ResourceNormalized"],
+    "definition": "terrain_lab/RUN_L16.bat",
+    "scenario": "terrain_lab/fixtures/l16_resources_192.csv",
+    "scenario_provenance": "deterministic source-independent Lab-only object augmentation over unchanged authoritative BIQ terrain",
+    "runtime_bundle": "packs/ResourceNormalized/resource_runtime.bin",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "shader": "terrain_lab/terrain_lab.hlsl"
+  },
+  "coverage": [
+    "three strategic, two luxury, two land-bonus, and one aquatic-bonus source body",
+    "single-subject animals, compact authored-material clusters, and submerged fish presentation",
+    "mixed terrain, relief, shore/water, vegetation, route proximity, native and reduced views",
+    "complete, no-resource, resource-only, and hidden-resource controls"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l16_resources.bmp",
+    "native_sha256": "3c112b32e677df37950498d681637e8e5c1a668710bccac9f2a10b0089533a9a",
+    "reduced_output": "preview/out/terrain_lab/terrain_beauty_l16_resources_zoom2.bmp",
+    "reduced_sha256": "0714943d96b15d6ebe71e2fd6b415d89327f58ea9b6e9551ff4be12a2c71f90a",
+    "no_resources_sha256": "69c6f30ebe70ec47eafd208f2ab0ff70cd30423589924e3a32cef39f6f72242f",
+    "resources_only_sha256": "06b9aedcf212d4d6ed2da3dd602d4b1defd03edf9e061bc3f242d340a4dbe3f6",
+    "hidden_resources_sha256": "69c6f30ebe70ec47eafd208f2ab0ff70cd30423589924e3a32cef39f6f72242f",
+    "scenario_sha256": "4bee2c83af59ffdbb076796c7747f4c067b5b3e964aa30d9687b9a5751c527ee",
+    "runtime_sha256": "4e66ed69d8483544b1d24ccb4f78a0c106480b7ca4bf762843563671d2d5c3f2",
+    "tile_count": 192,
+    "audit": "terrain_lab/L16_RESOURCE_AUDIT.md"
+  },
+  "ownership_intent": {
+    "map_resource_bodies": "custom_when_renderer_enabled_after_I16",
+    "resource_visibility": "authoritative Civ III visibility state",
+    "retained_layers": "Civilopedia, city-screen, trade-network, advisor, diplomacy, fog, labels, HUD, and UI"
+  },
+  "update_mode": "static except when authoritative resource, visibility, environment, or visible-scene state changes",
+  "fallback": "After I16, unresolved or failed custom resource rendering fails the custom frame visibly; it never replays native resource pixels."
+}

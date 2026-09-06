@@ -1,0 +1,60 @@
+{
+  "schema": "c3x.source_dedicated_pipeline.v0",
+  "pipeline_id": "unit",
+  "category": "units",
+  "composition_mode": "animated_formation",
+  "runtime_namespace": "unit/",
+  "mapping": "Renderer/inventory/vanilla_conquests_to_civ6_units.json",
+  "graph_roots": [
+    {"document_prefix": "Units", "root_collection": "Units"},
+    {"document_prefix": "Units", "root_collection": "UnitMemberTypes"},
+    {"document_prefix": "Units", "root_collection": "UnitFormationTypes"},
+    {"document_prefix": "Units", "root_collection": "UnitFormationLayoutTypes"},
+    {"document_prefix": "Units", "root_collection": "UnitMovementTypes"},
+    {"document_prefix": "Units", "root_collection": "MemberCombat"},
+    {"document_prefix": "Units", "root_collection": "UnitCombat"},
+    {"document_prefix": "Units", "root_collection": "CombatAttack"},
+    {"document_prefix": "Units", "root_collection": "CombatFormation"},
+    {"document_prefix": "Units", "root_collection": "UnitDomainTypes"},
+    {"document_prefix": "Units", "root_collection": "UnitTintTypes"},
+    {"document_prefix": "Unit_Bins", "root_collection": "UnitAttachmentBins"}
+  ],
+  "selector_axes": [
+    "unit_type",
+    "civilization",
+    "owner",
+    "action",
+    "direction",
+    "formation",
+    "visibility",
+    "stack_order"
+  ],
+  "stages": [
+    {"id": "source_graph", "adapter": "unit_artdef_graph"},
+    {"id": "members", "adapter": "unit_member_bin_resolver"},
+    {"id": "skin", "adapter": "normalized_skin"},
+    {"id": "skeleton", "adapter": "normalized_skeleton"},
+    {"id": "clips", "adapter": "normalized_animation"},
+    {"id": "formation", "adapter": "deterministic_unit_formation"},
+    {"id": "lab_preview", "adapter": "unit_action_turntable"}
+  ],
+  "normalized_outputs": [
+    "member_models",
+    "materials",
+    "skeletons",
+    "animation_clips",
+    "formation_recipes",
+    "owner_color_bindings",
+    "action_bindings",
+    "unit_action_fixtures"
+  ],
+  "retained_native_layers": [
+    "selection_cursor",
+    "health_bar",
+    "activity_marks",
+    "stack_indicators",
+    "hud"
+  ],
+  "forbidden_source_roots": ["Generator", "GeneratorBlockList", "GroundingMaterials"],
+  "runtime_integration": "not_enabled"
+}

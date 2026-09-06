@@ -1,0 +1,65 @@
+{
+  "schema": "c3x.source_route_style_mapping.v0",
+  "catalogs": [
+    {
+      "artdefs": [
+        "Base/ArtDefs/WorldViewRoutes.artdef"
+      ],
+      "material_sources": [
+        {
+          "source_package": "Base/Platforms/Windows/BLPs/route_decal_materials.blp"
+        }
+      ],
+      "source_units_per_tile": 100.0,
+      "styles": [
+        {
+          "source_route": "ROUTE_ANCIENT_ROAD",
+          "asset_id": "route/road/ancient",
+          "route_kind": "road",
+          "style_stage": "ancient"
+        },
+        {
+          "source_route": "ROUTE_MEDIEVAL_ROAD",
+          "asset_id": "route/road/medieval",
+          "route_kind": "road",
+          "style_stage": "medieval"
+        },
+        {
+          "source_route": "ROUTE_INDUSTRIAL_ROAD",
+          "asset_id": "route/road/industrial",
+          "route_kind": "road",
+          "style_stage": "industrial"
+        },
+        {
+          "source_route": "ROUTE_MODERN_ROAD",
+          "asset_id": "route/road/modern",
+          "route_kind": "road",
+          "style_stage": "modern"
+        }
+      ]
+    },
+    {
+      "artdefs": [
+        "Base/ArtDefs/WorldViewRoutes.artdef",
+        "DLC/Expansion2/ArtDefs/WorldViewRoutes.artdef"
+      ],
+      "material_sources": [
+        {
+          "source_package": "Base/Platforms/Windows/BLPs/route_decal_materials.blp"
+        },
+        {
+          "source_package": "DLC/Expansion2/Platforms/Windows/BLPs/route_decal_materials.blp"
+        }
+      ],
+      "source_units_per_tile": 100.0,
+      "styles": [
+        {
+          "source_route": "ROUTE_RAILROAD",
+          "asset_id": "route/railroad/default",
+          "route_kind": "railroad",
+          "style_stage": "default"
+        }
+      ]
+    }
+  ]
+}

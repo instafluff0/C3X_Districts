@@ -1,0 +1,347 @@
+{
+  "schema": "c3x.civblp_material_probe.v0",
+  "source": "Z:\\Library\\Application Support\\Steam\\steamapps\\common\\Sid Meier's Civilization VI\\Civ6.app\\Contents\\Assets\\Base\\Platforms\\Windows\\BLPs\\terrain\\TerrainMaterialSet_Base.blp",
+  "target": "ART_DEF_TERRAIN_MATERIAL_GRASSLAND",
+  "read_policy": "read exactly 28 header bytes plus the declared package-data region; skipped big-data payload",
+  "file_header": {
+    "magic": "CIVBLP",
+    "version": 2,
+    "package_data": {
+      "offset": 1024,
+      "offset_hex": "0x00000400",
+      "bytes": 61952
+    },
+    "big_data": {
+      "offset": 62976,
+      "offset_hex": "0x0000f600",
+      "entry_count": 79
+    },
+    "declared_file_bytes": 306968576
+  },
+  "package_metadata_sha256": "d4f38f69c9ed3c82ce8f1ce667d9ce5d0ca221049a4a8c79ca2ebfe3716dd119",
+  "allocation_table": {
+    "file_offset": 51906,
+    "file_offset_hex": "0x0000cac2",
+    "entry_bytes": 40,
+    "entry_count": 275,
+    "confidence": "high",
+    "evidence": [
+      "table follows the reflected BLP::Package::EntryMap type string",
+      "every decoded allocation has a known stripe, zero padding, and an in-range type pointer",
+      "the first allocation is a divisible non-empty element array",
+      "the remaining package-data bytes after the table are zero padding"
+    ]
+  },
+  "stripe_bases": {
+    "package_block": {
+      "file_offset": 34540,
+      "file_offset_hex": "0x000086ec",
+      "confidence": "high",
+      "evidence": [
+        "target bytes at package offset 0xb054",
+        "allocation pointer 92 is a typed char allocation at stripe offset 0x2d60",
+        "the selected base resolves 114 typed char allocations, more than any competing target-derived base"
+      ]
+    },
+    "temp_data": {
+      "file_offset": 51547,
+      "file_offset_hex": "0x0000c95b",
+      "confidence": "high",
+      "evidence": [
+        "pointer 87 + stripe offset 0x100 -> TerrainMaterialPackageEntry",
+        "pointer 273 + stripe offset 0x120 -> BLP::TextureEntry",
+        "pointer 274 + stripe offset 0x140 -> char",
+        "pointer 275 + stripe offset 0x150 -> BLP::Package::EntryMap"
+      ]
+    }
+  },
+  "reflected_type_and_field_strings": [
+    {
+      "value": "TerrainMaterialPackageEntry",
+      "file_offset": 22308,
+      "file_offset_hex": "0x00005724"
+    },
+    {
+      "value": "TerrainMaterialPackageEntry",
+      "file_offset": 51803,
+      "file_offset_hex": "0x0000ca5b"
+    },
+    {
+      "value": "BLP::TextureEntry",
+      "file_offset": 18276,
+      "file_offset_hex": "0x00004764"
+    },
+    {
+      "value": "BLP::TextureEntry",
+      "file_offset": 51835,
+      "file_offset_hex": "0x0000ca7b"
+    },
+    {
+      "value": "m_pBaseColorTexture",
+      "file_offset": 22340,
+      "file_offset_hex": "0x00005744"
+    },
+    {
+      "value": "m_pHeightTexture",
+      "file_offset": 22404,
+      "file_offset_hex": "0x00005784"
+    },
+    {
+      "value": "m_pSpecTexture",
+      "file_offset": 22436,
+      "file_offset_hex": "0x000057a4"
+    },
+    {
+      "value": "m_pFOWColorTexture",
+      "file_offset": 22452,
+      "file_offset_hex": "0x000057b4"
+    },
+    {
+      "value": "m_pFuzzTexture",
+      "file_offset": 22484,
+      "file_offset_hex": "0x000057d4"
+    }
+  ],
+  "material_record": {
+    "candidate_type": "TerrainMaterialPackageEntry",
+    "allocation_pointer": 86,
+    "allocation_index": 85,
+    "start": 46028,
+    "start_hex": "0x0000b3cc",
+    "end_exclusive": 46156,
+    "end_exclusive_hex": "0x0000b44c",
+    "bytes": 128,
+    "entry_name_pointer": 92,
+    "entry_name_field_offset": 56,
+    "entry_name_field_offset_hex": "0x38",
+    "confidence": "high",
+    "evidence": [
+      "allocation type resolves to TerrainMaterialPackageEntry",
+      "record contains the pointer to the unique target string allocation at +0x38"
+    ],
+    "candidate_texture_pointers": [
+      {
+        "material_field_offset": 72,
+        "material_field_offset_hex": "0x48",
+        "pointer": 88,
+        "allocation_index": 87,
+        "candidate_record": {
+          "start": 38076,
+          "start_hex": "0x000094bc",
+          "end_exclusive": 38180,
+          "end_exclusive_hex": "0x00009524",
+          "bytes": 104,
+          "strings": [
+            {
+              "field_offset": 8,
+              "field_offset_hex": "0x08",
+              "pointer": 40,
+              "value": "TER_Grass_B",
+              "string_file_offset": 44020,
+              "string_file_offset_hex": "0x0000abf4"
+            },
+            {
+              "field_offset": 64,
+              "field_offset_hex": "0x40",
+              "pointer": 22,
+              "value": "Terrain_BaseColor",
+              "string_file_offset": 43444,
+              "string_file_offset_hex": "0x0000a9b4"
+            }
+          ]
+        },
+        "confidence": "high",
+        "evidence": [
+          "material qword resolves through allocation pointer 88",
+          "allocation type resolves to BLP::TextureEntry",
+          "child allocation selects a bounded element of the typed texture array"
+        ]
+      },
+      {
+        "material_field_offset": 80,
+        "material_field_offset_hex": "0x50",
+        "pointer": 89,
+        "allocation_index": 88,
+        "candidate_record": {
+          "start": 38284,
+          "start_hex": "0x0000958c",
+          "end_exclusive": 38388,
+          "end_exclusive_hex": "0x000095f4",
+          "bytes": 104,
+          "strings": [
+            {
+              "field_offset": 8,
+              "field_offset_hex": "0x08",
+              "pointer": 42,
+              "value": "TER_Grass_H",
+              "string_file_offset": 44084,
+              "string_file_offset_hex": "0x0000ac34"
+            },
+            {
+              "field_offset": 64,
+              "field_offset_hex": "0x40",
+              "pointer": 26,
+              "value": "Terrain_Heightmap",
+              "string_file_offset": 43572,
+              "string_file_offset_hex": "0x0000aa34"
+            }
+          ]
+        },
+        "confidence": "high",
+        "evidence": [
+          "material qword resolves through allocation pointer 89",
+          "allocation type resolves to BLP::TextureEntry",
+          "child allocation selects a bounded element of the typed texture array"
+        ]
+      },
+      {
+        "material_field_offset": 88,
+        "material_field_offset_hex": "0x58",
+        "pointer": 90,
+        "allocation_index": 89,
+        "candidate_record": {
+          "start": 38180,
+          "start_hex": "0x00009524",
+          "end_exclusive": 38284,
+          "end_exclusive_hex": "0x0000958c",
+          "bytes": 104,
+          "strings": [
+            {
+              "field_offset": 8,
+              "field_offset_hex": "0x08",
+              "pointer": 41,
+              "value": "TER_Grass_G",
+              "string_file_offset": 44052,
+              "string_file_offset_hex": "0x0000ac14"
+            },
+            {
+              "field_offset": 64,
+              "field_offset_hex": "0x40",
+              "pointer": 24,
+              "value": "Terrain_Spec",
+              "string_file_offset": 43508,
+              "string_file_offset_hex": "0x0000a9f4"
+            }
+          ]
+        },
+        "confidence": "high",
+        "evidence": [
+          "material qword resolves through allocation pointer 90",
+          "allocation type resolves to BLP::TextureEntry",
+          "child allocation selects a bounded element of the typed texture array"
+        ]
+      },
+      {
+        "material_field_offset": 96,
+        "material_field_offset_hex": "0x60",
+        "pointer": 91,
+        "allocation_index": 90,
+        "candidate_record": {
+          "start": 34956,
+          "start_hex": "0x0000888c",
+          "end_exclusive": 35060,
+          "end_exclusive_hex": "0x000088f4",
+          "bytes": 104,
+          "strings": [
+            {
+              "field_offset": 8,
+              "field_offset_hex": "0x08",
+              "pointer": 7,
+              "value": "FOW_Ground_Grass_2k",
+              "string_file_offset": 42932,
+              "string_file_offset_hex": "0x0000a7b4"
+            },
+            {
+              "field_offset": 64,
+              "field_offset_hex": "0x40",
+              "pointer": 2,
+              "value": "Terrain_FOWColor",
+              "string_file_offset": 42772,
+              "string_file_offset_hex": "0x0000a714"
+            }
+          ]
+        },
+        "confidence": "high",
+        "evidence": [
+          "material qword resolves through allocation pointer 91",
+          "allocation type resolves to BLP::TextureEntry",
+          "child allocation selects a bounded element of the typed texture array"
+        ]
+      }
+    ],
+    "unknown_qwords": [
+      {
+        "name": "unknown_0x00",
+        "field_offset": 0,
+        "raw_u64": 0,
+        "raw_hex": "0x0000000000000000"
+      },
+      {
+        "name": "unknown_0x08",
+        "field_offset": 8,
+        "raw_u64": 0,
+        "raw_hex": "0x0000000000000000"
+      },
+      {
+        "name": "unknown_0x10",
+        "field_offset": 16,
+        "raw_u64": 0,
+        "raw_hex": "0x0000000000000000"
+      },
+      {
+        "name": "unknown_0x18",
+        "field_offset": 24,
+        "raw_u64": 0,
+        "raw_hex": "0x0000000000000000"
+      },
+      {
+        "name": "unknown_0x20",
+        "field_offset": 32,
+        "raw_u64": 0,
+        "raw_hex": "0x0000000000000000"
+      },
+      {
+        "name": "unknown_0x28",
+        "field_offset": 40,
+        "raw_u64": 0,
+        "raw_hex": "0x0000000000000000"
+      },
+      {
+        "name": "unknown_0x30",
+        "field_offset": 48,
+        "raw_u64": 0,
+        "raw_hex": "0x0000000000000000"
+      },
+      {
+        "name": "unknown_0x40",
+        "field_offset": 64,
+        "raw_u64": 113589480,
+        "raw_hex": "0x0000000006c53ce8"
+      },
+      {
+        "name": "unknown_0x68",
+        "field_offset": 104,
+        "raw_u64": 0,
+        "raw_hex": "0x0000000000000000"
+      },
+      {
+        "name": "unknown_0x70",
+        "field_offset": 112,
+        "raw_u64": 128849018883,
+        "raw_hex": "0x0000001e00000003"
+      },
+      {
+        "name": "unknown_0x78",
+        "field_offset": 120,
+        "raw_u64": 13,
+        "raw_hex": "0x000000000000000d"
+      }
+    ]
+  },
+  "limits": [
+    "This report identifies typed records and pointer associations, not texture-role semantics.",
+    "The reflected material field-name strings are evidence that roles exist, but M1.3 must map field offsets to those roles.",
+    "A null texture slot is not named because this probe does not yet prove its field offset or role.",
+    "The allocation-table discovery rule is scoped to the observed Civ VI package layout and is not a generic CIVBLP decoder."
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "schema": "c3x.source_ambient_effect_texture_mapping.v0",
+  "source_root": "Base/Platforms/Windows/BLPs/SHARED_DATA",
+  "textures": [
+    {
+      "source_entry": "TEXTURE_FXt_Fire_Torch_ANI_01",
+      "asset_id": "effect/fire/torch_sheet",
+      "usage": "color_sprite_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FX_4Flames",
+      "asset_id": "effect/fire/four_flames",
+      "usage": "color_sprite_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FX_Flame_Glow001",
+      "asset_id": "effect/glow/flame_soft",
+      "usage": "additive_sprite_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FX_LightSource",
+      "asset_id": "effect/glow/light_source",
+      "usage": "additive_sprite_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FireFX_Dust_Smoke_Sheet",
+      "asset_id": "effect/smoke/dust_sheet",
+      "usage": "color_alpha_sprite_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FX_SmokeCloud01",
+      "asset_id": "effect/smoke/cloud",
+      "usage": "color_alpha_sprite_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FX_SteamCloud01",
+      "asset_id": "effect/steam/cloud",
+      "usage": "color_alpha_sprite_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_firefx_smoke_mask_sharp",
+      "asset_id": "effect/smoke/sharp_mask",
+      "usage": "linear_mask_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FX_Radiation_anime1",
+      "asset_id": "effect/pollution/radiation_sheet_01",
+      "usage": "green_emissive_sprite_sheet_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FX_Radiation_anime2",
+      "asset_id": "effect/pollution/radiation_sheet_02",
+      "usage": "green_emissive_sprite_sheet_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FX_Radiation1_a",
+      "asset_id": "effect/pollution/radiation_alpha_01",
+      "usage": "linear_sprite_alpha_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FX_Radiation2_a",
+      "asset_id": "effect/pollution/radiation_alpha_02",
+      "usage": "linear_sprite_alpha_candidate"
+    },
+    {
+      "source_entry": "TEXTURE_FireFX_Radiation_A",
+      "asset_id": "effect/pollution/radiation_atlas",
+      "usage": "green_emissive_sprite_atlas_candidate"
+    }
+  ]
+}

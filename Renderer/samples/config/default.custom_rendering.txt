@@ -1,0 +1,60 @@
+[ C3X custom renderer v0 parser fixture. The format is specified in Renderer/docs/renderer_config_spec.md. ]
+
+#Profile
+id                  = default
+terrain             = replace
+features            = civ3
+roads               = civ3
+rivers              = civ3
+improvements        = civ3
+resources           = civ3
+cities              = civ3
+units                = civ3
+effects              = civ3
+missing_asset       = fallback
+world_seed           = map
+environment          = earthlike
+
+#Pack
+id                   = grassland_normalized
+path                 = mod:Renderer\packs\GrasslandNormalized
+
+#Asset
+id                   = grassland.base
+pack                 = grassland_normalized
+asset                = terrain/grassland/base
+anchor_x             = 0.50
+anchor_y             = 0.50
+scale                = 1.00
+fit_width_px         = 128
+fit_height_px        = 64
+
+#Rule
+id                   = terrain.grassland.default
+category             = terrain
+priority             = 100
+terrain_type         = grassland
+asset                = grassland.base
+variant_selection    = coordinate-hash
+replacement          = replace
+
+#Rule
+id                   = terrain.grassland.sheet2.sprite0
+category             = terrain
+priority             = 200
+terrain_type         = grassland
+sheet_index          = 2
+sprite_index         = 0
+asset                = grassland.base
+
+#Environment
+id                   = earthlike
+day_night_source     = c3x
+season_source        = c3x
+sunrise_hour         = 6
+sunset_hour          = 18
+sun_azimuth_degrees  = 135
+noon_sun_color       = 255, 244, 220
+midnight_ambient_color = 22, 30, 52
+night_exposure       = 0.35
+seasonal_materials   = true

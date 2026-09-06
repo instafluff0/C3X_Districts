@@ -1,0 +1,46 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L9",
+  "system": "terrain_foundation",
+  "status": "approved",
+  "approved_on": "2026-09-04",
+  "source_contract": {
+    "pack_roots": ["packs/TerrainNormalized", "packs/VegetationNormalized"],
+    "definition": "default.custom_rendering.txt",
+    "definition_schema": "c3x.renderer_definition.v0",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "scene_mode": "beauty_promotion",
+    "projection": "civ3_pixel_defined_isometric"
+  },
+  "coverage": [
+    "base terrain materials and transitions",
+    "authored hills and mountains",
+    "beach, shallows, coast water, and surf",
+    "forest and jungle bodies"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l9_promotion.bmp",
+    "native_sha256": "52c0238eacbff8b08128267038c4516f059b862ca749529d2d7eb25015cbb753",
+    "reduced_output": "preview/out/terrain_lab/terrain_beauty_l9_promotion_thumbnail.bmp",
+    "reduced_sha256": "a21bf4f1d809b644d7cbff7717af79e09ee89cc334bc20ea20cfdad430b09129",
+    "tile_count": 48,
+    "audit": "terrain_lab/L9_PROMOTION_AUDIT.md"
+  },
+  "ownership_intent": {
+    "base_terrain": "replace_after_successful_composite",
+    "relief": "replace_after_successful_composite",
+    "forest_and_jungle": "replace_after_successful_composite",
+    "retained_layers": "civ3"
+  },
+  "cache_inputs": [
+    "pack and definition revision",
+    "map and tile identity",
+    "base and real terrain identity",
+    "adjacency and selected-art metadata",
+    "viewport, zoom, scroll, and wrap representation",
+    "hour and season",
+    "ownership and fallback disposition"
+  ],
+  "update_mode": "static unless environment or visible game state changes",
+  "fallback": "The complete native terrain/feature representation remains Civ III-owned unless the exact replacement successfully resolves, renders, and composites."
+}

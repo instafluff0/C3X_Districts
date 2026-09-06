@@ -1,0 +1,26 @@
+{
+  "schema": "c3x.arbitrary_scenario_stress.v0",
+  "scenario_id": "scenario/nonstandard_identifiers",
+  "owner_palette_rows": {"31": [0.12, 0.74, 0.91, 1.0]},
+  "enabled_categories": ["resources", "cities", "mines", "farms", "tile_objects", "units"],
+  "rules": [
+    {"category": "resources", "selector": "resource/scenario_mithril", "asset": "asset/resource/crystal_cluster"},
+    {"category": "cities", "selector": "city_style/scenario_obsidian", "asset": "asset/city/obsidian_compound"},
+    {"category": "mines", "selector": "mine/scenario_arcane", "asset": "asset/mine/arcane"},
+    {"category": "farms", "selector": "farm/scenario_hydroponic", "asset": "asset/farm/hydroponic"},
+    {"category": "tile_objects", "selector": "tile_object/scenario_waystation", "asset": "asset/tile_object/waystation"},
+    {"category": "units", "selector": "unit/scenario_clockwork_legion", "asset": "asset/unit/clockwork_legion"}
+  ],
+  "cases": [
+    {"case_id": "arbitrary_resource_visible", "category": "resources", "selector": "resource/scenario_mithril", "visibility": "visible", "expected": "custom", "owner_palette_id": 31},
+    {"case_id": "arbitrary_resource_hidden", "category": "resources", "selector": "resource/scenario_mithril", "visibility": "hidden", "expected": "omitted", "owner_palette_id": 31},
+    {"case_id": "arbitrary_city", "category": "cities", "selector": "city_style/scenario_obsidian", "visibility": "visible", "expected": "custom", "owner_palette_id": 31},
+    {"case_id": "arbitrary_mine", "category": "mines", "selector": "mine/scenario_arcane", "visibility": "visible", "expected": "custom", "owner_palette_id": 31},
+    {"case_id": "arbitrary_farm", "category": "farms", "selector": "farm/scenario_hydroponic", "visibility": "visible", "expected": "custom", "owner_palette_id": 31},
+    {"case_id": "arbitrary_tile_object", "category": "tile_objects", "selector": "tile_object/scenario_waystation", "visibility": "visible", "expected": "custom", "owner_palette_id": 31},
+    {"case_id": "arbitrary_unit", "category": "units", "selector": "unit/scenario_clockwork_legion", "visibility": "visible", "expected": "custom", "owner_palette_id": 31},
+    {"case_id": "enabled_missing_mapping", "category": "resources", "selector": "resource/scenario_unmapped", "visibility": "visible", "expected": "hard_failure_no_native_replay", "owner_palette_id": 31},
+    {"case_id": "disabled_missing_mapping", "category": "infrastructure", "selector": "infrastructure/scenario_unknown", "visibility": "visible", "expected": "native", "owner_palette_id": 31}
+  ],
+  "partial_override": {"category": "cities", "selector": "city_style/scenario_obsidian", "replacement_asset": "asset/city/obsidian_compound_revision_2"}
+}

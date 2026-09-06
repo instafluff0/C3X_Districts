@@ -1,0 +1,37 @@
+{
+  "schema": "c3x.source_city_adjunct_mapping.v0",
+  "source_units_per_tile": 100.0,
+  "capital_probe": {
+    "source_artdef": "Base/ArtDefs/Buildings.artdef",
+    "source_building": "BUILDING_PALACE",
+    "attachment_point": "DIS_CTY_Palace_CP",
+    "status": "composition_marker_not_terminal_asset"
+  },
+  "assets": [
+    {"asset_id": "city/walls/ancient/half_01", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_ANC_halfwall", "kind": "wall_piece", "era": "ancient", "role": "half"},
+    {"asset_id": "city/walls/ancient/segment_01", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_ANC_wall_01", "kind": "wall_piece", "era": "ancient", "role": "segment"},
+    {"asset_id": "city/walls/ancient/segment_02", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_ANC_wall_02", "kind": "wall_piece", "era": "ancient", "role": "segment"},
+    {"asset_id": "city/walls/ancient/gate", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_ANC_gate", "kind": "wall_piece", "era": "ancient", "role": "gate"},
+    {"asset_id": "city/walls/ancient/tower_small", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_ANC_sm_tower", "kind": "wall_piece", "era": "ancient", "role": "tower"},
+    {"asset_id": "city/walls/medieval/half_01", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_MED_halfwall", "kind": "wall_piece", "era": "medieval", "role": "half"},
+    {"asset_id": "city/walls/medieval/half_02", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "citywalls_med_halfwall_02", "kind": "wall_piece", "era": "medieval", "role": "half"},
+    {"asset_id": "city/walls/medieval/segment_01", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_MED_wall", "kind": "wall_piece", "era": "medieval", "role": "segment"},
+    {"asset_id": "city/walls/medieval/segment_02", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "citywalls_med_wall_02", "kind": "wall_piece", "era": "medieval", "role": "segment"},
+    {"asset_id": "city/walls/medieval/gate", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_MED_gate", "kind": "wall_piece", "era": "medieval", "role": "gate"},
+    {"asset_id": "city/walls/medieval/tower_small", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_MED_sm_tower", "kind": "wall_piece", "era": "medieval", "role": "tower"},
+    {"asset_id": "city/walls/medieval/tower_large", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_MED_lg_tower", "kind": "wall_piece", "era": "medieval", "role": "tower"},
+    {"asset_id": "city/walls/industrial/half_01", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_halfwall", "kind": "wall_piece", "era": "industrial", "role": "half"},
+    {"asset_id": "city/walls/industrial/half_02", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "citywalls_ren_halfwall_02", "kind": "wall_piece", "era": "industrial", "role": "half"},
+    {"asset_id": "city/walls/industrial/segment_01", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_wall", "kind": "wall_piece", "era": "industrial", "role": "segment"},
+    {"asset_id": "city/walls/industrial/segment_02", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_wall_02", "kind": "wall_piece", "era": "industrial", "role": "segment"},
+    {"asset_id": "city/walls/industrial/gate", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_gate", "kind": "wall_piece", "era": "industrial", "role": "gate"},
+    {"asset_id": "city/walls/industrial/tower_small", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_sm_tower", "kind": "wall_piece", "era": "industrial", "role": "tower"},
+    {"asset_id": "city/walls/industrial/tower_large", "source_package": "Base/Platforms/Windows/BLPs/landmarks/Walls.blp", "source_entry": "CityWalls_REN_lg_tower", "kind": "wall_piece", "era": "industrial", "role": "tower"}
+  ],
+  "era_selection": {
+    "0": "ancient",
+    "1": "medieval",
+    "2": "industrial",
+    "3": "industrial"
+  }
+}

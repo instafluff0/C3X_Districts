@@ -1,0 +1,33 @@
+{
+  "schema": "c3x.scene_export_batch_plan.v0",
+  "batch_id": "synthetic-grassland",
+  "source": {
+    "id": "synthetic-grassland",
+    "kind": "synthetic",
+    "label": "Tracked visible-scene contract fixture",
+    "artifact": null
+  },
+  "fixtures": [
+    {
+      "id": "grassland_viewport",
+      "scene": "../scenes/grassland_viewport.scene.json",
+      "required_categories": [
+        "terrain",
+        "resource",
+        "city",
+        "unit"
+      ],
+      "in_game_evidence": {
+        "screenshot": null,
+        "layer_checks": {
+          "fog": "pending",
+          "borders": "pending",
+          "labels": "pending",
+          "highlights": "pending",
+          "hud": "pending",
+          "ui": "pending"
+        }
+      }
+    }
+  ]
+}

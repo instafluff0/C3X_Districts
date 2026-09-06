@@ -1,0 +1,47 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L11",
+  "system": "marshes",
+  "status": "approved",
+  "approved_on": "2026-09-05",
+  "depends_on": ["handoffs/L9_terrain.json", "handoffs/L10_dunes.json"],
+  "source_contract": {
+    "pack_roots": ["packs/TerrainNormalized", "packs/VegetationNormalized", "packs/DecalsNormalized"],
+    "definition": "default.custom_rendering.txt",
+    "definition_schema": "c3x.renderer_definition.v0",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "scene_mode": "beauty_marsh",
+    "projection": "civ3_pixel_defined_isometric",
+    "authoritative_fixture": "preview/out/terrain_lab/test_biq_l11_marsh_96.csv"
+  },
+  "coverage": [
+    "GrassMarsh material and CLUTTER_MARSH projected decals",
+    "viewport-wide continuous land, shore, bed, and water passes",
+    "authoritative 12x8 BIQ ownership with a non-rendered two-cell adjacency halo",
+    "accepted terrain, dunes, relief, vegetation, and water stack"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l11_marsh.bmp",
+    "native_sha256": "1b954f2190ceda40c13ac8b0f5a8c01af6a03d0633e2938d37bb67e1d7002544",
+    "reduced_output": "preview/out/terrain_lab/terrain_beauty_l11_marsh_thumbnail.bmp",
+    "reduced_sha256": "59904531efd9fe5ea2667f3defa8f99083f10855721221d4629f853ee399405c",
+    "tile_count": 96,
+    "audit": "terrain_lab/L11_MARSH_AUDIT.md"
+  },
+  "ownership_intent": {
+    "marsh_surface": "replace_after_successful_composite",
+    "underlying_land_and_shore": "replace_after_successful_composite",
+    "retained_layers": "civ3"
+  },
+  "cache_inputs": [
+    "L9 terrain and L10 dune handoff revisions",
+    "pack and definition revision",
+    "authoritative BIQ terrain, feature, and halo topology",
+    "deterministic variant seed",
+    "viewport, zoom, scroll, and wrap representation",
+    "hour and season",
+    "ownership and fallback disposition"
+  ],
+  "update_mode": "static unless environment or visible game state changes",
+  "fallback": "Marshes and their renderer-owned underlying surface fall back atomically to the complete native tile presentation."
+}

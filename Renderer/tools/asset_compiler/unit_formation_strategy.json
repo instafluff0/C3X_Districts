@@ -1,0 +1,35 @@
+{
+  "schema": "c3x.unit_formation_strategy.v0",
+  "runtime_integration": "not_enabled",
+  "default_profile": "single",
+  "profiles": {
+    "single": {
+      "semantic_bodies": 1,
+      "offsets_tile": [[0.0, 0.0]],
+      "pack_opt_in": false
+    },
+    "restrained_triad": {
+      "semantic_bodies": 3,
+      "offsets_tile": [[0.0, -0.08], [-0.12, 0.08], [0.12, 0.08]],
+      "pack_opt_in": true,
+      "eligible_tags": ["land", "humanoid"]
+    },
+    "army_commander_and_member": {
+      "semantic_bodies": 2,
+      "placement": "authoritative_civ3_army_body_anchors",
+      "normal_member_offset_pixels": 40,
+      "reduced_member_offset_pixels": 20,
+      "pack_opt_in": false
+    }
+  },
+  "policy": {
+    "ordinary_unit": "single",
+    "compound_unit": "one_semantic_body_regardless_of_node_count",
+    "mounted_siege_armored_naval_air": "single",
+    "humanoid_formation": "restrained_triad_only_by_explicit_pack_profile",
+    "army": "army_commander_and_member",
+    "forbidden_drivers": ["hit_points", "loaded_unit_count", "stack_size", "attack_value"],
+    "facing": "rotate_tile_relative_offsets_with_shared_unit_facing",
+    "zoom": "scale_offsets_with_projection"
+  }
+}

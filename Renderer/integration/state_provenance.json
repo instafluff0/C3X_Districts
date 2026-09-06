@@ -1,0 +1,65 @@
+{
+  "schema": "c3x.category_state_provenance_sources.v0",
+  "global_policy": {
+    "authoritative_state": "civ3_or_existing_c3x_state_only",
+    "derived_fields": "pure_deterministic_functions_of_confirmed_inputs",
+    "new_patch_request_policy": "only_after_gate_specific_disassembly_proves_existing_boundary_insufficient",
+    "runtime_activation": "none"
+  },
+  "common": {
+    "tile_x": {"source": "m19 current wrapped tile X", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"]},
+    "tile_y": {"source": "m19 current wrapped tile Y", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"]},
+    "anchor_x_px": {"source": "authoritative Map_Renderer screen anchor X", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"]},
+    "anchor_y_px": {"source": "authoritative Map_Renderer screen anchor Y", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"]},
+    "variant_seed": {"source": "pure hash of world seed, canonical tile index, category and logical asset ID", "status": "derived_from_confirmed_fields", "symbols": []},
+    "lighting_state": {"source": "captured C3X hour/season evaluated by shared environment runtime", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m71_Draw_Tiles"]},
+    "resource_id": {"source": "Tile resource-type field and loaded BIQ resource record", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m09_Draw_Tile_Resources"]},
+    "owner_palette_id": {"source": "Leader.Color_Table_ID resolved through loaded Units_Image_Data.Color_Tables", "status": "confirmed_existing_accessor", "symbols": []},
+    "era_id": {"source": "owning Leader.Era, with scenario-era policy for unowned objects", "status": "confirmed_existing_accessor", "symbols": []},
+    "culture_id": {"source": "owning leader/civilization culture group from loaded BIQ state", "status": "confirmed_existing_accessor", "symbols": []},
+    "instance_id": {"source": "stable category ID plus authoritative city/unit ID or canonical tile identity", "status": "derived_from_confirmed_fields", "symbols": []}
+  },
+  "categories": {
+    "resources": {
+      "visibility": {"source": "native resource draw decision plus viewer fog/visibility context", "status": "gate_audit_required", "symbols": ["Map_Renderer_m09_Draw_Tile_Resources", "Sprite_draw_on_map"], "audit": "prove selected map resource can be suppressed without touching shared UI icon uses"},
+      "animation_phase": {"source": "stable instance seed plus absolute presentation clock", "status": "derived_from_confirmed_fields", "symbols": []}
+    },
+    "cities": {
+      "city_style_id": {"source": "selected city graphics/city-style record captured during m19", "status": "gate_audit_required", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"], "audit": "correlate selected city art index without suppressing labels or population text"},
+      "population": {"source": "City population field", "status": "confirmed_existing_accessor", "symbols": []},
+      "is_capital": {"source": "City capital/palace state", "status": "confirmed_existing_accessor", "symbols": []},
+      "has_walls": {"source": "City wall/building state and native city flags", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"]},
+      "construction_state": {"source": "city production/construction presentation facts available at draw", "status": "gate_audit_required", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"], "audit": "freeze minimum construction states actually represented by the L17 handoff"},
+      "damage_state": {"source": "captured native city damage/condition field", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"]}
+    },
+    "mines": {
+      "resource_id": {"source": "Tile resource-type field; none is a valid value", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"]}
+    },
+    "farms": {
+      "irrigation_state": {"source": "Tile irrigation/building bit and adjacency facts", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"]},
+      "resource_id": {"source": "Tile resource-type field; none is a valid value", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"]},
+      "season": {"source": "captured C3X authoritative season", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m71_Draw_Tiles"]}
+    },
+    "tile_objects": {
+      "object_kind": {"source": "goody-hut visibility result or Tile_has_colony", "status": "confirmed_existing_accessor", "symbols": ["Tile_has_colony"]},
+      "object_type_id": {"source": "goody-hut reference bucket or colony body identity", "status": "confirmed_existing_accessor", "symbols": ["Tile_has_colony"]},
+      "linked_resource_id": {"source": "independent Tile resource-type field", "status": "confirmed_existing_capture", "symbols": ["Map_Renderer_m09_Draw_Tile_Resources"]}
+    },
+    "infrastructure": {
+      "infrastructure_id": {"source": "Tile building flags for fortress, barricade, airfield, outpost, radar, pollution and crater", "status": "gate_audit_required", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"], "audit": "enumerate exact flag masks and precedence from ref enum/decompile before I19B"},
+      "condition": {"source": "authoritative tile-building/pollution/crater presence and pillage state", "status": "gate_audit_required", "symbols": ["Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"], "audit": "prove persistent pollution/crater lifetime and improvement condition are independent"}
+    },
+    "units": {
+      "unit_type_id": {"source": "Unit.Body.UnitTypeID and loaded BIQ unit record", "status": "confirmed_existing_accessor", "symbols": ["Unit_tick_anim"]},
+      "owner_palette_id": {"source": "viewer-conditioned displayed civilization then Leader.Color_Table_ID", "status": "gate_audit_required", "symbols": ["Unit_tick_anim"], "audit": "preserve hidden-nationality display choice rather than assuming Unit.Body.CivID"},
+      "facing": {"source": "native AnimationSummary direction field", "status": "confirmed_existing_accessor", "symbols": ["Unit_tick_anim"]},
+      "action": {"source": "native unit animation/action state plus existing movement/combat/one-shot hooks", "status": "confirmed_existing_accessor", "symbols": ["Unit_move", "Fighter_begin", "Animator_play_one_shot_unit_animation"]},
+      "action_progress": {"source": "native AnimationSummary frame/progress fields sampled at Unit_tick_anim", "status": "gate_audit_required", "symbols": ["Unit_tick_anim"], "audit": "prove normal and reduced FLC cursors expose one normalized progress value without a new tick hook"},
+      "zoom": {"source": "native normal/reduced body draw branch", "status": "confirmed_existing_accessor", "symbols": ["Unit_tick_anim"]},
+      "formation_id": {"source": "pack mapping and authoritative Army/displayed-member state", "status": "derived_from_confirmed_fields", "symbols": ["Unit_select_army_member_for_combat"]},
+      "body_variant": {"source": "pack mapping plus authoritative unit, army-member and scenario selectors", "status": "derived_from_confirmed_fields", "symbols": ["Unit_select_army_member_for_combat"]},
+      "visibility": {"source": "viewer-conditioned native visible stack assembled by Animator_update", "status": "gate_audit_required", "symbols": ["Unit_tick_anim"], "audit": "scope body suppression to the exact visible native body calls while retaining HUD and cursor"}
+    }
+  },
+  "required_user_action": []
+}

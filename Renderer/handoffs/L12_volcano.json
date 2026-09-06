@@ -1,0 +1,53 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L12",
+  "system": "volcanoes",
+  "status": "approved",
+  "approved_on": "2026-09-05",
+  "depends_on": ["handoffs/L9_terrain.json", "handoffs/L10_dunes.json", "handoffs/L11_marsh.json"],
+  "source_contract": {
+    "pack_roots": ["packs/TerrainNormalized", "packs/TerrainElementsNormalized", "packs/VegetationNormalized", "packs/DecalsNormalized"],
+    "definition": "default.custom_rendering.txt",
+    "definition_schema": "c3x.renderer_definition.v0",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "scene_mode": "beauty_volcano",
+    "projection": "civ3_pixel_defined_isometric",
+    "authoritative_fixture": "preview/out/terrain_lab/test_biq_l12_volcano_192.csv"
+  },
+  "coverage": [
+    "authored dormant and active ordinary-volcano relief and material channels",
+    "connected mountain/volcano shoulders, range-boundary material fade, and coastal relief clearance",
+    "dense deterministic normalized forest and jungle bodies",
+    "normalized projected land clutter and CLUTTER_OCEAN shallow-bed decals",
+    "approved terrain, dunes, marsh, coast, water, relief, and vegetation stack"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l12_volcano.bmp",
+    "native_sha256": "5b75e1573392130ba6fff1baf5b2ce12d5d109ac34e4c47561481a56cb37f56c",
+    "reduced_output": "preview/out/terrain_lab/terrain_beauty_l12_volcano_thumbnail.bmp",
+    "reduced_sha256": "f01c29fe4f29f6a55b70f7cc88ab246f4e281863338ecc8eab48217e0c7912fb",
+    "no_system_output": "preview/out/terrain_lab/terrain_beauty_l12_volcano_no_volcano.bmp",
+    "no_system_sha256": "bfae617dedc008171ece35c11fc0af17ce2ea7c5ad5e9d38099059feb9d0d69a",
+    "isolation_output": "preview/out/terrain_lab/terrain_beauty_l12_volcano_only.bmp",
+    "isolation_sha256": "34234893fc87a822a02cadda9a28ec99d33d1f2d8dbd6c8ce60efe03fad0fbaf",
+    "tile_count": 192,
+    "audit": "terrain_lab/L12_VOLCANO_AUDIT.md"
+  },
+  "ownership_intent": {
+    "volcano_relief_and_material": "custom_when_renderer_enabled",
+    "shared_terrain_water_relief_and_vegetation_updates": "custom_when_renderer_enabled",
+    "retained_layers": "civ3",
+    "native_map_replay": "never_when_custom_renderer_enabled"
+  },
+  "cache_inputs": [
+    "L9-L11 integrated system revisions",
+    "pack and definition revision",
+    "authoritative BIQ base and visible terrain plus halo topology",
+    "deterministic variant seed and active/dormant presentation",
+    "viewport, zoom, scroll, clip, and wrap representation",
+    "hour and season",
+    "device generation"
+  ],
+  "update_mode": "static unless environment or visible game state changes",
+  "fallback": "An unavailable L12 payload is omitted while custom rendering remains exclusive; native map terrain is never replayed."
+}

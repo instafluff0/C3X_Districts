@@ -1,0 +1,39 @@
+{
+  "schema": "c3x.i13a_handoff_fidelity.v0",
+  "scope": "game_integration",
+  "approved_input": {
+    "gate": "L13A",
+    "record": "handoffs/L13A_lighting.json",
+    "record_fnv1a64": "430c1d534d33f3d4",
+    "native_reference_sha256": "379ac9ff2effc36654a2ad1118b6c67f1de2fc140cfeff013172aac37617a920",
+    "reduced_reference_sha256": "d1c4cc3974833722827bd717d0134a5d858b6721c724812b53f47a6713d575bb"
+  },
+  "production_shader_sha256": "3d8e4aa95b6abb9e5a37da78762d3ee38f2335d85f0fdc7aa7aca2bd1b0ac765",
+  "environment_mapping": [
+    "sun direction, color, and intensity",
+    "moon direction, color, and intensity",
+    "ambient color, exposure, and night activation",
+    "shared cast-shadow direction and strength",
+    "water Fresnel and specular response",
+    "emissive activation scale without visible object lights"
+  ],
+  "phase_references": {
+    "noon": "379ac9ff2effc36654a2ad1118b6c67f1de2fc140cfeff013172aac37617a920",
+    "sunset": "08b1a6582346e2df9ededbb8f9732482743492e158b109e5221bb915eb4ed95b",
+    "midnight": "e5f7a62491d877430cd83d2ee9fecb75556243d1cf52bc02c6b330ff2bc4d8dc",
+    "sunrise": "d2042d5d436db1f327a6c8b4ac3476d63528b4b8afe9b4d26cfeb3cf88493c29"
+  },
+  "runtime_contract": {
+    "authoritative_inputs": ["hour", "season", "visible geometry", "device generation"],
+    "raised_shadow_classes": ["hills", "mountains", "volcanoes", "forest", "jungle", "shore bodies", "river clutter"],
+    "visible_object_lights": "deferred to L17/I17",
+    "invalid_environment": "fail the custom frame visibly without native map replay"
+  },
+  "deterministic_tolerances": {
+    "same_phase_pixels": "byte_exact",
+    "screen_anchor_error_px": 0,
+    "pixels_modified_outside_clip": 0,
+    "both_civ3_zoom_bases": true,
+    "production_native_fallback_tiles": 0
+  }
+}

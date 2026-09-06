@@ -1,0 +1,178 @@
+{
+  "schema": "c3x.terrain_geometry_resolution.v0",
+  "target": "TERRAIN_GRASS",
+  "material_target": "ART_DEF_TERRAIN_MATERIAL_GRASSLAND",
+  "source_root": "Z:\\Library\\Application Support\\Steam\\steamapps\\common\\Sid Meier's Civilization VI\\Civ6.app\\Contents\\Assets\\Base",
+  "source_provenance": {
+    "terrains_artdef_sha256": "2a763740b8224a331d1c742a408553c25a2192dcb66c451665f1d3854ee5a470",
+    "terrain_style_artdef_sha256": "7f86888e539487d673d91ef3a91e92c74050d017232f74fd902fe8433cff751d"
+  },
+  "artdef_resolution": {
+    "terrain_entry": "TERRAIN_GRASS",
+    "terrain_type": "Flat",
+    "terrain_subtype": "Grass",
+    "style_collection": "StandardFlat",
+    "style_entry": "Default",
+    "material_reference": {
+      "entry_name": "ART_DEF_TERRAIN_MATERIAL_GRASSLAND",
+      "xlp_class": "TerrainMaterial",
+      "xlp_path": "TerrainMaterialSet_Base.xlp",
+      "blp_package": "terrain/TerrainMaterialSet_Base",
+      "library_name": "TerrainMaterial",
+      "parameter_name": "GrasslandMtl"
+    },
+    "authored_relief_reference": {
+      "entry_name": "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_GRASSLAND",
+      "xlp_class": "TerrainElement",
+      "xlp_path": "TerrainElementSet_Base.xlp",
+      "blp_package": "terrain/TerrainElementSet_Base",
+      "library_name": "TerrainElement",
+      "parameter_name": "GrasslandElement"
+    },
+    "all_style_geometry_references": [
+      {
+        "entry_name": "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_GRASSLAND",
+        "xlp_class": "TerrainElement",
+        "xlp_path": "TerrainElementSet_Base.xlp",
+        "blp_package": "terrain/TerrainElementSet_Base",
+        "library_name": "TerrainElement",
+        "parameter_name": "GrasslandElement"
+      },
+      {
+        "entry_name": "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_PLAINS",
+        "xlp_class": "TerrainElement",
+        "xlp_path": "TerrainElementSet_Base.xlp",
+        "blp_package": "terrain/TerrainElementSet_Base",
+        "library_name": "TerrainElement",
+        "parameter_name": "PlainsElement"
+      },
+      {
+        "entry_name": "",
+        "xlp_class": "TerrainElement",
+        "xlp_path": "TerrainElementSet_Base.xlp",
+        "blp_package": "",
+        "library_name": "TerrainElement",
+        "parameter_name": "TundraElement"
+      },
+      {
+        "entry_name": "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_SNOW",
+        "xlp_class": "TerrainElement",
+        "xlp_path": "TerrainElementSet_Base.xlp",
+        "blp_package": "terrain/TerrainElementSet_Base",
+        "library_name": "TerrainElement",
+        "parameter_name": "SnowElement"
+      },
+      {
+        "entry_name": "",
+        "xlp_class": "TerrainElement",
+        "xlp_path": "TerrainElementSet_Base.xlp",
+        "blp_package": "",
+        "library_name": "TerrainElement",
+        "parameter_name": "DesertElement"
+      }
+    ],
+    "comparison": {
+      "style_collection": "StandardHills",
+      "geometry_references": [
+        {
+          "entry_name": "ART_DEF_TERRAIN_ELEMENT_HILL",
+          "xlp_class": "TerrainElement",
+          "xlp_path": "TerrainElementSet_Base.xlp",
+          "blp_package": "terrain/TerrainElementSet_Base",
+          "library_name": "TerrainElement",
+          "parameter_name": "HillElement"
+        }
+      ]
+    },
+    "confidence": "high",
+    "evidence": [
+      "TERRAIN_GRASS explicitly declares TerrainType=Flat and TerrainSubType=Grass",
+      "StandardFlat/Default explicitly binds ART_DEF_TERRAIN_MATERIAL_GRASSLAND",
+      "StandardFlat/Default separately declares ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_GRASSLAND as GrasslandElement relief",
+      "the terrain entry itself is Flat, while authored non-flat relief is explicitly represented by TerrainElement references"
+    ]
+  },
+  "cooked_inventory": [
+    {
+      "name": "TerrainAssetSet_Base.blp",
+      "file_bytes": 2309120,
+      "version": 2,
+      "package_metadata_bytes": 653312,
+      "big_data_entry_count": 82,
+      "geometry_signals": [
+        "BLP::IndexBufferEntry",
+        "BLP::VertexBufferEntry",
+        "FGXModel::ContainerDesc::Mesh"
+      ],
+      "contains_grassland_material_entry": false,
+      "read_policy": "header and package metadata only"
+    },
+    {
+      "name": "TerrainElementSet_Base.blp",
+      "file_bytes": 114641408,
+      "version": 2,
+      "package_metadata_bytes": 67072,
+      "big_data_entry_count": 216,
+      "geometry_signals": [
+        "BLP::IndexBufferEntry",
+        "BLP::VertexBufferEntry"
+      ],
+      "contains_grassland_material_entry": false,
+      "read_policy": "header and package metadata only"
+    },
+    {
+      "name": "TerrainMaterialSet_Base.blp",
+      "file_bytes": 306968576,
+      "version": 2,
+      "package_metadata_bytes": 61952,
+      "big_data_entry_count": 79,
+      "geometry_signals": [
+        "BLP::IndexBufferEntry",
+        "BLP::VertexBufferEntry"
+      ],
+      "contains_grassland_material_entry": true,
+      "read_policy": "header and package metadata only"
+    }
+  ],
+  "loose_geometry_inventory": {
+    "extensions": [
+      ".fgx",
+      ".cn6",
+      ".glb",
+      ".gltf",
+      ".fbx",
+      ".obj"
+    ],
+    "file_count": 0,
+    "files": []
+  },
+  "selection": {
+    "mode": "procedural_flat_grid",
+    "normalized_mesh": "samples/geometry/flat_terrain_patch.json",
+    "normalized_mesh_sha256": "fea61abe9701cabf8d57d89c2334a5a6a44153ab1dbb9c1eb54c19d8e264ebd0",
+    "material_binding": "docs/civ6_grassland_material_binding.json",
+    "uv_channel": "uv0",
+    "uv_domain": "per_tile_unit_square",
+    "confidence": "high",
+    "rule": "TerrainType=Flat selects the source-agnostic unit grid for the base surface; the explicit StandardFlat material binds to that grid, while separately declared TerrainElement/Asset references remain authored relief rather than the flat base topology.",
+    "evidence": [
+      "the ArtDef chain explicitly selects StandardFlat and the grassland material",
+      "StandardFlat separates the base material from an explicitly named GrasslandElement relief reference",
+      "the normalized unit grid has validated CCW topology, +Z normals, and full-range UV0",
+      "the runtime-facing mesh contains no Civ VI path, pointer, or source-format dependency"
+    ]
+  },
+  "tool_inventory": {
+    "civnexus6_source_reference": true,
+    "civnexus6_built_executable": false,
+    "fgxviewer_executable": true,
+    "texconv_executable": true,
+    "blender_on_path": false,
+    "note": "The checked-in converter references remain appropriate for authored models, but flat base terrain needs no FGX conversion."
+  },
+  "limitations": [
+    "This step establishes geometry topology and a declared UV domain; texture payload extraction and visual calibration belong to M1.5.",
+    "The per-tile unit UV domain is a C3X normalization decision, not a claim that Civ VI stores an equivalent authored flat mesh.",
+    "Hills, mountains, cliffs, and landmarks have explicit geometry-bearing paths and are outside this grassland-flat step."
+  ]
+}

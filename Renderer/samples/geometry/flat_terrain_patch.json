@@ -1,0 +1,117 @@
+{
+  "schema": "c3x.normalized_mesh.v0",
+  "asset_id": "terrain.flat.unit_patch",
+  "coordinate_system": {
+    "handedness": "right",
+    "up_axis": "+Z",
+    "horizontal_axes": [
+      "X",
+      "Y"
+    ],
+    "position_unit": "tile",
+    "uv0_origin": "upper_left"
+  },
+  "topology": {
+    "primitive": "triangles",
+    "front_face": "counter_clockwise",
+    "indices": [
+      0,
+      1,
+      2,
+      0,
+      2,
+      3
+    ]
+  },
+  "vertices": [
+    {
+      "position": [
+        -0.5,
+        -0.5,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "uv0": [
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "position": [
+        0.5,
+        -0.5,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "uv0": [
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "position": [
+        0.5,
+        0.5,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "uv0": [
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "position": [
+        -0.5,
+        0.5,
+        0.0
+      ],
+      "normal": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "uv0": [
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "bounds": {
+    "minimum": [
+      -0.5,
+      -0.5,
+      0.0
+    ],
+    "maximum": [
+      0.5,
+      0.5,
+      0.0
+    ]
+  },
+  "material_slots": [
+    {
+      "slot": 0,
+      "name": "terrain_surface",
+      "triangle_start": 0,
+      "triangle_count": 2
+    }
+  ],
+  "provenance": {
+    "kind": "procedural",
+    "generator": "terrain_geometry_resolver.make_flat_patch",
+    "source_format_dependency": null
+  }
+}

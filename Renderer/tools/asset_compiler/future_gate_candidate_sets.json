@@ -1,0 +1,26 @@
+{
+  "schema": "c3x.source_compound_landmark_mapping.v0",
+  "packages": [
+    {
+      "source_package": "DLC/GranColombia_Maya/Platforms/Windows/BLPs/landmarks/tilebases.blp",
+      "shared_data": ["DLC/GranColombia_Maya/Platforms/Windows/BLPs/SHARED_DATA", "Base/Platforms/Windows/BLPs/SHARED_DATA"],
+      "source_units_per_tile": 100.0,
+      "assets": [
+        {"source_entry": "DIS_CMP_Modern_OBS_Main", "asset_id": "candidate/infrastructure/radar_observatory_body"},
+        {"source_entry": "DIS_CTY_RSAM_Palace", "asset_id": "candidate/city/capital_mesoamerican"},
+        {"source_entry": "DIS_CTY_RCOL_Palace", "asset_id": "candidate/city/capital_south_american"}
+      ]
+    },
+    {
+      "source_package": "DLC/CivRoyaleScenario/Platforms/Windows/BLPs/environment/clutter.blp",
+      "shared_data": ["DLC/CivRoyaleScenario/Platforms/Windows/BLPs/SHARED_DATA", "Base/Platforms/Windows/BLPs/SHARED_DATA"],
+      "source_units_per_tile": 100.0,
+      "assets": [
+        {"source_entry": "PIL_CraterDecal001", "asset_id": "infrastructure/crater/variant_01"},
+        {"source_entry": "PIL_CraterDecal002", "asset_id": "infrastructure/crater/variant_02"},
+        {"source_entry": "PIL_CraterDecal003", "asset_id": "infrastructure/crater/variant_03"},
+        {"source_entry": "PIL_CraterDecal004", "asset_id": "infrastructure/crater/variant_04"}
+      ]
+    }
+  ]
+}

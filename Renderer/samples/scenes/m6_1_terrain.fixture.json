@@ -1,0 +1,23 @@
+{
+  "schema": "c3x.m6_terrain_fixture.v0",
+  "world": {"seed": 6101, "width_tiles": 4, "height_tiles": 4, "wrap_x": true, "wrap_y": false},
+  "grid_origin": [0, 0],
+  "terrain_rows": [
+    ["grassland", "plains", "desert", "grassland"],
+    ["tundra", "flood plain", "hills", "mountains"],
+    ["forest", "jungle", "marsh", "volcano"],
+    ["coast", "sea", "ocean", "coast"]
+  ],
+  "landmarks": [[2, 1], [0, 2]],
+  "polar_ice": [[0, 3]],
+  "retained_categories": ["resource", "city", "unit"],
+  "viewports": [
+    {"id": "small", "size_px": [640, 480], "origin_px": [320, 80], "scroll_px": [0, 0], "hud_height_px": 64},
+    {"id": "large_scrolled", "size_px": [800, 600], "origin_px": [400, 120], "scroll_px": [64, 32], "hud_height_px": 64}
+  ],
+  "environments": [
+    {"id": "summer_noon", "hour": 12, "season": "summer"},
+    {"id": "winter_night", "hour": 0, "season": "winter"},
+    {"id": "spring_morning", "hour": 8, "season": "spring"}
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "schema": "c3x.resource_presentation_profiles.v0",
+  "default_profile": "source_authored_cluster",
+  "profiles": {
+    "source_authored_cluster": {
+      "composition": "source_authored_cluster",
+      "anchor": "civ3_resource_anchor",
+      "variant_selection": "stable_instance_seed",
+      "rotation": "authored_plus_stable_instance_yaw",
+      "animation_phase": "absolute_time_plus_stable_instance_seed",
+      "ancillary_policy": "authored"
+    },
+    "single_primary_subject": {
+      "composition": "single_primary_subject",
+      "subject_count": 1,
+      "anchor": "civ3_resource_anchor",
+      "variant_selection": "stable_instance_seed",
+      "rotation": "stable_instance_yaw",
+      "animation_phase": "absolute_time_plus_stable_instance_seed",
+      "ancillary_policy": "omit"
+    }
+  },
+  "resource_bindings": {
+    "resource/horses": {
+      "profile": "single_primary_subject",
+      "primary_source_entries": ["Horse_001", "Horse_Resource02", "Horse_Resource03"]
+    },
+    "resource/furs": {
+      "profile": "single_primary_subject",
+      "primary_source_entries": ["RES_Furs_Fox_01", "RES_Furs_Fox_02", "RES_Furs_Fox_03"]
+    },
+    "resource/ivory": {
+      "profile": "single_primary_subject",
+      "primary_source_entries": ["RES_Elephant_01", "RES_Elephant_02"]
+    },
+    "resource/whales": {
+      "profile": "single_primary_subject",
+      "primary_source_entries": ["RES_Whale_01"]
+    },
+    "resource/game": {
+      "profile": "single_primary_subject",
+      "primary_source_entries": ["RES_Deer_Doe01", "RES_Deer_Doe02", "RES_Deer_Buck01"]
+    },
+    "resource/fish": {
+      "profile": "single_primary_subject",
+      "primary_source_entries": ["RES_Fish"]
+    },
+    "resource/cattle": {
+      "profile": "single_primary_subject",
+      "primary_source_entries": ["RES_Cattle_Cow01", "RES_Cattle_Cow02", "RES_Cattle_Bull01", "RES_Cattle_Bull02"]
+    }
+  }
+}

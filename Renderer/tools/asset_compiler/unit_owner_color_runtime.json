@@ -1,0 +1,107 @@
+{
+  "schema": "c3x.unit_owner_color_runtime.v0",
+  "runtime_integration": "not_enabled",
+  "asset_conversion": {
+    "bake_owner_variants": false,
+    "material_contract": "neutral_base_plus_civ_color_weight",
+    "mask_semantic": "civ_color_weight",
+    "mask_range": [0.0, 1.0],
+    "primary_ramp_indices": [0, 15],
+    "reserved_palette_indices": [16, 63]
+  },
+  "runtime_selection": {
+    "instance_selector": "display_color_table_id",
+    "display_civ_authority": "civ3_native_unit_body_color_selection",
+    "table_lookup": "leaders[display_civ_id].Color_Table_ID",
+    "palette_authority": "units_image_data.Color_Tables[display_color_table_id].JGL_Color_Table",
+    "palette_readback": "JGL_Color_Table.m04_Get_Palette_Colors(start_0_count_64)",
+    "do_not_assume_owner_equals_display_civ": true,
+    "visibility_conditioned_cases": [
+      "hidden_nationality",
+      "viewer_specific_identity",
+      "barbarian_or_neutral_display"
+    ]
+  },
+  "gpu_lut": {
+    "format": "rgba8_unorm_srgb",
+    "width": 64,
+    "height": 32,
+    "row_semantic": "display_color_table_id",
+    "column_semantic": "civ3_palette_index_0_to_63",
+    "upload_policy": "once_per_effective_palette_generation"
+  },
+  "shader": {
+    "representative_color": "primary_index_6",
+    "source_value_and_detail": "preserved_by_base_color_modulation",
+    "blend_weight": "civ_color_weight_times_conservative_strength",
+    "blend_space": "linear_rgb",
+    "exactness": "civ3_palette_values_exact_mask_and_tint_equation_inferred",
+    "lab_calibration": {
+      "strength": 0.82,
+      "neutral_floor": 0.42,
+      "color_gain": 0.95,
+      "status": "conservative_visual_calibration_pending_l20_approval"
+    }
+  },
+  "authoring": {
+    "scope": "per_material_component_not_per_unit_code",
+    "normalized_component_field": "owner_color",
+    "default_from_source_hint": {
+      "USE_CIV_COLOR": "source_mask",
+      "otherwise": "none"
+    },
+    "allowed_modes": [
+      "none",
+      "source_mask",
+      "authored_mask"
+    ],
+    "override_key": "stable_logical_asset_id",
+    "override_inputs": [
+      "mask_source",
+      "strength",
+      "representative_palette_index"
+    ],
+    "forbidden": "unit_name_or_unit_type_branches_in_runtime_shader"
+  },
+  "coverage_gate": {
+    "measurement": "changed_screen_pixels_against_neutral_at_normal_and_reduced_civ3_scale",
+    "palette_sample_policy": "maximum_coverage_across_distinct_runtime_color_tables",
+    "normal_scale_factor": 1.0,
+    "reduced_scale_factor": 0.5,
+    "rgb_delta_threshold": 6,
+    "minimum_changed_pixels": {
+      "normal": 24,
+      "reduced": 6
+    },
+    "status": "required_before_l20_promotion",
+    "below_threshold": "needs_pack_authoring_override",
+    "must_not": "silently_tint_an_unmarked_whole_unit_or_add_runtime_unit_name_special_cases"
+  },
+  "dynamic_instance_fields": [
+    "unit_id",
+    "display_color_table_id",
+    "palette_generation"
+  ],
+  "invalidation": {
+    "owner_or_display_identity_change": "update_instance_selector_only",
+    "leader_color_table_change": "update_instance_selector_only",
+    "scenario_palette_change": "rebuild_lut_and_increment_palette_generation",
+    "never_rebuild_for_color_change": [
+      "mesh",
+      "skeleton",
+      "animation_clip",
+      "neutral_material_texture"
+    ]
+  },
+  "scenario_policy": {
+    "source": "effective_tables_already_loaded_by_civ3",
+    "reason": "inherits_civ3_scenario_search_precedence_and_partial_overrides",
+    "offline_ntp_compiler_role": "lab_preview_and_validation_only"
+  },
+  "ownership": {
+    "scope": "unit_body_only",
+    "retained_native_layers_are_not_recolored": true,
+    "pre_transfer_failure": "retain_complete_native_unit_body",
+    "post_transfer_failure": "visible_custom_pass_failure_without_native_body_replay"
+  }
+}

@@ -1,0 +1,9 @@
+[ Copy this #Pack section into Renderer/custom.custom_rendering.txt to select a different compiled pack. ]
+
+#Pack
+id = terrain_normalized
+path = mod:Renderer\packs\Civ5EnvironmentSkin
+
+#Pack
+id = vegetation_normalized
+path = mod:Renderer\packs\Civ5EnvironmentVegetation

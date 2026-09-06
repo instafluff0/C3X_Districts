@@ -1,0 +1,25 @@
+{
+  "schema": "c3x.source_analytic_light_mapping.v0",
+  "source_package": "Base/Platforms/Windows/BLPs/Light.blp",
+  "source_units_per_tile": 100.0,
+  "lights": [
+    {"source_entry": "DL_OrangeGlow", "asset_id": "light/warm/orange_large", "family": "architectural_glow"},
+    {"source_entry": "DL_StepwellGlow", "asset_id": "light/cool/stepwell", "family": "architectural_glow"},
+    {"source_entry": "DL_YellowAirstipBeacon", "asset_id": "light/warm/airstrip_beacon", "family": "beacon"},
+    {"source_entry": "DL_OrangeGlowB", "asset_id": "light/warm/orange_small", "family": "architectural_glow"},
+    {"source_entry": "DL_OrangeGranaryLight", "asset_id": "light/warm/granary", "family": "architectural_glow"},
+    {"source_entry": "DL_YellowBoatLight", "asset_id": "light/warm/boat_large", "family": "vehicle_light"},
+    {"source_entry": "DL_YellowBoatLightB", "asset_id": "light/warm/boat_small", "family": "vehicle_light"},
+    {"source_entry": "DL_AQDBathGlow", "asset_id": "light/cool/bath", "family": "architectural_glow"},
+    {"source_entry": "DL_ArenaLight", "asset_id": "light/warm/arena", "family": "architectural_glow"},
+    {"source_entry": "DL_VolcanoGlow", "asset_id": "light/volcanic/ambient", "family": "natural_glow"},
+    {"source_entry": "DL_Volcano_Active", "asset_id": "light/volcanic/active", "family": "natural_glow"},
+    {"source_entry": "DL_Volcano_Erupting", "asset_id": "light/volcanic/erupting", "family": "natural_glow"}
+  ],
+  "excluded_source_entries": [
+    {"source_entry": "LT_Warning", "reason": "editor_or_diagnostic_warning_fixture"},
+    {"source_entry": "DLTest_RedLight", "reason": "named_test_fixture"},
+    {"source_entry": "DLTEST_Negative", "reason": "named_test_negative_light"},
+    {"source_entry": "DL_NegativeSharp", "reason": "negative_intensity_special_case_outside_initial_contract"}
+  ]
+}

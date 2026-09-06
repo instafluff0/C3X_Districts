@@ -1,0 +1,66 @@
+{
+  "schema": "c3x.category_contract_sources.v0",
+  "global": {
+    "enabled_failure": "custom_category_hard_failure_no_native_replay",
+    "disabled_behavior": "native_category_owns_complete_plane",
+    "retained_layers": ["fog", "borders", "labels", "highlights", "selection", "hud", "ui"]
+  },
+  "categories": {
+    "resources": {
+      "gate": "L16",
+      "plane": "retained_map",
+      "scene_fields": ["instance_id", "resource_id", "tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "visibility", "variant_seed", "animation_phase"],
+      "cache_inputs": ["resource_id", "tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "visibility", "variant_seed"],
+      "invalidation": ["resource_id", "visibility", "variant_seed"],
+      "sample": {"instance_id": "resource:17", "resource_id": "resource/custom_17", "tile_x": 4, "tile_y": 7, "anchor_x_px": 320, "anchor_y_px": 160, "visibility": "visible", "variant_seed": 17, "animation_phase": 0.25}
+    },
+    "cities": {
+      "gate": "L17",
+      "plane": "retained_map",
+      "scene_fields": ["instance_id", "city_style_id", "tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "owner_palette_id", "population", "era_id", "culture_id", "is_capital", "has_walls", "construction_state", "damage_state", "lighting_state"],
+      "cache_inputs": ["city_style_id", "tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "owner_palette_id", "population", "era_id", "culture_id", "is_capital", "has_walls", "construction_state", "damage_state", "lighting_state"],
+      "invalidation": ["city_style_id", "owner_palette_id", "population", "era_id", "culture_id", "is_capital", "has_walls", "construction_state", "damage_state", "lighting_state"],
+      "sample": {"instance_id": "city:9", "city_style_id": "city_style/custom_9", "tile_x": 9, "tile_y": 2, "anchor_x_px": 384, "anchor_y_px": 144, "owner_palette_id": 31, "population": 12, "era_id": "era/custom", "culture_id": "culture/custom", "is_capital": true, "has_walls": true, "construction_state": "complete", "damage_state": "intact", "lighting_state": "night"}
+    },
+    "mines": {
+      "gate": "L18",
+      "plane": "retained_map",
+      "scene_fields": ["instance_id", "tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "era_id", "culture_id", "resource_id", "variant_seed", "lighting_state"],
+      "cache_inputs": ["tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "era_id", "culture_id", "resource_id", "variant_seed", "lighting_state"],
+      "invalidation": ["era_id", "culture_id", "resource_id", "variant_seed", "lighting_state"],
+      "sample": {"instance_id": "mine:3", "tile_x": 3, "tile_y": 5, "anchor_x_px": 256, "anchor_y_px": 152, "era_id": "era/industrial", "culture_id": "culture/custom", "resource_id": "resource/custom_3", "variant_seed": 3, "lighting_state": "day"}
+    },
+    "farms": {
+      "gate": "L19",
+      "plane": "retained_map",
+      "scene_fields": ["instance_id", "tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "era_id", "culture_id", "irrigation_state", "resource_id", "variant_seed", "season", "lighting_state"],
+      "cache_inputs": ["tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "era_id", "culture_id", "irrigation_state", "resource_id", "variant_seed", "season", "lighting_state"],
+      "invalidation": ["era_id", "culture_id", "irrigation_state", "resource_id", "variant_seed", "season", "lighting_state"],
+      "sample": {"instance_id": "farm:8", "tile_x": 8, "tile_y": 6, "anchor_x_px": 448, "anchor_y_px": 224, "era_id": "era/ancient", "culture_id": "culture/custom", "irrigation_state": "irrigated", "resource_id": null, "variant_seed": 8, "season": "summer", "lighting_state": "day"}
+    },
+    "tile_objects": {
+      "gate": "L19A",
+      "plane": "retained_map",
+      "scene_fields": ["instance_id", "object_kind", "object_type_id", "tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "owner_palette_id", "linked_resource_id", "variant_seed", "lighting_state"],
+      "cache_inputs": ["object_kind", "object_type_id", "tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "owner_palette_id", "linked_resource_id", "variant_seed", "lighting_state"],
+      "invalidation": ["object_kind", "object_type_id", "owner_palette_id", "linked_resource_id", "variant_seed", "lighting_state"],
+      "sample": {"instance_id": "tile_object:4", "object_kind": "colony", "object_type_id": "tile_object/custom_colony", "tile_x": 2, "tile_y": 9, "anchor_x_px": 224, "anchor_y_px": 248, "owner_palette_id": 31, "linked_resource_id": "resource/custom_4", "variant_seed": 4, "lighting_state": "night"}
+    },
+    "infrastructure": {
+      "gate": "L19B",
+      "plane": "retained_map",
+      "scene_fields": ["instance_id", "infrastructure_id", "tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "owner_palette_id", "condition", "variant_seed", "lighting_state"],
+      "cache_inputs": ["infrastructure_id", "tile_x", "tile_y", "anchor_x_px", "anchor_y_px", "owner_palette_id", "condition", "variant_seed", "lighting_state"],
+      "invalidation": ["infrastructure_id", "owner_palette_id", "condition", "variant_seed", "lighting_state"],
+      "sample": {"instance_id": "infrastructure:5", "infrastructure_id": "infrastructure/custom_5", "tile_x": 10, "tile_y": 4, "anchor_x_px": 512, "anchor_y_px": 208, "owner_palette_id": 31, "condition": "complete", "variant_seed": 5, "lighting_state": "day"}
+    },
+    "units": {
+      "gate": "L20",
+      "plane": "dynamic_unit_body",
+      "scene_fields": ["instance_id", "unit_type_id", "anchor_x_px", "anchor_y_px", "owner_palette_id", "facing", "action", "action_progress", "zoom", "formation_id", "body_variant", "visibility"],
+      "cache_inputs": ["unit_type_id", "owner_palette_id", "facing", "zoom", "formation_id", "body_variant"],
+      "invalidation": ["unit_type_id", "owner_palette_id", "facing", "zoom", "formation_id", "body_variant"],
+      "sample": {"instance_id": "unit:21", "unit_type_id": "unit/custom_21", "anchor_x_px": 400, "anchor_y_px": 260, "owner_palette_id": 31, "facing": "southeast", "action": "attack", "action_progress": 0.5, "zoom": "normal", "formation_id": "formation/custom", "body_variant": "variant/custom", "visibility": "visible"}
+    }
+  }
+}

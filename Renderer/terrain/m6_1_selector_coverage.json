@@ -1,0 +1,23 @@
+{
+  "schema": "c3x.m6_terrain_selector_coverage.v0",
+  "contracts": [
+    {"contract_id":"terrain_transition_81","mappings":[
+      {"basenames":["xtgc.pcx","xpgc.pcx","xdgc.pcx","xdpc.pcx","xdgp.pcx","xggc.pcx","lxtgc.pcx","lxpgc.pcx","lxdgc.pcx","lxdpc.pcx","lxdgp.pcx","lxggc.pcx"],"disposition":"mapped","logical_assets":["transition/land/blend"]},
+      {"basenames":["wCSO.pcx","wSSS.pcx","wOOO.pcx","lwCSO.pcx","lwSSS.pcx","lwOOO.pcx"],"disposition":"mapped","logical_assets":["transition/water/shore"]},
+      {"basenames":["FogOfWar.pcx"],"disposition":"retained_civ3","reason":"fog remains above the inserted map bitmap"}
+    ]},
+    {"contract_id":"polar_ice_32","mappings":[{"basenames":["polarICEcaps-final.pcx"],"disposition":"mapped","logical_assets":["feature/polar_ice"]}]},
+    {"contract_id":"hills_16","mappings":[{"basenames":["xhills.pcx","hill forests.pcx","hill jungle.pcx","LMHills.pcx"],"disposition":"mapped","logical_assets":["terrain/hills/base","terrain/forest/base","terrain/jungle/base"]}]},
+    {"contract_id":"mountain_or_volcano_16","mappings":[{"basenames":["LMMountains.pcx","Mountains.pcx","mountain forests.pcx","mountain jungles.pcx","Mountains-snow.pcx","Volcanos.pcx","Volcanos forests.pcx","Volcanos jungles.pcx","Volcanos-snow.pcx"],"disposition":"mapped","logical_assets":["terrain/mountains/base","terrain/volcano/base","terrain/forest/base","terrain/jungle/base"]}]},
+    {"contract_id":"tile_mask_16","mappings":[
+      {"basenames":["floodplains.pcx"],"disposition":"mapped","logical_assets":["terrain/flood_plain/base"]},
+      {"basenames":["deltaRivers.pcx","mtnRivers.pcx","irrigation DESETT.pcx","irrigation PLAINS.pcx","irrigation.pcx","irrigation TUNDRA.pcx"],"disposition":"m7_vanilla_fallback","reason":"river and irrigation ownership begins in M7.1"}
+    ]},
+    {"contract_id":"waterfalls_4","mappings":[{"basenames":["waterfalls.pcx"],"disposition":"m7_vanilla_fallback","reason":"river ownership begins in M7.1"}]},
+    {"contract_id":"marsh_18","mappings":[{"basenames":["marsh.pcx"],"disposition":"mapped","logical_assets":["terrain/marsh/base"]}]},
+    {"contract_id":"grassland_forest_and_jungle_50","mappings":[{"basenames":["grassland forests.pcx"],"disposition":"mapped","logical_assets":["terrain/grassland/base","terrain/forest/base","terrain/jungle/base"]}]},
+    {"contract_id":"forest_30","mappings":[{"basenames":["plains forests.pcx","tundra forests.pcx"],"disposition":"mapped","logical_assets":["terrain/plains/base","terrain/tundra/base","terrain/forest/base"]}]},
+    {"contract_id":"landmark_forest_32","mappings":[{"basenames":["LMForests.pcx"],"disposition":"mapped","logical_assets":["terrain/forest/base"]}]},
+    {"contract_id":"landmark_terrain_7","mappings":[{"basenames":["landmark_terrain.pcx"],"disposition":"mapped","logical_assets":["terrain/desert/base","terrain/plains/base","terrain/grassland/base","terrain/tundra/base","terrain/hills/base","terrain/mountains/base"]}]}
+  ]
+}

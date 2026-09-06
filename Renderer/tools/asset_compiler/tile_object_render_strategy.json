@@ -1,0 +1,202 @@
+{
+  "schema": "c3x.source_tile_object_strategy.v0",
+  "source_units_per_tile": 100.0,
+  "source_package": "Base/Platforms/Windows/BLPs/landmarks/tilebases.blp",
+  "goody_hut": {
+    "source_artdef_chain": [
+      "Base/ArtDefs/Improvements.artdef:IMPROVEMENT_GOODY_HUT",
+      "Base/ArtDefs/Landmarks.artdef:LM_GOODY_HUT"
+    ],
+    "variants": [
+      {"asset_id": "tile_object/goody_hut/variant_01", "source_entry": "VIL_Tribal_Thatch_01"},
+      {"asset_id": "tile_object/goody_hut/variant_02", "source_entry": "VIL_Tribal_Thatch_02"},
+      {"asset_id": "tile_object/goody_hut/variant_03", "source_entry": "VIL_Tribal_Thatch_03"}
+    ],
+    "runtime": {
+      "civ3_reference_buckets": 8,
+      "bucket_to_variant": [0, 1, 2, 0, 1, 2, 0, 1],
+      "selection_seed": ["world_seed", "canonical_tile_index"],
+      "selection_policy": "stable_eight_bucket_hash_then_mapping",
+      "viewer_visibility": "Tile.m15_Check_Goody_Hut(viewer_civ_id)",
+      "culture_policy": "neutral_tribal_site",
+      "era_policy": "none",
+      "terrain_fit": "renderer_terrain_surface_without_source_flattening",
+      "rotation_policy": "stable_diagonal_facing_with_authored_front_clearance",
+      "ambient": {
+        "day": ["campfire_optional", "smoke_optional"],
+        "night": ["campfire", "warm_local_light", "smoke_optional"],
+        "scheduler": "only_while_a_visible_attachment_is_animated"
+      },
+      "removal_policy": "disappear_when_authoritative_goody_hut_bit_clears",
+      "reward_policy": "retain_native_gameplay_message_sound_and_outcome"
+    }
+  },
+  "colony": {
+    "stand_in": "small_owned_resource_logistics_outpost",
+    "source_artdef_chain": [
+      "Base/ArtDefs/Improvements.artdef:IMPROVEMENT_CAMP",
+      "Base/ArtDefs/Landmarks.artdef:LM_CAMP"
+    ],
+    "industrial_source_resolution": [
+      {"source_entry": "IMP_Camp_IND_01", "status": "passed_strict_bind_pose_after_matrix_order_correction", "maximum_error": 3.3737867943806066e-07},
+      {"source_entry": "IMP_Camp_IND_02", "status": "passed_strict_bind_pose_after_matrix_order_correction", "maximum_error": 7.99083003100165e-07},
+      {"source_entry": "IMP_Camp_IND_03", "status": "passed_strict_bind_pose_after_matrix_order_correction", "maximum_error": 3.3737867943806066e-07}
+    ],
+    "eras": [
+      {
+        "civ3_eras": [0],
+        "id": "ancient",
+        "source_stage": "preindustrial",
+        "source_entries": ["IMP_Camp_AN_01", "IMP_Camp_AN_02", "IMP_Camp_AN_03"]
+      },
+      {
+        "civ3_eras": [1],
+        "id": "medieval",
+        "source_stage": "preindustrial",
+        "source_entries": ["IMP_Camp_AN_01", "IMP_Camp_AN_02", "IMP_Camp_AN_03"]
+      },
+      {
+        "civ3_eras": [2],
+        "id": "industrial",
+        "source_stage": "industrial",
+        "source_entries": ["IMP_Camp_IND_01", "IMP_Camp_IND_02", "IMP_Camp_IND_03"]
+      },
+      {
+        "civ3_eras": [3],
+        "id": "modern",
+        "source_stage": "industrial",
+        "source_entries": ["IMP_Camp_IND_01", "IMP_Camp_IND_02", "IMP_Camp_IND_03"]
+      }
+    ],
+    "runtime": {
+      "owner_source": "Colony_Body.OwnerID",
+      "era_source": "leaders[Colony_Body.OwnerID].Era",
+      "territory_owner_is_not_colony_owner": true,
+      "body_scale": 0.62,
+      "selection_seed": ["world_seed", "map_x", "map_y", "owner_id", "civ3_era"],
+      "variant_policy": "stable_hash_within_era_stage",
+      "resource_policy": "preserve_independently_rendered_resource_body",
+      "placement_policy": "choose_stable_clear_quadrant_away_from_resource_body",
+      "rotation_policy": "face_tile_center_then_snap_to_civ3_diagonal",
+      "owner_marker": {
+        "kind": "generated_pennant_and_small_awning_trim",
+        "palette_source": "effective_civ3_owner_color_lookup",
+        "maximum_colored_surface_fraction": 0.14,
+        "minimum_screen_area_pixels": 6
+      },
+      "ambient": {
+        "preindustrial_night": ["warm_lantern_or_fire", "optional_smoke"],
+        "industrial_night": ["warm_lamp", "optional_chimney_smoke"],
+        "scheduler": "only_while_a_visible_attachment_is_animated"
+      },
+      "missing_policy": "hard_fail_custom_frame_after_family_promotion"
+    }
+  },
+  "infrastructure": {
+    "source_artdef_chains": {
+      "fort": [
+        "Base/ArtDefs/Improvements.artdef:IMPROVEMENT_FORT",
+        "Base/ArtDefs/Landmarks.artdef:LM_FORT"
+      ],
+      "airfield": [
+        "Base/ArtDefs/Improvements.artdef:IMPROVEMENT_AIRSTRIP",
+        "Base/ArtDefs/Landmarks.artdef:LM_AIRSTRIP"
+      ]
+    },
+    "source_assets": [
+      {"source_entry": "IMP_Fort_Medieval_Base", "asset_id": "infrastructure/fort/medieval"},
+      {"source_entry": "IMP_Fort_Industrial_Base", "asset_id": "infrastructure/fort/industrial"},
+      {"source_entry": "IMP_Airstrip", "asset_id": "infrastructure/airfield/airstrip"},
+      {"source_entry": "IMP_Airstrip_Tower", "asset_id": "infrastructure/outpost/airstrip_tower"},
+      {"source_entry": "VIL_BAR_IND_Tower", "asset_id": "infrastructure/outpost/industrial_watchtower"}
+    ],
+    "families": {
+      "fortress": {
+        "civ3_era_assets": [
+          "infrastructure/fort/medieval",
+          "infrastructure/fort/medieval",
+          "infrastructure/fort/industrial",
+          "infrastructure/fort/industrial"
+        ],
+        "composition": "source_fort_base_and_declared_props",
+        "owner_color": "source_flags_and_banners_only",
+        "rotation": "stable_diagonal_with_entrance_clearance"
+      },
+      "barricade": {
+        "civ3_era_assets": [
+          "infrastructure/fort/medieval",
+          "infrastructure/fort/medieval",
+          "infrastructure/fort/industrial",
+          "infrastructure/fort/industrial"
+        ],
+        "composition": "fortress_plus_denser_declared_wall_and_earthwork_attachments",
+        "relationship": "visually_stronger_upgrade_to_fortress",
+        "owner_color": "source_flags_and_banners_only",
+        "rotation": "same_as_underlying_fortress"
+      },
+      "airfield": {
+        "civ3_era_assets": [
+          "infrastructure/airfield/airstrip",
+          "infrastructure/airfield/airstrip",
+          "infrastructure/airfield/airstrip",
+          "infrastructure/airfield/airstrip"
+        ],
+        "composition": "source_runway_tower_windsock_hangar_tents_vehicles_and_lanterns",
+        "rotation": "authoritative_or_stable_diagonal_runway_axis",
+        "night": "activate_only_source_lantern_and_runway_light_attachments"
+      },
+      "outpost": {
+        "civ3_era_assets": [
+          "infrastructure/outpost/airstrip_tower",
+          "infrastructure/outpost/airstrip_tower",
+          "infrastructure/outpost/industrial_watchtower",
+          "infrastructure/outpost/industrial_watchtower"
+        ],
+        "composition": "single_small_watchtower_with_restrained_owner_pennant",
+        "rotation": "stable_diagonal_facing_tile_center",
+        "night": "optional_single_warm_guard_light"
+      }
+    },
+    "deferred_families": {
+      "radar_tower": {
+        "status": "observatory_body_structurally_valid_but_isolated_sheet_reads_as_flat_plaza",
+        "candidate_asset": "candidate/infrastructure/radar_observatory_body",
+        "rejected_candidates": [
+          {"source_entry": "IMP_SILO", "reason": "compound_model_invalid_mesh_range"}
+        ],
+        "required_shape": "small_standalone_radar_or_antenna_tower_not_a_missile_silo",
+        "calibration": {"required_uniform_scale": 11.22191796, "facings": 8, "zooms": 2, "day_night_cells": 32}
+      },
+      "pollution": {
+        "status": "preferred_radiation_family_with_bounded_generic_effect_graph_visual_calibration_required",
+        "source_chain": "NUCLEAR_FALLOUT -> FX_Radiation",
+        "candidate_assets": ["effect/pollution/radiation_sheet_01", "effect/pollution/radiation_sheet_02", "effect/pollution/radiation_alpha_01", "effect/pollution/radiation_alpha_02", "effect/pollution/radiation_atlas"],
+        "rule": "use_restrained_tile_local_green_wisps_with_authoritative_civ3_pollution_lifetime_not_source_disaster_timing",
+        "effect_profile": "infrastructure/pollution_radiation",
+        "maximum_live_particles": 7
+      },
+      "crater": {
+        "status": "four_persistent_decal_variants_normalized",
+        "candidate_assets": ["infrastructure/crater/variant_01", "infrastructure/crater/variant_02", "infrastructure/crater/variant_03", "infrastructure/crater/variant_04"],
+        "rule": "authoritative_civ3_crater_state_owns_lifetime"
+      },
+      "victory_location": {
+        "status": "explicitly_set_aside_by_user_direction",
+        "policy": "do_not_investigate_generate_map_or_promote_in_this_preparation_pass"
+      }
+    },
+    "rejected_source_candidates": [
+      {"source_entry": "IMP_Fort_Modern_Base", "status": "rejected_bind_pose_error", "maximum_error": 0.05620446733770823},
+      {"source_entry": "IMP_SILO", "status": "rejected_invalid_mesh_range"}
+    ],
+    "runtime": {
+      "state_authority": "civ3_tile_building_and_pollution_crater_flags",
+      "era_source": "owning_leader_era_when_owned_otherwise_scenario_era_policy",
+      "selection_seed": ["world_seed", "canonical_tile_index", "family", "civ3_era"],
+      "resource_policy": "preserve_independently_rendered_resource_unless_native_semantics_suppress_it",
+      "terrain_fit": "renderer_terrain_surface",
+      "missing_policy": "hard_fail_custom_frame_after_family_promotion"
+    }
+  },
+  "runtime_integration": "not_enabled"
+}

@@ -1,0 +1,78 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L13",
+  "system": "rivers",
+  "status": "approved",
+  "approved_on": "2026-09-05",
+  "depends_on": [
+    "handoffs/L9_terrain.json",
+    "handoffs/L10_dunes.json",
+    "handoffs/L11_marsh.json",
+    "handoffs/L12_volcano.json"
+  ],
+  "source_contract": {
+    "pack_roots": [
+      "packs/Civ5EnvironmentSkin",
+      "packs/Civ5EnvironmentVegetation",
+      "packs/DecalsNormalized",
+      "packs/TerrainElementsNormalized",
+      "packs/ShoreNormalized"
+    ],
+    "definition": "terrain_lab/RUN_L13.bat",
+    "definition_schema": "c3x.renderer_definition.v0 generic logical IDs; local licensed payloads remain ignored",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "scene_modes": [
+      "beauty_rivers",
+      "beauty_rivers_no_rivers",
+      "beauty_rivers_only",
+      "beauty_rivers_thumbnail"
+    ],
+    "projection": "civ3_pixel_defined_isometric",
+    "authoritative_fixtures": [
+      "preview/out/terrain_lab/test_biq_l13_rivers_192.csv",
+      "preview/out/terrain_lab/test_biq_l13_river_topology_192.csv"
+    ],
+    "canonical_reference": "terrain_lab/CANONICAL_REFERENCE_AUDIT.md"
+  },
+  "coverage": [
+    "canonicalized northeast/southwest and southeast/northwest BIQ shared-edge topology",
+    "connected bends, sources, junctions, coast mouths, relief valleys, and horizontal wrap",
+    "source-backed river bed, bank noise, LEAN water response, source/clutter decals, and five normalized rock variants",
+    "alternate environment terrain and broadleaf vegetation skin",
+    "approved terrain, dunes, marsh, volcano, coast, water, relief, vegetation, and clutter stack"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l13_rivers.bmp",
+    "native_sha256": "3613a0f3d5e171f929f0adfa36e15934a980257c36e683c8486b765f0f4c07f8",
+    "reduced_output": "preview/out/terrain_lab/terrain_beauty_l13_rivers_thumbnail.bmp",
+    "reduced_sha256": "f2e5d2d3ce0d529120ba8040951df3709e08fd98f7e8df03696f4c00e3a4a4e0",
+    "no_system_output": "preview/out/terrain_lab/terrain_beauty_l13_rivers_no_rivers.bmp",
+    "no_system_sha256": "8dd8ff650bf606197d40d62d0df59b0439527fbe2966c58b2ee18b2cc40fa666",
+    "isolation_output": "preview/out/terrain_lab/terrain_beauty_l13_rivers_only.bmp",
+    "isolation_sha256": "bd0a090ef07e022f52f4378783408fd726b82e3b80bf79266208a6faa3b3a09e",
+    "topology_output": "preview/out/terrain_lab/terrain_beauty_l13_river_topology.bmp",
+    "topology_sha256": "c6c6812ec7e17cbf49e95f7614e4b5acbaee65556b08f45371574230c4a47039",
+    "all_terrain_fixture_sha256": "1500c085e88425796fb150db4a96a904722d1f8b0cce1d614d46db58bc3c0b4b",
+    "topology_fixture_sha256": "a90295b59ef0d4004433b36eeb2b7b917efb4b4e0b4315470017d19806c2ca95",
+    "tile_count": 192,
+    "tile_count_per_fixture": 192,
+    "audit": "terrain_lab/L13_RIVER_AUDIT.md"
+  },
+  "ownership_intent": {
+    "river_geometry_material_and_clutter": "custom_when_renderer_enabled_after_I13",
+    "shared_terrain_water_relief_and_vegetation_updates": "consume approved prior handoffs",
+    "retained_layers": "civ3 overlays, labels, fog, selection, HUD, and UI",
+    "native_map_replay": "never_when_custom_renderer_enabled"
+  },
+  "cache_inputs": [
+    "L9-L12 integrated system revisions",
+    "pack and definition revision",
+    "authoritative visible BIQ terrain, river masks, and two-cell halo topology",
+    "canonical physical-edge and deterministic variant seeds",
+    "viewport, zoom, scroll, clip, and wrap representation",
+    "hour and season",
+    "device generation"
+  ],
+  "update_mode": "static unless environment or visible game state changes",
+  "fallback": "If I13 cannot resolve the complete approved river payload, omit custom rivers while preserving the already integrated exclusive custom map plane; never replay native map terrain behind it."
+}

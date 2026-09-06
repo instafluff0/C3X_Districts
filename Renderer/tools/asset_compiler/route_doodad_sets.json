@@ -1,0 +1,39 @@
+{
+  "schema": "c3x.source_route_doodad_mapping.v0",
+  "route_types": {
+    "RType_Ancient": "route/road/ancient",
+    "RType_Classical": "route/road/medieval",
+    "RType_Industrial": "route/road/industrial",
+    "RType_Modern": "route/road/modern",
+    "RType_Railroad": "route/railroad/default"
+  },
+  "catalogs": [
+    {
+      "artdef": "Base/ArtDefs/WorldViewRoutes.artdef",
+      "source_package": "Base/Platforms/Windows/BLPs/route_doodads.blp",
+      "shared_data": [
+        "Base/Platforms/Windows/BLPs/SHARED_DATA"
+      ],
+      "source_units_per_tile": 100.0,
+      "allow_declared_size_mismatch": false,
+      "assets": [
+        {"source_entry": "MED_Bridge", "asset_id": "route/bridge/medieval"},
+        {"source_entry": "IND_Bridge", "asset_id": "route/bridge/industrial"},
+        {"source_entry": "MOD_Bridge", "asset_id": "route/bridge/modern"}
+      ]
+    },
+    {
+      "artdef": "DLC/Expansion2/ArtDefs/WorldViewRoutes.artdef",
+      "source_package": "DLC/Expansion2/Platforms/Windows/BLPs/route_doodads.blp",
+      "shared_data": [
+        "DLC/Expansion2/Platforms/Windows/BLPs/SHARED_DATA",
+        "Base/Platforms/Windows/BLPs/SHARED_DATA"
+      ],
+      "source_units_per_tile": 100.0,
+      "allow_declared_size_mismatch": true,
+      "assets": [
+        {"source_entry": "RR_Bridge", "asset_id": "route/bridge/railroad"}
+      ]
+    }
+  ]
+}

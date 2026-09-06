@@ -1,0 +1,139 @@
+{
+  "schema": "c3x.source_compound_unit_sets.v0",
+  "source_content": "Base",
+  "runtime_integration": "not_enabled",
+  "compositions": [
+    {
+      "slug": "horseman",
+      "civ3_ids": ["PRTO_Horseman"],
+      "source_artdef": "UNIT_HORSEMAN",
+      "member_index": 0,
+      "parent": {
+        "id": "mount",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "mount",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": ["RiderAttach"],
+          "child_root_bone_candidates": ["Root", "root", "skin_root"]
+        }
+      ],
+      "actions": {
+        "idle": {"loop": true, "nodes": {"mount": "ANIMATION_CavalryHorse_CombatA", "rider": "ANIMATION_Cavalry_CombatA"}},
+        "fidget": {"loop": false, "nodes": {"mount": "ANIMATION_CavalryHorse_CombatB", "rider": "ANIMATION_Cavalry_IdleD"}},
+        "move": {"loop": true, "nodes": {"mount": "ANIMATION_UnitHorse_RunFwdB", "rider": "ANIMATION_Cavalry_RunFwdB"}},
+        "fortify": {"loop": false, "nodes": {"mount": "ANIMATION_CavalryHorse_BraceA", "rider": "ANIMATION_Cavalry_BraceA"}},
+        "attack": {"loop": false, "nodes": {"mount": "ANIMATION_CavalryHorse_AttackA", "rider": "ANIMATION_Cavalry_AttackA"}},
+        "defend": {"loop": false, "nodes": {"mount": "ANIMATION_CavalryHorse_ReactA", "rider": "ANIMATION_Cavalry_ReactA"}},
+        "death": {"loop": false, "nodes": {"mount": "ANIMATION_UnitHorse_MountedDeathA", "rider": "ANIMATION_Cavalry_DeathB"}},
+        "victory": {"loop": false, "nodes": {"mount": "ANIMATION_CavalryHorse_Victory", "rider": "ANIMATION_Cavalry_Victory"}}
+      }
+    },
+    {
+      "slug": "great_general_classical",
+      "civ3_ids": [],
+      "source_artdef": "UNIT_GREAT_GENERAL",
+      "member_index": 0,
+      "parent": {
+        "id": "mount",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "mount",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": ["RiderAttach"],
+          "child_root_bone_candidates": ["Root", "root", "skin_root"]
+        }
+      ],
+      "actions": {
+        "idle": {"loop": true, "nodes": {"mount": "ANIMATION_UnitHorse_BreathingA", "rider": "ANIMATION_GreatGeneralClassic_IdleA"}},
+        "fidget": {"loop": false, "alias": "idle"},
+        "move": {"loop": true, "nodes": {"mount": "ANIMATION_UnitHorse_RunFwdB", "rider": "ANIMATION_Cavalry_RunFwdB"}},
+        "fortify": {"loop": false, "alias": "defend"},
+        "attack": {"loop": false, "alias": "defend"},
+        "defend": {"loop": false, "nodes": {"mount": "ANIMATION_UnitHorse_ReactRangedA", "rider": "ANIMATION_GreatGeneralClassic_ReactRangedA"}},
+        "death": {"loop": false, "nodes": {"mount": "ANIMATION_UnitHorse_MountedDeathA", "rider": "ANIMATION_Cavalry_DeathB"}},
+        "victory": {"loop": false, "alias": "idle"}
+      }
+    },
+    {
+      "slug": "catapult",
+      "civ3_ids": ["PRTO_Catapult"],
+      "source_artdef": "UNIT_CATAPULT",
+      "member_index": 0,
+      "parent": {
+        "id": "vehicle",
+        "variation": "CatapultA"
+      },
+      "children": [
+        {
+          "id": "operator",
+          "variation": "OperatorA",
+          "virtual_member": "OperatorA",
+          "parent": "vehicle",
+          "socket": "Operator",
+          "socket_bone_candidates": ["Operator", "CatapultOperator"],
+          "child_root_bone_candidates": ["Root", "root", "skin_root"]
+        }
+      ],
+      "actions": {
+        "idle": {"loop": true, "nodes": {"vehicle": "ANIMATION_Catapult_IdleA", "operator": "ANIMATION_CatapultOperator_IdleA"}},
+        "fidget": {"loop": false, "nodes": {"vehicle": "ANIMATION_Catapult_IdleB", "operator": "ANIMATION_CatapultOperator_IdleCombatA"}},
+        "move": {"loop": true, "nodes": {"vehicle": "ANIMATION_Catapult_RunFwdA", "operator": "ANIMATION_CatapultOperator_RunFwdA"}},
+        "fortify": {"loop": false, "nodes": {"vehicle": "ANIMATION_Catapult_BraceA", "operator": "ANIMATION_CatapultOperator_BraceA"}},
+        "attack": {"loop": false, "nodes": {"vehicle": "ANIMATION_Catapult_AttackA", "operator": "ANIMATION_CatapultOperator_AttackA"}},
+        "defend": {"loop": false, "nodes": {"vehicle": "ANIMATION_Catapult_DefendA", "operator": "ANIMATION_CatapultOperator_DefendA"}},
+        "victory": {"loop": false, "alias": "idle"}
+      }
+    },
+    {
+      "slug": "tank",
+      "civ3_ids": ["PRTO_Tank"],
+      "source_artdef": "UNIT_TANK",
+      "member_index": 0,
+      "parent": {
+        "id": "vehicle",
+        "variation": "A"
+      },
+      "children": [
+        {
+          "id": "gunner",
+          "variation": "TankGunner",
+          "virtual_member": "TankGunner",
+          "parent": "vehicle",
+          "socket": "GunnerAttach",
+          "socket_bone_candidates": ["GunnerAttach", "hatchPivot"],
+          "child_root_bone_candidates": ["Root", "root", "skin_root"]
+        }
+      ],
+      "actions": {
+        "idle": {"loop": true, "nodes": {"vehicle": "ANIMATION_Tank_IdleA", "gunner": "ANIMATION_TankGunner_IdleD"}},
+        "fidget": {"loop": false, "nodes": {"vehicle": "ANIMATION_Tank_BreatheSingleA", "gunner": "ANIMATION_TankGunner_BreatheSingleA"}},
+        "move": {"loop": true, "nodes": {"vehicle": "ANIMATION_Tank_Run", "gunner": "ANIMATION_TankGunner_Run"}},
+        "fortify": {"loop": false, "nodes": {"vehicle": "ANIMATION_Tank_BraceA", "gunner": "ANIMATION_TankGunner_BraceA"}},
+        "attack": {"loop": false, "nodes": {"vehicle": "ANIMATION_Tank_AttackA", "gunner": "ANIMATION_TankGunner_AttackA"}},
+        "defend": {"loop": false, "nodes": {"vehicle": "ANIMATION_Tank_DefendA", "gunner": "ANIMATION_TankGunner_DefendA"}},
+        "death": {"loop": false, "nodes": {"vehicle": "ANIMATION_Tank_TankDeathA", "gunner": "ANIMATION_TankGunner_TankDeathA"}},
+        "victory": {"loop": false, "nodes": {"vehicle": "ANIMATION_Tank_Hero", "gunner": "ANIMATION_TankGunner_Hero"}}
+      }
+    }
+  ],
+  "instance_contract": {
+    "anchor": "one_authoritative_civ3_unit_anchor",
+    "facing": "one_shared_eight_direction_facing",
+    "clock": "one_authoritative_action_clock_with_node_local_clips",
+    "owner_color": "one_display_color_table_id_applied_per_component_mask",
+    "hud": "one_retained_native_parent_hud",
+    "failure": "atomic_complete_unit_body",
+    "runtime_dispatch": "recipe_data_only_no_unit_name_branches"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "schema": "c3x.i12_handoff_fidelity.v0",
+  "scope": "game_integration",
+  "approved_input": {
+    "gate": "L12",
+    "record": "handoffs/L12_volcano.json",
+    "record_fnv1a64": "7934c813232c2bba",
+    "native_reference_sha256": "5b75e1573392130ba6fff1baf5b2ce12d5d109ac34e4c47561481a56cb37f56c",
+    "reduced_reference_sha256": "f01c29fe4f29f6a55b70f7cc88ab246f4e281863338ecc8eab48217e0c7912fb"
+  },
+  "frozen_component_mapping": [
+    {
+      "component": "ordinary volcano geometry",
+      "runtime_source": "TerrainElementsNormalized terrain/feature/volcano LOD0 authored height and blend fields",
+      "allowed_adaptation": "deterministic rigid orientation, bounded 0.88/1.12 aspect fit, connected 0.60 or isolated 1.00 Civ III footprint, and 88/104 pixel vertical calibration"
+    },
+    {
+      "component": "dormant and active volcano material",
+      "runtime_source": "TerrainNormalized authored dormant base/height and active base/specular channels",
+      "active_selector": "authoritative Civ III Tile.Body.active_tile_effect captured as has_effect",
+      "exclusion": "no synthetic cone, crater, smoke, glow, fire, connector, or decorative effect"
+    },
+    {
+      "component": "forest and jungle density",
+      "runtime_source": "VegetationNormalized authored bodies and weights",
+      "constants": {
+        "forest_instances_per_tile": 36,
+        "jungle_instances_per_tile": 49,
+        "forest_scale": 0.42,
+        "jungle_scale": 0.40
+      }
+    },
+    {
+      "component": "projected surface clutter",
+      "runtime_source": "DecalsNormalized ocean/coast, grassland, plains, dark-plains, and grassland-hill source families",
+      "density": 0.52,
+      "ownership": "terrain-aware and shoreline-clipped"
+    },
+    {
+      "component": "shared relief and shoreline transition",
+      "runtime_source": "approved L12 connected mountain/volcano shoulders plus the continuous shoreline field",
+      "constraint": "hills, mountains, and volcanoes flatten before their material reaches beach or water"
+    }
+  ],
+  "deterministic_tolerances": {
+    "same_frame_pixels": "byte_exact",
+    "same_frame_ownership": "exact",
+    "screen_anchor_error_px": 0,
+    "pixels_modified_outside_clip": 0,
+    "stale_pixels_after_scroll_zoom_or_wrap": 0,
+    "cache_entries_max": 1,
+    "production_native_fallback_tiles": 0,
+    "custom_on_failure_policy": "hard_failure_without_native_replay"
+  },
+  "game_viewport_adaptations": [
+    "authoritative Civ III occurrence anchors and clip rectangle",
+    "both Civ III zoom bases",
+    "horizontal wrapping in authoritative map coordinates",
+    "active versus dormant selection from captured tile effect state",
+    "shared environment and device generation"
+  ]
+}

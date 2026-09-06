@@ -1,0 +1,43 @@
+{
+  "schema": "c3x.i13_handoff_fidelity.v0",
+  "scope": "game_integration",
+  "approved_input": {
+    "gate": "L13",
+    "record": "handoffs/L13_rivers.json",
+    "record_fnv1a64": "a788142e63ee6deb",
+    "native_reference_sha256": "3613a0f3d5e171f929f0adfa36e15934a980257c36e683c8486b765f0f4c07f8",
+    "reduced_reference_sha256": "f2e5d2d3ce0d529120ba8040951df3709e08fd98f7e8df03696f4c00e3a4a4e0",
+    "topology_reference_sha256": "c6c6812ec7e17cbf49e95f7614e4b5acbaee65556b08f45371574230c4a47039"
+  },
+  "production_shader_sha256": "3d8e4aa95b6abb9e5a37da78762d3ee38f2335d85f0fdc7aa7aca2bd1b0ac765",
+  "frozen_component_mapping": [
+    {
+      "component": "canonical river graph and curves",
+      "runtime_source": "authoritative Civ III river_code masks plus the approved L13 shared-edge graph, deterministic bends, sources, junctions, coast mouths, valleys, and wrap topology",
+      "allowed_adaptation": "Civ III occurrence anchors, clip rectangle, zoom basis, and captured two-cell halo only"
+    },
+    {
+      "component": "river surface and bank material",
+      "runtime_source": "TerrainNormalized river base, height, specular, LEAN0, LEAN1, source, clutter, and bank-noise channels"
+    },
+    {
+      "component": "river rocks",
+      "runtime_source": "ShoreNormalized shore_runtime.bin river_rock group and its five normalized BC1 textures"
+    }
+  ],
+  "cache_and_ownership": {
+    "river_mask_is_scene_identity": true,
+    "road_mask_remains_retained": true,
+    "successful_river_flag": "C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED",
+    "missing_river_payload": "atomically omit the river subsystem while preserving the exclusive custom terrain plane",
+    "native_river_replay": false
+  },
+  "deterministic_tolerances": {
+    "same_frame_pixels": "byte_exact",
+    "screen_anchor_error_px": 0,
+    "pixels_modified_outside_clip": 0,
+    "stale_pixels_after_scroll_zoom_or_wrap": 0,
+    "cache_entries_max": 1,
+    "production_native_fallback_tiles": 0
+  }
+}

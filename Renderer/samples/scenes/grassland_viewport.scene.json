@@ -1,0 +1,226 @@
+{
+  "schema": "c3x.visible_scene.v0",
+  "scene_id": "scene:424242:128:64:640x480:12:summer",
+  "profile_id": "default",
+  "world": {
+    "seed": 424242,
+    "width_tiles": 100,
+    "height_tiles": 80,
+    "wrap_x": true,
+    "wrap_y": false
+  },
+  "viewport": {
+    "width_px": 640,
+    "height_px": 480,
+    "map_rect_px": {
+      "x": 0,
+      "y": 0,
+      "width": 640,
+      "height": 416
+    },
+    "scroll_px": {
+      "x": 128,
+      "y": 64
+    }
+  },
+  "projection": {
+    "type": "civ3-isometric-pixel",
+    "origin_tile": {
+      "x": 10,
+      "y": 20
+    },
+    "origin_px": {
+      "x": 320,
+      "y": 112
+    },
+    "tile_x_basis_px": {
+      "x": 64,
+      "y": 32
+    },
+    "tile_y_basis_px": {
+      "x": -64,
+      "y": 32
+    },
+    "elevation_basis_px": {
+      "x": 0,
+      "y": -32
+    }
+  },
+  "environment": {
+    "id": "earthlike",
+    "hour": 12,
+    "season": "summer"
+  },
+  "tiles": [
+    {
+      "id": "tile:10:20",
+      "map_x": 10,
+      "map_y": 20,
+      "anchor_px": {
+        "x": 320,
+        "y": 112
+      },
+      "terrain": {
+        "id": "terrain:10:20:0",
+        "variant_seed": 3096776778222987538,
+        "resolver_input": {
+          "category": "terrain",
+          "map_x": 10,
+          "map_y": 20,
+          "terrain_type": "grassland",
+          "real_terrain_type": "grassland",
+          "landmark": false,
+          "pcx_file": "xgc.pcx",
+          "sheet_index": 2,
+          "sprite_index": 0
+        }
+      }
+    },
+    {
+      "id": "tile:11:20",
+      "map_x": 11,
+      "map_y": 20,
+      "anchor_px": {
+        "x": 384,
+        "y": 144
+      },
+      "terrain": {
+        "id": "terrain:11:20:0",
+        "variant_seed": 3108385700789525742,
+        "resolver_input": {
+          "category": "terrain",
+          "map_x": 11,
+          "map_y": 20,
+          "terrain_type": "grassland",
+          "real_terrain_type": "grassland",
+          "landmark": false,
+          "pcx_file": "xgc.pcx",
+          "sheet_index": 2,
+          "sprite_index": 1
+        }
+      }
+    },
+    {
+      "id": "tile:10:21",
+      "map_x": 10,
+      "map_y": 21,
+      "anchor_px": {
+        "x": 256,
+        "y": 144
+      },
+      "terrain": {
+        "id": "terrain:10:21:0",
+        "variant_seed": 2123939716888705439,
+        "resolver_input": {
+          "category": "terrain",
+          "map_x": 10,
+          "map_y": 21,
+          "terrain_type": "grassland",
+          "real_terrain_type": "grassland",
+          "landmark": false,
+          "pcx_file": "xgc.pcx",
+          "sheet_index": 2,
+          "sprite_index": 2
+        }
+      }
+    },
+    {
+      "id": "tile:11:21",
+      "map_x": 11,
+      "map_y": 21,
+      "anchor_px": {
+        "x": 320,
+        "y": 176
+      },
+      "terrain": {
+        "id": "terrain:11:21:0",
+        "variant_seed": 10763358322718985377,
+        "resolver_input": {
+          "category": "terrain",
+          "map_x": 11,
+          "map_y": 21,
+          "terrain_type": "grassland",
+          "real_terrain_type": "grassland",
+          "landmark": false,
+          "pcx_file": "xgc.pcx",
+          "sheet_index": 2,
+          "sprite_index": 3
+        }
+      }
+    }
+  ],
+  "instances": [
+    {
+      "id": "resource:10:20:0",
+      "category": "resource",
+      "tile_id": "tile:10:20",
+      "ordinal": 0,
+      "anchor_px": {
+        "x": 320,
+        "y": 104
+      },
+      "variant_seed": 9733591494123990264,
+      "resolver_input": {
+        "category": "resource",
+        "map_x": 10,
+        "map_y": 20,
+        "resource_id": 5,
+        "resource_name": "Horses",
+        "resource_class": "strategic",
+        "pcx_index": 5
+      }
+    },
+    {
+      "id": "city:11:20:0",
+      "category": "city",
+      "tile_id": "tile:11:20",
+      "ordinal": 0,
+      "anchor_px": {
+        "x": 384,
+        "y": 136
+      },
+      "variant_seed": 4077741212008360800,
+      "resolver_input": {
+        "category": "city",
+        "map_x": 11,
+        "map_y": 20,
+        "owner": "Rome",
+        "civilization": "Romans",
+        "culture_group": "Mediterranean",
+        "era": "Ancient Times",
+        "city_style_index": 2,
+        "city_size": "town",
+        "has_walls": true,
+        "is_capital": false,
+        "sprite_index": 3
+      }
+    },
+    {
+      "id": "unit:10:21:0",
+      "category": "unit",
+      "tile_id": "tile:10:21",
+      "ordinal": 0,
+      "anchor_px": {
+        "x": 256,
+        "y": 132
+      },
+      "variant_seed": 947145697644672055,
+      "resolver_input": {
+        "category": "unit",
+        "map_x": 10,
+        "map_y": 21,
+        "owner": "Rome",
+        "civilization": "Romans",
+        "era": "Ancient Times",
+        "unit_id": 2,
+        "unit_type": "Warrior",
+        "unit_class": "land",
+        "direction": "southeast",
+        "action": "fortify",
+        "fortified": true,
+        "hit_point_band": "healthy",
+        "sprite_index": 1
+      }
+    }
+  ]
+}

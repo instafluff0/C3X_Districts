@@ -1,0 +1,1569 @@
+{
+  "schema": "c3x.renderer_project_status.v0",
+  "last_updated": "2026-09-05",
+  "current_milestone": "INTEGRATION",
+  "manual_evidence_policy": {
+    "mode": "strategic_batched_checkpoints",
+    "ordinary_iterations": "automated_and_replayable_evidence_only",
+    "reuse_valid_existing_evidence": true,
+    "normal_request_limit": "one bundled request per strategic milestone checkpoint",
+    "when_unavailable": "record pending_manual_checkpoint and continue independent work",
+    "must_not": "repeatedly request screenshots, request one image per matrix variant, or treat missing review as approval"
+  },
+  "lab_promotion_policy": {
+    "applies_to": ["L12", "L13", "L13A", "L14", "L15", "L16", "L17", "L18", "L19", "L19A", "L19B", "L20", "L21"],
+    "minimum_contiguous_tiles": 192,
+    "viewport_from_l12": "A deterministic 16x12 parallelogram whose local axes follow the two true Civ III edge-adjacency directions, rendered as a diamond-shaped map patch from an authoritative installed Windows BIQ selected to contain the current system.",
+    "accepted_legacy_promotions": {"L9": 48, "L10": 96, "L11": 96},
+    "required_content": "The current lab system, every preceding accepted terrain and object layer, mixed relevant terrain families, shared edges, blends, depth, shadows, and a nontrivial adjacency or overlap.",
+    "required_outputs": ["native inspection render", "reduced readability render", "deterministic input and output hashes"],
+    "lab_object_augmentation": "When the selected authoritative BIQ viewport lacks a map-object family needed by the current or future Lab gate, preserve every BIQ terrain cell and native field unchanged and add a separate deterministic, source-independent Lab-only object scenario. Dense network systems such as roads and railroads must exercise long connected runs, loops, branches, junctions, dead ends, crossings, relief, and wrap continuations. Record augmentation provenance explicitly and never represent it as captured Civ III state.",
+    "layer_isolation": "Required when the current system can obscure a previously accepted layer.",
+    "required_user_visual_approval": true,
+    "advance_rule": "Do not begin the next lab gate until the user explicitly approves the current 192-tile promotion render. Missing approval is pending, never implied."
+  },
+  "workstreams": {
+    "renderer_lab": {
+      "responsibility": "Standalone asset use, rendering technique, visual quality, and approval for all map graphics.",
+      "plan": "terrain_lab/PLAN.md",
+      "current_step": "L18",
+      "iteration_command": "python3 Renderer/tools/renderer_dev.py lab"
+    },
+    "game_integration": {
+      "responsibility": "Civ III state capture, cache/invalidation, redraws, anchoring, compositing, exclusive native suppression, retained layers, telemetry, and hard failure without native replay.",
+    "current_step": "I13A",
+    "status": "i13a_complete",
+      "iteration_command": "python3 Renderer/tools/renderer_dev.py integration"
+    },
+    "promotion_rule": "Every L# visual gate has a same-numbered I# game-integration gate. I# cannot start before L# approval; after L# is approved, I# consumes that frozen handoff before the next system is considered integrated. L21/I21 remain the final combined release gates.",
+    "custom_on_ownership": "Configuration off is fully vanilla. Configuration on owns the complete m19 map plane and never replays native terrain. Runtime code contains only deliberately integrated draw paths; unavailable payloads and not-yet-integrated categories are omitted while their integrated custom base terrain continues to render.",
+    "handoff_contract": "docs/renderer_workstreams.md",
+    "full_verification_command": "python3 Renderer/tools/renderer_dev.py full",
+    "windows_vm": {
+      "name": "Windows 11",
+      "shared_repository": "Y:\\fun\\Civilization III Complete\\Conquests\\C3X_Districts",
+      "dispatch": "Python checks run locally; Windows-only phases dispatch automatically through prlctl on non-Windows hosts.",
+      "civ3_conquests": "C:\\Program Files (x86)\\GOG Galaxy\\Games\\Civilization III Complete\\Conquests",
+      "live_mod_link": "C:\\Program Files (x86)\\GOG Galaxy\\Games\\Civilization III Complete\\Conquests\\C3X_Districts -> \\\\Mac\\Home\\fun\\Civilization III Complete\\Conquests\\C3X_Districts",
+      "injected_verify_link": "C3X_Shared_Verify"
+    }
+  },
+  "civ3_patch_dependencies": {
+    "ledger": "docs/civ3_patch_dependency_ledger.md",
+    "required_user_action": [
+      {
+        "milestone_step": "M7.5 effects and nuclear interception",
+        "symbol": "Units_Image_Data_load_animation",
+        "reason": "The standalone audio-bearing SDI FLC bypasses the existing animated-effect inlead; a post-load hook must clear only its draw-enable byte after custom ownership succeeds.",
+        "capability": "change define to inlead",
+        "signature": "void (__fastcall *)(Units_Image_Data * this, int edx, char * asset_string, FLC_Animation * anim, int civ_id, int param_4, int param_5, bool param_6)",
+        "supported_build_addresses": {"gog": "0x4062A0", "steam": "0x406810", "pcgames": "0x4062D0"},
+        "call_site": "function entry; existing civ_prog_objects.csv row",
+        "fallback": "Leave standalone SDI pixels and the complete custom nuclear-interception presentation native.",
+        "verification": "SDI pixels suppressed with native sound, advancement, wait, and cleanup preserved."
+      },
+      {
+        "milestone_step": "M7.5 nuclear effects",
+        "symbol": "Unit_do_nuke_tile",
+        "reason": "This is the exact authoritative detonation branch in offline play and multiplayer replay; delivery, missile despawn, fallout, and victim despawn are not equivalent signals.",
+        "capability": "inlead",
+        "signature": "void (__fastcall *)(Unit * this, int edx, int tile_x, int tile_y, int affected_civs)",
+        "supported_build_addresses": {"gog": "0x5B4070", "steam": "0x5C29C0", "pcgames": "0x5B3D80"},
+        "call_site": "function entry; Unit::nuke_tile offline branch and nuclear multiplayer sync callback",
+        "fallback": "Do not start a custom detonation; leave the nuclear strike wholly native.",
+        "verification": "Exact-target deterministic detonation events before native visual, despawn, and damage work."
+      },
+      {
+        "milestone_step": "M7.5 nuclear effects",
+        "symbol": "Unit_get_intercepted_as_nuke",
+        "reason": "This is the exact authoritative intercepted branch in offline play and multiplayer replay; delivery and missile despawn are shared with successful strikes.",
+        "capability": "inlead",
+        "signature": "void (__fastcall *)(Unit * this, int edx, int tile_x, int tile_y, int intercepting_civ_id, int affected_civs)",
+        "supported_build_addresses": {"gog": "0x5B4A00", "steam": "0x5C3350", "pcgames": "0x5B4710"},
+        "call_site": "function entry; Unit::nuke_tile offline branch and nuclear multiplayer sync callback",
+        "fallback": "Do not start a custom interception effect; leave the nuclear strike wholly native.",
+        "verification": "Deterministic intercepted events with target and interceptor and no detonation children."
+      }
+    ],
+    "current_step_existing_symbols": [
+      "Map_Renderer_m71_Draw_Tiles",
+      "Map_Renderer_m19_Draw_Tile_by_XY_and_Flags"
+    ],
+    "current_step_audit_candidates": [
+      "I12 reuses the existing m71/m19 capture and suppression boundary, m49/m50 terrain accessors, and Tile.Body.active_tile_effect; no new Civ III patch symbol is required"
+    ],
+    "reporting_rule": "When a new CSV entry is proven necessary, update this block and the ledger and tell the user immediately with exact patch capability, signature, supported-build addresses, reason, fallback, and verification."
+  },
+  "required_docs": [
+    "MASTER_PLAN.md",
+    "ROADMAP.md",
+    "VERIFICATION.md",
+    "docs/renderer_config_spec.md",
+    "docs/visible_scene_contract.md",
+    "docs/standalone_renderer.md",
+    "docs/fixture_matrix.md",
+    "docs/source_adapter_contract.md",
+    "docs/renderer_workstreams.md",
+    "docs/environment_lighting_and_ambient_effects.md",
+    "docs/civ6_lighting_findings.md",
+    "docs/civ6_lighting_probe.json",
+    "docs/upstream_asset_family_backlog.md",
+    "docs/civ3_to_civ6_resource_mapping.md",
+    "docs/resource_asset_conversion.md",
+    "inventory/vanilla_conquests_to_civ6_resources.json",
+    "inventory/resource_presentation_profiles.json",
+    "docs/visual_validation_plan.md",
+    "docs/runtime_animation_and_frame_pacing.md",
+    "docs/bombardment_and_explosion_effects.md",
+    "docs/goody_huts_and_colonies.md",
+    "docs/remaining_tile_infrastructure.md",
+    "docs/offline_crosscutting_preparation.md",
+    "docs/compound_unit_asset_conversion.md",
+    "docs/natural_wonder_rendering.md",
+    "docs/wonder_and_district_rendering.md",
+    "docs/civ3_patch_dependency_ledger.md",
+    "docs/vanilla_art_inventory.md",
+    "docs/civ6_extraction_findings.md",
+    "docs/civ3_insertion_points.md",
+    "docs/civ3_render_loop_viability.md",
+    "docs/i20_native_unit_animation_handoff.md",
+    "docs/army_rendering_strategy.md",
+    "docs/approved_terrain_integration.md",
+    "docs/vanilla_terrain_scene.md",
+    "docs/terrain_visual_direction.md",
+    "terrain_lab/PLAN.md",
+    "terrain_lab/DUNE_SOURCE_AUDIT.md"
+  ],
+  "next_step": {
+    "id": "L18",
+    "title": "Mines and 192-tile promotion approval",
+    "status": "ready",
+    "workstream": "renderer_lab",
+    "iteration_command": "python3 Renderer/tools/renderer_dev.py lab",
+    "promotion_required": true,
+    "scope": [
+      "Render normalized source-backed mine structures and excavation footprints over a separate deterministic Lab-only object scenario without changing authoritative BIQ terrain.",
+      "Cover reachable terrain, relief, resource association, era/civilization variants, route adjacency, shoreline proximity, and source-owned emissive channels bound to the accepted L13A environment.",
+      "Preserve the approved L9-L17 alternate-environment terrain, lighting, routes, resources, cities, relief, coastline, water, vegetation, and clutter in deterministic native, reduced, and day/night 16x12 / 192-tile fixtures."
+    ],
+    "acceptance": [
+      "Mine bodies read as compact worked improvements rather than cities or resources, with excavation/base treatment blended into every supported underlying terrain.",
+      "Raised mine structures share the accepted face, contact, and coherent cast-shadow lighting; only normalized source emissive channels may activate at night.",
+      "Relief, route, river, shoreline, resource, vegetation, and city adjacency remain free of tile-edge seams, clipping, or depth-order loss.",
+      "Complete noon/night, no-mines, mines-only, and reduced renders contain exactly 192 contiguous authoritative Civ III tiles where applicable and are byte-deterministic for identical inputs.",
+      "The user explicitly authorized careful self-approval of the complete alternate-skin L18 promotion on 2026-09-05 before L19 begins."
+    ],
+    "must_not": [
+      "Do not modify injected game code, implement I18, or launch Civilization III during the L18 visual gate.",
+      "Do not redesign approved L9-L17 terrain, river, route, resource, city, geometry, material, placement, lighting, or alternate-skin art direction.",
+      "Do not invent smoke, fire, bloom, weather, excavation animation, or lights unsupported by normalized source art.",
+      "Do not begin L19 before the authorized critical visual approval of L18."
+    ]
+  },
+  "milestones": [
+    {
+      "id": "M0",
+      "title": "Project contract and tooling",
+      "status": "complete",
+      "evidence": [
+        "MASTER_PLAN.md",
+        "README.md",
+        "docs/renderer_config_spec.md",
+        "preview/render_iso.py",
+        "samples/config/default.custom_rendering.txt",
+        "tools/asset_compiler/c3x_asset_compiler.py",
+        "tools/check_project_state.py"
+      ],
+      "verification": [
+        "project_state_contract",
+        "renderer_unit_tests",
+        "preview_smoke",
+        "config_contract_fixture"
+      ]
+    },
+    {
+      "id": "M1",
+      "title": "Civ VI grassland import",
+      "status": "complete",
+      "evidence": [
+        "docs/civ6_extraction_findings.md",
+        "tools/asset_compiler/grassland_pack_builder.py",
+        "preview/render_textured_patch.py"
+      ],
+      "verification": [
+        "grassland_pack_render_synthetic"
+      ],
+      "local_verification": [
+        "civ6_grassland_pack_render_local"
+      ],
+      "steps": [
+        {
+          "id": "M1.1",
+          "title": "Extract standalone CIVBIG texture to DDS/PNG",
+          "status": "complete",
+          "evidence": [
+            "tools/asset_compiler/c3x_asset_compiler.py",
+            "tools/asset_compiler/test_asset_compiler.py",
+            "docs/civ6_extraction_findings.md"
+          ],
+          "verification": [
+            "civbig_synthetic_roundtrip"
+          ],
+          "local_verification": [
+            "civ6_grassland_texture_local"
+          ]
+        },
+        {
+          "id": "M1.2",
+          "title": "Probe the CIVBLP grassland material binding",
+          "status": "complete",
+          "evidence": [
+            "tools/asset_compiler/civblp_probe.py",
+            "tools/asset_compiler/test_civblp_probe.py",
+            "docs/civ6_grassland_material_probe.json",
+            "docs/civ6_extraction_findings.md"
+          ],
+          "verification": [
+            "civblp_probe_synthetic"
+          ],
+          "local_verification": [
+            "civ6_grassland_material_probe_local"
+          ]
+        },
+        {
+          "id": "M1.3",
+          "title": "Resolve grassland material texture roles",
+          "status": "complete",
+          "evidence": [
+            "tools/asset_compiler/civblp_material_resolver.py",
+            "tools/asset_compiler/test_civblp_material_resolver.py",
+            "docs/civ6_grassland_material_binding.json",
+            "docs/civ6_extraction_findings.md"
+          ],
+          "verification": [
+            "civblp_material_resolver_synthetic"
+          ],
+          "local_verification": [
+            "civ6_grassland_material_binding_local"
+          ]
+        },
+        {
+          "id": "M1.4",
+          "title": "Recover terrain geometry and UV selection",
+          "status": "complete",
+          "evidence": [
+            "tools/asset_compiler/terrain_geometry_resolver.py",
+            "tools/asset_compiler/test_terrain_geometry_resolver.py",
+            "samples/geometry/flat_terrain_patch.json",
+            "docs/civ6_grassland_geometry_uv.json",
+            "docs/civ6_extraction_findings.md"
+          ],
+          "verification": [
+            "terrain_geometry_resolver_synthetic"
+          ],
+          "local_verification": [
+            "civ6_grassland_geometry_local"
+          ]
+        },
+        {
+          "id": "M1.5",
+          "title": "Render a correct textured grassland patch",
+          "status": "complete",
+          "evidence": [
+            "tools/asset_compiler/grassland_pack_builder.py",
+            "tools/asset_compiler/test_grassland_pack_builder.py",
+            "preview/render_textured_patch.py",
+            "docs/civ6_extraction_findings.md"
+          ],
+          "verification": [
+            "grassland_pack_render_synthetic"
+          ],
+          "local_verification": [
+            "civ6_grassland_pack_render_local"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "title": "Renderer definition parser and resolver",
+      "status": "complete",
+      "evidence": [
+        "definitions/definition_parser.py",
+        "definitions/rule_resolver.py",
+        "docs/renderer_config_spec.md"
+      ],
+      "verification": [
+        "renderer_definition_parser",
+        "renderer_rule_resolver"
+      ],
+      "steps": [
+        {
+          "id": "M2.1",
+          "title": "Implement renderer-definition parser and layered merge",
+          "status": "complete",
+          "evidence": [
+            "definitions/definition_parser.py",
+            "definitions/test_definition_parser.py",
+            "docs/renderer_config_spec.md"
+          ],
+          "verification": [
+            "renderer_definition_parser"
+          ]
+        },
+        {
+          "id": "M2.2",
+          "title": "Implement deterministic selector matching and diagnostics",
+          "status": "complete",
+          "evidence": [
+            "definitions/rule_resolver.py",
+            "definitions/test_rule_resolver.py",
+            "docs/renderer_config_spec.md"
+          ],
+          "verification": [
+            "renderer_rule_resolver"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M3",
+      "title": "Visible scene contract",
+      "status": "complete",
+      "evidence": [
+        "scenes/scene_contract.py",
+        "samples/scenes/grassland_viewport.scene.json",
+        "docs/visible_scene_contract.md"
+      ],
+      "verification": [
+        "visible_scene_contract"
+      ],
+      "steps": [
+        {
+          "id": "M3.1",
+          "title": "Define and validate a replayable visible-scene fixture",
+          "status": "complete",
+          "evidence": [
+            "scenes/scene_contract.py",
+            "scenes/test_scene_contract.py",
+            "samples/scenes/grassland_viewport.scene.json",
+            "docs/visible_scene_contract.md"
+          ],
+          "verification": [
+            "visible_scene_contract"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M4",
+      "title": "Standalone 3D renderer",
+      "status": "complete",
+      "evidence": [
+        "standalone/whole_viewport_renderer.py",
+        "tools/render_fixture_matrix.py",
+        "docs/standalone_renderer.md",
+        "docs/fixture_matrix.md"
+      ],
+      "verification": [
+        "standalone_whole_viewport_renderer",
+        "fixture_matrix_validation"
+      ],
+      "steps": [
+        {
+          "id": "M4.1",
+          "title": "Implement the standalone whole-viewport 3D renderer",
+          "status": "complete",
+          "evidence": [
+            "standalone/whole_viewport_renderer.py",
+            "standalone/test_whole_viewport_renderer.py",
+            "docs/standalone_renderer.md"
+          ],
+          "verification": [
+            "standalone_whole_viewport_renderer"
+          ]
+        },
+        {
+          "id": "M4.2",
+          "title": "Add fixture-matrix and reference visual validation",
+          "status": "complete",
+          "evidence": [
+            "tools/render_fixture_matrix.py",
+            "tools/test_render_fixture_matrix.py",
+            "samples/validation/reference_metadata.json",
+            "docs/fixture_matrix.md"
+          ],
+          "verification": [
+            "fixture_matrix_validation"
+          ],
+          "scope": [
+            "Batch the standalone renderer across named scene, viewport, hour, and season fixtures without changing the validated scene contract.",
+            "Emit deterministic image metrics and a machine-readable manifest that records exact inputs, resolutions, hashes, mapping coverage, and renderer version.",
+            "Generate a deterministic contact sheet that supports structural regression review plus controlled vanilla and alternate-skin art-direction references.",
+            "Keep quantitative structural gates distinct from optional qualitative human or AI observations."
+          ],
+          "acceptance": [
+            "A single command renders the recorded scene at two viewport sizes, four reference hours, and four seasons.",
+            "Repeated matrix runs produce byte-identical PNGs, contact sheet, manifest, and deterministic metrics after excluding no fields.",
+            "Metrics cover nonblank output, luminance/color behavior, map bounds, depth conflicts, anchor alignment, and mapping coverage with explicit pass/fail thresholds.",
+            "Reference metadata distinguishes structural regression baselines from cross-engine art-direction references and never claims an exact source hour when only a phase is known.",
+            "All renderer tests and the project-state checker pass."
+          ],
+          "must_not": [
+            "Do not add or modify injected Civ III code or begin the M5 capture/bridge.",
+            "Do not treat similarity to a Civ VI screenshot as a deterministic pixel-equality gate.",
+            "Do not make AI review the sole acceptance criterion or silently overwrite human review decisions.",
+            "Do not commit copyrighted source art or machine-specific installed-asset paths."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M5",
+      "title": "Civ III capture and off-screen bridge",
+      "status": "complete",
+      "evidence": [
+        "native/c3x_renderer_api.h",
+        "native/c3x_renderer.cpp",
+        "native/scene_export.cpp",
+        "native/frame_scheduler.cpp",
+        "native/native_smoke.cpp",
+        "native/test_native_bridge_contract.py",
+        "docs/civ3_insertion_points.md",
+        "docs/m5_2_offline_pipeline.md",
+        "docs/runtime_animation_and_frame_pacing.md",
+        "docs/civ3_patch_dependency_ledger.md",
+        "evidence/m5_1/README.md",
+        "evidence/m5_2/README.md",
+        "evidence/m5_3/README.md",
+        "../C3X.h",
+        "../injected_code.c",
+        "../default.c3x_config.ini"
+      ],
+      "verification": [
+        "native_civ3_bridge",
+        "m5_2_scene_export",
+        "m5_3_frame_scheduler"
+      ],
+      "steps": [
+        {
+          "id": "M5.1",
+          "title": "Capture Civ III scene data and insert the off-screen map render",
+          "status": "complete",
+          "scope": [
+            "Re-audit the decompiled Civ III map-render sequence and existing m19/m71 hooks to prove a bitmap insertion boundary after map preparation but before retained overlays, fog, labels, HUD, and UI.",
+            "Capture terrain-only visible-scene metadata and authoritative pixel anchors from existing Civ III hooks into bounded C3X-owned state.",
+            "Render one map-sized off-screen target through the source-independent renderer contract and copy it into Civ III at the proven boundary without creating a presenter or overlay window.",
+            "Keep configuration-off behavior on the original Civ III path with no renderer initialization or rendering calls, and retain per-item fallback for unavailable terrain assets.",
+            "Ignore C3X's legacy custom terrain/resource FLC overlays whenever custom rendering is enabled without rewriting the user's legacy-animation setting."
+          ],
+          "acceptance": [
+            "The insertion-point report names the exact patched/decompiled functions and records evidence for what Civ III draws before and after the bridge.",
+            "TEST_INJECTED_CODE_COMPILE.bat passes after any C3X.h or injected_code.c changes.",
+            "Configuration-off screenshots match the normal Civ III map path and prove the renderer remains uninitialized.",
+            "Configuration-on terrain aligns to captured anchors while Civ III roads, rivers, resources, cities, units, fog, borders, labels, highlights, HUD, and UI remain above or on their retained paths.",
+            "When both rendering flags are configured, custom rendering prevents legacy tile-FLC config loading, matching, scheduling, animation loading, and spawning; disabling custom rendering restores the configured legacy-animation behavior.",
+            "Resize, scrolling, map-rectangle bounds, renderer failure, and missing-asset fallback do not corrupt Civ III surfaces or suppress retained content.",
+            "All renderer tests and the project-state checker pass."
+          ],
+          "must_not": [
+            "Do not create a second swap chain, presenter, overlay window, or inferred camera.",
+            "Do not expand replacement ownership beyond terrain during this first bridge slice.",
+            "Do not load Civ VI ArtDef, BLP, FGX, or installed-source paths from injected runtime code.",
+            "Do not modify civ_prog_objects.csv or ref/Civ3Conquests.h; report any required new patch entries for the human to add."
+          ],
+          "evidence": [
+            "native/c3x_renderer_api.h",
+            "native/c3x_renderer.cpp",
+            "native/BUILD.bat",
+            "native/test_native_bridge_contract.py",
+            "docs/civ3_insertion_points.md",
+            "evidence/m5_1/README.md",
+            "evidence/m5_1/custom_rendering_on.png",
+            "evidence/m5_1/custom_rendering_off.png",
+            "evidence/m5_1/custom_rendering_scrolled.png",
+            "../C3X.h",
+            "../injected_code.c",
+            "../default.c3x_config.ini"
+          ],
+          "verification": [
+            "renderer_unit_tests",
+            "native_civ3_bridge"
+          ]
+        },
+        {
+          "id": "M5.2",
+          "title": "Export replayable scenes from loaded saves and BIQs",
+          "status": "complete",
+          "scope": [
+            "Automatically export the first successfully composited frame as c3x.visible_scene.v0, with an optional recapture hotkey and no user file-management requirement.",
+            "Capture authoritative terrain, object-category, environment, viewport, visibility, and retained-overlay metadata without process pointers or source-format data.",
+            "Keep strict scene-schema, deterministic export, complete synthetic category coverage, and offline batch behavior automated.",
+            "Use ordinary user screenshots and reported game behavior as the lightweight in-game health gate rather than requiring paired fixture administration during development."
+          ],
+          "acceptance": [
+            "The native exporter emits byte-deterministic scenes that pass the strict visible-scene contract and exercise every renderer category in its synthetic gate.",
+            "The offline batch tests prove canonical serialization, category counts, dependency hashes, mapping diagnostics, anchor/bounds metrics, and honest review state.",
+            "In-game screenshots show the renderer operating beneath retained fog, borders, labels, highlights, minimap, HUD, and UI without a crash or reported odd behavior.",
+            "The M5.2 export gate, injected-code compile gate, renderer tests, and project-state checker pass."
+          ],
+          "must_not": [
+            "Do not store process pointers, Civ VI source formats, installed-source paths, or copyrighted save/BIQ payloads in tracked scene fixtures.",
+            "Do not broaden replacement ownership beyond terrain or weaken the M5.1 configuration-off and fallback guarantees.",
+            "Do not require users to locate, rename, pair, or repeatedly recapture validation artifacts during routine development."
+          ],
+          "evidence": [
+            "native/c3x_renderer_api.h",
+            "native/scene_export.cpp",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "tools/process_scene_export_batch.py",
+            "tools/test_process_scene_export_batch.py",
+            "samples/config/m5_2_capture.custom_rendering.txt",
+            "docs/m5_2_offline_pipeline.md",
+            "evidence/m5_2/README.md",
+            "evidence/m5_2/game_health_full_ui.png",
+            "../C3X.h",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "m5_2_scene_export"
+          ]
+        },
+        {
+          "id": "M5.3",
+          "title": "Integrate renderer frame scheduling with the Civ III redraw and timer loop",
+          "status": "complete",
+          "scope": [
+            "Use normal Civ III map draws as the only render entry point and audit the existing approximately 66 ms timer path as a request-redraw source for visible continuous animation.",
+            "Add a monotonic QueryPerformanceCounter presentation clock, immutable per-frame timestamp, dirty-state model, and bounded telemetry without creating a second game or presentation loop.",
+            "Request another ordinary map redraw only while visible animation or changed map/camera/environment state requires it; static and hidden maps remain idle.",
+            "Define deterministic event-time replay, pause/rebase behavior, frame skipping, and a performance degradation policy that never changes simulation or gameplay animation timing."
+          ],
+          "acceptance": [
+            "Static maps cause zero renderer-requested continuous redraws and configuration-off behavior remains unchanged.",
+            "Animated scenes use Civ III's UI/redraw loop without reentrant rendering, Sleep, busy waiting, an independent message pump, or queued catch-up frames.",
+            "Identical timestamped event traces produce identical poses regardless of rendered-frame count, and skipped frames do not alter gameplay state, endpoints, outcomes, or action duration.",
+            "Loading, modal dialogs, focus/minimize, scrolling, resize, and renderer reset do not create stale events or large presentation-time jumps.",
+            "Telemetry proves bounded capture/render/readback/blit work and no growing queue at Civ III's native cadence."
+          ],
+          "must_not": [
+            "Do not render D3D or blit directly from a timer callback; it may only mark dirty state and request a normal map redraw through an audited path.",
+            "Do not add a second presenter, swap chain, render thread, message pump, fixed simulation loop, Sleep, or busy wait.",
+            "Do not assume 30 or 60 FPS support until a higher-frequency UI-thread path is audited and profiled."
+          ],
+          "evidence": [
+            "native/c3x_renderer_api.h",
+            "native/frame_scheduler.cpp",
+            "native/c3x_renderer.cpp",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "docs/runtime_animation_and_frame_pacing.md",
+            "docs/civ3_patch_dependency_ledger.md",
+            "evidence/m5_3/README.md",
+            "../C3X.h",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "m5_3_frame_scheduler"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M6",
+      "title": "Terrain productionization",
+      "status": "in_progress",
+      "steps": [
+        {
+          "id": "M6.0",
+          "title": "Inventory every vanilla Civ III map-visible art selection and retained layer",
+          "status": "complete",
+          "scope": [
+            "Census layered Base, Play the World, Conquests, and scenario art roots without confusing file counts with atlas-cell or runtime-selector counts.",
+            "Extract BIQ semantic records and correlate terrain, transitions, features, water, infrastructure, resources, city styles, units, and effects with their source files and low-level Civ III indices.",
+            "Inventory fog of war, unexplored shroud, borders, grid, selection, movement markers, labels, cursor, minimap, HUD, editor markers, and every other composited layer even when Civ III remains its owner.",
+            "Generate deterministic JSON, a readable coverage report, annotated indexed contact sheets, and runtime-census reconciliation with C3X natural wonders and Districts explicitly deferred to M9 and M11."
+          ],
+          "acceptance": [
+            "Every vanilla Conquests BIQ-defined or runtime-reachable map visual is classified as mapped, vanilla fallback, not map-rendered, or unreachable with evidence.",
+            "Every effective map atlas has verified cell geometry, authored capacity, reachable index set, source precedence, and an annotated contact sheet.",
+            "Every Conquests unit type is correlated with its effective INI/FLC actions, eight-direction behavior, shadows, projectiles, and runtime animation states.",
+            "Every retained map/HUD layer has an explicit, tested ownership and compositing-boundary decision.",
+            "Strict inventory generation is deterministic and reports zero unclassified or unresolved records."
+          ],
+          "must_not": [
+            "Do not infer sprite counts solely from filenames, image dimensions, directory counts, or unused atlas capacity.",
+            "Do not treat city-screen, Civilopedia, diplomacy, leaderhead, or splash art as a map-renderer requirement without runtime evidence.",
+            "Do not pull M9 natural wonders or M11 Districts into the vanilla M6.0 inventory or require Firaxis art redistribution in committed inventory metadata."
+          ],
+          "evidence": [
+            "inventory/civ3_art_inventory.py",
+            "inventory/test_civ3_art_inventory.py",
+            "inventory/extract_biq_semantics.js",
+            "inventory/vanilla_atlas_layouts.json",
+            "inventory/vanilla_conquests_biq_semantics.json",
+            "inventory/runtime_selector_census.json",
+            "docs/vanilla_art_inventory.md",
+            "evidence/m6_0/README.md"
+          ],
+          "verification": [
+            "m6_0_inventory_contract"
+          ],
+          "local_verification": [
+            "m6_0_installed_vanilla_inventory"
+          ]
+        },
+        {
+          "id": "M6.1",
+          "title": "Productionize terrain, transitions, features, and water",
+          "status": "complete",
+          "scope": [
+            "Consume the closed M6.0 semantic/atlas ledger to define source-independent terrain, transition, feature, water, and landmark logical assets and selector mappings.",
+            "Render all inventoried M6 terrain/water families as a continuous whole viewport with deterministic topology, variants, budgets, diagnostics, and per-item fallback.",
+            "Add replayable fixtures for seams, scrolling, wrapping, depth, hours, seasons, missing assets, and reset behavior without broadening M7 or retained ownership."
+          ],
+          "acceptance": [
+            "Every M6.0 terrain/water selector is mapped or exercises explicit per-item vanilla fallback.",
+            "Deterministic whole-viewport fixtures preserve seams, wrap, anchors, clipping, depth, hour, and season behavior.",
+            "Bounded cache/streaming diagnostics and missing/corrupt/reset fallbacks pass while retained Civ III layers remain exactly once."
+          ],
+          "must_not": [
+            "Do not add source-specific runtime formats or redistribute Firaxis-derived converted art.",
+            "Do not replace M7 infrastructure/resources/cities/units/effects or retained fog/UI responsibilities.",
+            "Do not approximate isolated tile cards where continuous cross-tile terrain is required."
+          ],
+          "evidence": [
+            "terrain/production_terrain.py",
+            "terrain/m6_1_selector_coverage.json",
+            "terrain/test_production_terrain.py",
+            "samples/scenes/m6_1_terrain.fixture.json",
+            "docs/production_terrain.md",
+            "evidence/m6_1/README.md"
+          ],
+          "verification": [
+            "m6_1_production_terrain"
+          ]
+        },
+        {
+          "id": "M6.2",
+          "title": "Load normalized grassland art in the native renderer",
+          "status": "complete",
+          "scope": [
+            "Add a versioned native ABI entry point for selecting a generic normalized pack root before the first render.",
+            "Validate the normalized manifest, mesh, material, and bounded BC3 DDS contracts and create a D3D11 shader resource.",
+            "Sample the actual local normalized grassland texture in the existing off-screen terrain pass while leaving unsupported terrain on the prior placeholder path.",
+            "Reject missing or malformed packs before suppressing Civ III terrain, preserving the configuration-off and vanilla fallback paths."
+          ],
+          "acceptance": [
+            "A portable synthetic normalized pack produces deterministic textured native output and reports the textured grassland tile count.",
+            "The ignored locally built licensed-source grassland pack produces a deterministic native pixel hash distinct from the synthetic pack.",
+            "Missing, malformed, truncated, or unsupported pack payloads reject initialization and restore vanilla terrain.",
+            "The versioned DLL ABI, existing insertion boundary, configuration-off behavior, retained layers, and injected-code compile remain valid."
+          ],
+          "must_not": [
+            "Do not load source formats, source-specific identities, absolute source paths, or a second presenter at runtime.",
+            "Do not claim the remaining colored terrain placeholders as real-art coverage.",
+            "Do not commit or redistribute the locally converted licensed texture.",
+            "Do not broaden ownership beyond terrain or change retained Civ III layers."
+          ],
+          "evidence": [
+            "native/c3x_renderer_api.h",
+            "native/c3x_renderer.cpp",
+            "native/c3x_renderer.def",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "docs/native_normalized_terrain_art.md",
+            "evidence/m6_2/README.md",
+            "../C3X.h",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "m6_2_native_terrain_art"
+          ],
+          "local_verification": [
+            "m6_2_local_grassland_art"
+          ]
+        },
+        {
+          "id": "M6.3",
+          "title": "Expand native real-art terrain through renderer definitions",
+          "status": "complete",
+          "scope": [
+            "Replace the single-pack grassland bootstrap with layered renderer-definition selection for the stable M6.1 terrain logical IDs.",
+            "Compile or map locally available permissioned art for the remaining terrain, transition, feature, water, polar-ice, and landmark families into generic packs.",
+            "Load normalized meshes, materials, and textures through the same bounded native off-screen path proven for grassland.",
+            "Keep unsupported or incomplete terrain dependencies on atomic per-item vanilla fallback while Civ III retains every M7 and UI layer."
+          ],
+          "acceptance": [
+            "Every mapped M6.1 family resolves to native normalized real art or an explicit per-item vanilla fallback; colored placeholders do not count as coverage.",
+            "Definition-driven native fixtures and a local in-game-capable build render multiple real terrain families deterministically across topology, anchors, clipping, depth, environment, wrap, and scroll.",
+            "Missing or corrupt payloads restore only affected vanilla terrain items while configuration-off behavior and retained layers remain unchanged.",
+            "Runtime packs contain no source-specific formats or absolute source paths, and no converted restricted art is committed."
+          ],
+          "must_not": [
+            "Do not treat procedural colors or flat placeholders as completed real-art terrain coverage.",
+            "Do not add source-specific identities, branches, formats, or installed-source paths to runtime pack selection.",
+            "Do not suppress a Civ III terrain item until all dependencies for its replacement are ready.",
+            "Do not broaden ownership to M7 objects, effects, or retained fog, labels, selection, minimap, HUD, and UI."
+          ],
+          "evidence": [
+            "default.custom_rendering.txt",
+            "terrain/m6_3_runtime_coverage.json",
+            "native/terrain_definition_runtime.h",
+            "native/terrain_definition_runtime.cpp",
+            "native/c3x_renderer.cpp",
+            "native/native_smoke.cpp",
+            "tools/asset_compiler/terrain_pack_builder.py",
+            "tools/asset_compiler/test_terrain_pack_builder.py",
+            "docs/definition_driven_terrain.md",
+            "evidence/m6_3/README.md",
+            "../C3X.h",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "m6_3_definition_terrain"
+          ],
+          "local_verification": [
+            "m6_3_local_terrain_art"
+          ]
+        },
+        {
+          "id": "M6.4",
+          "title": "Implement shared environment lighting and ambient-attachment primitives",
+          "status": "complete",
+          "scope": [
+            "Extend the source-agnostic environment with continuous sun/moon, ambient, exposure, shadow, emissive-activation, and water specular/Fresnel values driven only by captured C3X hour and season.",
+            "Extend generic pack materials with emissive channels and define analytic-light and ambient-effect attachments with local transforms, activation/state requirements, bounds, and stable phase seeds.",
+            "Decode enough installed Civ VI GameLighting, Light, VFX_FireFX, shared texture, water, and model-attachment metadata to convert one supported vertical slice while preserving confirmed/inferred evidence labels.",
+            "Use M5.3 absolute-time scheduling for visible animated attachments while static light/emissive scenes become idle."
+          ],
+          "acceptance": [
+            "Portable two-size fixtures cover noon, sunset, midnight, sunrise, bounded directional moon response on water, a static night emissive, and one attached animated flame/light pair.",
+            "Static scenes request no continuous redraw; animated attachment phase is deterministic across skipped frames, pause, reset, visibility, and fallback.",
+            "A local metadata-only gate reproduces the documented Civ VI profiles, package classes, resource names, and attachment evidence without extracting or redistributing cooked payloads.",
+            "Missing light, emissive, effect, or attachment data degrades explicitly without relighting, blooming, suppressing, or duplicating retained Civ III layers."
+          ],
+          "must_not": [
+            "Do not run Civ VI shaders, scripts, ArtDefs, or BLP formats in the C3X runtime.",
+            "Do not infer exact light parameters or attachment transforms from names alone; label such relationships unresolved until typed records prove them.",
+            "Do not make a static night scene continuously redraw or create a renderer-owned clock/game loop.",
+            "Do not take early ownership of cities, wonders, districts, fog, labels, minimap, HUD, or other retained categories."
+          ],
+          "local_verification": [
+            "civ6_lighting_metadata_local"
+          ],
+          "evidence": [
+            "native/environment_runtime.h",
+            "native/environment_runtime.cpp",
+            "native/c3x_renderer.cpp",
+            "native/native_smoke.cpp",
+            "environment/contract.py",
+            "environment/test_contract.py",
+            "samples/environment/m6_4_environment.fixture.json",
+            "tools/asset_compiler/civ6_lighting_probe.py",
+            "tools/asset_compiler/test_civ6_lighting_probe.py",
+            "tools/asset_compiler/ambient_effect_texture_importer.py",
+            "tools/asset_compiler/analytic_light_importer.py",
+            "tools/asset_compiler/analytic_light_sets.json",
+            "docs/environment_lighting_and_ambient_effects.md",
+            "docs/civ6_lighting_findings.md",
+            "docs/civ6_lighting_probe.json",
+            "evidence/m6_4/README.md"
+          ],
+          "verification": [
+            "m6_4_environment_runtime"
+          ]
+        },
+        {
+          "id": "M6.5",
+          "title": "Blend connected base terrain materials",
+          "status": "complete",
+          "scope": [
+            "Remove whole-tile coordinate brightness variation so the material bootstrap no longer reads as a checkerboard.",
+            "Blend adjacent mapped material families symmetrically through their shared edge bands using authoritative Civ III map coordinates.",
+            "Feather mapped/fallback boundaries into a complete replayed Civ III base-terrain underlay."
+          ],
+          "acceptance": [
+            "A native adjacent-material fixture has distinct interiors and a third opaque mixed color at the shared edge.",
+            "Changing one neighbor to a fallback family reports exactly one fallback and produces partial alpha at the mapped/native boundary.",
+            "Repeated renders are deterministic, the complete native base replay prevents black retained-relief wedges, and injected code compiles."
+          ],
+          "must_not": [
+            "Do not claim the interim flat material diamonds are finished relief, feature, water, or transition terrain.",
+            "Do not add source-specific identities, branches, or formats to the runtime renderer contract.",
+            "Do not ask for a manual screenshot to complete this executable continuity gate."
+          ],
+          "evidence": [
+            "native/c3x_renderer.cpp",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "docs/definition_driven_terrain.md",
+            "docs/civ3_patch_dependency_ledger.md",
+            "evidence/m6_5/README.md",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "m6_5_connected_terrain"
+          ]
+        },
+        {
+          "id": "M6.6",
+          "title": "Complete the vanilla terrain scene",
+          "status": "complete",
+          "scope": [
+            "Expand the generic runtime pack and renderer beyond flat base-color diamonds to connected relief, water, vegetation/clutter, transitions, polar ice, landmarks, and all fourteen vanilla BIQ terrain types.",
+            "Normalize geometry scale, UV/detail density, materials, and cross-tile composition so the result reads as one viewport at both Civ III zoom levels.",
+            "Preserve atomic Civ III fallback for any family whose complete material, geometry, transition, and selection dependencies are not yet proven."
+          ],
+          "acceptance": [
+            "Executable two-size mixed-terrain fixtures account for all fourteen vanilla types plus transitions, relief, water, vegetation, polar ice, and landmark state with complete replacement or atomic fallback ownership.",
+            "Connected geometry, materials, UV/detail density, depth, scrolling, and horizontal wrapping are deterministic and contain no black seams, hard material diamonds, or coordinate checkerboarding.",
+            "Runtime packs and rendering remain source-independent, and converted Firaxis payloads remain local and untracked."
+          ],
+          "must_not": [
+            "Do not count a flat texture diamond or procedural color as completed relief, vegetation, water, ice, landmark, or transition art.",
+            "Do not partially suppress a native family until its complete replacement instance and dependencies are ready.",
+            "Do not take ownership of roads, rivers, resources, cities, units, borders, fog, labels, selection, HUD, or UI."
+          ],
+          "evidence": [
+            "tools/asset_compiler/terrain_relief_builder.py",
+            "tools/asset_compiler/test_terrain_relief_builder.py",
+            "tools/export_biq_terrain_scene.js",
+            "native/c3x_renderer.cpp",
+            "native/biq_preview.cpp",
+            "native/test_native_bridge_contract.py",
+            "terrain/m6_6_runtime_coverage.json",
+            "samples/scenes/m6_6_all_terrain.csv",
+            "docs/vanilla_terrain_scene.md",
+            "evidence/m6_6/README.md",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "m6_6_vanilla_terrain"
+          ],
+          "local_verification": [
+            "m6_6_local_biq_terrain"
+          ]
+        },
+        {
+          "id": "M6.7",
+          "title": "Integrate approved Renderer Lab terrain into Civ III",
+          "status": "complete",
+          "workstream": "game_integration",
+          "lab_handoffs": [
+            {"gate": "L9", "record": "handoffs/L9_terrain.json"},
+            {"gate": "L10", "record": "handoffs/L10_dunes.json"},
+            {"gate": "L11", "record": "handoffs/L11_marsh.json"}
+          ],
+          "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
+          "scope": [
+            "Consume the approved L9 terrain foundation, L10 dunes, and L11 marsh lab outputs through frozen source-independent pack, definition, scene, and reference handoffs; visual redesign remains in Renderer Lab.",
+            "Prove authoritative state capture, content-derived frame/fragment fingerprints, bounded eviction, and invalidation for camera, zoom, clip coverage, wrap occurrence, visibility, environment, pack/definition revision, ownership, reset, and device changes; dirty flags are hints rather than cache authority.",
+            "Prove exact anchors, full and partial clipping, both zooms, pixel and sub-tile scrolling, horizontal wrapping, normal Civ III redraw scheduling, retained-overlay ordering, exclusive native suppression, reentrant-draw exclusion, device reset, and visible hard failure without native replay.",
+            "Combine automated replay, cache, ownership, and fidelity evidence with at most one optional batched in-game checkpoint after implementation is stable."
+          ],
+          "acceptance": [
+            "For the approved handoff fixtures, game-integration output matches the lab reference within documented deterministic/perceptual tolerances without introducing seams, stale tiles, duplicate native art, or missing replacements.",
+            "Every cache-relevant state change invalidates exactly the affected work even when a timer redraw was pending; unchanged static scenes remain idle and bounded caches expose useful hit, miss, eviction, and fingerprint-based stale-rejection telemetry.",
+            "With custom rendering enabled, every accepted L9-L11 terrain tile is custom-owned, production output reports zero fallback tiles, and no renderer, capture, validation, blit, load, or reentrant failure replays native map terrain.",
+            "Fog, borders, grid, selections, paths, labels, units, status overlays, cursor, minimap, HUD, and UI remain correctly anchored and above the replacement at both zooms after scrolling and wrapping; unported m19 categories are intentionally absent."
+          ],
+          "must_not": [
+            "Do not redesign terrain, relief, coastline, water, vegetation, lighting, or other art direction in Game Integration; return visual changes to Renderer Lab.",
+            "Do not mix native and custom map terrain when custom rendering is enabled; omit unavailable or not-yet-integrated draw categories without replaying native terrain.",
+            "Do not add a second presenter, render from a timer callback, queue catch-up frames, or require the user to supply a matrix of manual screenshots."
+          ],
+          "evidence": [
+            "handoffs/L9_terrain.json",
+            "handoffs/L10_dunes.json",
+            "handoffs/L11_marsh.json",
+            "native/terrain_scene_runtime.h",
+            "native/terrain_scene_runtime.cpp",
+            "native/c3x_renderer_api.h",
+            "native/c3x_renderer.cpp",
+            "native/native_smoke.cpp",
+            "native/test_native_bridge_contract.py",
+            "terrain/m6_7_handoff_fidelity.json",
+            "docs/approved_terrain_integration.md",
+            "docs/civ3_render_loop_viability.md",
+            "docs/civ3_patch_dependency_ledger.md",
+            "evidence/m6_7/README.md",
+            "../C3X.h",
+            "../injected_code.c"
+          ],
+          "verification": [
+            "i11_approved_marsh_integration"
+          ],
+          "local_verification": [
+            "i11_local_approved_marsh_payload"
+          ]
+        },
+        {
+          "id": "M6.8",
+          "title": "Compile and compare an interchangeable alternate visual skin",
+          "status": "blocked_by_previous",
+          "dependency_note": "May begin after M6.7 and after the alternate skin's own Renderer Lab approval; unrelated future lab gates and L21 are not prerequisites.",
+          "preparation": {
+            "status": "complete",
+            "date": "2026-09-05",
+            "scope": "User-directed private local terrain-material experiment; this does not advance the formal M6.8 gate.",
+            "result": "One-command adapter and deterministic equivalence reporting produced an ignored local pack with 14 replaced logical terrain IDs and zero missing IDs. Renderer Lab and native integration workflows pass with the alternate pack selected through external configuration.",
+            "inherited_components": ["baseline relief", "baseline animated-water resources"],
+            "evidence": [
+              "tools/import_source.py",
+              "tools/test_import_source.py",
+              "tools/asset_compiler/pack_equivalence.py",
+              "tools/asset_compiler/test_pack_equivalence.py",
+              "samples/config/alternate_pack.custom_rendering.txt",
+              "docs/alternate_skin_integration.md"
+            ]
+          },
+          "scope": [
+            "Compile baseline and overlay source roots into separate pack directories with the same stable logical asset IDs.",
+            "Select either pack by replacing only the layered renderer definition's pack path, without source-specific runtime branches.",
+            "Generate a deterministic equivalence report for shared, replaced, inherited, and missing logical assets with source-independent provenance."
+          ],
+          "acceptance": [
+            "An equivalence report accounts for shared, replaced, inherited, and missing logical IDs and records deterministic overlay provenance.",
+            "Repeated imports are deterministic, cannot silently overwrite a different variant, and emit source-independent runtime packs.",
+            "No converted third-party or Firaxis art is committed or distributed without permission."
+          ],
+          "must_not": [
+            "Do not add source-specific identities, branches, or formats to the runtime renderer contract.",
+            "Do not overwrite one compiled variant with another or hide missing logical IDs behind nondeterministic inheritance.",
+            "Do not commit or redistribute converted third-party or Firaxis art without documented permission."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "LAB",
+      "title": "Renderer Lab visual development",
+      "status": "in_progress",
+      "plan": "terrain_lab/PLAN.md",
+      "steps": [
+        {"id": "L9", "title": "Terrain beauty scene and 48-tile promotion approval", "status": "complete", "promotion_required": true, "evidence": ["terrain_lab/L9_PROMOTION_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl"], "verification": ["terrain_lab_l9_replayable_render_and_explicit_visual_approval"]},
+        {"id": "L10", "title": "Source-backed desert dunes and 96-tile promotion approval", "status": "complete", "promotion_required": true, "approved_on": "2026-09-05", "source_audit": "terrain_lab/DUNE_SOURCE_AUDIT.md", "evidence": ["terrain_lab/L10_DUNE_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "tools/asset_compiler/test_dune_source_probe.py", "tools/asset_compiler/test_generic_decal_compiler.py"], "verification": ["terrain_lab_l10_replayable_render_and_explicit_visual_approval"]},
+        {
+          "id": "L11",
+          "title": "Marshes and 96-tile test.biq promotion approval",
+          "status": "complete",
+          "approved_on": "2026-09-05",
+          "workstream": "renderer_lab",
+          "iteration_command": "python3 Renderer/tools/renderer_dev.py lab",
+          "promotion_required": true,
+          "source_audit": "terrain_lab/L11_MARSH_AUDIT.md",
+          "scope": [
+            "Complete the source-backed marsh body, material, water-edge, grounding, and depth treatment in the standalone Renderer Lab without changing M6.7 game-integration ownership.",
+            "Render the deterministic 12x8, 96-tile test.biq promotion scene with every approved L9/L10 layer and the required marsh isolation witness.",
+            "Record deterministic input/output hashes, focused automated evidence, and the required explicit visual approval before freezing an L11 handoff."
+          ],
+          "acceptance": [
+            "Marshes use normalized source assets and remain grounded, readable, and visually distinct across mixed underlying terrain, shore, water, relief, vegetation, and dune adjacencies.",
+            "The complete and isolation renders contain exactly 96 contiguous Civ III tiles, are byte-deterministic for identical inputs, and satisfy the lab promotion policy.",
+            "The user explicitly approves the complete promotion render before L11 becomes integration-eligible or L12 begins."
+          ],
+          "must_not": [
+            "Do not change the approved L9/L10 art direction except to fix a demonstrated regression in their running lab scene.",
+            "Do not modify injected game code, transfer native marsh ownership, or begin L12 before the L11 visual approval.",
+            "Do not infer approval from automated hashes or technical success."
+          ],
+          "evidence": ["terrain_lab/L11_MARSH_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "tools/export_biq_terrain_scene.js", "tools/test_export_biq_terrain_scene.js", "handoffs/L11_marsh.json"],
+          "verification": ["terrain_lab_l11_replayable_render_and_explicit_visual_approval"]
+        },
+        {
+          "id": "L12",
+          "title": "Volcanoes and 192-tile promotion approval",
+          "status": "complete",
+          "approved_on": "2026-09-05",
+          "workstream": "renderer_lab",
+          "iteration_command": "python3 Renderer/tools/renderer_dev.py lab",
+          "promotion_required": true,
+          "source_audit": "terrain_lab/L12_VOLCANO_AUDIT.md",
+          "scope": [
+            "Render authored volcano relief, crater and slope materials, and believable terrain grounding in the standalone Renderer Lab while preserving every approved L9-L11 layer.",
+            "Use the normalized generic volcano terrain-element height, blend, and region channels plus normalized dormant and active volcano materials exactly as authored, with only rigid orientation and Civ III footprint/vertical calibration.",
+            "Compose edge-adjacent mountain and volcano ownership cells by overlapping their authored footprints in world space so connected ranges share shoulders and saddles without generated connector geometry.",
+            "Add source-backed projected clutter in the same pass: ocean contour and rock decals, coast cracks, grassland breakup, plains and dark-plains patches, and grassland-hill accents, with deterministic source placement and terrain-aware clipping.",
+            "Render a deterministic 16x12, 192-tile true-adjacency diamond selected from an authoritative installed Windows BIQ with at least one volcano and preserve a two-cell off-crop adjacency halo."
+          ],
+          "acceptance": [
+            "Dormant and active volcanoes use authored relief and normalized material channels, read distinctly from ordinary mountains without an almost-black active body, and remain grounded across neighboring land without tile-edge seams or black voids.",
+            "Adjacent mountain and volcano ownership cells form continuous source-authored ranges rather than isolated per-cell cones.",
+            "At each range boundary, authored relief and mountain/volcano material fade together into surrounding grassland without a visible tile-shaped base.",
+            "Hills, mountains, and volcanoes flatten through the continuous shoreline-distance field before their material reaches the beach or water contour.",
+            "Repeated volcano instances use bounded deterministic orientation, aspect, and height fits of the single authored ordinary-volcano element so they do not appear as identical sprites.",
+            "A mountain adjacent to an authored hill retains its full silhouette through a narrow smooth heightfield merge and grass-covered shoulder; neither tile visibly slices the other.",
+            "Forest and jungle preserve normalized authored bodies and placement weights, form dense deterministic canopies without random interior holes, and keep individual vegetation clearly smaller than adjacent mountain and volcano relief.",
+            "Source-backed ocean/coast clutter provides restrained underwater contours and small-rock detail without visible atlas-cell seams, broad beige transparency, repetitive spot patterns, or projection across the shoreline; grassland, plains, and hill clutter remains subtle and respects BIQ material ownership.",
+            "The complete, no-volcano, volcano-only, and reduced renders contain exactly 192 contiguous Civ III tiles and are byte-deterministic for identical inputs.",
+            "The user explicitly approves the complete 192-tile promotion render before L12 becomes integration-eligible or L13 begins."
+          ],
+          "must_not": [
+            "Do not begin I12 or transfer volcano ownership while the L12 visual gate is unapproved.",
+            "Do not synthesize smoke, glow, fire, cone/crater geometry, or decorative volcano effects.",
+            "Do not synthesize connector ridges or change BIQ mountain/volcano ownership to manufacture a range.",
+            "Do not invent source geometry or claim inferred engine behavior as confirmed asset data.",
+            "Do not begin L13 or transfer volcano ownership before explicit visual approval."
+          ],
+          "evidence": ["terrain_lab/L12_VOLCANO_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "tools/export_biq_terrain_scene.js", "tools/test_export_biq_terrain_scene.js", "handoffs/L12_volcano.json"],
+          "verification": ["terrain_lab_l12_replayable_render_and_explicit_visual_approval"]
+        },
+        {
+          "id": "L13",
+          "title": "Rivers and 192-tile promotion approval",
+          "status": "complete",
+          "approved_on": "2026-09-05",
+          "workstream": "renderer_lab",
+          "iteration_command": "python3 Renderer/tools/renderer_dev.py lab",
+          "promotion_required": true,
+          "source_audit": "terrain_lab/L13_RIVER_AUDIT.md",
+          "scope": [
+            "Render connected source-backed river channels, sources, bends, junctions, mouths, deltas, banks, terrain-conforming water, and crossings in the standalone Renderer Lab.",
+            "Preserve every approved L9-L12 terrain layer while requiring the alternate environment terrain and vegetation packs for promotion previews.",
+            "Render deterministic all-terrain and river-topology 16x12, 192-tile horizontal-wrap fixtures with a two-cell adjacency halo."
+          ],
+          "acceptance": [
+            "Every reachable BIQ river connection remains continuous through canonical shared edges and grounded across flat land, relief, vegetation, marsh, coast, and horizontal wrap.",
+            "River bed, bank, water, source/clutter decals, bank noise, and rock variants use normalized source-backed inputs without smoke, mist, fire, animation, or invented waterfall state.",
+            "Complete, no-rivers, rivers-only, thumbnail, and topology renders are byte-deterministic for identical inputs and contain exactly 192 visible Civ III tiles per fixture.",
+            "The user explicitly approved the complete alternate-skin L13 promotion on 2026-09-05."
+          ],
+          "must_not": [
+            "Do not transfer river ownership or modify injected game code in the lab handoff.",
+            "Do not infer waterfall location or flow direction from BIQ masks that do not encode either state.",
+            "Do not regress to baseline terrain or vegetation packs in L13 or later promotion previews."
+          ],
+          "evidence": ["terrain_lab/L13_RIVER_AUDIT.md", "terrain_lab/CANONICAL_REFERENCE_AUDIT.md", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "tools/export_biq_terrain_scene.js", "tools/test_export_biq_terrain_scene.js", "handoffs/L13_rivers.json"],
+          "verification": ["terrain_lab_l13_replayable_render_and_explicit_visual_approval"]
+        },
+        {"id": "L13A", "title": "Shared shadows, lighting, and day-night with 192-tile promotion approval", "status": "complete", "approved_on": "2026-09-05", "promotion_required": true, "evidence": ["terrain_lab/L13A_LIGHTING_AUDIT.md", "terrain_lab/CANONICAL_REFERENCE_AUDIT.md", "docs/environment_lighting_and_ambient_effects.md", "native/environment_runtime.cpp", "environment/contract.py", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "handoffs/L13A_lighting.json"], "verification": ["terrain_lab_l13a_replayable_render_and_explicit_visual_approval"]},
+        {"id": "L14", "title": "Roads and 192-tile promotion approval", "status": "complete", "approved_on": "2026-09-05", "promotion_required": true, "evidence": ["terrain_lab/L14_ROAD_AUDIT.md", "terrain_lab/RUN_L14.bat", "terrain_lab/fixtures/l14_roads_192.csv", "terrain_lab/build_l14_road_scenario.py", "tools/asset_compiler/build_route_bridge_runtime.py", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "handoffs/L14_roads.json"], "verification": ["terrain_lab_l14_replayable_render_and_explicit_visual_approval"]},
+        {"id": "L15", "title": "Railroads and 192-tile promotion approval", "status": "complete", "approved_on": "2026-09-05", "promotion_required": true, "evidence": ["terrain_lab/L15_RAILROAD_AUDIT.md", "terrain_lab/RUN_L15.bat", "terrain_lab/fixtures/l15_railroads_192.csv", "terrain_lab/build_l15_railroad_scenario.py", "tools/asset_compiler/build_route_bridge_runtime.py", "terrain_lab/terrain_lab.cpp", "terrain_lab/terrain_lab.hlsl", "handoffs/L15_railroads.json"], "verification": ["terrain_lab_l15_replayable_render_and_authorized_critical_visual_approval"]},
+        {
+          "id": "L16",
+          "title": "Resources and 192-tile promotion approval",
+          "status": "complete",
+          "completed_on": "2026-09-05",
+          "evidence": ["handoffs/L16_resources.json", "terrain_lab/L16_RESOURCE_AUDIT.md", "terrain_lab/RUN_L16.bat"],
+          "verification": ["terrain_lab_l16_replayable_render_and_authorized_critical_visual_approval"],
+          "promotion_required": true,
+          "offline_preparation": {
+            "status": "complete",
+            "scope": "All 26 static mappings plus Fish/Whale and 24 animated clutter bodies are normalized; 22 clutter clips now have per-model source-independent pose caches, single-subject profiles omit ancillary elephant grass, and the reusable 192-tile/two-zoom promotion scaffold is generated. No L16 rendering, approval, or ownership is implied.",
+            "evidence": [
+              "docs/resource_asset_conversion.md",
+              "docs/offline_future_gate_acceleration.md",
+              "tools/asset_compiler/resource_body_profile_compiler.py",
+              "tools/lab_promotion_kit.py",
+              "tools/lab_promotion_profiles.json"
+            ]
+          }
+        },
+        {
+          "id": "L17",
+          "title": "Civilization, size, and era-specific cities and 192-tile promotion approval",
+          "status": "complete",
+          "completed_on": "2026-09-05",
+          "approved_on": "2026-09-05",
+          "evidence": ["handoffs/L17_cities.json", "terrain_lab/L17_CITY_AUDIT.md", "terrain_lab/RUN_L17.bat"],
+          "verification": ["terrain_lab_l17_replayable_render_and_authorized_critical_visual_approval"],
+          "promotion_required": true,
+          "offline_preparation": {
+            "status": "complete",
+            "scope": "Source-graph closure, representative component conversion, emissive and attachment intake, 19-piece three-era wall-kit conversion, two optional culture-specific palace compounds with emissives and exact VFX sockets, deterministic culture/era/size/capital/wall strategy, reusable promotion scaffold, and inactive Integration contract only; no L17 rendering or ownership.",
+            "evidence": [
+              "docs/city_rendering_strategy.md",
+              "docs/upstream_asset_family_backlog.md",
+              "tools/asset_compiler/city_asset_importer.py",
+              "tools/asset_compiler/city_adjunct_asset_importer.py",
+              "tools/asset_compiler/city_adjunct_sets.json",
+              "tools/asset_compiler/future_gate_candidate_sets.json",
+              "tools/asset_compiler/future_gate_candidate_strategy.json",
+              "tools/asset_compiler/city_render_strategy.json",
+              "tools/integration_contract_compiler.py",
+              "tools/lab_promotion_kit.py",
+              "preview/render_city_day_night_sheet.py"
+            ]
+          }
+        },
+        {
+          "id": "L18",
+          "title": "Mines and 192-tile promotion approval",
+          "status": "ready",
+          "promotion_required": true,
+          "offline_preparation": {
+            "status": "complete",
+            "scope": "Closed source-graph inventory, representative conversion plus zero-reject full 18-root recursive intake, emissive intake, and deterministic era/variant/resource-ownership strategy only; no L18 rendering or ownership.",
+            "evidence": [
+              "docs/mine_and_farm_asset_conversion.md",
+              "docs/upstream_asset_family_backlog.md",
+              "tools/asset_compiler/improvement_asset_importer.py",
+              "tools/asset_compiler/improvement_render_strategy.json",
+              "preview/render_improvement_sheet.py"
+            ]
+          }
+        },
+        {
+          "id": "L19",
+          "title": "Farms and irrigation, independent bundled tundra correction, and 192-tile promotion approval",
+          "status": "blocked_by_previous",
+          "promotion_required": true,
+          "offline_preparation": {
+            "status": "complete",
+            "scope": "Closed source-graph inventory, representative conversion plus zero-reject full 204-root recursive intake with unresolved rice terrain edits preserved but disabled, and checked era/topology/terrain/crop strategy only. L19 contains two independent tracks bundled only for convenience: farms/irrigation must prove all 16 adjacency masks across every irrigable terrain family, while the base-terrain track must replace the Terrain Lab's grassland fallback for Civ III tundra (base 3) with normalized tundra base-color, height, and specular channels regardless of irrigation state. Irrigated and unirrigated tundra plus mixed tundra/non-tundra material boundaries must appear at both zooms. Neither track may depend on the other; no L19 rendering, final adjacency mapping, or ownership has been performed by offline preparation.",
+            "evidence": [
+              "docs/mine_and_farm_asset_conversion.md",
+              "docs/upstream_asset_family_backlog.md",
+              "tools/asset_compiler/improvement_asset_importer.py",
+              "tools/asset_compiler/improvement_render_strategy.json",
+              "preview/render_improvement_sheet.py"
+            ]
+          }
+        },
+        {
+          "id": "L19A",
+          "title": "Goody huts and colony outposts with 192-tile promotion approval",
+          "status": "blocked_by_previous",
+          "promotion_required": true,
+          "offline_preparation": {
+            "status": "complete",
+            "scope": "Exact three-root goody-hut conversion, strict recursive three-root preindustrial plus three-root industrial colony-outpost conversion, 8-bucket hut selection, viewer visibility, owner/era/extraterritorial colony semantics, restrained owner-color marker, resource coexistence, rotation, and night attachments. Corrected matrix-order evidence closes the stale industrial rejection below 8e-7 without a static bake; no L19A rendering or ownership.",
+            "evidence": [
+              "docs/goody_huts_and_colonies.md",
+              "docs/upstream_asset_family_backlog.md",
+              "tools/asset_compiler/tile_object_asset_importer.py",
+              "tools/asset_compiler/tile_object_render_strategy.json",
+              "docs/offline_crosscutting_preparation.md"
+            ]
+          }
+        },
+        {
+          "id": "L19B",
+          "title": "Remaining tile infrastructure and 192-tile promotion approval",
+          "status": "blocked_by_previous",
+          "promotion_required": true,
+          "offline_preparation": {
+            "status": "partial_with_explicit_radar_semantic_and_pollution_visual_calibration_blockers_victory_location_set_aside",
+            "scope": "Exact Fort and Airstrip chains, five recursively normalized Fort/Airstrip/watchtower roots, four normalized persistent crater decals, one structurally valid emissive observatory/radar candidate, five normalized `NUCLEAR_FALLOUT -> FX_Radiation` pollution textures, bounded seven-particle generic pollution graph, automatic eight-facing/two-zoom calibration, road-connected attachment support, four-era Fortress/Barricade/Airfield/Outpost policy, reusable promotion scaffold, inactive Integration contract, and preserved Modern-Fort/missile-silo rejects. The isolated radar sheet reads as a flat plaza and remains unapproved; pollution visual calibration and all L19B rendering/ownership remain pending. Victory Location is explicitly set aside.",
+            "evidence": [
+              "docs/remaining_tile_infrastructure.md",
+              "docs/upstream_asset_family_backlog.md",
+              "tools/asset_compiler/tile_object_asset_importer.py",
+              "tools/asset_compiler/tile_object_render_strategy.json",
+              "tools/asset_compiler/infrastructure_source_sets.json"
+              ,"tools/asset_compiler/future_gate_candidate_sets.json"
+              ,"tools/asset_compiler/future_gate_candidate_strategy.json"
+              ,"tools/integration_contract_compiler.py"
+              ,"tools/lab_promotion_kit.py"
+              ,"tools/asset_compiler/effect_graph_compiler.py"
+              ,"tools/asset_compiler/tile_fit_calibrator.py"
+              ,"preview/render_compound_tile_fit_sheet.py"
+              ,"tools/visual_qa.py"
+              ,"docs/offline_crosscutting_preparation.md"
+            ]
+          }
+        },
+        {
+          "id": "L20",
+          "title": "Units and animation and 192-tile promotion approval",
+          "status": "blocked_by_previous",
+          "promotion_required": true,
+          "offline_preparation": {
+            "status": "complete",
+            "scope": "Five-family non-Warrior static conversion including a multi-mesh naval body, eight-action basic semantic contract, 37 unique raw clips/44 logical bindings, 93 deduplicated model-aware component pose caches serving 100 logical component/action bindings, pose-versus-motion policy, native timing and attack-slot alias policy, quantized skin-weight evidence, facing strategy, runtime-selected Civ III owner-color contract, an authoritative two-child Army contract using dedicated Great General art, and a generic arbitrary-tree compiler for Horseman, Classical Great General, Catapult, and Tank producing eight independently animated nodes, four resolved sockets, 30 components, 50 textures, 52 unique converted node/action clips, 62 logical bindings across 31 actions, 52 deterministic model-aware pose caches, and four-phase zero-separation proof. Horseman, Tank, and Classical General cover all eight basic actions; Catapult death remains an explicit truthful-art gap. The executable calibration contract covers eight Civ III facings and both 128x64/64x32 zoom bases, freezes single-body default/optional humanoid triad/Army two-body formation policy, and records an exact installed-GOG body-only replacement boundary without enabling it; no L20 rendering gate, actual all-facing/both-zoom visual measurements, final scale/facing-offset approval, Catapult death selection, specialty action expansion, or runtime unit ownership transfer.",
+            "evidence": [
+              "docs/unit_asset_conversion.md",
+              "docs/upstream_asset_family_backlog.md",
+              "tools/asset_compiler/unit_family_asset_importer.py",
+              "tools/asset_compiler/unit_family_action_validator.py",
+              "tools/asset_compiler/unit_family_pose_cache_builder.py",
+              "tools/asset_compiler/unit_action_conversion.json",
+              "tools/asset_compiler/unit_owner_color_runtime.json",
+              "tools/asset_compiler/unit_family_strategy.json",
+              "docs/army_rendering_strategy.md",
+              "docs/compound_unit_asset_conversion.md",
+              "tools/asset_compiler/army_render_strategy.json",
+              "tools/asset_compiler/army_render_strategy.py",
+              "tools/asset_compiler/compound_unit_source_sets.json",
+              "tools/asset_compiler/compound_unit_asset_importer.py",
+              "tools/asset_compiler/compound_unit_composition_validator.py",
+              "tools/asset_compiler/compound_unit_pose_cache_builder.py",
+              "tools/asset_compiler/normalized_pose_cache.py",
+              "tools/asset_compiler/unit_visual_calibration.json",
+              "tools/asset_compiler/unit_visual_calibration.py",
+              "tools/asset_compiler/unit_formation_strategy.json",
+              "tools/asset_compiler/test_compound_unit_asset_importer.py",
+              "tools/asset_compiler/test_compound_unit_pose_cache_builder.py",
+              "tools/asset_compiler/test_normalized_pose_cache.py",
+              "tools/asset_compiler/test_unit_visual_calibration.py",
+              "tools/asset_compiler/test_unit_family_pose_cache_builder.py",
+              "tools/asset_compiler/CONVERT_COMPOUND_UNIT_ANIMATIONS.ps1",
+              "docs/i20_unit_body_replacement_spike.md",
+              "preview/render_unit_family_sheet.py",
+              "preview/render_unit_owner_color_sheet.py"
+            ]
+          }
+        },
+        {"id": "L21", "title": "Complete 192-tile beauty scene and final user visual approval", "status": "blocked_by_previous", "promotion_required": true}
+      ]
+    },
+    {
+      "id": "INTEGRATION",
+      "title": "Paired Game Integration gates",
+      "status": "in_progress",
+      "pairing_rule": "Each I# consumes only the frozen, approved L# handoff with the same suffix. Lab owns appearance; Integration owns authoritative game state, placement, caching, compositing, exclusive suppression, telemetry, reset behavior, and hard failure without native replay.",
+      "steps": [
+        {"id": "I9", "lab_gate": "L9", "title": "Integrate terrain foundation", "status": "complete", "evidence": ["handoffs/L9_terrain.json", "docs/approved_terrain_integration.md", "native/c3x_renderer.cpp", "../injected_code.c"], "verification": ["m6_7_approved_terrain_integration"]},
+        {"id": "I10", "lab_gate": "L10", "title": "Integrate desert dunes", "status": "complete", "evidence": ["handoffs/L10_dunes.json", "terrain/m6_7_handoff_fidelity.json", "native/terrain_scene_runtime.cpp", "native/native_smoke.cpp"], "verification": ["m6_7_approved_terrain_integration"]},
+        {"id": "I11", "lab_gate": "L11", "title": "Integrate marshes", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L11_marsh.json", "terrain/m6_7_handoff_fidelity.json", "native/terrain_scene_runtime.h", "native/terrain_scene_runtime.cpp", "native/c3x_renderer.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "evidence/i11/README.md", "../C3X.h", "../injected_code.c"], "verification": ["i11_approved_marsh_integration"], "local_verification": ["i11_local_approved_marsh_payload"]},
+        {"id": "I12", "lab_gate": "L12", "title": "Integrate volcanoes and the approved L12 shared terrain stack", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L12_volcano.json", "terrain/i12_handoff_fidelity.json", "terrain_lab/terrain_lab.hlsl", "native/terrain_rendering.hlsl", "native/integrated_terrain.hlsl", "native/terrain_scene_runtime.cpp", "native/c3x_renderer.cpp", "native/native_smoke.cpp", "native/biq_preview.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i12/README.md", "../injected_code.c"], "verification": ["i12_approved_volcano_integration"], "local_verification": ["i12_local_approved_volcano_payload"]},
+        {"id": "I13", "lab_gate": "L13", "title": "Integrate rivers", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L13_rivers.json", "terrain/i13_handoff_fidelity.json", "native/terrain_rendering.hlsl", "native/integrated_terrain.hlsl", "native/terrain_scene_runtime.cpp", "native/c3x_renderer.cpp", "native/biq_preview.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i13/README.md", "../injected_code.c"], "verification": ["i13_approved_river_integration"], "local_verification": ["i13_local_approved_river_payload"]},
+        {"id": "I13A", "lab_gate": "L13A", "title": "Integrate shared shadows, lighting, and day-night", "status": "complete", "completed_on": "2026-09-05", "evidence": ["handoffs/L13A_lighting.json", "terrain/i13a_handoff_fidelity.json", "native/environment_runtime.cpp", "native/terrain_rendering.hlsl", "native/c3x_renderer.cpp", "native/biq_preview.cpp", "native/native_smoke.cpp", "native/test_native_bridge_contract.py", "docs/approved_terrain_integration.md", "docs/environment_lighting_and_ambient_effects.md", "docs/civ3_patch_dependency_ledger.md", "evidence/i13a/README.md"], "verification": ["i13a_approved_lighting_integration"], "local_verification": ["i13a_local_approved_lighting_payload"]},
+        {"id": "I14", "lab_gate": "L14", "title": "Integrate roads", "status": "blocked_by_previous"},
+        {"id": "I15", "lab_gate": "L15", "title": "Integrate railroads", "status": "blocked_by_previous"},
+        {"id": "I16", "lab_gate": "L16", "title": "Integrate resources", "status": "blocked_by_previous"},
+        {"id": "I17", "lab_gate": "L17", "title": "Integrate civilization-, size-, and era-specific cities", "status": "blocked_by_previous"},
+        {"id": "I18", "lab_gate": "L18", "title": "Integrate mines", "status": "blocked_by_previous"},
+        {"id": "I19", "lab_gate": "L19", "title": "Integrate farms and irrigation", "status": "blocked_by_previous"},
+        {"id": "I19A", "lab_gate": "L19A", "title": "Integrate goody huts and colony outposts", "status": "blocked_by_previous"},
+        {"id": "I19B", "lab_gate": "L19B", "title": "Integrate remaining tile infrastructure", "status": "blocked_by_previous"},
+        {"id": "I20", "lab_gate": "L20", "title": "Integrate units and animation", "status": "blocked_by_previous"},
+        {"id": "I21", "lab_gate": "L21", "title": "Complete combined release integration", "status": "blocked_by_previous"}
+      ]
+    },
+    {
+      "id": "M7",
+      "title": "Map-object game integration",
+      "status": "planned",
+      "promotion_prerequisites": {
+        "plan": "terrain_lab/PLAN.md",
+        "rule": "Each system waits only for its matching Renderer Lab technical gate and required visual approval, then passes an independent game-integration gate. L21 is a final combined release gate, not a global integration prerequisite.",
+        "by_system": {
+          "rivers": ["L13"],
+          "shared_lighting_and_day_night": ["L13A"],
+          "roads": ["L14"],
+          "railroads": ["L15"],
+          "resources": ["L16"],
+          "cities": ["L17"],
+          "mines": ["L18"],
+          "farms_and_irrigation": ["L19"],
+          "goody_huts_and_colonies": ["L19A"],
+          "remaining_tile_infrastructure": ["L19B"],
+          "units": ["L20"],
+          "combined_release_scene": ["L21"]
+        }
+      },
+      "steps": [
+        {
+          "id": "M7.1",
+          "title": "Render infrastructure and tile-bound overlays",
+          "status": "blocked_by_previous",
+          "lab_handoffs_by_family": {"rivers": "L13", "roads": "L14", "railroads": "L15", "mines": "L18", "farms_and_irrigation": "L19", "goody_huts": "L19A", "colonies": "L19A", "fortresses_barricades_airfields_outposts_radar_pollution_craters_victory_locations": "L19B"},
+          "lab_plan": "terrain_lab/PLAN.md",
+          "scope": [
+            "As each matching lab gate is approved, consume its frozen pack, definition, scene, reference, ownership, cache-input, and custom-coverage handoff without waiting for unrelated lab systems.",
+            "Game-integrate rivers, roads, railroads, farms/irrigation, mines, goody huts, colonies, fortresses, barricades, airfields, outposts, radar towers, pollution, craters, and victory locations as independently gated families.",
+            "Resolve authoritative Civ III topology, terrain, era, owner/civilization or culture selectors where applicable without transferring gameplay ownership to the renderer.",
+            "Give every family independent definition resolution, exclusive custom-on ownership, retained-layer ordering, and visible hard failure without native replay."
+          ],
+          "acceptance": [
+            "Road and railroad fixtures cover every reachable connection mask, slopes, junctions, crossings, wrapping, both zooms, and coexistence without cracks, doubled segments, or unstable selection.",
+            "Farm/irrigation and mine fixtures cover every reachable terrain and state family, deterministic variants, season/environment response, grounding, occlusion, and both zooms without changing gameplay state.",
+            "Goody-hut fixtures cover all eight deterministic reference buckets, visible/hidden viewer states, wrap duplication, grounding, diagonal facing, and day/night attachments; colony fixtures cover all four owner eras, owner/territory mismatch, restrained owner color, stable resource-clear placement, and same-tile resource readability.",
+            "Remaining-infrastructure fixtures cover Fortress/Barricade distinction, all four Airfield/Outpost era profiles, owner color, both zooms, rotation, relief, clipping/wrap, day/night runway lights, persistent Pollution/Crater state, Radar Tower, and Victory Location readability.",
+            "Configuration off restores the complete native draw; configuration on makes a missing or failed integrated family fail the custom frame without native substitution.",
+            "The production infrastructure fixture composes roads, rails, farms, mines, goody huts, colonies, remaining tile infrastructure, resources, terrain, and retained Civ III overlays with stable depth and zero native fallback."
+          ],
+          "must_not": [
+            "Do not start a family's production ownership before that family's own lab gate and visual approval pass.",
+            "Do not infer connectivity, yields, resource presence, production, depletion, worker activity, or other gameplay facts from rendered geometry.",
+            "Do not transfer a family to its I# gate until the complete replacement instance or network segment set is ready."
+          ]
+        },
+        {
+          "id": "M7.2",
+          "title": "Render resources with visibility and animation",
+          "status": "blocked_by_previous",
+          "lab_handoffs": ["L16"],
+          "scope": [
+            "Use the validated 26-resource BIQ mapping seed to compile normalized Civ VI/source candidates while allowing scenario and user definitions to replace every target.",
+            "Capture authoritative resource ID/name/class, selected map PCX index, tile/pixel anchor, terrain context, and player-specific visibility/fog state.",
+            "Render only map resource bodies, shadows, and explicitly mapped ambient animation; retain all native non-map resource icons.",
+            "Support terrain-specific visual variants and stable absolute-time animation with exclusive custom-on resource-body ownership."
+          ],
+          "acceptance": [
+            "Every loaded BIQ map resource has complete custom coverage, including scenario-defined resources absent from the 26-entry vanilla seed.",
+            "Fixtures prove hidden strategic resources are never revealed and visible resources preserve anchors, terrain variants, depth, fog, hour/season, and deterministic animation.",
+            "Missing or failed custom-on replacements fail visibly without restoring a native map body or affecting retained non-map icons.",
+            "Civilopedia, city-screen, trade-network, advisor, diplomacy, notification, and every other non-map resource icon remain native and unchanged."
+          ],
+          "must_not": [
+            "Do not replace or mutate resources.pcx globally merely to suppress a map resource draw.",
+            "Do not derive discovery, visibility, yields, trade, prerequisites, depletion, placement, or AI behavior from source art.",
+            "Do not treat a low-confidence stand-in such as Rubber to Cocoa as an immutable runtime mapping or completed asset conversion.",
+            "Do not transfer map-resource ownership until the complete replacement set is ready."
+          ]
+        },
+        {
+          "id": "M7.3",
+          "title": "Render culture, era, and size-specific cities",
+          "status": "blocked_by_previous",
+          "lab_handoffs": ["L17"],
+          "lab_plan": "terrain_lab/PLAN.md",
+          "scope": [
+            "After L17 and its visual approval, consume the accepted city matrix across owner/civilization identity, culture group, all reachable eras, and Civ III city sizes without waiting for unrelated lab gates.",
+            "Port the accepted city footprint, terrain grounding, depth/occlusion envelope, both-zoom calibration, and retained native label/population/UI envelope into production contracts.",
+            "Production-integrate walls, capital status, city style, and visible building/wonder composition from the accepted lab result.",
+            "Bind city-model emissive groups, windows, lamps, and static analytic lights to the shared M6.4 environment.",
+            "Describe city-owned flame, smoke, steam, or beacon attachments for M7.5 execution without duplicating their scheduler."
+          ],
+          "acceptance": [
+            "Fixtures cover every reachable size and era with representative civilizations/culture groups, owner color, walls/capital/style states, both zooms, terrain grounding, scrolling/wrapping, depth, and retained-label envelopes.",
+            "Representative culture, era, and size fixtures activate the correct windows and lamps across day/night without swapping geometry or relighting retained labels/UI.",
+            "Custom-on failure removes every renderer-owned city light/effect together with the replacement body, reports a hard failure, and never restores the native city body."
+          ],
+          "must_not": [
+            "Do not bake all night behavior into duplicate city models or let a city-owned effect survive custom-frame failure.",
+            "Do not take ownership of Civ III city labels, population displays, or HUD."
+          ]
+        },
+        {
+          "id": "M7.4",
+          "title": "Render animated units and movement/combat states",
+          "status": "blocked_by_previous",
+          "lab_handoffs": ["L20"],
+          "lab_plan": "terrain_lab/PLAN.md",
+          "preimplementation_evidence": ["docs/i20_native_unit_animation_handoff.md", "docs/army_rendering_strategy.md", "docs/compound_unit_asset_conversion.md", "docs/civ3_render_loop_viability.md", "docs/civ3_patch_dependency_ledger.md"],
+          "scope": [
+            "After L20 and its visual approval, consume the accepted static, directional, skeleton, clip, movement, combat, stacking, and interruption results without waiting for unrelated lab gates or redesigning their art direction during production integration.",
+            "Capture stable unit and action/event IDs, eight-direction facing, action/clip state, timing, loop/completion policy, hit points, visibility, stack order, and current/active/selected flags.",
+            "Capture the native viewer-conditioned display civilization and its Leader.Color_Table_ID, and populate one palette LUT from Civ III's effective loaded Units_Image_Data color tables so scenarios and hidden-nationality presentation remain authoritative.",
+            "Capture and composite unit bodies in Civ III's Animator-owned Units_Control dynamic plane using its visible-unit order, wrap-aware interpolated pixel origins, clipping, and unioned dirty rectangles; terrain m19 unit fields remain descriptive only.",
+            "Interpolate movement between authoritative Civ III tile and pixel anchors using captured segment progress, including scrolling and map-wrap representations.",
+            "Synchronize idle, fidget, run, fortify, attack, bombard, victory, death, capture, worker, and scenario-defined clips without deriving gameplay timing from rendered frames.",
+            "Compose mounted and crewed units through one pack-defined parent/child/socket schema, using the resolved Rider, Operator, defender, and TankGunner recipes without unit-name branches or duplicate HUD instances.",
+            "Replace only the vanilla unit body sprite while retaining Civ III ownership of the selection cursor/ring, green health bar, left-side activity/status marks, stack indicators, and related unit HUD.",
+            "Before implementing replacement, prove the smallest supported-build boundary around Unit.tick_anim's direct FLC body blit; record any concretely required patch symbol and addresses through the dependency ledger.",
+            "Capture the anchors and selected/current state needed to keep all retained native unit overlays aligned above and around the moving 3D body."
+          ],
+          "acceptance": [
+            "Timestamped fixtures cover all eight directions, movement endpoints, attack/target state, fortify transitions, victory/death lifecycle, and skipped-frame determinism.",
+            "Stable event IDs prevent clips from restarting on redraw, while interruption tests cover combat, death, selection/stack changes, visibility, loading, and renderer reset.",
+            "Owner-color fixtures cover multiple leaders sharing one converted unit, captures and alternate color assignments, partial scenario ntp overrides, barbarians, and hidden-nationality views without rebuilding meshes, materials, or clips or exposing the actual owner.",
+            "The native selected-unit underlay, health bar, activity/status marks, stack indicators, and related unit HUD follow the correct stacked unit through movement, scrolling, clipping, combat, and selection changes and preserve the required z-order.",
+            "Body suppression leaves every retained native overlay visible exactly once and does not apply renderer lighting, color grading, or replacement ownership to it.",
+            "Missing models or clips fail the custom unit pass visibly without restoring the vanilla unit body; retained native overlays remain outside body ownership and gameplay continues."
+          ],
+          "must_not": [
+            "Do not move, remove, damage, select, target, or complete an action independently of Civ III.",
+            "Do not shorten or extend Civ III gameplay waits until an audited synchronization hook can signal equivalent completion.",
+            "Do not accumulate animation progress by rendered-frame count or draw the selection underlay beneath the wrong stacked unit.",
+            "Do not bake moving units into the retained terrain bitmap or drive unit placement from the first unit found in a terrain-tile iterator.",
+            "Do not suppress, duplicate, replace, relight, recolor, or occlude Civ III's native selection, health, activity/status, stack, or related unit HUD during M7.4."
+          ]
+        },
+        {
+          "id": "M7.5",
+          "title": "Render transient effects and synchronized projectiles",
+          "status": "blocked_by_previous",
+          "lab_handoffs": ["L12", "L13A", "L17", "L20"],
+          "preimplementation_evidence": ["docs/bombardment_and_explosion_effects.md", "tools/asset_compiler/combat_effect_contract.json", "tools/asset_compiler/effect_graph_profiles.json", "tools/asset_compiler/effect_graph_compiler.py", "docs/offline_crosscutting_preparation.md", "docs/civ3_patch_dependency_ledger.md"],
+          "boundary_audit": {
+            "status": "complete",
+            "pixel_suppression": "Tick and native sound run before FLC byte 0x184 gates the direct blit; ordinary effects reuse the existing animated-effect loader, while standalone SDI needs the animation loader upgraded to inlead.",
+            "nuclear_outcomes": "Unit_do_nuke_tile is detonation and Unit_get_intercepted_as_nuke is interception in offline play and multiplayer replay; delivery animation is not an outcome.",
+            "runtime_enabled": false
+          },
+          "scope": [
+            "Capture stable effect event IDs, source/target anchors, spawn timestamp, duration, normalized progress, outcome, interruption, and cleanup policy.",
+            "Synchronize projectiles, impacts, combat particles, explosions, nuclear effects, worker effects, and ambient map effects to Civ III events while audio remains Civ III-owned initially.",
+            "For bombard and bombing, derive release children from authored unit-action markers and impact children from Civ III's exact AE_Hit/AE_Miss/AE_WaterMiss creation calls; keep Fire Rate impact count distinct from decorative release count.",
+            "Treat nuclear delivery, interception, detonation, fallout/scorch presentation, and victim removal as an explicit separate event family rather than a scaled ordinary explosion.",
+            "Execute visible model attachments such as flames, smoke, sparks, steam, flickering lights, and beacons using M6.4 assets and M5.3 absolute-time scheduling."
+          ],
+          "acceptance": [
+            "Deterministic event traces prove spawn, flight, impact, interruption, cleanup, and skipped-frame behavior without duplicate or orphaned effects.",
+            "Effect ownership and hard-failure behavior prevent duplicate vanilla/replacement visuals and preserve Civ III gameplay timing.",
+            "Fixtures cover ballistic land hit, land miss, water miss, air bomb, guided missile, multiple Fire Rate impacts, both nuclear outcome branches, and preservation of Civ III-owned effect audio while only native pixels are suppressed.",
+            "Hidden, off-screen, daylight-disabled, paused, failed, and completed ambient attachments request no frames; visible active attachments remain bounded and deterministic."
+          ],
+          "must_not": [
+            "Do not infer combat outcomes, targets, or cleanup from renderer frame count.",
+            "Do not play duplicate replacement audio or keep the redraw loop active for invisible completed effects."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M8",
+      "title": "Authoring and validation",
+      "status": "planned",
+      "steps": [
+        {
+          "id": "M8.1",
+          "title": "Automate seasonal asset authoring and validation",
+          "status": "planned"
+        },
+        {
+          "id": "M8.2",
+          "title": "Add production human and AI-assisted visual review workflow",
+          "status": "blocked_by_previous"
+        }
+      ]
+    },
+    {
+      "id": "M9",
+      "title": "Natural wonders",
+      "status": "planned",
+      "steps": [
+        {
+          "id": "M9.1",
+          "title": "Inventory and map effective C3X natural wonders",
+          "status": "blocked_by_previous",
+          "scope": [
+            "Parse the effective scenario, user, or default natural-wonder replacement set and enumerate every dynamic definition and placed NATURAL_WONDER_DISTRICT_ID instance from authoritative C3X state.",
+            "Capture stable natural-wonder ID/name, tile/pixel anchor, terrain and adjacency requirements/direction, native PCX row/column, configured hour/season/direction animations, visibility/fog, label eligibility, and custom-coverage metadata.",
+            "Inventory Civ VI Base/DLC Features, TerrainStyle NaturalWonders, Clutter, VFX, water, Landmarks, and cooked package references and seed exact, approximate, unavailable, or authored mappings with source-part and footprint evidence."
+          ],
+          "acceptance": [
+            "Every effective definition and placed instance is classified; the checked-in 18 definitions are treated only as a seed rather than a fixed completeness claim.",
+            "Every native sprite cell, configured animation alternative, terrain/adjacency/direction condition, and retained label/fog responsibility has explicit mapping and complete-coverage evidence.",
+            "Ordinary BIQ landmark terrain, mountains, and volcanoes are not classified as natural wonders without an authoritative C3X natural-wonder instance."
+          ],
+          "must_not": [
+            "Do not infer natural-wonder identity from terrain appearance, landmark state, filename similarity, or Civ VI source footprint.",
+            "Do not modify placement, generation, yields, passability, worker restrictions, visibility, or other natural-wonder gameplay."
+          ]
+        },
+        {
+          "id": "M9.2",
+          "title": "Render terrain-integrated natural-wonder kits",
+          "status": "blocked_by_previous",
+          "scope": [
+            "Render source-agnostic kits containing main geometry, terrain blend, directional pieces, clutter, water, emissives/lights, and ambient effects from one authoritative C3X anchor.",
+            "Normalize useful multi-part or multi-tile source art as visual overhang without creating gameplay tiles or suppressing independently owned neighboring content.",
+            "Use shared environment and absolute-time scheduling for waterfalls, geysers, steam, volcanic effects, waves, mist, and similar visible animation, with exclusive per-instance custom ownership.",
+            "Retain the native natural-wonder name label plus Civ III fog/shroud, borders, grid, cursor, minimap, HUD, and UI above the replacement."
+          ],
+          "acceptance": [
+            "Deterministic two-size fixtures cover land, mountain, geothermal/volcanic, coastal, and water examples across direction, adjacency, noon/night, seasons, animation, scrolling/wrapping, clipping/depth, and source-multipart cases.",
+            "Static instances request no continuous redraw and animated effects retain deterministic phase across skipped frames, pause, reset, visibility, and failure.",
+            "Every effective custom-on instance draws one complete 3D kit or fails visibly without native body/legacy-animation replay, while the retained native name label and other retained layers remain visible exactly once."
+          ],
+          "must_not": [
+            "Do not transfer a natural wonder to custom ownership before all required replacement pieces are ready.",
+            "Do not relight, bloom, duplicate, suppress, or replace the native natural-wonder label or other retained Civ III layers.",
+            "Do not let visual footprint, VFX, or animation alter C3X game state or timing."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M10",
+      "title": "Constructed wonders",
+      "status": "planned",
+      "steps": [
+        {
+          "id": "M10.1",
+          "title": "Inventory and map constructed wonders",
+          "status": "blocked_by_previous",
+          "scope": [
+            "Enumerate every loaded BIQ Great and Small Wonder and every effective default, user, and scenario C3X wonder-district definition.",
+            "Classify mapless, planned, constructing, completed, destroyed, abandoned, obsolete, orientation, and visibility states with stable BIQ and tile identities.",
+            "Seed swappable Civ III-to-Civ VI/source mappings without placing source-specific formats in runtime packs."
+          ],
+          "acceptance": [
+            "Every BIQ wonder and effective C3X wonder config entry is classified with mapping confidence and map-visibility evidence.",
+            "The inventory distinguishes BIQ identity, source sprite cells, construction/completion art, alternate direction, calibration, and custom-ownership readiness."
+          ],
+          "must_not": [
+            "Do not invent map placement for a wonder without an authoritative C3X Wonder District tile.",
+            "Do not treat a checked-in config block count as complete effective scenario coverage."
+          ]
+        },
+        {
+          "id": "M10.2",
+          "title": "Render constructed wonders",
+          "status": "blocked_by_previous",
+          "scope": [
+            "Render source-agnostic construction and completed wonder models at authoritative C3X Wonder District anchors.",
+            "Support alternate orientation, terrain/river/city placement, environment, emissive groups, analytic lights, ambient-effect attachments, destruction/abandonment, layering, and exclusive custom-on ownership."
+          ],
+          "acceptance": [
+            "Deterministic fixtures cover construction, completion, orientation, destruction/abandonment, day/night emissives/effects, seasons, and missing assets.",
+            "Configuration off preserves the existing C3X wonder draw; custom-on failed replacement reports a hard failure without restoring it."
+          ],
+          "must_not": [
+            "Do not complete, destroy, relocate, obsolete, or otherwise mutate a wonder from renderer state.",
+            "Do not transfer native C3X wonder art to custom ownership until the complete replacement instance is ready."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M11",
+      "title": "Districts final renderer milestone",
+      "status": "planned",
+      "steps": [
+        {
+          "id": "M11.1",
+          "title": "Inventory effective C3X districts and render states",
+          "status": "blocked_by_previous",
+          "scope": [
+            "Enumerate every built-in, dynamic, user, and scenario district definition after C3X config precedence is applied.",
+            "Capture stable instance/type identity, owner, culture, era, render strategy, effective dependent-building set/count, construction, damage, abandonment, visibility, terrain, coast orientation, and topology state.",
+            "Seed district-base, building-attachment, count-preset, and topology mappings from useful Civ VI/source ArtDefs."
+          ],
+          "acceptance": [
+            "All effective district definitions and every renderer-relevant state family are classified with scenario precedence and source evidence.",
+            "The inventory represents shared-district building additions as the effective C3X visual set and distinguishes ordinary, Wonder, Natural Wonder delegation, Bridge, Canal, Great Wall, Port, and other special families."
+          ],
+          "must_not": [
+            "Do not duplicate C3X district gameplay, city-sharing, yield, passability, construction, or building ownership logic in the renderer.",
+            "Do not infer complete district coverage from the checked-in 21 default definitions."
+          ]
+        },
+        {
+          "id": "M11.2",
+          "title": "Render composite district kits",
+          "status": "blocked_by_previous",
+          "scope": [
+            "Render a source-agnostic district base plus independently mapped building attachments for by-building strategies.",
+            "Resolve by-count strategies to deterministic monolithic or attachment-set stage presets.",
+            "Use authored sockets where available and deterministic collision-aware placement otherwise, with exclusive per-instance custom ownership.",
+            "Let each base, building attachment, or count preset own the emissive groups, analytic lights, and ambient effects that it visually introduces."
+          ],
+          "acceptance": [
+            "Fixtures prove individual building additions appear without replacing unrelated components and remain stable across redraw, save/load, season, and machine.",
+            "A missing required base, attachment, or preset fails the custom district pass visibly without restoring the native C3X district draw.",
+            "Adding or removing a represented building activates or removes only its owned windows, lamps, flames, smoke, or steam across day/night."
+          ],
+          "must_not": [
+            "Do not require Civ VI district file organization to mirror C3X PCX columns or expose Civ VI formats at runtime.",
+            "Do not accidentally mix partial 3D and native district layers under replace ownership."
+          ]
+        },
+        {
+          "id": "M11.3",
+          "title": "Complete special district and final integration gates",
+          "status": "blocked_by_previous",
+          "scope": [
+            "Implement Bridge, Canal, and Great Wall connection pieces, Port coastline alignment, Wonder District relationships, and construction/damage/abandonment variants.",
+            "Complete scenario override, environment, layering, performance, custom-on hard-failure, config-off, and final coverage validation."
+          ],
+          "acceptance": [
+            "Topology and directional fixtures cover every reachable mask/order without seams or unstable orientation.",
+            "Every effective custom-on district instance renders a complete mapped kit or fails visibly without native substitution, omissions, or duplicates.",
+            "The final renderer verification suite passes without requiring per-iteration manual screenshots."
+          ],
+          "must_not": [
+            "Do not mark the renderer plan complete while an effective district definition/state is unknown or lacks complete custom coverage.",
+            "Do not change district gameplay outcomes or require Firaxis assets in distributable C3X."
+          ]
+        }
+      ]
+    }
+  ]
+}

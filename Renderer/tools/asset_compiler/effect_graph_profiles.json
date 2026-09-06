@@ -1,0 +1,199 @@
+{
+  "schema": "c3x.effect_graph_sources.v0",
+  "clock": "absolute_presentation_milliseconds",
+  "profiles": {
+    "ambient/fire_small": {
+      "loop": true,
+      "duration_ms": 1600,
+      "bounds_tile": [-0.12, -0.12, 0.0, 0.12, 0.12, 0.34],
+      "emitters": [
+        {
+          "id": "flame",
+          "texture": "effect/fire/four_flames",
+          "blend": "additive",
+          "layout": {"columns": 2, "rows": 2, "frames": 4, "order": "row_major"},
+          "rate_per_second": 5.0,
+          "particle_lifetime_ms": 620,
+          "max_particles": 4,
+          "size_tile": [0.08, 0.16],
+          "velocity_tile_per_second": [0.0, 0.0, 0.12],
+          "spawn_radius_tile": 0.025,
+          "opacity_curve": [[0.0, 0.0], [0.15, 1.0], [0.72, 0.8], [1.0, 0.0]]
+        },
+        {
+          "id": "glow",
+          "texture": "effect/glow/flame_soft",
+          "blend": "additive",
+          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
+          "rate_per_second": 1.0,
+          "particle_lifetime_ms": 1600,
+          "max_particles": 1,
+          "size_tile": [0.18, 0.18],
+          "velocity_tile_per_second": [0.0, 0.0, 0.0],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [[0.0, 0.55], [0.5, 0.75], [1.0, 0.55]]
+        }
+      ],
+      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.55, "size": 1.15}},
+      "activation": "attachment_policy",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "ambient/smoke_small": {
+      "loop": true,
+      "duration_ms": 3200,
+      "bounds_tile": [-0.18, -0.18, 0.0, 0.18, 0.18, 0.62],
+      "emitters": [
+        {
+          "id": "smoke",
+          "texture": "effect/smoke/cloud",
+          "blend": "alpha",
+          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
+          "rate_per_second": 1.7,
+          "particle_lifetime_ms": 2200,
+          "max_particles": 5,
+          "size_tile": [0.13, 0.22],
+          "velocity_tile_per_second": [0.018, -0.012, 0.18],
+          "spawn_radius_tile": 0.035,
+          "opacity_curve": [[0.0, 0.0], [0.2, 0.55], [0.65, 0.38], [1.0, 0.0]]
+        }
+      ],
+      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.6, "size": 1.1}},
+      "activation": "attachment_policy",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "ambient/steam_small": {
+      "loop": true,
+      "duration_ms": 2400,
+      "bounds_tile": [-0.15, -0.15, 0.0, 0.15, 0.15, 0.5],
+      "emitters": [
+        {
+          "id": "steam",
+          "texture": "effect/steam/cloud",
+          "blend": "alpha",
+          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
+          "rate_per_second": 2.4,
+          "particle_lifetime_ms": 1350,
+          "max_particles": 4,
+          "size_tile": [0.1, 0.19],
+          "velocity_tile_per_second": [0.01, 0.0, 0.24],
+          "spawn_radius_tile": 0.02,
+          "opacity_curve": [[0.0, 0.0], [0.12, 0.48], [0.55, 0.28], [1.0, 0.0]]
+        }
+      ],
+      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.55, "size": 1.1}},
+      "activation": "attachment_policy",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "infrastructure/pollution_radiation": {
+      "loop": true,
+      "duration_ms": 2800,
+      "bounds_tile": [-0.42, -0.28, 0.0, 0.42, 0.28, 0.48],
+      "emitters": [
+        {
+          "id": "ground_wisps",
+          "texture": "effect/pollution/radiation_atlas",
+          "alpha_texture": "effect/pollution/radiation_alpha_01",
+          "blend": "additive",
+          "layout": {"columns": 4, "rows": 4, "frames": 16, "order": "row_major"},
+          "rate_per_second": 3.2,
+          "particle_lifetime_ms": 1700,
+          "max_particles": 7,
+          "size_tile": [0.11, 0.2],
+          "velocity_tile_per_second": [0.0, 0.0, 0.1],
+          "spawn_radius_tile": 0.28,
+          "opacity_curve": [[0.0, 0.0], [0.18, 0.68], [0.74, 0.52], [1.0, 0.0]]
+        }
+      ],
+      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.58, "size": 1.12}},
+      "activation": "authoritative_civ3_pollution_bit",
+      "source_claim": "authored_restrained_layout_not_civ6_disaster_emitter_decode"
+    },
+    "combat/land_impact": {
+      "loop": false,
+      "duration_ms": 1100,
+      "bounds_tile": [-0.34, -0.28, 0.0, 0.34, 0.28, 0.48],
+      "emitters": [
+        {
+          "id": "flash",
+          "texture": "effect/combat/explosion/hot_center",
+          "blend": "additive",
+          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
+          "rate_per_second": 10.0,
+          "particle_lifetime_ms": 180,
+          "max_particles": 1,
+          "size_tile": [0.2, 0.2],
+          "velocity_tile_per_second": [0.0, 0.0, 0.0],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [[0.0, 1.0], [1.0, 0.0]]
+        },
+        {
+          "id": "fireball",
+          "texture": "effect/combat/explosion/fireball_sheet",
+          "blend": "premultiplied",
+          "layout": {"columns": 4, "rows": 4, "frames": 16, "order": "row_major"},
+          "rate_per_second": 4.0,
+          "particle_lifetime_ms": 650,
+          "max_particles": 2,
+          "size_tile": [0.22, 0.3],
+          "velocity_tile_per_second": [0.0, 0.0, 0.08],
+          "spawn_radius_tile": 0.04,
+          "opacity_curve": [[0.0, 0.0], [0.08, 1.0], [0.7, 0.7], [1.0, 0.0]]
+        },
+        {
+          "id": "dust",
+          "texture": "effect/combat/impact/ground_dust",
+          "blend": "alpha",
+          "layout": {"columns": 4, "rows": 4, "frames": 16, "order": "row_major"},
+          "rate_per_second": 5.0,
+          "particle_lifetime_ms": 900,
+          "max_particles": 3,
+          "size_tile": [0.19, 0.24],
+          "velocity_tile_per_second": [0.03, -0.015, 0.08],
+          "spawn_radius_tile": 0.12,
+          "opacity_curve": [[0.0, 0.0], [0.18, 0.55], [1.0, 0.0]]
+        }
+      ],
+      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.55, "size": 1.08}},
+      "activation": "authoritative_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    },
+    "combat/water_impact": {
+      "loop": false,
+      "duration_ms": 900,
+      "bounds_tile": [-0.36, -0.24, -0.02, 0.36, 0.24, 0.26],
+      "emitters": [
+        {
+          "id": "ring",
+          "texture": "effect/combat/impact/water_wave",
+          "alpha_texture": "effect/combat/impact/water_wave_mask",
+          "blend": "alpha",
+          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
+          "rate_per_second": 10.0,
+          "particle_lifetime_ms": 720,
+          "max_particles": 1,
+          "size_tile": [0.3, 0.14],
+          "velocity_tile_per_second": [0.0, 0.0, 0.0],
+          "spawn_radius_tile": 0.0,
+          "opacity_curve": [[0.0, 0.8], [0.75, 0.45], [1.0, 0.0]]
+        },
+        {
+          "id": "mist",
+          "texture": "effect/steam/cloud",
+          "blend": "alpha",
+          "layout": {"columns": 1, "rows": 1, "frames": 1, "order": "row_major"},
+          "rate_per_second": 3.0,
+          "particle_lifetime_ms": 760,
+          "max_particles": 2,
+          "size_tile": [0.12, 0.22],
+          "velocity_tile_per_second": [0.0, 0.0, 0.18],
+          "spawn_radius_tile": 0.08,
+          "opacity_curve": [[0.0, 0.0], [0.16, 0.5], [1.0, 0.0]]
+        }
+      ],
+      "zoom": {"normal": {"density": 1.0, "size": 1.0}, "reduced": {"density": 0.55, "size": 1.1}},
+      "activation": "authoritative_water_impact_event",
+      "source_claim": "authored_generic_behavior_using_normalized_texture_evidence"
+    }
+  },
+  "runtime_activation": "not_enabled"
+}

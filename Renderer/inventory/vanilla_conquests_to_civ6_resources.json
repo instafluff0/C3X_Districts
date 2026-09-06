@@ -1,0 +1,57 @@
+{
+  "schema": "c3x.civ3_to_civ6_resource_mapping.v0",
+  "source_roster": {
+    "name": "Vanilla Civilization III Complete/Conquests standard-rules map resources",
+    "resource_count": 26,
+    "evidence": "inventory/vanilla_conquests_biq_semantics.json resources records",
+    "excludes": [
+      "scenario-only resources",
+      "Civilopedia icons",
+      "city-screen and trade-network icons",
+      "advisor and diplomacy icons"
+    ]
+  },
+  "target_namespace": "Civ VI Resources/Features ArtDef m_Name identifiers",
+  "policy": {
+    "purpose": "Editable seed choices for source conversion and map-only resource-body replacement",
+    "selection_order": [
+      "same resource identity",
+      "same real-world material or species",
+      "same visual family and terrain role",
+      "generic map-art stand-in",
+      "vanilla map-resource fallback"
+    ],
+    "runtime_identity": "Match authoritative Civ III BIQ resource ID/name/class and selected map PCX index; never infer gameplay behavior from the Civ VI target",
+    "replacement_ownership": "map resource body, its map shadow, and explicitly mapped ambient map animation only",
+    "retained_ownership": "Civ III Civilopedia, city-screen, trade-network, advisor, diplomacy, notification, and all other non-map resource icons",
+    "curation": "Every target and stand-in is replaceable by scenario or user renderer definitions without changing importer or runtime code"
+  },
+  "mappings": [
+    {"civ3_biq_index":0,"civ3_id":"GOOD_Horses","civ3_name":"Horses","resource_class":"strategic","civ3_resource_class":2,"civ3_icon_index":0,"civ6_artdef":"RESOURCE_HORSES","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same horse resource identity and animated map herd."},
+    {"civ3_biq_index":1,"civ3_id":"GOOD_Iron","civ3_name":"Iron","resource_class":"strategic","civ3_resource_class":2,"civ3_icon_index":1,"civ6_artdef":"RESOURCE_IRON","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same strategic mineral resource."},
+    {"civ3_biq_index":2,"civ3_id":"GOOD_Saltpeter","civ3_name":"Saltpeter","resource_class":"strategic","civ3_resource_class":2,"civ3_icon_index":2,"civ6_artdef":"RESOURCE_NITER","target_kind":"resource","match":"close","confidence":"high","alternatives":["RESOURCE_SALT"],"fallback":"vanilla_map_resource","reason":"Civ VI Niter is the direct saltpeter strategic-resource successor."},
+    {"civ3_biq_index":3,"civ3_id":"GOOD_Coal","civ3_name":"Coal","resource_class":"strategic","civ3_resource_class":2,"civ3_icon_index":3,"civ6_artdef":"RESOURCE_COAL","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same strategic mineral resource."},
+    {"civ3_biq_index":4,"civ3_id":"GOOD_Oil","civ3_name":"Oil","resource_class":"strategic","civ3_resource_class":2,"civ3_icon_index":4,"civ6_artdef":"RESOURCE_OIL","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same strategic oil resource."},
+    {"civ3_biq_index":5,"civ3_id":"GOOD_Rubber","civ3_name":"Rubber","resource_class":"strategic","civ3_resource_class":2,"civ3_icon_index":5,"civ6_artdef":"RESOURCE_COCOA","target_kind":"resource","match":"stand_in","confidence":"low","alternatives":["RESOURCE_COFFEE","RESOURCE_CITRUS"],"fallback":"vanilla_map_resource","reason":"Installed Civ VI ArtDefs have no rubber resource; Cocoa is a temporary tropical tree/plantation silhouette pending curated rubber art."},
+    {"civ3_biq_index":6,"civ3_id":"GOOD_Aluminum","civ3_name":"Aluminum","resource_class":"strategic","civ3_resource_class":2,"civ3_icon_index":6,"civ6_artdef":"RESOURCE_ALUMINUM","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same strategic mineral resource."},
+    {"civ3_biq_index":7,"civ3_id":"GOOD_Uranium","civ3_name":"Uranium","resource_class":"strategic","civ3_resource_class":2,"civ3_icon_index":7,"civ6_artdef":"RESOURCE_URANIUM","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same strategic mineral resource."},
+    {"civ3_biq_index":8,"civ3_id":"GOOD_Wine","civ3_name":"Wines","resource_class":"luxury","civ3_resource_class":1,"civ3_icon_index":8,"civ6_artdef":"RESOURCE_WINE","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same vineyard luxury resource."},
+    {"civ3_biq_index":9,"civ3_id":"GOOD_Furs","civ3_name":"Furs","resource_class":"luxury","civ3_resource_class":1,"civ3_icon_index":9,"civ6_artdef":"RESOURCE_FURS","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same fur-bearing animal luxury resource."},
+    {"civ3_biq_index":10,"civ3_id":"GOOD_Dye","civ3_name":"Dyes","resource_class":"luxury","civ3_resource_class":1,"civ3_icon_index":10,"civ6_artdef":"RESOURCE_DYES","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same dye luxury resource."},
+    {"civ3_biq_index":11,"civ3_id":"GOOD_Incense","civ3_name":"Incense","resource_class":"luxury","civ3_resource_class":1,"civ3_icon_index":11,"civ6_artdef":"RESOURCE_INCENSE","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same incense luxury resource."},
+    {"civ3_biq_index":12,"civ3_id":"GOOD_Spice","civ3_name":"Spices","resource_class":"luxury","civ3_resource_class":1,"civ3_icon_index":12,"civ6_artdef":"RESOURCE_SPICES","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same spice luxury resource."},
+    {"civ3_biq_index":13,"civ3_id":"GOOD_Ivory","civ3_name":"Ivory","resource_class":"luxury","civ3_resource_class":1,"civ3_icon_index":13,"civ6_artdef":"RESOURCE_IVORY","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same elephant/ivory luxury resource."},
+    {"civ3_biq_index":14,"civ3_id":"GOOD_Silk","civ3_name":"Silks","resource_class":"luxury","civ3_resource_class":1,"civ3_icon_index":14,"civ6_artdef":"RESOURCE_SILK","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same silk luxury resource."},
+    {"civ3_biq_index":15,"civ3_id":"GOOD_Diamonds","civ3_name":"Gems","resource_class":"luxury","civ3_resource_class":1,"civ3_icon_index":15,"civ6_artdef":"RESOURCE_DIAMONDS","target_kind":"resource","match":"direct","confidence":"high","alternatives":["RESOURCE_JADE","RESOURCE_SILVER"],"fallback":"vanilla_map_resource","reason":"Civ III's internal resource identity is Diamonds; Civ VI Diamonds is the exact source match despite the displayed name Gems."},
+    {"civ3_biq_index":16,"civ3_id":"GOOD_Whales","civ3_name":"Whales","resource_class":"bonus","civ3_resource_class":0,"civ3_icon_index":16,"civ6_artdef":"RESOURCE_WHALES","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same animated marine resource."},
+    {"civ3_biq_index":17,"civ3_id":"GOOD_Game","civ3_name":"Game","resource_class":"bonus","civ3_resource_class":0,"civ3_icon_index":17,"civ6_artdef":"RESOURCE_DEER","target_kind":"resource","match":"close","confidence":"high","alternatives":["RESOURCE_FURS"],"fallback":"vanilla_map_resource","reason":"Civ III Game is represented by deer; Civ VI Deer is the closest semantic and visual match."},
+    {"civ3_biq_index":18,"civ3_id":"GOOD_Fish","civ3_name":"Fish","resource_class":"bonus","civ3_resource_class":0,"civ3_icon_index":18,"civ6_artdef":"RESOURCE_FISH","target_kind":"resource","match":"direct","confidence":"high","alternatives":["RESOURCE_CRABS"],"fallback":"vanilla_map_resource","reason":"Same animated marine resource."},
+    {"civ3_biq_index":19,"civ3_id":"GOOD_Cattle","civ3_name":"Cattle","resource_class":"bonus","civ3_resource_class":0,"civ3_icon_index":19,"civ6_artdef":"RESOURCE_CATTLE","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same animated cattle resource."},
+    {"civ3_biq_index":20,"civ3_id":"GOOD_Wheat","civ3_name":"Wheat","resource_class":"bonus","civ3_resource_class":0,"civ3_icon_index":20,"civ6_artdef":"RESOURCE_WHEAT","target_kind":"resource","match":"direct","confidence":"high","alternatives":["RESOURCE_RICE","RESOURCE_MAIZE"],"fallback":"vanilla_map_resource","reason":"Same crop resource."},
+    {"civ3_biq_index":21,"civ3_id":"GOOD_Gold","civ3_name":"Gold","resource_class":"bonus","civ3_resource_class":0,"civ3_icon_index":21,"civ6_artdef":"RESOURCE_GOLD","target_kind":"resource","match":"direct","confidence":"high","alternatives":["RESOURCE_SILVER","RESOURCE_COPPER"],"fallback":"vanilla_map_resource","reason":"Same precious-metal map resource; the installed Civ VI ArtDef exposes CLUTTER_GOLD."},
+    {"civ3_biq_index":22,"civ3_id":"GOOD_Sugar","civ3_name":"Sugar","resource_class":"bonus","civ3_resource_class":0,"civ3_icon_index":24,"civ6_artdef":"RESOURCE_SUGAR","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same sugar-cane resource."},
+    {"civ3_biq_index":23,"civ3_id":"GOOD_Bananas","civ3_name":"Tropical Fruit","resource_class":"bonus","civ3_resource_class":0,"civ3_icon_index":22,"civ6_artdef":"RESOURCE_BANANAS","target_kind":"resource","match":"close","confidence":"high","alternatives":["RESOURCE_CITRUS"],"fallback":"vanilla_map_resource","reason":"Civ III's internal identity is Bananas and its displayed Tropical Fruit is best represented by Civ VI Bananas."},
+    {"civ3_biq_index":24,"civ3_id":"GOOD_Oasis","civ3_name":"Oasis","resource_class":"bonus","civ3_resource_class":0,"civ3_icon_index":23,"civ6_artdef":"FEATURE_OASIS","target_kind":"feature","match":"close","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Civ VI models Oasis as a feature rather than a resource; its map art is the direct visual equivalent."},
+    {"civ3_biq_index":25,"civ3_id":"GOOD_Tobacco","civ3_name":"Tobacco","resource_class":"bonus","civ3_resource_class":0,"civ3_icon_index":25,"civ6_artdef":"RESOURCE_TOBACCO","target_kind":"resource","match":"direct","confidence":"high","alternatives":[],"fallback":"vanilla_map_resource","reason":"Same plantation resource."}
+  ]
+}

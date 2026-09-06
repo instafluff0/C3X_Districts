@@ -1,0 +1,28 @@
+{
+  "schema": "c3x.source_combat_effect_texture_mapping.v0",
+  "source_root": "Base/Platforms/Windows/BLPs/SHARED_DATA",
+  "textures": [
+    {"source_entry": "TEXTURE_FXt_MuzzleFlash", "asset_id": "effect/combat/muzzle/flash_primary", "usage": "additive_sprite_candidate"},
+    {"source_entry": "TEXTURE_FXt_MuzzleFlash_02", "asset_id": "effect/combat/muzzle/flash_secondary", "usage": "additive_sprite_candidate"},
+    {"source_entry": "TEXTURE_FXt_MuzzleFlash_03", "asset_id": "effect/combat/muzzle/flash_artillery", "usage": "additive_sprite_candidate"},
+    {"source_entry": "TEXTURE_FXt_ArtilleryShell", "asset_id": "effect/combat/projectile/artillery_shell", "usage": "color_alpha_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_missile", "asset_id": "effect/combat/projectile/missile", "usage": "color_alpha_sprite_candidate"},
+    {"source_entry": "TEXTURE_FXt_Smoke_Trail_02", "asset_id": "effect/combat/projectile/smoke_trail", "usage": "color_alpha_sprite_candidate"},
+    {"source_entry": "TEXTURE_FXt_Stylized_Expl_Fireball", "asset_id": "effect/combat/explosion/fireball_sheet", "usage": "premultiplied_color_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_ExplosionRed_04_PreMultAlpha", "asset_id": "effect/combat/explosion/red_premultiplied", "usage": "premultiplied_color_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_ExplosionRed_03_ForkEmissive4", "asset_id": "effect/combat/explosion/emissive_forks", "usage": "additive_sprite_candidate"},
+    {"source_entry": "TEXTURE_fx_explosion002_center01", "asset_id": "effect/combat/explosion/hot_center", "usage": "additive_sprite_candidate"},
+    {"source_entry": "TEXTURE_fx_expl_smokesheet2", "asset_id": "effect/combat/explosion/smoke_sheet", "usage": "color_alpha_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_Debris01", "asset_id": "effect/combat/debris/general", "usage": "color_alpha_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_DustPage", "asset_id": "effect/combat/impact/ground_dust", "usage": "color_alpha_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_Crater_Waves", "asset_id": "effect/combat/impact/water_wave", "usage": "color_alpha_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_Crater_Waves_a01", "asset_id": "effect/combat/impact/water_wave_mask", "usage": "linear_mask_candidate"},
+    {"source_entry": "TEXTURE_FX_NukeSphere_rgb", "asset_id": "effect/combat/nuclear/sphere_color", "usage": "additive_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_NukeSphere_a_01", "asset_id": "effect/combat/nuclear/sphere_mask", "usage": "linear_mask_candidate"},
+    {"source_entry": "TEXTURE_FX_Nuke_Anime_rgb", "asset_id": "effect/combat/nuclear/cloud_color", "usage": "emissive_color_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_Nuke_Anime_a_inner", "asset_id": "effect/combat/nuclear/cloud_inner_mask", "usage": "linear_mask_candidate"},
+    {"source_entry": "TEXTURE_FX_Nuke_Anime_top_rgb", "asset_id": "effect/combat/nuclear/cloud_top_color", "usage": "emissive_color_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_Nuke_Flames", "asset_id": "effect/combat/nuclear/flames", "usage": "premultiplied_color_sprite_candidate"},
+    {"source_entry": "TEXTURE_FX_NukeScorchMark", "asset_id": "effect/combat/nuclear/scorch", "usage": "decal_candidate"}
+  ]
+}

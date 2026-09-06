@@ -1,0 +1,44 @@
+{
+  "schema": "c3x.visual_reference_catalog.v0",
+  "references": [
+    {
+      "id": "c3x.generated.fixture_matrix",
+      "kind": "structural_regression",
+      "source": "generated C3X standalone renderer output",
+      "availability": "generated_by_matrix",
+      "comparison_mode": "exact_hash",
+      "time_basis": "exact_render_state",
+      "purpose": "Byte-stable regression checks for identical scene, catalog, pack, viewport, hour, and season inputs."
+    },
+    {
+      "id": "civ6.vanilla.art_direction",
+      "kind": "art_direction",
+      "source": "locally supplied vanilla Civilization VI screenshots",
+      "availability": "local_untracked_optional",
+      "comparison_mode": "qualitative",
+      "time_basis": "lighting_phase_only",
+      "phases": [
+        "midnight",
+        "sunrise",
+        "noon",
+        "sunset"
+      ],
+      "purpose": "Lighting, palette, terrain treatment, and readability guidance; never a cross-engine pixel-equality baseline."
+    },
+    {
+      "id": "civ6.alternate_skin.art_direction",
+      "kind": "art_direction",
+      "source": "locally supplied permissioned alternate-skin screenshots",
+      "availability": "local_untracked_optional",
+      "comparison_mode": "qualitative",
+      "time_basis": "lighting_phase_only",
+      "phases": [
+        "midnight",
+        "sunrise",
+        "noon",
+        "sunset"
+      ],
+      "purpose": "Optional alternate palette and terrain-style guidance with provenance and permission recorded outside runtime packs."
+    }
+  ]
+}

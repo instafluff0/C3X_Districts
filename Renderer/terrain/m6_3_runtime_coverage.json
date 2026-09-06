@@ -1,0 +1,26 @@
+{
+  "schema": "c3x.m6_3_runtime_coverage.v0",
+  "definition_file": "Renderer/default.custom_rendering.txt",
+  "terrain_types": [
+    {"id": "desert", "disposition": "mapped", "logical_asset": "terrain/desert/base"},
+    {"id": "plains", "disposition": "mapped", "logical_asset": "terrain/plains/base"},
+    {"id": "grassland", "disposition": "mapped", "logical_asset": "terrain/grassland/base"},
+    {"id": "tundra", "disposition": "mapped", "logical_asset": "terrain/tundra/base"},
+    {"id": "flood_plain", "disposition": "vanilla_fallback", "reason": "complete base-and-feature composition is not normalized"},
+    {"id": "hills", "disposition": "vanilla_fallback", "reason": "complete relief geometry and material dependencies are not normalized"},
+    {"id": "mountains", "disposition": "vanilla_fallback", "reason": "complete relief geometry and material dependencies are not normalized"},
+    {"id": "forest", "disposition": "vanilla_fallback", "reason": "complete feature geometry and placement dependencies are not normalized"},
+    {"id": "jungle", "disposition": "vanilla_fallback", "reason": "complete feature geometry and placement dependencies are not normalized"},
+    {"id": "marsh", "disposition": "vanilla_fallback", "reason": "complete feature geometry and placement dependencies are not normalized"},
+    {"id": "volcano", "disposition": "vanilla_fallback", "reason": "complete relief geometry and placement dependencies are not normalized"},
+    {"id": "coast", "disposition": "mapped", "logical_asset": "terrain/coast/base"},
+    {"id": "sea", "disposition": "mapped", "logical_asset": "terrain/sea/base"},
+    {"id": "ocean", "disposition": "vanilla_fallback", "reason": "installed material binding remains ambiguous"}
+  ],
+  "other_families": [
+    {"id": "transitions", "disposition": "mapped", "strategy": "deterministic hard material boundary; unsupported authored blends remain transparent"},
+    {"id": "polar_ice", "disposition": "vanilla_fallback", "reason": "complete geometry and water-edge dependencies are not normalized"},
+    {"id": "landmarks", "disposition": "vanilla_fallback", "reason": "exact landmark selectors and complete replacement dependencies are not normalized"}
+  ],
+  "retained_layers": ["roads", "railroads", "rivers", "resources", "cities", "units", "borders", "fog", "labels", "selection", "minimap", "hud", "ui"]
+}

@@ -1,0 +1,42 @@
+{
+  "schema": "c3x.source_dedicated_pipeline.v0",
+  "pipeline_id": "city",
+  "category": "cities",
+  "composition_mode": "generated_compound_city",
+  "runtime_namespace": "city/",
+  "graph_roots": [
+    {"document_prefix": "CityGenerators", "root_collection": "Generator"},
+    {"document_prefix": "CityGenerators", "root_collection": "GroundingMaterials"},
+    {"document_prefix": "CityGenerators", "root_collection": "GeneratorBlockList"},
+    {"document_prefix": "Cultures", "root_collection": "Culture"},
+    {"document_prefix": "Cities", "root_collection": "City", "role": "strategic_view_only"}
+  ],
+  "selector_axes": [
+    "civilization",
+    "culture_group",
+    "era",
+    "size",
+    "owner",
+    "walls",
+    "capital",
+    "style"
+  ],
+  "stages": [
+    {"id": "source_graph", "adapter": "city_artdef_graph"},
+    {"id": "components", "adapter": "compound_landmark_importer"},
+    {"id": "composition", "adapter": "deterministic_city_composer"},
+    {"id": "ambient", "adapter": "city_ambient_attachment_compiler"},
+    {"id": "lab_preview", "adapter": "city_matrix_preview"}
+  ],
+  "normalized_outputs": [
+    "component_models",
+    "grounding_materials",
+    "composition_recipes",
+    "owner_color_bindings",
+    "ambient_attachments",
+    "city_matrix_fixtures"
+  ],
+  "retained_native_layers": ["labels", "population_display", "production_display", "hud"],
+  "forbidden_source_roots": ["Units", "UnitMemberTypes", "UnitMovementTypes"],
+  "runtime_integration": "not_enabled"
+}

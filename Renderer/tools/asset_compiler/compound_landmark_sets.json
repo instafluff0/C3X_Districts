@@ -1,0 +1,87 @@
+{
+  "schema": "c3x.source_compound_landmark_mapping.v0",
+  "packages": [
+    {
+      "source_package": "Base/Platforms/Windows/BLPs/landmarks/tilebases.blp",
+      "shared_data": "Base/Platforms/Windows/BLPs/SHARED_DATA",
+      "source_units_per_tile": 100.0,
+      "assets": [
+        {
+          "source_entry": "FEATURE_Oasis_OB",
+          "asset_id": "terrain/feature/oasis"
+        },
+        {
+          "source_entry": "RES_Fish",
+          "asset_id": "resource/fish"
+        },
+        {
+          "source_entry": "RES_Whale_01",
+          "asset_id": "resource/whales"
+        }
+      ]
+    },
+    {
+      "source_package": "Base/Platforms/Windows/BLPs/environment/clutter.blp",
+      "shared_data": "Base/Platforms/Windows/BLPs/SHARED_DATA",
+      "source_units_per_tile": 12.0,
+      "assets": [
+        {
+          "source_entry": "RES_Elephant_01",
+          "asset_id": "resource/elephants/variant_01"
+        },
+        {
+          "source_entry": "RES_Elephant_02",
+          "asset_id": "resource/elephants/variant_02"
+        },
+        {
+          "source_entry": "RES_Silk_01",
+          "asset_id": "resource/silk/variant_01"
+        },
+        {
+          "source_entry": "RES_Silk_02",
+          "asset_id": "resource/silk/variant_02"
+        },
+        {
+          "source_entry": "RES_Silk_03",
+          "asset_id": "resource/silk/variant_03"
+        },
+        {
+          "source_entry": "RES_Silk_04",
+          "asset_id": "resource/silk/variant_04"
+        },
+        {
+          "source_entry": "RES_Silk_05",
+          "asset_id": "resource/silk/variant_05"
+        },
+        {
+          "source_entry": "RES_Silk_Snow_01",
+          "asset_id": "resource/silk/snow_variant_01"
+        },
+        {
+          "source_entry": "RES_Silk_Snow_02",
+          "asset_id": "resource/silk/snow_variant_02"
+        },
+        {
+          "source_entry": "RES_Silk_Snow_03",
+          "asset_id": "resource/silk/snow_variant_03"
+        },
+        {
+          "source_entry": "RES_Silk_Snow_04",
+          "asset_id": "resource/silk/snow_variant_04"
+        },
+        {
+          "source_entry": "RES_Silk_Snow_05",
+          "asset_id": "resource/silk/snow_variant_05"
+        },
+        {
+          "source_entry": "Boulder_Clump_Snow_01",
+          "asset_id": "resource/shared/snow_boulder_clump_01"
+        },
+        {
+          "source_entry": "Boulder_Clump_Snow_02",
+          "asset_id": "resource/shared/snow_boulder_clump_02"
+        }
+      ]
+    }
+  ]
+}

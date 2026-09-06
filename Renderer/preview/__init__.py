@@ -1,0 +1,2 @@
+"""Standalone renderer preview harness."""
+

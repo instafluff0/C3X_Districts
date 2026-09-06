@@ -1,0 +1,128 @@
+{
+  "schema": "c3x.source_city_strategy.v0",
+  "proof_components_per_pool": 4,
+  "eras": [
+    {"civ3_era": 0, "id": "ancient", "source_art_era": "ARTERA_ANCIENT"},
+    {"civ3_era": 1, "id": "medieval", "source_art_era": "ARTERA_CLASSICAL"},
+    {"civ3_era": 2, "id": "industrial", "source_art_era": "ARTERA_INDUSTRIAL"},
+    {"civ3_era": 3, "id": "modern", "source_art_era": "ARTERA_MODERN"}
+  ],
+  "styles": [
+    {
+      "civ3_culture_group": 0,
+      "id": "american",
+      "source_culture_by_era": {
+        "ancient": "AncientWood",
+        "medieval": "SouthAmerican",
+        "industrial": "Colonial",
+        "modern": "ModernGlass"
+      }
+    },
+    {
+      "civ3_culture_group": 1,
+      "id": "european",
+      "source_culture_by_era": {
+        "ancient": "AncientEarth",
+        "medieval": "DEFAULT",
+        "industrial": "RowHouse",
+        "modern": "ModernGlass"
+      }
+    },
+    {
+      "civ3_culture_group": 2,
+      "id": "mediterranean",
+      "source_culture_by_era": {
+        "ancient": "DEFAULT",
+        "medieval": "Mediterranean",
+        "industrial": "Colonial",
+        "modern": "ModernGlass"
+      }
+    },
+    {
+      "civ3_culture_group": 3,
+      "id": "middle_eastern",
+      "source_culture_by_era": {
+        "ancient": "AncientEarth",
+        "medieval": "Mughal",
+        "industrial": "RowHouse",
+        "modern": "ModernGlass"
+      }
+    },
+    {
+      "civ3_culture_group": 4,
+      "id": "asian",
+      "source_culture_by_era": {
+        "ancient": "AncientWood",
+        "medieval": "EastAsian",
+        "industrial": "RowHouse",
+        "modern": "ModernGlass"
+      }
+    }
+  ],
+  "runtime": {
+    "size_recipes": [
+      {
+        "id": "town",
+        "population_min": 1,
+        "population_max": 6,
+        "component_count": 4,
+        "footprint_radius_tiles": 0.31,
+        "height_scale": 0.92
+      },
+      {
+        "id": "city",
+        "population_min": 7,
+        "population_max": 12,
+        "component_count": 7,
+        "footprint_radius_tiles": 0.39,
+        "height_scale": 1.0
+      },
+      {
+        "id": "metropolis",
+        "population_min": 13,
+        "population_max": null,
+        "component_count": 11,
+        "footprint_radius_tiles": 0.46,
+        "height_scale": 1.08
+      }
+    ],
+    "selection": {
+      "seed_inputs": ["world_seed", "city_id", "map_x", "map_y"],
+      "slot_hash": "sha256-v0",
+      "repeat_policy": "exhaust_pool_before_repeat",
+      "transition_policy": "keep_slot_angles_stable_across_population_changes"
+    },
+    "owner_color": {
+      "policy": "authored_tint_channels_and_banners_only",
+      "fallback": "neutral_material"
+    },
+    "capital": {
+      "composition": "additive_center_slot",
+      "source_target": "palace_or_civic_centerpiece",
+      "native_icon_policy": "retain_until_3d_capital_readability_is_approved"
+    },
+    "walls": {
+      "composition": "separate_perimeter_kit",
+      "fit": "city_footprint",
+      "native_policy": "retain_until_per-era_wall_matrix_is_approved"
+    },
+    "lighting": {
+      "environment": "shared_c3x_environment",
+      "emissive_activation": "night",
+      "emissive_missing_policy": "non-emissive",
+      "attachment_policy": "preserve_exact_socket_bones_but_require_resolved_generic_resources",
+      "animated_effect_owner": "M7.5"
+    },
+    "retained_native_layers": [
+      "labels",
+      "population_display",
+      "production_display",
+      "airport",
+      "harbor",
+      "barracks",
+      "spy_agency",
+      "embassy",
+      "hud"
+    ]
+  }
+}

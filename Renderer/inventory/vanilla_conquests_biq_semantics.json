@@ -1,0 +1,4050 @@
+{
+  "animation_bindings": [
+    {
+      "art_folder": "King Arab",
+      "key": "ANIMNAME_PRTO_Abu",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "AEGIS Cruiser",
+      "key": "ANIMNAME_PRTO_AEGIS_Cruiser",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Greek",
+      "key": "ANIMNAME_PRTO_Alexander",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Ancient Cavalry",
+      "key": "ANIMNAME_PRTO_Ancient_Cavalry",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "ansar warrior",
+      "key": "ANIMNAME_PRTO_Ansar_Warrior",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Archer",
+      "key": "ANIMNAME_PRTO_Archer",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Army Ancient Times",
+      "key": "ANIMNAME_PRTO_Army_ERAS_Ancient_Times",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Army Industrial Ages",
+      "key": "ANIMNAME_PRTO_Army_ERAS_Industrial_Age",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Army Middle Ages",
+      "key": "ANIMNAME_PRTO_Army_ERAS_Middle_Ages",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Army Modern Times",
+      "key": "ANIMNAME_PRTO_Army_ERAS_Modern_Era",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Artillery",
+      "key": "ANIMNAME_PRTO_Artillery",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Battleship",
+      "key": "ANIMNAME_PRTO_Battleship",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Berserk",
+      "key": "ANIMNAME_PRTO_Berserk",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King German",
+      "key": "ANIMNAME_PRTO_Bismarck",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Bomber",
+      "key": "ANIMNAME_PRTO_Bomber",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Bowman",
+      "key": "ANIMNAME_PRTO_Bowman",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Celtic",
+      "key": "ANIMNAME_PRTO_Brennus",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Roman",
+      "key": "ANIMNAME_PRTO_Caesar",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Cannon",
+      "key": "ANIMNAME_PRTO_Cannon",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Caravel",
+      "key": "ANIMNAME_PRTO_Caravel",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Carrack",
+      "key": "ANIMNAME_PRTO_Carrack",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Carrier",
+      "key": "ANIMNAME_PRTO_Carrier",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Catapult",
+      "key": "ANIMNAME_PRTO_Catapult",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Russian",
+      "key": "ANIMNAME_PRTO_Catherine",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Cavalry",
+      "key": "ANIMNAME_PRTO_Cavalry",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "chariot",
+      "key": "ANIMNAME_PRTO_Chariot",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Austria",
+      "key": "ANIMNAME_PRTO_Charles_V",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Chasquis Scout",
+      "key": "ANIMNAME_PRTO_Chasquis_Scout",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Egyptian",
+      "key": "ANIMNAME_PRTO_Cleopatra",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Conquistador",
+      "key": "ANIMNAME_PRTO_Conquistador",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Cossack",
+      "key": "ANIMNAME_PRTO_Cossack",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Cruise Missile",
+      "key": "ANIMNAME_PRTO_Cruise_Missile",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Cruiser",
+      "key": "ANIMNAME_PRTO_Cruiser",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Crusader",
+      "key": "ANIMNAME_PRTO_Crusader",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Curragh",
+      "key": "ANIMNAME_PRTO_Curragh",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Destroyer",
+      "key": "ANIMNAME_PRTO_Destroyer",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Dromon",
+      "key": "ANIMNAME_PRTO_Dromon",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King English",
+      "key": "ANIMNAME_PRTO_Elizabeth",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Enkidu Warrior",
+      "key": "ANIMNAME_PRTO_Enkidu_Warrior",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Explorer",
+      "key": "ANIMNAME_PRTO_Explorer",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "F-15",
+      "key": "ANIMNAME_PRTO_F-15",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Fighter",
+      "key": "ANIMNAME_PRTO_Fighter",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Flak",
+      "key": "ANIMNAME_PRTO_Flak",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Frigate",
+      "key": "ANIMNAME_PRTO_Frigate",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Galleon",
+      "key": "ANIMNAME_PRTO_Galleon",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Galley",
+      "key": "ANIMNAME_PRTO_Galley",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "gallic swordsman",
+      "key": "ANIMNAME_PRTO_Gallic_Swordsman",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Indian",
+      "key": "ANIMNAME_PRTO_Gandhi",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Sumeria",
+      "key": "ANIMNAME_PRTO_Gilgamesh",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Guerilla",
+      "key": "ANIMNAME_PRTO_Guerilla",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Babylonian",
+      "key": "ANIMNAME_PRTO_Hammurabi",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Carthaginian",
+      "key": "ANIMNAME_PRTO_Hannibal",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Helicopter",
+      "key": "ANIMNAME_PRTO_Helicopter",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Portugal",
+      "key": "ANIMNAME_PRTO_Henry",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Iroquois",
+      "key": "ANIMNAME_PRTO_Hiawatha",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Hoplite",
+      "key": "ANIMNAME_PRTO_Hoplite",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Horseman",
+      "key": "ANIMNAME_PRTO_Horseman",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Hwacha",
+      "key": "ANIMNAME_PRTO_Hwacha",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "ICBM",
+      "key": "ANIMNAME_PRTO_ICBM",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Immortals",
+      "key": "ANIMNAME_PRTO_Immortals",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Impi",
+      "key": "ANIMNAME_PRTO_Impi",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Infantry",
+      "key": "ANIMNAME_PRTO_Infantry",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Ironclad",
+      "key": "ANIMNAME_PRTO_Ironclad",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Spanish",
+      "key": "ANIMNAME_PRTO_Isabella",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Jaguar Warrior",
+      "key": "ANIMNAME_PRTO_Jaguar_Warrior",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Javelin Thrower",
+      "key": "ANIMNAME_PRTO_Javelin_Thrower",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Jet Fighter",
+      "key": "ANIMNAME_PRTO_Jet_Fighter",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King French",
+      "key": "ANIMNAME_PRTO_Joan",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Keshik",
+      "key": "ANIMNAME_PRTO_Keshik",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King",
+      "key": "ANIMNAME_PRTO_King",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Knight",
+      "key": "ANIMNAME_PRTO_Knight",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Leader Ancient Times",
+      "key": "ANIMNAME_PRTO_Leader_ERAS_Ancient_Times",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Leader Industrial Ages",
+      "key": "ANIMNAME_PRTO_Leader_ERAS_Industrial_Age",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Leader Middle Ages",
+      "key": "ANIMNAME_PRTO_Leader_ERAS_Middle_Ages",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Leader Modern Times",
+      "key": "ANIMNAME_PRTO_Leader_ERAS_Modern_Era",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "SciLeader",
+      "key": "ANIMNAME_PRTO_Leader_SCI",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Legionary",
+      "key": "ANIMNAME_PRTO_Legionary",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Libyan Mercenary",
+      "key": "ANIMNAME_PRTO_Libyan_Mercenary",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King American",
+      "key": "ANIMNAME_PRTO_Lincoln",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Longbowman",
+      "key": "ANIMNAME_PRTO_Longbowman",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Man-O-War",
+      "key": "ANIMNAME_PRTO_Man-O-War",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Chinese",
+      "key": "ANIMNAME_PRTO_Mao",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Marine",
+      "key": "ANIMNAME_PRTO_Marine",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Mech Infantry",
+      "key": "ANIMNAME_PRTO_Mech_Infantry",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Medieval Infantry",
+      "key": "ANIMNAME_PRTO_Medieval_Infantry",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Mobile SAM",
+      "key": "ANIMNAME_PRTO_Mobile_SAM",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Modern Armor",
+      "key": "ANIMNAME_PRTO_Modern_Armor",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Aztec",
+      "key": "ANIMNAME_PRTO_Montezuma",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Mounted Warrior",
+      "key": "ANIMNAME_PRTO_Mounted_Warrior",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Hatti",
+      "key": "ANIMNAME_PRTO_Mursilis",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Musketeer",
+      "key": "ANIMNAME_PRTO_Musketeer",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Musketman",
+      "key": "ANIMNAME_PRTO_Musketman",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Nuclear Submarine",
+      "key": "ANIMNAME_PRTO_Nuclear_Submarine",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Tactical Nuke",
+      "key": "ANIMNAME_PRTO_NUKE",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Ottoman",
+      "key": "ANIMNAME_PRTO_Osman",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Incan",
+      "key": "ANIMNAME_PRTO_Pachacuti",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Panzer",
+      "key": "ANIMNAME_PRTO_Panzer",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Paratrooper",
+      "key": "ANIMNAME_PRTO_Paratrooper",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Pikeman",
+      "key": "ANIMNAME_PRTO_Pikeman",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Princess",
+      "key": "ANIMNAME_PRTO_Princess",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Privateer",
+      "key": "ANIMNAME_PRTO_Privateer",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Radar Artillery",
+      "key": "ANIMNAME_PRTO_Radar_Artillery",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Viking",
+      "key": "ANIMNAME_PRTO_Ragnar",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Rider",
+      "key": "ANIMNAME_PRTO_Rider",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Rifleman",
+      "key": "ANIMNAME_PRTO_Rifleman",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Samurai",
+      "key": "ANIMNAME_PRTO_Samurai",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Scout",
+      "key": "ANIMNAME_PRTO_Scout",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Settler",
+      "key": "ANIMNAME_PRTO_Settler",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Settler Modern Times",
+      "key": "ANIMNAME_PRTO_Settler_ERAS_Industrial_Age",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Settler Modern Times",
+      "key": "ANIMNAME_PRTO_Settler_ERAS_Modern_Era",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Zulu",
+      "key": "ANIMNAME_PRTO_Shaka",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Sipahi",
+      "key": "ANIMNAME_PRTO_Sipahi",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Mayan",
+      "key": "ANIMNAME_PRTO_Smoke-Jaguar",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Spearman",
+      "key": "ANIMNAME_PRTO_Spearman",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Stealth Bomber",
+      "key": "ANIMNAME_PRTO_Stealth_Bomber",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Stealth Fighter",
+      "key": "ANIMNAME_PRTO_Stealth_Fighter",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Submarine",
+      "key": "ANIMNAME_PRTO_Submarine",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Swiss Mercenary",
+      "key": "ANIMNAME_PRTO_Swiss_Mercenary",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Swordsman",
+      "key": "ANIMNAME_PRTO_Swordsman",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Tank",
+      "key": "ANIMNAME_PRTO_Tank",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Mongol",
+      "key": "ANIMNAME_PRTO_Temujin",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Byzantines",
+      "key": "ANIMNAME_PRTO_Theodora",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Three Man Chariot",
+      "key": "ANIMNAME_PRTO_Three_Man_Chariot",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Japanese",
+      "key": "ANIMNAME_PRTO_Tokugawa",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "TOW Infantry",
+      "key": "ANIMNAME_PRTO_TOW_Infantry",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Transport",
+      "key": "ANIMNAME_PRTO_Transport",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Trebuchet",
+      "key": "ANIMNAME_PRTO_Trebuchet",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Korean",
+      "key": "ANIMNAME_PRTO_Wang",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "War Chariot",
+      "key": "ANIMNAME_PRTO_War_Chariot",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "War Elephant",
+      "key": "ANIMNAME_PRTO_War_Elephant",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Warrior",
+      "key": "ANIMNAME_PRTO_Warrior",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Netherlands",
+      "key": "ANIMNAME_PRTO_William_of_Orange",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Worker",
+      "key": "ANIMNAME_PRTO_Worker",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Worker Modern Times",
+      "key": "ANIMNAME_PRTO_Worker_ERAS_Industrial_Age",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Worker Modern Times",
+      "key": "ANIMNAME_PRTO_Worker_ERAS_Modern_Era",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "Enslaved Worker",
+      "key": "ANIMNAME_PRTO_Worker_SLAVE",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "WWII Paratrooper",
+      "key": "ANIMNAME_PRTO_WWII_Paratrooper",
+      "source_layer": "conquests"
+    },
+    {
+      "art_folder": "King Persian",
+      "key": "ANIMNAME_PRTO_Xerxes",
+      "source_layer": "conquests"
+    }
+  ],
+  "city_selectors": {
+    "additional_states": [
+      "walled",
+      "destroyed",
+      "airport",
+      "harbor",
+      "barracks",
+      "spy_agency",
+      "capital",
+      "embassy"
+    ],
+    "culture_groups": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "eras": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "sizes": [
+      "town",
+      "city",
+      "metropolis"
+    ]
+  },
+  "civilizations": [
+    {
+      "biq_index": 0,
+      "civilopedia_entry": "RACE_BARBARIANS",
+      "culture_group": -1,
+      "king_unit": -1,
+      "name": "A Barbarian Chiefdom"
+    },
+    {
+      "biq_index": 1,
+      "civilopedia_entry": "RACE_ROMANS",
+      "culture_group": 2,
+      "king_unit": 82,
+      "name": "Rome"
+    },
+    {
+      "biq_index": 2,
+      "civilopedia_entry": "RACE_EGYPTIANS",
+      "culture_group": 2,
+      "king_unit": 87,
+      "name": "Egypt"
+    },
+    {
+      "biq_index": 3,
+      "civilopedia_entry": "RACE_GREEKS",
+      "culture_group": 2,
+      "king_unit": 81,
+      "name": "Greece"
+    },
+    {
+      "biq_index": 4,
+      "civilopedia_entry": "RACE_BABYLON",
+      "culture_group": 3,
+      "king_unit": 78,
+      "name": "Babylon"
+    },
+    {
+      "biq_index": 5,
+      "civilopedia_entry": "RACE_GERMANS",
+      "culture_group": 1,
+      "king_unit": 80,
+      "name": "Germany"
+    },
+    {
+      "biq_index": 6,
+      "civilopedia_entry": "RACE_RUSSIAN",
+      "culture_group": 1,
+      "king_unit": 89,
+      "name": "Russia"
+    },
+    {
+      "biq_index": 7,
+      "civilopedia_entry": "RACE_CHINESE",
+      "culture_group": 4,
+      "king_unit": 79,
+      "name": "China"
+    },
+    {
+      "biq_index": 8,
+      "civilopedia_entry": "RACE_AMERICAN",
+      "culture_group": 0,
+      "king_unit": 77,
+      "name": "America"
+    },
+    {
+      "biq_index": 9,
+      "civilopedia_entry": "RACE_JAPANESE",
+      "culture_group": 4,
+      "king_unit": 97,
+      "name": "Japan"
+    },
+    {
+      "biq_index": 10,
+      "civilopedia_entry": "RACE_FRENCH",
+      "culture_group": 1,
+      "king_unit": 98,
+      "name": "France"
+    },
+    {
+      "biq_index": 11,
+      "civilopedia_entry": "RACE_INDIAN",
+      "culture_group": 4,
+      "king_unit": 94,
+      "name": "India"
+    },
+    {
+      "biq_index": 12,
+      "civilopedia_entry": "RACE_PERSIAN",
+      "culture_group": 3,
+      "king_unit": 83,
+      "name": "Persia"
+    },
+    {
+      "biq_index": 13,
+      "civilopedia_entry": "RACE_AZTECS",
+      "culture_group": 0,
+      "king_unit": 86,
+      "name": "Aztecs"
+    },
+    {
+      "biq_index": 14,
+      "civilopedia_entry": "RACE_ZULU",
+      "culture_group": 3,
+      "king_unit": 85,
+      "name": "Zululand"
+    },
+    {
+      "biq_index": 15,
+      "civilopedia_entry": "RACE_IROQUOIS",
+      "culture_group": 0,
+      "king_unit": 84,
+      "name": "Iroquois"
+    },
+    {
+      "biq_index": 16,
+      "civilopedia_entry": "RACE_ENGLISH",
+      "culture_group": 1,
+      "king_unit": 88,
+      "name": "England"
+    },
+    {
+      "biq_index": 17,
+      "civilopedia_entry": "RACE_Mongols",
+      "culture_group": 4,
+      "king_unit": 93,
+      "name": "Mongols"
+    },
+    {
+      "biq_index": 18,
+      "civilopedia_entry": "RACE_Spanish",
+      "culture_group": 1,
+      "king_unit": 100,
+      "name": "Spain"
+    },
+    {
+      "biq_index": 19,
+      "civilopedia_entry": "RACE_Vikings",
+      "culture_group": 1,
+      "king_unit": 95,
+      "name": "Scandinavia"
+    },
+    {
+      "biq_index": 20,
+      "civilopedia_entry": "RACE_Ottomans",
+      "culture_group": 3,
+      "king_unit": 92,
+      "name": "Ottomans"
+    },
+    {
+      "biq_index": 21,
+      "civilopedia_entry": "RACE_Celts",
+      "culture_group": 1,
+      "king_unit": 96,
+      "name": "Celts"
+    },
+    {
+      "biq_index": 22,
+      "civilopedia_entry": "RACE_Arabs",
+      "culture_group": 3,
+      "king_unit": 90,
+      "name": "Arabia"
+    },
+    {
+      "biq_index": 23,
+      "civilopedia_entry": "RACE_Carthaginians",
+      "culture_group": 2,
+      "king_unit": 91,
+      "name": "Carthage"
+    },
+    {
+      "biq_index": 24,
+      "civilopedia_entry": "RACE_Koreans",
+      "culture_group": 4,
+      "king_unit": 99,
+      "name": "Korea"
+    },
+    {
+      "biq_index": 25,
+      "civilopedia_entry": "RACE_SUMERIA",
+      "culture_group": 3,
+      "king_unit": 104,
+      "name": "Sumeria"
+    },
+    {
+      "biq_index": 26,
+      "civilopedia_entry": "RACE_HATTI",
+      "culture_group": 3,
+      "king_unit": 103,
+      "name": "Hittites"
+    },
+    {
+      "biq_index": 27,
+      "civilopedia_entry": "RACE_DUTCH",
+      "culture_group": 1,
+      "king_unit": 108,
+      "name": "Netherlands"
+    },
+    {
+      "biq_index": 28,
+      "civilopedia_entry": "RACE_PORTUGAL",
+      "culture_group": 1,
+      "king_unit": 105,
+      "name": "Portugal"
+    },
+    {
+      "biq_index": 29,
+      "civilopedia_entry": "RACE_BYZANTINES",
+      "culture_group": 2,
+      "king_unit": 112,
+      "name": "Byzantines"
+    },
+    {
+      "biq_index": 30,
+      "civilopedia_entry": "RACE_INCANS",
+      "culture_group": 0,
+      "king_unit": 110,
+      "name": "Inca"
+    },
+    {
+      "biq_index": 31,
+      "civilopedia_entry": "RACE_MAYANS",
+      "culture_group": 0,
+      "king_unit": 111,
+      "name": "Maya"
+    }
+  ],
+  "counts": {
+    "animation_bindings": 138,
+    "civilizations": 32,
+    "improvements_and_wonders": 83,
+    "primary_unit_types": 124,
+    "prto_records_including_strategy_rows": 141,
+    "resources": 26,
+    "terrain_types": 14
+  },
+  "improvements_and_wonders": [
+    {
+      "biq_index": 0,
+      "civilopedia_entry": "BLDG_Palace",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Palace",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 1,
+      "civilopedia_entry": "BLDG_Barracks",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Barracks",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 2,
+      "civilopedia_entry": "BLDG_Granary",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Granary",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 3,
+      "civilopedia_entry": "BLDG_Temple",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Temple",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 4,
+      "civilopedia_entry": "BLDG_Marketplace",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Marketplace",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 5,
+      "civilopedia_entry": "BLDG_Library",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Library",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 6,
+      "civilopedia_entry": "BLDG_Courthouse",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Courthouse",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 7,
+      "civilopedia_entry": "BLDG_Walls",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Walls",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 8,
+      "civilopedia_entry": "BLDG_Aqueduct",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Aqueduct",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 9,
+      "civilopedia_entry": "BLDG_Bank",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Bank",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 10,
+      "civilopedia_entry": "BLDG_Cathedral",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Cathedral",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 11,
+      "civilopedia_entry": "BLDG_University",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "University",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 12,
+      "civilopedia_entry": "BLDG_Colosseum",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Colosseum",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 13,
+      "civilopedia_entry": "BLDG_Factory",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Factory",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 14,
+      "civilopedia_entry": "BLDG_Manufacturing_Plant",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Manufacturing Plant",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 15,
+      "civilopedia_entry": "BLDG_Recycling_Center",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Recycling Center",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 16,
+      "civilopedia_entry": "BLDG_Coal_Plant",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Coal Plant",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 17,
+      "civilopedia_entry": "BLDG_Hydro_Plant",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Hydro Plant",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 18,
+      "civilopedia_entry": "BLDG_Nuclear_Plant",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Nuclear Plant",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 19,
+      "civilopedia_entry": "BLDG_Hospital",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Hospital",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 20,
+      "civilopedia_entry": "BLDG_Lab",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Research Lab",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 21,
+      "civilopedia_entry": "BLDG_Mass_Transit_System",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Mass Transit System",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 22,
+      "civilopedia_entry": "BLDG_SAM_Missile_Battery",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SAM Missile Battery",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 23,
+      "civilopedia_entry": "BLDG_Coastal_Fortress",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Coastal Fortress",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 24,
+      "civilopedia_entry": "BLDG_Solar_Plant",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Solar Plant",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 25,
+      "civilopedia_entry": "BLDG_Harbor",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Harbor",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 26,
+      "civilopedia_entry": "BLDG_Offshore_Platform",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Offshore Platform",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 27,
+      "civilopedia_entry": "BLDG_Airport",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Airport",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 28,
+      "civilopedia_entry": "BLDG_Police_Station",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Police Station",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 29,
+      "civilopedia_entry": "BLDG_Wealth",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Wealth",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 30,
+      "civilopedia_entry": "BLDG_Pyramids",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Pyramids",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 31,
+      "civilopedia_entry": "BLDG_Hanging_Gardens",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Hanging Gardens",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 32,
+      "civilopedia_entry": "BLDG_Colossus",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Colossus",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 33,
+      "civilopedia_entry": "BLDG_Lighthouse",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Great Lighthouse",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 34,
+      "civilopedia_entry": "BLDG_Great_Library",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Great Library",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 35,
+      "civilopedia_entry": "BLDG_Oracle",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Oracle",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 36,
+      "civilopedia_entry": "BLDG_Great_Wall",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Great Wall",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 37,
+      "civilopedia_entry": "BLDG_Art_of_War",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Sun Tzu's Art of War",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 38,
+      "civilopedia_entry": "BLDG_Sistine_Chapel",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Sistine Chapel",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 39,
+      "civilopedia_entry": "BLDG_Circumnavigation",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Magellan's Voyage",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 40,
+      "civilopedia_entry": "BLDG_Solar_System",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Copernicus' Observatory",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 41,
+      "civilopedia_entry": "BLDG_Great_Playhouse",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Shakespeare's Theater",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 42,
+      "civilopedia_entry": "BLDG_Inventor's_Workshop",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Leonardo's Workshop",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 43,
+      "civilopedia_entry": "BLDG_Grand_Cathedral",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "JS Bach's Cathedral",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 44,
+      "civilopedia_entry": "BLDG_Great_University",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Newton's University",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 45,
+      "civilopedia_entry": "BLDG_Trading_Company",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Smith's Trading Company",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 46,
+      "civilopedia_entry": "BLDG_Universal_Suffrage",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Universal Suffrage",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 47,
+      "civilopedia_entry": "BLDG_Hoover_Dam",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Hoover Dam",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 48,
+      "civilopedia_entry": "BLDG_Theory_of_Evolution",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Theory of Evolution",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 49,
+      "civilopedia_entry": "BLDG_United_Nations",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The United Nations",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 50,
+      "civilopedia_entry": "BLDG_Manhattan_Project",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Manhattan Project",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 51,
+      "civilopedia_entry": "BLDG_Cure_for_Cancer",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Cure for Cancer",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 52,
+      "civilopedia_entry": "BLDG_Longevity",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Longevity",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 53,
+      "civilopedia_entry": "BLDG_SETI_Program",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "SETI program",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 54,
+      "civilopedia_entry": "BLDG_Epic",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Heroic Epic",
+      "wonder_class": "small"
+    },
+    {
+      "biq_index": 55,
+      "civilopedia_entry": "BLDG_Great_Ironworks",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Iron Works",
+      "wonder_class": "small"
+    },
+    {
+      "biq_index": 56,
+      "civilopedia_entry": "BLDG_Forbidden_Palace",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Forbidden Palace",
+      "wonder_class": "small"
+    },
+    {
+      "biq_index": 57,
+      "civilopedia_entry": "BLDG_Military_Academy",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Military Academy",
+      "wonder_class": "small"
+    },
+    {
+      "biq_index": 58,
+      "civilopedia_entry": "BLDG_Pentagon",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Pentagon",
+      "wonder_class": "small"
+    },
+    {
+      "biq_index": 59,
+      "civilopedia_entry": "BLDG_Wall_Street",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Wall Street",
+      "wonder_class": "small"
+    },
+    {
+      "biq_index": 60,
+      "civilopedia_entry": "BLDG_Apollo_Project",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Apollo Program",
+      "wonder_class": "small"
+    },
+    {
+      "biq_index": 61,
+      "civilopedia_entry": "BLDG_SDI",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Strategic Missile Defense",
+      "wonder_class": "small"
+    },
+    {
+      "biq_index": 62,
+      "civilopedia_entry": "BLDG_Intelligence_Center",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Intelligence Agency",
+      "wonder_class": "small"
+    },
+    {
+      "biq_index": 63,
+      "civilopedia_entry": "BLDG_Battlefield_Medicine",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Battlefield Medicine",
+      "wonder_class": "small"
+    },
+    {
+      "biq_index": 64,
+      "civilopedia_entry": "BLDG_SS_Thrusters",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SS Thrusters",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 65,
+      "civilopedia_entry": "BLDG_SS_Engine",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SS Engine",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 66,
+      "civilopedia_entry": "BLDG_SS_Landing_Docking_Bay",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SS Docking Bay",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 67,
+      "civilopedia_entry": "BLDG_SS_Cockpit",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SS Cockpit",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 68,
+      "civilopedia_entry": "BLDG_SS_Fuel_Cells",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SS Fuel Cells",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 69,
+      "civilopedia_entry": "BLDG_SS_Life_Support_System",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SS Life Support System",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 70,
+      "civilopedia_entry": "BLDG_SS_Stasis_Chamber",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SS Stasis Chamber",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 71,
+      "civilopedia_entry": "BLDG_SS_Storage_Supply",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SS Storage/Supply",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 72,
+      "civilopedia_entry": "BLDG_SS_Planetary_Party_Lounge",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SS Planetary Party Lounge",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 73,
+      "civilopedia_entry": "BLDG_SS_Exterior_Casing",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "SS Exterior Casing",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 74,
+      "civilopedia_entry": "BLDG_Internet",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Internet",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 75,
+      "civilopedia_entry": "BLDG_Civil_Defense",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Civil Defense",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 76,
+      "civilopedia_entry": "BLDG_Stock_Exchange",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Stock Exchange",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 77,
+      "civilopedia_entry": "BLDG_Commercial_Dock",
+      "evidence": "BIQ improvements affect city state; Civ III exposes no per-building map sprite selector",
+      "map_render_classification": "not_map_rendered",
+      "name": "Commercial Dock",
+      "wonder_class": "improvement"
+    },
+    {
+      "biq_index": 78,
+      "civilopedia_entry": "BLDG_Artemis",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Temple of Artemis",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 79,
+      "civilopedia_entry": "BLDG_Zeus",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Statue of Zeus",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 80,
+      "civilopedia_entry": "BLDG_Mausoleum",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "The Mausoleum of Mausollos",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 81,
+      "civilopedia_entry": "BLDG_Knights_Templar",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Knights Templar",
+      "wonder_class": "great"
+    },
+    {
+      "biq_index": 82,
+      "civilopedia_entry": "BLDG_Secret_Police_HQ",
+      "evidence": "BIQ otherChar classifies the record; map placement requires an authoritative C3X Wonder District instance",
+      "map_render_classification": "not_map_rendered_without_c3x_wonder_instance",
+      "name": "Secret Police HQ",
+      "wonder_class": "small"
+    }
+  ],
+  "resources": [
+    {
+      "biq_index": 0,
+      "civilopedia_entry": "GOOD_Horses",
+      "icon_index": 0,
+      "name": "Horses",
+      "resource_class": 2
+    },
+    {
+      "biq_index": 1,
+      "civilopedia_entry": "GOOD_Iron",
+      "icon_index": 1,
+      "name": "Iron",
+      "resource_class": 2
+    },
+    {
+      "biq_index": 2,
+      "civilopedia_entry": "GOOD_Saltpeter",
+      "icon_index": 2,
+      "name": "Saltpeter",
+      "resource_class": 2
+    },
+    {
+      "biq_index": 3,
+      "civilopedia_entry": "GOOD_Coal",
+      "icon_index": 3,
+      "name": "Coal",
+      "resource_class": 2
+    },
+    {
+      "biq_index": 4,
+      "civilopedia_entry": "GOOD_Oil",
+      "icon_index": 4,
+      "name": "Oil",
+      "resource_class": 2
+    },
+    {
+      "biq_index": 5,
+      "civilopedia_entry": "GOOD_Rubber",
+      "icon_index": 5,
+      "name": "Rubber",
+      "resource_class": 2
+    },
+    {
+      "biq_index": 6,
+      "civilopedia_entry": "GOOD_Aluminum",
+      "icon_index": 6,
+      "name": "Aluminum",
+      "resource_class": 2
+    },
+    {
+      "biq_index": 7,
+      "civilopedia_entry": "GOOD_Uranium",
+      "icon_index": 7,
+      "name": "Uranium",
+      "resource_class": 2
+    },
+    {
+      "biq_index": 8,
+      "civilopedia_entry": "GOOD_Wine",
+      "icon_index": 8,
+      "name": "Wines",
+      "resource_class": 1
+    },
+    {
+      "biq_index": 9,
+      "civilopedia_entry": "GOOD_Furs",
+      "icon_index": 9,
+      "name": "Furs",
+      "resource_class": 1
+    },
+    {
+      "biq_index": 10,
+      "civilopedia_entry": "GOOD_Dye",
+      "icon_index": 10,
+      "name": "Dyes",
+      "resource_class": 1
+    },
+    {
+      "biq_index": 11,
+      "civilopedia_entry": "GOOD_Incense",
+      "icon_index": 11,
+      "name": "Incense",
+      "resource_class": 1
+    },
+    {
+      "biq_index": 12,
+      "civilopedia_entry": "GOOD_Spice",
+      "icon_index": 12,
+      "name": "Spices",
+      "resource_class": 1
+    },
+    {
+      "biq_index": 13,
+      "civilopedia_entry": "GOOD_Ivory",
+      "icon_index": 13,
+      "name": "Ivory",
+      "resource_class": 1
+    },
+    {
+      "biq_index": 14,
+      "civilopedia_entry": "GOOD_Silk",
+      "icon_index": 14,
+      "name": "Silks",
+      "resource_class": 1
+    },
+    {
+      "biq_index": 15,
+      "civilopedia_entry": "GOOD_Diamonds",
+      "icon_index": 15,
+      "name": "Gems",
+      "resource_class": 1
+    },
+    {
+      "biq_index": 16,
+      "civilopedia_entry": "GOOD_Whales",
+      "icon_index": 16,
+      "name": "Whales",
+      "resource_class": 0
+    },
+    {
+      "biq_index": 17,
+      "civilopedia_entry": "GOOD_Game",
+      "icon_index": 17,
+      "name": "Game",
+      "resource_class": 0
+    },
+    {
+      "biq_index": 18,
+      "civilopedia_entry": "GOOD_Fish",
+      "icon_index": 18,
+      "name": "Fish",
+      "resource_class": 0
+    },
+    {
+      "biq_index": 19,
+      "civilopedia_entry": "GOOD_Cattle",
+      "icon_index": 19,
+      "name": "Cattle",
+      "resource_class": 0
+    },
+    {
+      "biq_index": 20,
+      "civilopedia_entry": "GOOD_Wheat",
+      "icon_index": 20,
+      "name": "Wheat",
+      "resource_class": 0
+    },
+    {
+      "biq_index": 21,
+      "civilopedia_entry": "GOOD_Gold",
+      "icon_index": 21,
+      "name": "Gold",
+      "resource_class": 0
+    },
+    {
+      "biq_index": 22,
+      "civilopedia_entry": "GOOD_Sugar",
+      "icon_index": 24,
+      "name": "Sugar",
+      "resource_class": 0
+    },
+    {
+      "biq_index": 23,
+      "civilopedia_entry": "GOOD_Bananas",
+      "icon_index": 22,
+      "name": "Tropical Fruit",
+      "resource_class": 0
+    },
+    {
+      "biq_index": 24,
+      "civilopedia_entry": "GOOD_Oasis",
+      "icon_index": 23,
+      "name": "Oasis",
+      "resource_class": 0
+    },
+    {
+      "biq_index": 25,
+      "civilopedia_entry": "GOOD_Tobacco",
+      "icon_index": 25,
+      "name": "Tobacco",
+      "resource_class": 0
+    }
+  ],
+  "schema": "c3x.vanilla_conquests_biq_semantics.v0",
+  "source": {
+    "biq": "Conquests/conquests.biq",
+    "compressed_sha256": "1bd610ab1420217f7d64a9214b60c0bc7686e4781a0d6e66590171535495609c",
+    "format": "Conquests",
+    "inflated_sha256": "692656db2d0472abacf6f69bc4dde59f2fda63fdc807875f9277d0b59e517eee",
+    "major_version": 12,
+    "minor_version": 8,
+    "parser": "C3X_Editor/src/biq/biqSections.js",
+    "pedia_layers": [
+      "base",
+      "ptw",
+      "conquests"
+    ]
+  },
+  "terrain_transformations": [
+    {
+      "biq_index": 0,
+      "civilopedia_entry": "TFRM_Mine",
+      "name": "Mine",
+      "order": "Build Mine"
+    },
+    {
+      "biq_index": 1,
+      "civilopedia_entry": "TFRM_Irrigation",
+      "name": "Irrigation",
+      "order": "Irrigate"
+    },
+    {
+      "biq_index": 2,
+      "civilopedia_entry": "TFRM_Fortress",
+      "name": "Fortress",
+      "order": "Build Fortress"
+    },
+    {
+      "biq_index": 3,
+      "civilopedia_entry": "TFRM_Road",
+      "name": "Road",
+      "order": "Build Road"
+    },
+    {
+      "biq_index": 4,
+      "civilopedia_entry": "TFRM_Railroad",
+      "name": "Railroad",
+      "order": "Build Railroad"
+    },
+    {
+      "biq_index": 5,
+      "civilopedia_entry": "TFRM_Plant_Forest",
+      "name": "Plant Forest",
+      "order": "Plant Forest"
+    },
+    {
+      "biq_index": 6,
+      "civilopedia_entry": "TFRM_Clear_Forest",
+      "name": "Clear Forest",
+      "order": "Clear Forest"
+    },
+    {
+      "biq_index": 7,
+      "civilopedia_entry": "TFRM_Clear_Wetlands",
+      "name": "Clear Wetlands",
+      "order": "Clear Wetlands"
+    },
+    {
+      "biq_index": 8,
+      "civilopedia_entry": "TFRM_Clear_Damage",
+      "name": "Clear Damage",
+      "order": "Clear Damage"
+    },
+    {
+      "biq_index": 9,
+      "civilopedia_entry": "TFRM_Airfield",
+      "name": "Airfield",
+      "order": "Build Airfield"
+    },
+    {
+      "biq_index": 10,
+      "civilopedia_entry": "TFRM_Radar_Tower",
+      "name": "Radar Tower",
+      "order": "Build Radar Tower"
+    },
+    {
+      "biq_index": 11,
+      "civilopedia_entry": "TFRM_Outpost",
+      "name": "Outpost",
+      "order": "Build Outpost"
+    },
+    {
+      "biq_index": 12,
+      "civilopedia_entry": "TFRM_Barricades",
+      "name": "Barricade",
+      "order": "Build Barricade"
+    }
+  ],
+  "terrain_types": [
+    {
+      "biq_index": 0,
+      "civilopedia_entry": "TERR_Desert",
+      "landmark_enabled": true,
+      "landmark_name": "LM Desert",
+      "name": "Desert"
+    },
+    {
+      "biq_index": 1,
+      "civilopedia_entry": "TERR_Plains",
+      "landmark_enabled": true,
+      "landmark_name": "LM Plains",
+      "name": "Plains"
+    },
+    {
+      "biq_index": 2,
+      "civilopedia_entry": "TERR_Grassland",
+      "landmark_enabled": true,
+      "landmark_name": "LM Grassland",
+      "name": "Grassland"
+    },
+    {
+      "biq_index": 3,
+      "civilopedia_entry": "TERR_Tundra",
+      "landmark_enabled": false,
+      "landmark_name": "Tundra",
+      "name": "Tundra"
+    },
+    {
+      "biq_index": 4,
+      "civilopedia_entry": "TERR_Flood_Plain",
+      "landmark_enabled": false,
+      "landmark_name": "Flood Plain",
+      "name": "Flood Plain"
+    },
+    {
+      "biq_index": 5,
+      "civilopedia_entry": "TERR_Hills",
+      "landmark_enabled": true,
+      "landmark_name": "LM Hills",
+      "name": "Hills"
+    },
+    {
+      "biq_index": 6,
+      "civilopedia_entry": "TERR_Mountains",
+      "landmark_enabled": true,
+      "landmark_name": "LM Mountains",
+      "name": "Mountains"
+    },
+    {
+      "biq_index": 7,
+      "civilopedia_entry": "TERR_Forest",
+      "landmark_enabled": true,
+      "landmark_name": "LM Forest",
+      "name": "Forest"
+    },
+    {
+      "biq_index": 8,
+      "civilopedia_entry": "TERR_Jungle",
+      "landmark_enabled": false,
+      "landmark_name": "Jungle",
+      "name": "Jungle"
+    },
+    {
+      "biq_index": 9,
+      "civilopedia_entry": "TERR_Marsh",
+      "landmark_enabled": false,
+      "landmark_name": "Marsh",
+      "name": "Marsh"
+    },
+    {
+      "biq_index": 10,
+      "civilopedia_entry": "TERR_Volcano",
+      "landmark_enabled": false,
+      "landmark_name": "Volcano",
+      "name": "Volcano"
+    },
+    {
+      "biq_index": 11,
+      "civilopedia_entry": "TERR_Coast",
+      "landmark_enabled": false,
+      "landmark_name": "Coast",
+      "name": "Coast"
+    },
+    {
+      "biq_index": 12,
+      "civilopedia_entry": "TERR_Sea",
+      "landmark_enabled": true,
+      "landmark_name": "LM Sea",
+      "name": "Sea"
+    },
+    {
+      "biq_index": 13,
+      "civilopedia_entry": "TERR_Ocean",
+      "landmark_enabled": false,
+      "landmark_name": "Ocean",
+      "name": "Ocean"
+    }
+  ],
+  "unit_types": [
+    {
+      "art_variants": [
+        {
+          "art_folder": "Settler",
+          "key": "ANIMNAME_PRTO_Settler",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Settler Modern Times",
+          "key": "ANIMNAME_PRTO_Settler_ERAS_Industrial_Age",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Settler Modern Times",
+          "key": "ANIMNAME_PRTO_Settler_ERAS_Modern_Era",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 0,
+      "civilopedia_entry": "PRTO_Settler",
+      "direct_art_folder": "Settler",
+      "icon_index": 0,
+      "name": "Settler",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Worker",
+          "key": "ANIMNAME_PRTO_Worker",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Worker Modern Times",
+          "key": "ANIMNAME_PRTO_Worker_ERAS_Industrial_Age",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Worker Modern Times",
+          "key": "ANIMNAME_PRTO_Worker_ERAS_Modern_Era",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Enslaved Worker",
+          "key": "ANIMNAME_PRTO_Worker_SLAVE",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 1,
+      "civilopedia_entry": "PRTO_Worker",
+      "direct_art_folder": "Worker",
+      "icon_index": 1,
+      "name": "Worker",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Scout",
+          "key": "ANIMNAME_PRTO_Scout",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 2,
+      "civilopedia_entry": "PRTO_Scout",
+      "direct_art_folder": "Scout",
+      "icon_index": 2,
+      "name": "Scout",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Explorer",
+          "key": "ANIMNAME_PRTO_Explorer",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 3,
+      "civilopedia_entry": "PRTO_Explorer",
+      "direct_art_folder": "Explorer",
+      "icon_index": 3,
+      "name": "Explorer",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Marine",
+          "key": "ANIMNAME_PRTO_Marine",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 4,
+      "civilopedia_entry": "PRTO_Marine",
+      "direct_art_folder": "Marine",
+      "icon_index": 4,
+      "name": "Marine",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Paratrooper",
+          "key": "ANIMNAME_PRTO_Paratrooper",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 5,
+      "civilopedia_entry": "PRTO_Paratrooper",
+      "direct_art_folder": "Paratrooper",
+      "icon_index": 5,
+      "name": "Modern Paratrooper",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Warrior",
+          "key": "ANIMNAME_PRTO_Warrior",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 6,
+      "civilopedia_entry": "PRTO_Warrior",
+      "direct_art_folder": "Warrior",
+      "icon_index": 6,
+      "name": "Warrior",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Archer",
+          "key": "ANIMNAME_PRTO_Archer",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 7,
+      "civilopedia_entry": "PRTO_Archer",
+      "direct_art_folder": "Archer",
+      "icon_index": 7,
+      "name": "Archer",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Spearman",
+          "key": "ANIMNAME_PRTO_Spearman",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 8,
+      "civilopedia_entry": "PRTO_Spearman",
+      "direct_art_folder": "Spearman",
+      "icon_index": 8,
+      "name": "Spearman",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Swordsman",
+          "key": "ANIMNAME_PRTO_Swordsman",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 9,
+      "civilopedia_entry": "PRTO_Swordsman",
+      "direct_art_folder": "Swordsman",
+      "icon_index": 9,
+      "name": "Swordsman",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "chariot",
+          "key": "ANIMNAME_PRTO_Chariot",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 10,
+      "civilopedia_entry": "PRTO_Chariot",
+      "direct_art_folder": "chariot",
+      "icon_index": 10,
+      "name": "Chariot",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Horseman",
+          "key": "ANIMNAME_PRTO_Horseman",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 11,
+      "civilopedia_entry": "PRTO_Horseman",
+      "direct_art_folder": "Horseman",
+      "icon_index": 11,
+      "name": "Horseman",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Pikeman",
+          "key": "ANIMNAME_PRTO_Pikeman",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 12,
+      "civilopedia_entry": "PRTO_Pikeman",
+      "direct_art_folder": "Pikeman",
+      "icon_index": 12,
+      "name": "Pikeman",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Longbowman",
+          "key": "ANIMNAME_PRTO_Longbowman",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 13,
+      "civilopedia_entry": "PRTO_Longbowman",
+      "direct_art_folder": "Longbowman",
+      "icon_index": 13,
+      "name": "Longbowman",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Musketman",
+          "key": "ANIMNAME_PRTO_Musketman",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 14,
+      "civilopedia_entry": "PRTO_Musketman",
+      "direct_art_folder": "Musketman",
+      "icon_index": 14,
+      "name": "Musketman",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Knight",
+          "key": "ANIMNAME_PRTO_Knight",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 15,
+      "civilopedia_entry": "PRTO_Knight",
+      "direct_art_folder": "Knight",
+      "icon_index": 15,
+      "name": "Knight",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Rifleman",
+          "key": "ANIMNAME_PRTO_Rifleman",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 16,
+      "civilopedia_entry": "PRTO_Rifleman",
+      "direct_art_folder": "Rifleman",
+      "icon_index": 16,
+      "name": "Rifleman",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Cavalry",
+          "key": "ANIMNAME_PRTO_Cavalry",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 17,
+      "civilopedia_entry": "PRTO_Cavalry",
+      "direct_art_folder": "Cavalry",
+      "icon_index": 17,
+      "name": "Cavalry",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Infantry",
+          "key": "ANIMNAME_PRTO_Infantry",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 18,
+      "civilopedia_entry": "PRTO_Infantry",
+      "direct_art_folder": "Infantry",
+      "icon_index": 18,
+      "name": "Infantry",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Tank",
+          "key": "ANIMNAME_PRTO_Tank",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 19,
+      "civilopedia_entry": "PRTO_Tank",
+      "direct_art_folder": "Tank",
+      "icon_index": 19,
+      "name": "Tank",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Mech Infantry",
+          "key": "ANIMNAME_PRTO_Mech_Infantry",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 20,
+      "civilopedia_entry": "PRTO_Mech_Infantry",
+      "direct_art_folder": "Mech Infantry",
+      "icon_index": 20,
+      "name": "Mech Infantry",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Modern Armor",
+          "key": "ANIMNAME_PRTO_Modern_Armor",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 21,
+      "civilopedia_entry": "PRTO_Modern_Armor",
+      "direct_art_folder": "Modern Armor",
+      "icon_index": 21,
+      "name": "Modern Armor",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Catapult",
+          "key": "ANIMNAME_PRTO_Catapult",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 22,
+      "civilopedia_entry": "PRTO_Catapult",
+      "direct_art_folder": "Catapult",
+      "icon_index": 22,
+      "name": "Catapult",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Cannon",
+          "key": "ANIMNAME_PRTO_Cannon",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 23,
+      "civilopedia_entry": "PRTO_Cannon",
+      "direct_art_folder": "Cannon",
+      "icon_index": 23,
+      "name": "Cannon",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Artillery",
+          "key": "ANIMNAME_PRTO_Artillery",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 24,
+      "civilopedia_entry": "PRTO_Artillery",
+      "direct_art_folder": "Artillery",
+      "icon_index": 24,
+      "name": "Artillery",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Radar Artillery",
+          "key": "ANIMNAME_PRTO_Radar_Artillery",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 25,
+      "civilopedia_entry": "PRTO_Radar_Artillery",
+      "direct_art_folder": "Radar Artillery",
+      "icon_index": 25,
+      "name": "Radar Artillery",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Cruise Missile",
+          "key": "ANIMNAME_PRTO_Cruise_Missile",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 26,
+      "civilopedia_entry": "PRTO_Cruise_Missile",
+      "direct_art_folder": "Cruise Missile",
+      "icon_index": 26,
+      "name": "Cruise Missile",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Tactical Nuke",
+          "key": "ANIMNAME_PRTO_NUKE",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 27,
+      "civilopedia_entry": "PRTO_NUKE",
+      "direct_art_folder": "Tactical Nuke",
+      "icon_index": 27,
+      "name": "Tactical Nuke",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "ICBM",
+          "key": "ANIMNAME_PRTO_ICBM",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 28,
+      "civilopedia_entry": "PRTO_ICBM",
+      "direct_art_folder": "ICBM",
+      "icon_index": 28,
+      "name": "ICBM",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Galley",
+          "key": "ANIMNAME_PRTO_Galley",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 29,
+      "civilopedia_entry": "PRTO_Galley",
+      "direct_art_folder": "Galley",
+      "icon_index": 29,
+      "name": "Galley",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Caravel",
+          "key": "ANIMNAME_PRTO_Caravel",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 30,
+      "civilopedia_entry": "PRTO_Caravel",
+      "direct_art_folder": "Caravel",
+      "icon_index": 30,
+      "name": "Caravel",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Frigate",
+          "key": "ANIMNAME_PRTO_Frigate",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 31,
+      "civilopedia_entry": "PRTO_Frigate",
+      "direct_art_folder": "Frigate",
+      "icon_index": 31,
+      "name": "Frigate",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Galleon",
+          "key": "ANIMNAME_PRTO_Galleon",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 32,
+      "civilopedia_entry": "PRTO_Galleon",
+      "direct_art_folder": "Galleon",
+      "icon_index": 32,
+      "name": "Galleon",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Ironclad",
+          "key": "ANIMNAME_PRTO_Ironclad",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 33,
+      "civilopedia_entry": "PRTO_Ironclad",
+      "direct_art_folder": "Ironclad",
+      "icon_index": 33,
+      "name": "Ironclad",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Transport",
+          "key": "ANIMNAME_PRTO_Transport",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 34,
+      "civilopedia_entry": "PRTO_Transport",
+      "direct_art_folder": "Transport",
+      "icon_index": 34,
+      "name": "Transport",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Carrier",
+          "key": "ANIMNAME_PRTO_Carrier",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 35,
+      "civilopedia_entry": "PRTO_Carrier",
+      "direct_art_folder": "Carrier",
+      "icon_index": 35,
+      "name": "Carrier",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Submarine",
+          "key": "ANIMNAME_PRTO_Submarine",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 36,
+      "civilopedia_entry": "PRTO_Submarine",
+      "direct_art_folder": "Submarine",
+      "icon_index": 36,
+      "name": "Submarine",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Destroyer",
+          "key": "ANIMNAME_PRTO_Destroyer",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 37,
+      "civilopedia_entry": "PRTO_Destroyer",
+      "direct_art_folder": "Destroyer",
+      "icon_index": 37,
+      "name": "Destroyer",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Battleship",
+          "key": "ANIMNAME_PRTO_Battleship",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 38,
+      "civilopedia_entry": "PRTO_Battleship",
+      "direct_art_folder": "Battleship",
+      "icon_index": 38,
+      "name": "Battleship",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "AEGIS Cruiser",
+          "key": "ANIMNAME_PRTO_AEGIS_Cruiser",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 39,
+      "civilopedia_entry": "PRTO_AEGIS_Cruiser",
+      "direct_art_folder": "AEGIS Cruiser",
+      "icon_index": 39,
+      "name": "AEGIS Cruiser",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Nuclear Submarine",
+          "key": "ANIMNAME_PRTO_Nuclear_Submarine",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 40,
+      "civilopedia_entry": "PRTO_Nuclear_Submarine",
+      "direct_art_folder": "Nuclear Submarine",
+      "icon_index": 40,
+      "name": "Nuclear Submarine",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Fighter",
+          "key": "ANIMNAME_PRTO_Fighter",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 41,
+      "civilopedia_entry": "PRTO_Fighter",
+      "direct_art_folder": "Fighter",
+      "icon_index": 41,
+      "name": "Fighter",
+      "ranged_attack_animations": false,
+      "unit_class": 2
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Bomber",
+          "key": "ANIMNAME_PRTO_Bomber",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 42,
+      "civilopedia_entry": "PRTO_Bomber",
+      "direct_art_folder": "Bomber",
+      "icon_index": 42,
+      "name": "Bomber",
+      "ranged_attack_animations": false,
+      "unit_class": 2
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Helicopter",
+          "key": "ANIMNAME_PRTO_Helicopter",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 43,
+      "civilopedia_entry": "PRTO_Helicopter",
+      "direct_art_folder": "Helicopter",
+      "icon_index": 43,
+      "name": "Helicopter",
+      "ranged_attack_animations": false,
+      "unit_class": 2
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Jet Fighter",
+          "key": "ANIMNAME_PRTO_Jet_Fighter",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 44,
+      "civilopedia_entry": "PRTO_Jet_Fighter",
+      "direct_art_folder": "Jet Fighter",
+      "icon_index": 44,
+      "name": "Jet Fighter",
+      "ranged_attack_animations": false,
+      "unit_class": 2
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Stealth Fighter",
+          "key": "ANIMNAME_PRTO_Stealth_Fighter",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 45,
+      "civilopedia_entry": "PRTO_Stealth_Fighter",
+      "direct_art_folder": "Stealth Fighter",
+      "icon_index": 45,
+      "name": "Stealth Fighter",
+      "ranged_attack_animations": false,
+      "unit_class": 2
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Stealth Bomber",
+          "key": "ANIMNAME_PRTO_Stealth_Bomber",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 46,
+      "civilopedia_entry": "PRTO_Stealth_Bomber",
+      "direct_art_folder": "Stealth Bomber",
+      "icon_index": 46,
+      "name": "Stealth Bomber",
+      "ranged_attack_animations": false,
+      "unit_class": 2
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Leader Ancient Times",
+          "key": "ANIMNAME_PRTO_Leader_ERAS_Ancient_Times",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Leader Industrial Ages",
+          "key": "ANIMNAME_PRTO_Leader_ERAS_Industrial_Age",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Leader Middle Ages",
+          "key": "ANIMNAME_PRTO_Leader_ERAS_Middle_Ages",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Leader Modern Times",
+          "key": "ANIMNAME_PRTO_Leader_ERAS_Modern_Era",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "SciLeader",
+          "key": "ANIMNAME_PRTO_Leader_SCI",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 47,
+      "civilopedia_entry": "PRTO_Leader",
+      "direct_art_folder": null,
+      "icon_index": 47,
+      "name": "Leader",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Army Ancient Times",
+          "key": "ANIMNAME_PRTO_Army_ERAS_Ancient_Times",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Army Industrial Ages",
+          "key": "ANIMNAME_PRTO_Army_ERAS_Industrial_Age",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Army Middle Ages",
+          "key": "ANIMNAME_PRTO_Army_ERAS_Middle_Ages",
+          "source_layer": "conquests"
+        },
+        {
+          "art_folder": "Army Modern Times",
+          "key": "ANIMNAME_PRTO_Army_ERAS_Modern_Era",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 48,
+      "civilopedia_entry": "PRTO_Army",
+      "direct_art_folder": null,
+      "icon_index": 48,
+      "name": "Army",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Jaguar Warrior",
+          "key": "ANIMNAME_PRTO_Jaguar_Warrior",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 49,
+      "civilopedia_entry": "PRTO_Jaguar_Warrior",
+      "direct_art_folder": "Jaguar Warrior",
+      "icon_index": 49,
+      "name": "Jaguar Warrior",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Bowman",
+          "key": "ANIMNAME_PRTO_Bowman",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 50,
+      "civilopedia_entry": "PRTO_Bowman",
+      "direct_art_folder": "Bowman",
+      "icon_index": 50,
+      "name": "Bowman",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Hoplite",
+          "key": "ANIMNAME_PRTO_Hoplite",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 51,
+      "civilopedia_entry": "PRTO_Hoplite",
+      "direct_art_folder": "Hoplite",
+      "icon_index": 51,
+      "name": "Hoplite",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Impi",
+          "key": "ANIMNAME_PRTO_Impi",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 52,
+      "civilopedia_entry": "PRTO_Impi",
+      "direct_art_folder": "Impi",
+      "icon_index": 52,
+      "name": "Impi",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Legionary",
+          "key": "ANIMNAME_PRTO_Legionary",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 53,
+      "civilopedia_entry": "PRTO_Legionary",
+      "direct_art_folder": "Legionary",
+      "icon_index": 53,
+      "name": "Legionary",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Immortals",
+          "key": "ANIMNAME_PRTO_Immortals",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 54,
+      "civilopedia_entry": "PRTO_Immortals",
+      "direct_art_folder": "Immortals",
+      "icon_index": 54,
+      "name": "Immortals",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "War Chariot",
+          "key": "ANIMNAME_PRTO_War_Chariot",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 55,
+      "civilopedia_entry": "PRTO_War_Chariot",
+      "direct_art_folder": "War Chariot",
+      "icon_index": 55,
+      "name": "War Chariot",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Rider",
+          "key": "ANIMNAME_PRTO_Rider",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 56,
+      "civilopedia_entry": "PRTO_Rider",
+      "direct_art_folder": "Rider",
+      "icon_index": 56,
+      "name": "Rider",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Mounted Warrior",
+          "key": "ANIMNAME_PRTO_Mounted_Warrior",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 57,
+      "civilopedia_entry": "PRTO_Mounted_Warrior",
+      "direct_art_folder": "Mounted Warrior",
+      "icon_index": 57,
+      "name": "Mounted Warrior",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Musketeer",
+          "key": "ANIMNAME_PRTO_Musketeer",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 58,
+      "civilopedia_entry": "PRTO_Musketeer",
+      "direct_art_folder": "Musketeer",
+      "icon_index": 58,
+      "name": "Musketeer",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Samurai",
+          "key": "ANIMNAME_PRTO_Samurai",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 59,
+      "civilopedia_entry": "PRTO_Samurai",
+      "direct_art_folder": "Samurai",
+      "icon_index": 59,
+      "name": "Samurai",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "War Elephant",
+          "key": "ANIMNAME_PRTO_War_Elephant",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 60,
+      "civilopedia_entry": "PRTO_War_Elephant",
+      "direct_art_folder": "War Elephant",
+      "icon_index": 60,
+      "name": "War Elephant",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Cossack",
+          "key": "ANIMNAME_PRTO_Cossack",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 61,
+      "civilopedia_entry": "PRTO_Cossack",
+      "direct_art_folder": "Cossack",
+      "icon_index": 61,
+      "name": "Cossack",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Panzer",
+          "key": "ANIMNAME_PRTO_Panzer",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 62,
+      "civilopedia_entry": "PRTO_Panzer",
+      "direct_art_folder": "Panzer",
+      "icon_index": 62,
+      "name": "Panzer",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Man-O-War",
+          "key": "ANIMNAME_PRTO_Man-O-War",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 63,
+      "civilopedia_entry": "PRTO_Man-O-War",
+      "direct_art_folder": "Man-O-War",
+      "icon_index": 63,
+      "name": "Man-O-War",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "F-15",
+          "key": "ANIMNAME_PRTO_F-15",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 64,
+      "civilopedia_entry": "PRTO_F-15",
+      "direct_art_folder": "F-15",
+      "icon_index": 64,
+      "name": "F-15",
+      "ranged_attack_animations": false,
+      "unit_class": 2
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Privateer",
+          "key": "ANIMNAME_PRTO_Privateer",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 65,
+      "civilopedia_entry": "PRTO_Privateer",
+      "direct_art_folder": "Privateer",
+      "icon_index": 65,
+      "name": "Privateer",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Keshik",
+          "key": "ANIMNAME_PRTO_Keshik",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 66,
+      "civilopedia_entry": "PRTO_Keshik",
+      "direct_art_folder": "Keshik",
+      "icon_index": 76,
+      "name": "Keshik",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Conquistador",
+          "key": "ANIMNAME_PRTO_Conquistador",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 67,
+      "civilopedia_entry": "PRTO_Conquistador",
+      "direct_art_folder": "Conquistador",
+      "icon_index": 75,
+      "name": "Conquistador",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Berserk",
+          "key": "ANIMNAME_PRTO_Berserk",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 68,
+      "civilopedia_entry": "PRTO_Berserk",
+      "direct_art_folder": "Berserk",
+      "icon_index": 74,
+      "name": "Berserk",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Sipahi",
+          "key": "ANIMNAME_PRTO_Sipahi",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 69,
+      "civilopedia_entry": "PRTO_Sipahi",
+      "direct_art_folder": "Sipahi",
+      "icon_index": 77,
+      "name": "Sipahi",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "gallic swordsman",
+          "key": "ANIMNAME_PRTO_Gallic_Swordsman",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 70,
+      "civilopedia_entry": "PRTO_Gallic_Swordsman",
+      "direct_art_folder": "gallic swordsman",
+      "icon_index": 78,
+      "name": "Gallic Swordsman",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "ansar warrior",
+          "key": "ANIMNAME_PRTO_Ansar_Warrior",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 71,
+      "civilopedia_entry": "PRTO_Ansar_Warrior",
+      "direct_art_folder": "ansar warrior",
+      "icon_index": 82,
+      "name": "Ansar Warrior",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Libyan Mercenary",
+          "key": "ANIMNAME_PRTO_Libyan_Mercenary",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 72,
+      "civilopedia_entry": "PRTO_Libyan_Mercenary",
+      "direct_art_folder": "Libyan Mercenary",
+      "icon_index": 80,
+      "name": "Numidian Mercenary",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Hwacha",
+          "key": "ANIMNAME_PRTO_Hwacha",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 73,
+      "civilopedia_entry": "PRTO_Hwacha",
+      "direct_art_folder": "Hwacha",
+      "icon_index": 79,
+      "name": "Hwach'a",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Medieval Infantry",
+          "key": "ANIMNAME_PRTO_Medieval_Infantry",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 74,
+      "civilopedia_entry": "PRTO_Medieval_Infantry",
+      "direct_art_folder": "Medieval Infantry",
+      "icon_index": 84,
+      "name": "Medieval Infantry",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Guerilla",
+          "key": "ANIMNAME_PRTO_Guerilla",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 75,
+      "civilopedia_entry": "PRTO_Guerilla",
+      "direct_art_folder": "Guerilla",
+      "icon_index": 85,
+      "name": "Guerilla",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Princess",
+          "key": "ANIMNAME_PRTO_Princess",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 76,
+      "civilopedia_entry": "PRTO_Princess",
+      "direct_art_folder": "Princess",
+      "icon_index": 121,
+      "name": "Princess",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King American",
+          "key": "ANIMNAME_PRTO_Lincoln",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 77,
+      "civilopedia_entry": "PRTO_Lincoln",
+      "direct_art_folder": "King American",
+      "icon_index": 97,
+      "name": "Lincoln",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Babylonian",
+          "key": "ANIMNAME_PRTO_Hammurabi",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 78,
+      "civilopedia_entry": "PRTO_Hammurabi",
+      "direct_art_folder": "King Babylonian",
+      "icon_index": 100,
+      "name": "Hammurabi",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Chinese",
+          "key": "ANIMNAME_PRTO_Mao",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 79,
+      "civilopedia_entry": "PRTO_Mao",
+      "direct_art_folder": "King Chinese",
+      "icon_index": 103,
+      "name": "Mao",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King German",
+          "key": "ANIMNAME_PRTO_Bismarck",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 80,
+      "civilopedia_entry": "PRTO_Bismarck",
+      "direct_art_folder": "King German",
+      "icon_index": 107,
+      "name": "Bismarck",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Greek",
+          "key": "ANIMNAME_PRTO_Alexander",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 81,
+      "civilopedia_entry": "PRTO_Alexander",
+      "direct_art_folder": "King Greek",
+      "icon_index": 108,
+      "name": "Alexander",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Roman",
+          "key": "ANIMNAME_PRTO_Caesar",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 82,
+      "civilopedia_entry": "PRTO_Caesar",
+      "direct_art_folder": "King Roman",
+      "icon_index": 116,
+      "name": "Caesar",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Persian",
+          "key": "ANIMNAME_PRTO_Xerxes",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 83,
+      "civilopedia_entry": "PRTO_Xerxes",
+      "direct_art_folder": "King Persian",
+      "icon_index": 115,
+      "name": "Xerxes",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Iroquois",
+          "key": "ANIMNAME_PRTO_Hiawatha",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 84,
+      "civilopedia_entry": "PRTO_Hiawatha",
+      "direct_art_folder": "King Iroquois",
+      "icon_index": 110,
+      "name": "Hiawatha",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Zulu",
+          "key": "ANIMNAME_PRTO_Shaka",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 85,
+      "civilopedia_entry": "PRTO_Shaka",
+      "direct_art_folder": "King Zulu",
+      "icon_index": 120,
+      "name": "Shaka",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Aztec",
+          "key": "ANIMNAME_PRTO_Montezuma",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 86,
+      "civilopedia_entry": "PRTO_Montezuma",
+      "direct_art_folder": "King Aztec",
+      "icon_index": 99,
+      "name": "Montezuma",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Egyptian",
+          "key": "ANIMNAME_PRTO_Cleopatra",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 87,
+      "civilopedia_entry": "PRTO_Cleopatra",
+      "direct_art_folder": "King Egyptian",
+      "icon_index": 104,
+      "name": "Cleopatra",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King English",
+          "key": "ANIMNAME_PRTO_Elizabeth",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 88,
+      "civilopedia_entry": "PRTO_Elizabeth",
+      "direct_art_folder": "King English",
+      "icon_index": 105,
+      "name": "Elizabeth",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Russian",
+          "key": "ANIMNAME_PRTO_Catherine",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 89,
+      "civilopedia_entry": "PRTO_Catherine",
+      "direct_art_folder": "King Russian",
+      "icon_index": 117,
+      "name": "Catherine",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Arab",
+          "key": "ANIMNAME_PRTO_Abu",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 90,
+      "civilopedia_entry": "PRTO_Abu",
+      "direct_art_folder": "King Arab",
+      "icon_index": 98,
+      "name": "Abu",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Carthaginian",
+          "key": "ANIMNAME_PRTO_Hannibal",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 91,
+      "civilopedia_entry": "PRTO_Hannibal",
+      "direct_art_folder": "King Carthaginian",
+      "icon_index": 101,
+      "name": "Hannibal",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Ottoman",
+          "key": "ANIMNAME_PRTO_Osman",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 92,
+      "civilopedia_entry": "PRTO_Osman",
+      "direct_art_folder": "King Ottoman",
+      "icon_index": 114,
+      "name": "Osman",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Mongol",
+          "key": "ANIMNAME_PRTO_Temujin",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 93,
+      "civilopedia_entry": "PRTO_Temujin",
+      "direct_art_folder": "King Mongol",
+      "icon_index": 113,
+      "name": "Temujin",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Indian",
+          "key": "ANIMNAME_PRTO_Gandhi",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 94,
+      "civilopedia_entry": "PRTO_Gandhi",
+      "direct_art_folder": "King Indian",
+      "icon_index": 109,
+      "name": "Gandhi",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Viking",
+          "key": "ANIMNAME_PRTO_Ragnar",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 95,
+      "civilopedia_entry": "PRTO_Ragnar",
+      "direct_art_folder": "King Viking",
+      "icon_index": 119,
+      "name": "Ragnar",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Celtic",
+          "key": "ANIMNAME_PRTO_Brennus",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 96,
+      "civilopedia_entry": "PRTO_Brennus",
+      "direct_art_folder": "King Celtic",
+      "icon_index": 102,
+      "name": "Brennus",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Japanese",
+          "key": "ANIMNAME_PRTO_Tokugawa",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 97,
+      "civilopedia_entry": "PRTO_Tokugawa",
+      "direct_art_folder": "King Japanese",
+      "icon_index": 111,
+      "name": "Tokugawa",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King French",
+          "key": "ANIMNAME_PRTO_Joan",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 98,
+      "civilopedia_entry": "PRTO_Joan",
+      "direct_art_folder": "King French",
+      "icon_index": 106,
+      "name": "Joan d'Arc",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Korean",
+          "key": "ANIMNAME_PRTO_Wang",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 99,
+      "civilopedia_entry": "PRTO_Wang",
+      "direct_art_folder": "King Korean",
+      "icon_index": 112,
+      "name": "Wang Kon",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Spanish",
+          "key": "ANIMNAME_PRTO_Isabella",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 100,
+      "civilopedia_entry": "PRTO_Isabella",
+      "direct_art_folder": "King Spanish",
+      "icon_index": 118,
+      "name": "Isabella",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Enkidu Warrior",
+          "key": "ANIMNAME_PRTO_Enkidu_Warrior",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 101,
+      "civilopedia_entry": "PRTO_Enkidu_Warrior",
+      "direct_art_folder": "Enkidu Warrior",
+      "icon_index": 175,
+      "name": "Enkidu Warrior",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Three Man Chariot",
+          "key": "ANIMNAME_PRTO_Three_Man_Chariot",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 102,
+      "civilopedia_entry": "PRTO_Three_Man_Chariot",
+      "direct_art_folder": "Three Man Chariot",
+      "icon_index": 186,
+      "name": "Three-Man Chariot",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Hatti",
+          "key": "ANIMNAME_PRTO_Mursilis",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 103,
+      "civilopedia_entry": "PRTO_Mursilis",
+      "direct_art_folder": "King Hatti",
+      "icon_index": 169,
+      "name": "Mursilis",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Sumeria",
+          "key": "ANIMNAME_PRTO_Gilgamesh",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 104,
+      "civilopedia_entry": "PRTO_Gilgamesh",
+      "direct_art_folder": "King Sumeria",
+      "icon_index": 174,
+      "name": "Gilgamesh",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Portugal",
+          "key": "ANIMNAME_PRTO_Henry",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 105,
+      "civilopedia_entry": "PRTO_Henry",
+      "direct_art_folder": "King Portugal",
+      "icon_index": 173,
+      "name": "Henry",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Carrack",
+          "key": "ANIMNAME_PRTO_Carrack",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 106,
+      "civilopedia_entry": "PRTO_Carrack",
+      "direct_art_folder": "Carrack",
+      "icon_index": 198,
+      "name": "Carrack",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Swiss Mercenary",
+          "key": "ANIMNAME_PRTO_Swiss_Mercenary",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 107,
+      "civilopedia_entry": "PRTO_Swiss_Mercenary",
+      "direct_art_folder": "Swiss Mercenary",
+      "icon_index": 181,
+      "name": "Swiss Mercenary",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Netherlands",
+          "key": "ANIMNAME_PRTO_William_of_Orange",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 108,
+      "civilopedia_entry": "PRTO_William_of_Orange",
+      "direct_art_folder": "King Netherlands",
+      "icon_index": 172,
+      "name": "William of Orange",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Trebuchet",
+          "key": "ANIMNAME_PRTO_Trebuchet",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 109,
+      "civilopedia_entry": "PRTO_Trebuchet",
+      "direct_art_folder": "Trebuchet",
+      "icon_index": 190,
+      "name": "Trebuchet",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Incan",
+          "key": "ANIMNAME_PRTO_Pachacuti",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 110,
+      "civilopedia_entry": "PRTO_Pachacuti",
+      "direct_art_folder": "King Incan",
+      "icon_index": 170,
+      "name": "Pachacuti",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Mayan",
+          "key": "ANIMNAME_PRTO_Smoke-Jaguar",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 111,
+      "civilopedia_entry": "PRTO_Smoke-Jaguar",
+      "direct_art_folder": "King Mayan",
+      "icon_index": 171,
+      "name": "Smoke-Jaguar",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "King Byzantines",
+          "key": "ANIMNAME_PRTO_Theodora",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 112,
+      "civilopedia_entry": "PRTO_Theodora",
+      "direct_art_folder": "King Byzantines",
+      "icon_index": 168,
+      "name": "Theodora",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Chasquis Scout",
+          "key": "ANIMNAME_PRTO_Chasquis_Scout",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 113,
+      "civilopedia_entry": "PRTO_Chasquis_Scout",
+      "direct_art_folder": "Chasquis Scout",
+      "icon_index": 176,
+      "name": "Chasqui Scout",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Javelin Thrower",
+          "key": "ANIMNAME_PRTO_Javelin_Thrower",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 114,
+      "civilopedia_entry": "PRTO_Javelin_Thrower",
+      "direct_art_folder": "Javelin Thrower",
+      "icon_index": 177,
+      "name": "Javelin Thrower",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Dromon",
+          "key": "ANIMNAME_PRTO_Dromon",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 115,
+      "civilopedia_entry": "PRTO_Dromon",
+      "direct_art_folder": "Dromon",
+      "icon_index": 196,
+      "name": "Dromon",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Cruiser",
+          "key": "ANIMNAME_PRTO_Cruiser",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 116,
+      "civilopedia_entry": "PRTO_Cruiser",
+      "direct_art_folder": "Cruiser",
+      "icon_index": 200,
+      "name": "Cruiser",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Crusader",
+          "key": "ANIMNAME_PRTO_Crusader",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 117,
+      "civilopedia_entry": "PRTO_Crusader",
+      "direct_art_folder": "Crusader",
+      "icon_index": 180,
+      "name": "Crusader",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Ancient Cavalry",
+          "key": "ANIMNAME_PRTO_Ancient_Cavalry",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 118,
+      "civilopedia_entry": "PRTO_Ancient_Cavalry",
+      "direct_art_folder": "Ancient Cavalry",
+      "icon_index": 187,
+      "name": "Ancient Cavalry",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Curragh",
+          "key": "ANIMNAME_PRTO_Curragh",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 119,
+      "civilopedia_entry": "PRTO_Curragh",
+      "direct_art_folder": "Curragh",
+      "icon_index": 195,
+      "name": "Curragh",
+      "ranged_attack_animations": true,
+      "unit_class": 1
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "WWII Paratrooper",
+          "key": "ANIMNAME_PRTO_WWII_Paratrooper",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 120,
+      "civilopedia_entry": "PRTO_WWII_Paratrooper",
+      "direct_art_folder": "WWII Paratrooper",
+      "icon_index": 185,
+      "name": "Paratrooper",
+      "ranged_attack_animations": true,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "TOW Infantry",
+          "key": "ANIMNAME_PRTO_TOW_Infantry",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 121,
+      "civilopedia_entry": "PRTO_TOW_Infantry",
+      "direct_art_folder": "TOW Infantry",
+      "icon_index": 203,
+      "name": "TOW Infantry",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Flak",
+          "key": "ANIMNAME_PRTO_Flak",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 122,
+      "civilopedia_entry": "PRTO_Flak",
+      "direct_art_folder": "Flak",
+      "icon_index": 205,
+      "name": "Flak",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    },
+    {
+      "art_variants": [
+        {
+          "art_folder": "Mobile SAM",
+          "key": "ANIMNAME_PRTO_Mobile_SAM",
+          "source_layer": "conquests"
+        }
+      ],
+      "biq_index": 123,
+      "civilopedia_entry": "PRTO_Mobile_SAM",
+      "direct_art_folder": "Mobile SAM",
+      "icon_index": 206,
+      "name": "Mobile SAM",
+      "ranged_attack_animations": false,
+      "unit_class": 0
+    }
+  ]
+}

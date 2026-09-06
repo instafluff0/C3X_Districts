@@ -1,0 +1,265 @@
+[ C3X renderer production terrain definitions. Scenario and custom layers may replace these IDs. ]
+
+#Profile
+id = default
+terrain = replace
+features = replace
+roads = replace
+rivers = replace
+improvements = civ3
+resources = replace
+cities = replace
+units = civ3
+effects = civ3
+missing_asset = fallback
+world_seed = map
+environment = earthlike
+
+#Pack
+id = terrain_normalized
+path = mod:Renderer\packs\TerrainNormalized
+
+#Pack
+id = vegetation_normalized
+path = mod:Renderer\packs\VegetationNormalized
+
+#Pack
+id = decals_normalized
+path = mod:Renderer\packs\DecalsNormalized
+
+#Pack
+id = terrain_elements_normalized
+path = mod:Renderer\packs\TerrainElementsNormalized
+
+#Pack
+id = shore_normalized
+path = mod:Renderer\packs\ShoreNormalized
+
+#Pack
+id = route_styles_normalized
+path = mod:Renderer\packs\RouteStylesNormalized
+
+#Pack
+id = route_doodads_normalized
+path = mod:Renderer\packs\RouteDoodadsNormalized
+
+#Pack
+id = resource_normalized
+path = mod:Renderer\packs\ResourceNormalized
+
+#Pack
+id = city_components_normalized
+path = mod:Renderer\packs\CityComponentsNormalized
+
+#Pack
+id = city_adjuncts_normalized
+path = mod:Renderer\packs\CityAdjunctsNormalized
+
+#Asset
+id = terrain.desert.base
+pack = terrain_normalized
+asset = terrain/desert/base
+
+#Asset
+id = terrain.plains.base
+pack = terrain_normalized
+asset = terrain/plains/base
+
+#Asset
+id = terrain.grassland.base
+pack = terrain_normalized
+asset = terrain/grassland/base
+
+#Asset
+id = terrain.tundra.base
+pack = terrain_normalized
+asset = terrain/tundra/base
+
+#Asset
+id = terrain.flood_plain.base
+pack = terrain_normalized
+asset = terrain/flood_plain/base
+
+#Asset
+id = terrain.hills.base
+pack = terrain_normalized
+asset = terrain/hills/base
+
+#Asset
+id = terrain.mountains.base
+pack = terrain_normalized
+asset = terrain/mountains/base
+
+#Asset
+id = terrain.forest.base
+pack = terrain_normalized
+asset = terrain/forest/base
+
+#Asset
+id = terrain.jungle.base
+pack = terrain_normalized
+asset = terrain/jungle/base
+
+#Asset
+id = terrain.marsh.base
+pack = terrain_normalized
+asset = terrain/marsh/base
+
+#Asset
+id = terrain.volcano.base
+pack = terrain_normalized
+asset = terrain/volcano/base
+
+#Asset
+id = terrain.coast.base
+pack = terrain_normalized
+asset = terrain/coast/base
+
+#Asset
+id = terrain.sea.base
+pack = terrain_normalized
+asset = terrain/sea/base
+
+#Asset
+id = terrain.ocean.base
+pack = terrain_normalized
+asset = terrain/ocean/base
+
+#Rule
+id = terrain.desert.default
+category = terrain
+priority = 100
+terrain_type = desert
+asset = terrain.desert.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.plains.default
+category = terrain
+priority = 100
+terrain_type = plains
+asset = terrain.plains.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.grassland.default
+category = terrain
+priority = 100
+terrain_type = grassland
+asset = terrain.grassland.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.tundra.default
+category = terrain
+priority = 100
+terrain_type = tundra
+asset = terrain.tundra.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.flood_plain.default
+category = terrain
+priority = 100
+terrain_type = flood-plain
+asset = terrain.flood_plain.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.hills.default
+category = terrain
+priority = 100
+terrain_type = hills
+asset = terrain.hills.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.mountains.default
+category = terrain
+priority = 100
+terrain_type = mountains
+asset = terrain.mountains.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.forest.default
+category = terrain
+priority = 100
+terrain_type = forest
+asset = terrain.forest.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.jungle.default
+category = terrain
+priority = 100
+terrain_type = jungle
+asset = terrain.jungle.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.marsh.default
+category = terrain
+priority = 100
+terrain_type = marsh
+asset = terrain.marsh.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.volcano.default
+category = terrain
+priority = 100
+terrain_type = volcano
+asset = terrain.volcano.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.coast.default
+category = terrain
+priority = 100
+terrain_type = coast
+asset = terrain.coast.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.sea.default
+category = terrain
+priority = 100
+terrain_type = sea
+asset = terrain.sea.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Rule
+id = terrain.ocean.default
+category = terrain
+priority = 100
+terrain_type = ocean
+asset = terrain.ocean.base
+variant_selection = coordinate-hash
+replacement = replace
+
+#Environment
+id = earthlike
+day_night_source = c3x
+season_source = c3x
+sunrise_hour = 6
+sunset_hour = 18
+sun_azimuth_degrees = 135
+noon_sun_color = 255, 244, 220
+midnight_ambient_color = 22, 30, 52
+night_exposure = 0.35
+shadow_quality = medium
+seasonal_materials = true

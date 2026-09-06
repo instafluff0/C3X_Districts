@@ -1,0 +1,205 @@
+{
+  "schema": "c3x.source_decal_mapping.v0",
+  "source_units_per_tile": 12.0,
+  "sources": {
+    "package": "Base/Platforms/Windows/BLPs/environment/clutter.blp",
+    "shared_data": "Base/Platforms/Windows/BLPs/SHARED_DATA",
+    "artdef": "Base/ArtDefs/Clutter.artdef"
+  },
+  "groups": [
+    {
+      "group_id": "terrain/water/ocean_surface",
+      "artdef_set": "CLUTTER_OCEAN",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "TER_Ocean_Decal01", "asset_id": "terrain/water/ocean/decal_01"},
+        {"source_asset": "TER_Ocean_Decal02", "asset_id": "terrain/water/ocean/decal_02"},
+        {"source_asset": "TER_Ocean_Decal03", "asset_id": "terrain/water/ocean/decal_03"},
+        {"source_asset": "TER_Ocean_Decal04", "asset_id": "terrain/water/ocean/decal_04"},
+        {"source_asset": "TER_Ocean_Decal05", "asset_id": "terrain/water/ocean/decal_05"},
+        {"source_asset": "TER_Coast_Decal01", "asset_id": "terrain/water/coast/decal_01"},
+        {"source_asset": "TER_Coast_Decal02", "asset_id": "terrain/water/coast/decal_02"},
+        {"source_asset": "TER_Coast_Decal03", "asset_id": "terrain/water/coast/decal_03"},
+        {"source_asset": "TER_Coast_Decal04", "asset_id": "terrain/water/coast/decal_04"}
+      ]
+    },
+    {
+      "group_id": "terrain/grassland/surface",
+      "artdef_set": "CLUTTER_GRASSLAND",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "TER_Grass_Decal02", "asset_id": "terrain/grassland/decal_02"},
+        {"source_asset": "TER_Grass_Decal03", "asset_id": "terrain/grassland/decal_03"},
+        {"source_asset": "TER_Grass_Decal04", "asset_id": "terrain/grassland/decal_04"},
+        {"source_asset": "TER_Grass_Decal05", "asset_id": "terrain/grassland/decal_05"},
+        {"source_asset": "TER_Grass_Decal06", "asset_id": "terrain/grassland/decal_06"},
+        {"source_asset": "TER_Grass_Decal07", "asset_id": "terrain/grassland/decal_07"},
+        {"source_asset": "TER_Grass_Decal08", "asset_id": "terrain/grassland/decal_08"},
+        {"source_asset": "TER_Grass_Decal09", "asset_id": "terrain/grassland/decal_09"},
+        {"source_asset": "TER_Grass_Decal10", "asset_id": "terrain/grassland/decal_10"},
+        {"source_asset": "TER_Grass_Decal12", "asset_id": "terrain/grassland/decal_12"},
+        {"source_asset": "TER_Grass_Decal13", "asset_id": "terrain/grassland/decal_13"}
+      ]
+    },
+    {
+      "group_id": "terrain/plains/surface",
+      "artdef_set": "CLUTTER_PLAINS",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "TER_Plains_Decal01", "asset_id": "terrain/plains/decal_01"},
+        {"source_asset": "TER_Plains_Decal02", "asset_id": "terrain/plains/decal_02"},
+        {"source_asset": "TER_Plains_Decal03", "asset_id": "terrain/plains/decal_03"},
+        {"source_asset": "TER_Plains_Decal04", "asset_id": "terrain/plains/decal_04"},
+        {"source_asset": "TER_Plains_Decal05", "asset_id": "terrain/plains/decal_05"},
+        {"source_asset": "TER_Plains_Dark_Decal01", "asset_id": "terrain/plains/dark_decal_01"},
+        {"source_asset": "TER_Plains_Dark_Decal02", "asset_id": "terrain/plains/dark_decal_02"},
+        {"source_asset": "TER_Plains_Dark_Decal03", "asset_id": "terrain/plains/dark_decal_03"}
+      ]
+    },
+    {
+      "group_id": "terrain/grassland_hills/surface",
+      "artdef_set": "CLUTTER_GRASSLAND_HILLS",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "TER_Grass_Decal_HB01", "asset_id": "terrain/grassland_hills/decal_01"},
+        {"source_asset": "TER_Grass_Decal_HB02", "asset_id": "terrain/grassland_hills/decal_02"},
+        {"source_asset": "TER_Grass_Decal_HB03", "asset_id": "terrain/grassland_hills/decal_03"}
+      ]
+    },
+    {
+      "group_id": "terrain/desert/dunes",
+      "artdef_set": "CLUTTER_DESERT",
+      "collection": "Plants",
+      "assets": [
+        {
+          "source_asset": "TER_Desert_Decal10",
+          "asset_id": "terrain/desert/dune/decal_01"
+        },
+        {
+          "source_asset": "TER_Desert_Decal11",
+          "asset_id": "terrain/desert/dune/decal_02"
+        },
+        {
+          "source_asset": "TER_Desert_Decal12",
+          "asset_id": "terrain/desert/dune/decal_03"
+        },
+        {
+          "source_asset": "TER_Desert_Decal13",
+          "asset_id": "terrain/desert/dune/decal_04"
+        },
+        {
+          "source_asset": "TER_Desert_Decal14",
+          "asset_id": "terrain/desert/dune/decal_05"
+        }
+      ]
+    },
+    {
+      "group_id": "terrain/marsh/surface",
+      "artdef_set": "CLUTTER_MARSH",
+      "collection": "Plants",
+      "assets": [
+        {
+          "source_asset": "TER_Marsh_Decal",
+          "asset_id": "terrain/marsh/decal_01"
+        },
+        {
+          "source_asset": "TER_Marsh_Decal001",
+          "asset_id": "terrain/marsh/decal_02"
+        },
+        {
+          "source_asset": "TER_Marsh_Decal002",
+          "asset_id": "terrain/marsh/decal_03"
+        },
+        {
+          "source_asset": "TER_Marsh_Decal003",
+          "asset_id": "terrain/marsh/decal_04"
+        },
+        {
+          "source_asset": "TER_Marsh_Decal004",
+          "asset_id": "terrain/marsh/decal_05"
+        },
+        {
+          "source_asset": "TER_Marsh_Decal005",
+          "asset_id": "terrain/marsh/decal_06"
+        },
+        {
+          "source_asset": "TER_Marsh_Decall006",
+          "asset_id": "terrain/marsh/decal_07"
+        },
+        {
+          "source_asset": "TER_Marsh_Decal007",
+          "asset_id": "terrain/marsh/decal_08"
+        },
+        {
+          "source_asset": "TER_Marsh_Decall008",
+          "asset_id": "terrain/marsh/decal_09"
+        }
+      ]
+    },
+    {
+      "group_id": "resource/iron/decals",
+      "artdef_set": "CLUTTER_IRON",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "RES_Iron_Decal01", "asset_id": "resource/iron/decal_01"},
+        {"source_asset": "RES_Iron_Decal02", "asset_id": "resource/iron/decal_02"}
+      ]
+    },
+    {
+      "group_id": "resource/coal/decals",
+      "artdef_set": "CLUTTER_COAL",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "RES_Coal_Decal01", "asset_id": "resource/coal/decal_01"},
+        {"source_asset": "RES_Coal_Decal02", "asset_id": "resource/coal/decal_02"}
+      ]
+    },
+    {
+      "group_id": "resource/aluminum/decals",
+      "artdef_set": "CLUTTER_ALUMINUM",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "RES_Aluminum_Decal01", "asset_id": "resource/aluminum/decal_01"},
+        {"source_asset": "RES_Aluminum_Decal02", "asset_id": "resource/aluminum/decal_02"}
+      ]
+    },
+    {
+      "group_id": "resource/uranium/decals",
+      "artdef_set": "CLUTTER_URANIUM",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "RES_Uranium_Decal01", "asset_id": "resource/uranium/decal_01"},
+        {"source_asset": "RES_Uranium_Decal02", "asset_id": "resource/uranium/decal_02"}
+      ]
+    },
+    {
+      "group_id": "resource/diamonds/decals",
+      "artdef_set": "CLUTTER_DIAMONDS",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "RES_Diamond_Decal01", "asset_id": "resource/diamonds/decal_01"},
+        {"source_asset": "RES_Diamond_Decal02", "asset_id": "resource/diamonds/decal_02"}
+      ]
+    },
+    {
+      "group_id": "resource/gold/decals",
+      "artdef_set": "CLUTTER_GOLD",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "RES_Gold_Decal01", "asset_id": "resource/gold/decal_01"},
+        {"source_asset": "RES_Gold_Decal02", "asset_id": "resource/gold/decal_02"}
+      ]
+    },
+    {
+      "group_id": "resource/oil/decals",
+      "artdef_set": "CLUTTER_OIL_LAND",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "RES_Oil_Land_Decal01", "asset_id": "resource/oil/decal_01"},
+        {"source_asset": "RES_Oil_Land_Decal02", "asset_id": "resource/oil/decal_02"},
+        {"source_asset": "RES_Oil_Land_Decal03", "asset_id": "resource/oil/decal_03"},
+        {"source_asset": "RES_Oil_Land_Decal04", "asset_id": "resource/oil/decal_04"}
+      ]
+    }
+  ]
+}

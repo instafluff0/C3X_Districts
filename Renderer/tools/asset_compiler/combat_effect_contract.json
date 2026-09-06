@@ -1,0 +1,140 @@
+{
+  "schema": "c3x.combat_effect_contract.v0",
+  "runtime_status": "not_enabled",
+  "authority": {
+    "gameplay": "civ3",
+    "presentation": "c3x_renderer",
+    "audio": "civ3",
+    "clock": "absolute_monotonic_presentation_time",
+    "frame_policy": "sample_current_time_and_skip_missed_frames"
+  },
+  "stable_ids": {
+    "action": "native_action_sequence_id",
+    "release": "<action_id>/release/<authored_marker_index>",
+    "impact": "<action_id>/impact/<native_effect_call_ordinal>",
+    "decorative_child": "<impact_id>/visual/<deterministic_child_index>"
+  },
+  "native_bridge": {
+    "bombard_context": {
+      "begin": "patch_Unit_bombard_tile records source unit and wrapped target tile before calling Civ III",
+      "release": "patch_Unit_play_anim_for_bombard_tile plus the M7.4 native action cursor exposes authored release markers",
+      "impact": "patch_Units_Image_Data_load_animated_effect observes Civ III's AE_Hit/AE_Miss load at the exact native damage-animation boundary",
+      "finish": "patch_Unit_bombard_tile return closes the action after Civ III has resolved all fire-rate rolls",
+      "precision_strike": "patch_Unit_do_precision_strike and its existing bombing/cruise-missile replacement calls provide source and target context",
+      "defensive_bombard": "existing Fighter combat hooks provide source, target, and interruption context"
+    },
+    "native_impact_effects": {
+      "3": "hit_variant_0",
+      "4": "hit_variant_1",
+      "5": "hit_variant_2",
+      "6": "hit_variant_3",
+      "7": "land_miss",
+      "8": "water_miss"
+    },
+    "pixel_suppression": {
+      "ordinary_effect_loader": "patch_Units_Image_Data_load_animated_effect calls Civ III first, then clears only byte 0x184 of the returned FLC_Animation after the renderer accepts ownership",
+      "standalone_animation_loader": "Units_Image_Data_load_animation must become an inlead so renderer-owned standalone effects such as Art\\Animations\\SDI\\SDI.ini can use the same post-load byte-0x184 suppression",
+      "native_draw_rule": "Animator_update ticks the FLC before testing byte 0x184 and calling the sprite blitter, so zero suppresses pixels without suppressing tick, sound cues, dirty accounting, waits, or object lifetime",
+      "field_access": "write only the low byte of FLC_Animation.Last, which is the header name for offset 0x184; do not zero the whole trailing word because bytes 0x185 and 0x186 have separate native meanings",
+      "ownership_gate": "clear the byte only after the matching custom event/body/effect family has been accepted; unmapped or failed families remain entirely native"
+    },
+    "outcome_policy": "The effect call says hit/miss and timing, not what gameplay object changed. Damage, death, building loss, population loss, and tile changes come from authoritative before/after Civ III state.",
+    "nuclear_policy": {
+      "delivery": "Unit::animate_nuclear_strike runs before Civ III chooses the presentation branch and is never evidence of detonation",
+      "predicate": "after finding the first eligible SDI civilization, intercepted means intercepting_civ_id != -1 and rand_int(4) != 0; otherwise the strike detonates",
+      "detonated_boundary": "Unit::do_nuke_tile is the authoritative detonation branch in offline play and the multiplayer sync callback",
+      "intercepted_boundary": "Unit::get_intercepted_as_nuke is the authoritative interception branch in offline play and the multiplayer sync callback",
+      "local_visuals": "successful delivery uses the missile unit animation path; interception loads Art\\Animations\\SDI\\SDI.ini as a standalone FLC",
+      "rule": "never infer detonation from the delivery clip, attack clip, disappearance of the missile, an explosion size, or victim despawn"
+    }
+  },
+  "ownership": {
+    "custom_unit_and_effect": "replace the custom unit body and related native impact pixels as one atomic presentation family",
+    "native_unit": "leave its baked attack/projectile/explosion art completely native",
+    "missing_custom_effect": "visible hard failure for the custom effect; never replay the native pixels behind an already-custom unit",
+    "native_audio_preservation": "suppress only native effect pixels after their animation/audio state has been created and advanced",
+    "double_effects_forbidden": true
+  },
+  "bindings": {
+    "selection": "per-unit or per-attack data in the renderer pack; no unit-name branches",
+    "required_fields": ["profile_id", "release_markers"],
+    "release_marker_units": "normalized_native_action_progress",
+    "multiple_releases": "one child release event per authored marker",
+    "multiple_impacts": "one child impact event per native AE_Hit/AE_Miss call; decorative sub-bursts never imply extra gameplay damage",
+    "default_when_unmapped": "native_unit_and_native_effect"
+  },
+  "profiles": {
+    "ballistic_shell": {
+      "projectile": "effect/combat/projectile/artillery_shell",
+      "trajectory": "source_target_parabolic_arc",
+      "muzzle": "effect/combat/muzzle/flash_artillery",
+      "land_hit": "layered_flash_fireball_smoke_dust_debris",
+      "land_miss": "dust_without_damage_debris",
+      "water_hit_or_miss": "splash_ring_mist_without_ground_decal",
+      "impact_duration_ms": 900,
+      "night_light": "short_bounded_warm_analytic_flash"
+    },
+    "dropped_bomb": {
+      "projectile": "optional_pack_supplied_bomb_body",
+      "trajectory": "source_release_to_target_gravity_drop",
+      "muzzle": "none",
+      "land_hit": "layered_flash_fireball_smoke_dust_debris",
+      "land_miss": "dust_without_damage_debris",
+      "water_hit_or_miss": "splash_ring_mist_without_ground_decal",
+      "impact_duration_ms": 1100,
+      "night_light": "short_bounded_warm_analytic_flash"
+    },
+    "guided_missile": {
+      "projectile": "effect/combat/projectile/missile",
+      "trajectory": "source_target_guided_curve",
+      "muzzle": "effect/combat/muzzle/flash_primary",
+      "land_hit": "layered_flash_fireball_smoke_dust_debris",
+      "land_miss": "dust_without_damage_debris",
+      "water_hit_or_miss": "splash_ring_mist_without_ground_decal",
+      "impact_duration_ms": 1200,
+      "night_light": "short_bounded_warm_analytic_flash"
+    },
+    "nuclear_detonation": {
+      "projectile": "optional_pack_supplied_nuclear_delivery_body",
+      "trajectory": "native_delivery_route",
+      "muzzle": "pack_supplied_launch_effect",
+      "land_hit": "flash_sphere_shockwave_cloud_flames_scorch",
+      "land_miss": "not_applicable",
+      "water_hit_or_miss": "pack_supplied_nuclear_water_variant",
+      "impact_duration_ms": 7000,
+      "night_light": "large_but_bounded_authoritative_detonation_flash"
+    }
+  },
+  "rendering": {
+    "layer_order": ["terrain_decal", "low_dust_or_splash", "depth_tested_debris", "fireball_and_smoke", "additive_flash"],
+    "depth": "world-anchored particles depth-test against the map scene; soft sprites do not write depth",
+    "zoom": "profile-authored normal and reduced-scale density/size limits preserve Civ III readability",
+    "night": "flash and emissive sprites use the shared environment; transient light lifetime is bounded by the event",
+    "visibility": "never spawn or keep redrawing a fog-hidden or off-screen effect solely to reveal information",
+    "persistent_damage": "scorch, crater, smoke, or fire persists only when authoritative map state or an explicit presentation event owns it"
+  },
+  "cleanup": {
+    "normal": "complete at the profile impact duration",
+    "interrupted": "terminate or authored-short-fade at the native interruption timestamp",
+    "reset_load_or_device_loss": "drop all transient GPU instances and rebuild only from still-live captured events",
+    "source_or_target_despawn": "do not retarget; finish only if the event policy explicitly allows detached impact presentation"
+  },
+  "source_evidence": {
+    "confirmed_civ3": [
+      "Unit::play_bombard_damage_animation maps hits to AE_Hit/AE_Hit2/AE_Hit3/AE_Hit5 and misses to AE_Miss/AE_WaterMiss",
+      "Civ III creates an AnimatedEffect at the target, queues AT_DEATH, and waits 500 ms in offline play",
+      "Units_Image_Data_load_animated_effect and Fighter_do_bombard_tile already have inlead entries",
+      "ordinary bombard fire animation runs before Fighter_do_bombard_tile resolves outcomes",
+      "Animator_update ticks each effect FLC before byte 0x184 gates its pixel blit, so clearing only that byte preserves native advancement and sound",
+      "Unit::do_nuke_tile and Unit::get_intercepted_as_nuke are the exact detonation/interception branches and are reused by the multiplayer sync callback"
+    ],
+    "confirmed_civ6": [
+      "VFX.blp and VFX_A/B/C.blp contain named muzzle, shell, bomb, missile, explosion, debris, water-impact, and nuclear families",
+      "22 standalone SHARED_DATA texture resources in the conservative mapping convert to generic DDS payloads"
+    ],
+    "unresolved": [
+      "Civ VI particle-script bytecode, emitter graphs, blend constants, sprite-sheet layouts, and exact timing",
+      "M7.5 visual calibration and production event rendering"
+    ]
+  }
+}

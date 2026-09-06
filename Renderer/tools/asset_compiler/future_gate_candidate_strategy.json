@@ -1,0 +1,46 @@
+{
+  "schema": "c3x.future_gate_candidate_strategy.v0",
+  "runtime_integration": "not_enabled",
+  "candidates": {
+    "capital_centerpiece": {
+      "status": "two_normalized_culture_candidates_ready_for_L17_comparison",
+      "assets": ["candidate/city/capital_mesoamerican", "candidate/city/capital_south_american"],
+      "policy": "optional_centerpiece_selected_by_explicit_city-style mapping; never assume a scenario culture from source provenance",
+      "night": "use normalized emissive materials; VFX sockets remain inactive until their resource graphs decode"
+    },
+    "radar_tower": {
+      "status": "normalized_observatory_candidate_is_structurally_valid_but_isolated_sheet_reads_as_flat_plaza",
+      "assets": ["candidate/infrastructure/radar_observatory_body"],
+      "policy": "retain as evidence but expect rejection unless later source-backed components create an unmistakable tower or antenna silhouette",
+      "calibration": {"required_uniform_scale": 11.22191796, "facings": 8, "zooms": 2, "day_night_cells": 32},
+      "rejected": ["missile_silo_semantically_wrong"]
+    },
+    "crater": {
+      "status": "four_persistent_decal_variants_normalized",
+      "assets": ["infrastructure/crater/variant_01", "infrastructure/crater/variant_02", "infrastructure/crater/variant_03", "infrastructure/crater/variant_04"],
+      "policy": "lifetime follows authoritative Civ III crater state, never transient impact lifetime"
+    },
+    "pollution": {
+      "status": "preferred_nuclear_fallout_visual_family_with_five_normalized_textures_and_bounded_generic_graph",
+      "source_chain": "NUCLEAR_FALLOUT -> FX_Radiation",
+      "assets": ["effect/pollution/radiation_sheet_01", "effect/pollution/radiation_sheet_02", "effect/pollution/radiation_alpha_01", "effect/pollution/radiation_alpha_02", "effect/pollution/radiation_atlas"],
+      "policy": "use a restrained tile-local subset of the green radiation wisps, with lifetime owned by authoritative Civ III pollution state; do not inherit the source disaster radius or detonation timing",
+      "effect_profile": "infrastructure/pollution_radiation",
+      "maximum_live_particles": 7,
+      "remaining": "calibrate density, alpha, emissive response, and night exposure in L19B; exact source-script behavior remains unclaimed"
+    },
+    "victory_location": {
+      "status": "explicitly_set_aside_by_user_direction",
+      "rejected": ["supply_drop_reads_as_loot", "city_monument_collides_with_city_semantics"],
+      "policy": "do not investigate, generate, map, or promote a Victory Location candidate in this preparation pass"
+    },
+    "industrial_colony": {
+      "status": "three_preindustrial_and_three_industrial_source_bodies_pass_strict_conversion",
+      "base": "era_selected_source_logistics_outpost",
+      "dressing": ["compact_service_shed", "utility_lamp", "stacked_crates", "restrained_owner_pennant"],
+      "limits": {"body_scale": 0.62, "maximum_owner_colored_surface_fraction": 0.14},
+      "strict_bind_pose_max_errors": [3.3737867943806066e-07, 7.99083003100165e-07, 3.3737867943806066e-07],
+      "policy": "prefer the strict source compounds; retain source-neutral dressing only as an optional Lab composition choice"
+    }
+  }
+}

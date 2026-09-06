@@ -1,0 +1,47 @@
+{
+  "schema": "c3x.renderer_lab_handoff.v0",
+  "lab_gate": "L10",
+  "system": "desert_dunes",
+  "status": "approved",
+  "approved_on": "2026-09-05",
+  "depends_on": ["handoffs/L9_terrain.json"],
+  "source_contract": {
+    "pack_roots": ["packs/TerrainNormalized", "packs/DecalsNormalized"],
+    "definition": "default.custom_rendering.txt",
+    "definition_schema": "c3x.renderer_definition.v0",
+    "scene_generator": "terrain_lab/terrain_lab.cpp",
+    "scene_mode": "beauty_dunes",
+    "projection": "civ3_pixel_defined_isometric"
+  },
+  "coverage": [
+    "connected procedural dune macro geometry",
+    "desert-hills material response",
+    "source-backed sand decal base/height detail",
+    "flat desert, desert hills, and desert mountain coexistence"
+  ],
+  "reference": {
+    "native_output": "preview/out/terrain_lab/terrain_beauty_l10_dunes.bmp",
+    "native_sha256": "5b2a145196afd62e7cacf4b9b0af15d780a0f64e7820a62e817e1e27e9b3bc7d",
+    "reduced_output": "preview/out/terrain_lab/terrain_beauty_l10_dunes_thumbnail.bmp",
+    "reduced_sha256": "06477a205ec2f48076e354e7fcf680cee3e558a2b63da2ec6d3042bfcc24de6a",
+    "tile_count": 96,
+    "audit": "terrain_lab/L10_DUNE_AUDIT.md"
+  },
+  "ownership_intent": {
+    "dune_surface": "replace_after_successful_composite",
+    "underlying_desert": "replace_after_successful_composite",
+    "retained_layers": "civ3"
+  },
+  "cache_inputs": [
+    "L9 terrain handoff revision",
+    "pack and definition revision",
+    "map and tile identity",
+    "desert topology and adjacency",
+    "deterministic variant seed",
+    "viewport, zoom, scroll, and wrap representation",
+    "hour and season",
+    "ownership and fallback disposition"
+  ],
+  "update_mode": "static unless environment or visible game state changes",
+  "fallback": "Dunes and their renderer-owned desert contribution fall back atomically to the complete native tile presentation."
+}

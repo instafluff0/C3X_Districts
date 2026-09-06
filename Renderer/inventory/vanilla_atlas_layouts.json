@@ -1,0 +1,228 @@
+{
+  "schema": "c3x.civ3_atlas_layouts.v0",
+  "evidence": {
+    "loader": "Civ3Conquests Map_Renderer::load_images and the byte-equivalent C3X load_day_night_hour_and_season_images mirror",
+    "city_loader": "Civ3Conquests FUN_005497d0, FUN_0054a550, and load_city_icons",
+    "resource_selector": "Conquests BIQ GOOD.icon records",
+    "ownership": "Renderer M5 insertion-boundary contract"
+  },
+  "contracts": [
+    {
+      "id": "terrain_transition_81",
+      "basenames": ["xtgc.pcx", "xpgc.pcx", "xdgc.pcx", "xdpc.pcx", "xdgp.pcx", "xggc.pcx", "wCSO.pcx", "wSSS.pcx", "wOOO.pcx", "lxtgc.pcx", "lxpgc.pcx", "lxdgc.pcx", "lxdpc.pcx", "lxdgp.pcx", "lxggc.pcx", "lwCSO.pcx", "lwSSS.pcx", "lwOOO.pcx", "FogOfWar.pcx"],
+      "groups": [{"name": "selector", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 9, "rows": 9}],
+      "authored_capacity": 81,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "polar_ice_32",
+      "basenames": ["polarICEcaps-final.pcx"],
+      "groups": [{"name": "topology", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 8, "rows": 4}],
+      "authored_capacity": 32,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "hills_16",
+      "basenames": ["xhills.pcx", "hill forests.pcx", "hill jungle.pcx", "LMHills.pcx"],
+      "groups": [{"name": "variant", "origin": [0, 0], "cell": [128, 72], "stride": [128, 72], "columns": 4, "rows": 4}],
+      "authored_capacity": 16,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "mountain_or_volcano_16",
+      "basenames": ["LMMountains.pcx", "Mountains.pcx", "mountain forests.pcx", "mountain jungles.pcx", "Mountains-snow.pcx", "Volcanos.pcx", "Volcanos forests.pcx", "Volcanos jungles.pcx", "Volcanos-snow.pcx"],
+      "groups": [{"name": "variant", "origin": [0, 0], "cell": [128, 88], "stride": [128, 88], "columns": 4, "rows": 4}],
+      "authored_capacity": 16,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "tile_mask_16",
+      "basenames": ["floodplains.pcx", "deltaRivers.pcx", "mtnRivers.pcx", "irrigation DESETT.pcx", "irrigation PLAINS.pcx", "irrigation.pcx", "irrigation TUNDRA.pcx"],
+      "groups": [{"name": "adjacency_mask", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 4, "rows": 4}],
+      "authored_capacity": 16,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "waterfalls_4",
+      "basenames": ["waterfalls.pcx"],
+      "groups": [{"name": "direction", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 4, "rows": 1}],
+      "authored_capacity": 4,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "roads_256",
+      "basenames": ["roads.pcx"],
+      "groups": [{"name": "connection_mask", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 16, "rows": 16}],
+      "authored_capacity": 256,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "railroads_272",
+      "basenames": ["railroads.pcx"],
+      "groups": [{"name": "connection_mask", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 16, "rows": 17}],
+      "authored_capacity": 272,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "pollution_or_craters_25",
+      "basenames": ["pollution.pcx", "craters.pcx"],
+      "groups": [{"name": "variant", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 5, "rows": 5}],
+      "authored_capacity": 25,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "marsh_18",
+      "basenames": ["marsh.pcx"],
+      "groups": [
+        {"name": "large", "origin": [0, 0], "cell": [128, 88], "stride": [128, 88], "columns": 4, "rows": 2},
+        {"name": "small", "origin": [0, 176], "cell": [128, 88], "stride": [128, 88], "columns": 5, "rows": 2}
+      ],
+      "authored_capacity": 18,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "grassland_forest_and_jungle_50",
+      "basenames": ["grassland forests.pcx"],
+      "groups": [
+        {"name": "jungle_large", "origin": [0, 0], "cell": [128, 88], "stride": [128, 88], "columns": 4, "rows": 2},
+        {"name": "jungle_small", "origin": [0, 176], "cell": [128, 88], "stride": [128, 88], "columns": 6, "rows": 2},
+        {"name": "forest_large", "origin": [0, 352], "cell": [128, 88], "stride": [128, 88], "columns": 4, "rows": 2},
+        {"name": "forest_small", "origin": [0, 528], "cell": [128, 88], "stride": [128, 88], "columns": 5, "rows": 2},
+        {"name": "forest_pines", "origin": [0, 704], "cell": [128, 88], "stride": [128, 88], "columns": 6, "rows": 2}
+      ],
+      "authored_capacity": 50,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "forest_30",
+      "basenames": ["plains forests.pcx", "tundra forests.pcx"],
+      "groups": [
+        {"name": "forest_large", "origin": [0, 352], "cell": [128, 88], "stride": [128, 88], "columns": 4, "rows": 2},
+        {"name": "forest_small", "origin": [0, 528], "cell": [128, 88], "stride": [128, 88], "columns": 5, "rows": 2},
+        {"name": "forest_pines", "origin": [0, 704], "cell": [128, 88], "stride": [128, 88], "columns": 6, "rows": 2}
+      ],
+      "authored_capacity": 30,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "landmark_forest_32",
+      "basenames": ["LMForests.pcx"],
+      "groups": [
+        {"name": "large", "origin": [0, 0], "cell": [128, 88], "stride": [128, 88], "columns": 4, "rows": 2},
+        {"name": "small", "origin": [0, 176], "cell": [128, 88], "stride": [128, 88], "columns": 6, "rows": 2},
+        {"name": "pines", "origin": [0, 352], "cell": [128, 88], "stride": [128, 88], "columns": 6, "rows": 2}
+      ],
+      "authored_capacity": 32,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "landmark_terrain_7",
+      "basenames": ["landmark_terrain.pcx"],
+      "groups": [{"name": "landmark_base", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 1, "rows": 7}],
+      "authored_capacity": 7,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "territory_8",
+      "basenames": ["Territory.pcx"],
+      "groups": [{"name": "border", "origin": [0, 0], "cell": [128, 72], "stride": [128, 72], "columns": 2, "rows": 4}],
+      "authored_capacity": 8,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "tnt_18",
+      "basenames": ["tnt.pcx"],
+      "groups": [{"name": "selector_remapped", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 3, "rows": 6, "runtime_indices": [6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 1, 2, 15, 16, 17, 3, 4, 5]}],
+      "authored_capacity": 18,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "goody_huts_9",
+      "basenames": ["goodyhuts.pcx"],
+      "groups": [{"name": "culture_variant", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 3, "rows": 3}],
+      "authored_capacity": 9,
+      "reachable": {"mode": "indices", "indices": [0, 1, 2, 3, 4, 5, 6, 7]},
+      "unreachable_indices": [8]
+    },
+    {
+      "id": "terrain_buildings_14",
+      "basenames": ["TerrainBuildings.pcx"],
+      "groups": [
+        {"name": "fortress", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 1, "rows": 4},
+        {"name": "colony", "origin": [128, 0], "cell": [128, 64], "stride": [128, 64], "columns": 1, "rows": 4},
+        {"name": "barbarian_camp", "origin": [256, 0], "cell": [128, 64], "stride": [128, 64], "columns": 1, "rows": 1},
+        {"name": "mine", "origin": [256, 64], "cell": [128, 64], "stride": [128, 64], "columns": 1, "rows": 1},
+        {"name": "barricade", "origin": [384, 0], "cell": [128, 64], "stride": [128, 64], "columns": 1, "rows": 4}
+      ],
+      "authored_capacity": 14,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "airfield_detect_6",
+      "basenames": ["x_airfields and detect.pcx", "X_AIRfields and detect_shadow.pcx"],
+      "groups": [
+        {"name": "airfield", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 2, "rows": 1},
+        {"name": "outpost", "origin": [0, 64], "cell": [128, 128], "stride": [128, 128], "columns": 3, "rows": 1},
+        {"name": "radar", "origin": [0, 192], "cell": [128, 128], "stride": [128, 128], "columns": 1, "rows": 1}
+      ],
+      "authored_capacity": 6,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "single_tile_128x64",
+      "basenames": ["EditFog.pcx", "StartLoc.pcx", "x_victory.pcx"],
+      "groups": [{"name": "single", "origin": [0, 0], "cell": [128, 64], "stride": [128, 64], "columns": 1, "rows": 1}],
+      "authored_capacity": 1,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "resources_36",
+      "basenames": ["resources.pcx", "resources_shadows.pcx"],
+      "groups": [{"name": "resource_icon", "origin": [1, 1], "cell": [49, 49], "stride": [50, 50], "columns": 6, "rows": 6}],
+      "authored_capacity": 36,
+      "reachable": {"mode": "biq_good_icon"}
+    },
+    {
+      "id": "city_base_12",
+      "basenames": ["rAMER.pcx", "rEURO.pcx", "rROMAN.pcx", "rMIDEAST.pcx", "rASIAN.pcx"],
+      "groups": [{"name": "era_size", "origin": [0, 0], "cell": [167, 95], "stride": [167, 95], "columns": 3, "rows": 4}],
+      "authored_capacity": 12,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "city_wall_4",
+      "basenames": ["AMERWALL.pcx", "EUROWALL.pcx", "ROMANWALL.pcx", "MIDEASTWALL.pcx", "ASIANWALL.pcx"],
+      "groups": [{"name": "era", "origin": [0, 0], "cell": [167, 95], "stride": [167, 95], "columns": 1, "rows": 4}],
+      "authored_capacity": 4,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "destroyed_city_3",
+      "basenames": ["DESTROY.pcx"],
+      "groups": [{"name": "size", "origin": [0, 0], "cell": [167, 95], "stride": [167, 95], "columns": 3, "rows": 1}],
+      "authored_capacity": 3,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "city_status_small",
+      "basenames": ["airAndHarb.pcx"],
+      "groups": [{"name": "airport_harbor", "origin": [1, 1], "cell": [25, 17], "stride": [26, 17], "columns": 2, "rows": 1}],
+      "authored_capacity": 2,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "city_barracks",
+      "basenames": ["barracks.pcx"],
+      "groups": [{"name": "barracks", "origin": [1, 1], "cell": [25, 17], "stride": [25, 17], "columns": 1, "rows": 1}],
+      "authored_capacity": 1,
+      "reachable": {"mode": "all_contract_cells"}
+    },
+    {
+      "id": "city_icons_3",
+      "basenames": ["city icons.pcx"],
+      "groups": [{"name": "spy_capital_embassy", "origin": [1, 1], "cell": [18, 18], "stride": [19, 18], "columns": 3, "rows": 1}],
+      "authored_capacity": 3,
+      "reachable": {"mode": "all_contract_cells"}
+    }
+  ]
+}

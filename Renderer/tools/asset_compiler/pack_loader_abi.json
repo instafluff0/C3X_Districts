@@ -1,0 +1,22 @@
+{
+  "schema": "c3x.runtime_pack_loader_abi.v0",
+  "index_schema": "c3x.content_addressed_pack.v0",
+  "path_encoding": "utf-8",
+  "path_separator": "/",
+  "path_rules": [
+    "relative_only",
+    "no_empty_dot_or_dotdot_components",
+    "no_backslash",
+    "case_sensitive"
+  ],
+  "object_identity": "sha256_of_exact_uncompressed_logical_file_bytes",
+  "object_range": "offset_and_size_into_objects_bin",
+  "verification": "sha256_before_first_use_and_after_device_or_file_remount",
+  "mount_precedence": "last_mount_wins_per_complete_logical_path",
+  "partial_override": "path_granularity_only_unmentioned_base_paths_remain_visible",
+  "resident_set": "deduplicate_resolved_objects_by_sha256_across_mounts",
+  "budget": "sum_exact_unique_object_sizes_before_allocation",
+  "missing_or_corrupt": "visible_hard_failure_for_enabled_custom_category_no_native_replay",
+  "runtime_source_format_dependency": null,
+  "runtime_activation": "not_enabled"
+}

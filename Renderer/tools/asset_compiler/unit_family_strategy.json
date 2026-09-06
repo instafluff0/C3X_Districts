@@ -1,0 +1,138 @@
+{
+  "schema": "c3x.source_unit_family_strategy.v0",
+  "source_content": "Base",
+  "source_units_per_tile": 100.0,
+  "units": [
+    {
+      "slug": "archer",
+      "civ3_ids": ["PRTO_Archer"],
+      "source_artdef": "UNIT_ARCHER",
+      "domain": "land",
+      "archetype": "humanoid_ranged",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {"source": "ANIMATION_Archer_StandingIdleA", "loop": true},
+        "move": {"source": "ANIMATION_UnitMedium_Run_BowAndArrowA", "loop": true},
+        "attack": {"source": "ANIMATION_Archer_FireArrowStraightA", "loop": false},
+        "death": {"source": "ANIMATION_UnitMedium_ProjectileDeathFlyBackA", "loop": false}
+      },
+      "additional_actions": {
+        "fidget": {"source": "ANIMATION_Archer_StandingIdleC", "loop": false},
+        "fortify": {"source": "ANIMATION_Archer_BraceA", "loop": false},
+        "defend": {"source": "ANIMATION_Crossbowman_ReactA", "loop": false, "source_match": "compatible_ranged_humanoid_rig"},
+        "victory": {"source": "ANIMATION_Crossbowman_VictoryA", "loop": false, "source_match": "compatible_ranged_humanoid_rig"}
+      }
+    },
+    {
+      "slug": "swordsman",
+      "civ3_ids": ["PRTO_Swordsman"],
+      "source_artdef": "UNIT_SWORDSMAN",
+      "domain": "land",
+      "archetype": "humanoid_melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {"source": "ANIMATION_Swordsman_IdleB", "loop": true},
+        "move": {"source": "ANIMATION_UnitMedium_Run_SwordAndShieldA", "loop": true},
+        "attack": {"source": "ANIMATION_Swordsman_AttackA", "loop": false},
+        "death": {"source": "ANIMATION_Warrior_DeathMeleeA", "loop": false}
+      },
+      "additional_actions": {
+        "fidget": {"source": "ANIMATION_Swordsman_IdleD", "loop": false},
+        "fortify": {"source": "ANIMATION_Warrior_BraceA", "loop": false, "source_match": "compatible_sword_and_shield_rig"},
+        "defend": {"source": "ANIMATION_Swordsman_ReactA", "loop": false},
+        "victory": {"source": "ANIMATION_Hoplite_VictoryA", "loop": false, "source_match": "compatible_shield_infantry_rig"}
+      }
+    },
+    {
+      "slug": "infantry",
+      "civ3_ids": ["PRTO_Infantry"],
+      "source_artdef": "UNIT_INFANTRY",
+      "domain": "land",
+      "archetype": "humanoid_firearm",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {"source": "ANIMATION_Infantry_IdleA", "loop": true},
+        "move": {"source": "ANIMATION_Infantry_StrafeFwdA", "loop": true},
+        "attack": {"source": "ANIMATION_Infantry_GunBurstSights", "loop": false},
+        "death": {"source": "ANIMATION_Infantry_DeathA", "loop": false}
+      },
+      "additional_actions": {
+        "fidget": {"source": "ANIMATION_Infantry_IdleD", "loop": false},
+        "fortify": {"source": "ANIMATION_Infantry_BraceA", "loop": false},
+        "defend": {"source": "ANIMATION_Infantry_ReactB", "loop": false},
+        "victory": {"source": "ANIMATION_Infantry_VictoryA", "loop": false}
+      }
+    },
+    {
+      "slug": "fighter",
+      "civ3_ids": ["PRTO_Fighter"],
+      "source_artdef": "UNIT_FIGHTER",
+      "domain": "air",
+      "archetype": "aircraft",
+      "minimum_matching_tracks": 8,
+      "actions": {
+        "idle": {"source": "ANIMATION_Fighter_IdleGround", "loop": true},
+        "move": {"source": "ANIMATION_Fighter_IdleA", "loop": true},
+        "attack": {"source": "ANIMATION_Fighter_AttackA", "loop": false},
+        "death": {"source": "ANIMATION_Fighter_Death", "loop": false}
+      },
+      "additional_actions": {
+        "fidget": {"alias": "idle", "loop": false},
+        "fortify": {"alias": "idle", "loop": false},
+        "defend": {"alias": "turn_right", "loop": false},
+        "victory": {"alias": "move", "loop": false},
+        "takeoff": {"source": "ANIMATION_Fighter_Takeoff", "loop": false},
+        "landing": {"source": "ANIMATION_Fighter_Landing", "loop": false},
+        "turn_left": {"source": "ANIMATION_Fighter_TurnLeft", "loop": false},
+        "turn_right": {"source": "ANIMATION_Fighter_TurnRight", "loop": false}
+      }
+    },
+    {
+      "slug": "galley",
+      "civ3_ids": ["PRTO_Galley"],
+      "source_artdef": "UNIT_GALLEY",
+      "domain": "sea",
+      "archetype": "naval",
+      "minimum_matching_tracks": 8,
+      "actions": {
+        "idle": {"source": "ANIMATION_Galley_IdleA", "loop": true},
+        "move": {"source": "ANIMATION_Galley_RunA", "loop": true},
+        "attack": {"source": "ANIMATION_Galley_AttackA", "loop": false},
+        "death": {"source": "ANIMATION_Galley_DeathA", "loop": false}
+      },
+      "additional_actions": {
+        "fidget": {"alias": "idle", "loop": false},
+        "fortify": {"alias": "idle", "loop": false},
+        "defend": {"source": "ANIMATION_Galley_RunStopA", "loop": false, "source_match": "compatible_naval_stop_reaction"},
+        "victory": {"alias": "idle", "loop": false}
+      }
+    }
+  ],
+  "deferred_archetype_probes": [
+    {
+      "source_artdef": "UNIT_HORSEMAN",
+      "archetype": "mounted",
+      "blockers": ["virtual Rider member attachment", "horse bind-pose tolerance needs an archetype-specific audit"]
+    },
+    {
+      "source_artdef": "UNIT_CATAPULT",
+      "archetype": "siege_crew",
+      "blockers": ["two member recipes", "multi-mesh vehicle", "virtual Operator member attachment"]
+    },
+    {
+      "source_artdef": "UNIT_TANK",
+      "archetype": "armored_vehicle",
+      "blockers": ["virtual TankGunner member attachment", "vehicle and crew must remain separate composition members"]
+    }
+  ],
+  "runtime": {
+    "direction_count": 8,
+    "body_ownership": "unit_body_only",
+    "retained_native_layers": ["selection_cursor", "health_bar", "activity_marks", "stack_indicators", "hud"],
+    "movement_policy": "authoritative_civ3_anchor_and_segment_progress",
+    "action_timing_policy": "civ3_effective_duration_until_synchronization_hook_is_audited",
+    "owner_color_policy": "civ3_ntp_palette_with_inferred_source_mask_mapping",
+    "unsupported_policy": "complete_native_unit_body_fallback"
+  },
+  "runtime_integration": "not_enabled"
+}
