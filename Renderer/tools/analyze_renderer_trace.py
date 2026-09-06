@@ -25,7 +25,7 @@ def analyze(text: str) -> dict:
         stage = fields.get("stage", "unknown")
         stages[stage] += 1
         for name, value in fields.items():
-            if name.endswith("_ms") and not name.startswith("max_"):
+            if name.endswith("_ms") and not name.startswith(("max_", "cumulative_")):
                 try:
                     sample = float(value)
                 except ValueError:

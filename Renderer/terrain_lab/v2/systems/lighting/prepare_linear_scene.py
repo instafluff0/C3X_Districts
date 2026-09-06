@@ -195,13 +195,24 @@ Q6SceneOutput PSMain(PixelInput input) { return q6_scene_output(q6_raw_main(inpu
 Q6SceneOutput PSFeature(FeaturePixelInput input) { return q6_scene_output(q6_raw_feature(input)); }
 '''
     target = V2 / 'shaders/lighting/generated/scene_linear_v1.hlsl'
+    marker='''        float authored_height = biq_layout > 0.5
+            ? input.authored_relief.x'''
+    assert s.count(marker)==1
+    s=s.replace(marker,'''#ifdef Q4_BROAD_RELIEF
+        if(biq_layout>.5 && abs(input.real_terrain-10)>.25)
+            promotion_mountain_envelope=1; // CPU source support crosses tile ownership.
+#endif
+'''+marker)
     marker='float2 volcano_uv = frac(world_position);'
     assert s.count(marker)==3
     s=s.replace(marker,'''float2 volcano_uv = frac(world_position);
 #ifdef Q4_VOLCANO_SOURCE_MAPPING
             // Same local-v orientation and uniform footprint as the height
             // sampler. All dormant/active/slope/specular channels agree.
-            volcano_uv=.5+(float2(volcano_uv.x,1-volcano_uv.y)-.5)*.62;
+#ifndef Q4_VOLCANO_FOOTPRINT
+#define Q4_VOLCANO_FOOTPRINT .62
+#endif
+            volcano_uv=.5+(float2(volcano_uv.x,1-volcano_uv.y)-.5)*Q4_VOLCANO_FOOTPRINT;
 #endif''')
     marker='float4 q6_raw_feature(FeaturePixelInput input)\n{'
     assert s.count(marker)==1

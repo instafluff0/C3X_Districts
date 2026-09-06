@@ -36,6 +36,8 @@ bool volcano_geometry_enabled = false;
 bool lab_v2_volcano_source_mapping = false;
 bool lab_v2_direct_hill_source = false;
 int lab_v2_coastal_cliff_join = 0;
+float lab_v2_relief_scale = 1.0f;
+float lab_v2_volcano_scale = 1.0f;
 bool lab_v2_omit_legacy_relief_shadow = false;
 bool river_geometry_enabled = false;
 bool road_geometry_enabled = false;
@@ -1345,6 +1347,7 @@ void biq_mountain_sample(BiqWindowTile const & tile, float local_x, float local_
     // Connected cells enlarge the same authored footprint so neighboring
     // bodies overlap as a massif. Isolated cells retain the accepted L11 fit.
     float footprint_scale = has_relief_neighbor ? 0.50f : 0.68f;
+    footprint_scale /= lab_v2_relief_scale;
     float source_u = 0.5f + (local_x - 0.5f) * footprint_scale;
     float source_v = 0.5f + (local_y - 0.5f) * footprint_scale;
     if (source_u < 0.0f || source_u > 1.0f ||
@@ -1387,6 +1390,7 @@ void biq_volcano_sample(BiqWindowTile const & tile, float local_x, float local_y
     float footprint_scale = has_relief_neighbor ? 0.60f : 1.0f;
     float aspect = (seed & 4u) != 0 ? 0.88f : 1.12f;
     if (lab_v2_volcano_source_mapping) { footprint_scale=0.62f; aspect=1.0f; }
+    footprint_scale /= lab_v2_volcano_scale;
     float source_u = 0.5f + (local_x - 0.5f) * footprint_scale * aspect;
     float source_v = 0.5f + (local_y - 0.5f) * footprint_scale / aspect;
     if (source_u < 0.0f || source_u > 1.0f ||
@@ -1407,8 +1411,10 @@ void biq_chain_relief_sample(float world_x, float world_y, float & height,
     displacement = 0.0f;
     int center_x = static_cast<int>(std::floor(world_x));
     int center_y = static_cast<int>(std::floor(world_y));
-    constexpr int candidates[5][2] = {{0, 0}, {-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+    constexpr int candidates[9][2] = {{0, 0}, {-1, 0}, {1, 0}, {0, -1}, {0, 1},
+        {-1,-1},{-1,1},{1,-1},{1,1}};
     for (auto const & offset : candidates) {
+        if(lab_v2_relief_scale==1.0f && offset[0] && offset[1])continue;
         BiqWindowTile const * candidate = biq_tile_at(
             center_x + offset[0], center_y + offset[1]);
         if (candidate == nullptr || (candidate->real != 6 && candidate->real != 10) ||
@@ -1416,6 +1422,14 @@ void biq_chain_relief_sample(float world_x, float world_y, float & height,
             continue;
         float local_x = world_x - static_cast<float>(candidate->column);
         float local_y = 1.0f - (world_y - static_cast<float>(candidate->row));
+        float support=1;
+        if(lab_v2_relief_scale>1){
+            // Authored bodies cross the ownership edge, but stop before a
+            // neighboring tile center. This is a topology skirt, not a cone.
+            float radius=std::max(std::abs(local_x-.5f),std::abs(local_y-.5f));
+            support=1-smoothstep01((radius-.52f)/.23f);
+            if(support<=0)continue;
+        }
         float candidate_height = 0.0f;
         float candidate_blend = 0.0f;
         if (candidate->real == 6)
@@ -1424,12 +1438,14 @@ void biq_chain_relief_sample(float world_x, float world_y, float & height,
         else
             biq_volcano_sample(*candidate, local_x, local_y,
                                candidate_height, candidate_blend);
+        candidate_blend*=support;
         float candidate_displacement = candidate_height *
             smoothstep01(candidate_blend / 0.34f) *
             (candidate->real == 6 ? 104.0f :
              ((((static_cast<unsigned>(candidate->source_x) * 73856093u ^
                  static_cast<unsigned>(candidate->source_y) * 19349663u) >> 3) & 1u)
                   ? 104.0f : 88.0f));
+        candidate_displacement*=(candidate->real==10?lab_v2_volcano_scale:lab_v2_relief_scale)*support;
         if (candidate_displacement > displacement) {
             height = candidate_height;
             blend = candidate_blend;
@@ -2342,7 +2358,7 @@ float biq_tile_height(BiqWindowTile const & tile, float u, float v,
     float hill_displacement = promotion_hill_value(world_x, world_y) *
                               52.0f * hill_support * lab_v2_hill_height_multiplier;
     float authored_displacement = 0.0f;
-    if ((tile.real == 5 || tile.real == 6 || tile.real == 10) &&
+    if ((lab_v2_relief_scale>1 || tile.real == 5 || tile.real == 6 || tile.real == 10) &&
         (authored_height != nullptr || tile.real != 6) &&
         (authored_blend != nullptr || tile.real != 6) &&
         (tile.real != 10 || volcano_geometry_enabled)) {
@@ -2350,14 +2366,15 @@ float biq_tile_height(BiqWindowTile const & tile, float u, float v,
         float chain_blend = 0.0f;
         float chain_displacement = 0.0f;
         biq_chain_relief_sample(world_x, world_y, chain_height, chain_blend,
-                                chain_displacement, tile.real != 5);
+                                chain_displacement, lab_v2_relief_scale>1 || tile.real != 5);
         // Compose overlapping authored footprints in world space. Adjacent
         // mountain/volcano cells therefore share shoulders and saddles without
         // any generated connector mesh. Mountain shoulders may also continue
         // into an adjacent authored hill instead of being cut flat there.
         authored_displacement = chain_displacement * coastal_envelope *
-            biq_mountain_hill_transition_envelope(tile, u, v) *
-            ((tile.real == 6 || tile.real == 10) ? relief_envelope : 1.0f);
+            (lab_v2_relief_scale>1 ? biq_hill_compatibility_envelope(tile,u,v) :
+             biq_mountain_hill_transition_envelope(tile, u, v) *
+             ((tile.real == 6 || tile.real == 10) ? relief_envelope : 1.0f));
     }
     height += smooth_relief_max(hill_displacement, authored_displacement);
     if (lab_v2_continuous_desert) {
@@ -2622,12 +2639,12 @@ Vertex make_biq_vertex(BiqWindowTile const & tile, float u, float v, float uv_sc
     float coordinate = biq_surface_coordinate(tile, u, v, shore_distance);
     float authored_relief_height = 0.0f;
     float authored_relief_blend = 0.0f;
-    if (tile.real == 5 || tile.real == 6 || tile.real == 10) {
+    if (lab_v2_relief_scale>1 || tile.real == 5 || tile.real == 6 || tile.real == 10) {
         float chain_displacement = 0.0f;
         biq_chain_relief_sample(static_cast<float>(tile.column) + u,
                                 static_cast<float>(tile.row) + (1.0f - v),
                                 authored_relief_height, authored_relief_blend,
-                                chain_displacement, tile.real != 5);
+                                chain_displacement, lab_v2_relief_scale>1 ? tile.real==10 : tile.real != 5);
         // Geometry and material must share the same outer range envelope.
         // Without this factor the surface flattened toward grass while the
         // mountain albedo stayed opaque until the hidden diamond boundary.
@@ -2638,6 +2655,7 @@ Vertex make_biq_vertex(BiqWindowTile const & tile, float u, float v, float uv_sc
         float material_envelope = tile.real == 5
             ? biq_mountain_hill_transition_envelope(tile, u, v) * 0.35f
             : biq_mountain_material_envelope(tile, u, v);
+        if(lab_v2_relief_scale>1)material_envelope=biq_hill_compatibility_envelope(tile,u,v);
         authored_relief_blend *= material_envelope *
                                  biq_coastal_relief_envelope(tile, u, v);
     }
@@ -4733,6 +4751,9 @@ int main(int argc, char ** argv) {
     if(auto placement=std::getenv("C3X_LAB_V2_COASTAL_ROCK_PLACEMENT"))
         lab_v2_coastal_cliff_join=std::atoi(placement)>=3?std::atoi(placement):0;
     lab_v2_omit_legacy_relief_shadow=std::getenv("C3X_LAB_V2_OMIT_REPLACED_SHADOW")!=nullptr;
+    if(auto scale=std::getenv("C3X_LAB_V2_RELIEF_SCALE"))lab_v2_relief_scale=std::atof(scale);
+    lab_v2_volcano_scale=lab_v2_relief_scale;
+    if(auto scale=std::getenv("C3X_LAB_V2_VOLCANO_SCALE"))lab_v2_volcano_scale=std::atof(scale);
     river_geometry_enabled = l13_mode && !beauty_rivers_no_rivers_mode &&
         !beauty_roads_only_mode && !beauty_roads_styles_mode &&
         !beauty_resources_only_mode && !beauty_cities_only_mode && !beauty_mines_only_mode &&

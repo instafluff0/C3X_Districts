@@ -1,0 +1,1 @@
+{"classification":"shader_only_diagnostic","source":"coast-pass-rocks-r8/wilderness","replacement":{"before":"float3 w=world+normal*.001;","after":"float3 w=world;"},"result":"Rejected: denser false self-shadow lines; contact-only disabling also does not remove them."}

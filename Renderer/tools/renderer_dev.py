@@ -59,7 +59,7 @@ def command_result(command: list[str], cwd: Path = C3X_ROOT) -> dict[str, Any]:
 
 def changed_injected_sources() -> bool:
     result = subprocess.run(
-        ["git", "status", "--porcelain", "--", "C3X.h", "injected_code.c"],
+        ["git", "status", "--porcelain", "--", "C3X.h", "injected_code.c", "Renderer/native/c3x_renderer_api.h"],
         cwd=C3X_ROOT,
         text=True,
         capture_output=True,

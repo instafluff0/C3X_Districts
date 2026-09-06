@@ -208,6 +208,7 @@ struct c3x_renderer_output_v1 {
     // built/cancelled/ticks are cumulative for this worker lifetime.
     c3x_renderer_u32 prefetch_tiles_pending;
     c3x_renderer_u32 prefetch_tiles_built;
+    c3x_renderer_u32 prefetch_tiles_unavailable;
     c3x_renderer_u32 prefetch_tiles_cancelled;
     c3x_renderer_u32 prefetch_cache_bytes;
     c3x_renderer_i64 prefetch_ticks;

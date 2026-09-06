@@ -1222,10 +1222,10 @@ int main(int argc, char ** argv) {
         // Primary scroll workload: Civ III's staggered map coordinates and
         // discrete several-tile jumps, with whole rows/columns entering/leaving.
         // Retain the tiny-pixel test above only as a strip-copy regression.
-        auto jump_tiles = [&](int camera_x, int camera_y) {
+        auto jump_tiles = [&](int camera_x, int camera_y, bool prepare = false) {
             std::vector<c3x_renderer_tile_v1> result;
-            for (int y = camera_y-8; y < camera_y + 48; ++y)
-                for (int x = camera_x-8; x < camera_x + 28; ++x) {
+            for (int y = camera_y-12; y < camera_y + 52; ++y)
+                for (int x = camera_x-12; x < camera_x + 32; ++x) {
                     bool visible = y >= camera_y && y < camera_y+40 && x >= camera_x && x < camera_x+20;
                     bool logical = ((x+y) & 1) == 0;
                     if (!visible && !logical) continue;
@@ -1237,7 +1237,22 @@ int main(int argc, char ** argv) {
                         logical ? ground : -1, seed);
                     tile.real_terrain_type = logical ? real_type : -1;
                     if (!logical) tile.tile_flags = C3X_RENDERER_TILE_VANILLA_BASE_CALL;
-                    else if (!visible) tile.tile_flags = C3X_RENDERER_TILE_TOPOLOGY_HALO;
+                    else if (!visible) {
+                        tile.tile_flags = C3X_RENDERER_TILE_TOPOLOGY_HALO;
+                        if (prepare && x >= camera_x-4 && x < camera_x+24 &&
+                            y >= camera_y-4 && y < camera_y+44) tile.tile_flags |= C3X_RENDERER_TILE_PREFETCH;
+                    }
+                    // Complete appearance must survive prewarming and entering
+                    // the view, not just the tile's base terrain classification.
+                    if (x == 62 && y == 42) {
+                        tile.terrain_type = tile.real_terrain_type = 2;
+                        tile.city_id = 117; tile.city_owner_id = 1;
+                        tile.city_size = 0; tile.city_culture_group = 1; tile.city_era = 1;
+                        tile.city_flags = C3X_RENDERER_CITY_WALLED;
+                        tile.improvement_flags = C3X_RENDERER_IMPROVEMENT_MINE;
+                        tile.resource_id = 5; tile.resource_class = 2;
+                        strcpy_s(tile.resource_name, "Horses");
+                    }
                     result.push_back(tile);
                 }
             return result;
@@ -1311,6 +1326,124 @@ int main(int argc, char ** argv) {
         std::sort(jump_first.begin(),jump_first.end()); std::sort(jump_return.begin(),jump_return.end());
         std::printf("PERF repeated_tile_jump: samples=5 first_p50_ms=%.3f first_p95_ms=%.3f return_p95_ms=%.3f.\n",
             jump_first[2],jump_first.back(),jump_return.back());
+
+        reset();
+        std::vector<double> prepared_jump_times, foreground_during_preparation;
+        std::uint64_t prepared_city_view_hash = 0;
+        BITMAPINFO warm_bitmap_info = {};
+        warm_bitmap_info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        warm_bitmap_info.bmiHeader.biWidth = jump_frame.target_width;
+        warm_bitmap_info.bmiHeader.biHeight = -jump_frame.target_height;
+        warm_bitmap_info.bmiHeader.biPlanes = 1; warm_bitmap_info.bmiHeader.biBitCount = 32;
+        HDC warm_dc = CreateCompatibleDC(nullptr); void * warm_bits = nullptr;
+        HBITMAP warm_bitmap = CreateDIBSection(warm_dc, &warm_bitmap_info, DIB_RGB_COLORS, &warm_bits, nullptr, 0);
+        if (!warm_dc || !warm_bitmap || !warm_bits) return fail("prewarm blit surface allocation failed");
+        HGDIOBJ warm_previous = SelectObject(warm_dc, warm_bitmap);
+        for (int view = 0; view < 6; ++view) {
+            auto prepared_records = jump_tiles(jumps[view][0], jumps[view][1], true);
+            jump_frame.tiles = prepared_records.data(); jump_frame.tile_count = static_cast<unsigned>(prepared_records.size());
+            LARGE_INTEGER begin = {}, end = {};
+            QueryPerformanceCounter(&begin);
+            approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+            if (render(&jump_frame, &approved_output) != C3X_RENDERER_RESULT_OK)
+                return fail("prepared tile-jump render failed");
+            QueryPerformanceCounter(&end);
+            double elapsed = 1000.0*(end.QuadPart-begin.QuadPart)/performance_frequency.QuadPart;
+            std::printf("PERF prepared_tile_jump: view=%d milliseconds=%.3f built=%u reused=%u pending=%u prefetch_bytes=%u.\n",
+                view, elapsed, approved_output.geometry_tiles_built, approved_output.geometry_tiles_reused,
+                approved_output.prefetch_tiles_pending, approved_output.prefetch_cache_bytes);
+            if (view != 0) {
+                prepared_jump_times.push_back(elapsed);
+                if (approved_output.geometry_tiles_built != 0 || approved_output.geometry_upload_bytes != 0 ||
+                    approved_output.geometry_tiles_reused != 400)
+                    return fail("prepared several-tile jump still compiled entering meshes");
+            }
+            std::uint64_t stable_pixels = hash_pixels(approved_output.bgra_pixels, live_bytes);
+            if (view == 1) prepared_city_view_hash = stable_pixels;
+            LARGE_INTEGER preparation_begin = {}; QueryPerformanceCounter(&preparation_begin);
+            while (approved_output.prefetch_tiles_pending != 0) {
+                // The returned bitmap/ownership pointers stay valid while the
+                // worker prepares the next ring. UI redraws interrupt that work.
+                auto saved_pixels = approved_output.bgra_pixels;
+                auto saved_flags = approved_output.replacement_tile_flags;
+                std::vector<unsigned> expected_flags(saved_flags, saved_flags+approved_output.replacement_tile_count);
+                Sleep(12);
+                if (hash_pixels(saved_pixels, live_bytes) != stable_pixels ||
+                    std::memcmp(saved_flags, expected_flags.data(), expected_flags.size()*sizeof(unsigned)) != 0)
+                    return fail("idle preparation mutated a published bitmap or ownership array");
+                if (blit(&approved_output, warm_dc) != C3X_RENDERER_RESULT_OK ||
+                    std::memcmp(warm_bits, saved_pixels, live_bytes) != 0)
+                    return fail("idle preparation interfered with the native blit");
+                prepared_records[prepared_records.size()/2].unit_direction++;
+                QueryPerformanceCounter(&begin);
+                approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+                if (render(&jump_frame, &approved_output) != C3X_RENDERER_RESULT_OK)
+                    return fail("foreground redraw interrupted by preparation failed");
+                QueryPerformanceCounter(&end);
+                foreground_during_preparation.push_back(1000.0*(end.QuadPart-begin.QuadPart)/performance_frequency.QuadPart);
+                if (approved_output.geometry_tiles_built != 0 || approved_output.raster_draw_pixels != 0 ||
+                    hash_pixels(approved_output.bgra_pixels,live_bytes) != stable_pixels ||
+                    approved_output.prefetch_cache_bytes > 64u*1024u*1024u ||
+                    approved_output.geometry_cache_bytes > 192u*1024u*1024u)
+                    return fail("preparation violated foreground reuse or its memory budget");
+                if (1000.0*(end.QuadPart-preparation_begin.QuadPart)/performance_frequency.QuadPart > 15000.0)
+                    return fail("bounded idle preparation did not finish despite available idle time");
+            }
+            if (approved_output.prefetch_tiles_unavailable != 0)
+                return fail("representative scroll ring did not fit the preparation budget");
+            std::printf("PREWARM ready: view=%d built=%u cancelled=%u bytes=%u.\n", view,
+                approved_output.prefetch_tiles_built, approved_output.prefetch_tiles_cancelled,
+                approved_output.prefetch_cache_bytes);
+            if (view == 5) jump_witness.assign(static_cast<unsigned char const *>(approved_output.bgra_pixels),
+                static_cast<unsigned char const *>(approved_output.bgra_pixels)+live_bytes);
+        }
+        SelectObject(warm_dc, warm_previous); DeleteObject(warm_bitmap); DeleteDC(warm_dc);
+        auto changed_city_records = jump_tiles(jumps[1][0], jumps[1][1]);
+        unsigned changed_city_index = 0;
+        for (unsigned i = 0; i < changed_city_records.size(); ++i)
+            if (changed_city_records[i].city_id == 117) {
+                changed_city_records[i].city_size = 2; changed_city_index = i;
+            }
+        jump_frame.tiles = changed_city_records.data(); jump_frame.tile_count = static_cast<unsigned>(changed_city_records.size());
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&jump_frame, &approved_output) != C3X_RENDERER_RESULT_OK ||
+            approved_output.geometry_tiles_built == 0 ||
+            (approved_output.replacement_tile_flags[changed_city_index] & C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED) == 0 ||
+            hash_pixels(approved_output.bgra_pixels, live_bytes) == prepared_city_view_hash)
+            return fail("prepared appearance was reused after authoritative city mutation");
+        std::sort(prepared_jump_times.begin(), prepared_jump_times.end());
+        std::sort(foreground_during_preparation.begin(), foreground_during_preparation.end());
+        std::size_t foreground_p95 = (foreground_during_preparation.size()*95u+99u)/100u-1u;
+        std::printf("PERF idle_preparation: jump_p95_ms=%.3f foreground_samples=%zu foreground_p95_ms=%.3f foreground_max_ms=%.3f.\n",
+            prepared_jump_times.back(), foreground_during_preparation.size(),
+            foreground_during_preparation[foreground_p95], foreground_during_preparation.back());
+        if (foreground_during_preparation[foreground_p95] > 16.7)
+            return fail("background preparation delayed normal foreground redraws");
+        // Rebuild the prepared result with no background state or cache.
+        witness_records = jump_tiles(jumps[5][0], jumps[5][1]);
+        jump_frame.tiles = witness_records.data(); jump_frame.tile_count = static_cast<unsigned>(witness_records.size());
+        reset(); approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&jump_frame, &approved_output) != C3X_RENDERER_RESULT_OK)
+            return fail("prepared tile-jump cold witness failed");
+        witness_pixels = static_cast<unsigned char const *>(approved_output.bgra_pixels);
+        jump_changed = 0; jump_error = 0;
+        for (std::size_t i = 0; i < live_bytes; i += 4) {
+            bool changed = false;
+            for (std::size_t c = 0; c < 4; ++c) {
+                unsigned delta = static_cast<unsigned>(std::abs(static_cast<int>(jump_witness[i+c])-witness_pixels[i+c]));
+                jump_error += delta; changed = changed || delta > 2;
+            }
+            if (changed) ++jump_changed;
+        }
+        if (jump_changed > live_bytes/4000 || jump_error > live_bytes/100)
+            return fail("prepared meshes changed the several-tile jump image");
+
+        auto pending_reset_records = jump_tiles(80,80,true);
+        jump_frame.tiles = pending_reset_records.data(); jump_frame.tile_count = static_cast<unsigned>(pending_reset_records.size());
+        approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&jump_frame, &approved_output) != C3X_RENDERER_RESULT_OK || approved_output.prefetch_tiles_pending == 0)
+            return fail("reset witness did not start idle preparation");
+        Sleep(3); reset(); // cancel/join while the worker is active, not only idle
 
         output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
         if (render(&frame, &output) != C3X_RENDERER_RESULT_OK)

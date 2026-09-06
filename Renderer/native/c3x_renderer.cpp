@@ -183,6 +183,15 @@ enum GeometryLayer : std::size_t {
 struct CachedTileGeometry {
     std::uint64_t signature = 0, version = 0;
     bool prefetched = false;
+    CachedTileGeometry() = default;
+    CachedTileGeometry(CachedTileGeometry const &) = delete;
+    CachedTileGeometry(CachedTileGeometry &&) noexcept = default;
+    ~CachedTileGeometry() {
+        for (auto & layer : buffers) for (auto & chunk : layer) {
+            if (chunk.buffer) chunk.buffer->Release();
+            if (chunk.indices) chunk.indices->Release();
+        }
+    }
     std::vector<std::pair<std::uint64_t, std::uint64_t>> dependencies;
     std::array<std::vector<CachedVertexChunk>, geometry_layer_count> buffers;
     std::vector<std::pair<std::uint64_t, std::array<int, 2>>> anchor_dependencies;
@@ -2324,7 +2333,7 @@ public:
 
     bool cache_geometry_layer(std::vector<Vertex> & vertices,
                               std::vector<CachedVertexChunk> & output,
-                              std::size_t available_bytes = tile_geometry_cache_budget) {
+                              bool prefetch = false, std::size_t pending_bytes = 0) {
         if (vertices.empty()) return true;
         std::unordered_map<Vertex, UINT, VertexHash, VertexEqual> unique;
         unique.reserve(vertices.size() / 3u);
@@ -2346,7 +2355,21 @@ public:
         }
         chunk.index_count = static_cast<UINT>(indices.size());
         chunk.byte_count = packed.size() * sizeof(Vertex) + indices.size() * sizeof(UINT);
-        if (chunk.byte_count > available_bytes || !make_tile_cache_room(chunk.byte_count)) return false;
+        while (prefetch && prefetched_geometry_bytes + pending_bytes + chunk.byte_count > 64u*1024u*1024u) {
+            auto oldest = tile_geometry_cache.end();
+            for (auto it = tile_geometry_cache.begin(); it != tile_geometry_cache.end(); ++it)
+                if (it->second.prefetched && it->second.last_used < tile_geometry_epoch-1 &&
+                    (oldest == tile_geometry_cache.end() || it->second.last_used < oldest->second.last_used)) oldest = it;
+            if (oldest == tile_geometry_cache.end()) return false;
+            prefetched_geometry_bytes -= oldest->second.byte_count;
+            tile_geometry_cache_bytes -= oldest->second.byte_count;
+            release_geometry_vertex_buffers(oldest->second.buffers);
+            tile_geometry_cache.erase(oldest);
+            ++frame_tiles_evicted;
+            if (cache_evictions != 0xffffffffu) ++cache_evictions;
+        }
+        if (!make_tile_cache_room(chunk.byte_count)) return false;
+        output.reserve(output.size()+1); // allocate before acquiring COM resources
         D3D11_BUFFER_DESC desc = {};
         desc.ByteWidth = static_cast<UINT>(packed.size() * sizeof(Vertex));
         desc.Usage = D3D11_USAGE_IMMUTABLE;
@@ -3104,7 +3127,10 @@ public:
                         current->second->anchor_y - tile.anchor_y != dependency.second[1]) valid = false;
                 }
                 if (valid) {
-                    if (prewarming) { ++frame_tiles_reused; return true; }
+                    if (prewarming) {
+                        cached_tile->second.last_used = std::max(cached_tile->second.last_used, tile_geometry_epoch-1);
+                        ++frame_tiles_reused; return true;
+                    }
                     append_tile_geometry(cached_tile->second, tile);
                     ++frame_tiles_reused;
                     reused_tile = true;
@@ -4512,12 +4538,9 @@ public:
             compiled.prefetched = prewarming;
             compiled.dependencies.assign(dependencies.begin(), dependencies.end());
             compiled.anchor_dependencies = std::move(anchor_dependencies);
+            try {
             for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
-                constexpr std::size_t prewarm_budget = 64u * 1024u * 1024u;
-                std::size_t available = prewarming
-                    ? prewarm_budget - std::min(prewarm_budget, prefetched_geometry_bytes + compiled.byte_count)
-                    : tile_geometry_cache_budget;
-                if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer], available)) {
+                if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer], prewarming, compiled.byte_count)) {
                     for (auto const & chunks : compiled.buffers)
                         for (auto const & chunk : chunks) tile_geometry_cache_bytes -= chunk.byte_count;
                     release_geometry_vertex_buffers(compiled.buffers);
@@ -4525,11 +4548,21 @@ public:
                 }
                 for (auto const & chunk : compiled.buffers[layer]) compiled.byte_count += chunk.byte_count;
             }
-            auto inserted = tile_geometry_cache.emplace(tile_signature, std::move(compiled));
-            if (prewarming) {
-                prefetched_geometry_bytes += inserted->second.byte_count;
-                return true;
+            } catch (...) {
+                tile_geometry_cache_bytes -= compiled.byte_count;
+                return false; // compiled owns every successfully uploaded buffer
             }
+            std::size_t compiled_bytes = compiled.byte_count;
+            decltype(tile_geometry_cache)::iterator inserted;
+            try {
+                inserted = tile_geometry_cache.emplace(tile_signature, std::move(compiled));
+            } catch (...) {
+                // Container insertion can allocate after GPU upload. RAII owns
+                // the buffers even if it moved the value before allocation failed.
+                tile_geometry_cache_bytes -= compiled_bytes;
+                return false;
+            }
+            if (prewarming) { prefetched_geometry_bytes += inserted->second.byte_count; return true; }
             append_tile_geometry(inserted->second, tile);
         }
         if (prewarming) return true;
@@ -4916,9 +4949,13 @@ public:
         int result = submit_locked(lock, Command::render);
         QueryPerformanceCounter(&returned);
         if (renderer_state.trace.level) {
-            char detail[160];
-            std::snprintf(detail, sizeof(detail), "result=%d wait_ms=%.3f tiles=%u",
-                result, renderer_state.trace.milliseconds(returned.QuadPart - submitted.QuadPart), frame.tile_count);
+            char detail[320];
+            std::snprintf(detail, sizeof(detail),
+                "result=%d wait_ms=%.3f tiles=%u prefetch_pending=%u prefetch_built=%u prefetch_unavailable=%u prefetch_cancelled=%u prefetch_bytes=%u cumulative_prewarm_ms=%.3f",
+                result, renderer_state.trace.milliseconds(returned.QuadPart - submitted.QuadPart), frame.tile_count,
+                completed_output.prefetch_tiles_pending, completed_output.prefetch_tiles_built,
+                completed_output.prefetch_tiles_unavailable, completed_output.prefetch_tiles_cancelled,
+                completed_output.prefetch_cache_bytes, renderer_state.trace.milliseconds(completed_output.prefetch_ticks));
             renderer_state.trace.write("worker-complete", detail, result != C3X_RENDERER_RESULT_OK);
         }
         output = completed_output;
@@ -4927,8 +4964,9 @@ public:
 
     int blit(c3x_renderer_output_v1 const & output, HDC destination) {
         // This method executes on Civ III's calling/UI thread. Holding the call
-        // gate keeps the worker idle and the returned pixel pointer stable until
-        // the final GDI copy into Civ III's surface is complete.
+        // gate excludes foreground rendering/reset. Idle mesh preparation may
+        // continue because it never touches this bitmap, its ownership arrays,
+        // or the GDI blit resources.
         std::lock_guard<std::mutex> call_guard(call_mutex);
         LARGE_INTEGER started = {}, finished = {};
         QueryPerformanceCounter(&started);
@@ -4984,7 +5022,7 @@ private:
     std::vector<unsigned> warm_order;
     std::size_t warm_cursor = 0;
     std::uint64_t warm_signature = 0;
-    unsigned prepared_tiles = 0, cancelled_tiles = 0;
+    unsigned prepared_tiles = 0, cancelled_tiles = 0, unavailable_tiles = 0;
     c3x_renderer_i64 preparation_ticks = 0;
     Command job_command = Command::none;
     std::uint64_t latest_job_sequence = 0;
@@ -5048,7 +5086,7 @@ private:
         warm_frame = job_frame;
         warm_tiles.assign(job_tiles.begin(), job_tiles.end());
         warm_frame.tiles = warm_tiles.data();
-        warm_order.clear(); warm_cursor = 0;
+        warm_order.clear(); warm_cursor = 0; unavailable_tiles = 0;
         int left = INT_MAX, top = INT_MAX, right = INT_MIN, bottom = INT_MIN;
         for (auto const & tile : warm_tiles)
             if ((tile.tile_flags & C3X_RENDERER_TILE_RENDER) != 0) {
@@ -5088,15 +5126,26 @@ private:
                 LARGE_INTEGER begin = {}, end = {};
                 QueryPerformanceCounter(&begin);
                 c3x_renderer_output_v1 unused = {};
-                bool ok = renderer_state.render(warm_frame, unused, static_cast<int>(index), &foreground_pending);
+                bool ok = false;
+                try {
+                    ok = renderer_state.render(warm_frame, unused, static_cast<int>(index), &foreground_pending);
+                } catch (...) {
+                    // Optional idle work cannot terminate Civ III on scratch
+                    // allocation failure. Published frame state was never changed.
+                    ok = false;
+                }
                 QueryPerformanceCounter(&end);
                 lock.lock();
                 preparation_ticks += end.QuadPart - begin.QuadPart;
+                if (ok) prepared_tiles += renderer_state.frame_tiles_built;
                 if (foreground_pending.load(std::memory_order_relaxed)) {
                     if (!ok) ++cancelled_tiles;
                 } else {
-                    if (ok) { ++warm_cursor; prepared_tiles += renderer_state.frame_tiles_built; }
-                    else warm_cursor = warm_order.size(); // bounded cache pressure is not a game failure
+                    if (ok) ++warm_cursor;
+                    else {
+                        unavailable_tiles = static_cast<unsigned>(warm_order.size()-warm_cursor);
+                        warm_cursor = warm_order.size(); // bounded cache pressure is not a game failure
+                    }
                 }
                 if (warm_cursor == warm_order.size() || !ok) {
                     char detail[240];
@@ -5118,6 +5167,7 @@ private:
             lock.unlock();
             int result = C3X_RENDERER_RESULT_ERROR;
             c3x_renderer_output_v1 output = {};
+            try {
             if (command == Command::configure_pack) {
                 result = renderer_state.configure_pack(
                     optional_path(job_pack_present, job_pack_path))
@@ -5146,11 +5196,22 @@ private:
             renderer_state.reset();
                 result = C3X_RENDERER_RESULT_OK;
             }
+            } catch (...) {
+                renderer_state.reset();
+                renderer_state.trace.write("worker-error", "resource allocation or runtime exception", true);
+                output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+                result = C3X_RENDERER_RESULT_ERROR;
+            }
             lock.lock();
             if (command == Command::render && result == C3X_RENDERER_RESULT_OK) {
-                prepare_neighborhood();
+                try { prepare_neighborhood(); }
+                catch (...) {
+                    warm_order.clear(); warm_cursor = 0; warm_signature = 0;
+                    warm_tiles.clear(); unavailable_tiles = 1;
+                }
                 output.prefetch_tiles_pending = static_cast<unsigned>(warm_order.size()-warm_cursor);
                 output.prefetch_tiles_built = prepared_tiles;
+                output.prefetch_tiles_unavailable = unavailable_tiles;
                 output.prefetch_tiles_cancelled = cancelled_tiles;
                 output.prefetch_cache_bytes = static_cast<unsigned>(renderer_state.prefetched_geometry_bytes);
                 output.prefetch_ticks = preparation_ticks;

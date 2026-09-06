@@ -600,6 +600,18 @@ def packet(cache, f, module, scene, phase, zoom, pack_hash, query=None):
         environment.pop('C3X_LAB_V2_VOLCANO_SOURCE_MAPPING',None)
         environment.pop('C3X_LAB_V2_DIRECT_HILL_SOURCE',None)
         environment.pop('C3X_LAB_V2_OMIT_REPLACED_SHADOW',None)
+        environment.pop('C3X_LAB_V2_RELIEF_SCALE',None)
+        environment.pop('C3X_LAB_V2_VOLCANO_SCALE',None)
+        if 'relief_scale' in module:
+            scale=module['relief_scale']
+            if type(scale) not in (int,float) or not 1<scale<=1.6:
+                raise ValueError('Relief scale must be greater than one and at most 1.6')
+            environment['C3X_LAB_V2_RELIEF_SCALE']=str(scale)
+        if 'volcano_scale' in module:
+            scale=module['volcano_scale']
+            if 'relief_scale' not in module or type(scale) not in (int,float) or not 1<scale<=1.6:
+                raise ValueError('Volcano scale requires broad relief and must be greater than one and at most 1.6')
+            environment['C3X_LAB_V2_VOLCANO_SCALE']=str(scale)
         if module.get('omit_replaced_shadow_surface'):
             processor=f.get('packet_postprocessor',{})
             if (module['omit_replaced_shadow_surface']!=1 or not module.get('world_positions') or

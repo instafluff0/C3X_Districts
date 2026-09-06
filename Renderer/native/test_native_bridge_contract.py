@@ -237,7 +237,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("captured->anchor_x == pixel_x", feature_hook)
         self.assertIn("captured->anchor_y == pixel_y", feature_hook)
         self.assertIn("C3X_RENDERER_TILE_CUSTOM_FEATURE_REPLACED", feature_hook)
-        self.assertIn("replacement_tile_flags[index]", renderer)
+        self.assertIn("build_replacement[index]", renderer)
         self.assertIn("feature_assets_ready", renderer)
         self.assertIn("tile.real_terrain_type == 7 || tile.real_terrain_type == 8", renderer)
         self.assertIn("tile.real_terrain_type == 9", renderer)

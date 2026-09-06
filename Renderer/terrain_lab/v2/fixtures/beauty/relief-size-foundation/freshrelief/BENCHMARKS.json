@@ -1,0 +1,65 @@
+{
+  "region": {
+    "camera": {
+      "hours": [
+        12,
+        0
+      ],
+      "viewport": [
+        1360,
+        800
+      ],
+      "zooms": [
+        1,
+        2
+      ]
+    },
+    "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+    "coverage": {
+      "land_water_edges": 14,
+      "river_tiles": 0,
+      "terrain": {
+        "coast": 20,
+        "forest": 1,
+        "grassland": 9,
+        "hills": 3,
+        "mountain": 4,
+        "ocean": 42,
+        "plains": 5,
+        "sea": 16
+      },
+      "terrain_edges": 63
+    },
+    "extent": [
+      10,
+      10
+    ],
+    "halo": 6,
+    "id": "beauty-freshrelief-100-v1",
+    "origin": [
+      46,
+      46
+    ],
+    "request_sha256": "7b90750bf529665b42f372128a140d259de1a7462a309c7b21474f181a522f6e",
+    "role": "user_evaluation",
+    "terrain_sha256": "b1a8e71231297f1a112069c74d67f6f8c45e957c433cb366648c73ffa64b5002",
+    "wrap": {
+      "x": true,
+      "y": false
+    }
+  },
+  "projection": {
+    "origin": [
+      104,
+      380
+    ],
+    "half_width": 64
+  },
+  "gameplay_crop": [
+    360,
+    220,
+    1000,
+    540
+  ],
+  "selection": "Four source mountains; selected by coverage before size-pass rendering; no region-specific tuning."
+}

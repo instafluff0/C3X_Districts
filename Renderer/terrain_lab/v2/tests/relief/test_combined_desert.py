@@ -27,6 +27,7 @@ BiqWindowTile tiles[8][8];
 bool dune_scene_enabled=true,biq_scene_enabled=true;
 bool volcano_geometry_enabled=false,l13_scene_enabled=false;
 int lab_v2_coastal_cliff_join=0;
+float lab_v2_relief_scale=1;
 namespace labv2 {struct Hooks {void(*shore_sample)(float,float,float*)=nullptr;} hydrology_hooks;}
 void rocky_shore(float x,float,float*out){out[0]=2-x;out[1]=.1f;out[2]=1;out[3]=0;}
 int lab_v2_continuous_desert=3;
