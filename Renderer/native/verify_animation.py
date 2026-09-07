@@ -29,7 +29,8 @@ def main():
         result = windows_command_result("Renderer/native", command)
         result.pop("cwd", None)
         text = result.get("output_tail", "")
-        if "ANIMATION temporal: pass changed_frames=5" not in text or "FAIL" in text:
+        if ("ANIMATION temporal: pass changed_frames=5" not in text or
+                "ANIMATION scroll parity: pass" not in text or "ANIMATION removal parity: pass" not in text or "FAIL" in text):
             result["status"] = "fail"
         result["case"] = name
         results.append(result)

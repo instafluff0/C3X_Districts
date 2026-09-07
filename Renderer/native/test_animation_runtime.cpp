@@ -1,4 +1,5 @@
 #include "animation_runtime.h"
+#include "unit_animation_runtime.h"
 #include <cassert>
 #include <fstream>
 #include <iterator>
@@ -85,5 +86,44 @@ int main(int argc, char ** argv) {
     { auto bad = data; replace_u32(bad, 224, 3); reject(bad); } // Index outside mesh.
     { auto bad = data; bad.push_back(0); reject(bad); }
     { auto bad = data; replace_u32(bad, 248, 0x3f800000u); reject(bad); } // Non-affine matrix.
+    NativeUnitDraw draw;
+    draw.expected_sprite = draw.sprite = 17; draw.expected_canvas = draw.canvas = 29;
+    draw.unit_id = 5; draw.action = 2; draw.direction = 3;
+    draw.frame_count = 8; draw.action_cursor = 3;
+    draw.body_x = -11; draw.body_y = 73; draw.sprite_width = 131; draw.sprite_height = 127;
+    UnitAnimationPose pose;
+    assert(prepare_native_unit_pose(draw, true, pose));
+    assert(pose.anchor_x == 54 && pose.anchor_y == 136 && pose.phase == 3.0/8);
+    assert(std::strcmp(pose.action, "move") == 0 && pose.direction == 3);
+    auto retained = pose;
+    // Camera translation changes only placement, and a repeated callback does
+    // not restart the pose. Native direction changes are forwarded unchanged.
+    draw.body_x -= 256; draw.body_y += 128; draw.direction = 7;
+    assert(prepare_native_unit_pose(draw, true, pose));
+    assert(pose.anchor_x == retained.anchor_x-256 && pose.anchor_y == retained.anchor_y+128);
+    assert(pose.phase == retained.phase && pose.direction == 7);
+    draw.reduced = true;
+    assert(prepare_native_unit_pose(draw, true, pose));
+    assert(pose.anchor_x == draw.body_x+32 && pose.anchor_y == draw.body_y+31);
+    assert(pose.projection_scale == .5f);
+    draw.action = 6; draw.action_cursor = 999;
+    assert(prepare_native_unit_pose(draw, false, pose));
+    assert(pose.phase == 1 && std::strcmp(pose.action, "death") == 0);
+    draw.frame_count = 1;
+    assert(prepare_native_unit_pose(draw, false, pose) && pose.phase == 1);
+    assert(prepare_native_unit_pose(draw, true, pose) && pose.phase == 0);
+    retained = pose;
+    for (auto bad : {0, 11, 19, -1}) {
+        draw.action = bad; assert(!prepare_native_unit_pose(draw, false, pose));
+        assert(pose.anchor_x == retained.anchor_x && pose.phase == retained.phase);
+    }
+    draw.action = 1; draw.sprite = 42;
+    assert(!prepare_native_unit_pose(draw, true, pose)); // Unrelated Sprite remains native.
+    draw.sprite = 17; draw.canvas = 42;
+    assert(!prepare_native_unit_pose(draw, true, pose)); // Another canvas remains native.
+    draw.canvas = 29; draw.frame_count = 0;
+    assert(!prepare_native_unit_pose(draw, true, pose));
+    draw.frame_count = 8; draw.body_x = INT32_MAX;
+    assert(!prepare_native_unit_pose(draw, true, pose));
     std::cout << "animation runtime: timing, skinning, normals, endpoints, malformed payloads passed\n";
 }

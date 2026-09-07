@@ -43,9 +43,10 @@ def component(asset,pack=PACK):
     hi=[max(v[i] for v in points) for i in range(3)]
     return dict(id=asset,parts=parts,lo=lo,hi=hi,sockets=l.get('attachment_points',[]))
 
-def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,source_scale=None,ordering=None,footprint_limit=None):
+def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,source_scale=None,ordering=None,footprint_limit=None,stage_counts=None):
     """Stable slots: largest skyline body first, later growth only appends."""
-    counts=[4,7,11];result=[]
+    counts=stage_counts if stage_counts is not None else [4,7,11];result=[]
+    if len(counts)!=3 or any(not isinstance(n,int) or n<1 or n>11 for n in counts):raise ValueError('city stage counts')
     # Uniform per-pool scale; preserve relative source building proportions.
     span=max(max(a['hi'][0]-a['lo'][0],a['hi'][1]-a['lo'][1]) for a in assets)
     typical_height=statistics.median(a['hi'][2]-a['lo'][2] for a in assets)

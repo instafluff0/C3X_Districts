@@ -192,6 +192,25 @@ the deliberate native refresh is implemented; do not add speculative CSV entries
   `m26_Draw_Colony` or `m34_Draw_Goody_Huts` patch entries are not required.
   The checked offline handoff is `docs/goody_huts_and_colonies.md`.
 
+### M7.1 Barbarian Camps: Resolved, No New Entry
+
+- Viewer-conditioned presence is already available through
+  `Tile::m7_Check_Barbarian_Camp(viewer_civ_id)` during the existing m19 tile
+  capture. The accessor reads native overlay bit 7 through the visibility-aware
+  overlay path.
+- `Tile::m44_Get_Barbarian_TribeID` supplies stable camp identity for cache and
+  deterministic source-attachment selection. It is not an owner-color or
+  culture-style selector.
+- Native spawn and capture remain authoritative: units are separate ordinary
+  unit instances, while removal clears camp bit `0x80`, releases the tribe ID,
+  and retains native reward, message, and sound behavior.
+- The existing `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` exclusive plane and
+  `Map_Renderer_m12_Draw_Tile_Buildings` census are sufficient. A separate
+  `m23_Draw_Barbarian_Camp` patch entry is not required for offline intake or
+  eventual scene capture. The checked contract is
+  `docs/barbarian_camp_import.md`; dedicated Lab v2 visual promotion remains
+  required before native camp suppression.
+
 ### M7.1 Remaining Tile Infrastructure: Resolved, No New Entry
 
 - The existing m19 capture already records `tile_building_id` plus the
@@ -392,3 +411,24 @@ scoped Unit tick context and ordinary/reduced body-only Sprite calls, subject to
 the remaining ABI and supported-build proof in `i20_unit_body_replacement_spike.md`.
 `required_user_action: []`. No CSV entry changed and no body suppression enabled.
 See `animation_integration_checkpoint.md` for the remaining implementation work.
+
+### Unit cursor and complete-clip preparation (2026-09-07)
+
+Existing callable definitions: GOG `Unit_tick_anim` (0x005CBF50),
+`Sprite_draw_unit_body_normal` (0x005F88B0) and
+`Sprite_draw_unit_body_reduced` (0x005F8940). These remain definitions, not
+inleads; Steam/PCGames addresses are still zero/unverified. No CSV change or
+runtime body suppression occurred.
+
+The source audit confirms `FLC_Animation::tick` selects the current action and
+passes `field_FC` to the native FLC frame decoder. Native start/tick code advances,
+wraps and holds that cursor; `Animation_Info::Frame_Counts[current_anim_type]`
+supplies its effective length. `FLC_Frame_Image::get_frame_image` returns exactly
+`&Frame_1.sprite` only when `Flic_Info` exists. These are read-only capture inputs
+for the tested DLL-side cursor/anchor adapter, not new function dependencies.
+
+Audit candidates remain the scoped tick wrapper plus the two exact body calls.
+Complete-kit rendering, retained-layer tests and the concrete bridge are still
+required before a patch request. `required_user_action: []`. The Windows x86
+adapter checks and portable full-clip pose proofs do not establish live hook
+correctness or other-build support.

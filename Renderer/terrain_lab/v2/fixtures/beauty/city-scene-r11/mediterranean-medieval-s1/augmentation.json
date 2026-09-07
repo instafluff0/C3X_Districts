@@ -1,0 +1,427 @@
+{
+  "classification": "source_adaptation; explicit Lab city augmentation",
+  "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "anchor_tile": [
+    3,
+    2
+  ],
+  "pool": "city/pool/mediterranean/medieval",
+  "size": 1,
+  "uniform_scale_factor": 1.5,
+  "instances": [
+    {
+      "asset": "city/component/ffcbf7a5aff379ab",
+      "slot": 0,
+      "scale": 4.537175625141648,
+      "rotation": 0,
+      "offset": [
+        0.21000000000000002,
+        -0.28
+      ],
+      "local_bounds": [
+        -0.4546037409713894,
+        -0.4542492741256751,
+        0.4546037409713894,
+        0.4542492741256751
+      ],
+      "sample_start": 0,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0
+    },
+    {
+      "asset": "city/component/81e83985317d79e5",
+      "slot": 1,
+      "scale": 4.537175625141648,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        -0.14,
+        0.35000000000000003
+      ],
+      "local_bounds": [
+        -0.08533787609128295,
+        -0.1321274997255562,
+        0.08533787609128295,
+        0.1321274997255562
+      ],
+      "sample_start": 5,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.335697085
+    },
+    {
+      "asset": "city/component/21608a60a5ccc056",
+      "slot": 2,
+      "scale": 4.537175625141648,
+      "rotation": 0,
+      "offset": [
+        0.14,
+        0.35000000000000003
+      ],
+      "local_bounds": [
+        -0.14355904982836934,
+        -0.12051872754282503,
+        0.14355904982836934,
+        0.12051872754282503
+      ],
+      "sample_start": 10,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.855174005
+    },
+    {
+      "asset": "city/component/e70e0440af62b4f7",
+      "slot": 3,
+      "scale": 4.537175625141648,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        -0.07,
+        0.6300000000000001
+      ],
+      "local_bounds": [
+        -0.13372263456008726,
+        -0.13425430079984135,
+        0.13372263456008726,
+        0.13425430079984135
+      ],
+      "sample_start": 15,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.518415868
+    }
+  ],
+  "textures": {
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_a0618974138f3dc6.dds": "cfd18a88ab2d152fcc14f5700e69783d41527ef3277625bc53943de4fe939f9b",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_01f431974bab216b.dds": "0726427870eb1eff54820e0ff7adbbaacb9531405555a712a0276d7206782480",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_96eca7e78940ee0c.dds": "17df3f27418ae13379204469053a076756fee1d33757d2fc04cd00bee01d9824",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_2be9497d941baab7.dds": "524f30f3ece20e3e340f66688bbd687f4cbfe01f31da519fe9ca9f1b2b5dab52",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/ambient_occlusion_17523922e1f3fb49.dds": "ed908b77ba5d41c336bf09ba10cd25fbb7e5f996417ec4f70dd15063f78af00d",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_9f3b3fd9c209b6a4.dds": "863fe761127c9a42931d326009adf1cf7ddf870edbe0a12eb3d36a9fd2fa7f5f",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_71f385973db77352.dds": "0ad43f6a2497f78a52a0e78292c73e8b52a1983bbff164897db03b07d65dc086",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_72dbe66f7a221388.dds": "29bc2cfddbb21b1446721738ff1c3f52913ccb5c73987b925e23378779e06d55",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/ambient_occlusion_026f78df52f07636.dds": "6059f78b5f21dbb701f5f90967783c13790f98605ace727b61ef740b04dc2be0",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_948c36ceb513b52d.dds": "f6770e4119cdb73ac4a635bf02569fce476f79dd74a8e0d461a5e686520adb2f",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_07a9d1cc9983722e.dds": "f139f293d47e9af02473d57374c21002093c73ea3f1a56da89cb106aabda3832",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_1afe4528aa33c1fd.dds": "c6478a3ecf03581cb08e746b9d850240c840f994db662378091804ca48c5c944",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_546fa92899e85259.dds": "1e1f5bee039f125e9fd2feac12d5f367e78bffdb4aa3bf1b6f1c525eb0693114",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_f30bb00bf3c92a2a.dds": "f185785fde217661cdd52f8feaf21aefafa4e03d9ec4be14c0f40d48a8036f0a",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_7bae9a4a12178e25.dds": "5e8cf56ce58633752c6b9a5b1c71fdce677f27e05e2851ed5e46bc601827b510",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_1a7a5c7b87dadd66.dds": "a6bc91132aaef9a6068b06c96fd41d81fcaa1f4b304fd1bcd173ae3ffc3d126d",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_fdae047dad2f6884.dds": "ca32cfd6e439889ba54dfdbdb0c67874f4032eae3ed06e904224cb39a25eb433",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_1bf3f7779e4fdb3e.dds": "692092067e0f707b10bc1a25daca013d8e67f9c0362837f649a924b0e7380490",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/ambient_occlusion_01eedb9e46799ecf.dds": "05c016ed87a5da7dfce2693b1fdcffb7cdd348ff77096e6cd4f0fe418e3d4a92",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_6fbec4da65c8954e.dds": "941f031d3a4888b397ecdbfb7b63dd94731ce61825a58c9f784cec25d78e885c"
+  },
+  "material_declarations": [
+    {
+      "base_color": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_a0618974138f3dc6.dds"
+      },
+      "gloss": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/gloss_9bcc4977ee987cd3.dds"
+      },
+      "normal_0": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_01f431974bab216b.dds"
+      },
+      "normal_1": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_1_d639ab5b95236724.dds"
+      }
+    },
+    {
+      "ambient_occlusion": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/ambient_occlusion_17523922e1f3fb49.dds"
+      },
+      "base_color": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_96eca7e78940ee0c.dds"
+      },
+      "emissive": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_2be9497d941baab7.dds"
+      },
+      "gloss": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/gloss_816dbadb3c8d4bad.dds"
+      },
+      "normal_0": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_9f3b3fd9c209b6a4.dds"
+      },
+      "normal_1": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_1_fe1e5edd4fb8db1d.dds"
+      }
+    },
+    {
+      "ambient_occlusion": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/ambient_occlusion_026f78df52f07636.dds"
+      },
+      "base_color": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_71f385973db77352.dds"
+      },
+      "emissive": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_72dbe66f7a221388.dds"
+      },
+      "gloss": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/gloss_636d8313eefbebf0.dds"
+      },
+      "normal_0": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_948c36ceb513b52d.dds"
+      },
+      "normal_1": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_1_89f387b77a45fb7f.dds"
+      }
+    },
+    {
+      "base_color": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_07a9d1cc9983722e.dds"
+      },
+      "gloss": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/gloss_0c8f690bcd7c93b1.dds"
+      },
+      "normal_0": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_1afe4528aa33c1fd.dds"
+      },
+      "normal_1": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_1_fdc0e62b1e5bd59b.dds"
+      }
+    },
+    {
+      "ambient_occlusion": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/ambient_occlusion_17523922e1f3fb49.dds"
+      },
+      "base_color": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_546fa92899e85259.dds"
+      },
+      "emissive": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_2be9497d941baab7.dds"
+      },
+      "gloss": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/gloss_be16b9da07a1b46e.dds"
+      },
+      "normal_0": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_f30bb00bf3c92a2a.dds"
+      },
+      "normal_1": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_1_6464a924e3c88da8.dds"
+      }
+    },
+    {
+      "base_color": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_7bae9a4a12178e25.dds"
+      },
+      "gloss": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/gloss_bd7dc99b7389b700.dds"
+      },
+      "normal_0": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_1a7a5c7b87dadd66.dds"
+      },
+      "normal_1": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_1_7538a93d4f77df50.dds"
+      }
+    },
+    {
+      "ambient_occlusion": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/ambient_occlusion_01eedb9e46799ecf.dds"
+      },
+      "base_color": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC3_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_fdae047dad2f6884.dds"
+      },
+      "emissive": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_1bf3f7779e4fdb3e.dds"
+      },
+      "gloss": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/gloss_cd8a35d1d0d8db5a.dds"
+      },
+      "normal_0": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_6fbec4da65c8954e.dds"
+      },
+      "normal_1": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_1_faf9316d2fe4258a.dds"
+      }
+    }
+  ],
+  "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+  "expanded_pool": true,
+  "emissive_gain": 8.0,
+  "emissive_uv": 2,
+  "hdr_glow": true,
+  "weighted_growth": true,
+  "compound_house_equivalents": 4,
+  "stage_component_counts": [
+    1,
+    4,
+    8
+  ],
+  "grounding": "source_z_zero",
+  "footprint_half_extent_tiles": 0.8,
+  "cross_tile_extent_authorization": "user permits slight city overlap, especially larger cities",
+  "projection": {
+    "half_height": 32.0,
+    "half_width": 64.0,
+    "height": 800.0,
+    "origin_x": 104.0,
+    "origin_y": 380.0,
+    "vertical_scale": 0.468571424,
+    "width": 1360.0
+  },
+  "source_z_pixels_per_unit": 80.9543,
+  "scene_world_z_per_source_unit": 1.5425743290738958,
+  "material_channels_enabled": [
+    "base_color",
+    "emissive"
+  ],
+  "remaining": [
+    "source normal/gloss interpretation",
+    "full coast/route/vegetation envelopes",
+    "capital and wall states",
+    "all culture/era/size matrix"
+  ]
+}

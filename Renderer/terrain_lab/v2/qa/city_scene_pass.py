@@ -8,6 +8,8 @@ import argparse
 from collections import defaultdict
 import json
 import math
+import shutil
+import statistics
 from pathlib import Path
 import struct
 import subprocess
@@ -17,6 +19,7 @@ ROOT=Path(__file__).resolve().parents[4];V2=ROOT/'Renderer/terrain_lab/v2';OUT=V
 sys.path.insert(0,str(V2/'app'))
 import runner
 from cache import Cache,file_hash
+from packet_store import compact_packet
 sys.path.insert(0,str(V2/'systems/objects'))
 import presentation as city
 
@@ -40,10 +43,12 @@ def main():
     parser.add_argument('--emissive-gain',type=float,default=1.45)
     parser.add_argument('--emissive-uv',type=int,choices=[0,1,2],default=0)
     parser.add_argument('--glow',action='store_true')
+    parser.add_argument('--weighted-growth',action='store_true',help='Count a whole source neighborhood by footprint rather than as one house')
     parser.add_argument('--anchor',type=int,nargs=2,default=[3,2])
     parser.add_argument('--all-zooms',action='store_true')
     parser.add_argument('--resume',action='store_true',help='retry an input/build failure before any combined render exists')
     a=parser.parse_args()
+    if shutil.disk_usage(V2).free<8*1024**3:raise ValueError('capture stopped: preserve at least 8 GiB free disk space')
     if not .5<=a.factor<=2:raise ValueError('bounded uniform scale factor required')
     if not 0<=a.emissive_gain<=12 or any(v<0 or v>9 for v in a.anchor):raise ValueError('city parameter bounds')
     pack=Path('Renderer/packs/CityStudyExpanded') if a.expanded else city.PACK
@@ -87,7 +92,7 @@ def main():
             s=grid[iy*51+ix];values.append(s['height'])
             if s['base']>=11 or s['shore_distance']>-.05:return False
         return max(values)-min(values)<=2.5
-    source_scale=None;ordering=None
+    source_scale=None;ordering=None;stage_counts=None;compound_weight=1
     if a.expanded:
         reference=[city.component(x) for x in city.read(city.PACK/'city_catalog.json')['pools'][pool]['components']]
         source_scale=city.layout(reference,0,factor=a.factor)[0]['scale']
@@ -100,8 +105,12 @@ def main():
         compounds=sorted([x for x in assets if x['id'] in blocks],key=lambda x:(-(x['hi'][2]-x['lo'][2]),x['id']))
         ordering=compounds[:1]+standalone
         while len(ordering)<11:ordering+=standalone
+        if a.weighted_growth and compounds:
+            area=lambda x:(x['hi'][0]-x['lo'][0])*(x['hi'][1]-x['lo'][1])
+            compound_weight=min(4,max(1,math.ceil(area(compounds[0])/statistics.median(area(x) for x in standalone))))
+            stage_counts=[1+max(0,budget-compound_weight) for budget in (4,7,11)]
     footprint_limit=[.65,.8,.95][a.size] if a.expanded else None
-    layout=city.layout(assets,a.size,factor=a.factor,buildable=buildable,source_scale=source_scale,ordering=ordering,footprint_limit=footprint_limit)
+    layout=city.layout(assets,a.size,factor=a.factor,buildable=buildable,source_scale=source_scale,ordering=ordering,footprint_limit=footprint_limit,stage_counts=stage_counts)
     points=[];instances=[]
     for inst in layout:
         body=inst['asset'];positions=[]
@@ -167,6 +176,7 @@ def main():
          'uniform_scale_factor':a.factor,'instances':instances,'textures':inputs,'material_declarations':materials,
          'pack':pack.as_posix(),'expanded_pool':a.expanded,'emissive_gain':a.emissive_gain,
          'emissive_uv':a.emissive_uv,'hdr_glow':a.glow,
+         'weighted_growth':a.weighted_growth,'compound_house_equivalents':compound_weight,'stage_component_counts':stage_counts,
          'grounding':'source_z_zero' if a.authored_ground else 'lowest_source_vertex',
          'footprint_half_extent_tiles':footprint_limit,'cross_tile_extent_authorization':'user permits slight city overlap, especially larger cities',
          'projection':projection,'source_z_pixels_per_unit':80.9543,'scene_world_z_per_source_unit':80.9543/(vertical*112),
@@ -179,6 +189,11 @@ def main():
     for i,(job,row) in enumerate(pairs):
         combined=output/f'city-{i}.packet';shadowed=output/f'combined-{i}.packet'
         run([append,job[0],fixture/'city.bin',combined]);run([shadows,combined,shadowed,row['hour'],base/'report.json'])
+        # The pre-shadow copy is disposable; the final packet is replay input.
+        combined.unlink()
+        # Share existing immutable terrain mips/buffers instead of retaining a
+        # full terrain copy for every city, hour and zoom.
+        compact_packet(shadowed,V2/'app/.cache/content')
         row['packet']=rel(shadowed);job[0]=str(shadowed)
     report['outputs']=[r for _,r in pairs];save(output/'report.json',report);save(output/'batch.json',[j for j,_ in pairs])
     common=fixture/'city.hlsl'

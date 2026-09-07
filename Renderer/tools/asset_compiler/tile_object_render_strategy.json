@@ -31,6 +31,50 @@
       "reward_policy": "retain_native_gameplay_message_sound_and_outcome"
     }
   },
+  "barbarian_camp": {
+    "source_artdef_chain": [
+      "Base/ArtDefs/Improvements.artdef:IMPROVEMENT_BARBARIAN_CAMP",
+      "Base/ArtDefs/Landmarks.artdef:LM_BARBARIAN_CAMP"
+    ],
+    "source_stages": [
+      {
+        "id": "preindustrial",
+        "default_for_civ3": true,
+        "source_entries": ["VIL_BAR_01"]
+      },
+      {
+        "id": "industrial_optional",
+        "default_for_civ3": false,
+        "source_entries": ["VIL_BAR_IND"]
+      }
+    ],
+    "runtime": {
+      "presence_visibility": "Tile.m7_Check_Barbarian_Camp(viewer_civ_id)",
+      "tribe_id_source": "Tile.m44_Get_Barbarian_TribeID",
+      "default_stage": "preindustrial",
+      "era_policy": "primitive_default_for_all_civ3_eras",
+      "culture_policy": "source_default_neutral",
+      "selection_seed": ["world_seed", "canonical_tile_index", "barbarian_tribe_id"],
+      "variant_policy": "stable_hash_within_selected_stage",
+      "attachment_selection_seed": ["world_seed", "canonical_tile_index", "barbarian_tribe_id", "attachment_id"],
+      "attachment_selection_policy": "stable_per_socket_source_optional_cull",
+      "owner_color": "none",
+      "unit_policy": "render_authoritative_barbarian_units_as_separate_unit_instances",
+      "resource_policy": "preserve_authoritative_civ3_resource_visibility",
+      "terrain_fit": "renderer_terrain_surface_without_source_flattening",
+      "rotation_policy": "stable_diagonal_facing_with_entrance_clearance",
+      "ambient": {
+        "preindustrial_night": ["optional_pack_authored_campfire", "optional_warm_local_light", "optional_smoke"],
+        "industrial_optional_night": ["source_fire_ring_if_present", "optional_smoke"],
+        "scheduler": "only_while_a_visible_attachment_is_animated",
+        "provenance_rule": "pack_authored_effects_must_not_be_reported_as_decoded_source_behavior"
+      },
+      "removal_policy": "disappear_when_authoritative_camp_bit_clears",
+      "gameplay_policy": "retain_native_spawn_capture_reward_message_sound_and_unit_state",
+      "upstream_suppress_resource_policy": "ignore_source_specific_flag_and_preserve_civ3_authority"
+    },
+    "promotion_status": "offline_intake_only_dedicated_lab_v2_visual_gate_required"
+  },
   "colony": {
     "stand_in": "small_owned_resource_logistics_outpost",
     "source_artdef_chain": [

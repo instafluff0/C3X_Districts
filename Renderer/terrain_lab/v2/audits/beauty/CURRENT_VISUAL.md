@@ -3,9 +3,15 @@
 The user redirected the Lab to city sizes, eras and cultures, including night
 lights reflected in water, and permits modest cross-tile city footprints.
 [Current campaign and findings](CITY_QUALITY_CAMPAIGN.md). Complete source cities
-now render inside the fixed 100-tile coastal water scene. A scale comparison
-improves roof/facade readability; source variety, underground foundation placement
-and material/night-light fidelity remain active. No city result is promoted.
+now render inside the fixed 100-tile coastal water scene. **City r8** retains the
+source-origin foundation correction, recovers the separate source light-map UVs,
+and adds stronger window emission with soft GPU HDR glow. Roof light artifacts
+from earlier UV0 experiments are rejected. Modern reflected lights have matched
+lights-off/glow-off controls and four passing Metal/D3D11 comparisons.
+[Modern native-size comparison](out/city-scene-r8/review/modern-night-native.png),
+[medieval native-size comparison](out/city-scene-r8/review/medieval-night-native.png).
+Full culture/era/growth coverage, local ground-light transport, material normal
+fidelity and clearance remain active. No city result is promoted.
 
 # Preserved natural static water
 

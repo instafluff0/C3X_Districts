@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the compact source-independent goody-hut/colony bundle for L19A."""
+"""Build the compact source-independent small tile-object proof bundle."""
 
 from __future__ import annotations
 
@@ -21,16 +21,17 @@ from Renderer.tools.asset_compiler.build_mine_runtime import (
 )
 
 
-def build(pack: Path) -> Path:
-    manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
-    catalog = json.loads(
-        (pack / manifest["tile_object_catalog"]).read_text(encoding="utf-8")
-    )
+def root_bindings(catalog: dict) -> list[tuple[str, str]]:
     roots: list[tuple[str, str]] = []
     roots.extend(
         (f"hut_{index}", asset_id)
         for index, asset_id in enumerate(catalog["goody_hut"]["variants"])
     )
+    barbarian_index = 0
+    for stage in catalog["barbarian_camp"]["stages"]:
+        for asset_id in stage["variants"]:
+            roots.append((f"barbarian_camp_{barbarian_index}", asset_id))
+            barbarian_index += 1
     # Ancient and industrial source stages each provide three variants. Civ III
     # eras map to these two stages in the Lab scene rather than duplicating data.
     for family, era_index in enumerate((0, 2)):
@@ -40,6 +41,15 @@ def build(pack: Path) -> Path:
                 catalog["colony"]["eras"][era_index]["variants"]
             )
         )
+    return roots
+
+
+def build(pack: Path) -> Path:
+    manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
+    catalog = json.loads(
+        (pack / manifest["tile_object_catalog"]).read_text(encoding="utf-8")
+    )
+    roots = root_bindings(catalog)
     all_parts = {
         role: collect_parts(pack, manifest, asset_id)
         for role, asset_id in roots

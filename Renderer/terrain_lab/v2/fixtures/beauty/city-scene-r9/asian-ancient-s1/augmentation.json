@@ -1,0 +1,240 @@
+{
+  "classification": "source_adaptation; explicit Lab city augmentation",
+  "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "anchor_tile": [
+    3,
+    2
+  ],
+  "pool": "city/pool/asian/ancient",
+  "size": 1,
+  "uniform_scale_factor": 1.5,
+  "instances": [
+    {
+      "asset": "city/component/3b04bf3abfa61f38",
+      "slot": 0,
+      "scale": 5.156895398036857,
+      "rotation": 0,
+      "offset": [
+        -0.07,
+        -0.14
+      ],
+      "local_bounds": [
+        -0.12383598431297574,
+        -0.13562028961627665,
+        0.12383598431297574,
+        0.13562028961627665
+      ],
+      "sample_start": 0,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.585660398
+    },
+    {
+      "asset": "city/component/20c6179bd3b7587a",
+      "slot": 1,
+      "scale": 5.156895398036857,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        0.0,
+        0.21000000000000002
+      ],
+      "local_bounds": [
+        -0.15188668477030431,
+        -0.10049399347464064,
+        0.15188668477030431,
+        0.10049399347464064
+      ],
+      "sample_start": 5,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.671928763
+    },
+    {
+      "asset": "city/component/6cf90d821d71767d",
+      "slot": 2,
+      "scale": 5.156895398036857,
+      "rotation": 0,
+      "offset": [
+        0.28,
+        -0.14
+      ],
+      "local_bounds": [
+        -0.15294426087853372,
+        -0.15374999999999997,
+        0.15294426087853372,
+        0.15374999999999997
+      ],
+      "sample_start": 10,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0
+    },
+    {
+      "asset": "city/component/c800677c003782d8",
+      "slot": 3,
+      "scale": 5.156895398036857,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        -0.07,
+        0.49000000000000005
+      ],
+      "local_bounds": [
+        -0.12197264329880309,
+        -0.12932524161941605,
+        0.12197264329880309,
+        0.12932524161941605
+      ],
+      "sample_start": 15,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.497760743
+    },
+    {
+      "asset": "city/component/ea64dc2c2ac50f56",
+      "slot": 4,
+      "scale": 5.156895398036857,
+      "rotation": 0,
+      "offset": [
+        0.07,
+        -0.49000000000000005
+      ],
+      "local_bounds": [
+        -0.09805150732279146,
+        -0.12272805112118453,
+        0.09805150732279146,
+        0.12272805112118453
+      ],
+      "sample_start": 20,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.703274608
+    },
+    {
+      "asset": "city/component/0363dbee61e13503",
+      "slot": 5,
+      "scale": 5.156895398036857,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        0.35000000000000003,
+        0.21000000000000002
+      ],
+      "local_bounds": [
+        -0.1718293533001615,
+        -0.15052696616070396,
+        0.1718293533001615,
+        0.15052696616070396
+      ],
+      "sample_start": 25,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0
+    },
+    {
+      "asset": "city/component/cc8838bb2062e14e",
+      "slot": 6,
+      "scale": 5.156895398036857,
+      "rotation": 0,
+      "offset": [
+        0.35000000000000003,
+        -0.49000000000000005
+      ],
+      "local_bounds": [
+        -0.10245804865593695,
+        -0.15052694037622694,
+        0.10245804865593695,
+        0.15052694037622694
+      ],
+      "sample_start": 30,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0
+    }
+  ],
+  "textures": {
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_b8c5746583383c9b.dds": "605e15699cf5f3f88359dc707eca8a763adbb0960932144f8eb249d410ffa6c9",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_ca453871fb78698c.dds": "081039114b1cff7c78c3cd89971f5c2b956860ea66c1da851b09ce75f2e89f97",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_e33f7f5b83d13300.dds": "02e5d6e15fbfa71470206e9c4b1ca68af066990451318b43a26f13efa22a2189"
+  },
+  "material_declarations": [
+    {
+      "base_color": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_b8c5746583383c9b.dds"
+      },
+      "emissive": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_ca453871fb78698c.dds"
+      },
+      "gloss": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/gloss_72e76516d2442018.dds"
+      },
+      "normal_0": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_e33f7f5b83d13300.dds"
+      },
+      "normal_1": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_1_d6895781c7ddd5b5.dds"
+      }
+    }
+  ],
+  "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+  "expanded_pool": true,
+  "emissive_gain": 8.0,
+  "emissive_uv": 2,
+  "hdr_glow": true,
+  "grounding": "source_z_zero",
+  "footprint_half_extent_tiles": 0.8,
+  "cross_tile_extent_authorization": "user permits slight city overlap, especially larger cities",
+  "projection": {
+    "half_height": 32.0,
+    "half_width": 64.0,
+    "height": 800.0,
+    "origin_x": 104.0,
+    "origin_y": 380.0,
+    "vertical_scale": 0.468571424,
+    "width": 1360.0
+  },
+  "source_z_pixels_per_unit": 80.9543,
+  "scene_world_z_per_source_unit": 1.5425743290738958,
+  "material_channels_enabled": [
+    "base_color",
+    "emissive"
+  ],
+  "remaining": [
+    "source normal/gloss interpretation",
+    "full coast/route/vegetation envelopes",
+    "capital and wall states",
+    "all culture/era/size matrix"
+  ]
+}

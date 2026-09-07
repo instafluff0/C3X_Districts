@@ -1,0 +1,12 @@
+{
+  "schema": "c3x.unit_animation_payload_proof.v1",
+  "status": "pass",
+  "backend": "portable_cpp",
+  "units": 6,
+  "actions": 48,
+  "part_pose_samples": 576,
+  "socket_pose_samples": 192,
+  "maximum_position_error_tiles": 2.2558033141439893e-07,
+  "payload_bytes": 19192048,
+  "scope": "actual portable DLL evaluator versus raw authored clips; native body bridge/rendering not yet enabled"
+}

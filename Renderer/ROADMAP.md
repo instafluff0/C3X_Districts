@@ -50,7 +50,7 @@ DLLs, so this is not a clean full-workflow pass; unchanged thresholds and that
 existing limitation are recorded in the pickup checkpoint. Cold exposures still
 hitch; no vanilla-speed claim or milestone advancement is made.
 
-The active Lab goal is now **city quality across sizes, eras and cultures, including reflected night lights**. The user permits modest cross-tile footprints, especially for larger cities. The [city campaign](terrain_lab/v2/audits/beauty/CITY_QUALITY_CAMPAIGN.md) records complete cities composed with the current 100-tile water scene, a visible building-scale comparison, expanded source intake (132 components) and a source-origin foundation correction under review. Source material coordinates, full contextual coverage and all acceptance gates remain open.
+The active Lab goal is now **city quality across sizes, eras and cultures, including reflected night lights**. The user permits modest cross-tile footprints, especially for larger cities. The [city campaign](terrain_lab/v2/audits/beauty/CITY_QUALITY_CAMPAIGN.md) records complete cities composed with the current 100-tile water scene, a visible building-scale comparison, expanded source intake (132 components), corrected source-origin foundations and r8 night lights. Recovered UV2 light-atlas coordinates remove roof artifacts; brighter windows, GPU HDR glow and reflected lights have matched controls plus four passing standalone Metal/D3D11 comparisons. Full culture/growth coverage, local light pools, remaining materials and all acceptance gates remain open.
 
 The preceding Lab goal covered **more natural static water**, with animation and coastal surf deferred. The user said “Water looks great” about water-natural-r6 and requested object reflections. [water-reflection-r5](terrain_lab/v2/audits/beauty/WATER_OBJECT_REFLECTIONS.md) adds planar GPU prepasses in the standalone Metal and D3D11 Lab, preserving r6's open-water appearance. Twenty matched frames cover the fixed scenes and coastal holdout; eight offline/GPU comparisons and four exact disabled controls support the implementation. Four shifted-camera probes preserve offscreen-object reflections; sixteen focused Metal/D3D11 comparisons pass with identical Windows repeats. The extra local Metal GPU cost is 3.2–7.5 ms in eight-frame samples. Native delivery, provider halo/culling coverage, multiple river elevations and visual review remain open; implementation notes are ready. The [earlier water exploration](terrain_lab/v2/audits/beauty/WATER_EFFECTS_EXPLORATION.md), [surface-richness campaign](terrain_lab/v2/audits/beauty/SURFACE_RICHNESS_CAMPAIGN.md), source-normal/AO work and frozen pickup remain preserved. Milestone and integration gates are unchanged.
 
@@ -686,3 +686,43 @@ Resource dynamic composition, facing calibration and the native Animator unit
 bridge remain in progress; production animation is not enabled or staged yet.
 See `docs/animation_integration_checkpoint.md`. Terrain caches, the installed
 performance DLL, injected sources and the deferred fog-edge work are unchanged.
+
+### Resource dynamic pass and importer correction
+
+The animation candidate now renders ten resource families in the DLL, preserving
+static terrain meshes/pixels and reusing exact MSAA4 color/depth behind moving
+bodies. Its additional backdrop cache is capped at 24 MiB. Source-backed 1/12-to-
+1/100 translation normalization and constant root-placement removal fix stretched
+clutter poses discovered by actual renders. Timed normal/reduced noon/night
+witnesses change poses with zero terrain builds/uploads; fixed-scroll and removal
+comparisons match fresh output within existing pixel tolerances. Ordinary debug
+output reports resource bindings, demand, timing and cache costs. See
+`docs/animation_integration_checkpoint.md`. Unit movement integration is still
+required; the resource candidate remains verification-only and is not staged.
+
+### Complete unit clip export (2026-09-07)
+
+The animation candidate now has a complete-clip unit export for six families and
+48 actions, including skinned bodies and animated socket attachments. The actual
+C++ evaluator matches 576 normalized source poses within 2.256e-7 tiles. Planar
+root travel is removed consistently across the kit so Civ III alone positions
+moving units. Native cursor/anchor guards pass the Windows x86 build; live body
+rendering/hooks, marine heading correction and the combined gameplay checkpoint
+remain unfinished. No animation DLL was staged and the game was not launched.
+
+### Barbarian camp offline intake
+
+Barbarian camps now have a separate source and runtime contract rather than
+sharing goody-hut or colony semantics. The exact installed chain resolves
+`IMPROVEMENT_BARBARIAN_CAMP -> LM_BARBARIAN_CAMP` to primitive `VIL_BAR_01`
+and optional later `VIL_BAR_IND` roots. Both recursively normalize into the
+generic tile-object pack and the compact proof bundle builds. The primitive
+root remains the all-era Civ III default; viewer-conditioned presence, tribe-
+stable optional-child selection, neutral color, independent barbarian units,
+resource coexistence, immediate native removal, stable diagonal placement and
+authored-vs-source night effects are checked in
+`docs/barbarian_camp_import.md`. Two optional skull-pile child references are
+explicitly omitted because their source material lacks a required base-color
+channel; the primary camp composition is intact. This preparation neither
+reopens the completed L19A handoff nor advances LQ0. A dedicated modular Lab v2
+visual gate is still required before Game Integration may own camp pixels.

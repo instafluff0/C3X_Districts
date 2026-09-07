@@ -39,7 +39,8 @@ validated world matrix. Payloads contain no paths or source-engine types.
 actual C++ evaluator. The local licensed witness covers all 26 subjects at four
 authored times each, including both endpoints. All 104 poses agree with the
 independent normalized CPU skinning implementation within
-`6.575e-7` tile units. UVs are unchanged and output normals remain unit length.
+`3.363e-8` tile units after the translation correction below. Every subject
+changes its body positions across the sampled clip. UVs are unchanged and output normals remain unit length.
 The synthetic executable checks interpolation, nonuniform-scale normal
 transforms, one-shot endpoints, loop wrapping, repeated/skipped callbacks,
 invalid timing and malformed/truncated/oversized payload rejection.
@@ -48,43 +49,129 @@ Windows x86 `/W4 /WX` compilation and the executable animation checks passed
 through `renderer_dev.windows_command_result` and `BUILD.bat candidate-compile`.
 The normal build workflow now runs these executable checks. No injected source,
 CSV address, installed game executable, or staged production DLL was changed
-for this foundation. The game was not launched. This evidence establishes
-playback math and payload safety, not rendered animation or in-game movement.
+for this candidate. The game was not launched. Native temporal rendering now
+passes too; in-game movement and redraw scheduling still require the later
+manual checkpoint.
+
+## Dynamic resource candidate
+
+The DLL now loads one calibrated primary subject for each of the ten resource
+families when the verification switch `C3X_RENDERER_RESOURCE_ANIMATION=1` is set.
+No special user launcher is planned: this switch is temporary until the full
+checkpoint is staged. The production DLL in `Renderer/bin` is unchanged.
+
+Animated bodies are absent from static meshes and retained pixel caches. Tile
+geometry retains only immutable resource anchors. A separate posed vertex-buffer
+pool (32 MiB maximum) and completed bitmap handle animation. Repeated redraws
+within the same 15 Hz absolute-time quantum reuse the published image without
+cancelling background terrain preparation. New phases drive the existing visible
+animation demand. Resource ownership is retained on mesh-cache hits, including
+fixed scrolling; units remain outside this map plane.
+
+The dynamic pass restores exact MSAA4 linear color and depth behind each body,
+then draws just the new poses with native terrain occlusion. A maximum of 32
+128×128 background blocks costs 24 MiB, independent of window size. At capacity,
+uncached regions redraw normally rather than dropping bodies. These blocks are
+invalidated by the complete authoritative scene signature. Static terrain, mesh,
+pixel-block, recent-view and source-shadow budgets remain unchanged. Resource
+bodies receive static source shadows but do not animate their own cast shadows
+in this first checkpoint; they never invalidate static source-shadow pages.
+
+The first actual renders caught an importer defect that numeric palette parity
+alone could not detect: clutter animation translations had been exported at
+1/12 while their skeletons were normalized at 1/100. Clips also retained constant
+source-scene root placement. The runtime compiler now matches the exact clip
+hash to extraction metadata, converts authored translation channels by the
+proven 0.12 ratio, preserves already-normalized missing tracks, and removes only
+the initial root-placement offset. Animated root deltas, rotations and scale
+remain intact. A synthetic executable calibration test checks all three rules.
+Source packs and active Lab code are not rewritten. Corrected renders show intact
+horses, cattle, deer, foxes, elephants and plants. Generic bindings rotate −Y
+forward models by +90° and +Y cattle by −90°, projecting southeast. The fish
+school retains its authored internal member headings within the resource body.
+
+`python3 Renderer/native/verify_animation.py` runs the candidate offscreen in the
+Windows VM. Current evidence in `verification/animation/temporal.json` covers:
+
+- Six timed frames at normal/reduced zoom and noon/night; all five phase changes
+  change pixels, while repeated callbacks at the same time are byte-identical.
+- All ten synthetic resource families claim replacement ownership. Animated
+  updates build zero terrain meshes and upload zero terrain bytes.
+- A four-raw-tile camera jump compared with a reset and fresh render: zero pixels
+  differing by more than two channel levels, total channel error 0/0/1.
+- Resource removal stops animation demand and restores the base map; comparison
+  with fresh rendering has zero differing pixels and total error 2/1/1.
+- Background caching matches the preceding uncached dynamic implementation with
+  total channel error 0/1/2 over the three inspected frames, no difference above
+  one channel level. The reduced-zoom compositor takes about 4–5 ms, with roughly
+  9–11 ms API-call time in the latest headless run. This is not gameplay evidence.
+- The native portable smoke passes with animation disabled, including actual
+  RGB555/RGB565 destination copies. Thirty-seven focused renderer/playback and
+  calibration checks pass. No injected compilation is required for DLL-only work.
+
+Usual `OutputDebugStringA` records include `animation-bind` and `animation-frame`:
+resource identity, load outcome, southeast facing, clock quantum, visible bodies,
+dirty rectangles/pixels, pose uploads, buffer/backdrop bytes, cache hits/misses,
+terrain rebuild count and elapsed time. Runtime does not open a log file. The
+headless verifier explicitly opts into its local trace files.
+
+## Unit playback data and native pose adapter (2026-09-07)
+
+`tools/asset_compiler/build_unit_animation_runtime.py` now exports complete clips
+for Warrior, Archer, Swordsman, Infantry, Fighter and Galley: 48 actions, 177
+deduplicated payloads, 19,192,048 bytes. Source packs remain unchanged. Skinned
+parts and rigid socket attachments use the same bounded DLL palette evaluator;
+weapons are never recentered independently. All source texture channels, source
+tints and existing owner-mask contracts are preserved as data. Warrior's source
+owner-tint contract remains unresolved and must be addressed before enabling its
+custom body. Missing actions are not invented or silently aliased.
+
+Whole-kit planar root travel is removed while joint and vertical movement are
+retained. This aligns the mixed input packs: the older Warrior model-aware cache
+already strips root travel, whereas family exports retain it. Native screen
+anchors remain the only source of gameplay movement. A comparison against raw
+authored clips, with this explicit planar normalization, passes 576 part poses,
+including 192 socket poses, within 2.256e-7 tiles using the actual C++ evaluator.
+See `verification/animation/unit-payloads-portable_cpp.json`. This is numerical
+pose/material preservation evidence, not a rendered or in-game unit gate.
+
+`native/unit_animation_runtime.h` derives pose phase directly from the captured
+native action cursor, preserves one-shot endpoints, and reconstructs the native
+anchor with exact normal/reduced integer arithmetic. It rejects unrelated
+Sprite/canvas identities and unsupported actions. The Windows x86 `/W4 /WX`
+candidate build and executable cursor/anchor/rejection checks pass. Full source
+pose comparisons ran on the portable host; a separate attempt to run Python
+tests inside Windows could not run because that VM has no `py` launcher.
+The adapter is not connected to live hooks yet; no unit draw ownership is claimed.
+
+The next implementation must connect complete-kit rendering and the minimal
+native body bridge, then verify source tint/owner color, directions, native
+movement and retained overlays. Do not substitute the old sparse baked Lab
+action samples for these full clips. Animation remains unstaged, and Civ III has
+not been launched.
 
 ## Work still required before the user-run checkpoint
 
-1. Bind resource assets and calibrate southeast orientation. Normalized assets
-   do not all share a forward axis: rest-pose bone evidence places horse heads
-   toward −Y and cattle heads toward +Y. Deer, foxes and elephants also point
-   toward −Y. Fish are an authored school with differing member headings;
-   validate its intended resource orientation visually. Do not apply one random
-   or guessed yaw to all assets. Runtime +X projects southeast in the existing
-   Civ III isometric basis.
-2. Add a separate resource dynamic layer. Keep static terrain pixels, meshes,
-   prepared blocks and shadow pages independent of presentation time. Preserve
-   foreground occlusion, fog, ownership and dirty-region restoration. Both
-   native worker fast-publication and viewport-cache hits currently bypass
-   dynamic work; both must route to composition when visible ambient resources
-   need a new frame. Extend animation demand only for visible replacements.
-3. Deliver enabled units on the native Animator canvas, with authoritative
-   pixel anchors, direction, action/progress, selection/HUD and movement timing.
-   `docs/i20_native_unit_animation_handoff.md` and the body-boundary spike remain
-   the native contracts. The tile-capture unit fields are descriptive and cannot
-   substitute for this dynamic boundary. Do not bake units into terrain.
-4. Add bounded debug summaries for asset binding, orientation, action transitions,
-   visible instance count, pose reuse, dirty bounds, timing and failure. Use the
-   existing debug output; no per-vertex or automatic file logging.
-5. Run temporal renders, camera/fog/overlap and cache witnesses, disabled-unit
-   controls, Windows native builds, and the approved injected compile only if a
-   minimal capture/forwarding bridge changes. Stage the tested checkpoint for
-   normal `INSTALL.bat`, then stop for user gameplay testing without launching.
+1. Finish the enabled-unit body path on the native Animator canvas, including
+   authoritative pixel anchors, direction, native action/progress, retained HUD,
+   movement timing and focused action-transition logging. Tile unit fields are
+   descriptive and cannot substitute for this boundary.
+2. Finish southeast calibration for the marine school members, then validate
+   the unit and resource scene together, fog/visibility transitions,
+   overlap with retained native objects, interrupted actions and disabled-unit
+   controls. Prove native map redraw scheduling with the user at the checkpoint.
+3. Resolve any concrete native hook changes, compile the minimal capture/forwarding
+   bridge with the approved smoke if needed, remove the temporary resource test
+   switch and stage the verified DLL for normal `INSTALL.bat`. Do not launch the
+   game. The complete animation goal remains active.
 
 ## Native dependencies
 
 No new patch capability is needed by the current offline compiler/evaluator.
 The ordinary map boundary and scheduler already support resource demand.
-`Unit_tick_anim` currently has a callable GOG-only CSV definition, not an
-inlead. The old unit-body audit identifies GOG normal/reduced draw sites, but
-the reduced ABI and other supported builds still need proof before any concrete
-CSV change request. Do not edit CSV entries or suppress native unit pixels
+`Unit_tick_anim`, `Sprite_draw_unit_body_normal`, and
+`Sprite_draw_unit_body_reduced` now have callable GOG-only CSV definitions;
+they are not inleads. The old unit-body audit and current signatures must be
+reconciled against the executable before a concrete hook request. Other builds
+remain unaudited for this boundary. Do not edit CSV entries or suppress native unit pixels
 before the replacement path succeeds.

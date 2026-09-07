@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile goody-hut and colony-stand-in source graphs into a generic local pack."""
+"""Compile small tile-object source graphs into a generic local pack."""
 
 from __future__ import annotations
 
@@ -88,6 +88,47 @@ def load_strategy(path: Path = DEFAULT_STRATEGY) -> dict[str, Any]:
         raise ValueError("Goody-hut bucket mapping refers to an unavailable variant")
     if hut_runtime.get("culture_policy") != "neutral_tribal_site" or hut_runtime.get("era_policy") != "none":
         raise ValueError("Goody huts must remain culture- and era-neutral")
+
+    barbarian = strategy.get("barbarian_camp")
+    stages = barbarian.get("source_stages") if isinstance(barbarian, dict) else None
+    if not isinstance(stages, list) or len(stages) < 2:
+        raise ValueError("Barbarian-camp strategy needs primitive and optional later source stages")
+    stage_ids: set[str] = set()
+    barbarian_entries: set[str] = set()
+    default_stages = 0
+    for stage in stages:
+        stage_id = stage.get("id")
+        source_entries = stage.get("source_entries")
+        if (
+            not isinstance(stage_id, str)
+            or not SAFE_ID.fullmatch(stage_id)
+            or stage_id in stage_ids
+            or not isinstance(source_entries, list)
+            or not source_entries
+            or not all(isinstance(entry, str) and entry for entry in source_entries)
+            or barbarian_entries.intersection(source_entries)
+        ):
+            raise ValueError("Barbarian-camp strategy has an invalid or duplicate source stage")
+        stage_ids.add(stage_id)
+        barbarian_entries.update(source_entries)
+        default_stages += stage.get("default_for_civ3") is True
+    if default_stages != 1:
+        raise ValueError("Barbarian-camp strategy needs exactly one Civ III default stage")
+    barbarian_runtime = barbarian.get("runtime", {})
+    if barbarian_runtime.get("default_stage") not in stage_ids:
+        raise ValueError("Barbarian-camp default stage is unavailable")
+    if barbarian_runtime.get("presence_visibility") != "Tile.m7_Check_Barbarian_Camp(viewer_civ_id)":
+        raise ValueError("Barbarian-camp presence must use the viewer-conditioned Civ III accessor")
+    if barbarian_runtime.get("tribe_id_source") != "Tile.m44_Get_Barbarian_TribeID":
+        raise ValueError("Barbarian-camp identity must retain the native tribe ID")
+    if barbarian_runtime.get("owner_color") != "none":
+        raise ValueError("Barbarian camps must not inherit territory or civilization color")
+    if barbarian_runtime.get("unit_policy") != "render_authoritative_barbarian_units_as_separate_unit_instances":
+        raise ValueError("Barbarian camp geometry must not bake in its independently moving units")
+    if barbarian_runtime.get("resource_policy") != "preserve_authoritative_civ3_resource_visibility":
+        raise ValueError("Barbarian camps must not transfer Civ VI resource suppression to Civ III")
+    if barbarian_runtime.get("era_policy") != "primitive_default_for_all_civ3_eras":
+        raise ValueError("Barbarian camps must preserve Civ III's era-independent primitive silhouette")
 
     colony = strategy.get("colony")
     eras = colony.get("eras") if isinstance(colony, dict) else None
@@ -184,6 +225,30 @@ def goody_variant_for_bucket(strategy: dict[str, Any], bucket: int) -> str:
     return strategy["goody_hut"]["variants"][mapping[bucket]]["asset_id"]
 
 
+def barbarian_variant_for(
+    strategy: dict[str, Any],
+    stage_id: str,
+    world_seed: int,
+    canonical_tile_index: int,
+    barbarian_tribe_id: int,
+) -> str:
+    stage = next(
+        (item for item in strategy["barbarian_camp"]["source_stages"] if item["id"] == stage_id),
+        None,
+    )
+    if stage is None:
+        raise ValueError("Barbarian-camp stage is unavailable")
+    if not all(isinstance(value, int) for value in (world_seed, canonical_tile_index, barbarian_tribe_id)):
+        raise ValueError("Barbarian-camp variant inputs must be integers")
+    digest = hashlib.sha256(
+        f"{world_seed}\0{canonical_tile_index}\0{barbarian_tribe_id}".encode("ascii")
+    ).digest()
+    entry = stage["source_entries"][int.from_bytes(digest[:8], "little") % len(stage["source_entries"])]
+    return "tile_object/barbarian_camp/" + stage_id + "/" + re.sub(
+        r"[^a-z0-9]+", "_", entry.lower()
+    ).strip("_")
+
+
 def _dependency_asset_id(package_relative: str, entry: str) -> str:
     digest = _sha256((package_relative + "\0" + entry).encode("utf-8"))[:16]
     return f"tile_object/component/{digest}"
@@ -213,6 +278,14 @@ def compile_tile_objects(
             root_ids.setdefault(
                 (source_package, entry),
                 "tile_object/colony/body/" + re.sub(r"[^a-z0-9]+", "_", entry.lower()).strip("_"),
+            )
+    for stage in strategy["barbarian_camp"]["source_stages"]:
+        for entry in stage["source_entries"]:
+            root_ids[(source_package, entry)] = (
+                "tile_object/barbarian_camp/"
+                + stage["id"]
+                + "/"
+                + re.sub(r"[^a-z0-9]+", "_", entry.lower()).strip("_")
             )
     for item in strategy["infrastructure"]["source_assets"]:
         root_ids[(source_package, item["source_entry"])] = item["asset_id"]
@@ -324,6 +397,15 @@ def compile_tile_objects(
                 "variants": [ensure_asset(source_package, entry) for entry in era["source_entries"]],
             }
         )
+    barbarian_stages = []
+    for stage in strategy["barbarian_camp"]["source_stages"]:
+        barbarian_stages.append(
+            {
+                "id": stage["id"],
+                "default_for_civ3": stage["default_for_civ3"],
+                "variants": [ensure_asset(source_package, entry) for entry in stage["source_entries"]],
+            }
+        )
     infrastructure_assets = [
         ensure_asset(source_package, item["source_entry"])
         for item in strategy["infrastructure"]["source_assets"]
@@ -338,6 +420,11 @@ def compile_tile_objects(
                 "variants": hut_variants,
                 "bucket_to_variant": strategy["goody_hut"]["runtime"]["bucket_to_variant"],
                 "runtime": strategy["goody_hut"]["runtime"],
+            },
+            "barbarian_camp": {
+                "stages": barbarian_stages,
+                "runtime": strategy["barbarian_camp"]["runtime"],
+                "promotion_status": strategy["barbarian_camp"]["promotion_status"],
             },
             "colony": {
                 "stand_in": strategy["colony"]["stand_in"],
@@ -365,7 +452,7 @@ def compile_tile_objects(
         {
             "schema": "c3x.asset_pack.v0",
             "name": "TileObjectsNormalized",
-            "display_name": "Normalized Goody Huts, Colonies, And Tile Infrastructure",
+            "display_name": "Normalized Goody Huts, Barbarian Camps, Colonies, And Tile Infrastructure",
             "source_policy": "Local licensed-source import; derived art is not redistributable.",
             "assets": dict(sorted(assets.items())),
             "tile_object_catalog": catalog_path,
@@ -389,12 +476,16 @@ def compile_tile_objects(
         ],
         "skipped_source_conditions": skipped_source_conditions,
         "rejected_optional_dependencies": rejected_optional_dependencies,
+        "barbarian_camp_source_chain": strategy["barbarian_camp"]["source_artdef_chain"],
         "resolved_industrial_colony_source_candidates": strategy["colony"]["industrial_source_resolution"],
         "rejected_infrastructure_source_candidates": strategy["infrastructure"]["rejected_source_candidates"],
         "l19b_promoted_infrastructure_families": strategy["infrastructure"]["l19b_promoted_families"],
         "outputs": {
             "pack": str(pack),
             "hut_root_variants": len(hut_variants),
+            "barbarian_camp_root_assets": len(
+                {value for stage in barbarian_stages for value in stage["variants"]}
+            ),
             "colony_root_variants": len({value for era in colony_eras for value in era["variants"]}),
             "infrastructure_root_assets": len(infrastructure_assets),
             "compiled_components_with_dependencies": len(assets),

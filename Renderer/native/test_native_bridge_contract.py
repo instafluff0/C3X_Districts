@@ -890,7 +890,13 @@ int main() {
         self.assertIn("draw(geometry_water)", native)
         self.assertIn("cache_geometry_layer", native)
         self.assertIn("D3D11_USAGE_IMMUTABLE", native)
-        self.assertNotIn("D3D11_MAP_WRITE_DISCARD", native)
+        # Terrain remains immutable; the separate animation pass may stream
+        # posed bodies. The temporal native witness also checks zero terrain
+        # builds/uploads while those bodies change.
+        terrain_upload = native.split("    bool cache_geometry_layer(", 1)[1].split(
+            "    c3x_renderer::TileFootprint tile_footprint(", 1)[0]
+        self.assertNotIn("D3D11_MAP_WRITE_DISCARD", terrain_upload)
+        self.assertNotIn("D3D11_USAGE_DYNAMIC", terrain_upload)
         self.assertIn("(seed >> 3) % 5u", native)
         self.assertIn("has_relief_neighbor ? 0.50f : 0.68f", native)
         self.assertIn("constexpr int candidates[5][2]", native)

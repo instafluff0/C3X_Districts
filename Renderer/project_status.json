@@ -1,6 +1,6 @@
 {
   "schema": "c3x.renderer_project_status.v0",
-  "last_updated": "2026-09-06",
+  "last_updated": "2026-09-07",
   "current_milestone": "LAB_V2",
   "integration_performance_maintenance": {
     "authorization": "2026-09-06: user reported slow cold starts and minimap jumps, then explicitly deferred edge speckling. Continue DLL performance maintenance without launching Civ III.",
@@ -140,9 +140,12 @@
       "requested_by_user": true,
       "findings": "terrain_lab/v2/audits/beauty/CITY_QUALITY_CAMPAIGN.md",
       "scope": "Five cultures, four eras, three sizes; readable complete materials, grounded source buildings, stable growth and modest cross-tile footprints; shared night lighting reflected in water.",
-      "current_work": "Matched 100-tile coastal city probes, expanded 132-component intake, source-origin foundation correction and material-coordinate investigation.",
+      "current_work": "City r8: grounded expanded source bodies, recovered UV2 light-atlas mapping, stronger emissive windows and GPU HDR glow, reflected light controls, four passing standalone Metal/D3D11 comparisons.",
       "approval": null,
-      "next_action": "Verify source-origin grounding; improve source selection and material fidelity; prove localized night lights in the water with controls, then expand combined size/era/culture/holdout coverage. Preserve all milestone gates."
+      "next_action": "Review preserved partial r10 culture/era renders; continue corrected city growth and material/light coverage in bounded batches with shared-resource storage. Preserve all milestone gates.",
+      "night_light_evidence": "terrain_lab/v2/audits/beauty/CITY_NIGHT_r8_EVIDENCE.json",
+      "storage_policy": "Shared-resource packets; discard pre-shadow intermediates immediately; six matrix cases by default; stop below 8 GiB free space.",
+      "storage_cleanup": "terrain_lab/v2/audits/beauty/CITY_STORAGE_CLEANUP.json"
     },
     "water_effects_exploration": {
       "status": "preserved_user_pivot_to_cities",
@@ -170,6 +173,26 @@
       "layer_audit": "terrain_lab/v2/audits/beauty/GROUND_LAYER_FINDINGS.md",
       "next_action": "Reconstruct extracted cached height-to-normal/AO stages and source layer contributions before further bump tuning; see CONTINENTAL_GROUND_PASS.md and GROUND_BAKE_DECODE_EVIDENCE.json. Complete source-weight diagnostic coverage, explicit river XY parity for continental r2, named mountain bindings, crop/wrap and controlled cost. All-applicable texture/layer audit and overall visual quality remain incomplete."
     }
+  },
+  "barbarian_camp_offline_preparation": {
+    "status": "complete_not_promoted",
+    "requested_by_user": true,
+    "scope": "Exact Civ VI barbarian-camp ArtDef/package resolution, recursive generic conversion, compact runtime proof, and Civ III viewer/tribe/removal/unit/resource/night contracts only; no custom camp rendering, native suppression, L19A reopening, or LQ0 advancement.",
+    "source_roots": [
+      "VIL_BAR_01",
+      "VIL_BAR_IND"
+    ],
+    "default_profile": "preindustrial_all_civ3_eras",
+    "dedicated_lab_v2_promotion_required": true,
+    "evidence": [
+      "docs/barbarian_camp_import.md",
+      "docs/upstream_asset_family_backlog.md",
+      "tools/asset_compiler/barbarian_camp_source_probe.py",
+      "tools/asset_compiler/tile_object_asset_importer.py",
+      "tools/asset_compiler/tile_object_render_strategy.json",
+      "tools/asset_compiler/build_tile_object_runtime.py"
+    ],
+    "required_user_action": []
   },
   "workstreams": {
     "renderer_lab": {
@@ -276,6 +299,7 @@
     "docs/runtime_animation_and_frame_pacing.md",
     "docs/bombardment_and_explosion_effects.md",
     "docs/goody_huts_and_colonies.md",
+    "docs/barbarian_camp_import.md",
     "docs/remaining_tile_infrastructure.md",
     "docs/offline_crosscutting_preparation.md",
     "docs/compound_unit_asset_conversion.md",
@@ -2408,21 +2432,30 @@
       "Map_Renderer_m19_Draw_Tile_by_XY_and_Flags",
       "QueryPerformanceCounter",
       "OutputDebugStringA",
-      "Unit_tick_anim"
+      "Unit_tick_anim",
+      "Sprite_draw_unit_body_normal",
+      "Sprite_draw_unit_body_reduced"
     ],
     "audit_candidates": [
       "Unit_tick_anim context and body-only normal/reduced Sprite calls; verify ABI and supported builds before a concrete patch request."
     ],
     "required_user_action": [],
     "completed": [
-      "Generic bounded animation decoder/evaluator and offline resource compiler.",
-      "26 subjects, 104 authored pose samples match normalized CPU skinning; Windows x86 executable checks pass."
+      "Generic bounded animation decoder/evaluator and offline resource compiler; clutter translation units and constant root placement corrected from source metadata.",
+      "104 calibrated poses across 26 subjects match CPU skinning; Windows x86 compilation and portable smoke pass.",
+      "DLL resource composition with southeast bindings, immutable terrain anchors, 32 MiB pose buffers and 24 MiB exact MSAA4 backdrop cache.",
+      "Timed frames, fixed scrolling and resource-removal parity pass at both zooms and noon/night with zero terrain builds/uploads during animation.",
+      "Complete-clip export for six unit families / 48 actions: 576 source-pose comparisons including 192 sockets pass; whole-kit planar root travel removed. Windows x86 native cursor/anchor checks pass; live unit rendering remains unconnected."
     ],
     "remaining": [
-      "Southeast calibration and visible resource dynamic composition independent of terrain caches.",
-      "Enabled unit body rendering and authoritative Animator movement bridge.",
-      "Dynamic debug summaries, temporal/cache/fog/ownership verification and staged normal-install gameplay checkpoint."
+      "Finish southeast calibration for marine school members; land animal bindings are already southeast.",
+      "Enabled unit body rendering and authoritative Animator movement bridge, action logging and disabled-unit controls.",
+      "Combined resource/unit visibility, fog, interruption and retained-object overlap verification.",
+      "Remove temporary verification switch, stage normal INSTALL.bat checkpoint and stop for user gameplay without launching Civ III."
     ],
-    "game_launched": false
+    "game_launched": false,
+    "candidate_staged": false,
+    "temporal_evidence": "verification/animation/temporal.json",
+    "unit_payload_evidence": "verification/animation/unit-payloads-portable_cpp.json"
   }
 }

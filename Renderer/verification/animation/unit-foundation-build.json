@@ -1,0 +1,14 @@
+{
+  "schema": "c3x.unit_animation_foundation_build.v1",
+  "status": "pass",
+  "candidate_command": "Renderer/native/BUILD.bat candidate-compile",
+  "windows_x86_compile": "pass; /W4 /WX",
+  "windows_native_cursor_anchor_checks": "pass",
+  "portable_focused_tests": 38,
+  "portable_pose_report": "unit-payloads-portable_cpp.json",
+  "windows_full_pose_python_run": "not run: py launcher unavailable",
+  "game_launched": false,
+  "candidate_staged": false,
+  "injected_sources_changed": false,
+  "limitation": "Unit adapter and full-clip data are prepared; live body rendering/bridge and visual gates remain incomplete."
+}

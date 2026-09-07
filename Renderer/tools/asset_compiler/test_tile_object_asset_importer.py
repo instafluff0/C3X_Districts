@@ -9,9 +9,11 @@ from pathlib import Path
 from Renderer.tools.asset_compiler.tile_object_asset_importer import (
     DEFAULT_STRATEGY,
     _dependency_asset_id,
+    barbarian_variant_for,
     goody_variant_for_bucket,
     load_strategy,
 )
+from Renderer.tools.asset_compiler.build_tile_object_runtime import root_bindings
 
 
 class TileObjectAssetImporterTests(unittest.TestCase):
@@ -24,6 +26,17 @@ class TileObjectAssetImporterTests(unittest.TestCase):
         )
         self.assertEqual("Colony_Body.OwnerID", strategy["colony"]["runtime"]["owner_source"])
         self.assertTrue(strategy["colony"]["runtime"]["territory_owner_is_not_colony_owner"])
+        barbarian = strategy["barbarian_camp"]
+        self.assertEqual(
+            ["VIL_BAR_01", "VIL_BAR_IND"],
+            [entry for stage in barbarian["source_stages"] for entry in stage["source_entries"]],
+        )
+        self.assertEqual("preindustrial", barbarian["runtime"]["default_stage"])
+        self.assertEqual("none", barbarian["runtime"]["owner_color"])
+        self.assertEqual(
+            "preserve_authoritative_civ3_resource_visibility",
+            barbarian["runtime"]["resource_policy"],
+        )
         infrastructure = strategy["infrastructure"]
         self.assertEqual(
             {"fortress", "barricade", "airfield", "outpost"},
@@ -61,6 +74,58 @@ class TileObjectAssetImporterTests(unittest.TestCase):
         self.assertEqual(first, _dependency_asset_id("Base/private.blp", "Named_Source_Component"))
         self.assertRegex(first, r"^tile_object/component/[0-9a-f]{16}$")
         self.assertNotIn("Source", first)
+
+    def test_barbarian_camp_selection_is_stable_and_stage_specific(self) -> None:
+        strategy = load_strategy(DEFAULT_STRATEGY)
+        primitive = barbarian_variant_for(strategy, "preindustrial", 71, 222, 45)
+        self.assertEqual(primitive, barbarian_variant_for(strategy, "preindustrial", 71, 222, 45))
+        self.assertEqual(
+            "tile_object/barbarian_camp/preindustrial/vil_bar_01",
+            primitive,
+        )
+        self.assertEqual(
+            "tile_object/barbarian_camp/industrial_optional/vil_bar_ind",
+            barbarian_variant_for(strategy, "industrial_optional", 71, 222, 45),
+        )
+        with self.assertRaisesRegex(ValueError, "stage"):
+            barbarian_variant_for(strategy, "missing", 71, 222, 45)
+
+    def test_barbarian_camp_cannot_inherit_owner_color_or_hide_resources(self) -> None:
+        strategy = copy.deepcopy(load_strategy(DEFAULT_STRATEGY))
+        strategy["barbarian_camp"]["runtime"]["owner_color"] = "territory_owner"
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "strategy.json"
+            path.write_text(json.dumps(strategy), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "must not inherit"):
+                load_strategy(path)
+
+    def test_runtime_bundle_keeps_barbarian_camps_separate_from_colonies(self) -> None:
+        catalog = {
+            "goody_hut": {"variants": ["hut/a"]},
+            "barbarian_camp": {
+                "stages": [
+                    {"variants": ["camp/primitive"]},
+                    {"variants": ["camp/industrial"]},
+                ]
+            },
+            "colony": {
+                "eras": [
+                    {"variants": ["colony/a", "colony/b", "colony/c"]},
+                    {"variants": ["unused"]},
+                    {"variants": ["colony/d", "colony/e", "colony/f"]},
+                ]
+            },
+        }
+        bindings = root_bindings(catalog)
+        self.assertEqual(
+            ["barbarian_camp_0", "barbarian_camp_1"],
+            [role for role, _asset in bindings if role.startswith("barbarian_camp_")],
+        )
+        self.assertTrue(all(
+            not asset.startswith("colony/")
+            for role, asset in bindings
+            if role.startswith("barbarian_camp_")
+        ))
 
     def test_infrastructure_family_cannot_reference_an_uncompiled_asset(self) -> None:
         strategy = copy.deepcopy(load_strategy(DEFAULT_STRATEGY))

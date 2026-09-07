@@ -86,19 +86,101 @@ blindly bind BC5 as a standard normal to claim complete materials.
 
 The current importer recomputes area-weighted normals from indexed source
 triangles. Earlier Q7 text calling these authored vertex normals was inaccurate;
-the packed source tangent frame remains undecoded. Only UV0 is normalized.
+the packed source tangent frame remains undecoded. The baseline normalized only
+UV0; r8's separate opt-in source study retains two additional coordinate sets.
 The modern base and emissive atlases differ in dimensions/layout, so UV/material
 usage needs checking before intensity alone is blamed. A separate UV set is a
-hypothesis, not a recovered source fact. Current lights use the existing 1.45
-emissive gain; no additional lamp resources have been invented or activated.
+hypothesis at baseline, resolved for the tested r8 bodies below. The original
+lights used a 1.45 emissive gain; no additional lamp resources have been invented
+or activated.
+
+## r8 night-light checkpoint
+
+The user explicitly rejected faint windows and absent glow, pointing to
+`canonical/nightlights.jpg`. Simply raising emission exposed a deeper defect:
+the old shader sampled the emissive atlas with the diffuse UVs. Medieval roofs
+developed misplaced bright spots; modern windows became scattered speckles.
+Those r6/r7 images are preserved diagnostics and are rejected as final appearance.
+
+The cooked 24-byte static vertex profile contains additional half2 coordinates
+at offsets 16 and 20; the 32-byte profile carries them at 24 and 28. The optional
+`--auxiliary-uvs` city import retains these as generic `uv1` and `uv2` in the
+separate `CityStudyAuxiliaryUV` pack. Default imports remain unchanged. Matched
+medieval and modern renders establish **UV2 as the light-atlas coordinate for
+these tested source bodies**: roof artifacts disappear and lights follow window
+rows. UV1's precise role and the packed tangent frame still need verification.
+Do not infer the normal map or all auxiliary channel roles from this finding.
+
+`qa/city_scene_pass.py --emissive-uv 2 --emissive-gain 8 --glow` produces r8.
+For this bounded diagnostic, a depth-tested additive emissive draw retains the
+same source triangles but uses UV2; the diffuse draw keeps UV0. The extra draw
+neither writes depth nor casts a duplicate shadow. Reflections consume both.
+A production multi-UV vertex layout can combine these draws later; that change
+is not a prerequisite for inspecting the corrected source mapping now.
+
+The glow is an opt-in scene-linear GPU postprocess before the shared tone curve.
+It thresholds HDR values above 1.0, filters two compact optical scales, and
+preserves Q1 reconstruction, alpha and validity. The tiled separable version
+keeps all threads alive through workgroup barriers for Metal and FXC/D3D11.
+No bloom is applied to retained Civ III overlays or UI. This is lens glow;
+it does not claim point-light illumination of neighboring ground or buildings.
+
+Preserved selected views:
+
+- `out/city-scene-r8/modern-glow-portable/`: noon/midnight, both gameplay zooms,
+  unchanged 100-tile coastal terrain and modern city at [7,5].
+- `out/city-scene-r8/european-medieval-s1/combined/`: corrected medieval windows,
+  same four views and the preserved [3,2] city layout.
+- `out/city-scene-r8/review/`: native before/after crops and enlarged UV
+  diagnostics. Full source frames remain available beside the crops.
+- `CITY_NIGHT_r8_EVIDENCE.json`: reproducible source-geometry preservation,
+  glow/light/reflection controls and Windows comparison results.
+
+The modern lights-off control removes warm pixels from a measured interior
+lake patch separated from direct city glow. Glow-off controls demonstrate real
+halos at both zooms. Daylight differs by at most one 8-bit level in two pixels,
+consistent with the previously recorded isolated Metal replay rounding; it is
+not claimed byte-identical. Four standalone D3D11 frames pass unchanged parity
+thresholds. The initial FXC synchronization compile failure is preserved in the
+empty `windows-modern` attempt; `windows-modern-portable` is the passing retry.
+The two shader versions match exactly at night; one daylight pixel differs by
+one level. No native C3X city implementation or visual approval is implied.
+
+Verification: `qa/city_night_evidence.py` (Pillow/NumPy), 16 focused importer
+tests including sparse auxiliary-UV remapping for both vertex profiles, and
+`renderer_dev.py lab` (132 Python tests, 12 Node tests and campaign validation).
+
+## Storage correction and bounded continuation
+
+The user explicitly requested cleanup after the full city matrix consumed too
+much storage. The batch is stopped. The city producer had bypassed the existing
+`app/packet_store.py` resource deduplication, duplicating the complete terrain
+payload in every city/hour/zoom packet. It now compacts final packets before
+rendering and immediately deletes the disposable pre-shadow intermediate.
+
+Cleanup converted 54 completed city packets to the existing directly replayable
+shared-resource format, verified by expanding each to its original byte hash.
+Images, source packs, fixture inputs and reports remain intact. Earlier packet
+hashes describe the original serialization; `CITY_STORAGE_CLEANUP.json` maps
+those hashes to their compact representations. A fresh Metal night render is
+pixel-identical to the preserved r8 result; its temporary output was removed.
+596 geometry-cache entries unreferenced by saved replay/evidence records were
+removed. Referenced shared resources remain available. Renderer storage fell
+from approximately 67.1 GiB to 50.1 GiB during this cleanup, excluding the earlier
+removal of disposable city intermediates.
+
+`qa/city_matrix_pass.py` now defaults to six cases, supports an explicit start
+index, and uses shared packets directly. Both the matrix and single-city tools
+stop below 8 GiB free space. r9 records the capacity failure; r10 records the
+user-requested stop. Completed r10 images remain usable for culture/era review;
+the 60-case matrix is incomplete and must not be reported as passed.
 
 ## Next work
 
-Inspect and verify source-origin grounding, then compare the expanded source
-selection across sizes and cultures. Resolve city material coordinates and
-source tangent/LEAN handling; calibrate localized night emission with paired
-emission-disabled and reflection-disabled controls. Demonstrate reflected city
-light on a visible waterfront, not merely a successful reflection draw call.
+Extend the corrected source selection and light mapping across sizes/cultures,
+including stable growth and additional city light atlases. Resolve UV1, source
+tangent/LEAN handling, and source-backed local light resources so nearby streets
+and walls receive plausible pools of light as in the canonical reference.
 Add inland/untuned context, growth, clearance, four phases/two zooms and Windows
 parity at meaningful combined checkpoints. No city quality or milestone approval
 has been recorded.

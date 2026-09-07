@@ -62,6 +62,8 @@ class AnimationRuntimeTests(unittest.TestCase):
             self.assertEqual(len(component["draw_bindings"]), len(subject["parts"]))
             for binding, part in zip(component["draw_bindings"], subject["parts"]):
                 mesh = normalized_skin.load_mesh(pack / component["meshes"][binding["mesh"]], len(skeleton["bones"]))
+                first_pose = None
+                maximum_motion = 0.0
                 # Endpoints and two interior authored frames, with no clip-loop restart.
                 for frame in (0, cache.frame_count // 3, cache.frame_count // 2, cache.frame_count - 1):
                     time = cache.duration * frame / (cache.frame_count - 1)
@@ -82,7 +84,13 @@ class AnimationRuntimeTests(unittest.TestCase):
                         self.assertAlmostEqual(sum(value*value for value in vertex[3:6]), 1.0, places=4)
                         for a in range(2):
                             self.assertAlmostEqual(vertex[6+a], source_vertex["uv0"][a], places=5)
+                    if first_pose is None:
+                        first_pose = actual
+                    else:
+                        maximum_motion = max(maximum_motion, max(abs(v[a]-first_pose[i][a])
+                            for i,v in enumerate(actual) for a in range(3)))
                     samples += 1
+                self.assertGreater(maximum_motion, 1e-6, (part["mesh"], "clip does not move its body"))
         print(json.dumps({"resource_subjects": len(cases), "pose_samples": samples,
                           "maximum_position_error_tiles": max_error, "payload_bytes": compiled["payload_bytes"]}))
 

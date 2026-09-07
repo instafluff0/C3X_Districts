@@ -217,6 +217,7 @@ int main(int argc, char ** argv) {
 
     char object_option[8]={};bool objects=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_OBJECTS",object_option,sizeof(object_option))!=0;
     char animation_option[8]={};bool animate=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ANIMATION",animation_option,sizeof(animation_option))!=0;
+    std::vector<std::array<int,2>> resource_sites;
     auto capture_view = [&]() {
     int center_raw_x = center_x * tile_width / 2;
     int center_raw_y = center_y * tile_height / 2;
@@ -283,12 +284,15 @@ int main(int argc, char ** argv) {
     }
     if (animate) {
         char const * names[]={"Horses","Cattle","Wheat","Fish","Whales","Game","Furs","Ivory","Bananas","Rubber"};
-        unsigned next=0;
-        for (auto & tile:tiles)
-            if ((tile.tile_flags&C3X_RENDERER_TILE_RENDER) && tile.anchor_x>target_width/5 &&
-                tile.anchor_x<target_width*4/5 && tile.anchor_y>target_height/4 && tile.anchor_y<target_height*3/4 &&
-                next<std::size(names)) {
-                tile.resource_id=int(100+next);strcpy_s(tile.resource_name,names[next++]);
+        if (resource_sites.empty())
+            for (auto const & tile:tiles)
+                if ((tile.tile_flags&C3X_RENDERER_TILE_RENDER) && tile.anchor_x>target_width/5 &&
+                    tile.anchor_x<target_width*4/5 && tile.anchor_y>target_height/4 && tile.anchor_y<target_height*3/4 &&
+                    resource_sites.size()<std::size(names))
+                    resource_sites.push_back({((tile.tile_x%map_width)+map_width)%map_width,tile.tile_y});
+        for(auto & tile:tiles)for(unsigned i=0;i<resource_sites.size();++i)
+            if(((tile.tile_x%map_width)+map_width)%map_width==resource_sites[i][0] && tile.tile_y==resource_sites[i][1]) {
+                tile.resource_id=int(100+i);strcpy_s(tile.resource_name,names[i]);
             }
     }
     return tiles;
@@ -356,6 +360,31 @@ int main(int argc, char ** argv) {
         }
         ok=ok && changes==5;
         std::printf("ANIMATION temporal: %s changed_frames=%u\n",ok?"pass":"FAIL",changes);
+        auto compare_cold = [&](char const * label) {
+            auto pixels=static_cast<unsigned char const*>(output.bgra_pixels);
+            std::vector<unsigned char> cached(pixels,pixels+std::size_t(output.stride_bytes)*output.height);
+            reset();
+            if(set_definitions(argv[2],argv[3],nullptr,custom_path)!=C3X_RENDERER_RESULT_OK ||
+               render_checked(&frame,&output)!=C3X_RENDERER_RESULT_OK)return false;
+            auto fresh=static_cast<unsigned char const*>(output.bgra_pixels);
+            std::size_t changed=0;unsigned long long error=0;
+            for(std::size_t i=0;i<cached.size();i+=4){bool bad=false;
+                for(unsigned c=0;c<4;++c){unsigned delta=unsigned(std::abs(int(cached[i+c])-int(fresh[i+c])));
+                    error+=delta;bad=bad || delta>2;}if(bad)++changed;}
+            bool same=changed<=cached.size()/4000 && error<=cached.size()/100;
+            std::printf("ANIMATION %s parity: %s changed=%zu error=%llu bytes=%zu\n",label,same?"pass":"FAIL",changed,error,cached.size());
+            return same;
+        };
+        if(ok) {
+            center_x+=4;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.visible_animation_count>0;
+            if(ok)ok=compare_cold("scroll");
+        }
+        if(ok) {
+            for(auto & tile:tiles){tile.resource_id=-1;tile.resource_name[0]='\0';}
+            ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.visible_animation_count==0 && !output.request_continuous_redraw;
+            if(ok)ok=compare_cold("removal");
+        }
     }
     char color_option[8]={};
     if(ok && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_COLOR",color_option,sizeof(color_option)))
