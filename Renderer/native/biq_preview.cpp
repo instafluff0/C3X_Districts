@@ -626,6 +626,38 @@ bool preview_units(HMODULE module,char const* path,int hour) {
             SelectObject(dc16,previous);DeleteObject(dib16);DeleteDC(dc16);
         }
     }
+    unsigned action_draws=0;
+    for(int row=0;row<5 && ok;++row)for(int zoom=0;zoom<2 && ok;++zoom) {
+        c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);unit.unit_id=80+row;
+        sprintf_s(unit.unit_key,"PRTO_%s",names[row]);unit.direction=3;unit.frame_count=16;
+        unit.sprite_width=unit.sprite_height=191;unit.body_x=100;unit.body_y=100;
+        unit.hour=hour;unit.reduced=zoom;unit.display_color_rgb=0x205bdd;
+        std::vector<std::uint32_t> idle;
+        auto pose=[&](int action,int cursor,int queued) {
+            std::fill_n(static_cast<std::uint32_t*>(bits),1024*640,0xff565b62u);
+            unit.action=action;unit.action_cursor=cursor;unit.queued_action=queued;
+            int result=draw(&unit,dc);GdiFlush();
+            if(result!=C3X_RENDERER_RESULT_OK) {
+                std::printf("FAIL unit action key=%s action=%d cursor=%d zoom=%d result=%d\n",unit.unit_key,action,cursor,zoom,result);
+                return false;
+            }
+            ++action_draws;return true;
+        };
+        ok=pose(1,5,0);
+        idle.assign(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*640);
+        // Native cursor/action changes interrupt any previous pose immediately.
+        for(int action:{2,3,4,5,6,7,8,9})for(int cursor:{0,7,15})if(ok)ok=pose(action,cursor,1);
+        if(ok) {
+            ok=pose(6,15,0);
+            auto death=std::vector<std::uint32_t>(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*640);
+            ok=pose(6,1000,1) && std::memcmp(death.data(),bits,death.size()*4)==0 && ok;
+            unit.unit_id+=100; // Fresh identity with a queued attack still uses current idle.
+            ok=pose(1,5,3) && std::memcmp(idle.data(),bits,idle.size()*4)==0 && ok;
+            unit.action=18; // Unsupported worker action must leave the native canvas intact.
+            ok=draw(&unit,dc)!=C3X_RENDERER_RESULT_OK && std::memcmp(idle.data(),bits,idle.size()*4)==0 && ok;
+        }
+    }
+    std::printf("UNIT action interruption and held endpoint: %s draws=%u\n",ok?"pass":"FAIL",action_draws);
     // A missing action/key must leave the native canvas byte-for-byte intact.
     std::vector<std::uint32_t> retained(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*640);
     c3x_renderer_unit_v1 unknown={};unknown.struct_size=sizeof(unknown);strcpy_s(unknown.unit_key,"PRTO_NotMapped");

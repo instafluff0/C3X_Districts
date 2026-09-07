@@ -1,4 +1,4 @@
-"""Preserved city composition probe on the fixed 100-tile coastal terrain.
+"""Preserved city composition probes on the fixed 100-tile terrain benchmarks.
 
 City instances are explicit Lab augmentation, not captured BIQ city state. Source
 parts, UVs and uniform preprojection transforms are retained. The terrain packet
@@ -23,6 +23,7 @@ from packet_store import compact_packet
 sys.path.insert(0,str(V2/'systems/objects'))
 import presentation as city
 from city_generator_layout import select_components
+from city_ground_geometry import clip_ground_triangle
 
 def rel(path):return path.relative_to(ROOT).as_posix()
 def save(path,value):path.write_text(json.dumps(value,indent=2)+'\n')
@@ -36,8 +37,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--revision',type=int,required=True)
     parser.add_argument('--pool',default='european/medieval')
+    parser.add_argument('--region',choices=['coastal','inland','wilderness','freshcanopy'],default='coastal')
     parser.add_argument('--size',type=int,choices=[0,1,2],default=1)
     parser.add_argument('--factor',type=float,default=1)
+    parser.add_argument('--footprint-limit',type=float,help='Explicit Lab city half-extent in tiles; bounded to the sampled terrain envelope')
     parser.add_argument('--channels',action='store_true')
     parser.add_argument('--source-addressing',action='store_true',help='Respect normalized repeat/clamp addressing on city surface textures')
     parser.add_argument('--surface-detail',action='store_true',help='Adapt source slope-map detail to the geometric tangent frame')
@@ -52,15 +55,19 @@ def main():
     parser.add_argument('--generator-profile',type=Path,help='Use recovered generator parameters while preserving the user-selected single-era appearance')
     parser.add_argument('--historical-era-mix',action='store_true',help='Reproduce the rejected multi-era diagnostic; not the selected city appearance')
     parser.add_argument('--capital',action='store_true',help='Add the explicitly mapped palace to this Lab capital city')
+    parser.add_argument('--capital-composition',action='store_true',help='Keep the city compact while discouraging foreground coverage of its palace')
     parser.add_argument('--omit-capital',action='store_true',help='Matched control: retain the reserved palace site but omit its draws')
     parser.add_argument('--anchor',type=int,nargs=2,default=[3,2])
     parser.add_argument('--all-zooms',action='store_true')
     parser.add_argument('--resume',action='store_true',help='retry an input/build failure before any combined render exists')
     a=parser.parse_args()
+    terrain_fixture=V2/f'fixtures/beauty/river-corridor-r3/{a.region}/fixture.json'
     if shutil.disk_usage(V2).free<8*1024**3:raise ValueError('capture stopped: preserve at least 8 GiB free disk space')
     if not .5<=a.factor<=2:raise ValueError('bounded uniform scale factor required')
+    if a.footprint_limit is not None and not .5<=a.footprint_limit<=1:raise ValueError('city footprint must remain in the sampled terrain envelope')
     if not 0<=a.emissive_gain<=12 or any(v<0 or v>9 for v in a.anchor):raise ValueError('city parameter bounds')
     if a.omit_capital and not a.capital:raise ValueError('capital control requires --capital')
+    if a.capital_composition and not a.capital:raise ValueError('capital composition requires --capital')
     if a.graduated_growth and (not a.expanded or a.weighted_growth):raise ValueError('graduated growth requires expanded assets and excludes the alternative weighted recipe')
     if a.generator_profile and (not a.expanded or a.graduated_growth or a.weighted_growth):raise ValueError('generator profile requires expanded assets and excludes alternative growth recipes')
     if a.historical_era_mix and not a.generator_profile:raise ValueError('historical diagnostic requires generator profile')
@@ -74,6 +81,7 @@ def main():
     if pool not in catalog['pools']:raise ValueError('unknown pool')
     name=a.pool.replace('/','-')+f'-s{a.size}'
     if a.capital:name+='-capital'+('-control' if a.omit_capital else '')
+    if a.region!='coastal':name+='-'+a.region
     if a.anchor!=[3,2]:name+='-at'+'-'.join(map(str,a.anchor))
     fixture=V2/f'fixtures/beauty/city-scene-r{a.revision}'/name
     output=OUT/f'city-scene-r{a.revision}'/name
@@ -88,7 +96,7 @@ def main():
     anchor=a.anchor
     # Freeze a dense buildability witness before arranging any source bodies.
     # The signed shore query is negative on land (opposite optical water data).
-    foundation=V2/'fixtures/beauty/city-scene-foundation'/('coastal' if anchor==[3,2] else 'coastal-'+'-'.join(map(str,anchor)))
+    foundation=V2/'fixtures/beauty/city-scene-foundation'/(a.region if anchor==[3,2] else a.region+'-'+'-'.join(map(str,anchor)))
     foundation.mkdir(parents=True,exist_ok=True)
     gridfile=foundation/'surface.json';gridstep=.04
     if not gridfile.exists():
@@ -98,7 +106,7 @@ def main():
                 wx=anchor[0]+.5-1+ix*gridstep;wy=anchor[1]+.5+1-iy*gridstep
                 col=math.floor(wx);row=math.floor(wy);grid.append([col,row,wx-col,1-(wy-row)])
         pointfile=foundation/'points.csv';pointfile.write_text(''.join(','.join(map(str,p))+'\n' for p in grid))
-        run([sys.executable,V2/'app/surface_query.py','--fixture',V2/'fixtures/beauty/river-corridor-r3/coastal/fixture.json','--points',pointfile,'--output',gridfile])
+        run([sys.executable,V2/'app/surface_query.py','--fixture',terrain_fixture,'--points',pointfile,'--output',gridfile])
     grid=json.loads(gridfile.read_text())['samples']
     def buildable(box):
         values=[]
@@ -139,22 +147,38 @@ def main():
         assets=[asset for values in layer_assets.values() for asset in values]
         source_scale*=generator['model_scale']
     footprint_limit=[.65,.8,.95][a.size] if a.expanded else None
-    palace=None;palace_site=None;house_buildable=buildable
+    if a.footprint_limit is not None:footprint_limit=a.footprint_limit
+    palace=None;palace_site=None;palace_attempts=[]
     if a.capital:
         mapping=capital_mapping['styles'][a.pool]
-        body=city.component(mapping['asset'],Path(capital_mapping['pack']))
+        body=city.component(mapping['asset'],Path(mapping.get('pack',capital_mapping['pack'])))
         span=max(body['hi'][j]-body['lo'][j] for j in (0,1))
         palace_scale=mapping['footprint_span_tiles']/span*a.factor/1.5
-        palace=city.layout([body],0,buildable=buildable,source_scale=palace_scale,
-                           footprint_limit=footprint_limit,stage_counts=[1,1,1])[0]
-        palace['slot']='capital'
-        hx=(body['hi'][0]-body['lo'][0])*palace_scale/2+.024
-        hy=(body['hi'][1]-body['lo'][1])*palace_scale/2+.024
-        palace_site=[palace['x']-hx,palace['y']-hy,palace['x']+hx,palace['y']+hy]
-        def house_buildable(box):
-            overlaps=box[0]<palace_site[2] and box[2]>palace_site[0] and box[1]<palace_site[3] and box[3]>palace_site[1]
-            return not overlaps and buildable(box)
-    layout=city.layout(assets,a.size,factor=a.factor,buildable=house_buildable,source_scale=source_scale,ordering=ordering,footprint_limit=footprint_limit,stage_counts=stage_counts)
+        # A legal palace site can still strand the last ordinary building.
+        # Try bounded alternative civic sites before rejecting the whole city.
+        # Ordinary city geometry, scale, dry-land gates and order stay fixed.
+        def palace_buildable(box):
+            center=[(box[0]+box[2])/2,(box[1]+box[3])/2]
+            return buildable(box) and all(math.dist(center,p)>.001 for p in palace_attempts)
+        for attempt in range(25):
+            palace=city.layout([body],0,buildable=palace_buildable,source_scale=palace_scale,
+                               footprint_limit=footprint_limit,stage_counts=[1,1,1])[0]
+            palace['slot']='capital'
+            palace_attempts.append([palace['x'],palace['y']])
+            hx=(body['hi'][0]-body['lo'][0])*palace_scale/2+.024
+            hy=(body['hi'][1]-body['lo'][1])*palace_scale/2+.024
+            palace_site=[palace['x']-hx,palace['y']-hy,palace['x']+hx,palace['y']+hy]
+            def house_buildable(box):
+                overlaps=box[0]<palace_site[2] and box[2]>palace_site[0] and box[1]<palace_site[3] and box[3]>palace_site[1]
+                return not overlaps and buildable(box)
+            try:
+                layout=city.layout(assets,a.size,recipe='compact' if a.capital_composition else 'stable',factor=a.factor,buildable=house_buildable,source_scale=source_scale,ordering=ordering,footprint_limit=footprint_limit,stage_counts=stage_counts,focal_instance=palace if a.capital_composition else None,source_ground_zero=a.authored_ground and a.capital_composition)
+                break
+            except ValueError as error:
+                if not str(error).startswith('city footprint cannot fit'):raise
+        else:raise ValueError('city footprint cannot fit after 25 bounded palace sites')
+    else:
+        layout=city.layout(assets,a.size,factor=a.factor,buildable=buildable,source_scale=source_scale,ordering=ordering,footprint_limit=footprint_limit,stage_counts=stage_counts)
     if palace and not a.omit_capital:layout.append(palace)
     ground_parts=city.read(a.compound_ground)['parts'] if a.compound_ground else {}
     ground_draws=[]
@@ -208,7 +232,7 @@ def main():
                           **({'era_layer':body['era_layer'],'order_from_center':body['order_from_center']} if 'era_layer' in body else {}),
                           **({'ground_samples':ground_samples} if ground_samples else {})})
     pointfile=fixture/'points.csv';pointfile.write_text(''.join(','.join(map(str,p))+'\n' for p in points))
-    run([sys.executable,V2/'app/surface_query.py','--fixture',V2/'fixtures/beauty/river-corridor-r3/coastal/fixture.json',
+    run([sys.executable,V2/'app/surface_query.py','--fixture',terrain_fixture,
          '--points',pointfile,'--output',fixture/'surface.json'])
     surface=json.loads((fixture/'surface.json').read_text());projection=surface['projection']
     width,height=map(int,[projection['width'],projection['height']]);half=projection['half_width'];half_y=projection['half_height'];vertical=projection['vertical_scale']
@@ -230,7 +254,7 @@ def main():
             if ch not in materials:materials.append(ch)
             channel_bits=(1 if textures[2] else 0)+(2 if textures[3] else 0)
             if a.source_addressing and ch['base_color']['address_u']=='repeat':channel_bits+=4
-            vertices=[]
+            vertices=[];shore_distances=[]
             for vertex_index,v in enumerate(mesh['vertices']):
                 source=[v['position'][0]-(body['lo'][0]+body['hi'][0])*.5,v['position'][1]-(body['lo'][1]+body['hi'][1])*.5,v['position'][2]-(0 if a.authored_ground else body['lo'][2])]
                 x,y,z=[q*inst['scale'] for q in city.rotate(source,inst['rotation'])]
@@ -242,11 +266,22 @@ def main():
                 world=[site['column']+site['u']+x,site['row']+1-site['v']-y,(site['height']+height_pixels/vertical)/112]
                 if ground:
                     sample=surface['samples'][record['ground_samples'][part_index]+vertex_index]
-                    if sample['base']>=11 or sample['shore_distance']>-.02:raise ValueError('city ground part reaches water')
+                    if sample['base']>=11 and sample['shore_distance']<=-.02:raise ValueError('city ground land/water query disagrees')
+                    shore_distances.append(sample['shore_distance'])
                     sx=sample['screen_x'];sy=sample['screen_y']-.015;depth=sample['depth']-.000001
                     world=[sample['column']+sample['u'],sample['row']+1-sample['v'],sample['height']/112]
                 vertices.append([sx/width*2-1,1-sy/height*2,depth,*v['uv0'],*city.rotate(v['normal'],inst['rotation']),60 if ground else 40+channel_bits,*world,1])
-            groups[(textures,False)].extend(vertices[i] for i in mesh['topology']['indices'])
+            indices=mesh['topology']['indices']
+            if ground:
+                emitted=[]
+                for start in range(0,len(indices),3):
+                    triangle=indices[start:start+3]
+                    emitted.extend(clip_ground_triangle([vertices[i] for i in triangle],[shore_distances[i] for i in triangle]))
+                record.setdefault('ground_clipping',[]).append({'part':part_index,'input_triangles':len(indices)//3,
+                    'output_triangles':len(emitted)//3,'wet_input_vertices':sum(d>-.02 for d in shore_distances),
+                    'shore_boundary':-.02,'classification':'local linear shore approximation on tessellated source triangles'})
+                groups[(textures,False)].extend(emitted)
+            else:groups[(textures,False)].extend(vertices[i] for i in indices)
             if a.emissive_uv and textures[1]:
                 emission_vertices=[]
                 for source,v in zip(mesh['vertices'],vertices):
@@ -260,7 +295,7 @@ def main():
         for v in verts:wire+=struct.pack('<13f',*v)
     (fixture/'city.bin').write_bytes(wire)
     save(fixture/'augmentation.json',{'classification':'source_adaptation; explicit Lab city augmentation',
-         'source_biq_sha256':surface['region']['source_sha256'],'anchor_tile':anchor,'pool':pool,'size':a.size,
+         'benchmark_region':a.region,'source_biq_sha256':surface['region']['source_sha256'],'anchor_tile':anchor,'pool':pool,'size':a.size,
          'uniform_scale_factor':a.factor,'instances':instances,'textures':inputs,'material_declarations':materials,
          'pack':pack.as_posix(),'expanded_pool':a.expanded,'emissive_gain':a.emissive_gain,
          'emissive_uv':a.emissive_uv,'hdr_glow':a.glow,
@@ -275,7 +310,8 @@ def main():
                               'era_policy':'rejected_historical_mix_diagnostic' if a.historical_era_mix else 'single_current_era_user_preference',
                               'used':(['era weights','center ordering','uniform model scale'] if a.historical_era_mix else ['uniform model scale']) if generator else [],
                               'adapter':'stable weighted choices; bounded ring preference; source engine algorithm not recovered'},
-         'capital':{'requested':a.capital,'drawn':bool(palace and not a.omit_capital),'reserved_site':palace_site,
+         'capital':{'requested':a.capital,'drawn':bool(palace and not a.omit_capital),'reserved_site':palace_site,'placement_attempts':palace_attempts,
+                    'composition':'compact_with_focal_visibility_preference' if a.capital_composition else 'first_legal_layout',
                     'mapping':capital_mapping['styles'][a.pool] if a.capital else None,
                     'authority':'explicit Lab fixture only; production must use captured Civ III capital status',
                     'native_capital_indicator':'retained'},
@@ -284,7 +320,7 @@ def main():
          'projection':projection,'source_z_pixels_per_unit':80.9543,'scene_world_z_per_source_unit':80.9543/(vertical*112),
          'material_channels_enabled':['base_color','emissive']+(['ambient_occlusion'] if a.channels else [])+(['normal_0_slope_adaptation'] if a.surface_detail else []),
          'remaining':['source normal/gloss interpretation','full coast/route/vegetation envelopes','capital and wall states','all culture/era/size matrix']})
-    base=OUT/'river-corridor-r3/coastal';report=json.loads((base/'report.json').read_text());jobs=json.loads((base/'batch.json').read_text())
+    base=OUT/f'river-corridor-r3/{a.region}';report=json.loads((base/'report.json').read_text());jobs=json.loads((base/'batch.json').read_text())
     pairs=[(j,r) for j,r in zip(jobs,report['outputs']) if a.all_zooms or r['zoom']==1]
     cache=Cache(V2/'app/.cache');append=executable(V2/'qa/append_city_scene.cpp',cache)
     shadows=executable(V2/'systems/lighting/scene_shadow.cpp',cache)
@@ -300,7 +336,7 @@ def main():
     report['outputs']=[r for _,r in pairs];save(output/'report.json',report);save(output/'batch.json',[j for j,_ in pairs])
     common=fixture/'city.hlsl'
     common.write_text('#define Q3_NATURAL_WATER 1\n#define PSFeature Q8LegacyPSFeature\n'
-        '#include "../../river-corridor-r3/coastal/combined.hlsl"\n#undef PSFeature\n'+
+        f'#include "../../river-corridor-r3/{a.region}/combined.hlsl"\n#undef PSFeature\n'+
         f'#define Q8_CITY_CHANNELS {int(a.channels)}\n#define Q8_CITY_SURFACE_DETAIL {int(a.surface_detail)}\n#define Q8_CITY_WORLD_Z_TO_SOURCE {vertical*112/80.9543:.12f}\n#define Q8_CITY_SEPARATE_EMISSION {int(a.emissive_uv>0)}\n#define Q8_CITY_EMISSIVE_GAIN {a.emissive_gain}\n#include "../../../../shaders/objects/city_scene_material.hlsl"\n')
     shader=fixture/'combined.hlsl';shader.write_text(f'#define Q3_OBJECT_REFLECTION 1\n#define Q3_REFLECTION_SIZE float2({width}.0,{height}.0)\n#include "city.hlsl"\n')
     reflected=fixture/'reflection.hlsl';reflected.write_text('#define VSMain Q3OriginalVSMain\n#define VSFeature Q3OriginalVSFeature\n#define PSMain Q3OriginalPSMain\n#define Q8_CITY_FEATURE_ENTRY Q3OriginalPSFeature\n#include "city.hlsl"\n#undef VSMain\n#undef VSFeature\n#undef PSMain\n'+f'#define Q3_REFLECTION_HEIGHT_NDC {4*.82*half/height:.12f}\n#include "../../../../shaders/hydrology/planar_reflection_pass.hlsl"\n')

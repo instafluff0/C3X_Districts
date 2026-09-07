@@ -461,3 +461,12 @@ bridge uses the full audited signature explicitly; no CSV file was edited.
 Approved injected compilation and an executable x86 mock of the actual extracted
 wrapper source pass. New inlead injection still needs compilation after the
 human CSV update. Other-build address audits remain candidates, not guesses.
+
+### GOG unit inleads received and compiled
+
+The three requested rows are now `inlead`, including the full nine-stack-argument
+reduced signature. The read-only executable/CSV audit confirms all three GOG
+addresses and signatures, and the approved injected smoke succeeds.
+`required_user_action: []` for patch symbols. Steam/PCGames.de equivalents remain
+unverified; this is the GOG VM prototype. The agent did not edit the CSV or run
+the game. Live unit/HUD behavior remains for the strategic user checkpoint.

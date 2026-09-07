@@ -1,0 +1,20 @@
+{
+  "command": [
+    "$C3X_RENDERER_PYTHON",
+    "-m",
+    "unittest",
+    "Renderer.tools.test_project_state",
+    "Renderer.tools.test_verification",
+    "Renderer.tools.test_state_provenance_compiler",
+    "Renderer.tools.test_analyze_renderer_trace",
+    "Renderer.tools.asset_compiler.test_pack_loader_abi",
+    "Renderer.native.test_native_bridge_contract",
+    "Renderer.native.test_scroll_damage",
+    "Renderer.native.test_profile_v2",
+    "Renderer.tools.test_renderer_dev"
+  ],
+  "status": "pass",
+  "returncode": 0,
+  "started_utc": "2026-09-07T08:12:53.855748+00:00",
+  "output_tail": ".......................................................................profile_v2: pinned material/shore/normal parity, wrap and relief support passed\n..............\n----------------------------------------------------------------------\nRan 85 tests in 6.419s\n\nOK\nRETRY approved_terrain_integration after VM return code 255.\n"
+}

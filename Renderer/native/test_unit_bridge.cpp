@@ -39,9 +39,8 @@ int __fastcall colors(JGL_Color_Table*,int,unsigned char* out,int first,int coun
 int capture(c3x_renderer_unit_v1 const* value,void*){captured=*value;calls.push_back(20);return success?1:0;}
 int __fastcall Sprite_draw_unit_body_normal(Sprite*,int,PCX_Image*,PCX_Image*,int x,int y,char* path,PCX_Color_Table* p){assert(x==11 && y==23 && path[0]=='p' && p==&fixture_palette);calls.push_back(30);return 77;}
 int __fastcall original_reduced(Sprite*,int,PCX_Image*,PCX_Image*,int x,int y,int sx,int sy,int divisor,char* path,PCX_Color_Table* p){assert(x==11 && y==23 && sx==1 && sy==1 && divisor==2 && path[0]=='p' && p==&fixture_palette);calls.push_back(30);return 77;}
-// Mirror the currently incorrect callable declaration, then exercise the audited cast.
-using OldReduced=int (__fastcall *)(Sprite*,int,PCX_Image*,PCX_Image*,int,int);
-OldReduced Sprite_draw_unit_body_reduced=reinterpret_cast<OldReduced>(original_reduced);
+// Match the corrected nine-stack-argument native declaration.
+auto Sprite_draw_unit_body_reduced=original_reduced;
 void __fastcall Unit_tick_anim(Unit*,int,PCX_Image*,int,int,bool);
 
 #define this self

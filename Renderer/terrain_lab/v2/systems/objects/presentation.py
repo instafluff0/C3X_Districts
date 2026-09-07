@@ -43,7 +43,7 @@ def component(asset,pack=PACK):
     hi=[max(v[i] for v in points) for i in range(3)]
     return dict(id=asset,parts=parts,lo=lo,hi=hi,sockets=l.get('attachment_points',[]))
 
-def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,source_scale=None,ordering=None,footprint_limit=None,stage_counts=None):
+def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,source_scale=None,ordering=None,footprint_limit=None,stage_counts=None,focal_instance=None,source_ground_zero=False):
     """Stable slots: largest skyline body first, later growth only appends."""
     counts=stage_counts if stage_counts is not None else [4,7,11];result=[]
     if len(counts)!=3 or any(not isinstance(n,int) or n<1 or n>11 for n in counts):raise ValueError('city stage counts')
@@ -60,12 +60,14 @@ def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,s
         points=[]
         for mesh,_ in a['parts']:
             for v in mesh['vertices']:
-                p=[v['position'][0]-(a['lo'][0]+a['hi'][0])/2,v['position'][1]-(a['lo'][1]+a['hi'][1])/2,v['position'][2]-a['lo'][2]]
+                p=[v['position'][0]-(a['lo'][0]+a['hi'][0])/2,v['position'][1]-(a['lo'][1]+a['hi'][1])/2,v['position'][2]-(0 if source_ground_zero else a['lo'][2])]
                 p=[t*sc for t in rotate(p,rotation)];p[0]+=x;p[1]+=y
                 points.append(project(p) if screen else p)
         return [min(p[0] for p in points),min(p[1] for p in points),max(p[0] for p in points),max(p[1] for p in points)]
     def area(b):return (b[2]-b[0])*(b[3]-b[1])
     def overlap(a,b):return max(0,min(a[2],b[2])-max(a[0],b[0]))*max(0,min(a[3],b[3])-max(a[1],b[1]))
+    focal_box=box(focal_instance['asset'],focal_instance['x'],focal_instance['y'],
+                  focal_instance['rotation'],focal_instance['scale'],True) if focal_instance else None
     # Grow the same deterministic sequence only as far as requested. Future
     # unbuildable slots cannot reject an otherwise legal town.
     for i in range(counts[size]):
@@ -103,8 +105,13 @@ def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,s
                         gap=min(max(0,b[0]-q[0][2],q[0][0]-b[2])**2+max(0,b[1]-q[0][3],q[0][1]-b[3])**2 for q in placed)
                         score+=gap*3
                     if not placed:score=(x+.14)**2+(y+.14)**2
+                    if focal_box and x+y>focal_instance['x']+focal_instance['y']:
+                        # Prefer a clear view of a civic focal building. This
+                        # screen-box heuristic ranks legal sites only; actual
+                        # facade visibility still requires combined rendering.
+                        score+=2*overlap(pb,focal_box)/area(focal_box)
                     candidates.append((score,x,y,b,pb))
-            if not candidates:raise ValueError('city footprint cannot fit')
+            if not candidates:raise ValueError(f"city footprint cannot fit slot {i} ({a['id']}); {len(placed)} prior placements")
             _,x,y,b,pb=min(candidates);placed.append((b,pb))
         result.append(dict(asset=a,slot=i,x=x,y=y,rotation=rotation,scale=sc))
     result=result[:counts[size]]

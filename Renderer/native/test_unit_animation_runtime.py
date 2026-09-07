@@ -124,7 +124,7 @@ class UnitAnimationRuntimeTests(unittest.TestCase):
             "units": len(exported["units"]), "actions": sum(len(u["actions"]) for u in exported["units"].values()),
             "part_pose_samples": cases, "socket_pose_samples": rigid_cases,
             "maximum_position_error_tiles": maximum_error, "payload_bytes": exported["payload_bytes"],
-            "scope": "actual portable DLL evaluator versus raw authored clips; native body bridge/rendering not yet enabled"}
+            "scope": "actual portable DLL evaluator versus raw authored clips; source-payload proof; live gameplay behavior is a separate checkpoint"}
         (ROOT/f"Renderer/verification/animation/unit-payloads-{self.backend}.json").write_text(json.dumps(report, indent=2)+"\n")
         print(json.dumps(report))
 

@@ -1,0 +1,545 @@
+{
+  "classification": "Partial grounding improvement and palace composition diagnostic; no new city best or promotion",
+  "era_policy": "single current era",
+  "grounding": [
+    {
+      "name": "american-modern-s1-at7-5",
+      "matched_buildings": 7,
+      "ground": {
+        "mapping": "Renderer/terrain_lab/v2/fixtures/beauty/city-generator-source-r2/modern-ground-parts.json",
+        "mapping_sha256": "95dda99b9584d749d09b1ba9628107cdd3b2a10c945884dbe7228eb760342e54",
+        "draws": [
+          {
+            "asset": "city/component/81e6bc964c4f7c5a",
+            "slot": 0,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/201c181c2d3d95c2",
+            "slot": 1,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/f65b0689b7acb564",
+            "slot": 2,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/81157340c6bc8609",
+            "slot": 3,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/1a2cdd77f4c26999",
+            "slot": 4,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/790e2a73c14737d8",
+            "slot": 5,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/1a71fb8ac25f1241",
+            "slot": 6,
+            "parts": 1
+          }
+        ],
+        "classification": "explicit source-material/triangle probe; descriptor state and height response unproven"
+      },
+      "clipping": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ],
+      "pixels": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "changed_pixels_gt_2": 672,
+          "max_channel_delta": 45,
+          "bounds": [
+            811,
+            446,
+            944,
+            467
+          ],
+          "outside_roi_max": 0,
+          "lake_max_channel_delta": 0,
+          "image_sha256": "7530a0e982b780eb508a063930f73b7b6f978e9bfa26bf004c065aeb4735f456"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "changed_pixels_gt_2": 195,
+          "max_channel_delta": 42,
+          "bounds": [
+            406,
+            223,
+            471,
+            233
+          ],
+          "outside_roi_max": 0,
+          "lake_max_channel_delta": 0,
+          "image_sha256": "bf8989252185b6282371b00f831ad637a2a246938cd835b712f8b33e4e5674a8"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "changed_pixels_gt_2": 595,
+          "max_channel_delta": 31,
+          "bounds": [
+            811,
+            447,
+            943,
+            466
+          ],
+          "outside_roi_max": 1,
+          "lake_max_channel_delta": 0,
+          "image_sha256": "c8978d41b0cc19368df295b7b02d6752c57ea4d7f7ca206fdee96203baec5429"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "changed_pixels_gt_2": 165,
+          "max_channel_delta": 26,
+          "bounds": [
+            406,
+            224,
+            471,
+            233
+          ],
+          "outside_roi_max": 0,
+          "lake_max_channel_delta": 0,
+          "image_sha256": "7e19c36265c4a503ba4126299e5774f7bfbcf5cf6c3d8e1097a660ce193704e4"
+        }
+      ]
+    },
+    {
+      "name": "european-medieval-s1",
+      "matched_buildings": 7,
+      "ground": {
+        "mapping": "Renderer/terrain_lab/v2/fixtures/beauty/city-generator-source-r2/medieval-ground-parts.json",
+        "mapping_sha256": "80e6a9729236f553e54b03a6f9d41211b7567b962b347df717654a6f12d1e82f",
+        "draws": [
+          {
+            "asset": "city/component/d3e1215438b0c46a",
+            "slot": 0,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/02f0fb9418ca8751",
+            "slot": 1,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/522818d5bb53654b",
+            "slot": 2,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/9372c1432c3f5f23",
+            "slot": 3,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/f96fa4fa560da3d4",
+            "slot": 4,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/45b4e5476b262097",
+            "slot": 5,
+            "parts": 1
+          },
+          {
+            "asset": "city/component/0b29e76d7a7d6d9e",
+            "slot": 6,
+            "parts": 1
+          }
+        ],
+        "classification": "explicit source-material/triangle probe; descriptor state and height response unproven"
+      },
+      "clipping": [
+        [
+          {
+            "part": 3,
+            "input_triangles": 1296,
+            "output_triangles": 1302,
+            "wet_input_vertices": 210,
+            "shore_boundary": -0.02,
+            "classification": "local linear shore approximation on tessellated source triangles"
+          }
+        ],
+        [
+          {
+            "part": 1,
+            "input_triangles": 162,
+            "output_triangles": 171,
+            "wet_input_vertices": 23,
+            "shore_boundary": -0.02,
+            "classification": "local linear shore approximation on tessellated source triangles"
+          }
+        ],
+        [
+          {
+            "part": 1,
+            "input_triangles": 128,
+            "output_triangles": 128,
+            "wet_input_vertices": 0,
+            "shore_boundary": -0.02,
+            "classification": "local linear shore approximation on tessellated source triangles"
+          }
+        ],
+        [
+          {
+            "part": 1,
+            "input_triangles": 324,
+            "output_triangles": 324,
+            "wet_input_vertices": 0,
+            "shore_boundary": -0.02,
+            "classification": "local linear shore approximation on tessellated source triangles"
+          }
+        ],
+        [
+          {
+            "part": 1,
+            "input_triangles": 200,
+            "output_triangles": 206,
+            "wet_input_vertices": 42,
+            "shore_boundary": -0.02,
+            "classification": "local linear shore approximation on tessellated source triangles"
+          }
+        ],
+        [
+          {
+            "part": 1,
+            "input_triangles": 344,
+            "output_triangles": 344,
+            "wet_input_vertices": 0,
+            "shore_boundary": -0.02,
+            "classification": "local linear shore approximation on tessellated source triangles"
+          }
+        ],
+        [
+          {
+            "part": 1,
+            "input_triangles": 344,
+            "output_triangles": 344,
+            "wet_input_vertices": 0,
+            "shore_boundary": -0.02,
+            "classification": "local linear shore approximation on tessellated source triangles"
+          }
+        ]
+      ],
+      "pixels": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "changed_pixels_gt_2": 767,
+          "max_channel_delta": 40,
+          "bounds": [
+            381,
+            386,
+            494,
+            450
+          ],
+          "outside_roi_max": 0,
+          "lake_max_channel_delta": 0,
+          "image_sha256": "04f3ce61a20679178bc12a983dcfcbda7441284e84c109335fe66f5b50abfef4"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "changed_pixels_gt_2": 215,
+          "max_channel_delta": 33,
+          "bounds": [
+            190,
+            193,
+            246,
+            225
+          ],
+          "outside_roi_max": 0,
+          "lake_max_channel_delta": 0,
+          "image_sha256": "4939461bef89ff27912bb58e7b29b140a80f5603a88a4d458b84b7a9ff24adf7"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "changed_pixels_gt_2": 613,
+          "max_channel_delta": 31,
+          "bounds": [
+            381,
+            386,
+            492,
+            450
+          ],
+          "outside_roi_max": 1,
+          "lake_max_channel_delta": 0,
+          "image_sha256": "8dfc5a9be8e52f12ca2491d546bc0d50f12faa5fa7cdea1c73e6d2d70de81a4a"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "changed_pixels_gt_2": 171,
+          "max_channel_delta": 24,
+          "bounds": [
+            191,
+            193,
+            246,
+            224
+          ],
+          "outside_roi_max": 0,
+          "lake_max_channel_delta": 0,
+          "image_sha256": "3f170b42167dc3d53b1b190b8f8f33c4264f6fb956caf5570acee648fd1bcfbb"
+        }
+      ]
+    }
+  ],
+  "capital": {
+    "mapping": {
+      "asset": "city/palace/root/0d0c35f4a4c9651a",
+      "pack": "Renderer/packs/CityPalacesNormalized",
+      "footprint_span_tiles": 0.6,
+      "basis": "Explicit Lab pairing of the American civic palace with the single-era modern American house pool. Source culture tag is provenance only; no runtime civilization inference."
+    },
+    "matched_houses": 7,
+    "placement_attempts": [
+      [
+        0.07,
+        0.0
+      ],
+      [
+        0.07,
+        0.07
+      ],
+      [
+        0.14,
+        0.0
+      ]
+    ],
+    "pixels": [
+      {
+        "hour": 12,
+        "zoom": 1,
+        "changed_pixels_gt_2": 908,
+        "max_channel_delta": 102,
+        "bounds": [
+          862,
+          413,
+          896,
+          489
+        ],
+        "outside_roi_max": 0,
+        "lake_max_channel_delta": 0,
+        "image_sha256": "1fc86362492a044ee11ee28537003af71cdf76e4c90b20f170b68851bd382251"
+      },
+      {
+        "hour": 12,
+        "zoom": 2,
+        "changed_pixels_gt_2": 242,
+        "max_channel_delta": 82,
+        "bounds": [
+          431,
+          206,
+          447,
+          244
+        ],
+        "outside_roi_max": 1,
+        "lake_max_channel_delta": 1,
+        "image_sha256": "7d13363a9a36f079f17743c2353190a4b421cd6b52e599a2bcb5437081187870"
+      },
+      {
+        "hour": 0,
+        "zoom": 1,
+        "changed_pixels_gt_2": 1062,
+        "max_channel_delta": 141,
+        "bounds": [
+          856,
+          413,
+          896,
+          487
+        ],
+        "outside_roi_max": 1,
+        "lake_max_channel_delta": 0,
+        "image_sha256": "0d4bf941b73605e739aa527e477ecdb4db7180bbe01739cf90682850ee37bd34"
+      },
+      {
+        "hour": 0,
+        "zoom": 2,
+        "changed_pixels_gt_2": 279,
+        "max_channel_delta": 124,
+        "bounds": [
+          430,
+          206,
+          448,
+          243
+        ],
+        "outside_roi_max": 0,
+        "lake_max_channel_delta": 0,
+        "image_sha256": "f37656a1ca43e2d936c8097399269133a7a9c0e2c30a16c4e8d8a6313494f9d0"
+      }
+    ],
+    "finding": "Dome and windows contribute; foreground towers obscure facade. No measurable palace contribution in the fixed interior lake ROI."
+  },
+  "standalone_windows_parity": [
+    {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "bd8a4fd1d8408ae7c9ea234a34a8e056b5cb4aa0125f9cfc266f260dcb7cb4a3",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.0885750612745098,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 13,
+            "changed_channels": 167738,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.004628503859974444,
+            "pass": true
+          },
+          "d3d11_sha256": "9254617486c6bcc345254124917b07b7c19d7f3c5b6f4e74188f8e6233fd65fe"
+        },
+        {
+          "frame": "h12-z2-pan00.bmp",
+          "packet_sha256": "8f5ebe1681ed6776466dbae67602494bc322661e8edd8da79a18e618ae68e355",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.07382230392156863,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 11,
+            "changed_channels": 38581,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.005040239706491668,
+            "pass": true
+          },
+          "d3d11_sha256": "f56c03ca46a44a65fb1e7841e4794da9cfd98382c7537cb98d04a3dda58d64e5"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "1b69988a1a0c87c39b0a27552fb0196efe0114f52fb936f8574badd5d848a3a8",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.10068841911764706,
+            "rgb_p99_absolute": 3,
+            "max_channel_delta": 11,
+            "changed_channels": 183097,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.002496879228086019,
+            "pass": true
+          },
+          "d3d11_sha256": "d4ed244aa1bc9d563a7227805009754f0ef73fca3693305455971eb6a14707fd"
+        },
+        {
+          "frame": "h00-z2-pan00.bmp",
+          "packet_sha256": "058350d79c19ae6c28fe985a16691087eb3587fd84395691fb19b91b25fd6512",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.0838406862745098,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 9,
+            "changed_channels": 42322,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0029939411763163447,
+            "pass": true
+          },
+          "d3d11_sha256": "92be9c0e3a2d462ff9a63412affea19880fa10bb2cf4310078651a83ef4cb519"
+        }
+      ]
+    },
+    {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "aba6655af9e4675fdb0a14e0ce8e83e4077d69e3d59ec755b3fcd237b6ccd0d3",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.08856893382352941,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 13,
+            "changed_channels": 167741,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.004631656801156864,
+            "pass": true
+          },
+          "d3d11_sha256": "bc9e6eed6a99b70b2dd50e5abdfbcbe0f2fddb14333c6478ec724facf3a9627b"
+        },
+        {
+          "frame": "h12-z2-pan00.bmp",
+          "packet_sha256": "62026723bd7cd3c92b90463b2ead4d619badcdc6bbf580482722ca87cc51a47f",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.07382107843137255,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 11,
+            "changed_channels": 38581,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.005041044853545507,
+            "pass": true
+          },
+          "d3d11_sha256": "aca30b8bc8f0faa8b4505244fa9bd228abb7e9b37d3f220e9d8a84d84fead150"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "7fa2cffacf6fe275da141947251270032d1a3d9393226ddd221262d70c75f30b",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.10069117647058823,
+            "rgb_p99_absolute": 3,
+            "max_channel_delta": 11,
+            "changed_channels": 183103,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.002489321323632098,
+            "pass": true
+          },
+          "d3d11_sha256": "a4a09b52704e4c85090d57f53cb5f9bd1f1c7d28ee04cdcecf94a6f08cd3370f"
+        },
+        {
+          "frame": "h00-z2-pan00.bmp",
+          "packet_sha256": "05adf1ca5dd83b7c06a7be6138ebb9e81521217564ed3074fb56ec2193bd6c68",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.08385661764705882,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 9,
+            "changed_channels": 42335,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0029797235292327753,
+            "pass": true
+          },
+          "d3d11_sha256": "1e9c6a1c875a9695f97c9ffff9b9b6fc20e4df1d1d561fc3a75cb4934126df3e"
+        }
+      ]
+    }
+  ],
+  "free_disk_gib": 28.79,
+  "remaining": [
+    "Palace prominence and coherent city layout",
+    "Ground material state/height response",
+    "Full sizes/cultures and fresh terrain regions",
+    "Complete material and night lighting scope",
+    "All existing visual/integration gates"
+  ]
+}

@@ -17,6 +17,8 @@ def main():
     prepare()
     if not args.skip_build:
         built = windows_command_result("Renderer/native", "call BUILD.bat candidate-compile")
+        built.pop("cwd", None)
+        (ROOT/"Renderer/verification/animation/unit-body-build.json").write_text(json.dumps(built, indent=2)+"\n")
         if built["status"] != "pass":
             return 1
     results = []
@@ -42,6 +44,7 @@ def main():
             "UNIT post-draw terrain parity: pass", "ANIMATION temporal: pass",
             "ANIMATION scroll parity: pass", "ANIMATION removal parity: pass",
             "UNIT config-off preserves canvas: pass", "UNIT RGB555 clipped zoom=0",
+            "UNIT action interruption and held endpoint: pass draws=280",
             "UNIT RGB555 clipped zoom=1", "UNIT RGB565 clipped zoom=0", "UNIT RGB565 clipped zoom=1")
         if any(marker not in text for marker in required) or "FAIL" in text:
             result["status"] = "fail"

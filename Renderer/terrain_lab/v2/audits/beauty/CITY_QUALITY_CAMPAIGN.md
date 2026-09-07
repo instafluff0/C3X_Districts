@@ -258,3 +258,13 @@ per city. This preference supersedes the preceding mixed-era plan. Preserve
 same-era source families; apply useful generator growth, placement and ground
 metadata without historical-era mixing. The generator-profile CLI defaults to
 that policy. Roads remain deferred.
+
+## Single-era ground and broader palace intake
+
+[r18/r19 combined findings](CITY_GROUND_AND_CAPITAL_PASS.md) preserve the selected
+one-era policy. Modern and medieval source paving produces small visible base
+improvements. The American palace from the new 47-root pack renders with its
+night material and seven matched surrounding city pieces; its facade occlusion
+and wider scattered composition remain defects. Six focused tests and eight
+standalone Windows comparisons pass. No overall city-best replacement, full Lab
+pass, fresh-region acceptance or milestone advancement is claimed.

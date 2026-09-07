@@ -21,6 +21,14 @@ zooms and noon/midnight render on the same 100-tile coast.
 [Capital at gameplay size](out/city-scene-r13/review/capital-native.png).
 Other cultures and the colonial palace's unresolved components remain open.
 
+The user selected **one era per city**; the mixed-era r17 diagnostic is rejected.
+The [single-era ground/palace pass](CITY_GROUND_AND_CAPITAL_PASS.md) adds source
+paving under all selected buildings in modern/medieval r18, with a small visible
+base-edge improvement and shoreline clipping. r19 connects the American palace
+from the complete 47-root pack, but foreground towers obscure its facade and the
+wider city is less coherent; it is not a new city best. Eight Windows comparisons
+pass. Broader size/culture/fresh-region coverage remains open.
+
 # Preserved natural static water
 
 The user responded “Water looks great” to r6 and requested object reflections.

@@ -20,6 +20,7 @@ public:
     std::vector<std::uint32_t> pixels;
     int image_width=0,image_height=0;
     bool cache_hit=false;
+    char const* failure_reason="none";
     std::size_t cache_bytes=0;
 
     template<class T> void release(T*& p) { if(p) {p->Release();p=nullptr;} }
@@ -35,13 +36,14 @@ public:
     void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();}
 
     bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request) {
-        cache_hit=false;
+        cache_hit=false;failure_reason="invalid-request-or-device";
         if(!device || !context || request.struct_size!=sizeof(request) ||
            request.unit_key[63]!=0 || request.hour<0 || request.hour>23 ||
            (request.reduced!=0 && request.reduced!=1))return false;
         auto found=std::find_if(units.begin(),units.end(),[&](Unit const& unit){
             return std::find(unit.keys.begin(),unit.keys.end(),request.unit_key)!=unit.keys.end();});
         auto name=native_unit_action(request.action);
+        failure_reason="unmapped-unit-or-action";
         if(found==units.end() || !name)return false;
         auto action=std::find_if(found->actions.begin(),found->actions.end(),[&](Action const& a){return a.name==name;});
         if(action==found->actions.end() || action->parts.empty())return false;
@@ -52,6 +54,7 @@ public:
         draw.body_x=request.body_x;draw.body_y=request.body_y;
         draw.sprite_width=request.sprite_width;draw.sprite_height=request.sprite_height;draw.reduced=request.reduced!=0;
         UnitAnimationPose pose;
+        failure_reason="invalid-native-pose";
         if(!prepare_native_unit_pose(draw,action->loop,pose))return false;
         int w=request.sprite_width/(draw.reduced?2:1),h=request.sprite_height/(draw.reduced?2:1);
         if(w<1 || h<1 || w>512 || h>512)return false;
@@ -61,8 +64,9 @@ public:
             action->loop?request.action_cursor%request.frame_count:std::min(request.action_cursor,request.frame_count-1),
             request.frame_count,w,h,request.reduced,request.hour,request.season,request.display_color_rgb};
         for(auto & saved:cache)if(saved.key==key) {
-            saved.used=++serial; pixels=saved.pixels;image_width=w;image_height=h;cache_hit=true;return true;
+            saved.used=++serial; pixels=saved.pixels;image_width=w;image_height=h;cache_hit=true;failure_reason="none";return true;
         }
+        failure_reason="gpu-target-setup";
         if(!ensure(device,w,h))return false;
         auto environment=evaluate_environment(float(request.hour),request.season);
         float cosine=std::cos((found->yaw_offset+float(request.direction%8)*45)*.01745329252f);
@@ -77,10 +81,12 @@ public:
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
         context->PSSetSamplers(0,1,&sampler);context->PSSetConstantBuffers(0,1,&settings);
         std::vector<FeatureSourceVertex> posed;
-        std::vector<std::array<float,8>> upload;
+        std::vector<std::array<float,9>> upload;
         for(auto const& part:action->parts) {
+            failure_reason="missing-part-or-texture";
             if(part.mesh>=meshes.size() || part.texture>=textures.size() || !textures[part.texture].view)return false;
             auto & mesh=meshes[part.mesh];
+            failure_reason="pose-sampling";
             if(!sample_animation_mesh(mesh.animation,pose.phase*mesh.animation.duration,false,posed))return false;
             upload.resize(posed.size());
             for(std::size_t i=0;i<posed.size();++i) {
@@ -89,12 +95,26 @@ public:
                 float y=(p.position[0]*sine+p.position[1]*cosine)*scale,z=(p.position[2]+found->offset_z)*scale;
                 float sx=float(pose.anchor_x-request.body_x)+(x-y)*64*zoom;
                 float sy=float(pose.anchor_y-request.body_y)+(x+y)*32*zoom-z*(150.f*128/224)*zoom;
-                // The native dirty rectangle must contain every custom pixel.
-                // Never silently clip a large modded model or resize it per pose.
-                if(sx<1 || sy<1 || sx>w-1 || sy>h-1)return false;
                 upload[i]={2*sx/w-1,1-2*sy/h,.5f-(x+y)*.05f-z*.001f,
-                    p.normal[0]*cosine-p.normal[1]*sine,p.normal[0]*sine+p.normal[1]*cosine,p.normal[2],p.uv[0],p.uv[1]};
+                    p.normal[0]*cosine-p.normal[1]*sine,p.normal[0]*sine+p.normal[1]*cosine,p.normal[2],p.uv[0],p.uv[1],z};
             }
+            // The ground plane hides buried anatomy/stowed equipment. Bound
+            // the visible polygon, including intersections of crossing edges,
+            // so clipping never extends beyond Civ III's native dirty region.
+            failure_reason="visible-body-outside-native-sprite";
+            auto inside=[&](float x,float y){return x>=2.f/w-1 && x<=1-2.f/w && y>=2.f/h-1 && y<=1-2.f/h;};
+            for(std::size_t i=0;i<mesh.animation.indices.size();i+=3) {
+                for(unsigned edge=0;edge<3;++edge) {
+                    auto const& a=upload[mesh.animation.indices[i+edge]];
+                    auto const& b=upload[mesh.animation.indices[i+(edge+1)%3]];
+                    if(a[8]>=0 && !inside(a[0],a[1]))return false;
+                    if((a[8]<0)!=(b[8]<0)) {
+                        float t=a[8]/(a[8]-b[8]);
+                        if(!inside(a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])))return false;
+                    }
+                }
+            }
+            failure_reason="gpu-geometry-upload";
             UINT bytes=UINT(upload.size()*sizeof(upload[0]));
             if(bytes>capacity) {
                 release(vertices);capacity=0;
@@ -120,12 +140,13 @@ public:
             }
             values[7]=part.strength;values[11]=environment.sun_intensity;values[19]=environment.moon_intensity;values[27]=part.cutout;
             context->UpdateSubresource(settings,0,nullptr,values,0,0);
-            UINT stride=32,offset=0;context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
+            UINT stride=36,offset=0;context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
             context->IASetIndexBuffer(mesh.indices,DXGI_FORMAT_R32_UINT,0);
             context->PSSetShaderResources(0,1,&textures[part.texture].view);
             context->DrawIndexed(UINT(mesh.animation.indices.size()),0,0);
         }
         ID3D11ShaderResourceView* empty=nullptr;context->PSSetShaderResources(0,1,&empty);
+        failure_reason="gpu-body-readback";
         transfer.draw(context,linear,target,environment.exposure);
         context->OMSetRenderTargets(0,nullptr,nullptr);context->CopyResource(readback,output);
         D3D11_MAPPED_SUBRESOURCE mapped={};
@@ -143,7 +164,7 @@ public:
             cache_bytes-=old->pixels.size()*4;cache.erase(old);
         }
         cache.push_back({key,++serial,pixels});cache_bytes+=size;
-        return true;
+        failure_reason="none";return true;
     }
 
     // Runs on the game's calling thread, after the complete body succeeds.
@@ -189,10 +210,11 @@ private:
             char const* source=R"(
 Texture2D<float4> base : register(t0);SamplerState sample_base : register(s0);
 cbuffer Material : register(b0) {float4 tint,owner,sun,sun_color,moon,moon_color,ambient;};
-struct Input {float3 p:POSITION;float3 n:NORMAL;float2 uv:TEXCOORD0;};
-struct Output {float4 p:SV_Position;float3 n:NORMAL;float2 uv:TEXCOORD0;};
-Output VS(Input i){Output o;o.p=float4(i.p,1);o.n=i.n;o.uv=i.uv;return o;}
+struct Input {float3 p:POSITION;float3 n:NORMAL;float2 uv:TEXCOORD0;float ground:TEXCOORD1;};
+struct Output {float4 p:SV_Position;float3 n:NORMAL;float2 uv:TEXCOORD0;float ground:TEXCOORD1;};
+Output VS(Input i){Output o;o.p=float4(i.p,1);o.n=i.n;o.uv=i.uv;o.ground=i.ground;return o;}
 float4 PS(Output i):SV_Target {
+ clip(i.ground);
  float4 b=base.Sample(sample_base,i.uv);if(ambient.w>.5)clip(b.a-.5);
  float3 albedo=b.rgb*tint.rgb;
  float mask=tint.w<.5?0:(tint.w<1.5?smoothstep(.06,.94,1-b.a):1);
@@ -212,8 +234,9 @@ float4 PS(Output i):SV_Target {
             if(SUCCEEDED(hr))hr=device->CreatePixelShader(ps->GetBufferPointer(),ps->GetBufferSize(),nullptr,&pixel);
             D3D11_INPUT_ELEMENT_DESC elements[]={{"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0},
-                {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0}};
-            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,3,vs->GetBufferPointer(),vs->GetBufferSize(),&layout);
+                {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0},
+                {"TEXCOORD",1,DXGI_FORMAT_R32_FLOAT,0,32,D3D11_INPUT_PER_VERTEX_DATA,0}};
+            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,4,vs->GetBufferPointer(),vs->GetBufferSize(),&layout);
             release(vs);release(ps);
             D3D11_BUFFER_DESC b={};b.ByteWidth=112;b.Usage=D3D11_USAGE_DEFAULT;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&b,nullptr,&settings);

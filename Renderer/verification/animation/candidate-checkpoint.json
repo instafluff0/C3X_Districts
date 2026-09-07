@@ -1,0 +1,28 @@
+{
+  "schema": "c3x.animation_candidate_checkpoint.v1",
+  "status": "compiled_verified_not_staged",
+  "game_launched": false,
+  "candidate_staged": false,
+  "sha256": {
+    "Renderer/native/build/candidate/C3XRenderer.dll": "6a88bc0940435b6d98a69ba4f1a3cdf78e18dc81955f5434291fe7fcf8575705",
+    "Renderer/packs/ResourceAnimationRuntime/bindings.json": "2f9d94adf4bc8504ed1b4ff390c61999c6416be942d1866c84e410975bbd69a8",
+    "Renderer/packs/ResourceAnimationRuntime/manifest.json": "80f4b4e411b34970955bfe4b44959e78bbb31f7f7c61d452d8cf5e5904e10ee8",
+    "Renderer/packs/UnitAnimationRuntime/bindings.json": "a349984a63ce738a8c61c4e60d5b2a35ff05e8160b2af44faada89776ffd2fff",
+    "Renderer/packs/UnitAnimationRuntime/manifest.json": "95a144d4d1394a2bee4b0c8be184266d61250de1bd40a962a1dc5aee09a3791b",
+    "C3X.h": "05911138d7f7ebdc1bb157b9e49b39ec969e2d95939b62c31d0a5e1f4af7977e",
+    "injected_code.c": "6c4efbdf936f232cba6af8729cbd9c279aaba99ccb46b9b60093ee5fbc037993",
+    "civ_prog_objects.csv": "10e5e3f5347503df7807987555a64a89fe139f739e855be3f428f5c52358ad5e"
+  },
+  "evidence": [
+    "Renderer/verification/animation/units.json",
+    "Renderer/verification/animation/resource-payloads-portable_cpp.json",
+    "Renderer/verification/animation/unit-body-build.json",
+    "Renderer/verification/animation/unit-injected-compile.json"
+  ],
+  "required_user_action": "Apply the exact three existing GOG CSV row changes from Renderer/handoffs/animation_unit_hooks_gog.md; current rows are still define.",
+  "pending": [
+    "Approved injected compile after human CSV inlead/signature edits.",
+    "Action-interruption and retained-object/visibility checkpoint review; five supported unit families only in initial prototype.",
+    "Final normal INSTALL.bat staging and user-run gameplay checkpoint."
+  ]
+}

@@ -12,8 +12,15 @@
       "asset": "candidate/city/capital_mesoamerican",
       "footprint_span_tiles": 0.6,
       "basis": "Authored pairing with the Mesoamerican source house family; not a universal American capital."
+    },
+    "american/modern": {
+      "asset": "city/palace/root/0d0c35f4a4c9651a",
+      "pack": "Renderer/packs/CityPalacesNormalized",
+      "footprint_span_tiles": 0.6,
+      "basis": "Explicit Lab pairing of the American civic palace with the single-era modern American house pool. Source culture tag is provenance only; no runtime civilization inference."
     }
   },
   "unmapped_policy": "No palace body; retain native capital indicator.",
-  "colonial_candidate": "Body decoded, but four operational component sockets remain unresolved; no complete-kit claim."
+  "colonial_candidate": "Body decoded, but four operational component sockets remain unresolved; no complete-kit claim.",
+  "palace_intake": "Renderer/docs/city_palace_asset_import.md"
 }

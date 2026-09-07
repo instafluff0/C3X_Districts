@@ -98,9 +98,9 @@ growth recipe. Stop tuning that ordering in isolation: use the recovered era
 layers, block roles and city area/fill metadata for the next combined layout.
 The r8 night, r11 growth and r13 palace checkpoints remain preserved.
 
-The next Lab work is metadata-led mixed-era city composition with correctly
-selected city ground pieces, then size/culture/terrain and night/reflection
-checks. Roads remain deferred. No native city ownership, milestone advancement
+The historical next step was metadata-led mixed-era composition. The user
+selection below supersedes it: use one era with correctly selected ground
+pieces, then size/culture/terrain and night/reflection checks. Roads remain deferred. No native city ownership, milestone advancement
 or human approval is claimed.
 
 Verification: 16 focused importer tests pass, ground-part regeneration matches
@@ -122,3 +122,12 @@ one era. The next pass must keep that visual policy. The r17 mixed city actually
 occupies 0.510 tile-squared of bounding-box footprint versus 0.471 previously;
 the initial impression of reduced density came from spacing/occlusion, not less
 occupied area. Do not use the earlier density explanation as evidence.
+
+## Subsequent single-era ground and capital pass
+
+See [r18/r19 findings](CITY_GROUND_AND_CAPITAL_PASS.md). Exact ground recovery now
+covers all selected components in two pools, and shoreline clipping handles
+source pads outside legal building footprints. The new 47-root palace pack is
+connected through an explicit American modern mapping. The initial capital
+layout required bounded alternative palace sites; its remaining facade occlusion
+and scattered skyline prevent a new city-best claim.

@@ -26744,7 +26744,7 @@ unload_custom_renderer ()
 }
 
 // Capture/forwarding only. Civ III still chooses visibility, timing and HUD order.
-// These entry wrappers remain inactive until the audited CSV inleads are added.
+// The audited GOG inleads retain the original unit routine and its body arguments.
 bool
 forward_custom_unit_body (Sprite * sprite, PCX_Image * canvas, int x, int y, int reduced, PCX_Color_Table * palette)
 {
@@ -26821,10 +26821,7 @@ patch_Sprite_draw_unit_body_reduced (Sprite * this, int edx, PCX_Image * backgro
 {
 	if (scale_x == 1 && scale_y == 1 && divisor == 2 &&
 	    forward_custom_unit_body (this, canvas, x, y, 1, palette)) return 0;
-	// Installed GOG code returns with RET 0x24: nine stack arguments. The old
-	// callable CSV prototype had only four. Keep the audited call explicit until corrected.
-	return ((int (__fastcall *) (Sprite *, int, PCX_Image *, PCX_Image *, int, int, int, int, int, char *, PCX_Color_Table *))
-		Sprite_draw_unit_body_reduced) (this, __, background, canvas, x, y, scale_x, scale_y, divisor, palette_path, palette);
+	return Sprite_draw_unit_body_reduced (this, __, background, canvas, x, y, scale_x, scale_y, divisor, palette_path, palette);
 }
 
 bool

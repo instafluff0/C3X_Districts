@@ -1,12 +1,14 @@
 """Read-only GOG unit-hook byte/stack audit; never patches or executes the game."""
 import argparse
+import csv
 import hashlib
 import json
+import re
 import struct
 from pathlib import Path
 
 
-def audit(path):
+def audit(path, csv_path=None):
     data = path.read_bytes()
     pe = struct.unpack_from("<I", data, 0x3c)[0]
     if data[:2] != b"MZ" or data[pe:pe+4] != b"PE\0\0" or struct.unpack_from("<H", data, pe+4)[0] != 0x14c:
@@ -40,15 +42,34 @@ def audit(path):
         instruction = read(address, 5)
         if instruction[0] != 0xe8 or address+5+struct.unpack_from("<i", instruction, 1)[0] != target:
             raise ValueError(f"unit body call mismatch at {address:#010x}")
+    csv_path = csv_path or Path(__file__).resolve().parents[2]/"civ_prog_objects.csv"
+    wanted = {"Unit_tick_anim": (0x5cbf50, 4), "Sprite_draw_unit_body_normal": (0x5f88b0, 6),
+              "Sprite_draw_unit_body_reduced": (0x5f8940, 9)}
+    rows = {}
+    with csv_path.open(newline="") as stream:
+        for row in csv.reader(stream, skipinitialspace=True):
+            if len(row) < 6 or row[4] not in wanted:
+                continue
+            name = row[4]
+            address, arguments = wanted[name]
+            signature = re.search(r"\)\s*\((.*)\)\s*$", row[5])
+            if (name in rows or int(row[1], 16) != address or not signature or
+                    len(signature.group(1).split(","))-2 != arguments):
+                raise ValueError(f"CSV unit-hook address/signature mismatch: {name}")
+            rows[name] = {"capability": row[0].strip(), "gog_address": f"0x{address:08X}",
+                          "stack_arguments": arguments, "signature": row[5]}
+    if set(rows) != set(wanted):
+        raise ValueError("CSV unit hooks missing")
     return {"schema": "c3x.unit_hook_audit.v1", "status": "pass",
         "executable_sha256": hashlib.sha256(data).hexdigest(),
         "build": "GOG address layout; other builds unverified",
         "byte_checks": {f"0x{a:08X}": text for a, text in expected.items()},
         "body_calls": {f"0x{a:08X}": f"0x{t:08X}" for a, t in calls.items()},
         "normal_stack_arguments": 6, "reduced_stack_arguments": 9,
-        "reduced_current_csv_stack_arguments": 4,
+        "csv_rows": rows, "csv_sha256": hashlib.sha256(csv_path.read_bytes()).hexdigest(),
+        "csv_inleads_ready": all(row["capability"] == "inlead" for row in rows.values()),
         "native_selection_and_hud": "outside intercepted primitives; retained by original Unit_tick_anim",
-        "native_hooks_enabled": False, "csv_modified": False}
+        "installed_hook_execution_verified": False, "csv_modified_by_audit": False}
 
 
 if __name__ == "__main__":

@@ -52,6 +52,13 @@ hitch; no vanilla-speed claim or milestone advancement is made.
 
 The active Lab goal is now **city quality across sizes, eras and cultures, including reflected night lights**. The user permits modest cross-tile footprints, especially for larger cities. The [city campaign](terrain_lab/v2/audits/beauty/CITY_QUALITY_CAMPAIGN.md) records complete cities composed with the current 100-tile water scene, a visible building-scale comparison, expanded source intake (132 components), corrected source-origin foundations and r8 night lights. Recovered UV2 light-atlas coordinates remove roof artifacts; brighter windows, GPU HDR glow and reflected lights have matched controls plus four passing standalone Metal/D3D11 comparisons. Full culture/growth coverage, local light pools, remaining materials and all acceptance gates remain open. The subsequent r11 colonial growth probe preserves building placements across all three sizes; r13 adds an explicitly mapped source palace with seven unchanged houses in its no-palace controls at both zooms/noon/night. The complete offline palace audit now resolves and normalizes all 47 distinct standard-game palace roots; L17 still owns generic profile mapping, visual calibration, the Gran Colombian root's four unresolved tree children, and native capital-state binding. The current Lab run has one L19A tile-object pack hash failure; that pack was not modified by this city pass.
 
+The subsequent [single-era r18/r19 pass](terrain_lab/v2/audits/beauty/CITY_GROUND_AND_CAPITAL_PASS.md)
+adds source paving beneath every selected modern/medieval building and clips
+pad overhangs to the sampled shore. It also connects the American palace from
+the existing 47-root pack. Eight standalone Windows comparisons pass; gains are
+partial, and the palace's obscured facade/scattered city layout are still visible
+limitations. Previous bests and all gates remain preserved.
+
 The user's subsequent reference review exposed omitted city-generator and grounding
 metadata. The [generator findings](terrain_lab/v2/audits/beauty/CITY_GENERATOR_FINDINGS.md)
 record mixed-era center ordering and growth/fill parameters, plus recovered city
@@ -685,6 +692,19 @@ Natural wonders, constructed wonders, and C3X districts are late, separate categ
 - Layer boundaries for roads, rivers, fog, and other overlays must be verified in-game rather than assumed from decompiled names.
 - Scenario and user override semantics must be deterministic before packs become large.
 
+## Animation gameplay checkpoint ready (2026-09-07)
+
+The tested animation DLL is staged for normal INSTALL.bat. The GOG unit inleads
+and corrected reduced signature compile successfully. Ten resource families
+animate facing southeast; five custom unit families follow native cursors and
+anchors. Other units retain native bodies. Both zooms, day/night, action
+interruptions, held endpoints, RGB555/RGB565 clipping, config-off, cache reuse
+and terrain preservation pass. The agent did not launch Civ III and stops for
+the batched user-run checkpoint in `docs/animation_integration_checkpoint.md`.
+The full workflow was run but remains non-green on the unrelated frozen L19A
+pack hash; the known legacy frozen-profile boundary failure also remains open.
+No Lab gate was advanced or regression threshold changed.
+
 ## Animation integration foundation (2026-09-06)
 
 The user authorized southeast-facing animated resources and enabled unit bodies,
@@ -736,3 +756,18 @@ explicitly omitted because their source material lacks a required base-color
 channel; the primary camp composition is intact. This preparation neither
 reopens the completed L19A handoff nor advances LQ0. A dedicated modular Lab v2
 visual gate is still required before Game Integration may own camp pixels.
+
+### Animation body/config and southeast calibration increment
+
+The candidate DLL renders five complete unit families through a separate
+8 MiB sprite cache. The thin native bridge and ordinary
+`enable_custom_rendered_units` configuration forwarding compile successfully.
+Real-DLL day/night witnesses cover both zooms, cached anchor translation,
+16-bit clipped bodies, config-off preservation and unchanged retained terrain.
+Resources now have per-sample whole-body southeast calibration, including all
+12 fish and three whales without breaking cross-rig weights. The runtime
+environment switches are removed; animation is still candidate-only.
+The three existing GOG CSV definitions need the audited inlead/signature changes
+in `handoffs/animation_unit_hooks_gog.md` before live unit activation. No animation
+DLL has been staged and Civ III was not launched. See
+`docs/animation_integration_checkpoint.md` for coverage and remaining gates.

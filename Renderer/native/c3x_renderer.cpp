@@ -6312,13 +6312,14 @@ public:
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
         int result=submit_locked(lock,Command::unit);
         lock.unlock();
-        if(result==C3X_RENDERER_RESULT_OK && !renderer_state.unit_bodies.blit(destination,request.body_x,request.body_y))
-            result=C3X_RENDERER_RESULT_ERROR;
+        if(result==C3X_RENDERER_RESULT_OK && !renderer_state.unit_bodies.blit(destination,request.body_x,request.body_y)) {
+            result=C3X_RENDERER_RESULT_ERROR;renderer_state.unit_bodies.failure_reason="native-canvas-blit";
+        }
         QueryPerformanceCounter(&finished);
         char detail[384];std::snprintf(detail,sizeof(detail),
-            "id=%d key=%.63s action=%d queued=%d cursor=%d/%d dir=%d xy=%d,%d reduced=%d color=%06x result=%d cache_hit=%d cache_bytes=%zu ms=%.3f",
+            "id=%d key=%.63s action=%d queued=%d cursor=%d/%d dir=%d xy=%d,%d reduced=%d color=%06x result=%d reason=%s cache_hit=%d cache_bytes=%zu ms=%.3f",
             request.unit_id,request.unit_key,request.action,request.queued_action,request.action_cursor,request.frame_count,
-            request.direction,request.body_x,request.body_y,request.reduced,request.display_color_rgb,result,
+            request.direction,request.body_x,request.body_y,request.reduced,request.display_color_rgb,result,renderer_state.unit_bodies.failure_reason,
             renderer_state.unit_bodies.cache_hit?1:0,renderer_state.unit_bodies.cache_bytes,
             renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart));
         renderer_state.trace.write("unit-body",detail,true);

@@ -1,0 +1,9 @@
+{
+  "schema": "c3x.resource_animation_pose_proof.v1",
+  "status": "pass",
+  "resource_subjects": 26,
+  "pose_samples": 104,
+  "marine_body_frames_aligned_SE": 7215,
+  "maximum_position_error_tiles": 1.268424851263994e-07,
+  "payload_bytes": 8901120
+}
