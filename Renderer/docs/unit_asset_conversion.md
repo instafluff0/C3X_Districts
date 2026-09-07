@@ -28,6 +28,14 @@ directly resolvable foot-officer variation. See
 
 The complete source inventory remains in the ignored build report. The normalized runtime recipe contains only semantic `unit/warrior/*` IDs and no Civ VI package paths.
 
+The unit importer also preserves the source octahedral vertex normal stored at
+bytes 6–7 of the proven 32-byte skinned profile. Material UV addressing is part
+of the normalized record: the Warrior body, head, and armor use repeat in both
+axes, while the selected helmet and weapon use clamp. The standalone beauty
+study must honor that distinction; clamping the repeat-addressed skin atlas was
+shown to stretch edge texels across the shoulder, hand, and eye. See
+`Renderer/terrain_lab/v2/audits/objects/WARRIOR_SOURCE_PASS.md`.
+
 ## Model extraction
 
 `unit_model_extractor.py` reads `ModelPackageEntry` records from `units/units.blp` and emits a dedicated `c3x.unit_pack.v0` lab pack. It reuses the already-proven low-level static-package, mesh, material, texture, and skeleton decoders, but unit outputs use their own `units/`, `meshes/unit/`, `materials/unit/`, `textures/unit/`, and `skeletons/unit/` namespaces.
