@@ -4,7 +4,7 @@
   "current_milestone": "LAB_V2",
   "integration_performance_maintenance": {
     "authorization": "2026-09-06: user resumed production cache, scrolling, unit-selection performance and timestamped diagnostics independently of Lab updates.",
-    "status": "in_progress",
+    "status": "ready_for_in_game_test",
     "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
     "scope": "Optimize the existing production map plane without promoting new Lab systems or advancing I19/M9-M11.",
     "existing_symbols": [
@@ -16,11 +16,11 @@
     ],
     "audit_candidates": [],
     "required_user_action": [],
-    "verified_increment": "API 12: authoritative appearance prefetch ring, cancellable idle mesh preparation with a 64 MiB sub-budget, immutable published pixels, reusable scene topology and conservative river-node locality. Full Windows workflow, pointer/blit/reset/city invalidation replay and injected smoke passed.",
+    "verified_increment": "API 13 consolidated test build: bounded indexed mesh and exact pixel-block caches, foreground-priority idle mesh/GPU preparation, stable pixel projection, per-map OutputDebugStringA diagnostics, and detailed test launcher. Full Windows workflow passed; final injected diagnostics passed the approved compile smoke. User requested consolidation and will launch the game and provide logs/experience.",
     "remaining_work": [
-      "Reduce exposed-strip GPU drawing and readback after prepared tile jumps; latest verified six-view run reused all 400 meshes per jump, with prepared jump p95 57.594 ms and foreground redraw p95 2.238 ms during idle work.",
-      "Measure rapid consecutive jumps without waiting for neighborhood preparation and bound new-area/environment-change cold latency; no stale bitmap may be presented.",
-      "Measure native halo projection-guard hit rate, actual injected capture and whole-map latency before claiming game-wide parity. Investigate intermittent incremental/cold parity failures seen in earlier VM runs; preserve strict executable bounds and diagnostic images."
+      "Await the user-run Windows in-game session; do not launch the game or continue optimization before reviewing the supplied logs and experience.",
+      "Validate actual capture/projection-guard use, native whole-map/blit cost and rapid consecutive scrolls. Prepared replay jumps are 12.451\u201324.604 ms; redraws during preparation p95 2.356 ms, with a 54.392 ms maximum outlier.",
+      "Cold first exposures and rapid recentering can still hitch. Incremental/cold comparisons passed bounded raster tolerances, but earlier intermittent failures remain an investigation item; do not claim vanilla-speed parity."
     ],
     "evidence": "evidence/integration_cache_worker/README.md"
   },
@@ -77,16 +77,16 @@
       "benchmarks": "terrain_lab/v2/fixtures/beauty/gameplay-100-v1/BENCHMARKS.json",
       "review": "terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md",
       "approval": null,
-      "retained_candidate": "relief-size-r3",
-      "supplemental_witness": "relief-size-r3/combinedvolcano; explicitly synthetic because test.biq contains no volcanoes",
+      "retained_candidate": "shadow-receiver-r1",
+      "supplemental_witness": "shadow-receiver-r1/combinedvolcano; explicitly synthetic because test.biq contains no volcanoes",
       "additional_benchmark": "terrain_lab/v2/fixtures/beauty/coast-pass-foundation/BENCHMARKS.json",
-      "latest_evidence": "terrain_lab/v2/audits/beauty/RELIEF_SIZE_r3_EVIDENCE.json",
+      "latest_evidence": "terrain_lab/v2/audits/beauty/SHADOW_RECEIVER_r1_EVIDENCE.json",
       "remaining_visible_gaps": [
-        "Mountain/volcano surface projection and unproven source physical reconstruction",
-        "Shadow-receiver lines across inherited diagnostic dune bodies",
+        "Mountain/volcano surface projection, height-channel interpretation and unproven source physical reconstruction",
+        "Inherited diagnostic dune bodies and residual facet artifacts; thin shadow lines reduced",
         "Soft shallows and abrupt cliff/grass joins"
       ],
-      "untuned_region_evidence": "terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/BENCHMARKS.json"
+      "untuned_region_evidence": "terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/BENCHMARKS.json"
     },
     "ordinary_backend": "macos_metal",
     "promotion_parity_backend": "windows_d3d11"

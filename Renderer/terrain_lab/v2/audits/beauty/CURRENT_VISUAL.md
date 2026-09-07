@@ -1,53 +1,53 @@
-# Combined terrain checkpoint — larger source relief
+# Combined terrain checkpoint — cleaner shadow receiving
 
 2026-09-06. Sole lead, local Metal. Retained work in progress:
-**relief-size-r3**, including **combinedvolcano** as a separate synthetic witness.
-The three fixed 100-tile test.biq benchmarks, 128-tile long coast, previous fresh
-coast, and a newly selected 100-tile region with four mountains were composed
-at noon/midnight and both fixed gameplay zooms. The synthetic volcano adds
-four frames to those 24 real-map frames.
+**shadow-receiver-r1**, including **combinedvolcano** as a separate synthetic
+witness. This builds on the larger source bodies in `relief-size-r3`.
 
 This is an incremental visual improvement, not Civ VI-level acceptance.
 No human approval, milestone closure or Integration promotion is recorded.
-Cities, units and improvements remain deferred.
+Cities, units and improvements remain deferred. LQ0 remains ready/unaccepted.
 
-- [Larger inland mountains — native gameplay comparison](out/relief-size-r3/review/inland-day-z1-comparison.png)
-- [Larger volcano in the current combined scene — explicitly synthetic](out/relief-size-r3/review/combinedvolcano-day-z1-comparison.png)
-- [Combined volcano and mountains at night](out/relief-size-r3/review/combinedvolcano-night-z1-comparison.png)
-- [Inland mountains at night](out/relief-size-r3/review/inland-night-z1-comparison.png)
-- [Fixed coast — full native zoom 2](out/relief-size-r3/review/coastal-day-z2-comparison.png)
-- [Wilderness — full native zoom 2](out/relief-size-r3/review/wilderness-day-z2-comparison.png)
-- [Long coast — full native zoom 2](out/relief-size-r3/review/longcoast-day-z2-comparison.png)
-- [Previously untuned four-mountain region](out/relief-size-r3/review/freshrelief-day-z2-comparison.png)
-- [Previously untuned region at night](out/relief-size-r3/review/freshrelief-night-z2-comparison.png)
-- [Full combined inland scene](out/relief-size-r3/inland/h12-z1-pan00.png)
-- [Full combined volcano witness](out/relief-size-r3/combinedvolcano/h12-z1-pan00.png)
+- [Cleaner wilderness sand — native gameplay comparison](out/shadow-receiver-r1/review/wilderness-h12-z1-comparison.png)
+- [Wilderness at night — full native zoom 2](out/shadow-receiver-r1/review/wilderness-h00-z2-comparison.png)
+- [Inland mountains and forest shadows](out/shadow-receiver-r1/review/inland-h12-z1-comparison.png)
+- [Fixed coast — full native zoom 2](out/shadow-receiver-r1/review/coastal-h12-z2-comparison.png)
+- [Long coast — full native zoom 2](out/shadow-receiver-r1/review/longcoast-h12-z2-comparison.png)
+- [New 100-tile desert/forest/mountain holdout](out/shadow-receiver-r1/review/freshshadow-h12-z2-comparison.png)
+- [New holdout at night](out/shadow-receiver-r1/review/freshshadow-h00-z2-comparison.png)
+- [Current combined volcano witness — explicitly synthetic](out/shadow-receiver-r1/review/combinedvolcano-h12-z1-comparison.png)
+- [Full wilderness scene](out/shadow-receiver-r1/wilderness/h12-z1-pan00.png)
+- [Full new holdout](out/shadow-receiver-r1/freshshadow/h12-z1-pan00.png)
 
-Mountains use 1.30 uniform source-body scale and volcanoes 1.60 before the
-bounded topology joins. Foothills can extend .25 tile beyond an ownership edge,
-ending before the neighboring center. Source height samples, fixed cameras and
-terrain remain unchanged. Vegetation keeps its XY placement, mesh, scale and
-yaw; grounding heights follow the changed terrain. An initial larger volcano
-exposed a tile-bound material cut. That version was rejected; the retained
-version carries source-owner coordinates and coverage across the skirt.
+Most thin dark mesh-edge lines across the wilderness sand are gone. Visible
+forest and mountain cast shadows remain. The correction sizes the receiver
+normal offset to its bounded shadow texel footprint and derives its plane from
+unshifted geometry. It changes no terrain, source material, camera, vegetation
+placement or shadow caster. The seven real regions and synthetic witness have
+32 noon/midnight frames at both fixed zooms; all matched input packets are
+byte-identical. Those invariants support comparison and do not grant acceptance.
 
-The changed footprints give the terrain more presence beside forests and move
-toward canonical `mountain.png`. Detailed source/adaptation limits, actual-pixel
-locations and validation are in [RELIEF_SIZE_PASS.md](RELIEF_SIZE_PASS.md).
-The previous best `coast-pass-rocks-r8` and every intermediate render are preserved.
+Mountains still use 1.30 uniform source-body scale and volcanoes 1.60, with
+bounded foothill overlap. The previous `relief-size-r3`, `coast-pass-rocks-r8`
+and rejected attempts are preserved. Detailed changed-pixel locations,
+diagnosis and reproduction are in [SHADOW_RECEIVER_PASS.md](SHADOW_RECEIVER_PASS.md).
+[SHADOW_RECEIVER_r1_EVIDENCE.json](SHADOW_RECEIVER_r1_EVIDENCE.json) records
+all matched outputs; [SHADOW_RECEIVER_DIAGNOSTICS.json](SHADOW_RECEIVER_DIAGNOSTICS.json)
+records the rejected tests and numerical probe.
 
 The three largest remaining gaps are:
 
-1. Mountain/volcano surface projection and natural shoulder integration. The
-   volcano remains streaked; source physical reconstruction is still unproven.
-2. Shadow-receiver lines across dunes, plus the inherited unapproved analytic
-   dune body. Disabling all shadows isolates the lines, but is not a retained fix.
+1. Mountain/volcano projection, material detail and unproven source physical
+   reconstruction. Direct inspection shows that the volcano height texture is
+   incorrectly treated as a two-component normal. The first red-height normal
+   reconstruction has too little visible benefit and is not selected.
+2. Source dune reconstruction and residual facet artifacts. The inherited
+   analytic dune body remains an unapproved proxy; cleaner shadows do not
+   resolve that source-fidelity defect.
 3. Soft shallow-water structure and abrupt cliff/grass joins.
 
-[RELIEF_SIZE_r3_EVIDENCE.json](RELIEF_SIZE_r3_EVIDENCE.json) verifies all 28
-matched frames and preserved source/placement inputs; it does not decide quality.
-[RELIEF_SHADOW_DIAGNOSTICS.json](RELIEF_SHADOW_DIAGNOSTICS.json) records the
-unselected lighting isolation. The new four-mountain region is now a regression
-witness, not an untuned witness for later acceptance. Earlier retained coastal
-and water work is documented in [COAST_SOURCE_JOIN_PASS.md](COAST_SOURCE_JOIN_PASS.md).
-LQ0 remains ready/unaccepted.
+The new [freshshadow benchmark](../../fixtures/beauty/shadow-receiver-foundation/freshshadow/BENCHMARKS.json)
+was selected before viewing this candidate and received no local tuning. It is
+now a regression witness, not an untuned witness for later acceptance.
+Previous relief work is in [RELIEF_SIZE_PASS.md](RELIEF_SIZE_PASS.md); coastal
+source work is in [COAST_SOURCE_JOIN_PASS.md](COAST_SOURCE_JOIN_PASS.md).

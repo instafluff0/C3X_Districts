@@ -1,0 +1,88 @@
+{
+  "classification": "diagnostic_evidence",
+  "approval": null,
+  "records": [
+    {
+      "variant": "shadow-plane-diagnostic-r1",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-plane-diagnostic-r1/wilderness/report.json",
+      "report_sha256": "55b28c93a0852c01a784319e65f39385deb64cec15fd7d10a3aa401e999f2b61",
+      "selected_as_combined": false
+    },
+    {
+      "variant": "shadow-center-diagnostic-r1",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-center-diagnostic-r1/wilderness/report.json",
+      "report_sha256": "7cc3711c184c52bb73d3c500a12c32449935b796e4fdc5952a0dcd43c81623f6",
+      "selected_as_combined": false
+    },
+    {
+      "variant": "shadow-geometric-normal-diagnostic-r1",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-geometric-normal-diagnostic-r1/wilderness/report.json",
+      "report_sha256": "318919ccb940f0efd55c0d60d666e8de75550543a345c0296fe78734d27997e7",
+      "selected_as_combined": false
+    },
+    {
+      "variant": "shadow-caster-plane-r1",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-caster-plane-r1/wilderness/report.json",
+      "report_sha256": "1d34d332a04eb2a7047360d596cfe89aa61cc5b612e374d75edc7104d72cbba7",
+      "selected_as_combined": false
+    },
+    {
+      "variant": "shadow-caster-plane-r2",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-caster-plane-r2/wilderness/report.json",
+      "report_sha256": "791f717035c25a30234cbaaeb3e126c03e55fad47a729c8375366206517913fb",
+      "selected_as_combined": false
+    },
+    {
+      "variant": "shadow-texel-offset-r1",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-texel-offset-r1/wilderness/report.json",
+      "report_sha256": "23e192d43ddf65f33a0ad56acc6a467c69d97c6798d611f34dde90cf66021c66",
+      "selected_as_combined": true
+    },
+    {
+      "variant": "volcano-height-normal-diagnostic-r1",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/volcano-height-normal-diagnostic-r1/combinedvolcano/report.json",
+      "report_sha256": "cab0d11adaa5427a50cd9c63f02c8f06e3b84623b7b29725c75c7d4d0a514bfc",
+      "selected_as_combined": false
+    }
+  ],
+  "probe": {
+    "samples": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-probe-r1/samples.csv",
+    "sha256": "7684d3a559cbe8f31255e838371aee0292157889c515d1d6091c9aec989c776f",
+    "summary": {
+      "centers": {
+        "samples": 13469,
+        "center_gap": {
+          "0.5": -1.2814999e-06,
+          "0.9": 6.5356493e-05,
+          "0.95": 7.3365867e-05,
+          "0.99": 8.0093741e-05,
+          "1": 0.35854444
+        },
+        "max_gap": {
+          "0.5": 7.0162117e-05,
+          "0.9": 8.0093741e-05,
+          "0.95": 8.1375241e-05,
+          "0.99": 0.0002047196,
+          "1": 0.36581406
+        }
+      },
+      "near_edges": {
+        "samples": 40457,
+        "center_gap": {
+          "0.5": 6.4074993e-07,
+          "0.9": 7.4967742e-05,
+          "0.95": 0.00011341274,
+          "0.99": 0.00047671795,
+          "1": 0.38022837
+        },
+        "max_gap": {
+          "0.5": 7.8812242e-05,
+          "0.9": 0.0012641996,
+          "0.95": 0.0020590499,
+          "0.99": 0.0047790334,
+          "1": 0.3874349
+        }
+      }
+    }
+  }
+}

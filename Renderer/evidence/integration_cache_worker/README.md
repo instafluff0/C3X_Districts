@@ -1,6 +1,89 @@
 # Integration Cache And Renderer Worker Evidence
 
-## Current maintenance: bounded idle preparation (2026-09-06)
+## Consolidated Windows in-game test build (2026-09-06)
+
+The user requested consolidation and will launch the game and share logs and
+experience. API 13 is the current test contract. Further optimization is paused
+for that checkpoint; do not launch Civ III on the user's behalf. This does not
+advance LQ0, promote Lab v2, or claim vanilla-speed parity.
+
+The mesh preparation described below now feeds a 16 MiB composite pixel-block
+cache. Each 128x128 block includes all contributing meshes, their versions,
+relative anchors and draw order. Removal, content changes, overhangs and new
+contributors invalidate the block. Full scene layering is retained. The worker
+uses separate small color/depth/staging surfaces and polls readback with
+`D3D11_MAP_FLAG_DO_NOT_WAIT`; it never edits published pixels or ownership arrays.
+Only one block is in flight and foreground requests interrupt submission.
+Unchanged interior pixels remain in the existing bitmap rather than duplicating
+an entire speculative viewport. Missing blocks use the normal renderer.
+
+Foreground and block rendering share the same draw pass and a power-of-two pixel
+projection. Physical depth separation still uses the original target height.
+Even coordinate phases preserve derivative quads; unsupported phases and target
+heights above 4096 skip block reuse. Keys validate exact contributors even when
+a wrapped map or unusual projection chooses a different cache grid. Portable
+executable checks cover translation, changed/removed contributors, alpha order,
+overhangs, disjoint rectangle merging, bounded eviction and reset.
+
+The total GPU mesh cap remains 192 MiB, including active references and the
+64 MiB unused-prefetch sub-budget. Exact recent-view bitmaps remain capped at
+128 MiB. The new block cap of 16 MiB includes vector metadata, keys and pixels;
+three 128x128 GPU surfaces add about 192 KiB and one pending CPU image adds 64 KiB.
+Existing source assets, targets and bounded scene/scratch metadata remain
+additional working memory. No worker backlog or off-thread game-state access
+was introduced.
+
+Final full report: `Renderer/verification/pixel_blocks_full.json` (ignored).
+All portable/native/production gates, both BIQ zoom previews, approved injected
+compilation and live-link checks passed. The final per-map diagnostics edit also
+passed `TEST_INJECTED_CODE_COMPILE.bat` after that run.
+
+| Workload | Result |
+|---|---:|
+| Prepared fixed tile jumps, 5 samples | 12.451–24.604 ms; p95 24.604 ms |
+| Meshes on each prepared jump | 400 reused; zero built or uploaded |
+| Prepared pixels used per jump | 143,752–315,648 |
+| Remaining raster pixels per jump | 27,648–81,320 |
+| Foreground redraw during preparation, 836 samples | p95 2.356 ms; max 54.392 ms |
+| Peak block-cache bytes | 16,773,072; below 16 MiB |
+| Final accumulated block/cold comparison | 1,262 pixels above 2/255 channel error; aggregate error 37,910 |
+
+The last pixel comparison passed the unchanged bounds (fewer than 0.1% of pixels
+above quantization tolerance and aggregate channel error below 0.04 per pixel).
+It is not byte-identical reconstruction. Earlier intermittent VM parity failures,
+foreground outliers, first-exposure costs and continuous scrolling without idle
+preparation remain open. Live capture/whole-map measurements are still needed.
+
+### User-run test and diagnostics
+
+Use the Windows desktop shortcut **C3X Renderer Test**, which targets
+`Renderer/TEST_IN_GAME.bat`. It starts the installed executable only when the
+user runs it; no game session is launched during installation. The launcher
+defaults to `C3X_RENDERER_TRACE=2` (every DLL stage/frame), and accepts argument
+`1` for lighter sampled DLL timings. It detects an already running game.
+
+The test build emits `OutputDebugStringA` lines for every composite and completed
+native map pass, with QPC timestamps, capture/render/blit/whole-map durations,
+invalidations, geometry uploads/reuse/eviction, pixel reuse, memory and preparation
+counts, halo records, target/clip/zoom, hour and season. Optional halo skips report
+projection, bounds, allocation or capture reasons. The DLL additionally logs
+render start, geometry readiness, readback, worker completion, prewarming, blit,
+reset and failures. No per-tile logging is performed inside hot loops.
+
+The launcher's DLL trace is `Renderer/verification/in_game_trace.log` in the linked
+checkout, capped at 8 MiB and replaced on each launch. Close the game before
+sharing that buffered file. DebugView's `OutputDebugStringA` capture additionally
+contains the injected `stage=composite`, `stage=map-complete` and halo-skip lines;
+retain that capture to measure the full native map pass. The trace analyzer is
+`python3 Renderer/tools/analyze_renderer_trace.py path/to/log`.
+
+The official installer is `INSTALL.bat`. Installation evidence and executable/DLL
+hashes are recorded locally in `Renderer/verification/installed_test_build.json`.
+The prior installed executable is preserved locally as
+`Renderer/verification/Civ3Conquests-before-cache-test.exe`; the existing original
+unmodded backup is retained. No CSV entries or additional native patches are needed.
+
+## Prior verified increment: bounded idle mesh preparation (2026-09-06)
 
 Production API 12 extends the fixed-scroll cache with optional mesh preparation
 between foreground frames. The complete appearance of a tile is still keyed by

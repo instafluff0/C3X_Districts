@@ -27003,8 +27003,10 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 		struct c3x_renderer_tile_v1 * tile = &is->custom_renderer_tiles[i];
 		if (! (tile->tile_flags & C3X_RENDERER_TILE_RENDER)) continue;
 		Main_Screen_Form_tile_to_screen_coords (p_main_screen_form, __, tile->tile_x, tile->tile_y, &native_x, &native_y);
-		if (native_x + offset_x != tile->anchor_x || native_y + offset_y != tile->anchor_y)
+		if (native_x + offset_x != tile->anchor_x || native_y + offset_y != tile->anchor_y) {
+			log_custom_renderer_event ("halo-skip-projection", C3X_RENDERER_RESULT_OK);
 			return; // Other map forms/wrapped occurrences keep the native capture.
+		}
 		int dx = tile->tile_x - origin_x, dy = tile->tile_y - origin_y;
 		if (map->Flags & 1) { if (dx > map->Width / 2) dx -= map->Width; if (dx < -map->Width / 2) dx += map->Width; }
 		if (map->Flags & 2) { if (dy > map->Height / 2) dy -= map->Height; if (dy < -map->Height / 2) dy += map->Height; }
@@ -27017,9 +27019,15 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 	int width = max_x - min_x + 1, height = max_y - min_y + 1;
 	if (width <= 0 || height <= 0 || width > 256 || height > 256 ||
 	    width * height > 16384 || count + (width * height + 1) / 2 > 8192 ||
-	    ((map->Flags & 1) && width > map->Width) || ((map->Flags & 2) && height > map->Height)) return;
+	    ((map->Flags & 1) && width > map->Width) || ((map->Flags & 2) && height > map->Height)) {
+		log_custom_renderer_event ("halo-skip-bounds", C3X_RENDERER_RESULT_OK);
+		return;
+	}
 	unsigned char * captured = calloc (width * height, 1);
-	if (captured == NULL) return;
+	if (captured == NULL) {
+		log_custom_renderer_event ("halo-skip-allocation", C3X_RENDERER_RESULT_OK);
+		return;
+	}
 	for (int i = 0; i < count; i++) {
 		struct c3x_renderer_tile_v1 * tile = &is->custom_renderer_tiles[i];
 		if (! (tile->tile_flags & C3X_RENDERER_TILE_RENDER)) continue;
@@ -27042,6 +27050,7 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 				is->custom_renderer_target, visibility_mask, x, y, tile, ! prepare_appearance)) {
 				is->custom_renderer_tile_count = count;
 				free (captured);
+				log_custom_renderer_event ("halo-skip-capture", C3X_RENDERER_RESULT_OK);
 				return;
 			}
 			if (prepare_appearance)
@@ -27214,19 +27223,29 @@ composite_custom_renderer_frame ()
 	long long blit_ticks = blit_finished.QuadPart - blit_started.QuadPart;
 	if (blit_ticks > is->custom_renderer_max_blit_ticks)
 		is->custom_renderer_max_blit_ticks = blit_ticks;
-	if ((output.frame_invalidation_flags != 0) ||
-	    (is->custom_renderer_presented_frames % 120u == 0u)) {
-		char message[640];
+	// Consolidated in-game test build: one complete diagnostic per map pass,
+	// without per-tile logging in the capture or mesh loops.
+	{
+		int halo_records = 0, prefetch_records = 0;
+		for (unsigned int n = 0; n < frame.tile_count; n++) {
+			halo_records += (frame.tiles[n].tile_flags & C3X_RENDERER_TILE_TOPOLOGY_HALO) != 0;
+			prefetch_records += (frame.tiles[n].tile_flags & C3X_RENDERER_TILE_PREFETCH) != 0;
+		}
+		char message[960];
 		double ticks_to_ms = 1000.0 / is->custom_renderer_qpc_frequency.QuadPart;
 		snprintf (message, sizeof message,
-			"[C3X renderer] qpc=%lld frame=%u stage=composite result=%d capture_ms=%.3f render_wait_ms=%.3f blit_ms=%.3f invalidations=%u built=%u reused=%u evicted=%u cache_bytes=%u upload_bytes=%u reused_pixels=%u drawn_pixels=%u prefetch_pending=%u prefetch_unavailable=%u prefetch_bytes=%u\n",
+			"[C3X renderer] qpc=%lld frame=%u stage=composite result=%d capture_ms=%.3f render_wait_ms=%.3f blit_ms=%.3f invalidations=%u built=%u reused=%u evicted=%u cache_bytes=%u upload_bytes=%u reused_pixels=%u drawn_pixels=%u prefetch_pending=%u prefetch_unavailable=%u prefetch_bytes=%u block_pixels=%u blocks_pending=%u blocks_built=%u block_bytes=%u halo_records=%d prefetch_records=%d target=%dx%d zoom_tile=%dx%d hour=%d season=%d clip=%d,%d,%d,%d\n",
 			blit_finished.QuadPart, is->custom_renderer_presented_frames, result,
 			capture_ticks * ticks_to_ms, (blit_started.QuadPart - capture_finished.QuadPart) * ticks_to_ms,
 			blit_ticks * ticks_to_ms, output.frame_invalidation_flags,
 			output.geometry_tiles_built, output.geometry_tiles_reused, output.geometry_tiles_evicted,
 			output.geometry_cache_bytes, output.geometry_upload_bytes,
 			output.raster_reused_pixels, output.raster_draw_pixels,
-			output.prefetch_tiles_pending, output.prefetch_tiles_unavailable, output.prefetch_cache_bytes);
+			output.prefetch_tiles_pending, output.prefetch_tiles_unavailable, output.prefetch_cache_bytes,
+			output.raster_cached_pixels, output.prefetch_blocks_pending, output.prefetch_blocks_built,
+			output.pixel_block_cache_bytes, halo_records, prefetch_records,
+			frame.target_width, frame.target_height, frame.tile_width, frame.tile_height, frame.hour, frame.season,
+			frame.clip_left, frame.clip_top, frame.clip_right, frame.clip_bottom);
 		message[(sizeof message) - 1] = '\0';
 		(*p_OutputDebugStringA) (message);
 	}
@@ -28965,10 +28984,9 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	long long map_pass_ticks = map_pass_finished.QuadPart - is->custom_renderer_frame_started_at.QuadPart;
 	if (map_pass_ticks > is->custom_renderer_max_map_pass_ticks)
 		is->custom_renderer_max_map_pass_ticks = map_pass_ticks;
-	// Slow frames and periodic summaries expose end-to-end cost, including native
-	// retained work. Detailed DLL stages are opt-in through C3X_RENDERER_TRACE.
-	if ((is->custom_renderer_presented_frames % 120u == 1u) ||
-	    (map_pass_ticks > is->custom_renderer_qpc_frequency.QuadPart / 30)) {
+	// Per-pass evidence includes native retained work outside the DLL. The test
+	// launcher additionally enables all detailed DLL stages.
+	{
 		char message[512];
 		double ticks_to_ms = 1000.0 / is->custom_renderer_qpc_frequency.QuadPart;
 		snprintf (message, sizeof message,

@@ -26,8 +26,11 @@ meshes from its own snapshot, prioritizes foreground requests, and never modifie
 published pixels or ownership arrays during idle work. Cache compilation,
 dependency validation, changed-set bitmap damage and diagnostics remain DLL
 responsibilities. River-node dependencies use a conservative local window.
+The worker also prepares bounded 128-pixel composite blocks using the same
+off-screen draw path. Per-map OutputDebugStringA diagnostics include halo capture,
+pixel-cache use and whole-map timings. No additional native callable is needed.
 `audit_candidates = []` and
-`required_user_action = []` for this increment. The API 12 header is shared by
+`required_user_action = []` for this increment. The API 13 header is shared by
 the DLL and injected compilation; the approved smoke must verify both together.
 The deferred M7.5 requests below remain unchanged.
 
