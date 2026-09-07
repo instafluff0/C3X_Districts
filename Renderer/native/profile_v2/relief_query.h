@@ -7,6 +7,29 @@ struct GroundSample {
     float height=0,authored_height=0,authored_blend=0;
     std::array<float,4> owner{};
 };
+// Exact zero-height certificate for one tile plus the normal-sampling collar.
+// Every inspected tile still enters the caller's dependency ledger, so adding
+// relief/dunes or bringing a coast closer invalidates the cached mesh.
+struct FlatGroundRegion {
+    float u, v;
+    bool certified = false;
+    template<class Lookup>
+    FlatGroundRegion(int c, int r, double center_shore_distance, Lookup const& lookup)
+        : u(float(c)), v(float(r)) {
+        // Farthest query is < .722 tiles from center. At distance > .85,
+        // the cliff shoulder is exactly zero; use a conservative 1.6 bound.
+        if (center_shore_distance <= 1.6) return;
+        certified = true;
+        for (int y=-2;y<=2;y++) for (int x=-2;x<=2;x++) {
+            Tile t=lookup(c+x,r+y);
+            if (!t.present || t.real==5 || t.real==6 || t.real==10 ||
+                (t.base==0 && t.real==0)) certified=false;
+        }
+    }
+    bool contains(float x, float y) const {
+        return certified && x>=u-.01f && x<=u+1.01f && y>=v-.01f && y<=v+1.01f;
+    }
+};
 inline float smooth01(float x) { x=std::clamp(x,0.f,1.f); return x*x*(3-2*x); }
 inline float smooth_max(float a,float b) {
     if(a<=.001f || b<=.001f) return std::max(a,b);
@@ -65,12 +88,13 @@ public:
         result.blend=source(tile.real,variant,1,u,v)*edge;
         return result;
     }
-    ReliefSample chain(float x,float y,bool include_volcano) const {
+    ReliefSample chain(float x,float y,bool include_volcano,bool* contains_volcano=nullptr) const {
         int c=int(std::floor(x)),r=int(std::floor(y)); ReliefSample result;
         int candidates[][2]={{0,0},{-1,0},{1,0},{0,-1},{0,1},{-1,-1},{-1,1},{1,-1},{1,1}};
         for(auto const& offset:candidates) {
             int owner_c=c+offset[0],owner_r=r+offset[1];
             Tile tile=lookup(owner_c,owner_r);
+            if(contains_volcano && tile.present && tile.real==10)*contains_volcano=true;
             if(!tile.present || (tile.real!=6 && (tile.real!=10 || !include_volcano))) continue;
             float u=x-owner_c,v=1-(y-owner_r);
             float support=1-smooth01((std::max(std::abs(u-.5f),std::abs(v-.5f))-.52f)/.23f);
@@ -85,7 +109,7 @@ public:
         }
         return result;
     }
-    GroundSample sample(float x,float y) const {
+    GroundSample sample(float x,float y,bool with_material=true) const {
         int c=int(std::floor(x)),r=int(std::floor(y)); Tile tile=lookup(c,r);
         GroundSample result;
         if(!tile.present || water(tile)) return result;
@@ -111,9 +135,10 @@ public:
             support=std::max(support,smooth01((1-std::sqrt(ox*ox+oy*oy))/.42f));
         }
         float frequency=repeated_frequency(.08f,world);
-        float hill=source(5,0,0,.11f+x*frequency,.19f+y*frequency)*52.f*
-            support*compatibility*(coastal*(1-rocky)+cliff*rocky)*(5.f/7.f);
-        auto relief=chain(x,y,true);
+        float hill=support>0 ? source(5,0,0,.11f+x*frequency,.19f+y*frequency)*52.f*
+            support*compatibility*(coastal*(1-rocky)+cliff*rocky)*(5.f/7.f) : 0;
+        bool contains_volcano=false;
+        auto relief=chain(x,y,true,&contains_volcano);
         result.height+=smooth_max(hill,relief.displacement*coastal*compatibility);
         // Existing analytic dune body is retained as a diagnostic proxy. Only
         // its continuous ownership/collar is ported; no source recovery claimed.
@@ -123,10 +148,13 @@ public:
             Tile t=lookup(left+dx,top+dy);
             if(t.present && t.base==0 && t.real==0) desert+=(dx?sx:1-sx)*(dy?sy:1-sy);
         }
-        result.height+=dune(x,y)*desert*smooth01((-signed_shore-.20f)/.42f)*compatibility;
+        if(desert>0)result.height+=dune(x,y)*desert*smooth01((-signed_shore-.20f)/.42f)*compatibility;
         float valley=1-smooth01((river(c,r,u,v)-4.f)/16.f);
         result.height*=1-valley*.92f*.90f;
-        auto material=chain(x,y,tile.real==10);
+        // Normal finite differences consume height only. Root material/owner
+        // sampling is unrelated work, and absent volcanoes make both chains equal.
+        if(!with_material)return result;
+        auto material=(tile.real==10 || !contains_volcano) ? relief : chain(x,y,false);
         result.authored_height=material.height;
         result.authored_blend=material.blend*coastal*compatibility;
         float nearest=1e6f;

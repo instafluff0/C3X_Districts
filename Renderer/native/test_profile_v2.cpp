@@ -3,6 +3,7 @@
 #include "profile_v2/world_topology.h"
 #include "profile_v2/world_coast.h"
 #include "profile_v2/relief_query.h"
+#include "profile_v2/exact_point_cache.h"
 #include "profile_v2/reference/systems/terrain/surface.h"
 #include "profile_v2/reference/systems/hydrology/field.h"
 #include "profile_v2/reference/systems/relief/continuous_normal.h"
@@ -14,6 +15,52 @@ void near(double a,double b,double tolerance=1e-10) {
     if(std::abs(a-b)>tolerance) { std::cerr<<a<<" != "<<b<<"\n"; std::abort(); }
 }
 int main() {
+    // A certified inland tile has exactly zero relief/owner channels even
+    // with maximal source height, rocky coast response and arbitrary rivers.
+    // Neighbour edits must revoke the certificate; no cache approximation.
+    {
+        int changed_x=99, changed_y=99, changed_real=2, observed=0;
+        auto lookup=[&](int x,int y) {++observed;
+            int kind=(x==changed_x && y==changed_y) ? changed_real : 2;
+            return port::Tile{kind==0 ? 0 : 2,kind,true};};
+        auto source=[](int,unsigned,int,float,float){return 1.f;};
+        auto shore=[](float,float){return port::ShoreSample{.86,.2,1,.1};};
+        auto river=[](int,int,float,float){return 0.f;};
+        auto dune=[](float,float){return 18.6f;};
+        auto active=[](int,int){return 1.f;};
+        port::ReliefQuery query(port::World{100,100,true,false},lookup,source,shore,river,dune,active);
+        port::FlatGroundRegion flat(20,20,1.6+1e-6,lookup);
+        assert(flat.certified && observed==25);
+        for(int y=0;y<=102;y++)for(int x=0;x<=102;x++) {
+            float u=19.99f+x*.01f,v=19.99f+y*.01f;
+            assert(flat.contains(u,v));auto sample=query.sample(u,v);
+            assert(sample.height==0 && sample.authored_height==0 && sample.authored_blend==0);
+            assert((sample.owner==std::array<float,4>{}));
+        }
+        assert(!flat.contains(19.98f,20.f));
+        assert(!port::FlatGroundRegion(20,20,1.6,lookup).certified);
+        for(int kind:{0,5,6,10})for(int y=18;y<=22;y++)for(int x=18;x<=22;x++) {
+            changed_x=x;changed_y=y;changed_real=kind;
+            assert(!port::FlatGroundRegion(20,20,3,lookup).certified);
+        }
+    }
+    {
+        port::ExactPointCache<std::array<double,4>> cache;
+        int calls=0;
+        auto query=[&](float x,float y) {return cache.get(x,y,[&]() {
+            ++calls;return std::array<double,4>{x,y,x+y,x-y};});};
+        auto first=query(1.f,2.f);assert(query(1.f,2.f)==first && calls==1);
+        query(0.f,0.f);int before=calls;query(-0.f,0.f);assert(calls==before);
+        query(std::nextafter(1.f,2.f),2.f);assert(calls==before+1);
+        for(int i=0;i<30000;i++) {
+            float x=i*.037f,y=i*-.081f;auto actual=query(x,y);
+            assert(actual[0]==x && actual[1]==y && actual[2]==double(x+y));
+        }
+        assert(cache.bytes()<=2u*1024u*1024u);
+        assert(query(1.f,2.f)==first);
+        cache.clear();before=calls;assert(query(1.f,2.f)==first && calls==before+1);
+        assert(query(1.f,2.f)==first && calls==before+1);
+    }
     // A translated crop, with every material, diagonal coast and a cliff owner.
     q2::Surface reference; reference.width=100; reference.height=80;
     hydro::Field shore; shore.cols=4; shore.rows=4; shore.map_width=100;
@@ -155,6 +202,42 @@ int main() {
         near(incremental.distance,cold.distance); near(incremental.rocky,cold.rocky);
         near(incremental.beach_width,cold.beach_width); near(incremental.depth,cold.depth);
     }
+    // Prepared disks reproduce exact nearest segments, including both wrap
+    // axes, normal-sampling collars and out-of-domain fallback. A coast edit
+    // invalidates the certificate before reusing the prepared query domain.
+    for(int i=0;i<24;i++) {
+        port::Point center{double(i)*.73,double(i)*.21};
+        auto center_sample=coast_world.sample(center,no_node,no_tile);
+        auto patch=coast_world.prepare(center,.73,std::abs(center_sample.distance),no_node);
+        assert(patch.ready && patch.edges.size()<=2048);
+        for(int y=-6;y<=6;y++)for(int x=-6;x<=6;x++) {
+            auto point=center+port::Point{x*.083,y*.083};
+            auto expected=coast_world.sample(point,no_node,no_tile);
+            auto actual=coast_world.sample(point,no_node,no_tile,&patch);
+            near(actual.distance,expected.distance,1e-12);near(actual.rocky,expected.rocky,1e-12);
+            near(actual.beach_width,expected.beach_width,1e-12);near(actual.depth,expected.depth,1e-12);
+        }
+        auto outside=center+port::Point{2,2};
+        assert(!patch.contains(outside));
+        near(coast_world.sample(outside,no_node,no_tile,&patch).distance,
+             coast_world.sample(outside,no_node,no_tile).distance);
+    }
+    {
+        std::map<std::uint64_t,std::uint64_t> nodes;
+        std::map<std::size_t,std::uint32_t> tiles;
+        auto on_node=[&](auto id,auto revision){nodes.emplace(id,revision);};
+        auto on_tile=[&](auto id,auto value){tiles.emplace(id,value);};
+        port::Point center{.5,.5};
+        auto center_sample=coast_world.sample(center,on_node,on_tile);
+        auto patch=coast_world.prepare(center,.73,std::abs(center_sample.distance),on_node);
+        coast_world.sample(center,on_node,on_tile,&patch);
+        compact[0]=11u|(11u<<8);
+        coast_world.update({32,24,true,true},compact.data(),compact.size(),3);
+        bool valid=true;
+        for(auto item:nodes)valid=valid && coast_world.node_revision(item.first)==item.second;
+        for(auto item:tiles)valid=valid && coast_world.world().at(item.first)==item.second;
+        assert(!valid);
+    }
     int relief_kind=6;
     auto owners=[&](int c,int r){return port::Tile{2,c==0&&r==0 ? relief_kind : 2,true};};
     auto source=[](int kind,unsigned,int,float,float){return kind==5 ? 0.f : 1.f;};
@@ -174,5 +257,14 @@ int main() {
     auto before_edge=relief.sample(1.f-1e-5f,.5f);
     near(before_edge.height,skirt.height,1e-3);
     near(before_edge.owner[0],skirt.owner[0],1e-5);
+    for(int kind:{0,2,5,6,10}) {
+        relief_kind=kind;
+        for(int y=-5;y<=15;y++)for(int x=-5;x<=15;x++) {
+            auto full=relief.sample(x*.1f,y*.1f);
+            auto height_only=relief.sample(x*.1f,y*.1f,false);
+            near(full.height,height_only.height,0);
+            assert(height_only.authored_blend==0 && height_only.owner[3]==0);
+        }
+    }
     std::cout<<"profile_v2: pinned material/shore/normal parity, wrap and relief support passed\n";
 }

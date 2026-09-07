@@ -1,12 +1,14 @@
 #pragma once
 
-// Diagnostics are opt-in, bounded, and serialized by the existing worker call
-// gate and a short trace mutex. No tile loop performs I/O. QPC timestamps match injected capture logs.
+// Diagnostics are enabled by default, bounded, and serialized by the existing worker call
+// gate and a short trace mutex. Normal gameplay uses OutputDebugStringA only.
+// File output requires an explicit standalone-verification override.
+// No tile loop performs I/O. QPC timestamps match injected capture logs.
 #include <cstdio>
 
 struct RendererTrace {
     std::mutex write_mutex;
-    int level = 0;
+    int level = 2;
     FILE * file = nullptr;
     std::size_t bytes = 0;
     std::uint64_t sequence = 0;

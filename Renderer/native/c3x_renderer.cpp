@@ -30,9 +30,11 @@
 #include "scroll_damage.h"
 #include "river_node_locality.h"
 #include "pixel_block_cache.h"
+#include "color_quantization.h"
 #include "profile_v2/terrain_query.h"
 #include "profile_v2/world_coast.h"
 #include "profile_v2/relief_query.h"
+#include "profile_v2/exact_point_cache.h"
 #include "profile_v2/cliff_placement.h"
 #include "profile_v2/source_shadow.h"
 #include "profile_v2/linear_target.h"
@@ -277,6 +279,42 @@ struct SceneTopology {
     std::vector<RiverNode> rivers;
 };
 
+// Locate a direct member within one JSON object. Never cross into a nested
+// authored layer or a sibling when a channel is absent. Material files are
+// key-order independent (the selected skin sorts authored_layers before base).
+std::size_t json_member_position(std::vector<std::uint8_t> const& data,
+                                char const* key, std::size_t start=0) {
+    auto whitespace=[&](std::size_t& p) {while(p<data.size() && std::isspace(data[p])) ++p;};
+    auto string_end=[&](std::size_t p) {
+        for(++p;p<data.size();++p) {
+            if(data[p]=='\\') {if(++p>=data.size())break;}
+            else if(data[p]=='"')return p;
+        }
+        return std::string::npos;
+    };
+    if(start>=data.size())return std::string::npos;
+    whitespace(start);
+    if(start<data.size() && data[start]=='"') {
+        start=string_end(start);if(start==std::string::npos)return start;
+        ++start;whitespace(start);
+        if(start>=data.size() || data[start++]!=':')return std::string::npos;
+        whitespace(start);
+    }
+    if(start>=data.size() || data[start]!='{')return std::string::npos;
+    int depth=1;
+    for(std::size_t p=start+1;p<data.size();++p) {
+        if(data[p]=='"') {
+            auto end=string_end(p);if(end==std::string::npos)return end;
+            auto after=end+1;whitespace(after);
+            if(depth==1 && after<data.size() && data[after]==':' &&
+                end-p-1==std::strlen(key) && std::memcmp(data.data()+p+1,key,end-p-1)==0)return p;
+            p=end;
+        } else if(data[p]=='{' || data[p]=='[')++depth;
+        else if(data[p]=='}' || data[p]==']') {if(--depth==0)break;}
+    }
+    return std::string::npos;
+}
+
 class RendererState {
 public:
     RendererTrace trace;
@@ -450,6 +488,10 @@ public:
     void * blit_bits = nullptr;
     int blit_width = 0;
     int blit_height = 0;
+    int blit_destination_bits = -1;
+    unsigned blit_destination_green_mask = 0;
+    c3x_renderer::ColorRoundingTable blit_round5{}, blit_round6{};
+    bool blit_rounding_ready = false;
     bool cache_valid = false;
     bool feature_assets_ready = false;
     bool dune_assets_ready = false;
@@ -896,7 +938,7 @@ public:
     static bool json_string_after(std::vector<std::uint8_t> const & data, char const * key,
                                   std::size_t start, std::string & value) {
         std::string marker = std::string("\"") + key + "\"";
-        std::size_t position = find_text(data, marker, start);
+        std::size_t position = json_member_position(data, key, start);
         if (position == std::string::npos)
             return false;
         position = find_text(data, ":", position + marker.size());
@@ -918,7 +960,7 @@ public:
     static bool json_number_after(std::vector<std::uint8_t> const & data, char const * key,
                                   std::size_t start, float & value) {
         std::string marker = std::string("\"") + key + "\"";
-        std::size_t position = find_text(data, marker, start);
+        std::size_t position = json_member_position(data, key, start);
         if (position == std::string::npos)
             return false;
         position = find_text(data, ":", position + marker.size());
@@ -1134,7 +1176,7 @@ public:
             std::make_pair("specular", &output.specular_dds)
         };
         for (std::size_t index = 0; index < channels.size(); ++index) {
-            std::size_t position = find_text(material, std::string("\"") + channels[index].first + "\"");
+            std::size_t position = json_member_position(material, channels[index].first);
             std::string relative;
             std::vector<std::uint8_t> dds;
             if (position == std::string::npos ||
@@ -1643,7 +1685,7 @@ public:
             !contains(mesh, "c3x.normalized_mesh.v0") || !contains(mesh, "\"primitive\": \"triangles\""))
             return false;
         if (!pack_path(root, material_relative.c_str(), path, std::size(path)) || !read_file(path, material) ||
-            !contains(material, "c3x.material.v0") || !json_string_after(material, "texture", 0, texture_relative))
+            !contains(material, "c3x.material.v0") || !json_string_after(material, "texture", json_member_position(material, "base_color"), texture_relative))
             return false;
         if (!pack_path(root, texture_relative.c_str(), path, std::size(path)) || !read_file(path, dds) ||
             dds.size() < 164 || std::memcmp(dds.data(), "DDS ", 4) != 0 || read_u32(dds, 4) != 124 ||
@@ -1679,7 +1721,7 @@ public:
         for (auto const & channel : std::array<std::pair<char const *, std::vector<std::uint8_t> *>, 2>{
                  std::make_pair("height", &texture.material_height_dds),
                  std::make_pair("specular", &texture.specular_dds)}) {
-            std::size_t channel_position = find_text(material, std::string("\"") + channel.first + "\"");
+            std::size_t channel_position = json_member_position(material, channel.first);
             std::string channel_relative;
             std::vector<std::uint8_t> channel_dds;
             if (channel_position == std::string::npos ||
@@ -1693,14 +1735,13 @@ public:
                 continue;
             channel.second->swap(channel_dds);
         }
-        std::size_t elevated_position = find_text(material, "\"elevated\"");
+        std::size_t elevated_position = json_member_position(material, "elevated");
         if (elevated_position != std::string::npos) {
             for (auto const & channel : std::array<std::pair<char const *, std::vector<std::uint8_t> *>, 3>{
                      std::make_pair("base_color", &texture.elevated_dds),
                      std::make_pair("height", &texture.elevated_height_dds),
                      std::make_pair("specular", &texture.elevated_specular_dds)}) {
-                std::size_t channel_position = find_text(
-                    material, std::string("\"") + channel.first + "\"", elevated_position);
+                std::size_t channel_position = json_member_position(material, channel.first, elevated_position);
                 std::string channel_relative;
                 std::vector<std::uint8_t> channel_dds;
                 if (channel_position == std::string::npos ||
@@ -1719,7 +1760,7 @@ public:
                 channel.second->swap(channel_dds);
             }
         }
-        std::size_t authored_layers_position = find_text(material, "\"authored_layers\"");
+        std::size_t authored_layers_position = json_member_position(material, "authored_layers");
         if (authored_layers_position != std::string::npos) {
             std::array<char const *, 5> layer_names = {};
             std::size_t layer_count = 0;
@@ -1733,9 +1774,8 @@ public:
                 return false;
             }
             for (std::size_t layer_index = 0; layer_index < layer_count; ++layer_index) {
-                std::size_t layer_position = find_text(
-                    material, std::string("\"") + layer_names[layer_index] + "\"", authored_layers_position);
-                std::size_t channel_position = find_text(material, "\"base_color\"", layer_position);
+                std::size_t layer_position = json_member_position(material, layer_names[layer_index], authored_layers_position);
+                std::size_t channel_position = json_member_position(material, "base_color", layer_position);
                 std::string channel_relative;
                 std::vector<std::uint8_t> channel_dds;
                 if (layer_position == std::string::npos || channel_position == std::string::npos ||
@@ -1750,7 +1790,7 @@ public:
                 texture.relief_layer_dds[layer_index].swap(channel_dds);
             }
         }
-        std::size_t water_surface_position = find_text(material, "\"water_surface\"");
+        std::size_t water_surface_position = json_member_position(material, "water_surface");
         if (water_surface_position != std::string::npos) {
             if (terrain_type != 11)
                 return false;
@@ -1763,9 +1803,7 @@ public:
                 DXGI_FORMAT_BC3_UNORM_SRGB,
             };
             for (std::size_t channel_index = 0; channel_index < channel_names.size(); ++channel_index) {
-                std::size_t channel_position = find_text(
-                    material, std::string("\"") + channel_names[channel_index] + "\"",
-                    water_surface_position);
+                std::size_t channel_position = json_member_position(material, channel_names[channel_index], water_surface_position);
                 std::string channel_relative;
                 std::vector<std::uint8_t> channel_dds;
                 if (channel_position == std::string::npos ||
@@ -1783,7 +1821,7 @@ public:
                 texture.water_surface_dds[channel_index].swap(channel_dds);
             }
         }
-        std::size_t relief_position = find_text(material, "\"relief\"");
+        std::size_t relief_position = json_member_position(material, "relief");
         if (relief_position != std::string::npos) {
             std::string height_relative, profile;
             float scale = 0.0f;
@@ -1837,7 +1875,7 @@ public:
                                char const * scenario_path, char const * custom_path) {
         char requested_profile[32] = {};
         GetEnvironmentVariableA("C3X_RENDERER_VISUAL_PROFILE", requested_profile, sizeof(requested_profile));
-        bool use_pickup = std::strcmp(requested_profile, "pickup-r1") == 0;
+        bool use_pickup = std::strcmp(requested_profile, "frozen") != 0;
         if (pickup_profile != use_pickup) reset();
         pickup_profile = use_pickup;
         char shader_path[4 * MAX_PATH];
@@ -3372,6 +3410,9 @@ public:
         int const base_ground_grid = frame.tile_width >= 96 ?
             (draw_record_count <= 768 ? 16 : 12) : 8;
         c3x_renderer_i64 ground_ticks=0,feature_ticks=0,cliff_ticks=0,upload_ticks=0;
+        c3x_renderer::profile_v2::ExactPointCache<c3x_renderer::profile_v2::ShoreSample> shore_samples;
+        c3x_renderer::profile_v2::ExactPointCache<c3x_renderer::profile_v2::GroundSample> pickup_ground_samples;
+        std::size_t pickup_height_queries=0;
         LARGE_INTEGER phase_time={},phase_end={};
         std::vector<Vertex> underlay_vertices;
         std::vector<Vertex> land_vertices;
@@ -3712,7 +3753,20 @@ public:
             std::unordered_map<std::size_t, std::uint32_t> world_dependencies;
             std::unordered_map<std::uint64_t,c3x_renderer::profile_v2::Tile> world_lookup_cache;
             auto observe_world = [&](std::size_t i, std::uint32_t value) { world_dependencies.emplace(i,value); };
+            std::array<c3x_renderer::profile_v2::Tile,81> nearby_world_tiles{};
+            std::array<bool,81> nearby_world_ready{};
+            int nearby_c=(tile.tile_x+tile.tile_y)/2-4,nearby_r=(tile.tile_x-tile.tile_y)/2-4;
             auto world_lookup = [&](int c, int r) {
+                int x=c-nearby_c,y=r-nearby_r;
+                if(x>=0 && x<9 && y>=0 && y<9) {
+                    auto n=std::size_t(y*9+x);
+                    if(!nearby_world_ready[n]) {
+                        auto const& topology=world_coast.world();auto i=topology.index(c,r);
+                        if(i!=std::size_t(-1))observe_world(i,topology.at(i));
+                        nearby_world_tiles[n]=topology.tile(c,r);nearby_world_ready[n]=true;
+                    }
+                    return nearby_world_tiles[n];
+                }
                 std::uint64_t key=(std::uint64_t(std::uint32_t(c))<<32)|std::uint32_t(r);
                 auto found=world_lookup_cache.find(key);if(found!=world_lookup_cache.end())return found->second;
                 auto const & topology = world_coast.world();
@@ -3723,7 +3777,9 @@ public:
             float shore_center_u=float(tile.tile_x+tile.tile_y)*.5f+.5f;
             float shore_center_v=float(tile.tile_x-tile.tile_y)*.5f+.5f;
             c3x_renderer::profile_v2::ShoreSample shore_center{};bool shore_center_ready=false;
-            std::map<std::pair<float,float>, c3x_renderer::profile_v2::ShoreSample> shore_samples;
+            shore_samples.clear();pickup_ground_samples.clear();
+            c3x_renderer::profile_v2::WorldCoast::Patch shore_patch;
+            bool shore_patch_attempted=false;
             auto shore_sample_at = [&](float u,float v) {
                 // Distance to a closed contour is 1-Lipschitz. Once the
                 // center certificate proves this query beyond every land
@@ -3731,12 +3787,17 @@ public:
                 // certificate detects any newly closer coast on terrain edits.
                 if(shore_center_ready && shore_center.distance>1.5+std::hypot(u-shore_center_u,v-shore_center_v))
                     return c3x_renderer::profile_v2::ShoreSample{2,0,0,0};
-                auto key = std::make_pair(u,v); auto found = shore_samples.find(key);
-                if (found != shore_samples.end()) return found->second;
-                auto sample = world_coast.sample({u,v},
-                    [&](auto id,auto revision) { coast_dependencies.emplace(id,revision); }, observe_world);
-                if(u==shore_center_u && v==shore_center_v){shore_center=sample;shore_center_ready=true;}
-                shore_samples.emplace(key,sample); return sample;
+                return shore_samples.get(u,v,[&]() {
+                    if(shore_center_ready && !shore_patch_attempted) {
+                        shore_patch=world_coast.prepare({shore_center_u,shore_center_v},.73,std::abs(shore_center.distance),
+                            [&](auto id,auto revision){coast_dependencies.emplace(id,revision);});
+                        shore_patch_attempted=true;
+                    }
+                    auto sample = world_coast.sample_with_lookup({u,v},
+                        [&](auto id,auto revision) { coast_dependencies.emplace(id,revision); }, world_lookup, &shore_patch);
+                    if(u==shore_center_u && v==shore_center_v){shore_center=sample;shore_center_ready=true;}
+                    return sample;
+                });
             };
             std::vector<std::pair<std::uint64_t, std::array<int, 2>>> anchor_dependencies;
             auto observed_coordinate_key = [&](int x, int y) {
@@ -4368,12 +4429,20 @@ public:
             };
             c3x_renderer::profile_v2::ReliefQuery pickup_relief(world_coast.world().dimensions(),
                 world_lookup, pickup_source, shore_sample_at, pickup_river, pickup_dune, pickup_activity);
-            std::map<std::pair<float,float>, c3x_renderer::profile_v2::GroundSample> pickup_ground_samples;
+            c3x_renderer::profile_v2::FlatGroundRegion flat_ground(
+                (tile.tile_x+tile.tile_y)/2, (tile.tile_x-tile.tile_y)/2,
+                pickup_profile ? shore_sample_at(shore_center_u,shore_center_v).distance : 0,
+                world_lookup);
             auto pickup_ground_at = [&](float u,float v) {
-                auto key = std::make_pair(u,v); auto found = pickup_ground_samples.find(key);
-                if (found != pickup_ground_samples.end()) return found->second;
-                auto sample = pickup_relief.sample(u,v);
-                pickup_ground_samples.emplace(key,sample); return sample;
+                if (flat_ground.contains(u,v)) return c3x_renderer::profile_v2::GroundSample{};
+                return pickup_ground_samples.get(u,v,[&]() {return pickup_relief.sample(u,v);});
+            };
+            auto pickup_height_at = [&](float u,float v) {
+                if(flat_ground.contains(u,v))return 0.f;
+                // Finite-difference coordinates are unique in the compiled grid.
+                // Measured zero cache hits: avoid storing a million one-use values.
+                ++pickup_height_queries;
+                return pickup_relief.sample(u,v,false).height;
             };
             auto relief_at_world = [&](float world_u, float world_v) {
                 if (pickup_profile) {
@@ -4647,10 +4716,10 @@ public:
                     std::array<float, 3> sampled = relief_at_world(world_u, world_v);
                     std::copy(sampled.begin(), sampled.end(), point.relief);
                     constexpr float normal_step = 0.006f;
-                    float left_height = relief_at_world(world_u - normal_step, world_v)[0];
-                    float right_height = relief_at_world(world_u + normal_step, world_v)[0];
-                    float down_height = relief_at_world(world_u, world_v - normal_step)[0];
-                    float up_height = relief_at_world(world_u, world_v + normal_step)[0];
+                    float left_height = pickup_profile ? pickup_height_at(world_u - normal_step, world_v) : relief_at_world(world_u - normal_step, world_v)[0];
+                    float right_height = pickup_profile ? pickup_height_at(world_u + normal_step, world_v) : relief_at_world(world_u + normal_step, world_v)[0];
+                    float down_height = pickup_profile ? pickup_height_at(world_u, world_v - normal_step) : relief_at_world(world_u, world_v - normal_step)[0];
+                    float up_height = pickup_profile ? pickup_height_at(world_u, world_v + normal_step) : relief_at_world(world_u, world_v + normal_step)[0];
                     float slope_u = (right_height - left_height) * (pickup_profile ? 1.0f : relief_projection_scale) /
                         (2.0f * normal_step * static_cast<float>(frame.tile_width));
                     float slope_v = (up_height - down_height) * (pickup_profile ? -1.0f : relief_projection_scale) /
@@ -5461,8 +5530,19 @@ public:
                 frame_tiles_built,frame_tiles_reused,trace.milliseconds(ground_ticks),trace.milliseconds(feature_ticks),
                 trace.milliseconds(cliff_ticks),trace.milliseconds(upload_ticks),static_cast<unsigned long long>(tile_geometry_cache_bytes));
             trace.write("mesh-phases",detail,true);
+            sprintf_s(detail,"shore_hits=%zu shore_misses=%zu material_hits=%zu material_misses=%zu height_queries=%zu scratch_bytes=%zu",
+                shore_samples.hits,shore_samples.misses,pickup_ground_samples.hits,pickup_ground_samples.misses,
+                pickup_height_queries,
+                shore_samples.bytes()+pickup_ground_samples.bytes());
+            trace.write("query-cache",detail,true);
         }
         if (prewarming) return true;
+        // Off-screen caster geometry contributes shadows but never replaces a
+        // native draw. Keep the public ownership array aligned with RENDER,
+        // including the copies retained for bitmap and translated-cache hits.
+        for (c3x_renderer_u32 i = 0; i < frame.tile_count; ++i)
+            if ((frame.tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER) == 0)
+                build_replacement[i] = 0;
         geometry_world_revision = frame.world_topology_revision;
         geometry_cache.signature = signature;
         if (frame.tile_count != 0)
@@ -5668,15 +5748,50 @@ public:
             blit_width = output.width;
             blit_height = output.height;
         }
+        DIBSECTION destination_section = {};
+        HGDIOBJ destination_bitmap = GetCurrentObject(destination, OBJ_BITMAP);
+        int descriptor_bytes = GetObjectA(destination_bitmap, sizeof(destination_section), &destination_section);
+        int destination_bits = descriptor_bytes >= int(sizeof(BITMAP)) ? destination_section.dsBm.bmBitsPixel : 0;
+        bool dib16 = descriptor_bytes == int(sizeof(DIBSECTION)) && destination_bits == 16;
+        unsigned red_mask = dib16 ? destination_section.dsBitfields[0] : 0;
+        unsigned green_mask = dib16 ? destination_section.dsBitfields[1] : 0;
+        unsigned blue_mask = dib16 ? destination_section.dsBitfields[2] : 0;
+        if (dib16 && destination_section.dsBmih.biCompression == BI_RGB) {
+            red_mask=0x7c00;green_mask=0x3e0;blue_mask=0x1f;
+        }
+        bool round16 = dib16 && blue_mask==0x1f &&
+            ((red_mask==0x7c00 && green_mask==0x3e0) || (red_mask==0xf800 && green_mask==0x7e0));
+        if (destination_bits != blit_destination_bits || green_mask != blit_destination_green_mask) {
+            char detail[192];
+            std::snprintf(detail,sizeof(detail),"bits=%d dib=%u masks=%x,%x,%x ordered_rounding=%u",
+                destination_bits,unsigned(dib16),red_mask,green_mask,blue_mask,unsigned(round16));
+            trace.write("destination-format",detail,true);
+            blit_destination_bits=destination_bits;blit_destination_green_mask=green_mask;
+        }
+        if (round16 && !blit_rounding_ready) {
+            blit_round5=c3x_renderer::color_rounding_table(31);
+            blit_round6=c3x_renderer::color_rounding_table(63);
+            blit_rounding_ready=true;
+        }
+        int phase_x=cached_tiles.empty()?0:cached_tiles.front().anchor_x;
+        int phase_y=cached_tiles.empty()?0:cached_tiles.front().anchor_y;
+        auto const& green_rounding=green_mask==0x7e0?blit_round6:blit_round5;
         std::size_t row_bytes = static_cast<std::size_t>(
             output.clip_right - output.clip_left) * sizeof(std::uint32_t);
         for (int y = output.clip_top; y < output.clip_bottom; ++y) {
             std::size_t row = static_cast<std::size_t>(y) * output.stride_bytes;
             std::size_t left = static_cast<std::size_t>(output.clip_left) *
                 sizeof(std::uint32_t);
-            std::memcpy(static_cast<std::uint8_t *>(blit_bits) + row + left,
-                        static_cast<std::uint8_t const *>(output.bgra_pixels) + row + left,
-                        row_bytes);
+            auto* target=static_cast<std::uint8_t *>(blit_bits)+row+left;
+            auto const* source=static_cast<std::uint8_t const *>(output.bgra_pixels)+row+left;
+            if (!round16) std::memcpy(target,source,row_bytes);
+            else for(int x=output.clip_left;x<output.clip_right;++x,source+=4,target+=4) {
+                unsigned threshold=c3x_renderer::color_threshold(unsigned(x-phase_x),unsigned(y-phase_y));
+                target[0]=blit_round5[threshold][source[0]];
+                target[1]=green_rounding[threshold][source[1]];
+                target[2]=blit_round5[threshold][source[2]];
+                target[3]=source[3];
+            }
         }
         return BitBlt(destination, output.clip_left, output.clip_top,
                       output.clip_right - output.clip_left,

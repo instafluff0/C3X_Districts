@@ -10,6 +10,20 @@ Agents do not edit `civ_prog_objects.csv` or `ref/Civ3Conquests.h`.
 
 ## Current Human Action
 
+Cold-start/minimap query maintenance remains DLL-only. Existing capture and
+composite hooks (`Map_Renderer_m71_Draw_Tiles`,
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`) plus `OutputDebugStringA` supply the
+same inputs and diagnostics. Exact coast preparation and scratch caching require
+no new callable. `audit_candidates = []`, `required_user_action = []`; fog edges
+are explicitly deferred by the user and no fog hook is requested.
+
+The material-binding and 16-bit gradient correction is DLL-only, using the existing
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` composite boundary and usual
+`OutputDebugStringA` diagnostics. Destination bitmap inspection uses GDI imports
+in the separately loaded renderer DLL, with no new injected callable or patch.
+For this correction: `existing_symbols = [Map_Renderer_m19_Draw_Tile_by_XY_and_Flags, OutputDebugStringA]`,
+`audit_candidates = []`, `required_user_action = []`. No CSV entry is needed.
+
 The user-authorized 2026-09-06 production performance maintenance needs no new
 CSV entries. It uses the existing `Map_Renderer_m71_Draw_Tiles` lifecycle,
 `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture/composite boundary,
@@ -356,4 +370,14 @@ M6.6 requires no new patch symbol. The existing tile capture already supplies bo
 - Existing symbols: `Map_Renderer_m71_Draw_Tiles`, `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, `Main_Screen_Form_tile_to_screen_coords`, `OutputDebugStringA`, `QueryPerformanceCounter`.
 - Shader/input/linear-output adaptation remains inside the off-screen native renderer. No added patch capability is currently proven necessary.
 - `audit_candidates: []`; `required_user_action: []`.
-- The user explicitly authorized implementing the pickup into production, superseding the earlier pause for logs. Geometry/caster/cache engineering checks, full workflow and approved injected compilation pass. API 14 DLL staged; the launcher uses matching RUN.bat injection. Only the user-run gameplay checkpoint remains pending.
+- The user explicitly authorized implementing the pickup into production, superseding the earlier pause for logs. Geometry/caster/cache engineering checks, full workflow and approved injected compilation pass. API 14 DLL staged; standard INSTALL.bat installs matching injected code. Pickup-r1, authoritative world capture and detailed OutputDebugStringA diagnostics are now defaults for normal game launches. The reported execute fault was a direct debug import in world capture; corrected to existing p_OutputDebugStringA, with no new symbol. Automatic file logging removed. Existing symbols and required_user_action remain unchanged; no CSV entry is needed. Only the user-run gameplay checkpoint remains pending.
+
+### Pickup ownership rejection follow-up
+
+The user supplied a successful native render followed by failed ownership
+validation and a black map. Caster/prefetch-only records must have zero replacement
+flags even when their meshes contribute shadows. Corrected native publication and
+cache retention preserve this invariant without weakening the injected validator.
+Existing symbols: Map_Renderer_m71_Draw_Tiles, Map_Renderer_m19_Draw_Tile_by_XY_and_Flags,
+OutputDebugStringA. Audit candidates: none. required_user_action: none for patch
+symbols or CSV entries. The ordinary INSTALL.bat workflow remains the test route.

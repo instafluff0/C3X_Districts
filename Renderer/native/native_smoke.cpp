@@ -1552,6 +1552,75 @@ int main(int argc, char ** argv) {
     DeleteObject(dest_bitmap);
     DeleteDC(dc);
 
+    // Exercise the actual Windows GDI conversion, including both common game
+    // formats. Each 8x8 patch has one exact source shade: ordered rounding must
+    // preserve its mean without touching the retained full-color source.
+    for (bool green6 : {false, true}) {
+        struct ColorInfo { BITMAPINFOHEADER header; DWORD masks[3]; } low_info = {};
+        low_info.header.biSize = sizeof(BITMAPINFOHEADER);
+        low_info.header.biWidth = 128;
+        low_info.header.biHeight = -128;
+        low_info.header.biPlanes = 1;
+        low_info.header.biBitCount = 16;
+        low_info.header.biCompression = green6 ? BI_BITFIELDS : BI_RGB;
+        low_info.masks[0] = green6 ? 0xf800 : 0x7c00;
+        low_info.masks[1] = green6 ? 0x7e0 : 0x3e0;
+        low_info.masks[2] = 0x1f;
+        HDC low_dc = CreateCompatibleDC(nullptr);
+        void* low_bits = nullptr;
+        HBITMAP low_bitmap = CreateDIBSection(low_dc,
+            reinterpret_cast<BITMAPINFO*>(&low_info), DIB_RGB_COLORS, &low_bits, nullptr, 0);
+        if (!low_dc || !low_bitmap || !low_bits)
+            return fail("could not create 16-bit gradient destination");
+        HGDIOBJ low_previous = SelectObject(low_dc, low_bitmap);
+        std::vector<std::uint32_t> gradient(128 * 128);
+        for (int y = 0; y < 128; ++y) for (int x = 0; x < 128; ++x) {
+            unsigned shade = unsigned((y / 8) * 16 + x / 8);
+            gradient[y * 128 + x] = 0xff000000u | shade * 0x010101u;
+        }
+        auto original_gradient = gradient;
+        auto gradient_output = output;
+        gradient_output.width = gradient_output.height = 128;
+        gradient_output.stride_bytes = 128 * 4;
+        gradient_output.bgra_pixels = gradient.data();
+        gradient_output.clip_left = gradient_output.clip_top = 0;
+        gradient_output.clip_right = gradient_output.clip_bottom = 128;
+        if (blit(&gradient_output, low_dc) != C3X_RENDERER_RESULT_OK)
+            return fail("16-bit gradient blit failed");
+        GdiFlush();
+        auto* low_pixels = static_cast<std::uint16_t*>(low_bits);
+        std::vector<std::uint16_t> reference(low_pixels, low_pixels + 128 * 128);
+        double max_error = 0;
+        for (int shade = 0; shade < 256; ++shade) {
+            double sums[3] = {};
+            for (int y = 0; y < 8; ++y) for (int x = 0; x < 8; ++x) {
+                unsigned pixel = low_pixels[((shade / 16) * 8 + y) * 128 + (shade % 16) * 8 + x];
+                sums[0] += double(pixel & 31) * 255 / 31;
+                sums[1] += double((pixel >> 5) & (green6 ? 63 : 31)) * 255 / (green6 ? 63 : 31);
+                sums[2] += double((pixel >> (green6 ? 11 : 10)) & 31) * 255 / 31;
+            }
+            for (double sum : sums) max_error = (std::max)(max_error, std::abs(sum / 64 - shade));
+        }
+        if (max_error > 0.15 || gradient != original_gradient)
+            return fail("16-bit conversion lost gradient means or changed full-color input");
+        std::memset(low_bits, 0x20, 128 * 128 * 2);
+        gradient_output.clip_left = 3; gradient_output.clip_top = 5;
+        gradient_output.clip_right = 119; gradient_output.clip_bottom = 117;
+        if (blit(&gradient_output, low_dc) != C3X_RENDERER_RESULT_OK)
+            return fail("16-bit clipped gradient blit failed");
+        GdiFlush();
+        for (int y = 0; y < 128; ++y) for (int x = 0; x < 128; ++x) {
+            bool inside = x >= 3 && x < 119 && y >= 5 && y < 117;
+            if (low_pixels[y * 128 + x] != (inside ? reference[y * 128 + x] : 0x2020))
+                return fail("16-bit clipped blit changed its pattern or touched outside the clip");
+        }
+        std::printf("PASS destination RGB%s gradient_max_mean_error=%.4f source_unchanged=1 clip_exact=1\n",
+            green6 ? "565" : "555", max_error);
+        SelectObject(low_dc, low_previous);
+        DeleteObject(low_bitmap);
+        DeleteDC(low_dc);
+    }
+
     c3x_renderer_scene_export_v1 request = {};
     request.api_version = C3X_RENDERER_API_VERSION;
     request.struct_size = sizeof(request);

@@ -17,7 +17,7 @@ from Renderer.tools.renderer_dev import windows_command_result
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("replay", "matrix", "gpu", "edits"))
+    parser.add_argument("mode", choices=("replay", "matrix", "gpu", "edits", "defaults", "minimap"))
     args = parser.parse_args()
     destination = ROOT / "Renderer/verification/pickup"
     destination.mkdir(parents=True, exist_ok=True)
@@ -35,7 +35,7 @@ def main():
                 fields[2:4] = ["2", "10"]
             synthetic.append(",".join(fields))
         (destination / "synthetic-volcano.csv").write_text("\n".join(synthetic) + "\n")
-        scenes = [("prepared-scroll", 75, 39, 128, 12, False, False)] if args.mode == "replay" else [
+        scenes = [("prepared-scroll", 75, 39, 128, 12, False, False)] if args.mode in ("replay", "minimap") else [
             (f"coastal-z{zoom}-h{hour}", 85, 38, zoom, hour, False, False)
             for zoom in (128, 64) for hour in (12, 18, 0, 6)
         ] + [
@@ -45,20 +45,29 @@ def main():
             (f"synthetic-volcano-z{zoom}-h{hour}", 70, 50, zoom, hour, False, True)
             for zoom in (128, 64) for hour in (12, 0)
         ] + [(f"wrap-z{zoom}", 0, 50, zoom, 12, False, False) for zoom in (128, 64)]
+        if args.mode == "minimap":
+            scenes = [("minimap-jumps", 75, 39, 128, 12, False, False)]
         if args.mode == "edits":
             scenes = [("terrain-edit", 69, 50, 128, 12, False, False),
                       ("volcano-activity-edit", 70, 50, 128, 0, False, True)]
+        if args.mode == "defaults":
+            scenes = [("install-defaults", 75, 39, 128, 12, False, False)]
         cases = []
         for name, x, y, zoom, hour, objects, volcano in scenes:
             settings = {
+                "C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS": "..\\..\\Renderer\\custom.custom_rendering.txt",
                 "C3X_RENDERER_VISUAL_PROFILE": "pickup-r1",
                 "C3X_RENDERER_TRACE": "2",
                 "C3X_RENDERER_TRACE_FILE": f"..\\verification\\pickup\\{name}.log",
-                "C3X_RENDERER_PREVIEW_REPLAY": "1" if args.mode == "replay" else "",
+                "C3X_RENDERER_PREVIEW_REPLAY": "1" if args.mode in ("replay", "minimap") else "",
+                "C3X_RENDERER_PREVIEW_MINIMAP": "1" if args.mode == "minimap" else "",
                 "C3X_RENDERER_PREVIEW_OBJECTS": "1" if objects else "",
                 "C3X_RENDERER_PREVIEW_EDITS": "1" if args.mode == "edits" else "",
                 "C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO": "1" if volcano else "",
             }
+            if args.mode == "defaults":
+                for key in ("C3X_RENDERER_VISUAL_PROFILE", "C3X_RENDERER_TRACE", "C3X_RENDERER_TRACE_FILE"):
+                    settings[key] = ""
             command = " && ".join(f'set "{key}={value}"' for key, value in settings.items())
             csv = "synthetic-volcano.csv" if volcano else "world.csv"
             command += (f" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. "
@@ -67,6 +76,8 @@ def main():
             cases.append((name, "Renderer/native", command))
     for name, directory, command in cases:
         print("Checking " + name, flush=True)
+        default_log = ROOT / "Renderer/verification/in_game_trace.log"
+        previous_log_time = default_log.stat().st_mtime_ns if default_log.exists() else 0
         result = windows_command_result(directory, command)
         # Keep reports portable; dispatcher cwd includes a machine-local path.
         result.pop("cwd", None)
@@ -75,7 +86,7 @@ def main():
         if marker not in output or "FAIL" in output:
             result["status"] = "fail"
             result["detail"] = "Required completion marker missing or native check reported failure"
-        if args.mode in ("replay", "edits"):
+        if args.mode in ("replay", "edits", "minimap"):
             parity = re.search(r"PICKUP (?:edit )?pixel parity: changed=(\d+) error=(\d+) bytes=(\d+)", output)
             if parity:
                 changed, error, size = map(int, parity.groups())
@@ -83,6 +94,13 @@ def main():
             if not parity or changed > size // 4000 or error > size // 100:
                 result["status"] = "fail"
                 result["detail"] = "Cached/cold parity did not pass the unchanged native thresholds"
+        if args.mode == "defaults":
+            log_time = default_log.stat().st_mtime_ns if default_log.exists() else 0
+            if log_time != previous_log_time:
+                result["status"] = "fail"
+                result["detail"] = "Normal gameplay must not create or modify a diagnostic file"
+            result["environment_overrides"] = False
+            result["logging"] = "OutputDebugStringA only; existing trace file untouched"
         result["name"] = name
         image = destination / (name + ".bmp")
         if image.is_file():

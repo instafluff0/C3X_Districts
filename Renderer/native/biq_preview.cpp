@@ -2,6 +2,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <cstdio>
@@ -10,6 +11,22 @@
 #include <string>
 
 #include "c3x_renderer_api.h"
+
+// Mirror the critical production boundary on every render, including warm hits.
+bool preview_ownership(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_v1 const& output) {
+    if (output.fallback_tile_count || output.replacement_tile_count != frame.tile_count ||
+        (frame.tile_count && !output.replacement_tile_flags)) return false;
+    for (unsigned i=0;i<frame.tile_count;++i) {
+        bool visible=(frame.tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER)!=0;
+        unsigned flags=output.replacement_tile_flags[i];
+        if ((!visible && flags) || (visible && !(flags & C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED))) {
+            std::printf("FAIL production ownership index=%u tile=%d,%d captured=%u replacement=%u\n",
+                i,frame.tiles[i].tile_x,frame.tiles[i].tile_y,frame.tiles[i].tile_flags,flags);
+            return false;
+        }
+    }
+    return true;
+}
 
 struct CsvTile {
     int x, y, base, real;
@@ -111,6 +128,50 @@ bool write_bmp(char const * path, c3x_renderer_output_v1 const & output) {
     return ok;
 }
 
+// Optional headless witness of the final GDI conversion; no game HWND or UI.
+bool write_color_preview(char const* path, HMODULE module, c3x_renderer_output_v1 const& output) {
+    auto blit = reinterpret_cast<c3x_renderer_blit_fn>(GetProcAddress(module,"c3x_renderer_blit"));
+    if (!blit) return false;
+    BITMAPINFO info={}; info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth=output.width; info.bmiHeader.biHeight=-output.height;
+    info.bmiHeader.biPlanes=1; info.bmiHeader.biCompression=BI_RGB;
+    HDC dc32=CreateCompatibleDC(nullptr),dc16=CreateCompatibleDC(nullptr);
+    void* bits32=nullptr;void* bits16=nullptr;
+    info.bmiHeader.biBitCount=32;
+    HBITMAP bitmap32=CreateDIBSection(dc32,&info,DIB_RGB_COLORS,&bits32,nullptr,0);
+    info.bmiHeader.biBitCount=16;
+    HBITMAP bitmap16=CreateDIBSection(dc16,&info,DIB_RGB_COLORS,&bits16,nullptr,0);
+    bool ok=dc32 && dc16 && bitmap32 && bitmap16 && bits32 && bits16;
+    HGDIOBJ previous32=nullptr,previous16=nullptr;
+    if (ok) {
+        previous32=SelectObject(dc32,bitmap32);previous16=SelectObject(dc16,bitmap16);
+        std::memcpy(bits32,output.bgra_pixels,std::size_t(output.stride_bytes)*output.height);
+        std::vector<std::uint32_t> pixels(std::size_t(output.width)*output.height);
+        auto save=[&](char const* suffix) {
+            GdiFlush();
+            unsigned stride=(unsigned(output.width)*2+3)&~3u;
+            for(int y=0;y<output.height;++y)for(int x=0;x<output.width;++x) {
+                auto row=reinterpret_cast<std::uint16_t const*>(static_cast<std::uint8_t const*>(bits16)+y*stride);
+                unsigned value=row[x],r=(value>>10)&31,g=(value>>5)&31,b=value&31;
+                pixels[std::size_t(y)*output.width+x]=0xff000000u|((r*255/31)<<16)|((g*255/31)<<8)|(b*255/31);
+            }
+            auto preview=output;preview.bgra_pixels=pixels.data();
+            return write_bmp((std::string(path)+suffix).c_str(),preview);
+        };
+        ok=BitBlt(dc16,0,0,output.width,output.height,dc32,0,0,SRCCOPY)!=FALSE && save(".rgb555-before.bmp");
+        LARGE_INTEGER start={},finish={},frequency={};QueryPerformanceFrequency(&frequency);
+        QueryPerformanceCounter(&start);
+        for(int repeat=0;ok && repeat<20;++repeat)ok=blit(&output,dc16)==C3X_RENDERER_RESULT_OK;
+        GdiFlush();QueryPerformanceCounter(&finish);
+        std::printf("COLOR RGB555 blit_mean_ms=%.3f repeats=20\n",1000.0*double(finish.QuadPart-start.QuadPart)/double(frequency.QuadPart)/20);
+        ok=ok && save(".rgb555-after.bmp");
+        SelectObject(dc32,previous32);SelectObject(dc16,previous16);
+    }
+    if(bitmap32)DeleteObject(bitmap32);if(bitmap16)DeleteObject(bitmap16);
+    if(dc32)DeleteDC(dc32);if(dc16)DeleteDC(dc16);
+    return ok;
+}
+
 int main(int argc, char ** argv) {
     if (argc != 11 && argc != 12) {
         std::fprintf(stderr, "usage: biq_preview <dll> <mod-root> <definitions> <scene.csv> <out.bmp> <width> <height> <center-x> <center-y> <tile-width> [hour]\n");
@@ -132,7 +193,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
     char profile[64]={};GetEnvironmentVariableA("C3X_RENDERER_VISUAL_PROFILE",profile,sizeof(profile));
-    bool pickup=std::strcmp(profile,"pickup-r1")==0;
+    bool pickup=std::strcmp(profile,"frozen")!=0;
     if(pickup && source_tiles.size()!=std::size_t(map_width)*map_height/2){
         std::fprintf(stderr,"pickup preview requires the complete world CSV\n");return 1;
     }
@@ -147,8 +208,11 @@ int main(int argc, char ** argv) {
         GetProcAddress(module, "c3x_renderer_set_definition_paths"));
     auto render = reinterpret_cast<c3x_renderer_render_fn>(GetProcAddress(module, "c3x_renderer_render"));
     auto reset = reinterpret_cast<c3x_renderer_reset_fn>(GetProcAddress(module, "c3x_renderer_reset"));
+    char custom_definitions[4 * MAX_PATH] = {};
+    GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS",custom_definitions,sizeof(custom_definitions));
+    char const* custom_path=custom_definitions[0] ? custom_definitions : nullptr;
     if (set_definitions == nullptr || render == nullptr || reset == nullptr ||
-        set_definitions(argv[2], argv[3], nullptr, nullptr) != C3X_RENDERER_RESULT_OK)
+        set_definitions(argv[2], argv[3], nullptr, custom_path) != C3X_RENDERER_RESULT_OK)
         return 1;
 
     char object_option[8]={};bool objects=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_OBJECTS",object_option,sizeof(object_option))!=0;
@@ -240,7 +304,12 @@ int main(int argc, char ** argv) {
     if(pickup){frame.world_topology_count=unsigned(world.size());frame.world_topology=world.data();frame.world_topology_revision=1;}
     char season[16]={};if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SEASON",season,sizeof(season)))frame.season=std::atoi(season);
     c3x_renderer_output_v1 output = {C3X_RENDERER_API_VERSION, sizeof(output)};
-    int result = render(&frame, &output);
+    auto render_checked = [&](c3x_renderer_frame_v1 const* input, c3x_renderer_output_v1* result) {
+        int code=render(input,result);
+        return code==C3X_RENDERER_RESULT_OK && !preview_ownership(*input,*result)
+            ? int(C3X_RENDERER_RESULT_ERROR) : code;
+    };
+    int result = render_checked(&frame, &output);
     std::size_t expected_rendered = 0;
     for (c3x_renderer_tile_v1 const & tile : tiles)
         if ((tile.tile_flags & C3X_RENDERER_TILE_RENDER) != 0)
@@ -248,6 +317,9 @@ int main(int argc, char ** argv) {
     bool ok = result == C3X_RENDERER_RESULT_OK &&
               (pickup ? output.rendered_tile_count >= expected_rendered : output.rendered_tile_count == expected_rendered) &&
               output.fallback_tile_count == 0 && write_bmp(argv[5], output);
+    char color_option[8]={};
+    if(ok && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_COLOR",color_option,sizeof(color_option)))
+        ok=write_color_preview(argv[5],module,output);
     if(ok && objects){
         unsigned ownership=0;for(unsigned i=0;i<output.replacement_tile_count;++i)ownership|=output.replacement_tile_flags[i];
         unsigned expected=C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED|C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED|
@@ -274,7 +346,7 @@ int main(int argc, char ** argv) {
             else {value=11u|(11u<<8);changed->terrain_type=changed->real_terrain_type=11;
                 changed->feature_flags=0;changed->river_code=0;}
             ++frame.world_topology_revision;
-            ok=render(&frame,&output)==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 &&
+            ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 &&
                 output.geometry_tiles_built>0 && output.geometry_tiles_reused>0;
             std::printf("PICKUP authoritative edit: %s active=%u built=%u reused=%u\n",ok?"pass":"FAIL",
                 unsigned(active),output.geometry_tiles_built,output.geometry_tiles_reused);
@@ -282,8 +354,8 @@ int main(int argc, char ** argv) {
             if(ok){auto first=static_cast<unsigned char const*>(output.bgra_pixels);
                 edited.assign(first,first+output.stride_bytes*output.height);}
             reset();
-            if(set_definitions(argv[2],argv[3],nullptr,nullptr)!=C3X_RENDERER_RESULT_OK ||
-                render(&frame,&output)!=C3X_RENDERER_RESULT_OK)ok=false;
+            if(set_definitions(argv[2],argv[3],nullptr,custom_path)!=C3X_RENDERER_RESULT_OK ||
+                render_checked(&frame,&output)!=C3X_RENDERER_RESULT_OK)ok=false;
             if(ok){auto cold=static_cast<unsigned char const*>(output.bgra_pixels);
                 std::size_t changed_pixels=0;unsigned long long error=0;
                 for(std::size_t i=0;i<edited.size();i+=4){bool bad=false;
@@ -299,7 +371,7 @@ int main(int argc, char ** argv) {
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
         std::vector<double> times;
         for(int n=0;n<32;++n){LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
-            ok=render(&frame,&output)==C3X_RENDERER_RESULT_OK && ok;QueryPerformanceCounter(&b);
+            ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && ok;QueryPerformanceCounter(&b);
             times.push_back(double(b.QuadPart-a.QuadPart)*1000/frequency.QuadPart);
             if(output.geometry_tiles_built || output.geometry_upload_bytes)ok=false;
         }
@@ -308,7 +380,7 @@ int main(int argc, char ** argv) {
         auto prepare=[&](){
             LARGE_INTEGER begin={},now={};QueryPerformanceCounter(&begin);
             for(;;){
-                Sleep(25);int code=render(&frame,&output);QueryPerformanceCounter(&now);
+                Sleep(25);int code=render_checked(&frame,&output);QueryPerformanceCounter(&now);
                 if(code!=C3X_RENDERER_RESULT_OK)return false;
                 if(!output.prefetch_tiles_pending && !output.prefetch_blocks_pending)break;
                 if(now.QuadPart-begin.QuadPart>frequency.QuadPart*60)break;
@@ -317,14 +389,18 @@ int main(int argc, char ** argv) {
                 output.prefetch_tiles_pending,output.prefetch_tiles_built,output.prefetch_tiles_unavailable,
                 output.prefetch_blocks_built,output.prefetch_cache_bytes);return true;
         };
-        ok=prepare() && ok;
+        char minimap_option[8]={};
+        bool minimap=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_MINIMAP",minimap_option,sizeof(minimap_option))!=0;
+        if(!minimap)ok=prepare() && ok;
         int original_x=center_x,original_y=center_y;
-        int steps[][2]={{4,0},{8,0},{8,4},{4,4},{0,0}};
+        std::vector<std::array<int,2>> steps=minimap
+            ? std::vector<std::array<int,2>>{{-48,24},{-16,-12},{0,0},{-48,24},{0,0}}
+            : std::vector<std::array<int,2>>{{4,0},{8,0},{8,4},{4,4},{0,0}};
         for(auto const& step:steps){
             center_x=original_x+step[0];center_y=original_y+step[1];tiles=capture_view();
             frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
             LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
-            int code=render(&frame,&output);QueryPerformanceCounter(&b);
+            int code=render_checked(&frame,&output);QueryPerformanceCounter(&b);
             ok=ok && code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;
             std::printf("PICKUP jump=%d,%d result=%d ms=%.3f built=%u reused=%u gpu_bytes=%u geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f\n",
                 step[0],step[1],code,double(b.QuadPart-a.QuadPart)*1000/frequency.QuadPart,
@@ -332,21 +408,21 @@ int main(int argc, char ** argv) {
                 double(output.geometry_ticks)*1000/frequency.QuadPart,double(output.draw_ticks)*1000/frequency.QuadPart,
                 double(output.readback_ticks)*1000/frequency.QuadPart);
             if(code!=C3X_RENDERER_RESULT_OK)break;
-            ok=prepare() && ok;
+            if(!minimap)ok=prepare() && ok;
         }
         // Compare an image assembled from prepared pixel blocks with a fresh
         // renderer of the same authoritative snapshot. Use the existing native
         // pixel-budget thresholds, never a looser pickup-only allowance.
         center_x=original_x+4;center_y=original_y+4;tiles=capture_view();
         frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
-        if(render(&frame,&output)!=C3X_RENDERER_RESULT_OK)ok=false;
+        if(render_checked(&frame,&output)!=C3X_RENDERER_RESULT_OK)ok=false;
         std::vector<unsigned char> warm;
         if(ok){auto first=static_cast<unsigned char const*>(output.bgra_pixels);
             warm.assign(first,first+output.stride_bytes*output.height);
             std::string path=std::string(argv[5])+".cached.bmp";write_bmp(path.c_str(),output);}
         reset();
-        if(set_definitions(argv[2],argv[3],nullptr,nullptr)!=C3X_RENDERER_RESULT_OK ||
-            render(&frame,&output)!=C3X_RENDERER_RESULT_OK)ok=false;
+        if(set_definitions(argv[2],argv[3],nullptr,custom_path)!=C3X_RENDERER_RESULT_OK ||
+            render_checked(&frame,&output)!=C3X_RENDERER_RESULT_OK)ok=false;
         if(ok){
             auto cold=static_cast<unsigned char const*>(output.bgra_pixels);std::size_t changed=0;
             unsigned long long error=0;

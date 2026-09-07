@@ -1,0 +1,845 @@
+{
+  "classification": "GPU planar-reflection Lab candidate; no Windows integration or visual promotion",
+  "frames": [
+    {
+      "region": "coastal",
+      "frame": "h12-z1-pan00.bmp",
+      "packet_sha256": "a379ead8b0c2c5df2fce5f14f702f92be5f8d313edf9dd1a46c3e51c642f3fb3",
+      "before_sha256": "519faad4555498f6d02442881045981515180d33dc443bb55910f76fbe646e87",
+      "after_sha256": "e0ec66f0006d2aa480bbe8c5a8d835032899ec90d6f84de06e991a8970fc5021",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 2261,
+      "max_channel_error": 12,
+      "mean_channel_error": 0.00471078431372549
+    },
+    {
+      "region": "coastal",
+      "frame": "h12-z2-pan00.bmp",
+      "packet_sha256": "28c690e18cfb200b6773b935475529147f0097328fcf1d5b706a0f5b1774858d",
+      "before_sha256": "1b521a46b18f5f3e1bd4b7f4730e2d003088b4b17952c0e76761a6fd9b073ba3",
+      "after_sha256": "4174917be75fcdf9bb9bcd804feb822ad5057c98fb0e9c5edf95f4aba73d9db2",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 742,
+      "max_channel_error": 8,
+      "mean_channel_error": 0.004639705882352941
+    },
+    {
+      "region": "coastal",
+      "frame": "h00-z1-pan00.bmp",
+      "packet_sha256": "a8d71ffb7554b1e36204e36b2dc48e53fe0859b7d03e2231ce7f6fbeec1db5fd",
+      "before_sha256": "39c11aee211103ab9bf54fdb5db649981e6b34f190acaa88ef130b2213adc7c8",
+      "after_sha256": "4b4e217bf76eb2099419e781648ea97db10f4db63ff233f05b9050ca2a744977",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 2330,
+      "max_channel_error": 15,
+      "mean_channel_error": 0.00646875
+    },
+    {
+      "region": "coastal",
+      "frame": "h00-z2-pan00.bmp",
+      "packet_sha256": "3c6183e8fb020a232a06d21291ba18c5685a18086851a4a91d9d4b3c25431075",
+      "before_sha256": "67348ce41d8333ab06830a6595c5612f97286350a892ab2b22579d6be94f0172",
+      "after_sha256": "132b94093fb8d7e0c9f3d0ad374289cc61ed3a25c3b99c3dfe3ca8ffe740642e",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 774,
+      "max_channel_error": 12,
+      "mean_channel_error": 0.006291666666666667
+    },
+    {
+      "region": "inland",
+      "frame": "h12-z1-pan00.bmp",
+      "packet_sha256": "9dd3885b81d34177de0193f9025fe10c8605df800743dd4b782d6b2e52438da3",
+      "before_sha256": "0244b80503aae21864db637a337050ff789510a61bd597ae6e4ff6090af5d3c4",
+      "after_sha256": "9c0f4b1dc2e26585a9776e9f3db51a7e92f0d05cf728f09f33156c1178c0b9b6",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 489,
+      "max_channel_error": 15,
+      "mean_channel_error": 0.0010857843137254903
+    },
+    {
+      "region": "inland",
+      "frame": "h12-z2-pan00.bmp",
+      "packet_sha256": "18daeadd520e6568eed4b0caa2dbb7b1f6eda4c15392e8331d3f9168d99accee",
+      "before_sha256": "5e1929b3e7db1e9fbb9b45aabda1b05aed8151903ac307f3c2c6ae7d51366e6b",
+      "after_sha256": "0422fd29c3454f6c785aba8e6a6959d31f2aab22f80b7501d682916cb805a544",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 182,
+      "max_channel_error": 12,
+      "mean_channel_error": 0.001071078431372549
+    },
+    {
+      "region": "inland",
+      "frame": "h00-z1-pan00.bmp",
+      "packet_sha256": "944bdd7e1014a4706ee173a751df9fd54f18c9f58b2bc06783895ecf7065d5b8",
+      "before_sha256": "8bd516e0f4f8f8978d38d33f51bb4d426dd9a0e0020a14fe33dac009a0d259d2",
+      "after_sha256": "c93e4db3f94d4149a9b61ab42dadc7db8574c0ac049bccbfe7f83f99038f799f",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 510,
+      "max_channel_error": 19,
+      "mean_channel_error": 0.0013434436274509804
+    },
+    {
+      "region": "inland",
+      "frame": "h00-z2-pan00.bmp",
+      "packet_sha256": "ca1583496dbb84637d8436ab78abb79adcce9112e2656cf0f5b05cd0e16d7fb8",
+      "before_sha256": "6a97624c63e83a6e34c9d6516e4b7e5fafd24c94caa100a1bc6b8ed7a93adca4",
+      "after_sha256": "d228c89b733f10cc1644329a02756c543dc9ef4ac43ba6cdc9c8dff0405a72d3",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 184,
+      "max_channel_error": 16,
+      "mean_channel_error": 0.0013272058823529413
+    },
+    {
+      "region": "wilderness",
+      "frame": "h12-z1-pan00.bmp",
+      "packet_sha256": "6b4270a49f4fd0be47a7e7b499cc7a2c9159140c130e698844ff7fa519cc4b7b",
+      "before_sha256": "1ed25339fe0041e15e383064ed78c256aa00d550dde0321003e2319dcb57bb68",
+      "after_sha256": "528fbb88624d78557172693411b79b8d81cdacb6d20b3f0c97b82df799f4a40d",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 954,
+      "max_channel_error": 3,
+      "mean_channel_error": 0.001234375
+    },
+    {
+      "region": "wilderness",
+      "frame": "h12-z2-pan00.bmp",
+      "packet_sha256": "480716557b4f0e6e20dce6f660a47ed1c88f9137179a7c4469f5aef731908a98",
+      "before_sha256": "a9e49ccf9e5f56eaa2894467abd7a28a312e3bea5c4068aacbe3f5b1fd9fc4e2",
+      "after_sha256": "f108ad4a89203c93db51520ceba87cf7f243749c7d386586000345391cc47b1e",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 338,
+      "max_channel_error": 4,
+      "mean_channel_error": 0.0012524509803921568
+    },
+    {
+      "region": "wilderness",
+      "frame": "h00-z1-pan00.bmp",
+      "packet_sha256": "31558f2ef7c7d66907554853aa36de4b730d8bd442ae10292c48819e3ae1ac4f",
+      "before_sha256": "522f3ccc501bf1262e39f00a9e952fa173370de6fc6a748cd46fa68ad16f07fc",
+      "after_sha256": "cf290ef497a68d0f8fa067561829eab4fe75ccce4b8ad72cd2b0f6ba7e1f168e",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 987,
+      "max_channel_error": 8,
+      "mean_channel_error": 0.0028051470588235294
+    },
+    {
+      "region": "wilderness",
+      "frame": "h00-z2-pan00.bmp",
+      "packet_sha256": "135b9d4ebfbaf8d1af567ab84d8038a70198451a7d452d5ee53738e9027ae3f5",
+      "before_sha256": "e87e57fe8ae02d942d0a66e93658c6c5afa309f6fc5d793cca3c197a7ef71e38",
+      "after_sha256": "f2ca4fb0036cd2ca4714142de7a336d0448d3f0a49e45d5aedb41afbbd29cc65",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 353,
+      "max_channel_error": 7,
+      "mean_channel_error": 0.0027622549019607843
+    },
+    {
+      "region": "longcoast",
+      "frame": "h12-z1-pan00.bmp",
+      "packet_sha256": "8177cf559ab3e5ae256258fd8a83a20b3ef615c23a051c59149b4d3570deaa77",
+      "before_sha256": "c608c0e17aadafa8dc12a386fe3e48f1ead09c88c57064f9f6b307fdf79a9d99",
+      "after_sha256": "4bc29029f740bfc1bfe71bcc411ced1284310aa4a1e708b1dbc058cb8cc6478c",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 5079,
+      "max_channel_error": 14,
+      "mean_channel_error": 0.010052208768174115
+    },
+    {
+      "region": "longcoast",
+      "frame": "h12-z2-pan00.bmp",
+      "packet_sha256": "ce7c5824f092694c797e834bdbbd41098011963faf251b4b331569a33a6c8e14",
+      "before_sha256": "226778bbf85377c054cceab9d06d83dc46140c125b36863a3e24fbe145801a96",
+      "after_sha256": "af59e8fe8c5b144e4a90770156d5907e58ee488281ea740e93666a8e53e092c9",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 1571,
+      "max_channel_error": 13,
+      "mean_channel_error": 0.0098991318050724
+    },
+    {
+      "region": "longcoast",
+      "frame": "h00-z1-pan00.bmp",
+      "packet_sha256": "d8c3ed59a2d1fd1973bd2456a26d60d4b34b93af7a1154957f6d421b930376a4",
+      "before_sha256": "fcba2929def9fe4338a50a1581ee00054f6a320c9135144662622bd34f4c7c73",
+      "after_sha256": "2f6629784c4c419274261ed0fea792b2e77ec353d359ceb7539cd46e364c418c",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 5141,
+      "max_channel_error": 17,
+      "mean_channel_error": 0.011501213465941188
+    },
+    {
+      "region": "longcoast",
+      "frame": "h00-z2-pan00.bmp",
+      "packet_sha256": "c9406dcbe995d2f3c7397d8f259e682b239d9b4d38eeeb39dc3f234a082d3f21",
+      "before_sha256": "c3d579f1ac6b36a5303c611576a1f885c00eae445bf92f1475af6bc7a18f61e4",
+      "after_sha256": "ea1b8d2ea0d9c287838bac83cd751672809f5e513e3a02e50ce198bdaf74c03b",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 1591,
+      "max_channel_error": 15,
+      "mean_channel_error": 0.011143259596229893
+    },
+    {
+      "region": "freshwater",
+      "frame": "h12-z1-pan00.bmp",
+      "packet_sha256": "f0eaec591f9f78924d9ae79d6e6a93227e3d2e1df320cdba2a414646e9db3094",
+      "before_sha256": "72c2fe65f28c2725e49efe92cf8b8a594b1aee0975937676f2a1fe87a803d5d0",
+      "after_sha256": "fe14c156213d061cb40f400e6dc04f55ef6aae7b2daa871fda5ca6a9337c5345",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 2416,
+      "max_channel_error": 10,
+      "mean_channel_error": 0.006507046568627451
+    },
+    {
+      "region": "freshwater",
+      "frame": "h12-z2-pan00.bmp",
+      "packet_sha256": "6b12f59060cfb7b7fdbbe41274a92f34c17a1eb7cec36d3286097b128ae2ce10",
+      "before_sha256": "26904a713baa748ebc2c5c51c05c5411df4bc0f5a9715e8dd8cccef0db51c385",
+      "after_sha256": "4c99f6afd102e78521d784f6dc6c33b2d8d64df2c90e16e94d8be7e8d360843e",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 726,
+      "max_channel_error": 8,
+      "mean_channel_error": 0.006506127450980392
+    },
+    {
+      "region": "freshwater",
+      "frame": "h00-z1-pan00.bmp",
+      "packet_sha256": "934465a438660c2b8940c9a0460ef8d27bb3782d385c9a809ff302638d98f3ff",
+      "before_sha256": "b6e99ebee36084f82c48e79715d27b2a646de6a893e6e28d8e1ff5d0495e23cf",
+      "after_sha256": "4ad8140895cc6abdf1babc86a7c4181092000b92e97ac8a635cd3c6063fa2f42",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 2430,
+      "max_channel_error": 14,
+      "mean_channel_error": 0.00822610294117647
+    },
+    {
+      "region": "freshwater",
+      "frame": "h00-z2-pan00.bmp",
+      "packet_sha256": "a11ede4fe88a8d8987189ad8593559529d8cc74cb962ae0946c00d33579b7763",
+      "before_sha256": "408b7fc98dd3c833873906dc91d4f66015c5dfa9d215d73c13096fb9f6756278",
+      "after_sha256": "52ac54691bafaad1273e2c5611af0bb0853f706582bb7f5011ea0799de283b7c",
+      "finite_linear": true,
+      "validity_identical": true,
+      "changed_pixels": 748,
+      "max_channel_error": 13,
+      "mean_channel_error": 0.008063725490196079
+    }
+  ],
+  "offline_to_gpu_parity": [
+    {
+      "region": "longcoast",
+      "frame": "h12-z1-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    },
+    {
+      "region": "longcoast",
+      "frame": "h12-z2-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    },
+    {
+      "region": "longcoast",
+      "frame": "h00-z1-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    },
+    {
+      "region": "longcoast",
+      "frame": "h00-z2-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    },
+    {
+      "region": "freshwater",
+      "frame": "h12-z1-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    },
+    {
+      "region": "freshwater",
+      "frame": "h12-z2-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    },
+    {
+      "region": "freshwater",
+      "frame": "h00-z1-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    },
+    {
+      "region": "freshwater",
+      "frame": "h00-z2-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    }
+  ],
+  "reflection_disabled_controls": [
+    {
+      "frame": "h12-z1-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    },
+    {
+      "frame": "h12-z2-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    },
+    {
+      "frame": "h00-z1-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    },
+    {
+      "frame": "h00-z2-pan00.bmp",
+      "changed_pixels": 0,
+      "max_channel_error": 0,
+      "mean_channel_error": 0.0
+    }
+  ],
+  "eight_frame_cost_samples": [
+    {
+      "frame": "h12-z1-pan00.bmp",
+      "baseline_gpu_ms": 31.279026,
+      "reflected_gpu_ms": 38.804125,
+      "extra_gpu_ms": 7.525098999999997,
+      "baseline_draws": 7,
+      "reflected_draws": 14,
+      "extra_allocation_bytes": 59342848
+    },
+    {
+      "frame": "h12-z2-pan00.bmp",
+      "baseline_gpu_ms": 34.547422,
+      "reflected_gpu_ms": 40.213594,
+      "extra_gpu_ms": 5.666172000000003,
+      "baseline_draws": 7,
+      "reflected_draws": 14,
+      "extra_allocation_bytes": 59342848
+    },
+    {
+      "frame": "h00-z1-pan00.bmp",
+      "baseline_gpu_ms": 33.339156,
+      "reflected_gpu_ms": 38.484812,
+      "extra_gpu_ms": 5.145655999999995,
+      "baseline_draws": 7,
+      "reflected_draws": 14,
+      "extra_allocation_bytes": 59867136
+    },
+    {
+      "frame": "h00-z2-pan00.bmp",
+      "baseline_gpu_ms": 34.086958,
+      "reflected_gpu_ms": 37.310474,
+      "extra_gpu_ms": 3.2235159999999965,
+      "baseline_draws": 7,
+      "reflected_draws": 14,
+      "extra_allocation_bytes": 59867136
+    }
+  ],
+  "offscreen_reflector_probe": {
+    "classification": "matched viewport shift; already captured geometry only",
+    "results": [
+      {
+        "frame": "h12-z1-pan00.bmp",
+        "viewport_shift_internal_pixels": [
+          0,
+          -120
+        ],
+        "reflected_sha256": "a2e8e42247442570af9904cd9322e18eeec3f91d7cbfe492e399297137d09f29",
+        "sky_only_sha256": "bef22f97130dbc2e3ace40b6fc1b67f382d57b60119920c386a2859b65962a68",
+        "reflection_effect_changed_pixels": 1569,
+        "effect_crop_max_channel_error": 1,
+        "effect_crop_mean_channel_error": 3.6043829296424453e-07,
+        "top_three_rows_max_channel_error": 0
+      },
+      {
+        "frame": "h12-z2-pan00.bmp",
+        "viewport_shift_internal_pixels": [
+          0,
+          -120
+        ],
+        "reflected_sha256": "f7d2a3b96142fcac8a8d270884595825d1352872ea47403eb6a488099a6032f4",
+        "sky_only_sha256": "9736de74066ffe5af84c5554d9bbbdc7f7f3278991e3a1a5213a54801a7cfd1b",
+        "reflection_effect_changed_pixels": 495,
+        "effect_crop_max_channel_error": 0,
+        "effect_crop_mean_channel_error": 0.0,
+        "top_three_rows_max_channel_error": 0
+      },
+      {
+        "frame": "h00-z1-pan00.bmp",
+        "viewport_shift_internal_pixels": [
+          0,
+          -120
+        ],
+        "reflected_sha256": "643a7b31132f20e90c51abb26e6d017c2a449671d11b687ea5dbb7b7e23dc36d",
+        "sky_only_sha256": "31cfba45f2b95c7a3a9ccb92be36ad3897f5ef9cb113c1b06ff165880e4b4a50",
+        "reflection_effect_changed_pixels": 1587,
+        "effect_crop_max_channel_error": 0,
+        "effect_crop_mean_channel_error": 0.0,
+        "top_three_rows_max_channel_error": 0
+      },
+      {
+        "frame": "h00-z2-pan00.bmp",
+        "viewport_shift_internal_pixels": [
+          0,
+          -120
+        ],
+        "reflected_sha256": "abd33f51500391e03fc89a87fb93af271ea4c240093317cebf3cd9d39e34d5d3",
+        "sky_only_sha256": "af9e8eef87521015456b3b05ba42c2768d0a9dcd2af2f4ccd70b5461012eabc5",
+        "reflection_effect_changed_pixels": 518,
+        "effect_crop_max_channel_error": 0,
+        "effect_crop_mean_channel_error": 0.0,
+        "top_three_rows_max_channel_error": 0
+      }
+    ],
+    "limit": "does not prove provider culling or scene halo coverage"
+  },
+  "windows_d3d_probe": {
+    "classification": "standalone Windows Lab; not native integration",
+    "backend_source_sha256": "5ff97e6ac7371d61fd04ab6fbab417e22609954a2aa17fce368d1754e104eed2",
+    "backend_binary_sha256": "d698cb570aed65c472ec0f72968e357b8f2879965e7050c071575ae16daf95db",
+    "unchanged_tolerances": {
+      "rgb_mean_absolute_max": 3.0,
+      "rgb_p99_absolute_max": 20,
+      "silhouette_iou_min": 0.995,
+      "luminance_mean_delta_max": 2.0,
+      "purpose": "controlled same-packet port regression, not art-direction scoring",
+      "silhouette_mask": "nonzero alpha for transparent map frames; frozen RGB != background9 otherwise"
+    },
+    "results": [
+      {
+        "region": "freshwater",
+        "mode": "sky-only",
+        "frame": "h12-z1-pan00.bmp",
+        "packet_sha256": "f0eaec591f9f78924d9ae79d6e6a93227e3d2e1df320cdba2a414646e9db3094",
+        "shader_sha256": "07bbfd50e79201217b35e947fa7a48c05bfcfb26ea7ff56ad5b92d558ce21f88",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-natural-r6/freshwater/phase-0/h12-z1-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/freshwater/sky-only-h12-z1-pan00.bmp",
+        "d3d11_sha256": "b4233af7757bb90a6433033b46dab514076c71d803ea5ab3e8f2f723dbc905c6",
+        "metrics": {
+          "rgb_mean_absolute": 0.2545575980392157,
+          "rgb_p99_absolute": 5,
+          "max_channel_delta": 14,
+          "changed_channels": 398019,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.000981640808756792,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "freshwater",
+        "mode": "reflected",
+        "frame": "h12-z1-pan00.bmp",
+        "packet_sha256": "f0eaec591f9f78924d9ae79d6e6a93227e3d2e1df320cdba2a414646e9db3094",
+        "shader_sha256": "266b4b3549fa3c9028b61737c33458334624e2d28291fdd5104c28c19710e63d",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-r5/freshwater/combined/h12-z1-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/freshwater/reflected-h12-z1-pan00.bmp",
+        "d3d11_sha256": "c6efa54d480f2eeaa81ce307ec24509c5fc75ac515b74e7dfa406ae8e27235eb",
+        "metrics": {
+          "rgb_mean_absolute": 0.25364889705882354,
+          "rgb_p99_absolute": 5,
+          "max_channel_delta": 14,
+          "changed_channels": 395540,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0009974795955110013,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "freshwater",
+        "mode": "sky-only",
+        "frame": "h12-z2-pan00.bmp",
+        "packet_sha256": "6b12f59060cfb7b7fdbbe41274a92f34c17a1eb7cec36d3286097b128ae2ce10",
+        "shader_sha256": "07bbfd50e79201217b35e947fa7a48c05bfcfb26ea7ff56ad5b92d558ce21f88",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-natural-r6/freshwater/phase-0/h12-z2-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/freshwater/sky-only-h12-z2-pan00.bmp",
+        "d3d11_sha256": "d48eacc99267a2277c668d86c1db9dd4f0d2ecc0ad21c5a5178e9aba9fa2302d",
+        "metrics": {
+          "rgb_mean_absolute": 0.20674264705882353,
+          "rgb_p99_absolute": 4,
+          "max_channel_delta": 12,
+          "changed_channels": 92119,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0015127830879749073,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "freshwater",
+        "mode": "reflected",
+        "frame": "h12-z2-pan00.bmp",
+        "packet_sha256": "6b12f59060cfb7b7fdbbe41274a92f34c17a1eb7cec36d3286097b128ae2ce10",
+        "shader_sha256": "266b4b3549fa3c9028b61737c33458334624e2d28291fdd5104c28c19710e63d",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-r5/freshwater/combined/h12-z2-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/freshwater/reflected-h12-z2-pan00.bmp",
+        "d3d11_sha256": "aa07920f9d2ed2b60c91884072752c2bba9fd18d081efcd3e76c694aa24463bf",
+        "metrics": {
+          "rgb_mean_absolute": 0.2058921568627451,
+          "rgb_p99_absolute": 4,
+          "max_channel_delta": 12,
+          "changed_channels": 91522,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.001534692646798623,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "freshwater",
+        "mode": "sky-only",
+        "frame": "h00-z1-pan00.bmp",
+        "packet_sha256": "934465a438660c2b8940c9a0460ef8d27bb3782d385c9a809ff302638d98f3ff",
+        "shader_sha256": "07bbfd50e79201217b35e947fa7a48c05bfcfb26ea7ff56ad5b92d558ce21f88",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-natural-r6/freshwater/phase-0/h00-z1-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/freshwater/sky-only-h00-z1-pan00.bmp",
+        "d3d11_sha256": "879ceb1ab27f605c05ebb002a3b30b95d7d5f4c02da792d7a8960045a2d72214",
+        "metrics": {
+          "rgb_mean_absolute": 0.2801550245098039,
+          "rgb_p99_absolute": 5,
+          "max_channel_delta": 11,
+          "changed_channels": 425621,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0006846498161732383,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "freshwater",
+        "mode": "reflected",
+        "frame": "h00-z1-pan00.bmp",
+        "packet_sha256": "934465a438660c2b8940c9a0460ef8d27bb3782d385c9a809ff302638d98f3ff",
+        "shader_sha256": "266b4b3549fa3c9028b61737c33458334624e2d28291fdd5104c28c19710e63d",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-r5/freshwater/combined/h00-z1-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/freshwater/reflected-h00-z1-pan00.bmp",
+        "d3d11_sha256": "ec99d52f820871b9ff4993914f3c7b4a214dd9c13da94d062bbfabf54195e4b7",
+        "metrics": {
+          "rgb_mean_absolute": 0.2789126838235294,
+          "rgb_p99_absolute": 5,
+          "max_channel_delta": 11,
+          "changed_channels": 422804,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0006772204044220203,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "freshwater",
+        "mode": "sky-only",
+        "frame": "h00-z2-pan00.bmp",
+        "packet_sha256": "a11ede4fe88a8d8987189ad8593559529d8cc74cb962ae0946c00d33579b7763",
+        "shader_sha256": "07bbfd50e79201217b35e947fa7a48c05bfcfb26ea7ff56ad5b92d558ce21f88",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-natural-r6/freshwater/phase-0/h00-z2-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/freshwater/sky-only-h00-z2-pan00.bmp",
+        "d3d11_sha256": "29158cb3b3d0b3ff6829139b4de25e73bd5f138e05c9fa346f18b9c1a39c4ffb",
+        "metrics": {
+          "rgb_mean_absolute": 0.22743504901960784,
+          "rgb_p99_absolute": 4,
+          "max_channel_delta": 10,
+          "changed_channels": 98904,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0009370860293343225,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "freshwater",
+        "mode": "reflected",
+        "frame": "h00-z2-pan00.bmp",
+        "packet_sha256": "a11ede4fe88a8d8987189ad8593559529d8cc74cb962ae0946c00d33579b7763",
+        "shader_sha256": "266b4b3549fa3c9028b61737c33458334624e2d28291fdd5104c28c19710e63d",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-r5/freshwater/combined/h00-z2-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/freshwater/reflected-h00-z2-pan00.bmp",
+        "d3d11_sha256": "4c9748195ad79d8002ffa5c33ab3b374183c92ffe6addfaf17c2128644c9aae2",
+        "metrics": {
+          "rgb_mean_absolute": 0.2263639705882353,
+          "rgb_p99_absolute": 4,
+          "max_channel_delta": 10,
+          "changed_channels": 98262,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0009677382352220935,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "longcoast",
+        "mode": "sky-only",
+        "frame": "h12-z1-pan00.bmp",
+        "packet_sha256": "8177cf559ab3e5ae256258fd8a83a20b3ef615c23a051c59149b4d3570deaa77",
+        "shader_sha256": "0a743e9864b222c718c27f9f3d639869356de96da25dc40a1be8960ae6fa808e",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-natural-r6/longcoast/phase-0/h12-z1-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/longcoast/sky-only-h12-z1-pan00.bmp",
+        "d3d11_sha256": "232383ce6d60e9e65f4ddb3c983941ea1fc22b73a5c4319871f69613f4267604",
+        "metrics": {
+          "rgb_mean_absolute": 0.12495609780572652,
+          "rgb_p99_absolute": 3,
+          "max_channel_delta": 12,
+          "changed_channels": 322397,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.00494883359567519,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "longcoast",
+        "mode": "reflected",
+        "frame": "h12-z1-pan00.bmp",
+        "packet_sha256": "8177cf559ab3e5ae256258fd8a83a20b3ef615c23a051c59149b4d3570deaa77",
+        "shader_sha256": "239218ecaea0ccfe095e4a68554ad0f725ba7dbaabfa9fc4a65fffe7cf9cc975",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-r5/longcoast/combined/h12-z1-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/longcoast/reflected-h12-z1-pan00.bmp",
+        "d3d11_sha256": "5816550da4edb303d6ab67612dddc2e128fa7b4a30fc61ec24839def4f18b239",
+        "metrics": {
+          "rgb_mean_absolute": 0.12375331705467844,
+          "rgb_p99_absolute": 3,
+          "max_channel_delta": 12,
+          "changed_channels": 318014,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0049264769259888515,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "longcoast",
+        "mode": "sky-only",
+        "frame": "h12-z2-pan00.bmp",
+        "packet_sha256": "ce7c5824f092694c797e834bdbbd41098011963faf251b4b331569a33a6c8e14",
+        "shader_sha256": "0a743e9864b222c718c27f9f3d639869356de96da25dc40a1be8960ae6fa808e",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-natural-r6/longcoast/phase-0/h12-z2-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/longcoast/sky-only-h12-z2-pan00.bmp",
+        "d3d11_sha256": "3757e4411492647c644e42f3233cafcc353060d447a5601c129f3a832b8507dc",
+        "metrics": {
+          "rgb_mean_absolute": 0.10369837659441619,
+          "rgb_p99_absolute": 2,
+          "max_channel_delta": 10,
+          "changed_channels": 74019,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.005175532401581046,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "longcoast",
+        "mode": "reflected",
+        "frame": "h12-z2-pan00.bmp",
+        "packet_sha256": "ce7c5824f092694c797e834bdbbd41098011963faf251b4b331569a33a6c8e14",
+        "shader_sha256": "239218ecaea0ccfe095e4a68554ad0f725ba7dbaabfa9fc4a65fffe7cf9cc975",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-r5/longcoast/combined/h12-z2-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/longcoast/reflected-h12-z2-pan00.bmp",
+        "d3d11_sha256": "c5ac92fdd6ba8af4fe7f1ec6822518fbc062c023698d5c458d97dcea2e91aeb5",
+        "metrics": {
+          "rgb_mean_absolute": 0.10268281895757143,
+          "rgb_p99_absolute": 2,
+          "max_channel_delta": 10,
+          "changed_channels": 73044,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.005151913299716393,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "longcoast",
+        "mode": "sky-only",
+        "frame": "h00-z1-pan00.bmp",
+        "packet_sha256": "d8c3ed59a2d1fd1973bd2456a26d60d4b34b93af7a1154957f6d421b930376a4",
+        "shader_sha256": "0a743e9864b222c718c27f9f3d639869356de96da25dc40a1be8960ae6fa808e",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-natural-r6/longcoast/phase-0/h00-z1-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/longcoast/sky-only-h00-z1-pan00.bmp",
+        "d3d11_sha256": "e525dffc6eb936525cde200e89c5f128ac15a5290c20272258feefa768bb2f8d",
+        "metrics": {
+          "rgb_mean_absolute": 0.14617200740344305,
+          "rgb_p99_absolute": 3,
+          "max_channel_delta": 10,
+          "changed_channels": 351255,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0027450613518823367,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "longcoast",
+        "mode": "reflected",
+        "frame": "h00-z1-pan00.bmp",
+        "packet_sha256": "d8c3ed59a2d1fd1973bd2456a26d60d4b34b93af7a1154957f6d421b930376a4",
+        "shader_sha256": "239218ecaea0ccfe095e4a68554ad0f725ba7dbaabfa9fc4a65fffe7cf9cc975",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-r5/longcoast/combined/h00-z1-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/longcoast/reflected-h00-z1-pan00.bmp",
+        "d3d11_sha256": "7745082f54135c9c6cfcf56eef4b5e548a63fdb02c1b084a1860b514f19131ba",
+        "metrics": {
+          "rgb_mean_absolute": 0.14462637142092588,
+          "rgb_p99_absolute": 3,
+          "max_channel_delta": 10,
+          "changed_channels": 346415,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0027489731070269585,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "longcoast",
+        "mode": "sky-only",
+        "frame": "h00-z2-pan00.bmp",
+        "packet_sha256": "c9406dcbe995d2f3c7397d8f259e682b239d9b4d38eeeb39dc3f234a082d3f21",
+        "shader_sha256": "0a743e9864b222c718c27f9f3d639869356de96da25dc40a1be8960ae6fa808e",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-natural-r6/longcoast/phase-0/h00-z2-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/longcoast/sky-only-h00-z2-pan00.bmp",
+        "d3d11_sha256": "2e4a08e92b233d252e2304eb1571beaa3e9d59b5829bc0e5c84e4771ad635967",
+        "metrics": {
+          "rgb_mean_absolute": 0.12111895311152737,
+          "rgb_p99_absolute": 3,
+          "max_channel_delta": 9,
+          "changed_channels": 81375,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.003373353179908191,
+          "pass": true
+        },
+        "repeat_identical": true
+      },
+      {
+        "region": "longcoast",
+        "mode": "reflected",
+        "frame": "h00-z2-pan00.bmp",
+        "packet_sha256": "c9406dcbe995d2f3c7397d8f259e682b239d9b4d38eeeb39dc3f234a082d3f21",
+        "shader_sha256": "239218ecaea0ccfe095e4a68554ad0f725ba7dbaabfa9fc4a65fffe7cf9cc975",
+        "metal": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-r5/longcoast/combined/h00-z2-pan00.bmp",
+        "d3d11": "Renderer/terrain_lab/v2/audits/beauty/out/water-reflection-d3d-r5/longcoast/reflected-h00-z2-pan00.bmp",
+        "d3d11_sha256": "9ba4f43cec002e2548e5b9f500c17936cbe0adfc1f7113578a40e08052d93c03",
+        "metrics": {
+          "rgb_mean_absolute": 0.11981443076740106,
+          "rgb_p99_absolute": 3,
+          "max_channel_delta": 9,
+          "changed_channels": 80252,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0033082497101286044,
+          "pass": true
+        },
+        "repeat_identical": true
+      }
+    ],
+    "reflection_effect_comparisons": [
+      {
+        "region": "freshwater",
+        "frame": "h12-z1-pan00.bmp",
+        "d3d_reflection_changed_pixels": 2414,
+        "effect_delta_max_channel": 4,
+        "effect_delta_mean_channel": 0.0010582107843137255
+      },
+      {
+        "region": "freshwater",
+        "frame": "h12-z2-pan00.bmp",
+        "d3d_reflection_changed_pixels": 732,
+        "effect_delta_max_channel": 3,
+        "effect_delta_mean_channel": 0.0010343137254901962
+      },
+      {
+        "region": "freshwater",
+        "frame": "h00-z1-pan00.bmp",
+        "d3d_reflection_changed_pixels": 2425,
+        "effect_delta_max_channel": 5,
+        "effect_delta_mean_channel": 0.0014782475490196078
+      },
+      {
+        "region": "freshwater",
+        "frame": "h00-z2-pan00.bmp",
+        "d3d_reflection_changed_pixels": 746,
+        "effect_delta_max_channel": 4,
+        "effect_delta_mean_channel": 0.001321078431372549
+      },
+      {
+        "region": "longcoast",
+        "frame": "h12-z1-pan00.bmp",
+        "d3d_reflection_changed_pixels": 5123,
+        "effect_delta_max_channel": 4,
+        "effect_delta_mean_channel": 0.0015117221181577616
+      },
+      {
+        "region": "longcoast",
+        "frame": "h12-z2-pan00.bmp",
+        "d3d_reflection_changed_pixels": 1584,
+        "effect_delta_max_channel": 3,
+        "effect_delta_mean_channel": 0.0014448235364076948
+      },
+      {
+        "region": "longcoast",
+        "frame": "h00-z1-pan00.bmp",
+        "d3d_reflection_changed_pixels": 5211,
+        "effect_delta_max_channel": 5,
+        "effect_delta_mean_channel": 0.0019786184699551036
+      },
+      {
+        "region": "longcoast",
+        "frame": "h00-z2-pan00.bmp",
+        "d3d_reflection_changed_pixels": 1610,
+        "effect_delta_max_channel": 3,
+        "effect_delta_mean_channel": 0.0017690958285017692
+      }
+    ],
+    "shared_resource_read_incident": {
+      "classification": "Windows shared-resource open failure before rendering; unchanged local resources verified",
+      "packet_sha256": "d8c3ed59a2d1fd1973bd2456a26d60d4b34b93af7a1154957f6d421b930376a4",
+      "resource_count": 1296,
+      "resource_bytes": 535255320,
+      "all_local_resource_hashes_match": true,
+      "message": "packet content resource missing",
+      "case": "longcoast reflected h00-z1",
+      "recovery": "explicit resume skips and verifies completed outputs; no image or shader tolerance changed"
+    },
+    "limits": [
+      "two coastal regions, not full promotion matrix",
+      "no native-game performance measurement"
+    ]
+  },
+  "constraints": [
+    "one scene-linear shader namespace",
+    "render scale 1",
+    "common water plane z=0",
+    "t121 overridden only for main/water draws; feature material alias preserved"
+  ],
+  "remaining": [
+    "full promotion matrix and integration delivery",
+    "provider halo/culling coverage for off-viewport reflectors",
+    "roughness/fade calibration",
+    "river elevations and multiple water planes",
+    "human visual review"
+  ]
+}

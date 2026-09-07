@@ -115,6 +115,26 @@ public:
         visit(visit,1,origin_x,origin_y,side);
         return result;
     }
+    // Visit a bounded disk once when preparing a tile's exact query domain.
+    // Empty subtrees are dependencies too: a newly closer coast must invalidate.
+    template<class Observe, class Segment>
+    bool gather(Point p, double radius, Observe observe, Segment segment) const {
+        auto visit=[&](auto&& self,std::uint64_t id,int x,int y,int size)->bool {
+            if(box_distance_squared(p,x,y,size)>radius*radius) return true;
+            auto found=nodes.find(id);
+            if(found==nodes.end()) {observe(id,0);return true;}
+            if(size==1) {
+                observe(id,found->second.revision);
+                for(auto const& edge:found->second.segments) if(!segment(id,edge)) return false;
+                return true;
+            }
+            int half=size/2;
+            for(int child=0;child<4;child++)
+                if(!self(self,id*4+child,x+(child&1)*half,y+(child>>1)*half,half))return false;
+            return true;
+        };
+        return visit(visit,1,origin_x,origin_y,side);
+    }
     std::size_t estimated_bytes() const {
         std::size_t bytes=nodes.size()*(sizeof(Node)+sizeof(std::uint64_t)+4*sizeof(void*))+nodes.bucket_count()*sizeof(void*);
         for(auto const& pair:nodes) bytes+=pair.second.segments.capacity()*sizeof(CoastSegment);

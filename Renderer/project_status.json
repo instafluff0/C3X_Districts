@@ -135,8 +135,17 @@
       "bank_rock_findings": "terrain_lab/v2/audits/beauty/RIVER_BANK_ROCK_PASS_r3.md",
       "bank_rock_evidence": "terrain_lab/v2/audits/beauty/RIVER_BANK_ROCK_r3_EVIDENCE.json"
     },
+    "water_effects_exploration": {
+      "status": "active_user_pivot",
+      "requested_by_user": true,
+      "findings": "terrain_lab/v2/audits/beauty/WATER_EFFECTS_EXPLORATION.md",
+      "evidence": "terrain_lab/v2/audits/beauty/WATER_REFLECTION_r5_EVIDENCE.json",
+      "candidate": "User said Water looks great about water-natural-r6 and requested object reflections. water-reflection-r5 adds GPU planar reflections in the standalone Metal and D3D11 Lab: 20 matched combined frames, eight offline/GPU comparisons, four exact disabled controls, four offscreen crop probes and 16 passing Metal/D3D11 comparisons with identical Windows repeats. No native delivery or promotion.",
+      "next_action": "Combined reflection candidate is ready for visual review. Integration implementation notes are in WATER_OBJECT_REFLECTIONS.md; full promotion coverage, provider halo/culling coverage and native cost remain delivery gates. Common sea/pool plane only; multi-height rivers, roughness/fade and seabed detail remain later work. Animation and coastal surf are deferred. Preserve the fixed benchmarks, water-natural-r6, older prototypes and all milestone gates.",
+      "approval": null
+    },
     "surface_richness_campaign": {
-      "status": "active",
+      "status": "preserved_user_pivot_to_water",
       "requested_by_user": true,
       "plan": "terrain_lab/v2/audits/beauty/SURFACE_RICHNESS_CAMPAIGN.md",
       "baseline": "river-corridor-r3 (four regions); shadow-receiver-r1 (broader preserved matrix)",
@@ -2362,13 +2371,19 @@
       "Pickup replay p95 unit redraw 1.30 ms; fixed jumps 18\u201339 ms; cached/cold pixel parity passes unchanged thresholds.",
       "18 both-zoom/day-night/wrap/source-object/synthetic-volcano matrix cases pass; terrain/activity edits match fresh reset exactly.",
       "Windows source-shadow/cutout/MSAA hardware checks and full workflow pass, including 81 unit tests and approved injected compile.",
-      "Verified DLL staged and test launcher dry run passes. Launcher uses matching RUN.bat injection; Civ III was not launched."
+      "Verified DLL staged. Standard INSTALL.bat installs matching code; normal game launches select pickup-r1 and detailed diagnostics by default. Civ III was not launched.",
+      "Mapped reported execute fault to direct world-topology debug import retaining an invalid installer address; corrected to existing p_OutputDebugStringA. Normal gameplay no longer creates a trace file.",
+      "User logs confirm rendering succeeds; black map isolated to ownership-validation rejecting caster/prefetch-only replacement claims. Previous DLL reproduces the failure in the headless production-boundary test.",
+      "Corrected native ownership publication and cache copies preserve caster meshes with zero non-RENDER replacement flags; strict injected validator retained and exercised from its actual source.",
+      "Exact inland flat-ground certificate preserves terrain/coast edit dependencies; reference image unchanged byte-for-byte and cold/cached scroll parity remains 3 pixels / 33 channel error.",
+      "User screenshots isolated unscoped JSON material binding: root mountain/coast channels now resolve correctly. Pinned source/assets verified; headless pickup checks now include production custom skin/vegetation overrides.",
+      "Actual RGB555 terrain copy reproduces screenshot banding; final-copy ordered rounding restores gradients on known RGB555/RGB565 DIBs with full-color caches unchanged. Fifty focused tests and Windows GDI smoke pass; destination-format logs identify runtime format."
     ],
     "remaining": [
-      "User-run gameplay checkpoint and logs. First-map cold geometry remains approximately 10\u201313 seconds in the measured scene."
+      "User runs INSTALL.bat and checks corrected materials/gradients using usual OutputDebugStringA diagnostics. Full Lab visual parity remains open; cold first-map preparation remains slow."
     ],
     "visual_approval": "pending; no historical Lab acceptance or new convergence gate claimed",
     "evidence": "native/profile_v2/checkpoint.json",
-    "test_launcher": "Renderer/TEST_IN_GAME.bat"
+    "test_launcher": "INSTALL.bat, then launch Civ III normally"
   }
 }

@@ -128,6 +128,7 @@ def integrated_terrain_preview_results() -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for name, output, width, height, center_x, center_y, tile_width, hour in cases:
         command = (
+            r'set "C3X_RENDERER_VISUAL_PROFILE=frozen" && set "C3X_RENDERER_TRACE=0" && '
             r'build\biq_preview.exe build\candidate\C3XRenderer.dll ..\.. '
             r'..\default.custom_rendering.txt '
             r'..\preview\out\terrain_lab\test_biq_l13_rivers_192.csv '
@@ -172,6 +173,7 @@ def approved_terrain_smoke_result() -> dict[str, Any]:
         print(f"SKIP approved_terrain_integration: {detail}")
         return {"name": "approved_terrain_integration", "status": "skip", "reason": detail}
     command = (
+        r'set "C3X_RENDERER_VISUAL_PROFILE=frozen" && set "C3X_RENDERER_TRACE=0" && '
         r'build\native_smoke.exe build\candidate\C3XRenderer.dll '
         r'--definitions ..\.. ..\..\Renderer\default.custom_rendering.txt'
     )

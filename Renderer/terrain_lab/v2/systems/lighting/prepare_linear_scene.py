@@ -243,6 +243,13 @@ def generate():
 #endif
 '''+marker)
     marker = 'float4 q6_raw_feature(FeaturePixelInput input)'
+    ao_marker = '        float ambient_visibility = lab_mode > 2.5 ? input.shape_visibility.y : 1.0;'
+    assert s.count(ao_marker)==1
+    s=s.replace(ao_marker,ao_marker+'''
+#ifdef Q2_CACHED_OCCLUSION
+        ambient_visibility*=q2_cached_occlusion(input,geometry_normal);
+#endif
+''')
     normal_marker = '            : micro_normal;'
     assert s.count(normal_marker)==1
     s=s.replace(normal_marker,normal_marker+'''

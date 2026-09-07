@@ -25,4 +25,19 @@ void q2_cached_normal(PixelInput input,float3 n,inout float3 material_normal) {
     float3 rebuilt=normalize(n-tangent*xy.x+bitangent*xy.y);
     material_normal=normalize(lerp(material_normal,rebuilt,envelope));
 }
+#ifdef Q2_CACHED_OCCLUSION
+float q2_cached_occlusion(PixelInput input,float3 n) {
+    float envelope=q2_base_detail_envelope(input,n);
+    if(envelope<=0)return 1;
+    float4 w=max(input.material_weights,0);float t=max(input.material_tundra,0);
+    if(marsh_enabled<.5) {w.x+=w.w;w.w=0;}
+    float total=max(.001,dot(w,1)+t);w/=total;t/=total;
+    float ao=resource_base_texture_0.Sample(material_sampler,input.uv).b*w.x
+        +resource_base_texture_1.Sample(material_sampler,input.uv).b*w.y
+        +resource_base_texture_2.Sample(material_sampler,input.uv).b*w.z
+        +resource_base_texture_3.Sample(material_sampler,input.uv).b*w.w
+        +resource_base_texture_4.Sample(material_sampler,input.uv).b*t;
+    return lerp(1,saturate(ao),envelope);
+}
+#endif
 #endif

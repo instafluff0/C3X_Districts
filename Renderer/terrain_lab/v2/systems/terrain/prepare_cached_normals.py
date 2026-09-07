@@ -1,5 +1,6 @@
 """Source-kernel normal baking diagnostic; cache scale is explicitly calibrated."""
 import hashlib
+import argparse
 import json
 from pathlib import Path
 import struct
@@ -35,21 +36,26 @@ def verify_source():
 
 def write_dds(path,values):
     height,width=values.shape[:2]
+    channels=values.shape[2]
+    assert channels in (2,4)
     levels=[]
     while True:
         levels.append(np.rint(np.clip(values,0,1)*65535).astype('<u2').tobytes())
         if values.shape[0]==1:break
         values=(values[::2,::2]+values[1::2,::2]+values[::2,1::2]+values[1::2,1::2])*.25
     header=[0]*31
-    header[:7]=[124,0x2100f,height,width,width*4,0,len(levels)]
+    header[:7]=[124,0x2100f,height,width,width*channels*2,0,len(levels)]
     header[18:22]=[32,4,struct.unpack('<I',b'DX10')[0],0]
     header[26]=0x401008
-    path.write_bytes(b'DDS '+struct.pack('<31I',*header)+struct.pack('<5I',35,3,0,1,0)+b''.join(levels))
+    path.write_bytes(b'DDS '+struct.pack('<31I',*header)+struct.pack('<5I',35 if channels==2 else 11,3,0,1,0)+b''.join(levels))
 
 
 def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--ao',action='store_true')
+    args=parser.parse_args()
     proof=verify_source()
-    destination=V2/'fixtures/beauty/source-normal-cache-r1'
+    destination=V2/'fixtures/beauty'/('source-normal-cache-r2' if args.ao else 'source-normal-cache-r1')
     destination.mkdir(parents=True,exist_ok=True)
     (destination/'.gitignore').write_text('*.dds\n')
     source=ROOT/'Renderer/packs/Civ5EnvironmentSkin'
@@ -62,15 +68,26 @@ def main():
         im=im.resize((1024,1024),Image.Resampling.BOX)
         field=np.array(im,dtype=np.float32)/255
         normals=encoded_normals(np.pad(field,1,mode='wrap'))
+        ao_metadata=None
+        if args.ao:
+            ao_path=V2/'audits/beauty/out/ground-shader-source'/(name+'-ao.rgba8')
+            result=np.fromfile(ao_path,dtype=np.uint8).reshape(1024,1024,4)
+            assert np.all(result[:,:,0]==62) and np.all(result[:,:,2]==0) and np.all(result[:,:,3]==255)
+            ao=result[:,:,1].astype(np.float32)/255
+            normals=np.concatenate([normals,ao[:,:,None],np.ones_like(ao)[:,:,None]],axis=2)
+            ao_metadata={'source_compute':'shader-00426f26.dxbc','raw_output_sha256':hashlib.sha256(ao_path.read_bytes()).hexdigest(),
+                'minimum':float(ao.min()),'mean':float(ao.mean()),'maximum':float(ao.max()),
+                'source_scale':1,'padded_high':1040,'padded_half':520,'padding_wrap':True}
         target=destination/(name+'.dds')
         write_dds(target,normals)
         records.append({'material':name,'height':path.relative_to(ROOT).as_posix(),
             'height_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
             'source_size':list(original_size),'cache_size':[1024,1024],
-            'normal':target.relative_to(ROOT).as_posix(),'normal_sha256':hashlib.sha256(target.read_bytes()).hexdigest()})
+            'normal':target.relative_to(ROOT).as_posix(),'normal_sha256':hashlib.sha256(target.read_bytes()).hexdigest(),
+            'occlusion':ao_metadata})
     report={'classification':'source-kernel reconstruction verified; per-material cache size/scale and processing boundary remain Lab hypotheses',
         'normal_scale':1,'input_height':'normalized source red, BOX downsample before kernel',
-        'mips':'average encoded RG after normal construction, RG16_UNORM',
+        'mips':'average encoded normal and optional AO after construction; RG16_UNORM or RGBA16_UNORM',
         'limitation':'per-material baking precedes cross-material blending; source engine bakes combined height',
         'source_compute_parity':proof,'materials':records}
     (destination/'provenance.json').write_text(json.dumps(report,indent=2)+'\n')

@@ -251,8 +251,37 @@ int render_job(int argc, char **argv) {
       auto depthRead = [dev newDepthStencilStateWithDescriptor:depthDesc];
       depthDesc.depthCompareFunction = MTLCompareFunctionAlways;
       auto depthOff = [dev newDepthStencilStateWithDescriptor:depthDesc];
+      std::string reflection_dir = argc > 13 ? argv[13] : "";
+      bool reflect_scene = !reflection_dir.empty();
+      check(!reflect_scene || (linear && p.shader_count == 1 && s.scale == 1),
+            "reflection prototype requires one scene-linear namespace at render scale 1");
+      if (reflect_scene)
+        for (auto &d : p.draws)
+          check(d.feature || d.textures[121] == 0, "reflection target slot already occupied");
+      uint32_t w = p.width * s.scale, h = p.height * s.scale;
+      check(w <= 8192 && h <= 8192, "scaled viewport exceeds limit");
+      id<MTLTexture> reflection_color = nil, reflection_resolved = nil;
+      std::vector<Shader> reflection_vs, reflection_ps;
+      if (reflect_scene) {
+        auto rd = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:target_format width:w height:h mipmapped:NO];
+        rd.storageMode = MTLStorageModeShared;
+        rd.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+        reflection_resolved = [dev newTextureWithDescriptor:rd];
+        reflection_color = reflection_resolved;
+        if (s.samples > 1) {
+          rd.textureType = MTLTextureType2DMultisample; rd.sampleCount = s.samples;
+          rd.storageMode = MTLStorageModePrivate;
+          reflection_color = [dev newTextureWithDescriptor:rd];
+        }
+        check(reflection_color && reflection_resolved, "reflection target allocation failed");
+        reflection_vs = {shader(dev,reflection_dir,"VSMain"),shader(dev,reflection_dir,"VSFeature")};
+        reflection_ps = {shader(dev,reflection_dir,"PSMain"),shader(dev,reflection_dir,"PSFeature")};
+      }
       std::vector<id<MTLRenderPipelineState>> pipelines;
       std::vector<id<MTLBuffer>> arguments;
+      for (unsigned stage = 0; stage < (reflect_scene ? 2u : 1u); stage++) {
+      auto &stage_vs = stage ? reflection_vs : vs;
+      auto &stage_ps = stage ? reflection_ps : ps;
       for (auto &d : p.draws) {
         auto vd = [MTLVertexDescriptor vertexDescriptor];
         for (unsigned i = 0; i < d.attributes.size(); i++) {
@@ -263,8 +292,8 @@ int render_job(int argc, char **argv) {
         }
         vd.layouts[30].stride = d.stride;
         auto pd = [MTLRenderPipelineDescriptor new];
-        pd.vertexFunction = vs[d.shader_index*2+d.feature].fn;
-        pd.fragmentFunction = ps[d.shader_index*2+d.feature].fn;
+        pd.vertexFunction = stage_vs[d.shader_index*2+d.feature].fn;
+        pd.fragmentFunction = stage_ps[d.shader_index*2+d.feature].fn;
         pd.vertexDescriptor = vd;
         pd.rasterSampleCount = s.samples;
         pd.colorAttachments[0].pixelFormat = target_format;
@@ -290,15 +319,17 @@ int render_job(int argc, char **argv) {
           throw std::runtime_error(error.localizedDescription.UTF8String);
         pipelines.push_back(pipeline);
         id<MTLArgumentEncoder> encoder =
-            ps[d.shader_index*2+d.feature].ids.empty()
+            stage_ps[d.shader_index*2+d.feature].ids.empty()
                 ? nil
-                : [ps[d.shader_index*2+d.feature].fn newArgumentEncoderWithBufferIndex:0];
+                : [stage_ps[d.shader_index*2+d.feature].fn newArgumentEncoderWithBufferIndex:0];
         auto args = [dev
             newBufferWithLength:std::max<NSUInteger>(1, encoder.encodedLength)
                         options:MTLResourceStorageModeShared];
         [encoder setArgumentBuffer:args offset:0];
-        for (auto binding : ps[d.shader_index*2+d.feature].ids) {
-          if (binding < 128)
+        for (auto binding : stage_ps[d.shader_index*2+d.feature].ids) {
+          if (binding == 121 && reflect_scene && !stage && !d.feature)
+            [encoder setTexture:reflection_resolved atIndex:binding];
+          else if (binding < 128)
             [encoder setTexture:g.textures[d.textures[binding]]
                         atIndex:binding];
           else if (binding < 130)
@@ -314,8 +345,7 @@ int render_job(int argc, char **argv) {
         }
         arguments.push_back(args);
       }
-      uint32_t w = p.width * s.scale, h = p.height * s.scale;
-      check(w <= 8192 && h <= 8192, "scaled viewport exceeds limit");
+      }
       auto td = [MTLTextureDescriptor
           texture2DDescriptorWithPixelFormat:target_format
                                        width:w
@@ -349,10 +379,17 @@ int render_job(int argc, char **argv) {
           std::max(allocation_high_water, uint64_t(dev.currentAllocatedSize));
       for (unsigned frame = 0; frame < repeats; frame++) {
         auto cb = [queue commandBuffer];
+        // The reflection resolves before the main surface samples it. Both
+        // passes share packet geometry/resources and one command buffer.
+        for (unsigned stage = 0; stage < (reflect_scene ? 2u : 1u); stage++) {
+        bool mirrored = reflect_scene && stage == 0;
+        size_t pipeline_offset = mirrored ? p.draws.size() : 0;
+        id<MTLTexture> stage_color = mirrored ? reflection_color : color;
+        id<MTLTexture> stage_resolved = mirrored ? reflection_resolved : resolved;
         for (size_t i = 0; i < p.draws.size(); i++) {
           auto &d = p.draws[i];
           auto pass = [MTLRenderPassDescriptor renderPassDescriptor];
-          pass.colorAttachments[0].texture = color;
+          pass.colorAttachments[0].texture = stage_color;
           pass.colorAttachments[0].loadAction =
               i ? MTLLoadActionLoad : MTLLoadActionClear;
           pass.colorAttachments[0].clearColor =
@@ -361,7 +398,7 @@ int render_job(int argc, char **argv) {
               s.samples > 1 && (!linear || i+1==p.draws.size()) ? MTLStoreActionStoreAndMultisampleResolve
                             : MTLStoreActionStore;
           if (s.samples > 1 && (!linear || i+1==p.draws.size()))
-            pass.colorAttachments[0].resolveTexture = resolved;
+            pass.colorAttachments[0].resolveTexture = stage_resolved;
           if (linear) {
             auto v = pass.colorAttachments[1]; v.texture = validity;
             v.loadAction = i ? MTLLoadActionLoad : MTLLoadActionClear;
@@ -376,7 +413,7 @@ int render_job(int argc, char **argv) {
           pass.depthAttachment.storeAction = MTLStoreActionStore;
           pass.depthAttachment.clearDepth = 1;
           auto e = [cb renderCommandEncoderWithDescriptor:pass];
-          [e setRenderPipelineState:pipelines[i]];
+          [e setRenderPipelineState:pipelines[pipeline_offset+i]];
           [e setCullMode:MTLCullModeNone];
           if (linear) [e setDepthStencilState:d.depth_mode == 2 ? depthState : d.depth_mode == 1 ? depthRead : depthOff];
           else if (d.depth) [e setDepthStencilState:depthState];
@@ -384,7 +421,9 @@ int render_job(int argc, char **argv) {
                                      s.offset_y * s.scale * p.downsample,
                                      double(w), double(h), 0, 1}];
           [e setVertexBuffer:g.buffers[d.vertex_buffer] offset:0 atIndex:30];
-          [e setFragmentBuffer:arguments[i] offset:0 atIndex:0];
+          [e setFragmentBuffer:arguments[pipeline_offset+i] offset:0 atIndex:0];
+          if (reflect_scene && !mirrored)
+            [e useResource:reflection_resolved usage:MTLResourceUsageRead stages:MTLRenderStageFragment];
           for (auto t : g.textures)
             [e useResource:t
                      usage:MTLResourceUsageRead
@@ -397,6 +436,7 @@ int render_job(int argc, char **argv) {
                 vertexStart:0
                 vertexCount:d.count];
           [e endEncoding];
+        }
         }
         [cb commit];
         [cb waitUntilCompleted];
@@ -497,13 +537,14 @@ int render_job(int argc, char **argv) {
               "bytes\":%llu,\"allocation_scope\":\"sampled at upload, target "
               "creation and completed frame; not driver transient "
               "peak\",\"allocated_bytes\":%llu,\"texture_count\":%zu,\"draw_"
-              "count\":%zu,\"batch_frames\":%u,\"new_texture_uploads\":%zu,"
+              "count\":%zu,\"reflection_passes\":%u,\"batch_frames\":%u,\"new_texture_uploads\":%zu,"
               "\"samples\":%u,\"anisotropy\":%u,\"render_scale\":%u,\"output_"
               "size\":[%u,%u],\"camera_offset\":[%.6f,%.6f]}\n",
               gpu_ms / repeats, wall_ms,
               (unsigned long long)allocation_high_water,
               (unsigned long long)dev.currentAllocatedSize, p.textures.size(),
-              p.draws.size(), repeats, texture_cache.size() - uploads_before,
+              p.draws.size() * (reflect_scene ? 2 : 1), reflect_scene ? 1u : 0u,
+              repeats, texture_cache.size() - uploads_before,
               s.samples, s.anisotropy, s.scale, p.width / p.downsample,
               p.height / p.downsample, s.offset_x, s.offset_y);
       fclose(metrics);

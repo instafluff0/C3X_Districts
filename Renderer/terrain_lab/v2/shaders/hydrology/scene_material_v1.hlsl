@@ -21,6 +21,12 @@ float q3_source_repeat(float requested) {
  float period=Q3_MATERIAL_WRAP_WIDTH*.5;
  return period>0?round(requested*period)/period:requested;
 }
+#ifdef Q3_WATER_EFFECTS
+#include "water_effects.hlsl"
+#endif
+#ifdef Q3_NATURAL_WATER
+#include "water_natural.hlsl"
+#endif
 float4 q3_authored_bed_detail(PixelInput input) {
  float2 projected=q3_source_world(input)/1.0+float2(.29,.53);
  float variant=floor(macro_decal_hash(floor(projected))*4);
@@ -109,6 +115,9 @@ float4 q3_water_material(PixelInput input) {
   source_roughness=rcp(1+dot(variance,float2(2,2)));
  }
 #endif
+#ifdef Q3_WATER_EFFECTS
+ if(kind>4.5&&kind<5.5)normal=q3_effect_normal(input,normal);
+#endif
  float3 illumination=q6_receiver_illumination(input,normal,1,1);
  if(kind>8.5&&kind<9.5){
   // The default keeps the frozen analytic distance. Q3_CONTINUOUS_RIVERS
@@ -167,6 +176,9 @@ float4 q3_water_material(PixelInput input) {
  }
  clip(-sd-.0001);
  if(kind<4.5)return float4(q3_scene_bed(input)*q6_receiver_illumination(input,q3_authored_bed_normal(input),1,1),1);
+#ifdef Q3_NATURAL_WATER
+ return q3_natural_water(input);
+#endif
  // Optical absorption over separately shaded authored bed; no opaque water plate.
  float alpha=1-exp(-depth*3.2);
  float3 tint=lerp(float3(.023,.074,.096),float3(.003,.015,.040),smoothstep(.18,.43,depth))*illumination;
@@ -179,6 +191,9 @@ float4 q3_water_material(PixelInput input) {
   +environment_moon_color*environment_moon_intensity*pow(saturate(dot(normal,moonhalf)),180);
  tint+=reflection*fresnel*environment_water_fresnel+glint*.12*source_roughness*environment_water_specular
   *q6_receiver_visibility(input,normal,1);
+#ifdef Q3_WATER_EFFECTS
+ q3_effect_color(input,normal,illumination,tint,alpha);
+#endif
  return float4(tint,alpha);
 }
 #endif

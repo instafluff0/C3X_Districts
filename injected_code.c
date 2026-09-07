@@ -26757,7 +26757,7 @@ ensure_custom_renderer_loaded ()
 		(void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
 	if (get_environment != NULL)
 		get_environment ("C3X_RENDERER_VISUAL_PROFILE", visual_profile, sizeof visual_profile);
-	is->custom_renderer_capture_world_topology = strcmp (visual_profile, "pickup-r1") == 0;
+	is->custom_renderer_capture_world_topology = strcmp (visual_profile, "frozen") != 0;
 	is->custom_renderer_module = LoadLibraryA (path);
 	if (is->custom_renderer_module != NULL) {
 		is->custom_renderer_get_api_version = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_get_api_version");
@@ -27182,7 +27182,8 @@ capture_custom_renderer_world_topology ()
 		finished.QuadPart, is->custom_renderer_requested_frames, count, modified,
 		is->custom_renderer_world_topology_revision, count * (unsigned int)sizeof(unsigned int),
 		1000.0 * (double)(finished.QuadPart - started.QuadPart) / (double)is->custom_renderer_qpc_frequency.QuadPart);
-	OutputDebugStringA (detail);
+	detail[(sizeof detail) - 1] = '\0';
+	(*p_OutputDebugStringA) (detail);
 	return true;
 }
 
@@ -27272,6 +27273,15 @@ composite_custom_renderer_frame ()
 		return false;
 	}
 	if (! validate_custom_renderer_replacement_ownership (&output)) {
+		char detail[256];
+		unsigned int unexpected_halo = 0;
+		if (output.replacement_tile_flags != NULL && output.replacement_tile_count == (unsigned int)is->custom_renderer_tile_count)
+			for (unsigned int n = 0; n < output.replacement_tile_count; n++)
+				if (!(is->custom_renderer_tiles[n].tile_flags & C3X_RENDERER_TILE_RENDER) && output.replacement_tile_flags[n]) unexpected_halo++;
+		snprintf (detail, sizeof detail, "[C3X renderer] ownership rejected: captured=%d replacements=%u fallback=%u unexpected_halo=%u\n",
+			is->custom_renderer_tile_count, output.replacement_tile_count, output.fallback_tile_count, unexpected_halo);
+		detail[(sizeof detail) - 1] = '\0';
+		(*p_OutputDebugStringA) (detail);
 		log_custom_renderer_event ("ownership-validation", C3X_RENDERER_RESULT_ERROR);
 		return false;
 	}

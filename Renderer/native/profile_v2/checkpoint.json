@@ -80,12 +80,12 @@
     "report": "Renderer/verification/pickup/full.json"
   },
   "pending": [
-    "User-run gameplay checkpoint: subjective scroll/unit-switch experience and diagnostic logs"
+    "User runs normal INSTALL.bat and checks corrected materials/gradients with usual debugger output. Initial preparation remains slow."
   ],
   "external_blocker": null,
   "source_csv_sha256": "d778d526d51e36e52af3166e77ff24435aa605da768dbef0d1d38a572ab42283",
   "image_sha256": "4982dfd41f150c06b1359be0ee722e6bf1eca9f7d3176e17cc59901fdb49d8de",
-  "dll_sha256": "8273d8d7877a8da8f8bfea69571b096558b3babe9e26c1032b16f008f75db985",
+  "dll_sha256": "ac85901c046bcd4baf8d51a3c22d834379ce1db52662c6095d5ba5ae1cc52246",
   "resolved_frozen_regression": {
     "status": "fail",
     "test": "several-tile jump overlap versus cold reconstruction",
@@ -151,10 +151,119 @@
     "report": "Renderer/verification/pickup/full.json"
   },
   "launcher": {
+    "path": "INSTALL.bat, then launch Civ III normally",
+    "requires_special_launcher": false,
+    "requires_environment_overrides": false,
+    "optional_test_launcher": "Renderer/TEST_IN_GAME.bat",
+    "game_launched": false
+  },
+  "normal_install_defaults": {
     "status": "pass",
-    "path": "Renderer/TEST_IN_GAME.bat",
-    "uses_matching_injection": true,
-    "separate_install_required": false,
-    "dry_run_report": "Renderer/verification/pickup/launcher.json"
+    "profile": "pickup-r1",
+    "trace_level": 2,
+    "environment_overrides": false,
+    "native_smoke": "pass",
+    "approved_injected_compile": "pass",
+    "focused_unit_tests": 47,
+    "dll_staged": true,
+    "reports": [
+      "Renderer/verification/pickup/defaults.json",
+      "Renderer/verification/pickup/logging-fix-build.json"
+    ],
+    "custom_configuration": "Existing custom.c3x_config.ini enables custom rendering.",
+    "installed_executable_modified": false,
+    "logging": "OutputDebugStringA only; no automatic file output"
+  },
+  "logging_crash_fix": {
+    "status": "user_log_proceeds_past_corrected_call",
+    "identified_call": "Direct OutputDebugStringA in capture_custom_renderer_world_topology",
+    "reported_and_installed_thunk_target": "0xFFC179C9",
+    "fix": "Existing p_OutputDebugStringA game import and explicitly terminated bounded message",
+    "evidence": "Renderer/verification/pickup/logging-crash.json",
+    "regression_guard": "Reject direct OutputDebugString API calls throughout injected_code.c",
+    "automatic_file_logging": false,
+    "game_launched": false
+  },
+  "ownership_black_map_fix": {
+    "status": "verified_and_staged_pending_user_gameplay",
+    "cause": "Caster/prefetch-only records claimed native terrain replacement; strict injected validation rejected the completed frame before blit.",
+    "previous_dll_reproduction": {
+      "record": 168,
+      "captured_flags": 8256,
+      "replacement_flags": 4,
+      "report": "Renderer/verification/pickup/ownership-reproduction.json"
+    },
+    "fix": "Zero replacement ownership for non-RENDER records before retaining cache copies; shadow geometry and caches preserved.",
+    "validation": [
+      "48 focused unit tests including execution of the actual injected validator",
+      "Cold, unit-style warm and fixed-scroll ownership checks",
+      "Terrain and volcano edits match fresh reset exactly",
+      "Flat-ground optimized image remains byte-identical",
+      "Portable native smoke and approved injected compilation"
+    ],
+    "reports": [
+      "Renderer/verification/pickup/replay.json",
+      "Renderer/verification/pickup/edits.json",
+      "Renderer/verification/pickup/flat-ground-image-parity.json",
+      "Renderer/verification/pickup/ownership-build.json"
+    ],
+    "unit_redraw_p95_ms": 1.223,
+    "prepared_jump_ms": [
+      72.124,
+      21.562,
+      28.59,
+      29.101
+    ],
+    "prepared_jump_mesh_builds": 0,
+    "cached_cold_changed_pixels": 3,
+    "cached_cold_channel_error": 33,
+    "cold_render_ms": 11135.741,
+    "observed_mesh_peak_bytes": 163718848,
+    "game_launched_by_agent": false,
+    "installed_executable_modified_by_agent": false,
+    "limitation": "Initial preparation remains slow; latest replay does not prove a cold-load speedup or vanilla-speed gameplay."
+  },
+  "material_and_color_fix": {
+    "status": "verified_and_staged_pending_user_gameplay",
+    "pinned_archive_and_assets": "verified; no active Lab experiment promoted",
+    "material_cause": "Unscoped JSON lookup bound nested desert_base before root base_color; coast channels were also affected.",
+    "fix": "Direct JSON object members only; root and explicit nested channels remain separate.",
+    "headless_configuration_correction": "Pickup verification now passes custom.custom_rendering.txt, matching production selected skin and vegetation. Earlier matrix/performance evidence used default packs.",
+    "color_evidence": "Actual Windows RGB555 copy reproduces water/sand banding; RGB555/RGB565 ordered rounding tested. Actual in-game destination format awaits destination-format debug output.",
+    "color_tables_bytes": 32768,
+    "full_color_caches_unchanged": true,
+    "cache_budgets_unchanged": true,
+    "rgb555_and_565_max_patch_mean_error_255": 0.064,
+    "rgb555_960x640_copy_mean_ms": 2.505,
+    "copy_repetitions": 20,
+    "selected_skin_replay": {
+      "unit_redraw_p95_ms": 1.76,
+      "prepared_jump_ms": [
+        43.971,
+        27.648,
+        28.008,
+        24.649
+      ],
+      "jump_mesh_builds": 0,
+      "cached_cold_changed_pixels": 0,
+      "cached_cold_channel_error": 8,
+      "mesh_peak_bytes": 139103908
+    },
+    "focused_tests": 50,
+    "windows_portable_smoke": "pass",
+    "game_launched": false,
+    "injected_source_changed_for_this_fix": false,
+    "reports": [
+      "Renderer/verification/pickup/material-bindings.json",
+      "Renderer/verification/pickup/material-color-build.json",
+      "Renderer/verification/pickup/color-preview.json",
+      "Renderer/verification/pickup/replay.json"
+    ],
+    "comparison": "Renderer/verification/pickup/color-comparison.png",
+    "limitations": [
+      "Full Lab visual parity still open.",
+      "Cold preparation still slow.",
+      "16-bit gradient preservation introduces fine dither."
+    ]
   }
 }

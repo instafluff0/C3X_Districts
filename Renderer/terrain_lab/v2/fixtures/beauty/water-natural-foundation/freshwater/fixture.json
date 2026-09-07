@@ -1,0 +1,136 @@
+{
+  "campaign": "Q1",
+  "id": "real-beauty-freshwater-100-v1-terrain",
+  "isolations": [
+    "terrain",
+    "features"
+  ],
+  "modules": [
+    "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/terrain.module.json"
+  ],
+  "packs": {
+    "bridges": "Renderer/packs/RouteDoodadsNormalized",
+    "cities": "Renderer/packs/CityComponentsNormalized",
+    "compound_units": "Renderer/packs/CompoundUnitLab",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "improvements": "Renderer/packs/ImprovementsNormalized",
+    "objects": "Renderer/packs/TileObjectsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "resources": "Renderer/packs/ResourceNormalized",
+    "routes": "Renderer/packs/RouteStylesNormalized",
+    "shore": "Renderer/packs/ShoreNormalized",
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "units": "Renderer/packs/UnitFamilyLab",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "walls": "Renderer/packs/CityAdjunctsNormalized"
+  },
+  "real_map": {
+    "dataset_payload_sha256": "4e5fa91a03586b9b36da1ec3d8ee8249d19e803fe710ecd6659a174697cee837",
+    "fixture_class": "unaltered_real_terrain",
+    "parser": {
+      "adapter": 1,
+      "closure_sha256": "3f1ec44302b61b4fc2ad9ebbe53e25081f0805443872f07a56bfa2dbe0b99fc1",
+      "text_encoding": "windows-1252"
+    },
+    "profile": "q0_real_map_v1",
+    "region": {
+      "camera": {
+        "hours": [
+          12,
+          0
+        ],
+        "viewport": [
+          1360,
+          800
+        ],
+        "zooms": [
+          1,
+          2
+        ]
+      },
+      "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+      "coverage": {
+        "land_water_edges": 22,
+        "river_tiles": 0,
+        "terrain": {
+          "coast": 24,
+          "desert": 2,
+          "forest": 3,
+          "grassland": 1,
+          "hills": 3,
+          "mountain": 8,
+          "ocean": 6,
+          "plains": 14,
+          "sea": 39
+        },
+        "terrain_edges": 76
+      },
+      "extent": [
+        10,
+        10
+      ],
+      "halo": 6,
+      "id": "beauty-freshwater-100-v1",
+      "origin": [
+        52,
+        30
+      ],
+      "request_sha256": "8954a610a815f6981cf5da8ee7826e88bfaccfd56dde6d9a0c913b93939b1174",
+      "role": "user_evaluation",
+      "terrain_sha256": "2b7b351cdc6affb0c6024374e46a97d06e84aca9d0320628df22cddb76a3a069",
+      "wrap": {
+        "x": true,
+        "y": false
+      }
+    },
+    "region_id": "beauty-freshwater-100-v1",
+    "source_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e"
+  },
+  "references": [
+    "civ6.hills",
+    "civ6.mountain",
+    "civ6.sea_and_shore",
+    "civ6.forest"
+  ],
+  "schema": "c3x.lab_v2.fixture.v1",
+  "settings": {
+    "anisotropy": 8,
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ],
+    "mip_bias": 0,
+    "postprocess": {
+      "shader": "Renderer/terrain_lab/v2/shaders/sampling/linear_reconstruct.hlsl",
+      "owner": "Q1-sampling",
+      "contract": 2
+    },
+    "render_scale": 1,
+    "samples": 4
+  },
+  "terrain": "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/terrain.csv",
+  "tile_count": 100,
+  "track": "Q8-beauty",
+  "viewport": [
+    1360,
+    800
+  ],
+  "packet_postprocessor": {
+    "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp",
+    "owner": "Q6-lighting",
+    "contract": 1
+  },
+  "scenarios": {
+    "cities": "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/cities.csv",
+    "farms": "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/farms.csv",
+    "infrastructure": "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/infrastructure.csv",
+    "mines": "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/mines.csv",
+    "objects": "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/objects.csv",
+    "railroads": "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/railroads.csv",
+    "resources": "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/resources.csv",
+    "roads": "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/roads.csv",
+    "units": "Renderer/terrain_lab/v2/fixtures/beauty/water-natural-foundation/freshwater/units.csv"
+  }
+}

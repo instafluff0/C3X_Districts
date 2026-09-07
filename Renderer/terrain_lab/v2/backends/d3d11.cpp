@@ -33,7 +33,7 @@ ComPtr<ID3DBlob> compile(const char *path, const char *entry,
 }
 int main(int argc, char **argv) {
   try {
-    if (argc < 4 || argc > 9)
+    if (argc < 4 || argc > 10)
       throw std::runtime_error("usage: d3d11 packet shader.hlsl output.bmp");
     Packet p = read_packet(argv[1]);
     bool linear = p.color_branch == 1;
@@ -41,6 +41,11 @@ int main(int argc, char **argv) {
     std::string post=argc>5?argv[5]:"box";
     float offset_x=argc>6?std::stof(argv[6]):0,offset_y=argc>7?std::stof(argv[7]):0;
     unsigned scale=argc>8?std::stoul(argv[8]):1;
+    bool reflection=argc>9;
+    if(reflection && (!linear || p.shader_count!=1 || scale!=1))
+      throw std::runtime_error("reflection requires linear single-shader render scale 1");
+    if(reflection) for(auto &d:p.draws) if(!d.feature && d.textures[121])
+      throw std::runtime_error("reflection texture slot t121 already used by main draw");
     if((scale!=1&&scale!=2&&scale!=4)||p.width*scale>8192||p.height*scale>8192)throw std::runtime_error("unsupported D3D render scale");
     if(post!="box"&&!linear)throw std::runtime_error("D3D custom post requires linear contract2");
     unsigned w=p.width*scale,h=p.height*scale;
@@ -87,11 +92,12 @@ int main(int argc, char **argv) {
       check(dev->CreateBuffer(&desc, &data, &b), "buffer");
       buffers.push_back(b);
     }
-    std::vector<ComPtr<ID3DBlob>> blobs(p.shader_count*2);
-    std::vector<ComPtr<ID3D11VertexShader>> vs(p.shader_count*2);
-    std::vector<ComPtr<ID3D11PixelShader>> ps(p.shader_count*2);
-    for (unsigned i = 0; i < p.shader_count*2; i++) {
-      std::string source=argv[2];
+    unsigned program_count=p.shader_count*2+(reflection?2:0);
+    std::vector<ComPtr<ID3DBlob>> blobs(program_count);
+    std::vector<ComPtr<ID3D11VertexShader>> vs(program_count);
+    std::vector<ComPtr<ID3D11PixelShader>> ps(program_count);
+    for (unsigned i = 0; i < program_count; i++) {
+      std::string source=i>=p.shader_count*2?argv[9]:argv[2];
       if(p.shader_count>1) source+="/m"+std::to_string(i/2)+".hlsl";
       blobs[i] = compile(source.c_str(), i%2 ? "VSFeature" : "VSMain", "vs_5_0");
       auto pixel = compile(source.c_str(), i%2 ? "PSFeature" : "PSMain", "ps_5_0");
@@ -129,6 +135,15 @@ int main(int argc, char **argv) {
     auto readback=make_texture(format,w,h,1,0,true);
     auto depth=make_texture(DXGI_FORMAT_D24_UNORM_S8_UINT,w,h,samples,D3D11_BIND_DEPTH_STENCIL,false);
     ComPtr<ID3D11RenderTargetView> rt;check(dev->CreateRenderTargetView(color.Get(),nullptr,&rt),"target");
+    ComPtr<ID3D11Texture2D> reflection_color,reflection_resolved;
+    ComPtr<ID3D11RenderTargetView> reflection_rt;
+    ComPtr<ID3D11ShaderResourceView> reflection_view;
+    if(reflection){
+      reflection_color=make_texture(format,w,h,samples,D3D11_BIND_RENDER_TARGET|(samples==1?D3D11_BIND_SHADER_RESOURCE:0),false);
+      reflection_resolved=samples==1?reflection_color:make_texture(format,w,h,1,D3D11_BIND_SHADER_RESOURCE,false);
+      check(dev->CreateRenderTargetView(reflection_color.Get(),nullptr,&reflection_rt),"reflection target");
+      check(dev->CreateShaderResourceView(reflection_resolved.Get(),nullptr,&reflection_view),"reflection view");
+    }
     ComPtr<ID3D11DepthStencilView> depthView;check(dev->CreateDepthStencilView(depth.Get(),nullptr,&depthView),"depth view");
     ComPtr<ID3D11Texture2D> validity,valid_resolved,validity_readback;
     ComPtr<ID3D11RenderTargetView> validity_rt;
@@ -181,16 +196,18 @@ int main(int argc, char **argv) {
     ctx->OMSetBlendState(blend.Get(), nullptr, 0xffffffffu);
     float clear[] = {.035f, .035f, .035f, 1};
     if (linear) for (auto &v:clear) v=0;
-    ctx->ClearRenderTargetView(rt.Get(), clear);
-    if (linear) ctx->ClearRenderTargetView(validity_rt.Get(), clear);
-    ctx->ClearDepthStencilView(depthView.Get(),D3D11_CLEAR_DEPTH,1,0);
     D3D11_VIEWPORT vp = {offset_x*scale*p.downsample, offset_y*scale*p.downsample, float(w), float(h), 0, 1};
     ctx->RSSetViewports(1, &vp);
     ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    for(int stage=reflection?1:0;stage>=0;--stage){
+    auto stage_rt=stage?reflection_rt.Get():rt.Get();
+    ctx->ClearRenderTargetView(stage_rt,clear);
+    if(linear)ctx->ClearRenderTargetView(validity_rt.Get(),clear);
+    ctx->ClearDepthStencilView(depthView.Get(),D3D11_CLEAR_DEPTH,1,0);
     for (auto &d : p.draws) {
       if (d.clear_depth)
         ctx->ClearDepthStencilView(depthView.Get(), D3D11_CLEAR_DEPTH, 1, 0);
-      ID3D11RenderTargetView* targets[]={rt.Get(),validity_rt.Get()};
+      ID3D11RenderTargetView* targets[]={stage_rt,validity_rt.Get()};
       ctx->OMSetRenderTargets(linear?2:1, targets, depthView.Get());
       if (linear) {
         ctx->OMSetDepthStencilState(d.depth_mode==2?depthState.Get():d.depth_mode==1?depthRead.Get():depthOff.Get(),0);
@@ -203,8 +220,9 @@ int main(int argc, char **argv) {
       ctx->PSSetConstantBuffers(0, 1, &constant);
       auto frame=d.frame_buffer==UINT32_MAX?nullptr:buffers[d.frame_buffer].Get();
       ctx->PSSetConstantBuffers(1,1,&frame);
-      ctx->VSSetShader(vs[d.shader_index*2+d.feature].Get(), nullptr, 0);
-      ctx->PSSetShader(ps[d.shader_index*2+d.feature].Get(), nullptr, 0);
+      unsigned program=d.shader_index*2+d.feature+(stage?p.shader_count*2:0);
+      ctx->VSSetShader(vs[program].Get(), nullptr, 0);
+      ctx->PSSetShader(ps[program].Get(), nullptr, 0);
       std::vector<D3D11_INPUT_ELEMENT_DESC> attrs;
       unsigned texcoord = 0;
       for (size_t i = 0; i < d.attributes.size(); i++) {
@@ -223,17 +241,21 @@ int main(int argc, char **argv) {
       }
       ComPtr<ID3D11InputLayout> layout;
       check(dev->CreateInputLayout(attrs.data(), UINT(attrs.size()),
-                                   blobs[d.shader_index*2+d.feature]->GetBufferPointer(),
-                                   blobs[d.shader_index*2+d.feature]->GetBufferSize(), &layout),
+                                   blobs[program]->GetBufferPointer(),
+                                   blobs[program]->GetBufferSize(), &layout),
             "layout");
       ctx->IASetInputLayout(layout.Get());
       ID3D11ShaderResourceView *views[128] = {};
       for (unsigned i = 0; i < 128; i++)
         views[i] = textures[d.textures[i]].Get();
+      // Features alias t121 with their fifth base texture; preserve that binding.
+      if(reflection && !stage && !d.feature)views[121]=reflection_view.Get();
       ctx->PSSetShaderResources(0, 128, views);
       ctx->Draw(d.count, 0);
     }
     ctx->OMSetRenderTargets(0,nullptr,nullptr);
+    if(stage && samples>1)ctx->ResolveSubresource(reflection_resolved.Get(),0,reflection_color.Get(),0,format);
+    }
     if(samples>1){ctx->ResolveSubresource(resolved.Get(),0,color.Get(),0,format);if(linear)ctx->ResolveSubresource(valid_resolved.Get(),0,validity.Get(),0,DXGI_FORMAT_R8_UNORM);}
     unsigned read_w=w,read_h=h,read_scale=scale*p.downsample;
     if(post!="box"){

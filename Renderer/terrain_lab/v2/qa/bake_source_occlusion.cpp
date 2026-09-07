@@ -32,7 +32,7 @@ int main() {
         checked(device->CreateBuffer(&bd,&sd,&buffers[0]));bd.ByteWidth=32;sd.pSysMem=globals;
         checked(device->CreateBuffer(&bd,&sd,&buffers[1]));context->CSSetConstantBuffers(0,2,buffers);
         std::vector<float> spec(1024*1024,62.0f/255.0f);
-        for(const char* name:{"grassland","plains","desert","marsh","tundra"}) {
+        for(const char* name:{"grassland","plains","desert","marsh","tundra","grassland_shift","flat_control"}) {
             auto high=bytes(std::string(name)+"-ao-high.f32"),half=bytes(std::string(name)+"-ao-half.f32");
             if(high.size()!=1040*1040*4||half.size()!=520*520*4)throw std::runtime_error("input dimensions");
             ID3D11ShaderResourceView* views[4]={field(device,half.data(),520),nullptr,field(device,high.data(),1040),field(device,spec.data(),1024)};

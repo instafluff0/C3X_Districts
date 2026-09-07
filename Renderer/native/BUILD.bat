@@ -1,5 +1,8 @@
 @echo off
 setlocal
+rem Historical regression fixtures explicitly select their frozen renderer.
+set "C3X_RENDERER_VISUAL_PROFILE=frozen"
+set "C3X_RENDERER_TRACE=0"
 pushd "%~dp0"
 
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"

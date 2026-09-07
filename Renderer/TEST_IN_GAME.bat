@@ -23,16 +23,14 @@ if not exist "%C3X_TEST_MOD_DIR%\RUN.bat" (
   exit /b 1
 )
 if not exist "%C3X_TEST_MOD_DIR%\Renderer\bin\C3XRenderer.dll" exit /b 1
-set "C3X_TEST_LOG_DIR=%C3X_TEST_GAME_DIR%\C3X_Districts\Renderer\verification"
-if not exist "%C3X_TEST_LOG_DIR%" mkdir "%C3X_TEST_LOG_DIR%"
 set "C3X_RENDERER_VISUAL_PROFILE=pickup-r1"
 set "C3X_RENDERER_TRACE=2"
 if "%~1"=="1" set "C3X_RENDERER_TRACE=1"
-set "C3X_RENDERER_TRACE_FILE=%C3X_TEST_LOG_DIR%\in_game_trace.log"
+set "C3X_RENDERER_TRACE_FILE="
 if "%~1"=="--check" (
   echo PASS pickup_test_launcher: installed checkout, renderer DLL, pickup-r1, trace, and RUN.bat route ready; game not launched.
   exit /b 0
 )
-echo Starting Civ III with pickup-r1 renderer diagnostics. Trace: %C3X_RENDERER_TRACE_FILE%
+echo Starting Civ III with pickup-r1 renderer diagnostics through OutputDebugStringA.
 start "" /d "%C3X_TEST_MOD_DIR%" "%ComSpec%" /d /c call RUN.bat
 exit /b %errorlevel%

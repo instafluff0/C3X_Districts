@@ -17,11 +17,11 @@ def dds(path):
     if data[:4]!=b'DDS ' or data[84:88]!=b'DX10': raise ValueError('DDS DX10 required')
     h,w=struct.unpack_from('<II',data,12);fmt=struct.unpack_from('<I',data,128)[0]
     n=struct.unpack_from('<I',data,28)[0]
-    if fmt not in (35,77,78,80,83) or not 1<=n<=15: raise ValueError('unsupported replacement texture')
+    if fmt not in (10,11,35,77,78,80,83) or not 1<=n<=15: raise ValueError('unsupported replacement texture')
     block=8 if fmt==80 else 16;offset=148;mips=[]
     for level in range(n):
-        pitch=max(1,w>>level)*4 if fmt==35 else ((max(1,w>>level)+3)//4)*block
-        size=pitch*(max(1,h>>level) if fmt==35 else ((max(1,h>>level)+3)//4))
+        pitch=max(1,w>>level)*(8 if fmt in (10,11) else 4) if fmt in (10,11,35) else ((max(1,w>>level)+3)//4)*block
+        size=pitch*(max(1,h>>level) if fmt in (10,11,35) else ((max(1,h>>level)+3)//4))
         mips.append((pitch,data[offset:offset+size]));offset+=size
     if offset!=len(data): raise ValueError('replacement mip layout')
     return {'width':w,'height':h,'format':fmt,'mips':mips,'payload_sha256':sha(data[148:])}

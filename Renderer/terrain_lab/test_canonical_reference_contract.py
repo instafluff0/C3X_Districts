@@ -11,7 +11,7 @@ RUN_L13 = (ROOT / "Renderer" / "terrain_lab" / "RUN_L13.bat").read_text(
 )
 
 EXPECTED = {
-    "Screenshot 2026-09-06 at 6.35.02 AM.png": ((3662, 1962), "bf3d6b85013b2ec0d0de6722bd661a1082d6f599ba7e9bcde4ea65e4539c4041"),
+    "unit_texture_and_civ_colors1.png": ((3662, 1962), "bf3d6b85013b2ec0d0de6722bd661a1082d6f599ba7e9bcde4ea65e4539c4041"),
     "daynight.png": ((1608, 1368), "5e210083753c9938478c636815bf50ae6d2f5d82f4fe9cd2a45c33357db65c5a"),
     "desert.png": ((1008, 620), "e270f22003589504e22de2b0f4a7365de8a109e437c44e12b5f21e079ef8b61f"),
     "forest.png": ((660, 502), "4c94f820423486ef056b4a7fc3e41d3f985efc022ff48f3a09dc5bf3b8dee36f"),

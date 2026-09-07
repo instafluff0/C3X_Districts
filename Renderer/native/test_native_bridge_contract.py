@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -12,6 +15,147 @@ C3X_ROOT = RENDERER_ROOT.parent
 
 
 class NativeBridgeContractTests(unittest.TestCase):
+    def test_color_rounding_has_world_stable_balanced_coverage(self) -> None:
+        compiler = shutil.which("c++")
+        if compiler is None:
+            self.skipTest("C++ compiler unavailable")
+        harness = r'''
+#include "color_quantization.h"
+#include <cassert>
+#include <cmath>
+int main() {
+    using namespace c3x_renderer;
+    bool seen[64] = {};
+    for (unsigned y=0; y<8; ++y) for (unsigned x=0; x<8; ++x) {
+        unsigned t=color_threshold(x,y);
+        assert(t<64 && !seen[t]); seen[t]=true;
+        // Multi-tile jumps at both normal/zoomed isometric tile bases.
+        for (int width : {64,128}) for (int jump : {-8,-4,4,8})
+            assert(t==color_threshold(x+unsigned(jump*width/2),y+unsigned(jump*width/4)));
+    }
+    for (unsigned levels : {31u,63u}) {
+        auto table=color_rounding_table(levels);
+        for (unsigned shade=0; shade<256; ++shade) {
+            double mean=0;
+            for (unsigned t=0; t<64; ++t) {
+                if (shade) assert(table[t][shade]>=table[t][shade-1]);
+                unsigned quantized=table[t][shade]>>(levels==31?3:2);
+                mean+=double(quantized)*255/levels/64;
+                if (shade==0 || shade==255) assert(table[t][shade]==shade);
+            }
+            assert(std::abs(mean-shade)<0.15);
+        }
+    }
+}
+'''
+        with tempfile.TemporaryDirectory() as folder:
+            cpp = Path(folder) / "color.cpp"
+            exe = Path(folder) / "color"
+            cpp.write_text(harness)
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(RENDERER_ROOT / "native"),
+                            str(cpp), "-o", str(exe)], check=True)
+            subprocess.run([str(exe)], check=True)
+
+    def test_material_lookup_respects_object_scope_and_selected_skin(self) -> None:
+        compiler=shutil.which("c++")
+        if compiler is None:self.skipTest("C++ compiler unavailable")
+        source=(RENDERER_ROOT/"native/c3x_renderer.cpp").read_text()
+        helper=source[source.index("std::size_t json_member_position("):source.index("class RendererState {")]
+        harness='''
+#include <cstdint>
+#include <cctype>
+#include <cstring>
+#include <string>
+#include <vector>
+#include <fstream>
+#include <iterator>
+#include <iostream>
+'''+helper+'''
+int main(int argc,char** argv) {
+    for(int i=1;i<argc;i++) {
+        std::ifstream file(argv[i]);std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(file)),{});
+        for(auto key:{"base_color","height","specular"}) {
+            auto member=json_member_position(bytes,key);
+            std::cout<<json_member_position(bytes,"texture",member)<<"\\n";
+        }
+        auto layers=json_member_position(bytes,"authored_layers");
+        auto desert=json_member_position(bytes,"desert_base",layers);
+        auto color=json_member_position(bytes,"base_color",desert);
+        std::cout<<json_member_position(bytes,"texture",color)<<"\\n";
+        std::cout<<json_member_position(bytes,"missing",desert)<<"\\n";
+    }
+}
+'''
+        import json
+        with tempfile.TemporaryDirectory() as folder:
+            cpp=Path(folder)/"lookup.cpp";cpp.write_text(harness)
+            exe=Path(folder)/"lookup"
+            subprocess.run([compiler,"-std=c++17",str(cpp),"-o",str(exe)],check=True)
+            files=[]
+            for pack in ("TerrainNormalized","Civ5EnvironmentSkin"):
+                files.extend((RENDERER_ROOT/"packs"/pack/"materials").glob("*.json"))
+            self.assertTrue(files)
+            output=subprocess.check_output([str(exe),*map(str,files)],text=True).splitlines()
+            for i,path in enumerate(files):
+                text=path.read_text();data=json.loads(text)
+                expected=[data.get(k,{}).get("texture") for k in ("base_color","height","specular")]
+                expected += [data.get("authored_layers",{}).get("desert_base",{}).get("base_color",{}).get("texture"),None]
+                for j,wanted in enumerate(expected):
+                    pos=int(output[i*5+j])
+                    if wanted is None:self.assertGreaterEqual(pos,len(text))
+                    else:
+                        self.assertLess(pos,len(text))
+                        actual=json.JSONDecoder().raw_decode(text[text.index(":",pos)+1:].lstrip())[0]
+                        self.assertEqual(actual,wanted,str(path))
+
+    def test_production_ownership_validator_rejects_caster_only_claims(self) -> None:
+        compiler = shutil.which("c++")
+        if compiler is None:
+            self.skipTest("C++ compiler unavailable")
+        source = (C3X_ROOT / "injected_code.c").read_text()
+        begin = source.index("bool\nvalidate_custom_renderer_replacement_ownership")
+        end = source.index("\n// Compact topology", begin)
+        # Execute the actual injected validation body with the real public ABI.
+        harness = '''
+#include "c3x_renderer_api.h"
+#include <cassert>
+#include <cstddef>
+enum {SQ_Forest=7,SQ_Jungle=8,SQ_Swamp=9,SQ_Volcano=10};
+struct State {int custom_renderer_tile_count; c3x_renderer_tile_v1* custom_renderer_tiles;};
+State state, *is=&state;
+''' + source[begin:end] + '''
+int main() {
+    c3x_renderer_tile_v1 tiles[3]={}; unsigned flags[3]={4,4,0};
+    state={3,tiles}; tiles[0].tile_flags=C3X_RENDERER_TILE_RENDER;
+    tiles[1].tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_PREFETCH;
+    tiles[2].tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO;
+    c3x_renderer_output_v1 out={};out.replacement_tile_count=3;out.replacement_tile_flags=flags;
+    assert(!validate_custom_renderer_replacement_ownership(&out)); // reported black map
+    flags[1]=0;assert(validate_custom_renderer_replacement_ownership(&out));
+    flags[2]=4;assert(!validate_custom_renderer_replacement_ownership(&out));flags[2]=0;
+    out.fallback_tile_count=1;assert(!validate_custom_renderer_replacement_ownership(&out));
+    out.fallback_tile_count=0;out.replacement_tile_count=2;
+    assert(!validate_custom_renderer_replacement_ownership(&out));
+    out.replacement_tile_count=3;out.replacement_tile_flags=nullptr;
+    assert(!validate_custom_renderer_replacement_ownership(&out));
+}
+'''
+        with tempfile.TemporaryDirectory() as folder:
+            source_file=Path(folder)/"ownership.cpp"
+            source_file.write_text(harness)
+            exe=Path(folder)/"ownership"
+            subprocess.run([compiler,"-std=c++17","-I",str(RENDERER_ROOT/"native"),str(source_file),"-o",str(exe)],check=True)
+            subprocess.run([str(exe)],check=True)
+
+    def test_injected_debug_output_uses_game_import_pointer(self) -> None:
+        # INSTALL cannot retain a TCC-resolved Windows API thunk from the
+        # installer process. The original game import survives normal loading.
+        injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
+        self.assertNotRegex(injected, r"\bOutputDebugString[AW]\s*\(")
+        world = injected.split("stage=world-topology", 1)[1].split("return true;", 1)[0]
+        self.assertIn("(*p_OutputDebugStringA) (detail)", world)
+        self.assertIn("detail[(sizeof detail) - 1] = '\\0'", world)
+
     def test_native_topology_halo_is_checked_bounded_and_not_a_lod_input(self) -> None:
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
         native = (Path(__file__).parent / "c3x_renderer.cpp").read_text(encoding="utf-8")

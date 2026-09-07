@@ -1,4 +1,26 @@
-# Active focus: terrain surface richness
+# Active focus: natural static water
+
+The user responded “Water looks great” to r6 and requested object reflections.
+[water-reflection-r5](WATER_OBJECT_REFLECTIONS.md) now renders real planar object
+reflections in a GPU prepass, preserving the r6 water elsewhere. Twenty matched
+frames include the fixed benchmarks and coastal holdout. Sixteen focused
+Metal/D3D11 comparisons pass, with identical Windows repeat renders. Four shifted
+camera probes preserve reflections when their captured objects move offscreen.
+Native integration, provider halo/culling coverage and multi-height rivers remain
+pending; no milestone gate is closed.
+[Native rock comparison](out/water-reflection-r5/review/rocks-native.png).
+
+The user pivoted to water effects after referencing Alex Tardif's walkthrough
+and canonical water images. [Exploration and current evidence](WATER_EFFECTS_EXPLORATION.md).
+The user then deferred animation and coastal surf. Current water candidate:
+**water-natural-r6**, with softer sky reflections and broad calm patches in
+20 matched frames across the three fixed benchmarks, long coast, and a wholly
+unseen 100-tile coast. [Native previous-prototype comparison](out/water-natural-r6/review/previous-prototype-comparison.png).
+Shallow-bed detail and broader parity/cost checks remain. Disabled shaders are
+byte-identical; a one-channel 1/255 control repeatability discrepancy is recorded.
+No Civ VI equivalence, human approval, milestone closure or pickup replacement.
+
+# Preserved terrain surface richness
 
 The user reoriented the active goal to terrain surface richness at matched
 gameplay scale and explicitly requires complete source texture/layer auditing.

@@ -1,0 +1,68 @@
+{
+  "region": {
+    "camera": {
+      "hours": [
+        12,
+        0
+      ],
+      "viewport": [
+        1360,
+        800
+      ],
+      "zooms": [
+        1,
+        2
+      ]
+    },
+    "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+    "coverage": {
+      "land_water_edges": 22,
+      "river_tiles": 0,
+      "terrain": {
+        "coast": 24,
+        "desert": 2,
+        "forest": 3,
+        "grassland": 1,
+        "hills": 3,
+        "mountain": 8,
+        "ocean": 6,
+        "plains": 14,
+        "sea": 39
+      },
+      "terrain_edges": 76
+    },
+    "extent": [
+      10,
+      10
+    ],
+    "halo": 6,
+    "id": "beauty-freshwater-100-v1",
+    "origin": [
+      52,
+      30
+    ],
+    "request_sha256": "8954a610a815f6981cf5da8ee7826e88bfaccfd56dde6d9a0c913b93939b1174",
+    "role": "user_evaluation",
+    "terrain_sha256": "2b7b351cdc6affb0c6024374e46a97d06e84aca9d0320628df22cddb76a3a069",
+    "wrap": {
+      "x": true,
+      "y": false
+    }
+  },
+  "projection": {
+    "origin": [
+      104,
+      380
+    ],
+    "half_width": 64
+  },
+  "selection": "Before viewing: maximize coast count, then total water count, then origin coordinates among even-coordinate 10x10 crops with 30-75 water, >=20 coast, >=15 sea/ocean and ALL 100 tiles outside prior beauty regions.",
+  "previously_unseen_tiles": 100,
+  "selection_score": 246900,
+  "gameplay_crop": [
+    360,
+    220,
+    1000,
+    540
+  ]
+}
