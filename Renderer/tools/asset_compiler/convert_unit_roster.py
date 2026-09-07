@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
@@ -43,15 +44,21 @@ def main():
         'call "%TOOLS_DIR%BUILD_CIV6_ANIMATION_CONVERTER.bat"',
         'if errorlevel 1 exit /b %errorlevel%']
     for unit in strategy['units']:
+        if not re.fullmatch(r'[a-z0-9_]+(?:/[a-z0-9_]+)?',unit['slug']):
+            raise ValueError('unsafe conversion unit path')
         root = SourceDataRoots(ASSETS_ROOT, unit.get('source_content', strategy['source_content']))
         for action, record in {**unit['actions'], **unit['additional_actions']}.items():
             if 'source' not in record:
                 continue
+            if not re.fullmatch(r'[a-z_]+',action) or not re.fullmatch(r'ANIMATION_[A-Za-z0-9_]+',record['source']):
+                raise ValueError('unsafe conversion action or source name')
             key = f"{unit['slug']}/{action}"
             current[key] = hashlib.sha256((root / record['source']).read_bytes()).hexdigest()
             if previous.get(key) == current[key] and (pack / 'animations/unit' / (key+'.c3anim')).is_file():
                 continue
             content = (root / record['source']).relative_to(ASSETS_ROOT).parent.as_posix().replace('/', '\\')
+            if not re.fullmatch(r'[A-Za-z0-9_ .\\-]+',content):
+                raise ValueError('unsafe conversion content path')
             lines += [f"set \"SOURCE=\\\\Mac\\Home\\Library\\Application Support\\Steam\\steamapps\\common\\Sid Meier's Civilization VI\\Civ6.app\\Contents\\Assets\\{content}\""]
             slug = unit["slug"].replace('/', '\\')
             lines += [f'call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" "{slug}" {action} {record["source"]}',

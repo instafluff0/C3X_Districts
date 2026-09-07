@@ -320,6 +320,14 @@ def compile_unit_families(
         if excluded - available:
             raise ValueError("excluded role does not exist in selected source member")
         recipe["selected_components"] = [item for item in recipe["selected_components"] if item["role"] not in excluded]
+        overrides=unit.get("attachment_point_overrides",{})
+        from Renderer.tools.asset_compiler.unit_family_action_validator import SOCKET_PROFILE
+        if not isinstance(overrides,dict) or set(overrides)-available or any(p not in SOCKET_PROFILE for p in overrides.values()):
+            raise ValueError("invalid component attachment-point override")
+        for item in recipe["selected_components"]:
+            if item['role'] in overrides:
+                item['source_attachment_point']=item['point']
+                item['point']=overrides[item['role']]
         resolved.append((unit, recipe))
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for unit, recipe in resolved:
@@ -511,6 +519,7 @@ def compile_unit_families(
                 },
                 "components": component_records,
                 "animation_driver": driver,
+                "move_cycle_translation_bone": unit.get("move_cycle_translation_bone"),
                 "minimum_matching_tracks": unit["minimum_matching_tracks"],
                 "formation": source_recipe["formation"],
                 "movement": source_recipe["movement"],

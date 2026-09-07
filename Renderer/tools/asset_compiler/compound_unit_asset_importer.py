@@ -82,6 +82,8 @@ def load_source_sets(path: Path = DEFAULT_SOURCE_SETS) -> dict[str, Any]:
             raise ValueError(f"{slug} contains an invalid node ID")
         if len(node_ids) != len(set(node_ids)):
             raise ValueError(f"{slug} contains duplicate node IDs")
+        if composition.get('ground_reference_node') is not None and composition['ground_reference_node'] not in node_ids:
+            raise ValueError(f"{slug} has an unknown ground reference node")
         for node in [parent, *children]:
             if not isinstance(node.get("variation"), str) or not node["variation"]:
                 raise ValueError(f"{slug}/{node.get('id')} has no source variation")
@@ -258,6 +260,8 @@ def compile_compound_units(
                 node["variation"],
                 composition["member_index"], content=content,
             )
+            recipe["selected_components"] = [component for component in recipe["selected_components"]
+                if component["role"] not in node.get("exclude_roles", [])]
             nodes[node["id"]] = recipe
             for component in recipe["selected_components"]:
                 component["package_content"] = content
@@ -383,6 +387,8 @@ def compile_compound_units(
                 "member_scale": source_recipe["member"]["member_scale"],
                 "variation_scale": source_recipe["member"]["variation_scale"] * node.get("scale_multiplier", 1.0),
                 "source_track_group": skeleton["track_group"],
+                "disabled_socket_bones": node.get("disabled_socket_bones", []),
+                "parent_space_actions": node.get("parent_space_actions", []),
             }
 
         joints = []
@@ -404,7 +410,7 @@ def compile_compound_units(
                     "socket": child["socket"],
                     "parent_bone": parent_bone,
                     "child_root_bone": child_root,
-                    "local_transform": IDENTITY,
+                    "local_transform": child.get("local_transform", IDENTITY),
                     "transform_convention": "row_major_row_vector_child_local_then_parent_socket",
                     "scale_policy": "node_member_times_variation_then_parent_instance",
                 }
@@ -485,6 +491,7 @@ def compile_compound_units(
             "civ3_ids": composition["civ3_ids"],
             "root_node": composition["parent"]["id"],
             "nodes": compiled_nodes,
+            **({"ground_reference_node": composition["ground_reference_node"]} if composition.get("ground_reference_node") else {}),
             "joints": joints,
             "actions": action_bindings,
             "instance_contract": source_sets["instance_contract"],

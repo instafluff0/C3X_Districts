@@ -1,0 +1,11 @@
+{
+  "status": "pass",
+  "changed_unit_keys": [
+    "PRTO_Hwacha"
+  ],
+  "unchanged_other_unit_bindings": 77,
+  "changed_fields": [
+    "offset_z",
+    "scale"
+  ]
+}

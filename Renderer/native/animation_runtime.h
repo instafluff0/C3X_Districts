@@ -110,8 +110,12 @@ inline bool sample_animation_mesh(AnimationMesh const & mesh, double seconds, bo
              p[2]*p[9]-p[1]*p[10], p[0]*p[10]-p[2]*p[8], p[1]*p[8]-p[0]*p[9],
              p[1]*p[6]-p[2]*p[5], p[2]*p[4]-p[0]*p[6], p[0]*p[5]-p[1]*p[4]};
         float determinant = p[0]*n[0] + p[1]*n[1] + p[2]*n[2];
-        if (!std::isfinite(determinant) || std::abs(determinant) < 1e-12f) return false;
-        for (auto & v : n) v /= determinant;
+        if (!std::isfinite(determinant)) return false;
+        // Authored visibility tracks collapse some parts to zero scale. Their
+        // positions must still collapse; a singular normal must not reject the
+        // entire kit (including unused inventory helper bones).
+        if (std::abs(determinant) >= 1e-12f)
+            for (auto & v : n) v /= determinant;
     }
     output.resize(mesh.vertices.size());
     for (std::size_t i = 0; i < mesh.vertices.size(); ++i) {

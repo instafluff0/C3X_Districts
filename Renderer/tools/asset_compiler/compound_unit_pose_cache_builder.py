@@ -64,7 +64,11 @@ def build_pose_caches(pack: Path, report_path: Path | None = None) -> dict[str, 
         for frame in range(clip.frame_count):
             time = frame / clip.sample_rate
             pose = normalized_skin.sample_pose(skeleton, clip, group_index, time, False)
-            worlds = normalized_skin.world_matrices(skeleton, pose)
+            worlds = list(normalized_skin.world_matrices(skeleton, pose))
+            rest = normalized_skin.world_matrices(skeleton)
+            for i, bone in enumerate(skeleton["bones"]):
+                if bone["name"] in node.get("disabled_socket_bones", []):
+                    worlds[i] = rest[i]
             maximum = max(maximum, *(abs(value) for matrix in worlds for value in matrix))
             if not math.isfinite(maximum) or maximum > MAX_ABSOLUTE_WORLD_VALUE:
                 raise ValueError(

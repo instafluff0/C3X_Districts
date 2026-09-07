@@ -13,7 +13,7 @@ public:
     struct Mesh { AnimationMesh animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Part { unsigned mesh=0,texture=0; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
-    struct Action { std::string name; bool loop=false; std::vector<Part> parts; };
+    struct Action { std::string name; bool loop=false,allow_exit_clip=false; std::vector<Part> parts; };
     struct Unit { std::vector<std::string> keys; float scale=1,yaw_offset=0,offset_z=0; std::vector<Action> actions; };
     std::vector<Mesh> meshes;
     std::vector<Texture> textures;
@@ -65,7 +65,7 @@ public:
         if(w<1 || h<1 || w>512 || h>512)return false;
         // Placement and identity are deliberately absent: the same posed body
         // can be reused at a different native anchor or wrapped occurrence.
-        Key key={unsigned(found-units.begin()),request.action,request.direction,
+        Key key={unsigned(found-units.begin()),int(action-found->actions.begin()),request.direction,
             action->loop?request.action_cursor%request.frame_count:std::min(request.action_cursor,request.frame_count-1),
             request.frame_count,w,h,request.reduced,request.hour,request.season,request.display_color_rgb};
         for(auto & saved:cache)if(saved.key==key) {
@@ -90,6 +90,7 @@ public:
         std::vector<std::vector<FeatureSourceVertex>> poses(action->parts.size());
         std::vector<std::vector<UnitShadow::Point>> positions(action->parts.size());
         std::vector<UnitShadow::Point> all_points;
+        failure_reason="pose-sampling";
         for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
             auto const& part=action->parts[part_index];
             if(part.mesh>=meshes.size() || !sample_animation_mesh(meshes[part.mesh].animation,
@@ -137,8 +138,10 @@ public:
                 for(unsigned edge=0;edge<3;++edge) {
                     auto const& a=upload[mesh.animation.indices[i+edge]];
                     auto const& b=upload[mesh.animation.indices[i+(edge+1)%3]];
-                    if(a[8]>=0 && !inside(a[0],a[1]))return false;
-                    if((a[8]<0)!=(b[8]<0)) {
+                    // Some terminal clips send a mount offscreen. The GPU
+                    // still clips strictly to this same native-sized target.
+                    if(!action->allow_exit_clip && a[8]>=0 && !inside(a[0],a[1]))return false;
+                    if(!action->allow_exit_clip && (a[8]<0)!=(b[8]<0)) {
                         float t=a[8]/(a[8]-b[8]);
                         if(!inside(a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])))return false;
                     }

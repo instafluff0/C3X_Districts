@@ -2529,16 +2529,18 @@
       "Added Warrior, Scout, Settler and Worker/Builder through a separate offline intake: nine families / 70 actions, 852 source-pose samples and 576 movement / 912 action draws pass. Correct scientific-number parsing restores Scout; compatible staff clips fix Settler. Existing cache budgets and injected bridge unchanged.",
       "Final nine-family DLL passes prepared multi-tile scroll parity with zero mesh builds and is staged byte-for-byte for normal INSTALL.bat. Full rerun passes 374 prerequisite tests and retains the known unrelated L19A hash failure.",
       "Native underlay forwarding and color-key-aware DLL composition pass 32-bit and clipped RGB555/RGB565 parity at both zooms/day-night. Bounded posed self/cast shadows retain the 8 MiB sprite cache. Non-consuming mouse redraw deferral passes extracted checks; approved injected compilation passes. Final nine-family DLL is staged byte-for-byte for INSTALL.bat; 379 broader prerequisite tests pass before the known L19A hash failure.",
-      "User confirms mouse clicks and shadows work. Expanded production pack to 79 actions: Settler founding and Worker jobs with per-action tools; six static fortify poses now have baked local-joint transitions. Successful body draws expand the existing native Unit.Body.Rect without a new hook. 951 source-pose comparisons and 1128 day/night action draws pass; approved injected compilation passes. Final DLL staged byte-for-byte for INSTALL.bat; full workflow has only the known L19A hash failure after 379 passing prerequisite tests."
+      "User confirms mouse clicks and shadows work. Expanded production pack to 79 actions: Settler founding and Worker jobs with per-action tools; six static fortify poses now have baked local-joint transitions. Successful body draws expand the existing native Unit.Body.Rect without a new hook. 951 source-pose comparisons and 1128 day/night action draws pass; approved injected compilation passes. Final DLL staged byte-for-byte for INSTALL.bat; full workflow has only the known L19A hash failure after 379 passing prerequisite tests.",
+      "Full standard Conquests roster staged: 78 families / 630 actions / 93 roster keys plus Builder. 40992 day/night roster draws and 432 isolated Hwacha calibration draws pass without roster fallback. 4622 ordinary source-pose comparisons and six parent-space chariot comparisons pass. Catalog-only startup, 96 MiB lazy payload residency and the existing 8 MiB sprite cache retain position-independent reuse; attack-slot aliases share cached poses. Army representative capture reuses existing hooks. Normal INSTALL.bat uses the verified staged DLL/pack; no game launch."
     ],
     "remaining": [
-      "User-run checkpoint for civilian actions, fortify transitions and remaining intermittent split bodies."
+      "User-run checkpoint for expanded roster, civilian actions, fortify and intermittent split bodies.",
+      "Separate Lab v2 lighting-coordinate/receiver work orders remain unimplemented by this roster maintenance."
     ],
     "game_launched": false,
     "candidate_staged": true,
     "temporal_evidence": "verification/animation/temporal.json",
-    "unit_payload_evidence": "verification/animation/unit-payloads-portable_cpp.json",
-    "unit_render_evidence": "verification/animation/units.json",
+    "unit_payload_evidence": "verification/animation/roster/unit-payloads-portable_cpp.json",
+    "unit_render_evidence": "verification/animation/roster/roster-h12.json",
     "resource_payload_evidence": "verification/animation/resource-payloads-portable_cpp.json",
     "resolved_user_action": [
       {
@@ -2560,7 +2562,7 @@
         "fallback": "Leave rows as definitions to retain every native unit body. Do not install zero-address inleads on unverified builds."
       }
     ],
-    "manual_checkpoint": "Use normal INSTALL.bat, then test Settler founding, Worker road/mine/irrigation/clearing/planting and fortify at both zooms; check moving/overlapping units for remaining split or stale pixels. Normal OutputDebugStringA logging remains enabled. Agent did not launch Civ III.",
+    "manual_checkpoint": "Run normal INSTALL.bat, then check mixed standard units, combat/death/fortify, civilian jobs, loaded Armies and both zoom levels. Review remaining split-body behavior and scrolling. Normal OutputDebugStringA diagnostics are enabled. Agent did not run the installer or launch Civ III.",
     "checkpoint_evidence": "verification/animation/candidate-checkpoint.json",
     "known_unrelated_failures": [
       "Full workflow: frozen L19A tile-object pack hash differs after Lab pack changes; production DLL does not consume this pack.",
@@ -2573,8 +2575,12 @@
       "Warrior/Scout victory reuses fidget. Six pose-only fortify clips receive an offline baked idle-to-pose transition; Fighter fortify retains its idle alias.",
       "Worker tool choices and right-hand socket are explicit local presentation mappings. The Settler founding gesture hides its stowed staff.",
       "Unit shadows receive on a flat local ground plane; terrain/object receivers and cross-unit shadows remain outside this prototype. Caster cutout silhouettes are approximated by mesh triangles.",
-      "The dirty-rectangle fix addresses a verified native crop mismatch; intermittent split-body behavior awaits the user-run checkpoint."
+      "The dirty-rectangle fix addresses a verified native crop mismatch; intermittent split-body behavior awaits the user-run checkpoint.",
+      "Nearest-source family aliases cover the standard roster; original generic bodies cover Cruise Missile, Tactical Nuke and ICBM. Some source actions are pose aliases.",
+      "Source companion animals and additional formation members remain omitted; a loaded Army captures its existing native commander and representative member.",
+      "Unit/resource world-lighting adapter and terrain/object shadow receivers remain the separate Lab v2 work orders."
     ],
-    "user_feedback": "Mouse clicks now work; units mostly normal, shadows as expected. Remaining report concerned civilian actions, fortify snaps, and intermittent split bodies."
+    "user_feedback": "Mouse clicks now work; units mostly normal, shadows as expected. Remaining report concerned civilian actions, fortify snaps, and intermittent split bodies.",
+    "unit_roster_evidence": "docs/conquests_unit_roster.md"
   }
 }

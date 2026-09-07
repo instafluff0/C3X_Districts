@@ -1657,7 +1657,8 @@ public:
 
         // Bind the catalog once. Payloads are resident only when needed.
         char unit_pack[128]="UnitAnimationRuntime",unit_root[4*MAX_PATH];
-        GetEnvironmentVariableA("C3X_RENDERER_UNIT_PACK",unit_pack,sizeof(unit_pack));
+        if(GetEnvironmentVariableA("C3X_RENDERER_UNIT_PACK",unit_pack,sizeof(unit_pack))>=sizeof(unit_pack))
+            strcpy_s(unit_pack,"UnitAnimationRuntime");
         if(unit_rendering_enabled && (!pack_path(packs_root.c_str(),unit_pack,unit_root,std::size(unit_root)) ||
             !load_unit_animations(unit_root))) {
             unit_bodies.clear();trace.write("unit-bind","complete unit pack rejected; native bodies retained",true);
@@ -2528,6 +2529,10 @@ public:
                 if(!json_number_after(data,"part_count",action_location,parts) || parts<1 || parts>32 || parts!=int(parts) ||
                    !json_number_after(data,"loop",action_location,loop) || (loop!=0 && loop!=1))return false;
                 c3x_renderer::UnitBodyRenderer::Action action;action.name=name;action.loop=loop!=0;
+                float exit_clip=0;
+                if(json_number_after(data,"allow_exit_clip",action_location,exit_clip) &&
+                   (exit_clip!=0 && (exit_clip!=1 || action.name!="death")))return false;
+                action.allow_exit_clip=exit_clip==1;
                 for(int part_index=0;part_index<int(parts);++part_index) {
                     auto record=json_member_position(data,("part"+std::to_string(part_index)).c_str(),action_location);
                     c3x_renderer::UnitBodyRenderer::Part part;

@@ -62,6 +62,20 @@ int main(int argc, char ** argv) {
     assert(sample_animation_mesh(mesh, -1, true, vertices));
     assert(vertices[0].position[0] == 4.f);
     assert(!sample_animation_mesh(mesh, std::numeric_limits<double>::quiet_NaN(), false, vertices));
+    {
+        auto hidden=mesh;
+        for(unsigned frame=0;frame<hidden.frames;++frame) {
+            auto p=hidden.palettes.data()+frame*16;
+            p[0]=p[5]=p[10]=0;
+        }
+        assert(sample_animation_mesh(hidden,1,false,vertices));
+        for(auto const& v:vertices) {
+            assert(v.position[0]==2.f && v.position[1]==0.f && v.position[2]==0.f);
+            for(float n:v.normal)assert(std::isfinite(n));
+        }
+        assert(sample_animation_mesh(mesh,1,false,vertices));
+        assert(vertices[0].position[0]==4.f); // Visible pose unaffected.
+    }
     double late = ambient_animation_time(9000000123ll, 1000, 2.0, 17);
     assert(late == ambient_animation_time(9000002123ll, 1000, 2.0, 17));
     assert(ambient_animation_time(1, 0, 2, 0) == 0);

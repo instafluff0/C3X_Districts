@@ -26748,7 +26748,12 @@ unload_custom_renderer ()
 bool
 forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * canvas, int x, int y, int reduced, PCX_Color_Table * palette)
 {
-	Unit * unit = is->custom_renderer_unit_context;
+	Unit * display_unit = is->custom_renderer_unit_context;
+	Unit * unit = display_unit;
+	// Loaded armies draw their commander and representative member through the
+	// same audited sprite hooks. Capture each body's own frame and native anchor.
+	if (unit != NULL && sprite != &unit->Body.Animation.Frame_1.sprite && Unit_has_ability (unit, __, UTA_Army))
+		unit = get_unit_ptr (unit->Body.army_top_defender_id);
 	if (unit == NULL || canvas != is->custom_renderer_unit_canvas ||
 	    unit->Body.Animation.Frame_1.Flic_Info == NULL || sprite != &unit->Body.Animation.Frame_1.sprite ||
 	    palette == NULL || palette->JGL_Color_Table == NULL)
@@ -26794,10 +26799,10 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (result == C3X_RENDERER_RESULT_OK) {
 		// Animator unions this same Rect after tick_anim, then erases it next frame.
 		// Its native FLC crop does not cover the custom body and shadow envelope.
-		if (unit->Body.Rect.left > x) unit->Body.Rect.left = x;
-		if (unit->Body.Rect.top > y) unit->Body.Rect.top = y;
-		if (unit->Body.Rect.right < x + sprite->Width / (reduced ? 2 : 1)) unit->Body.Rect.right = x + sprite->Width / (reduced ? 2 : 1);
-		if (unit->Body.Rect.bottom < y + sprite->Height / (reduced ? 2 : 1)) unit->Body.Rect.bottom = y + sprite->Height / (reduced ? 2 : 1);
+		if (display_unit->Body.Rect.left > x) display_unit->Body.Rect.left = x;
+		if (display_unit->Body.Rect.top > y) display_unit->Body.Rect.top = y;
+		if (display_unit->Body.Rect.right < x + sprite->Width / (reduced ? 2 : 1)) display_unit->Body.Rect.right = x + sprite->Width / (reduced ? 2 : 1);
+		if (display_unit->Body.Rect.bottom < y + sprite->Height / (reduced ? 2 : 1)) display_unit->Body.Rect.bottom = y + sprite->Height / (reduced ? 2 : 1);
 	}
 	return result == C3X_RENDERER_RESULT_OK;
 }
@@ -26810,8 +26815,7 @@ patch_Unit_tick_anim (Unit * this, int edx, PCX_Image * canvas, int offset_x, in
 	is->custom_renderer_unit_context = NULL;
 	is->custom_renderer_unit_canvas = canvas;
 	if (is->current_config.enable_custom_rendering && is->current_config.enable_custom_rendered_units &&
-	    is->custom_renderer_unit_draw != NULL && is->custom_renderer_init_state == IS_OK &&
-	    ! Unit_has_ability (this, __, UTA_Army))
+	    is->custom_renderer_unit_draw != NULL && is->custom_renderer_init_state == IS_OK)
 		is->custom_renderer_unit_context = this;
 	Unit_tick_anim (this, __, canvas, offset_x, offset_y, status);
 	is->custom_renderer_unit_context = previous_unit;

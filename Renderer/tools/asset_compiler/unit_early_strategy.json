@@ -139,6 +139,14 @@
             "Staff"
           ],
           "presentation_note": "CITYA is a founding gesture; hide the staff that its source socket stows away from the hand."
+        },
+        "death": {
+          "source": "ANIMATION_Scout_DeathA",
+          "loop": false,
+          "exclude_roles": [
+            "Staff"
+          ],
+          "source_match": "compatible_humanoid_death; source civilians otherwise only supply capture gestures"
         }
       },
       "member_index": 0,
@@ -232,6 +240,14 @@
           "tools": [
             "Builder_SledgeHammer"
           ]
+        },
+        "death": {
+          "source": "ANIMATION_Scout_DeathA",
+          "loop": false,
+          "exclude_roles": [
+            "Tool"
+          ],
+          "source_match": "compatible_humanoid_death; source civilians otherwise only supply capture gestures"
         }
       },
       "member_index": 0,

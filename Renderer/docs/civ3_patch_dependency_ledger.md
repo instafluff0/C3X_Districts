@@ -510,3 +510,18 @@ Civilian actions already arrive through the existing action/cursor capture.
 Fortify transitions and tool selection are offline pack changes.
 Audit candidates: none required. `required_user_action: []`.
 User confirms the previous mouse-click and shadow fixes work; retain the input guard.
+
+
+### 2026-09-07 full standard Conquests roster
+
+Existing symbols: `Unit_tick_anim`, `Sprite_draw_unit_body_normal` and
+`Sprite_draw_unit_body_reduced`, with their existing GOG signatures and addresses
+unchanged. The existing `get_unit_ptr` helper resolves the representative member
+from `Unit.Body.army_top_defender_id` when the Army sprite differs from its
+commander. Native `Unit::FUN_005cc430` is read-only evidence that both bodies use
+the same two sprite primitives; it is not a new patch request. Dirty bounds
+expand the Army owner rectangle, not the member's unrelated rectangle.
+The extracted bridge and approved injected compilation pass. All catalog,
+loading, pose caching and action/art changes remain under `Renderer/`.
+Audit candidates: no new symbols; other-build equivalents remain unverified.
+`required_user_action: []`. The user-run expanded-roster checkpoint is pending.

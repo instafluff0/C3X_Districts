@@ -22,7 +22,7 @@ struct Animation_Info {int* Frame_Counts;};
 struct Summary {int current_anim_type=2,queued_anim_type=0,direction_2=3;};
 struct Animation {struct {void* Flic_Info;Sprite sprite;} Frame_1;Animation_Info* Animation_Info;Summary summary;int field_FC=7;};
 struct Rect {int left=20,top=30,right=45,bottom=55;};
-struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0;Animation Animation;} Body;bool army=false,visible=true;};
+struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0;int army_top_defender_id=-1;Animation Animation;} Body;bool army=false,visible=true;};
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;};
 struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
@@ -34,6 +34,7 @@ State state;State* is=&state;Bic bic;Bic* p_bic_data=&bic;PCX_Color_Table fixtur
 std::vector<int> calls;c3x_renderer_unit_v1 captured;bool success=true,fixture_reduced=false;int dc_count=0;PCX_Image* fixture_background=nullptr;JGL_Image* denied_dc=nullptr;
 int clamp(int a,int b,int v){return v<a?a:(v>b?b:v);}
 bool Unit_has_ability(Unit* u,int,int){return u->army;}
+Unit* army_member=nullptr;Unit* get_unit_ptr(int id){return army_member && army_member->Body.ID==id?army_member:nullptr;}
 HDC __fastcall acquire(JGL_Image* p){if(p==denied_dc)return nullptr;++dc_count;return p;}
 void __fastcall release_dc(JGL_Image*,int,int){--dc_count;}
 int __fastcall colors(JGL_Color_Table*,int,unsigned char* out,int first,int count){assert(first==6 && count==1);out[0]=12;out[1]=34;out[2]=56;return 0;}
@@ -51,9 +52,10 @@ void __fastcall Unit_tick_anim(Unit* u,int,PCX_Image* canvas,int x,int y,bool st
  assert(x==101 && y==202 && status);if(!u->visible)return;
  u->Body.Rect={};
  calls.push_back(10);
- for(int child=0;child<(u->army?2:1);++child){
-  if(fixture_reduced)patch_Sprite_draw_unit_body_reduced(&u->Body.Animation.Frame_1.sprite,0,fixture_background,canvas,11,23,1,1,2,const_cast<char*>("palette"),&fixture_palette);
-  else patch_Sprite_draw_unit_body_normal(&u->Body.Animation.Frame_1.sprite,0,fixture_background,canvas,11,23,const_cast<char*>("palette"),&fixture_palette);
+ for(int child=0;child<(u->army && army_member?2:1);++child){
+  Unit* body=child?army_member:u;
+  if(fixture_reduced)patch_Sprite_draw_unit_body_reduced(&body->Body.Animation.Frame_1.sprite,0,fixture_background,canvas,11,23,1,1,2,const_cast<char*>("palette"),&fixture_palette);
+  else patch_Sprite_draw_unit_body_normal(&body->Body.Animation.Frame_1.sprite,0,fixture_background,canvas,11,23,const_cast<char*>("palette"),&fixture_palette);
  }
  calls.push_back(40);
 }
@@ -75,7 +77,14 @@ int main(){
   success=false;invoke();assert(unit.Body.Rect.left==20 && unit.Body.Rect.right==45);assert((calls==std::vector<int>{10,20,30,40}));
   denied_dc=&background_image;invoke();assert((calls==std::vector<int>{10,30,40}));denied_dc=nullptr;
   state.current_config.enable_custom_rendered_units=false;invoke();assert((calls==std::vector<int>{10,30,40}));
-  state.current_config.enable_custom_rendered_units=true;unit.army=true;invoke();assert((calls==std::vector<int>{10,30,30,40}));unit.army=false;
+  state.current_config.enable_custom_rendered_units=true;unit.army=true;success=true;
+  invoke();assert((calls==std::vector<int>{10,20,40}));
+  Unit member=unit;member.army=false;member.Body.ID=84;member.Body.Animation.field_FC=4;
+  member.Body.Rect={200,200,210,210};army_member=&member;unit.Body.army_top_defender_id=84;invoke();assert((calls==std::vector<int>{10,20,20,40}));
+  assert(captured.unit_id==84 && captured.action_cursor==4);
+  assert(member.Body.Rect.left==200 && member.Body.Rect.right==210); // Only parent's native dirty bounds own redraw.
+  unit.Body.army_top_defender_id=-1;invoke();assert((calls==std::vector<int>{10,20,30,40}));
+  army_member=nullptr;unit.army=false;
   unit.visible=false;invoke();assert(calls.empty());unit.visible=true;
  }
  state.custom_renderer_unit_context=&unit;state.custom_renderer_unit_canvas=&canvas;

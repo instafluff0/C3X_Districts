@@ -105,8 +105,12 @@ def fortify_transition(skeleton: dict, idle, target):
     return normalized_pose_cache.PoseCache(.5,30.,16,tuple(b["name"] for b in skeleton["bones"]),tuple(frames))
 
 
-def build(packs: list[Path], output: Path) -> dict:
+def build(packs: list[Path], output: Path, standard_roster: bool = False, reuse_source_packs=()) -> dict:
+    source_roots={p.name:p for p in packs}
+    if len(source_roots)!=len(packs) or set(reuse_source_packs)-source_roots.keys():
+        raise ValueError('source pack names must be unique and reused packs must be present')
     previous = output/"manifest.json"
+    old = {"units":{}}
     old_payloads = set()
     if previous.exists():
         old = json.loads(previous.read_text(encoding="utf-8"))
@@ -139,6 +143,21 @@ def build(packs: list[Path], output: Path) -> dict:
             if unit_id in result["units"]:
                 raise ValueError(f"duplicate unit binding: {unit_id}")
             recipe = document(pack, entry["recipe"])
+            if pack.name in reuse_source_packs:
+                unit = old["units"][unit_id]
+                if unit['source_pack']!=pack.name or unit['source_recipe']!=entry['recipe']:
+                    raise ValueError('previous unit belongs to another source recipe')
+                for data in unit['actions'].values():
+                    for part in data['parts']:
+                        for relative in [part['mesh'],*[c['texture'] for c in part['material']['channels'].values()]]:
+                            blob=pack_path(output,relative).read_bytes()
+                            if Path(relative).stem!=hashlib.sha256(blob).hexdigest():
+                                raise ValueError('previous compiled unit payload changed')
+                            publish(blob,Path(relative).parent.name,Path(relative).suffix[1:])
+                # Catalog aliases are applied below, once, from current policy.
+                unit['civ3_ids']=recipe.get('civ3_ids',[])
+                result['units'][unit_id]=unit
+                continue
             if entry.get("type") == "compound":
                 from Renderer.tools.asset_compiler.compile_compound_animation import compile_unit
                 result["units"][unit_id] = compile_unit(pack, manifest, recipe, publish)
@@ -170,6 +189,22 @@ def build(packs: list[Path], output: Path) -> dict:
                     idle_clip = normalized_animation.load_clip(pack_path(pack, idle_record["clip"]))
                     caches = {asset: fortify_transition(skeleton, idle_clip, clip) for asset,skeleton in skeletons.items()}
                 caches = native_anchor_caches(caches, driver_id, skeletons[driver_id])
+                if action == "move" and recipe.get("move_cycle_translation_bone"):
+                    # Some locomotion exports put cycle travel on the hips.
+                    # Remove only the linear endpoint drift, keeping gait sway,
+                    # vertical motion, rotations and all relative kit positions.
+                    driver = caches[driver_id]
+                    index = driver.bone_names.index(recipe["move_cycle_translation_bone"])
+                    first = index * 16
+                    last = ((driver.frame_count - 1) * len(driver.bone_names) + index) * 16
+                    delta = [driver.matrices[last + 12 + a] - driver.matrices[first + 12 + a] for a in (0, 1)]
+                    for asset, cache in list(caches.items()):
+                        values = list(cache.matrices)
+                        for frame in range(cache.frame_count):
+                            for bone in range(len(cache.bone_names)):
+                                for axis in (0, 1):
+                                    values[(frame * len(cache.bone_names) + bone) * 16 + 12 + axis] -= delta[axis] * frame / (cache.frame_count - 1)
+                        caches[asset] = normalized_pose_cache.PoseCache(cache.duration, cache.sample_rate, cache.frame_count, cache.bone_names, tuple(values))
                 parts = []
                 selected = set(recipe.get("action_components", {}).get(action, components))
                 if not selected or selected - components.keys() or driver_id not in selected:
@@ -209,6 +244,27 @@ def build(packs: list[Path], output: Path) -> dict:
                     "presentation": "idle_to_static_fortify" if transition else "source_clip",
                     "loop": animation["loop"], "parts": parts}
             result["units"][unit_id] = unit
+    if standard_roster:
+        from Renderer.tools.asset_compiler.generic_missile_units import compile_units
+        for key, unit in compile_units(publish).items():
+            if key in result["units"]:
+                raise ValueError(f"duplicate generic unit: {key}")
+            result["units"][key] = unit
+        aliases = {"unit/ranger": ["PRTO_Explorer"], "unit/archer": ["PRTO_Bowman"],
+                   "unit/warrior": ["PRTO_Enkidu_Warrior"], "unit/horseman": ["PRTO_Mounted_Warrior"],
+                   "unit/tank": ["PRTO_Panzer"]}
+        for key, values in aliases.items():
+            result["units"][key]["civ3_ids"].extend(values)
+        # The seed's Cree source is foot recon, unsuitable for Mounted Warrior.
+        # Its generic horseman alias preserves the mounted silhouette instead.
+        keys = [key for unit in result["units"].values() for key in unit["civ3_ids"]]
+        if len(keys) != len(set(keys)):
+            raise ValueError("duplicate standard unit lookup key")
+        roster = json.loads(Path("Renderer/inventory/vanilla_conquests_to_civ6_units.json").read_text())
+        missing = {row["civ3_id"] for row in roster["mappings"]} - set(keys)
+        if missing:
+            raise ValueError(f"incomplete standard roster: {sorted(missing)}")
+        result["standard_roster_count"] = len(roster["mappings"])
     result["unique_payloads"] = len(payloads)
     result["payload_bytes"] = sum(payloads.values())
     # A small direct-member table avoids runtime interpretation of source
@@ -218,6 +274,13 @@ def build(packs: list[Path], output: Path) -> dict:
         keys = unit["civ3_ids"] or (["PRTO_Warrior"] if unit_id == "unit/warrior" else [])
         # Fit one authored idle stance once. Never refit moving/death poses.
         stance = []
+        ground_stance = []
+        ground_assets = None
+        if unit['source_pack']!='C3XGenericMissiles':
+            recipe=document(source_roots[unit['source_pack']],unit['source_recipe'])
+            ground_node=recipe.get('ground_reference_node')
+            if ground_node is not None:
+                ground_assets={p['asset'] for p in recipe['nodes'][ground_node]['components']}
         for part in unit["actions"]["idle"]["parts"]:
             payload = (output/part["mesh"]).read_bytes()
             _version, vertices, indices, _bones, _frames = struct.unpack_from("<5I", payload, 8)
@@ -232,7 +295,12 @@ def build(packs: list[Path], output: Path) -> dict:
                     for axis in range(3):
                         position[axis] += weight*(sum(values[a]*matrix[a*4+axis] for a in range(3))+matrix[12+axis])
                 stance.append(position)
-        low_z = min(v[2] for v in stance)
+                if ground_assets is None or part['asset'] in ground_assets:ground_stance.append(position)
+        low_z = min(v[2] for v in ground_stance)
+        if ground_assets is not None:
+            # Hidden inventory is deliberately below the authored chassis.
+            # It neither lifts the body nor enlarges its visible idle fit.
+            stance=[v for v in stance if v[2]>=low_z]
         span = 0.
         for direction in range(8):
             cosine, sine = math.cos(direction*math.pi/4), math.sin(direction*math.pi/4)
@@ -247,6 +315,7 @@ def build(packs: list[Path], output: Path) -> dict:
         complete = bool(keys)
         for action, data in unit["actions"].items():
             target = {"part_count": len(data["parts"]), "loop": int(data["loop"])}
+            if data.get('allow_exit_clip'):target['allow_exit_clip']=1
             for i, part in enumerate(data["parts"]):
                 material = part["material"]
                 tint = material.get("tint_rgb") or SOURCE_TINTS[material["source_tint"]]
@@ -278,8 +347,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pack", type=Path, action="append")
     parser.add_argument("--output", type=Path, default=Path("Renderer/packs/UnitAnimationRuntime"))
+    parser.add_argument("--standard-roster", action="store_true")
+    parser.add_argument("--reuse-source-pack", action="append", default=[],
+        help="Explicitly reuse this unchanged source pack's last compiled units; payload hashes are checked. Other packs rebuild.")
     args = parser.parse_args()
-    result = build(args.pack or [Path("Renderer/packs/UnitFamilyLab"), Path("Renderer/packs/UnitEarlyLab")], args.output)
+    defaults = ["UnitFamilyLab", "UnitEarlyLab"]
+    if args.standard_roster:
+        defaults += ["UnitRosterLab", "UnitRosterExpansionLab", "CompoundUnitRosterLab"]
+    result = build(args.pack or [Path("Renderer/packs") / name for name in defaults], args.output, args.standard_roster, args.reuse_source_pack)
     print(json.dumps({"units": len(result["units"]), "actions": sum(len(u["actions"]) for u in result["units"].values()),
                       "unique_payloads": result["unique_payloads"], "bytes": result["payload_bytes"]}))
 

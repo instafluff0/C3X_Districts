@@ -20,6 +20,21 @@ from Renderer.tools.asset_compiler.compound_landmark_importer import (
 
 
 class CompoundLandmarkImporterTests(unittest.TestCase):
+    def test_opposite_thin_faces_keep_finite_normals_but_degenerate_mesh_is_rejected(self) -> None:
+        data = bytearray(3 * 24)
+        for i, position in enumerate(((0, 0, 0), (1, 0, 0), (0, 1, 0))):
+            struct.pack_into("<3e", data, i * 24, *position)
+        def normalize(indices):
+            return _normalize_geometry(bytes(data), struct.pack("<6H", *indices),
+                {"format": 0x315CFCD9, "stride": 24, "count": 3},
+                {"bytes_per_index": 2, "count": 6},
+                {"first_index": 0, "index_count": 6, "base_vertex": 0, "vertex_count": 3}, 1.0, None)
+        mesh, _ = normalize((0, 1, 2, 2, 1, 0))
+        self.assertEqual(6, len(mesh["topology"]["indices"]))
+        self.assertEqual([[0., 0., 1.]] * 3, [v["normal"] for v in mesh["vertices"]])
+        with self.assertRaisesRegex(ValueError, "no non-degenerate triangles"):
+            normalize((0, 0, 0, 1, 1, 1))
+
     def test_auxiliary_atlases_follow_sparse_vertex_remapping_without_changing_geometry(self) -> None:
         for stride, profile, bones in ((24, 0x315CFCD9, None), (32, 0x6679B170, 1)):
             with self.subTest(stride=stride):

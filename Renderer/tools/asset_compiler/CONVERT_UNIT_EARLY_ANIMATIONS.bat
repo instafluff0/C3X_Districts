@@ -77,5 +77,9 @@ call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker plant ANIMATION_B
 if errorlevel 1 exit /b %errorlevel%
 call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker build ANIMATION_Builder_BuildAction02_2H
 if errorlevel 1 exit /b %errorlevel%
-echo Converted 33 early-unit animation clips.
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler death ANIMATION_Scout_DeathA
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker death ANIMATION_Scout_DeathA
+if errorlevel 1 exit /b %errorlevel%
+echo Converted 35 early-unit animation clips.
 exit /b 0

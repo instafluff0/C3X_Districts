@@ -90,6 +90,17 @@ The [ground decal source pass](terrain_lab/v2/audits/beauty/GROUND_DECAL_PASS.md
 
 The [mountain material pass](terrain_lab/v2/audits/beauty/ROCK_CHANNEL_PASS.md) aligns projected color/height/specular and adds eight snow/stripe channels in sixteen matched combined diagnostics. The gray rock relief improves modestly; normal-pipeline bindings, crop/wrap and cost remain open. All 72 test.biq mountains have grass base terrain, so desert coverage is an explicit synthetic material witness. Next, trace continental ground geometry together with the flat/high/hill material graph.
 
+The user-directed [Civ V Environment Skin mountain study](terrain_lab/v2/audits/relief/BEAUTY_MOUNTAIN_STUDY.md)
+removes Civ III and Windows constraints to isolate visual quality on macOS
+Metal. Its retained r4 frame shows that the 256 x 256 macro relief is not the
+main cause of the washed-together result: one-sample-per-texel geometry,
+triplanar use of the 2K base/top/snow color-height-specular stacks, source
+footprint blending, scene-linear warm/cool lighting, soft relief shadowing,
+4x MSAA and 16x anisotropy recover substantial authored detail. The focused
+control uses the same geometry and shader but recreates the planar, incomplete-
+material failure. This is an unoptimized standalone finding only; it does not
+close LQ0, establish D3D parity, or change Game Integration.
+
 The [continental/source-baking pass](terrain_lab/v2/audits/beauty/CONTINENTAL_GROUND_PASS.md)
 recovers continental height fields and rejects a broad pale high-material mask.
 Installed bytecode confirms alpha-squared weighted material baking and separate
@@ -1006,3 +1017,31 @@ The older frozen-profile boundary failure also remains explicit. No native edits
 injected compilation, installation, game launch, new visual-best claim or
 milestone/manual gate advancement is part of this preparation. The terrain-only
 package and historical L9–L21 records remain immutable.
+
+
+### Full standard Conquests unit roster maintenance
+
+The user selected the full standard roster. The staged runtime now covers all
+93 inventory keys plus Builder through 78 animation families and 630 actions.
+Twenty composed kits include mounts, crews and launchers; original generic
+missile bodies cover source-VFX-only gaps. Native action/placement authority,
+mouse quieting, keyed composition and terrain caches remain intact. Army
+commander/member capture reuses the existing three inleads; no CSV edit.
+
+Catalog-only startup and a 96 MiB LRU payload pool avoid eagerly loading the
+expanded pack. The independent 8 MiB sprite cache retains position-independent
+reuse and now shares ATTACK1/2/3 poses. Source parent-space chariot clips no
+longer receive double cart motion; zero-scale hidden parts remain valid;
+terminal composed exits remain GPU-clipped to the native canvas. Rifle sockets,
+civilian death clips and the Hwacha chassis ground reference were checked.
+
+The two full Windows sweeps pass 40,992 draws; the final isolated Hwacha fit
+passes another 432 draws with the other 77 family bindings byte-identical.
+Ordinary source proof passes 4,622 part poses / 1,611 sockets across 55 families,
+plus six source comparisons for the chariot coordinate correction. Terrain
+pixels remain unchanged and both cache budgets hold. The approved injected
+smoke and extracted bridge pass. Broader verification passes 380 prerequisite
+tests and retains the existing frozen L19A hash failure. No milestone is
+advanced and no game/installer is launched. Normal INSTALL.bat consumes the
+verified staged DLL and shared-storage runtime pack. See
+`docs/conquests_unit_roster.md` and `verification/animation/candidate-checkpoint.json`.

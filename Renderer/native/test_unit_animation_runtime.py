@@ -67,25 +67,36 @@ class UnitAnimationRuntimeTests(unittest.TestCase):
         for frame in range(16):self.assertAlmostEqual(same.matrices[frame*16],1.)
 
     def test_complete_source_kits_at_native_action_phases(self):
-        runtime = ROOT/"Renderer/packs/UnitAnimationRuntime"
+        runtime = ROOT/"Renderer/packs"/os.environ.get("C3X_UNIT_TEST_PACK", "UnitAnimationRuntime")
         if not (runtime/"manifest.json").exists():
             self.skipTest("local unit pack unavailable; run build_unit_animation_runtime.py")
         exported = json.loads((runtime/"manifest.json").read_text())
         cases = 0
         maximum_error = 0.0
         rigid_cases = 0
+        reference_units = 0
+        reference_actions = 0
+        composed_units = []
         for unit_id, unit in exported["units"].items():
+            if unit["source_pack"] == "C3XGenericMissiles":
+                composed_units.append(unit_id)
+                continue
             pack = ROOT/"Renderer/packs"/unit["source_pack"]
             source = json.loads((pack/"manifest.json").read_text())
             recipe = json.loads((pack/unit["source_recipe"]).read_text())
+            if recipe.get("schema") == "c3x.unit_composition.v0":
+                composed_units.append(unit_id)
+                continue
+            reference_units += 1
             self.assertEqual(set(unit["actions"]), set(recipe["actions"]))
             components = {c["asset"]: json.loads((pack/source["assets"][c["asset"]]["component"]).read_text())
                           for c in recipe["components"]}
             skeletons = {asset: normalized_skin.load_skeleton(pack/c["skeleton"])
-                         for asset, c in components.items() if c["binding_mode"] == "vertex_skin"}
+                         for asset, c in components.items() if c["binding_mode"] in {"vertex_skin", "mixed"}}
             driver = recipe.get("animation_driver", "unit/warrior/body")
             sockets = source.get("unit_binding", {}).get("sockets", SOCKET_PROFILE)
             for action, compiled in unit["actions"].items():
+                reference_actions += 1
                 animation = source["animations"][recipe["actions"][action]]
                 clip = normalized_animation.load_clip(pack/animation["clip"])
                 transition = compiled.get("presentation") == "idle_to_static_fortify"
@@ -117,17 +128,28 @@ class UnitAnimationRuntimeTests(unittest.TestCase):
                     root = next(i for i, b in enumerate(skeletons[driver]["bones"]) if b["parent"] == -1)
                     rest_root = normalized_skin.world_matrices(skeletons[driver])[root]
                     root_delta = [worlds[driver][root][12+a]-rest_root[12+a] for a in (0, 1)]
+                    if action == "move" and recipe.get("move_cycle_translation_bone"):
+                        skeleton = skeletons[driver]
+                        index = [b["name"] for b in skeleton["bones"]].index(recipe["move_cycle_translation_bone"])
+                        group = _best_group(clip, {b["name"] for b in skeleton["bones"]})[0]
+                        endpoints = [normalized_skin.world_matrices(skeleton, normalized_skin.sample_pose(skeleton, clip, group, t, False))
+                                     for t in (0., clip.duration)]
+                        for a in (0, 1):
+                            drift = (endpoints[1][index][12+a] - endpoints[1][root][12+a]) - (endpoints[0][index][12+a] - endpoints[0][root][12+a])
+                            root_delta[a] += drift * frame / (compiled["frames"] - 1)
                     for part in compiled["parts"]:
                         component = components[part["asset"]]
-                        if component["binding_mode"] == "vertex_skin":
+                        mesh_document = json.loads((pack/part["source_mesh"]).read_text())
+                        if mesh_document["schema"] == normalized_skin.MESH_SCHEMA:
                             skeleton = skeletons[part["asset"]]
                             mesh = normalized_skin.load_mesh(pack/part["source_mesh"], len(skeleton["bones"]))
                             expected = _skinned_mesh(mesh, skeleton, worlds[part["asset"]])
                         else:
-                            bone = sockets[component["attachment_point"]]["bone"]
-                            index = [b["name"] for b in skeletons[driver]["bones"]].index(bone)
+                            local_driver = part["asset"] if part["asset"] in worlds and component.get("rigid_driver_bone") else driver
+                            bone = component.get("rigid_driver_bone") or sockets[component["attachment_point"]]["bone"]
+                            index = [b["name"] for b in skeletons[local_driver]["bones"]].index(bone)
                             mesh = json.loads((pack/part["source_mesh"]).read_text())
-                            expected = _rigid_mesh(mesh, worlds[driver][index], component["model_scale"])
+                            expected = _rigid_mesh(mesh, worlds[local_driver][index], component["model_scale"])
                             rigid_cases += 1
                         payload = runtime/part["mesh"]
                         self.assertEqual(payload.stem, hashlib.sha256(payload.read_bytes()).hexdigest())
@@ -155,12 +177,61 @@ class UnitAnimationRuntimeTests(unittest.TestCase):
                                              (runtime/part["material"]["channels"][channel]["texture"]).read_bytes())
         report = {"schema": "c3x.unit_animation_payload_proof.v1", "status": "pass",
             "backend": self.backend,
-            "units": len(exported["units"]), "actions": sum(len(u["actions"]) for u in exported["units"].values()),
+            "source_reference_units": reference_units,
+            "composed_or_original_units_requiring_separate_verification": composed_units,
+            "units": reference_units, "actions": reference_actions,
+            "runtime_catalog_units": len(exported["units"]),
             "part_pose_samples": cases, "socket_pose_samples": rigid_cases,
             "maximum_position_error_tiles": maximum_error, "payload_bytes": exported["payload_bytes"],
             "scope": "actual portable DLL evaluator versus raw authored clips; source-payload proof; live gameplay behavior is a separate checkpoint"}
-        (ROOT/f"Renderer/verification/animation/unit-payloads-{self.backend}.json").write_text(json.dumps(report, indent=2)+"\n")
+        prefix = "roster/" if os.environ.get("C3X_UNIT_TEST_PACK") else ""
+        (ROOT/f"Renderer/verification/animation/{prefix}unit-payloads-{self.backend}.json").write_text(json.dumps(report, indent=2)+"\n")
         print(json.dumps(report))
+
+    def test_parent_scene_horse_clips_apply_cart_translation_once(self):
+        runtime = ROOT/"Renderer/packs"/os.environ.get("C3X_UNIT_TEST_PACK", "UnitAnimationRuntime")
+        if not (runtime/"manifest.json").exists():self.skipTest("local unit pack unavailable")
+        exported=json.loads((runtime/"manifest.json").read_text())
+        unit=exported['units'].get('unit/heavy_chariot')
+        if not unit:self.skipTest("expanded roster not selected")
+        pack=ROOT/'Renderer/packs'/unit['source_pack']
+        manifest=json.loads((pack/'manifest.json').read_text())
+        recipe=json.loads((pack/unit['source_recipe']).read_text())
+        parent=recipe['nodes'][recipe['root_node']]
+        parent_skeleton=normalized_skin.load_skeleton(pack/parent['skeleton'])
+        root=next(i for i,b in enumerate(parent_skeleton['bones']) if b['parent']==-1)
+        rest=normalized_skin.world_matrices(parent_skeleton)[root]
+        samples=0
+        for node_id,node in recipe['nodes'].items():
+            for action in node.get('parent_space_actions',[]):
+                compiled=unit['actions'][action]
+                part=next(p for p in compiled['parts'] if p['asset']==node['animation_driver'])
+                component=json.loads((pack/manifest['assets'][part['asset']]['component']).read_text())
+                skeleton=normalized_skin.load_skeleton(pack/component['skeleton'])
+                mesh=normalized_skin.load_mesh(pack/part['source_mesh'],len(skeleton['bones']))
+                clips={n:normalized_animation.load_clip(pack/manifest['animations'][clip]['clip'])
+                       for n,clip in recipe['actions'][action]['node_clips'].items()}
+                for frame in (0,compiled['frames']//2,compiled['frames']-1):
+                    phase=frame/(compiled['frames']-1)
+                    def worlds(sk,clip):
+                        group=_best_group(clip,{b['name'] for b in sk['bones']})[0]
+                        return normalized_skin.world_matrices(sk,normalized_skin.sample_pose(sk,clip,group,clip.duration*phase,False))
+                    expected=_skinned_mesh(mesh,skeleton,worlds(skeleton,clips[node_id]))
+                    parent_root=worlds(parent_skeleton,clips[recipe['root_node']])[root]
+                    target=Path(self.scratch.name)/'parent-scene.bin'
+                    subprocess.run([str(self.executable),str(runtime/part['mesh']),str(compiled['duration']*phase),'0',str(target)],check=True,capture_output=True)
+                    actual=list(struct.iter_unpack('<8f',target.read_bytes()))
+                    self.assertEqual(len(actual),len(expected['vertices']))
+                    for vertex,wanted in zip(actual,expected['vertices']):
+                        for axis in range(3):
+                            position=wanted['position'][axis]*node['variation_scale']*parent['variation_scale']
+                            if axis<2:position-=(parent_root[12+axis]-rest[12+axis])*parent['variation_scale']
+                            self.assertAlmostEqual(vertex[axis],position,places=5)
+                    samples+=1
+        self.assertGreater(samples,0)
+        (ROOT/'Renderer/verification/animation/roster/parent-scene-reference.json').write_text(json.dumps(
+            {'status':'pass','part_pose_samples':samples,'contract':'paired horse clips contain one copy of parent scene translation'},indent=2)+'\n')
+        print(f"parent-scene source reference: {samples} part poses passed")
 
 
 if __name__ == "__main__":

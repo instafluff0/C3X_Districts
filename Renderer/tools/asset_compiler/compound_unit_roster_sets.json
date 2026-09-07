@@ -899,7 +899,12 @@
             "root",
             "skin_root"
           ],
-          "scale_multiplier": 0.45
+          "scale_multiplier": 0.45,
+          "component_attachment_bones": {
+            "ArmBand": [
+              "LForearm"
+            ]
+          }
         }
       ],
       "actions": {
@@ -993,7 +998,12 @@
             "Root",
             "root",
             "skin_root"
-          ]
+          ],
+          "component_attachment_bones": {
+            "ArmBand": [
+              "LForearm"
+            ]
+          }
         }
       ],
       "actions": {
@@ -1081,7 +1091,14 @@
             "Root",
             "root",
             "skin_root"
-          ]
+          ],
+          "exclude_roles": [
+            "Pistol"
+          ],
+          "disabled_socket_bones": [
+            "Inven_R_Hand"
+          ],
+          "calibration_note": "The operator clip stows its pistol with a distant inventory socket. Omit the pistol and neutralize only that unused helper; skin weights may not reference it."
         }
       ],
       "actions": {
@@ -1346,7 +1363,11 @@
             "Root",
             "root",
             "skin_root"
-          ]
+          ],
+          "exclude_roles": [
+            "WeaponHip"
+          ],
+          "calibration_note": "Omit the stowed sidearm: the exported operator skeleton has no hip weapon socket; retain the working hand tool."
         }
       ],
       "actions": {
@@ -1406,7 +1427,9 @@
             "operatora": "ANIMATION_HwachaOperator_IdleA"
           }
         }
-      }
+      },
+      "ground_reference_node": "body",
+      "ground_reference_note": "Fit ground from the launcher chassis; the source idle clip stows its torch below the ground plane."
     },
     {
       "slug": "field_cannon",
@@ -1520,94 +1543,6 @@
       }
     },
     {
-      "slug": "modern_at",
-      "civ3_ids": [
-        "PRTO_TOW_Infantry"
-      ],
-      "source_artdef": "UNIT_MODERN_AT",
-      "source_content": "Base",
-      "member_index": 0,
-      "parent": {
-        "id": "body",
-        "variation": "Rocketeer"
-      },
-      "children": [
-        {
-          "id": "support",
-          "variation": "Support",
-          "virtual_member": "Support",
-          "parent": "body",
-          "socket": "attachSupport",
-          "socket_bone_candidates": [
-            "attachSupport"
-          ],
-          "child_root_bone_candidates": [
-            "Root",
-            "root",
-            "skin_root"
-          ]
-        }
-      ],
-      "actions": {
-        "idle": {
-          "loop": true,
-          "nodes": {
-            "body": "ANIMATION_AT_Crew_IdleA",
-            "support": "ANIMATION_AT_Crew_Support_IdleA"
-          }
-        },
-        "move": {
-          "loop": true,
-          "nodes": {
-            "body": "ANIMATION_AT_Crew_RunFwdA",
-            "support": "ANIMATION_AT_Crew_Support_RunFwdA"
-          }
-        },
-        "attack": {
-          "loop": false,
-          "nodes": {
-            "body": "ANIMATION_AT_Crew_AttackA",
-            "support": "ANIMATION_AT_Crew_Support_AttackA"
-          }
-        },
-        "death": {
-          "loop": false,
-          "nodes": {
-            "body": "ANIMATION_AT_Crew_DeathA",
-            "support": "ANIMATION_AT_Crew_Support_DeathA"
-          }
-        },
-        "fortify": {
-          "loop": false,
-          "nodes": {
-            "body": "ANIMATION_AT_Crew_BraceA",
-            "support": "ANIMATION_AT_Crew_Support_BraceA"
-          }
-        },
-        "fidget": {
-          "loop": false,
-          "nodes": {
-            "body": "ANIMATION_AT_Crew_IdleD",
-            "support": "ANIMATION_AT_Crew_Support_IdleC"
-          }
-        },
-        "defend": {
-          "loop": false,
-          "nodes": {
-            "body": "ANIMATION_AT_Crew_Defend",
-            "support": "ANIMATION_AT_Crew_Support_Defend"
-          }
-        },
-        "victory": {
-          "loop": false,
-          "nodes": {
-            "body": "ANIMATION_AT_Crew_IdleA",
-            "support": "ANIMATION_AT_Crew_Support_IdleA"
-          }
-        }
-      }
-    },
-    {
       "slug": "heavy_chariot",
       "civ3_ids": [
         "PRTO_Chariot",
@@ -1628,13 +1563,14 @@
           "parent": "body",
           "socket": "attachRider",
           "socket_bone_candidates": [
-            "attachRider"
+            "cart"
           ],
           "child_root_bone_candidates": [
             "Root",
             "root",
             "skin_root"
-          ]
+          ],
+          "calibration_note": "The exported cart has no attachRider helper; use the cart frame for its authored standing rider clip."
         },
         {
           "id": "horsel",
@@ -1649,7 +1585,11 @@
             "Root",
             "root",
             "skin_root"
-          ]
+          ],
+          "parent_space_actions": [
+            "attack"
+          ],
+          "calibration_note": "These paired horse clips contain the cart socket movement already; retain one copy of that parent-space transform. Generic death clips remain socket-local."
         },
         {
           "id": "horser",
@@ -1664,7 +1604,11 @@
             "Root",
             "root",
             "skin_root"
-          ]
+          ],
+          "parent_space_actions": [
+            "attack"
+          ],
+          "calibration_note": "These paired horse clips contain the cart socket movement already; retain one copy of that parent-space transform. Generic death clips remain socket-local."
         }
       ],
       "actions": {
@@ -1762,13 +1706,14 @@
           "parent": "body",
           "socket": "attachArcher",
           "socket_bone_candidates": [
-            "attachArcher"
+            "cart"
           ],
           "child_root_bone_candidates": [
             "Root",
             "root",
             "skin_root"
-          ]
+          ],
+          "calibration_note": "The exported cart omits attachArcher; its standing archer is composed in the cart frame."
         },
         {
           "id": "horsec",
@@ -1863,7 +1808,12 @@
       "member_index": 0,
       "parent": {
         "id": "body",
-        "variation": "Cart"
+        "variation": "Cart",
+        "component_attachment_bones": {
+          "Root": [
+            "root"
+          ]
+        }
       },
       "children": [
         {
@@ -1873,13 +1823,32 @@
           "parent": "body",
           "socket": "attachDriver",
           "socket_bone_candidates": [
-            "attachDriver"
+            "neck"
           ],
           "child_root_bone_candidates": [
             "Root",
             "root",
             "skin_root"
-          ]
+          ],
+          "local_transform": [
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            -0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "calibration_note": "Exported attachment helpers are absent. Use the anatomical neck or basket position, cancel its rest orientation, and separate the two basket riders."
         },
         {
           "id": "ridera",
@@ -1888,13 +1857,32 @@
           "parent": "body",
           "socket": "attachRiderA",
           "socket_bone_candidates": [
-            "attachRiderA"
+            "basket"
           ],
           "child_root_bone_candidates": [
             "Root",
             "root",
             "skin_root"
-          ]
+          ],
+          "local_transform": [
+            -1.2e-07,
+            1.0,
+            0.0,
+            0.0,
+            -0.99853909,
+            -1.2e-07,
+            0.05403492,
+            0.0,
+            0.05403492,
+            0.0,
+            0.99853903,
+            0.0,
+            -3.3599999999999996e-09,
+            0.028,
+            0.0,
+            1.0
+          ],
+          "calibration_note": "Exported attachment helpers are absent. Use the anatomical neck or basket position, cancel its rest orientation, and separate the two basket riders."
         },
         {
           "id": "riderb",
@@ -1903,13 +1891,32 @@
           "parent": "body",
           "socket": "attachRiderB",
           "socket_bone_candidates": [
-            "attachRiderB"
+            "basket"
           ],
           "child_root_bone_candidates": [
             "Root",
             "root",
             "skin_root"
-          ]
+          ],
+          "local_transform": [
+            -1.2e-07,
+            1.0,
+            0.0,
+            0.0,
+            -0.99853909,
+            -1.2e-07,
+            0.05403492,
+            0.0,
+            0.05403492,
+            0.0,
+            0.99853903,
+            0.0,
+            3.3599999999999996e-09,
+            -0.028,
+            -0.0,
+            1.0
+          ],
+          "calibration_note": "Exported attachment helpers are absent. Use the anatomical neck or basket position, cancel its rest orientation, and separate the two basket riders."
         }
       ],
       "actions": {

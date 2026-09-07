@@ -49,7 +49,8 @@
           "source": "ANIMATION_Impi_VictoryA",
           "loop": false
         }
-      }
+      },
+      "move_cycle_translation_bone": "Pelvis"
     },
     {
       "slug": "inca_warakaq",
@@ -295,7 +296,14 @@
           "source": "ANIMATION_Infantry_VictoryA",
           "loop": false
         }
-      }
+      },
+      "exclude_roles": [
+        "Scope"
+      ],
+      "attachment_point_overrides": {
+        "Weapon": "WeaponPrimary"
+      },
+      "calibration_note": "The selected compatible Infantry clips use the right-hand rifle socket. Omit the source binocular attachment and bind the rifle to that animated hand."
     },
     {
       "slug": "phoenicia_bireme",
@@ -639,6 +647,55 @@
           "loop": false
         }
       }
+    },
+    {
+      "slug": "modern_at",
+      "source_artdef": "UNIT_MODERN_AT",
+      "civ3_ids": [
+        "PRTO_TOW_Infantry"
+      ],
+      "source_content": "Base",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "anti_cavalry",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_AT_Crew_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_AT_Crew_RunFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_AT_Crew_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_AT_Crew_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_AT_Crew_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_AT_Crew_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_AT_Crew_Defend",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_AT_Crew_IdleA",
+          "loop": false
+        }
+      },
+      "presentation_note": "One rocket operator per Civ III body. The optional support infantry member is omitted, as with other formation members."
     }
   ],
   "runtime": {
