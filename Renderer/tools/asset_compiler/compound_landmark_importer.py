@@ -38,6 +38,7 @@ from Renderer.tools.asset_compiler.generic_decal_compiler import (
 )
 from Renderer.tools.asset_compiler.grassland_pack_builder import validate_runtime_independence
 from Renderer.tools.asset_compiler.indexed_static_package import IndexedStaticPackage
+from Renderer.tools.asset_compiler.packed_static_frame import decode_octahedral_snorm8
 
 
 RENDERER_ROOT = Path(__file__).resolve().parents[2]
@@ -712,6 +713,7 @@ def _normalize_geometry(
     bone_count: int | None,
     normalize_skin_weights: bool = False,
     auxiliary_uvs: bool = False,
+    use_authored_normals: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     expected_stride = STATIC_VERTEX_PROFILES.get(vertex_entry["format"])
     if expected_stride != vertex_entry["stride"]:
@@ -788,8 +790,17 @@ def _normalize_geometry(
                 normal_sums[vertex][axis] += cross[axis]
     if not kept_indices:
         raise ValueError("Compound mesh contains no non-degenerate triangles")
+    authored_normals = (
+        [
+            tuple(decode_octahedral_snorm8(vertex_bytes, index * stride + 6))
+            for index in range(count)
+        ]
+        if use_authored_normals
+        else None
+    )
     vertices = []
     referenced = set(kept_indices)
+    normal_dots = []
     for index, (position, uv, normal_sum) in enumerate(zip(positions, uvs, normal_sums)):
         if index not in referenced:
             continue
@@ -800,10 +811,13 @@ def _normalize_geometry(
             length, normal_sum = strongest_normals[index]
             if length <= 1.0e-12:
                 raise ValueError("Compound mesh referenced vertex has no geometric normal")
+        geometric_normal = tuple(value / length for value in normal_sum)
+        normal = authored_normals[index] if authored_normals is not None else geometric_normal
+        normal_dots.append(sum(a * b for a, b in zip(normal, geometric_normal)))
         vertex = {
             "source_index": index,
             "position": [round(value, 8) for value in position],
-            "normal": [round(value / length, 8) for value in normal_sum],
+            "normal": [round(value, 8) for value in normal],
             "uv0": [round(value, 8) for value in uv],
         }
         if auxiliary_uvs:
@@ -865,6 +879,13 @@ def _normalize_geometry(
                 "normalized_vertices": sum(value != 255 for value in source_weight_sums),
             }
         ),
+        "normal_source": (
+            "authored_octahedral_snorm8" if authored_normals is not None
+            else "area_weighted_geometry"
+        ),
+        "minimum_geometric_normal_dot": min(normal_dots),
+        "mean_geometric_normal_dot": sum(normal_dots) / len(normal_dots),
+        "negative_geometric_normal_dots": sum(value < 0.0 for value in normal_dots),
         "vertex_sha256": _sha256(vertex_bytes),
         "index_sha256": _sha256(index_bytes),
     }

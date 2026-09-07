@@ -62,6 +62,27 @@ class CompoundLandmarkImporterTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'auxiliary UV is not finite'):
                     _normalize_geometry(bytes(data), *args[1:], auxiliary_uvs=True)
 
+    def test_authored_octahedral_normals_are_an_explicit_opt_in(self) -> None:
+        data = bytearray(3 * 32)
+        for index, position in enumerate(((0, 0, 0), (1, 0, 0), (0, 1, 0))):
+            struct.pack_into("<3e", data, index * 32, *position)
+            struct.pack_into("<2b", data, index * 32 + 6, 127, 0)
+            struct.pack_into("<2e", data, index * 32 + 8, 0.0, 0.0)
+            data[index * 32 + 16] = 255
+        args = (
+            bytes(data), struct.pack("<3H", 0, 1, 2),
+            {"format": 0x6679B170, "stride": 32, "count": 3},
+            {"bytes_per_index": 2, "count": 3},
+            {"first_index": 0, "index_count": 3, "base_vertex": 0, "vertex_count": 3},
+            1.0, 1,
+        )
+        geometric, geometric_evidence = _normalize_geometry(*args)
+        authored, authored_evidence = _normalize_geometry(*args, use_authored_normals=True)
+        self.assertEqual([0.0, 0.0, 1.0], geometric["vertices"][0]["normal"])
+        self.assertEqual([1.0, 0.0, 0.0], authored["vertices"][0]["normal"])
+        self.assertEqual("area_weighted_geometry", geometric_evidence["normal_source"])
+        self.assertEqual("authored_octahedral_snorm8", authored_evidence["normal_source"])
+
     def test_checked_in_infrastructure_probe_has_five_unique_roots(self) -> None:
         mapping = load_mapping(Path(__file__).with_name("infrastructure_source_sets.json"))
         assets = [asset for package in mapping["packages"] for asset in package["assets"]]

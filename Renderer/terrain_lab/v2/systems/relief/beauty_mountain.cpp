@@ -200,6 +200,10 @@ int main(int argc, char **argv) {
             float wx = (u - 0.5f) * span_x - (combined_scene ? 1.20f : 0.0f);
             float wy = (v - 0.5f) * span_y + (combined_scene ? 0.82f : 0.0f);
             BeautyVertex out = project_vertex(wx, wy, h * z_scale, h, 2);
+            // Composition replays the relief and object packets together. A
+            // small scene-only bias keeps the feathered, near-coplanar skirts
+            // from losing their depth tie to the shared terrain plane.
+            if (combined_scene) out.position[2] = clamp01(out.position[2] - 0.055f);
             out.uv[0] = u; out.uv[1] = v;
             out.material[2] = footprint(u, v);
             float du = 1.0f / float(grid - 1), dv = du;

@@ -28,9 +28,10 @@ struct BeautyFrame {
 };
 
 struct BeautyMaterial {
-    std::array<std::string, 6> paths;
+    std::array<std::string, 7> paths;
     unsigned owner_tint = 0;
-    std::array<unsigned, 6> textures{};
+    unsigned repeat = 0;
+    std::array<unsigned, 7> textures{};
 };
 
 struct BeautyObject {
@@ -38,6 +39,18 @@ struct BeautyObject {
     unsigned kind = 0;
     unsigned material = 0;
     std::vector<FeatureSourceVertex> vertices;
+};
+
+struct BeautyRecipe {
+    unsigned object = 0;
+    float scale = 1.0f;
+    float scale_variation = 0.0f;
+    unsigned count = 0;
+    unsigned min_count = 0;
+    unsigned priority = 0;
+    unsigned flags = 0;
+    float width = 0.0f;
+    float low_end_reduction = 0.0f;
 };
 
 struct Placement {
@@ -69,22 +82,25 @@ bool consume_optional_string(std::vector<std::uint8_t> const &data, std::size_t 
 }
 
 bool load_beauty_objects(std::string const &path, std::vector<BeautyMaterial> &materials,
-                         std::vector<BeautyObject> &objects) {
+                         std::vector<BeautyObject> &objects,
+                         std::vector<BeautyRecipe> &tree_recipes) {
     std::vector<std::uint8_t> data;
-    if (!read_file(path, data) || data.size() < 20 ||
+    if (!read_file(path, data) || data.size() < 24 ||
         std::memcmp(data.data(), "C3XBTO1\0", 8) != 0)
         return false;
     std::size_t cursor = 8;
-    std::uint32_t version = 0, material_count = 0, object_count = 0;
+    std::uint32_t version = 0, material_count = 0, object_count = 0, recipe_count = 0;
     if (!consume_u32(data, cursor, version) || !consume_u32(data, cursor, material_count) ||
-        !consume_u32(data, cursor, object_count) || version != 1 || material_count == 0 ||
-        material_count > 64 || object_count == 0 || object_count > 128)
+        !consume_u32(data, cursor, object_count) || !consume_u32(data, cursor, recipe_count) ||
+        version != 3 || material_count == 0 || material_count > 64 || object_count == 0 ||
+        object_count > 256 || recipe_count == 0 || recipe_count > 128)
         return false;
     materials.resize(material_count);
     for (BeautyMaterial &material : materials) {
         for (std::string &path_value : material.paths)
             if (!consume_optional_string(data, cursor, path_value)) return false;
-        if (!consume_u32(data, cursor, material.owner_tint) || material.owner_tint > 1)
+        if (!consume_u32(data, cursor, material.owner_tint) || material.owner_tint > 1 ||
+            !consume_u32(data, cursor, material.repeat) || material.repeat > 1)
             return false;
     }
     objects.resize(object_count);
@@ -105,6 +121,22 @@ bool load_beauty_objects(std::string const &path, std::vector<BeautyMaterial> &m
             for (float &value : vertex.uv)
                 if (!consume_float(data, cursor, value)) return false;
         }
+    }
+    tree_recipes.resize(recipe_count);
+    for (BeautyRecipe &recipe : tree_recipes) {
+        if (!consume_u32(data, cursor, recipe.object) ||
+            !consume_float(data, cursor, recipe.scale) ||
+            !consume_float(data, cursor, recipe.scale_variation) ||
+            !consume_u32(data, cursor, recipe.count) ||
+            !consume_u32(data, cursor, recipe.min_count) ||
+            !consume_u32(data, cursor, recipe.priority) ||
+            !consume_u32(data, cursor, recipe.flags) ||
+            !consume_float(data, cursor, recipe.width) ||
+            !consume_float(data, cursor, recipe.low_end_reduction) ||
+            recipe.object >= objects.size() || objects[recipe.object].kind != 1 ||
+            recipe.scale <= 0 || recipe.scale_variation < 0 ||
+            recipe.scale_variation > 2 || recipe.flags > 7)
+            return false;
     }
     return cursor == data.size();
 }
@@ -130,7 +162,7 @@ void add_triangle(std::vector<BeautyVertex> &vertices, BeautyVertex const &a,
 }
 
 void add_draw(std::vector<BeautyVertex> const &vertices, unsigned constants,
-              std::array<unsigned, 9> const &textures, unsigned depth_mode,
+              std::array<unsigned, 10> const &textures, unsigned depth_mode,
               unsigned blend_mode) {
     if (vertices.empty()) return;
     recorded.buffers.emplace_back(
@@ -170,8 +202,9 @@ int main(int argc, char **argv) {
 
         std::vector<BeautyMaterial> materials;
         std::vector<BeautyObject> objects;
+        std::vector<BeautyRecipe> tree_recipes;
         if (!load_beauty_objects("Renderer/packs/BeautyStudies/beauty_objects.bin",
-                                 materials, objects))
+                                 materials, objects, tree_recipes))
             throw std::runtime_error("beauty object bundle load failed");
 
         ID3D11Device device;
@@ -194,7 +227,7 @@ int main(int argc, char **argv) {
             return id;
         };
 
-        std::array<unsigned, 9> common{};
+        std::array<unsigned, 10> common{};
         common[0] = texture("Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds");
         common[1] = texture("Renderer/packs/Civ5EnvironmentSkin/textures/grassland_height.dds");
         common[2] = texture("Renderer/packs/Civ5EnvironmentSkin/textures/grassland_specular.dds");
@@ -205,8 +238,13 @@ int main(int argc, char **argv) {
         BeautyFrame frame = {};
         frame.sun[0] = -0.62f; frame.sun[1] = -0.42f; frame.sun[2] = 0.66f;
         normalize3(frame.sun); frame.sun[3] = 2.05f;
-        frame.sun_color_exposure[0] = 1.0f; frame.sun_color_exposure[1] = 0.91f;
-        frame.sun_color_exposure[2] = 0.76f; frame.sun_color_exposure[3] = 1.16f;
+        // DEFAULT_LIGHTING noon is authored as RGB intensity 6.2/4.5/3.5.
+        // Preserve that chromatic ratio while the Lab retains its bounded
+        // source-independent radiance scale.
+        frame.sun_color_exposure[0] = 1.0f;
+        frame.sun_color_exposure[1] = 4.5f / 6.2f;
+        frame.sun_color_exposure[2] = 3.5f / 6.2f;
+        frame.sun_color_exposure[3] = 1.0f;
         frame.ambient[0] = 0.34f; frame.ambient[1] = 0.45f;
         frame.ambient[2] = 0.60f; frame.ambient[3] = 0.62f;
         frame.view[0] = 0.490290f; frame.view[1] = -0.735435f; frame.view[2] = 0.469979f;
@@ -231,7 +269,46 @@ int main(int argc, char **argv) {
         BeautyVertex d = project(-plane,  plane, 0, view_x, view_y, center_y, 0);
         for (BeautyVertex *vertex : {&a, &b, &c, &d}) vertex->normal[2] = 1;
         add_triangle(ground, a, b, c); add_triangle(ground, a, c, d);
-        add_draw(ground, constants, common, 2, 0);
+        // In the combined fixture the relief module already owns the identical
+        // full-frame ground. Drawing it again would resolve equal-depth pixels
+        // over the mountain's feathered foothills.
+        if (!scene_mode) add_draw(ground, constants, common, 2, 0);
+
+        if (scene_mode) {
+            auto river_ribbon = [&](float half_width, float z, float kind) {
+                std::vector<BeautyVertex> ribbon;
+                std::array<std::array<float, 2>, 49> left{}, right{};
+                for (unsigned index = 0; index < left.size(); ++index) {
+                    float phase = float(index) / float(left.size() - 1);
+                    float x = -4.4f + phase * 8.8f;
+                    float y = -0.10f + 0.18f * std::sin(phase * 9.0f) +
+                              0.08f * std::sin(phase * 19.0f);
+                    float derivative = 1.62f * std::cos(phase * 9.0f) / 8.8f +
+                                       1.52f * std::cos(phase * 19.0f) / 8.8f;
+                    float inverse = 1.0f / std::sqrt(1.0f + derivative * derivative);
+                    float nx = -derivative * inverse, ny = inverse;
+                    left[index] = {x + nx * half_width, y + ny * half_width};
+                    right[index] = {x - nx * half_width, y - ny * half_width};
+                }
+                for (unsigned index = 0; index + 1 < left.size(); ++index) {
+                    BeautyVertex a = project(left[index][0], left[index][1], z,
+                                             view_x, view_y, center_y, kind);
+                    BeautyVertex b = project(right[index][0], right[index][1], z,
+                                             view_x, view_y, center_y, kind);
+                    BeautyVertex c = project(right[index + 1][0], right[index + 1][1], z,
+                                             view_x, view_y, center_y, kind);
+                    BeautyVertex d = project(left[index + 1][0], left[index + 1][1], z,
+                                             view_x, view_y, center_y, kind);
+                    for (BeautyVertex *vertex : {&a, &b, &c, &d}) vertex->normal[2] = 1;
+                    add_triangle(ribbon, a, b, c); add_triangle(ribbon, a, c, d);
+                }
+                add_draw(ribbon, constants, common, 2, 0);
+            };
+            // Warm banks frame a narrow, sky-reflecting river and add the
+            // large-scale color/value break missing from an all-grass tableau.
+            river_ribbon(0.24f, 0.003f, 6.0f);
+            river_ribbon(0.155f, 0.008f, 5.0f);
+        }
 
         std::vector<Placement> placements;
         if (scene_mode) {
@@ -252,8 +329,8 @@ int main(int argc, char **argv) {
             // vegetation sources proven by the isolated study.
             constexpr float golden = 2.39996323f;
             for (unsigned cluster = 0; cluster < 2; ++cluster) {
-                float center_x = cluster ? 1.72f : -1.52f;
-                float center_z = cluster ? 0.72f : -0.48f;
+                float center_x = cluster ? 1.72f : -2.10f;
+                float center_z = cluster ? 0.72f : -1.02f;
                 for (unsigned index = 0; index < 11; ++index) {
                     float ring = std::sqrt(float(index) / 10.0f);
                     float angle = golden * index + cluster * 0.71f;
@@ -298,20 +375,33 @@ int main(int argc, char **argv) {
                         warrior_placements[member][2], warrior_placements[member][3]});
         } else if (trees_mode) {
             constexpr float golden = 2.39996323f;
-            // The detailed single broadleaf holds up at this close camera;
-            // restrained conifers supply silhouette variety. The preassembled
-            // and seasonal sources contain visible low-detail filler crowns.
-            for (unsigned index = 0; index < 24; ++index) {
-                float ring = std::sqrt(float(index) / 23.0f);
+            unsigned recipe_weight = 0;
+            for (BeautyRecipe const &recipe : tree_recipes)
+                recipe_weight += recipe.count;
+            if (recipe_weight == 0)
+                throw std::runtime_error("forest recipe has no authored weight");
+            // ArtDef Count is the only authored variant-frequency signal. The
+            // engine's exact scatter transforms are not serialized, so this
+            // study applies those weights, scales, variations, and RotateZ
+            // semantics to a deterministic low-discrepancy patch.
+            for (unsigned index = 0; index < 36; ++index) {
+                unsigned selected = (index * 73 + 19) % recipe_weight;
+                BeautyRecipe const *recipe = nullptr;
+                for (BeautyRecipe const &candidate : tree_recipes) {
+                    if (selected < candidate.count) { recipe = &candidate; break; }
+                    selected -= candidate.count;
+                }
+                if (!recipe) throw std::runtime_error("forest recipe selection failed");
+                float ring = std::sqrt((float(index) + 0.5f) / 36.0f);
                 float angle = golden * index;
-                unsigned source = index % 6 == 0 ? 4u + (index / 6) % 2 : 1u;
-                float scale = source >= 4 ? 0.48f + 0.025f * float(index % 3) :
-                    0.88f + float((index * 7) % 7) * 0.045f;
-                placements.push_back({source,
-                    std::cos(angle) * ring * 1.52f,
-                    std::sin(angle) * ring * 1.10f,
+                float signed_jitter = float((index * 37 + 11) % 101) / 50.0f - 1.0f;
+                float scale = recipe->scale *
+                    (1.0f + recipe->scale_variation * signed_jitter);
+                placements.push_back({recipe->object,
+                    std::cos(angle) * ring * 1.12f,
+                    std::sin(angle) * ring * 0.80f,
                     scale,
-                    angle * 0.37f});
+                    angle * 0.73f});
             }
         } else if (city_mode) {
             unsigned city_indices[4] = {};
@@ -341,7 +431,7 @@ int main(int argc, char **argv) {
                     placements.push_back({index, 0.0f, 0.0f, 6.9f, -0.46f});
         }
 
-        std::vector<BeautyVertex> shadows;
+        std::vector<std::vector<BeautyVertex>> shadow_batches(objects.size());
         std::vector<std::vector<BeautyVertex>> batches(objects.size());
         float sun_horizontal = std::max(0.05f, frame.sun[2]);
         float cast_x = -frame.sun[0] / sun_horizontal;
@@ -363,14 +453,20 @@ int main(int argc, char **argv) {
                 vertex.normal[1] = source.normal[0] * sine + source.normal[1] * cosine;
                 vertex.normal[2] = source.normal[2];
                 vertex.uv[0] = source.uv[0]; vertex.uv[1] = source.uv[1];
-                // Vegetation stores LEAN moments, not a conventional tangent
-                // normal. Treating LEAN0 as XYZ was the source of the flat
-                // yellow polygon flashes in the first grove passes.
-                vertex.material[1] = object.kind == 1 || material.paths[1].empty() ? 0.0f : 1.0f;
+                // Source-authored packed normals now drive foliage and units.
+                // The paired LEAN moments remain bound for audit, but their
+                // BRDF decoding is not yet proven and must not be treated as
+                // an XYZ normal for those assets. Bit 1 carries the source
+                // texture address mode without widening the vertex wire.
+                vertex.material[1] = (object.kind == 1 || object.kind == 3 ||
+                    material.paths[1].empty() ? 0.0f : 1.0f) +
+                    (material.repeat ? 2.0f : 0.0f);
                 vertex.material[2] = material.paths[3].empty() ? 0.0f : 1.0f;
                 vertex.material[3] = material.paths[4].empty() ? 0.0f : 1.0f;
                 vertex.secondary[0] = float(material.owner_tint);
-                vertex.secondary[1] = material.paths[5].empty() ? 0.0f : 1.0f;
+                vertex.secondary[1] = object.kind == 1
+                    ? (material.paths[6].empty() ? 0.0f : 1.0f)
+                    : (material.paths[5].empty() ? 0.0f : 1.0f);
                 transformed.push_back(vertex);
             }
             batches[placement.object].insert(batches[placement.object].end(),
@@ -395,17 +491,30 @@ int main(int argc, char **argv) {
                         projected[corner] = project(x, y, 0.004f, view_x, view_y,
                                                     center_y, 4.0f);
                         projected[corner].normal[2] = 1;
-                        projected[corner].secondary[0] = object.kind == 3 ? 0.075f : 0.052f;
+                        projected[corner].uv[0] = source.uv[0];
+                        projected[corner].uv[1] = source.uv[1];
+                        projected[corner].secondary[0] = object.kind == 1 ? 0.075f :
+                            (object.kind == 3 ? 0.075f : 0.052f);
+                        projected[corner].secondary[1] = source.secondary[1];
                     }
-                    add_triangle(shadows, projected[0], projected[1], projected[2]);
+                    add_triangle(shadow_batches[placement.object], projected[0],
+                                 projected[1], projected[2]);
                 }
             }
         }
-        add_draw(shadows, constants, common, 1, 1);
+
+        for (unsigned index = 0; index < objects.size(); ++index) {
+            if (shadow_batches[index].empty()) continue;
+            std::array<unsigned, 10> bindings = common;
+            BeautyMaterial const &material = materials[objects[index].material];
+            for (unsigned channel = 0; channel < material.textures.size(); ++channel)
+                bindings[3 + channel] = material.textures[channel];
+            add_draw(shadow_batches[index], constants, bindings, 1, 1);
+        }
 
         for (unsigned index = 0; index < objects.size(); ++index) {
             if (batches[index].empty()) continue;
-            std::array<unsigned, 9> bindings = common;
+            std::array<unsigned, 10> bindings = common;
             BeautyMaterial const &material = materials[objects[index].material];
             for (unsigned channel = 0; channel < material.textures.size(); ++channel)
                 bindings[3 + channel] = material.textures[channel];

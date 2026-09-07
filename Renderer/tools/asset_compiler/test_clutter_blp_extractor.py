@@ -109,6 +109,7 @@ class MeshProfileTests(unittest.TestCase):
         ):
             base = index * stride
             struct.pack_into("<eee", vertices, base, *position)
+            struct.pack_into("<2b", vertices, base + 6, 0, 0)
             struct.pack_into("<ee", vertices, base + extractor.UV0_OFFSET, *uv)
         mesh, evidence = extractor.normalize_mesh(
             bytes(vertices),
@@ -122,10 +123,14 @@ class MeshProfileTests(unittest.TestCase):
                 "vertex_count": 3,
             },
             "feature.test.compact",
+            use_authored_normals=True,
         )
         self.assertEqual(evidence["unique_uv0"], 3)
         self.assertEqual(mesh["vertices"][0]["uv0"], [0.125, 0.25])
         self.assertEqual(mesh["vertices"][2]["uv0"], [0.875, 1.0])
+        self.assertEqual(mesh["vertices"][0]["normal"], [0.0, 0.0, 1.0])
+        self.assertEqual(mesh["provenance"]["normal_source"], "authored_octahedral_snorm8")
+        self.assertGreater(evidence["minimum_geometric_normal_dot"], 0.0)
 
     def test_rejects_unknown_vertex_format(self) -> None:
         with self.assertRaisesRegex(ValueError, "Unsupported vertex profile"):

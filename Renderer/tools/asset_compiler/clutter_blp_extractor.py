@@ -27,6 +27,7 @@ from Renderer.tools.asset_compiler.c3x_asset_compiler import (
     parse_civbig_header,
 )
 from Renderer.tools.asset_compiler.grassland_pack_builder import validate_runtime_independence
+from Renderer.tools.asset_compiler.packed_static_frame import decode_octahedral_snorm8
 
 
 RENDERER_ROOT = Path(__file__).resolve().parents[2]
@@ -50,7 +51,12 @@ UV0_OFFSET = 8
 SOURCE_UNITS_PER_TILE = 12.0
 VERTEX_PROFILES = {
     0x6679B170: {"stride": 32, "uv0_encoding": "half2"},
-    0x315CFCD9: {"stride": 24, "uv0_encoding": "half2"},
+    0x315CFCD9: {
+        "stride": 24,
+        "uv0_encoding": "half2",
+        "normal_encoding": "octahedral_snorm8",
+        "normal_offset": 6,
+    },
 }
 
 FEATURE_SPECS = tuple(
@@ -422,6 +428,7 @@ def normalize_mesh(
     primitive: dict[str, int],
     asset_id: str,
     allow_wrapping_uvs: bool = False,
+    use_authored_normals: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     profile = VERTEX_PROFILES.get(vertex_entry["format"])
     if profile is None or vertex_entry["stride"] != profile["stride"]:
@@ -502,12 +509,28 @@ def normalize_mesh(
         for index in (ia, ib, ic):
             for axis in range(3):
                 normal_sums[index][axis] += cross[axis]
-    normals = []
+    geometric_normals = []
     for index, value in enumerate(normal_sums):
         length = math.sqrt(sum(component * component for component in value))
         if length <= 1.0e-10:
             raise ValueError(f"Vertex {index} has no computable geometric normal")
-        normals.append(tuple(component / length for component in value))
+        geometric_normals.append(tuple(component / length for component in value))
+
+    if use_authored_normals and profile.get("normal_encoding") == "octahedral_snorm8":
+        normal_offset = profile["normal_offset"]
+        normals = [
+            tuple(decode_octahedral_snorm8(vertex_bytes, vertex * stride + normal_offset))
+            for vertex in range(vertex_count)
+        ]
+        normal_dots = [
+            sum(authored[axis] * geometric[axis] for axis in range(3))
+            for authored, geometric in zip(normals, geometric_normals)
+        ]
+        normal_source = "authored_octahedral_snorm8"
+    else:
+        normals = geometric_normals
+        normal_dots = [1.0] * vertex_count
+        normal_source = "area_weighted_geometry"
 
     def rounded(values: tuple[float, ...] | list[float]) -> list[float]:
         return [round(value, 8) for value in values]
@@ -547,6 +570,7 @@ def normalize_mesh(
             "kind": "local_normalized_import",
             "adapter": "c3x.feature_mesh.v0",
             "source_format_dependency": None,
+            "normal_source": normal_source,
         },
     }
     evidence = {
@@ -563,6 +587,10 @@ def normalize_mesh(
         "unique_uv0": len(set(source_uvs)),
         "uv0_address_mode": "wrap" if wraps_uv0 else "clamp",
         "triangle_area_range": [min(triangle_areas), max(triangle_areas)],
+        "normal_source": normal_source,
+        "minimum_geometric_normal_dot": min(normal_dots),
+        "mean_geometric_normal_dot": sum(normal_dots) / len(normal_dots),
+        "negative_geometric_normal_dots": sum(dot < 0.0 for dot in normal_dots),
     }
     return mesh, evidence
 
@@ -714,6 +742,7 @@ def build_feature(
     *,
     allow_wrapping_uvs: bool = False,
     allow_optional_maps: bool = False,
+    use_authored_normals: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     asset_name = spec["source_name"]
     package.select_direct_string(asset_name)
@@ -774,6 +803,7 @@ def build_feature(
         primitive,
         spec["asset_id"],
         allow_wrapping_uvs,
+        use_authored_normals,
     )
 
     material_user_data = package.unique_pointer_field(
@@ -798,13 +828,16 @@ def build_feature(
         "normal_1": struct.unpack_from("<I", material_raw, 0x20)[0],
         "base_color": struct.unpack_from("<I", material_raw, 0x24)[0],
         "gloss": struct.unpack_from("<I", material_raw, 0x28)[0],
+        "opacity": struct.unpack_from("<I", material_raw, 0x30)[0],
         "emissive": struct.unpack_from("<I", material_raw, 0x3C)[0],
     }
     texture_array = package.unique_allocation(TYPE_TEXTURE)
     texture_entries = {}
     for role, index in texture_indices.items():
         if index == 0xFFFFFFFF:
-            if role == "emissive" or (role != "base_color" and allow_optional_maps):
+            if role in ("opacity", "emissive") or (
+                role != "base_color" and allow_optional_maps
+            ):
                 continue
             raise ValueError(f"Feature is missing required {role} texture")
         texture_entries[role] = decode_texture_entry(package, texture_array, index)
@@ -813,6 +846,7 @@ def build_feature(
         "normal_1": "LEAN",
         "base_color": "Generic_BaseColor",
         "gloss": "Generic_Gloss",
+        "opacity": "Generic_OPAC",
         "emissive": "Generic_Emissive",
     }
     for role, entry in texture_entries.items():
@@ -871,6 +905,15 @@ def build_feature(
             "address_mode_u": address_mode,
             "address_mode_v": address_mode,
         }
+    if "opacity" in texture_outputs:
+        material["opacity"] = {
+            "texture": texture_outputs["opacity"],
+            "uv_channel": "uv0",
+            "address_mode_u": address_mode,
+            "address_mode_v": address_mode,
+        }
+        material["alpha_mode"] = "mask"
+        material["alpha_cutoff"] = 0.5
     if "emissive" in texture_outputs:
         material["emissive"] = {
             "mask": texture_outputs["emissive"],
@@ -993,6 +1036,7 @@ def build_vegetation_pack(
             pack,
             spec,
             allow_wrapping_uvs=spec["source_name"] in alternate_source_names,
+            use_authored_normals=spec["group"] == "forest",
         )
         assets[spec["manifest_key"]] = manifest_asset
         feature_groups.setdefault(spec["group"], []).append(spec["manifest_key"])

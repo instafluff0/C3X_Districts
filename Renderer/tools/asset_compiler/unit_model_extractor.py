@@ -283,12 +283,14 @@ def _compile_component(
                 SOURCE_UNITS_PER_TILE,
                 len(selected_skeleton["bones"]) if is_skinned else None,
                 normalize_skin_weights=True,
+                use_authored_normals=True,
             )
             if is_skinned:
                 _remap_skin_palette(mesh, mesh_palette, len(selected_skeleton["bones"]))
             geometry_index = len(mesh_paths)
             part_asset_id = asset_id if counts["primitives"] == 1 else f"{asset_id}/part_{geometry_index:02d}"
             mesh = _normalized_mesh(mesh, part_asset_id, component_schema)
+            mesh["provenance"]["normal_source"] = geometry_evidence["normal_source"]
             mesh_path = (
                 f"meshes/{artifact_family}/{stem}.json"
                 if counts["primitives"] == 1

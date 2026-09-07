@@ -28,10 +28,29 @@ TREE_IDS = (
     "feature/forest/leafy_v4_03",
     "feature/forest/pine_01",
     "feature/forest/pine_03",
+    "feature/forest/leafy_clump_02",
+    "feature/forest/leafy_clump_03",
+    "feature/forest/leafy_v1_01",
+    "feature/forest/leafy_v1_02",
+    "feature/forest/leafy_v1_03",
+    "feature/forest/leafy_v2_02",
+    "feature/forest/leafy_v2_03",
+    "feature/forest/leafy_v3_01",
+    "feature/forest/leafy_v3_03",
+    "feature/forest/leafy_v4_01",
+    "feature/forest/leafy_v4_02",
+    "feature/forest/pine_02",
+    "feature/forest/pine_clump_01",
+    "feature/forest/pine_clump_02",
+    "feature/forest/shrub_01",
+    "feature/forest/shrub_02",
 )
 CITY_POOL = "city/pool/european/medieval"
 WARRIOR_ROLES = ("body", "head", "armor", "hair", "weapon")
-CHANNELS = ("base_color", "normal_0", "normal_1", "ambient_occlusion", "gloss", "emissive")
+CHANNELS = (
+    "base_color", "normal_0", "normal_1", "ambient_occlusion", "gloss",
+    "emissive", "opacity",
+)
 KIND = {"tree": 1, "city": 2, "warrior": 3}
 
 
@@ -48,10 +67,12 @@ def material_record(pack: Path, path: str, owner_tint: bool = False) -> dict[str
     source = read_json(pack / path)
     if "channels" in source:
         channels = source["channels"]
+        base_channel = channels["base_color"]
         textures = {
             name: channels.get(name, {}).get("texture", "") for name in CHANNELS
         }
     else:
+        base_channel = source["base_color"]
         textures = {
             "base_color": source["base_color"]["texture"],
             "normal_0": source.get("lean_normal", {}).get("texture_0", ""),
@@ -59,13 +80,21 @@ def material_record(pack: Path, path: str, owner_tint: bool = False) -> dict[str
             "ambient_occlusion": "",
             "gloss": source.get("gloss", {}).get("texture", ""),
             "emissive": "",
+            "opacity": source.get("opacity", {}).get("texture", ""),
         }
+    address_u = base_channel.get("address_u", base_channel.get("address_mode_u"))
+    address_v = base_channel.get("address_v", base_channel.get("address_mode_v"))
+    address_u = "repeat" if address_u == "wrap" else address_u
+    address_v = "repeat" if address_v == "wrap" else address_v
+    if address_u not in {"clamp", "repeat"} or address_v != address_u:
+        raise ValueError(f"unsupported or asymmetric base-color address mode in {path}")
     return {
         "textures": {
             name: str((pack / texture).relative_to(ROOT)) if texture else ""
             for name, texture in textures.items()
         },
         "owner_tint": owner_tint,
+        "repeat": address_u == "repeat",
     }
 
 
@@ -91,15 +120,29 @@ def add_object(
     })
 
 
-def add_trees(objects: list[dict[str, Any]], materials: list[dict[str, Any]]) -> None:
+def add_trees(
+    objects: list[dict[str, Any]], materials: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     manifest = read_json(VEGETATION / "manifest.json")
-    for asset_id in TREE_IDS:
+    tree_ids = tuple(manifest["features"]["forest"]["variants"])
+    if set(tree_ids) != set(TREE_IDS):
+        raise ValueError("beauty study forest asset list drifted from the normalized pack")
+    object_indices: dict[str, int] = {}
+    for asset_id in tree_ids:
         asset = manifest["assets"][asset_id]
+        object_indices[asset_id] = len(objects)
         add_object(
             objects, materials, asset_id, "tree",
             read_json(VEGETATION / asset["mesh"]),
             material_record(VEGETATION, asset["material"]),
         )
+    recipes = []
+    for placement in manifest["features"]["forest"]["placements"]:
+        recipes.append({
+            **placement,
+            "object": object_indices[placement["asset"]],
+        })
+    return recipes
 
 
 def add_city(objects: list[dict[str, Any]], materials: list[dict[str, Any]]) -> None:
@@ -178,13 +221,18 @@ def add_warrior(objects: list[dict[str, Any]], materials: list[dict[str, Any]]) 
         )
 
 
-def serialize(materials: list[dict[str, Any]], objects: list[dict[str, Any]]) -> bytes:
+def serialize(
+    materials: list[dict[str, Any]], objects: list[dict[str, Any]],
+    tree_recipes: list[dict[str, Any]],
+) -> bytes:
     output = bytearray(b"C3XBTO1\0")
-    output.extend(struct.pack("<III", 1, len(materials), len(objects)))
+    output.extend(struct.pack("<IIII", 3, len(materials), len(objects), len(tree_recipes)))
     for material in materials:
         for channel in CHANNELS:
             output.extend(string(material["textures"][channel]))
-        output.extend(struct.pack("<I", int(material["owner_tint"])))
+        output.extend(struct.pack(
+            "<II", int(material["owner_tint"]), int(material["repeat"])
+        ))
     for obj in objects:
         output.extend(string(obj["id"]))
         output.extend(struct.pack("<III", obj["kind"], obj["material"], len(obj["vertices"])))
@@ -192,18 +240,30 @@ def serialize(materials: list[dict[str, Any]], objects: list[dict[str, Any]]) ->
             output.extend(struct.pack(
                 "<8f", *(vertex["position"] + vertex["normal"] + vertex["uv0"])
             ))
+    for recipe in tree_recipes:
+        flags = (
+            int(recipe["allow_overlap"]) |
+            (int(recipe["show_decal"]) << 1) |
+            (int(recipe["is_center_model"]) << 2)
+        )
+        output.extend(struct.pack(
+            "<IffIIIIff", recipe["object"], recipe["scale"],
+            recipe["scale_variation"], recipe["count"], recipe["min_count"],
+            recipe["priority"], flags, recipe["width"],
+            recipe["low_end_reduction"],
+        ))
     return bytes(output)
 
 
 def main() -> int:
     materials: list[dict[str, Any]] = []
     objects: list[dict[str, Any]] = []
-    add_trees(objects, materials)
+    tree_recipes = add_trees(objects, materials)
     add_city(objects, materials)
     add_warrior(objects, materials)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     bundle = OUTPUT / "beauty_objects.bin"
-    bundle.write_bytes(serialize(materials, objects))
+    bundle.write_bytes(serialize(materials, objects, tree_recipes))
     manifest = {
         "schema": "c3x.beauty_studies.v1",
         "runtime": "beauty_objects.bin",
@@ -217,6 +277,8 @@ def main() -> int:
         "warrior_action": {"name": "idle", "phase": 0.28},
         "material_count": len(materials),
         "object_count": len(objects),
+        "forest_recipe_count": len(tree_recipes),
+        "forest_recipe_weight": sum(recipe["count"] for recipe in tree_recipes),
     }
     (OUTPUT / "manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
