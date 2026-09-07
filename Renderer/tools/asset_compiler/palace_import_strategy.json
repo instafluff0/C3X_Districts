@@ -1,0 +1,36 @@
+{
+  "schema": "c3x.source_palace_import_strategy.v0",
+  "source_units_per_tile": 768.0,
+  "inventory": {
+    "artdef_name": "Landmarks.artdef",
+    "building_root": "Building",
+    "building_name": "BUILDING_PALACE",
+    "include_scenarios": false,
+    "expected_standard_bindings": 48,
+    "expected_unique_standard_assets": 47,
+    "required_representative_entries": [
+      "DIS_CTY_AB_Palace",
+      "DIS_CTY_RE_Palace",
+      "DIS_CTY_RMUG_Palace",
+      "DIS_CTY_RBAB_Palace",
+      "DIS_CTY_RINC_Palace",
+      "DIS_CTY_RCOL_Palace",
+      "DIS_CTY_RSAM_Palace",
+      "DIS_CTY_RVIE_Palace",
+      "DIS_CTY_RPOR_Palace"
+    ]
+  },
+  "runtime_selection": {
+    "capital_source": "authoritative_civ3_is_capital",
+    "selection_order": [
+      "pack_profile_city_style_override",
+      "pack_profile_civ3_culture_group_fallback",
+      "pack_profile_default"
+    ],
+    "source_selectors_are": "provenance_only",
+    "missing_style_policy": "render_ordinary_city_and_retain_native_capital_indicator",
+    "era_policy": "retain_selected_style_unless_pack_profile_defines_an_explicit_era_override",
+    "hard_coded_civ6_civilization_ids": false
+  },
+  "runtime_integration": "not_enabled"
+}

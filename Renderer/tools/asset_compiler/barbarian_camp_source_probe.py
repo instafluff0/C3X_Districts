@@ -40,7 +40,7 @@ def _improvement_suppresses_resource(path: Path, name: str) -> bool:
         item_name = item.find("m_Name")
         if item_name is None or item_name.attrib.get("text") != name:
             continue
-        for value in item.findall("./m_Fields/m_Values/Element"):
+        for value in item.findall(".//m_Values/Element"):
             parameter = value.find("m_ParamName")
             if parameter is None or parameter.attrib.get("text") != "SuppressResource":
                 continue

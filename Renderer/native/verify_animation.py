@@ -17,7 +17,6 @@ def main():
         settings = {
             "C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS": "..\\..\\Renderer\\custom.custom_rendering.txt",
             "C3X_RENDERER_VISUAL_PROFILE": "pickup-r1",
-            "C3X_RENDERER_RESOURCE_ANIMATION": "1",
             "C3X_RENDERER_PREVIEW_ANIMATION": "1",
             "C3X_RENDERER_TRACE": "2",
             "C3X_RENDERER_TRACE_FILE": f"..\\verification\\animation\\{name}.log",

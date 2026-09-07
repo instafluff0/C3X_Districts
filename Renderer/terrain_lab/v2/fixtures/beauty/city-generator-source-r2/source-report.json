@@ -1,0 +1,1792 @@
+{
+  "classification": "source_parameter_evidence; no engine behavior or promotion claim",
+  "sources": [
+    {
+      "path": "Base/ArtDefs/CityGenerators.artdef",
+      "sha256": "a1debb4133a194d3d0836bbca5d0104af92d59f1877c74ce3956d58d6799c348",
+      "Generator": [
+        {
+          "name": "Gen_CityCenter",
+          "fields": {
+            "Var_EnableSpines": {
+              "m_bValue": "true"
+            },
+            "Var_SpineWidthRange": {
+              "m_x": "0.200000",
+              "m_y": "0.500000"
+            },
+            "Var_BlockMaxVariation": {
+              "m_fValue": "0.000000"
+            },
+            "Var_ModelScale": {
+              "m_fValue": "1.000000"
+            },
+            "Var_BlockHeightRange": {
+              "m_x": "0.000000",
+              "m_y": "0.000000"
+            },
+            "Var_SpineLengthRange": {
+              "m_x": "1.100000",
+              "m_y": "1.600000"
+            },
+            "Var_Mode": {
+              "m_Value": "HEX_SPINED"
+            },
+            "Var_BlockList": {
+              "m_ElementName": "CityCenter_BlockList",
+              "m_RootCollectionName": "GeneratorBlockList",
+              "m_ArtDefPath": "CityGenerators.artdef",
+              "m_CollectionIsLocked": "true",
+              "m_TemplateName": "CityGenerators"
+            }
+          },
+          "children": {
+            "GrowthStage": [
+              {
+                "name": "1",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "1"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "0.050000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.750000"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "12.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.031250"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "22",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "22"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "1.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.300000"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "48.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.031250"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "14",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "14"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "48.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.300000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "0.250000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.031250"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "0",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "0"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.000000"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              }
+            ],
+            "EraDistribution": [
+              {
+                "name": "ARTERA_ANCIENT",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_ANCIENT",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "ARTERA_ANCIENT",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_ANCIENT",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_CLASSICAL",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_CLASSICAL",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution001",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_ANCIENT",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "1"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_INDUSTRIAL",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_INDUSTRIAL",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "1"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution003",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_INDUSTRIAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_MODERN",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_MODERN",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution001",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "2"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_INDUSTRIAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "1"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution003",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_MODERN",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "0.500000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              }
+            ]
+          },
+          "replace_merged_collections": {
+            "GrowthStage": false,
+            "EraDistribution": false
+          },
+          "append_merged_parameter_collections": false
+        },
+        {
+          "name": "Gen_GenericDistrict",
+          "fields": {
+            "Var_EnableSpines": {
+              "m_bValue": "true"
+            },
+            "Var_SpineWidthRange": {
+              "m_x": "0.500000",
+              "m_y": "0.500000"
+            },
+            "Var_BlockMaxVariation": {
+              "m_fValue": "0.000000"
+            },
+            "Var_ModelScale": {
+              "m_fValue": "1.000000"
+            },
+            "Var_BlockHeightRange": {
+              "m_x": "0.000000",
+              "m_y": "0.000000"
+            },
+            "Var_SpineLengthRange": {
+              "m_x": "1.000000",
+              "m_y": "1.000000"
+            },
+            "Var_Mode": {
+              "m_Value": "HEX_ONLY"
+            },
+            "Var_BlockList": {
+              "m_ElementName": "GenericDistrict_BlockList",
+              "m_RootCollectionName": "GeneratorBlockList",
+              "m_ArtDefPath": "CityGenerators.artdef",
+              "m_CollectionIsLocked": "true",
+              "m_TemplateName": "CityGenerators"
+            }
+          },
+          "children": {
+            "GrowthStage": [
+              {
+                "name": "1",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "1"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "1.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "1.000000"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "0.500000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.031250"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "22",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "22"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "1.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "1.000000"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "12.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.031250"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "0",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "0"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.000000"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              }
+            ],
+            "EraDistribution": [
+              {
+                "name": "ARTERA_ANCIENT",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_ANCIENT",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "ARTERA_ANCIENT",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_ANCIENT",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_CLASSICAL",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_CLASSICAL",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution001",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_ANCIENT",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "1"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_INDUSTRIAL",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_INDUSTRIAL",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_MODERN",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_MODERN",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution001",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              }
+            ]
+          },
+          "replace_merged_collections": {
+            "GrowthStage": false,
+            "EraDistribution": false
+          },
+          "append_merged_parameter_collections": false
+        },
+        {
+          "name": "Gen_Empty",
+          "fields": {
+            "Var_BlockMaxVariation": {
+              "m_fValue": "0.000000"
+            },
+            "Var_ModelScale": {
+              "m_fValue": "1.000000"
+            },
+            "Var_EnableSpines": {
+              "m_bValue": "false"
+            },
+            "Var_SpineLengthRange": {
+              "m_x": "0.000000",
+              "m_y": "0.000000"
+            },
+            "Var_SpineWidthRange": {
+              "m_x": "0.000000",
+              "m_y": "0.000000"
+            },
+            "Var_Mode": {
+              "m_Value": "DISABLED"
+            },
+            "Var_BlockHeightRange": {
+              "m_x": "0.000000",
+              "m_y": "0.000000"
+            },
+            "Var_BlockList": {
+              "m_ElementName": "",
+              "m_RootCollectionName": "",
+              "m_ArtDefPath": "",
+              "m_CollectionIsLocked": "true",
+              "m_TemplateName": ""
+            }
+          },
+          "children": {
+            "GrowthStage": [
+              {
+                "name": "GrowthStage",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "0"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.000000"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              }
+            ],
+            "EraDistribution": []
+          },
+          "replace_merged_collections": {
+            "GrowthStage": false,
+            "EraDistribution": false
+          },
+          "append_merged_parameter_collections": false
+        }
+      ],
+      "GroundingMaterials": [
+        {
+          "name": "CLA_OVERRIDE",
+          "fields": {
+            "Tag_Era": {
+              "m_ElementName": "ARTERA_CLASSICAL",
+              "m_RootCollectionName": "ArtEra",
+              "m_ArtDefPath": "Eras.artdef",
+              "m_CollectionIsLocked": "true",
+              "m_TemplateName": "Eras"
+            },
+            "Normal Material": {
+              "m_EntryName": "Decal_Parts_Classical_01",
+              "m_XLPClass": "RouteDecalMaterial",
+              "m_XLPPath": "RouteDecalMaterials.xlp",
+              "m_BLPPackage": "route_decal_materials",
+              "m_LibraryName": "RouteDecalMaterial"
+            },
+            "Pillaged Material": {
+              "m_EntryName": "Decal_Parts_Classical_PIL",
+              "m_XLPClass": "RouteDecalMaterial",
+              "m_XLPPath": "RouteDecalMaterials.xlp",
+              "m_BLPPackage": "route_decal_materials",
+              "m_LibraryName": "RouteDecalMaterial"
+            },
+            "HeightRange": {
+              "m_x": "10.000000",
+              "m_y": "100.000000"
+            }
+          },
+          "children": {},
+          "replace_merged_collections": {},
+          "append_merged_parameter_collections": false
+        },
+        {
+          "name": "IND_OVERRIDE",
+          "fields": {
+            "Tag_Era": {
+              "m_ElementName": "ARTERA_INDUSTRIAL",
+              "m_RootCollectionName": "ArtEra",
+              "m_ArtDefPath": "Eras.artdef",
+              "m_CollectionIsLocked": "true",
+              "m_TemplateName": "Eras"
+            },
+            "Normal Material": {
+              "m_EntryName": "Decal_Parts_Industrial_01",
+              "m_XLPClass": "RouteDecalMaterial",
+              "m_XLPPath": "RouteDecalMaterials.xlp",
+              "m_BLPPackage": "route_decal_materials",
+              "m_LibraryName": "RouteDecalMaterial"
+            },
+            "Pillaged Material": {
+              "m_EntryName": "Decal_Parts_Industrial_PIL",
+              "m_XLPClass": "RouteDecalMaterial",
+              "m_XLPPath": "RouteDecalMaterials.xlp",
+              "m_BLPPackage": "route_decal_materials",
+              "m_LibraryName": "RouteDecalMaterial"
+            },
+            "HeightRange": {
+              "m_x": "10.000000",
+              "m_y": "100.000000"
+            }
+          },
+          "children": {},
+          "replace_merged_collections": {},
+          "append_merged_parameter_collections": false
+        },
+        {
+          "name": "MOD_OVERRIDE",
+          "fields": {
+            "Tag_Era": {
+              "m_ElementName": "ARTERA_MODERN",
+              "m_RootCollectionName": "ArtEra",
+              "m_ArtDefPath": "Eras.artdef",
+              "m_CollectionIsLocked": "true",
+              "m_TemplateName": "Eras"
+            },
+            "Normal Material": {
+              "m_EntryName": "Decal_Parts_Modern_01",
+              "m_XLPClass": "RouteDecalMaterial",
+              "m_XLPPath": "RouteDecalMaterials.xlp",
+              "m_BLPPackage": "route_decal_materials",
+              "m_LibraryName": "RouteDecalMaterial"
+            },
+            "Pillaged Material": {
+              "m_EntryName": "Decal_Parts_Modern_PIL",
+              "m_XLPClass": "RouteDecalMaterial",
+              "m_XLPPath": "RouteDecalMaterials.xlp",
+              "m_BLPPackage": "route_decal_materials",
+              "m_LibraryName": "RouteDecalMaterial"
+            },
+            "HeightRange": {
+              "m_x": "10.000000",
+              "m_y": "100.000000"
+            }
+          },
+          "children": {},
+          "replace_merged_collections": {},
+          "append_merged_parameter_collections": false
+        },
+        {
+          "name": "ANC_OVERRIDE",
+          "fields": {
+            "Tag_Era": {
+              "m_ElementName": "ARTERA_ANCIENT",
+              "m_RootCollectionName": "ArtEra",
+              "m_ArtDefPath": "Eras.artdef",
+              "m_CollectionIsLocked": "true",
+              "m_TemplateName": "Eras"
+            },
+            "HeightRange": {
+              "m_x": "10.000000",
+              "m_y": "100.000000"
+            },
+            "Normal Material": {
+              "m_EntryName": "",
+              "m_XLPClass": "RouteDecalMaterial",
+              "m_XLPPath": "",
+              "m_BLPPackage": "",
+              "m_LibraryName": "RouteDecalMaterial"
+            },
+            "Pillaged Material": {
+              "m_EntryName": "",
+              "m_XLPClass": "RouteDecalMaterial",
+              "m_XLPPath": "",
+              "m_BLPPackage": "",
+              "m_LibraryName": "RouteDecalMaterial"
+            }
+          },
+          "children": {},
+          "replace_merged_collections": {},
+          "append_merged_parameter_collections": false
+        }
+      ]
+    },
+    {
+      "path": "DLC/Expansion2/ArtDefs/CityGenerators.artdef",
+      "sha256": "a1a1556884d810d090452bd1a5512015b43f4a16f5ebc6323e395c9742ae5b2e",
+      "Generator": [
+        {
+          "name": "Gen_CityCenter",
+          "fields": {
+            "Var_BlockMaxVariation": {
+              "m_fValue": "0.000000"
+            },
+            "Var_ModelScale": {
+              "m_fValue": "1.000000"
+            },
+            "Var_EnableSpines": {
+              "m_bValue": "true"
+            },
+            "Var_SpineLengthRange": {
+              "m_x": "1.300000",
+              "m_y": "1.800000"
+            },
+            "Var_SpineWidthRange": {
+              "m_x": "0.200000",
+              "m_y": "0.500000"
+            },
+            "Var_Mode": {
+              "m_Value": "HEX_SPINED"
+            },
+            "Var_BlockHeightRange": {
+              "m_x": "0.000000",
+              "m_y": "0.000000"
+            },
+            "Var_BlockList": {
+              "m_ElementName": "CityCenter_BlockList",
+              "m_RootCollectionName": "GeneratorBlockList",
+              "m_ArtDefPath": "CityGenerators.artdef",
+              "m_CollectionIsLocked": "true",
+              "m_TemplateName": "CityGenerators"
+            }
+          },
+          "children": {
+            "GrowthStage": [
+              {
+                "name": "1",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "1"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "10.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.750000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "0.050000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.031250"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "22",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "22"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "64.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.500000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "1.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.031250"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "14",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "14"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "32.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.500000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "0.250000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.031250"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "0",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "0"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.000000"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              }
+            ],
+            "EraDistribution": [
+              {
+                "name": "ARTERA_ANCIENT",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_ANCIENT",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "ARTERA_ANCIENT",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_ANCIENT",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_CLASSICAL",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_CLASSICAL",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution001",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_ANCIENT",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "1"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_INDUSTRIAL",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_INDUSTRIAL",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "1"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution003",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_INDUSTRIAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_MODERN",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_MOD_NO_FUTURE",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution001",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "2"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_INDUSTRIAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "1"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution003",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_MODERN",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "0.500000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_FUTURE",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_FUTURE",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution001",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "2"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_INDUSTRIAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "1"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution003",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_FUTURE",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "0.500000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              }
+            ]
+          },
+          "replace_merged_collections": {
+            "GrowthStage": false,
+            "EraDistribution": false
+          },
+          "append_merged_parameter_collections": false
+        },
+        {
+          "name": "Gen_Empty",
+          "fields": {
+            "Var_BlockMaxVariation": {
+              "m_fValue": "0.000000"
+            },
+            "Var_ModelScale": {
+              "m_fValue": "1.000000"
+            },
+            "Var_EnableSpines": {
+              "m_bValue": "false"
+            },
+            "Var_SpineLengthRange": {
+              "m_x": "0.000000",
+              "m_y": "0.000000"
+            },
+            "Var_SpineWidthRange": {
+              "m_x": "0.000000",
+              "m_y": "0.000000"
+            },
+            "Var_Mode": {
+              "m_Value": "DISABLED"
+            },
+            "Var_BlockHeightRange": {
+              "m_x": "0.000000",
+              "m_y": "0.000000"
+            },
+            "Var_BlockList": {
+              "m_ElementName": "",
+              "m_RootCollectionName": "",
+              "m_ArtDefPath": "",
+              "m_CollectionIsLocked": "true",
+              "m_TemplateName": ""
+            }
+          },
+          "children": {
+            "GrowthStage": [
+              {
+                "name": "GrowthStage",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "0"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.000000"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              }
+            ],
+            "EraDistribution": []
+          },
+          "replace_merged_collections": {
+            "GrowthStage": false,
+            "EraDistribution": false
+          },
+          "append_merged_parameter_collections": false
+        },
+        {
+          "name": "Gen_GenericDistrict",
+          "fields": {
+            "Var_BlockMaxVariation": {
+              "m_fValue": "0.000000"
+            },
+            "Var_ModelScale": {
+              "m_fValue": "1.000000"
+            },
+            "Var_EnableSpines": {
+              "m_bValue": "true"
+            },
+            "Var_SpineLengthRange": {
+              "m_x": "1.000000",
+              "m_y": "1.000000"
+            },
+            "Var_SpineWidthRange": {
+              "m_x": "0.500000",
+              "m_y": "0.500000"
+            },
+            "Var_Mode": {
+              "m_Value": "HEX_ONLY"
+            },
+            "Var_BlockHeightRange": {
+              "m_x": "0.000000",
+              "m_y": "0.000000"
+            },
+            "Var_BlockList": {
+              "m_ElementName": "GenericDistrict_BlockList",
+              "m_RootCollectionName": "GeneratorBlockList",
+              "m_ArtDefPath": "CityGenerators.artdef",
+              "m_CollectionIsLocked": "true",
+              "m_TemplateName": "CityGenerators"
+            }
+          },
+          "children": {
+            "GrowthStage": [
+              {
+                "name": "1",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "1"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "0.500000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "1.000000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "1.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.031250"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "22",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "22"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "12.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "1.000000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "1.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.031250"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "0",
+                "fields": {
+                  "Var_Population": {
+                    "m_nValue": "0"
+                  },
+                  "Var_CityArea": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerRatio": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_FillerOccupancy": {
+                    "m_fValue": "0.000000"
+                  },
+                  "Var_ScatterGrouping": {
+                    "m_fValue": "0.000000"
+                  }
+                },
+                "children": {},
+                "replace_merged_collections": {},
+                "append_merged_parameter_collections": false
+              }
+            ],
+            "EraDistribution": [
+              {
+                "name": "ARTERA_ANCIENT",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_ANCIENT",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "ARTERA_ANCIENT",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_ANCIENT",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_CLASSICAL",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_CLASSICAL",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution001",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_ANCIENT",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "1"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    },
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_INDUSTRIAL",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_INDUSTRIAL",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution002",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_MODERN",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_MOD_NO_FUTURE",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution001",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              },
+              {
+                "name": "ARTERA_FUTURE",
+                "fields": {
+                  "Era": {
+                    "m_ElementName": "ARTERA_FUTURE",
+                    "m_RootCollectionName": "ArtEra",
+                    "m_ArtDefPath": "Eras.artdef",
+                    "m_CollectionIsLocked": "true",
+                    "m_TemplateName": "Eras"
+                  }
+                },
+                "children": {
+                  "Distribution": [
+                    {
+                      "name": "Distribution001",
+                      "fields": {
+                        "Era": {
+                          "m_ElementName": "ARTERA_CLASSICAL",
+                          "m_RootCollectionName": "ArtEra",
+                          "m_ArtDefPath": "Eras.artdef",
+                          "m_CollectionIsLocked": "true",
+                          "m_TemplateName": "Eras"
+                        },
+                        "OrderFromCenter": {
+                          "m_nValue": "0"
+                        },
+                        "Weight": {
+                          "m_fValue": "1.000000"
+                        }
+                      },
+                      "children": {},
+                      "replace_merged_collections": {},
+                      "append_merged_parameter_collections": false
+                    }
+                  ]
+                },
+                "replace_merged_collections": {
+                  "Distribution": false
+                },
+                "append_merged_parameter_collections": false
+              }
+            ]
+          },
+          "replace_merged_collections": {
+            "GrowthStage": false,
+            "EraDistribution": false
+          },
+          "append_merged_parameter_collections": false
+        }
+      ],
+      "GroundingMaterials": []
+    }
+  ],
+  "grounding_note": "Material references are recorded only; no road topology or rendering work.",
+  "prior_import_gap": "City asset importer consumed tagged blocks but omitted Generator and GroundingMaterials."
+}

@@ -1113,6 +1113,7 @@ def _compile_asset(
     terrain_edit_policy: str = "reject",
     static_bake: bool = False,
     auxiliary_uvs: bool = False,
+    omit_empty_material_draws: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     package.select_direct_string(source_entry)
     landmark, landmark_user_data, base_model = landmark_base_model(package)
@@ -1176,6 +1177,7 @@ def _compile_asset(
     material_paths = []
     geometry_evidence = []
     material_evidence = []
+    omitted_empty_material_draws = []
     if all(present):
         if any(len(geometry_fields[target]) != 1 for target in geometry_types):
             raise ValueError("Compound landmark has ambiguous geometry container arrays")
@@ -1321,8 +1323,32 @@ def _compile_asset(
                 )
         if sorted(covered_primitives) != list(range(primitive_count)):
             raise ValueError("Compound mesh ranges do not cover primitive groups exactly once")
+        if omit_empty_material_draws:
+            empty_materials = set()
+            for material_index in range(material_count):
+                record = package.array_element(material_array, material_index)
+                user_data = struct.unpack_from("<Q", record, 0)[0]
+                fields = package.pointer_fields(user_data, TYPE_MATERIAL_DATA)
+                if len(fields) != 1:
+                    raise ValueError("Compound material has no unique material-data record")
+                raw = package.bytes_for(fields[0][1])
+                if len(raw) != 64:
+                    raise ValueError("Compound material-data record must be 64 bytes")
+                if all(
+                    struct.unpack_from("<I", raw, offset)[0] == 0xFFFFFFFF
+                    for offset, _expected_class, _required in MATERIAL_TEXTURE_SLOTS.values()
+                ):
+                    empty_materials.add(material_index)
+            omitted_empty_material_draws = [
+                binding for binding in draw_bindings if binding["material"] in empty_materials
+            ]
+            draw_bindings = [
+                binding for binding in draw_bindings if binding["material"] not in empty_materials
+            ]
+            for material_index in empty_materials:
+                material_uv_addresses.pop(material_index, None)
         material_variants = []
-        for material_index in range(material_count):
+        for material_index in sorted(material_uv_addresses):
             addresses = material_uv_addresses[material_index]
             if not addresses:
                 raise ValueError("Compound material is not referenced by any primitive")
@@ -1416,6 +1442,7 @@ def _compile_asset(
         "states": states,
         "geometry": geometry_evidence,
         "materials": material_evidence,
+        "omitted_empty_material_draws": omitted_empty_material_draws,
         "decal": decal_evidence,
         "attachments": attachment_evidence,
         "terrain_edit": terrain_edit_evidence,
@@ -1435,6 +1462,7 @@ def compile_compound_landmarks(
     mapping_path: Path,
     pack: Path,
     report_path: Path,
+    auxiliary_uvs: bool = False,
 ) -> dict[str, Any]:
     mapping = load_mapping(mapping_path)
     try:
@@ -1479,6 +1507,7 @@ def compile_compound_landmarks(
                     asset_id,
                     float(package_mapping["source_units_per_tile"]),
                     texture_cache,
+                    auxiliary_uvs=auxiliary_uvs,
                 )
             except (OSError, ValueError, KeyError, TypeError, struct.error) as exc:
                 raise ValueError(
@@ -1530,10 +1559,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mapping", type=Path, default=DEFAULT_MAPPING)
     parser.add_argument("--pack", type=Path, default=DEFAULT_PACK)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument("--auxiliary-uvs", action="store_true")
     args = parser.parse_args(argv)
     try:
         report = compile_compound_landmarks(
-            args.assets_root, args.mapping, args.pack, args.report
+            args.assets_root, args.mapping, args.pack, args.report, args.auxiliary_uvs
         )
     except (OSError, ValueError, KeyError, TypeError, struct.error) as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -93,6 +93,10 @@ def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,s
                     dx,dy=project([x,y,0]);pb=[proj[0]+dx,proj[1]+dy,proj[2]+dx,proj[3]+dy]
                     occlusion=sum(overlap(pb,q[1])/min(area(pb),area(q[1])) for q in placed)
                     score=x*x+y*y+occlusion*(.065 if recipe=='compact' else .22)+(x+y)*.025
+                    if 'layout_radius' in a:
+                        # The source supplies center ordering, not Civ III
+                        # distances. This bounded ring preference is a Lab adapter.
+                        score=(math.hypot(x,y)-a['layout_radius'])**2+occlusion*.22+(x+y)*.025
                     if recipe=='compact' and placed:
                         # Favor one settlement on a legal side of a corridor.
                         # Physical source clearance still precedes this score.

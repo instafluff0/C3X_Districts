@@ -40,6 +40,8 @@ std::uint32_t preview_seed(int x, int y) {
     return (value ^ static_cast<std::uint32_t>(y)) * 16777619u;
 }
 
+bool preview_units(HMODULE module,char const* path,int hour);
+
 bool read_scene(char const * path, int & map_width, int & map_height, std::vector<CsvTile> & tiles) {
     FILE * file = nullptr;
     if (fopen_s(&file, path, "rb") != 0 || file == nullptr)
@@ -211,6 +213,11 @@ int main(int argc, char ** argv) {
     char custom_definitions[4 * MAX_PATH] = {};
     GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS",custom_definitions,sizeof(custom_definitions));
     char const* custom_path=custom_definitions[0] ? custom_definitions : nullptr;
+    auto set_units=reinterpret_cast<c3x_renderer_set_unit_rendering_fn>(
+        GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
+    char unit_preview[8]={};
+    if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_UNITS",unit_preview,sizeof(unit_preview)) &&
+       (!set_units || set_units(1)!=C3X_RENDERER_RESULT_OK))return 1;
     if (set_definitions == nullptr || render == nullptr || reset == nullptr ||
         set_definitions(argv[2], argv[3], nullptr, custom_path) != C3X_RENDERER_RESULT_OK)
         return 1;
@@ -505,7 +512,124 @@ int main(int argc, char ** argv) {
             ok=changed<=warm.size()/4000 && error<=warm.size()/100;
         }
     }
+    char unit_test[8]={};
+    if(ok && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_UNITS",unit_test,sizeof(unit_test))) {
+        auto bytes=static_cast<unsigned char const*>(output.bgra_pixels);
+        std::vector<unsigned char> retained(bytes,bytes+output.stride_bytes*output.height);
+        ok=preview_units(module,argv[5],frame.hour);
+        if(ok)ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK &&
+            !output.geometry_tiles_built && !output.geometry_upload_bytes &&
+            std::memcmp(retained.data(),output.bgra_pixels,retained.size())==0;
+        std::printf("UNIT retained terrain unchanged: %s\n",ok?"pass":"FAIL");
+        if(ok) {
+            frame.hour=(frame.hour+1)%24;
+            ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
+            std::vector<unsigned char> warm;
+            if(ok){auto begin=static_cast<unsigned char const*>(output.bgra_pixels);warm.assign(begin,begin+output.stride_bytes*output.height);}
+            reset();
+            if(ok)ok=set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK &&
+                render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
+            if(ok) {
+                auto cold=static_cast<unsigned char const*>(output.bgra_pixels);std::size_t changed=0;unsigned long long error=0;
+                for(std::size_t i=0;i<warm.size();i+=4){bool bad=false;for(unsigned c=0;c<4;++c){
+                    unsigned delta=unsigned(std::abs(int(warm[i+c])-int(cold[i+c])));error+=delta;bad=bad || delta>2;}if(bad)++changed;}
+                ok=changed<=warm.size()/4000 && error<=warm.size()/100;
+                std::printf("UNIT post-draw terrain parity: %s changed=%zu error=%llu bytes=%zu\n",ok?"pass":"FAIL",changed,error,warm.size());
+            }
+        }
+    }
     reset();
     FreeLibrary(module);
     return ok ? 0 : 1;
+}
+
+bool preview_units(HMODULE module,char const* path,int hour) {
+    auto draw=reinterpret_cast<c3x_renderer_unit_draw_fn>(GetProcAddress(module,"c3x_renderer_unit_draw"));
+    auto configure=reinterpret_cast<c3x_renderer_set_unit_rendering_fn>(GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
+    if(!draw || !configure)return false;
+    BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth=1024;info.bmiHeader.biHeight=-640;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
+    HDC dc=CreateCompatibleDC(nullptr);void* bits=nullptr;
+    HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&bits,nullptr,0);
+    if(!dc || !bitmap){if(bitmap)DeleteObject(bitmap);if(dc)DeleteDC(dc);return false;}
+    auto old=SelectObject(dc,bitmap);bool ok=true;unsigned drawn=0;
+    char const* names[]={"Archer","Swordsman","Infantry","Fighter","Galley"};
+    std::vector<std::uint32_t> first;
+    for(int zoom=0;zoom<2 && ok;++zoom)for(int phase=0;phase<2 && ok;++phase) {
+        std::fill_n(static_cast<std::uint32_t*>(bits),1024*640,0xff565b62u);
+        for(int row=0;row<5 && ok;++row)for(int direction=1;direction<=8 && ok;++direction) {
+            c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);unit.unit_id=row;
+            sprintf_s(unit.unit_key,"PRTO_%s",names[row]);
+            unit.action=2;unit.action_cursor=phase*7;unit.frame_count=16;unit.direction=direction;
+            unit.sprite_width=unit.sprite_height=191;unit.reduced=zoom;unit.hour=hour;
+            unit.display_color_rgb=direction%2?0x205bdd:0xe33020;
+            unit.body_x=(direction-1)*128+64-191/(zoom?4:2);
+            unit.body_y=row*128+91-191/(zoom?4:2);
+            int result=draw(&unit,dc);
+            if(result!=C3X_RENDERER_RESULT_OK) {std::printf("FAIL unit body key=%s direction=%d phase=%d zoom=%d result=%d\n",unit.unit_key,direction,phase,zoom,result);ok=false;}
+            else ++drawn;
+        }
+        c3x_renderer_output_v1 picture={};picture.width=1024;picture.height=640;picture.stride_bytes=4096;picture.bgra_pixels=bits;
+        std::string filename=std::string(path)+".units-z"+std::to_string(zoom)+"-p"+std::to_string(phase)+".bmp";
+        if(ok)ok=write_bmp(filename.c_str(),picture);
+        auto begin=static_cast<std::uint32_t const*>(bits);
+        if(phase==0)first.assign(begin,begin+1024*640);
+        else if(ok) {
+            std::size_t changes=0;for(unsigned i=0;i<first.size();++i)if(first[i]!=begin[i])++changes;
+            std::printf("UNIT temporal zoom=%d changed_pixels=%zu\n",zoom,changes);ok=changes>100;
+        }
+    }
+    if(ok) {
+        // Reuse one pose at a new authoritative location and another unit ID.
+        std::fill_n(static_cast<std::uint32_t*>(bits),1024*640,0xff565b62u);
+        c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Archer");
+        unit.unit_id=41;unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=8;
+        unit.sprite_width=unit.sprite_height=191;unit.body_x=100;unit.body_y=100;unit.hour=hour;unit.display_color_rgb=0x205bdd;
+        ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK;
+        std::vector<std::uint32_t> original(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*640);
+        std::fill_n(static_cast<std::uint32_t*>(bits),1024*640,0xff565b62u);
+        unit.unit_id=42;unit.body_x+=128;
+        ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK && ok;
+        auto actual=static_cast<std::uint32_t const*>(bits);
+        for(int y=0;y<640;++y)for(int x=0;x<1024;++x)
+            if(actual[y*1024+x]!=(x>=128?original[y*1024+x-128]:0xff565b62u))ok=false;
+        std::printf("UNIT cached anchor translation: %s\n",ok?"pass":"FAIL");
+        auto snapshot=std::vector<std::uint32_t>(actual,actual+1024*640);
+        std::fill_n(static_cast<std::uint32_t*>(bits),1024*640,0xff565b62u);
+        ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK && std::memcmp(snapshot.data(),bits,snapshot.size()*4)==0 && ok;
+        std::printf("UNIT repeated native cursor: %s\n",ok?"pass":"FAIL");
+        ok=configure(2)==C3X_RENDERER_RESULT_BAD_ARGUMENT && ok;
+        ok=configure(0)==C3X_RENDERER_RESULT_OK && ok;
+        ok=draw(&unit,dc)!=C3X_RENDERER_RESULT_OK && std::memcmp(snapshot.data(),bits,snapshot.size()*4)==0 && ok;
+        ok=configure(1)==C3X_RENDERER_RESULT_OK && ok;
+        std::printf("UNIT config-off preserves canvas: %s\n",ok?"pass":"FAIL");
+        // Exercise AlphaBlend against the actual legacy 16-bit GDI surfaces,
+        // including partial offscreen bodies at both native zoom scales.
+        for(int green_bits:{5,6})for(int zoom=0;zoom<2 && ok;++zoom) {
+            struct {BITMAPINFOHEADER header;DWORD masks[3];} format={};
+            format.header.biSize=sizeof(BITMAPINFOHEADER);format.header.biWidth=384;format.header.biHeight=-256;
+            format.header.biPlanes=1;format.header.biBitCount=16;format.header.biCompression=BI_BITFIELDS;
+            format.masks[0]=green_bits==5?0x7c00u:0xf800u;format.masks[1]=green_bits==5?0x3e0u:0x7e0u;format.masks[2]=0x1fu;
+            HDC dc16=CreateCompatibleDC(nullptr);void* pixels16=nullptr;
+            HBITMAP dib16=CreateDIBSection(dc16,reinterpret_cast<BITMAPINFO*>(&format),DIB_RGB_COLORS,&pixels16,nullptr,0);
+            if(!dc16 || !dib16 || !pixels16) {if(dib16)DeleteObject(dib16);if(dc16)DeleteDC(dc16);ok=false;break;}
+            auto previous=SelectObject(dc16,dib16);auto values=static_cast<std::uint16_t*>(pixels16);
+            std::fill_n(values,384*256,std::uint16_t(0x4210));
+            unit.reduced=zoom;unit.body_x=zoom?-24:-47;unit.body_y=zoom?-12:-27;
+            ok=draw(&unit,dc16)==C3X_RENDERER_RESULT_OK && ok;GdiFlush();
+            unsigned changes=0;int extent=191/(zoom?2:1);
+            for(int y=0;y<256;++y)for(int x=0;x<384;++x)if(values[y*384+x]!=0x4210) {
+                ++changes;if(x>=unit.body_x+extent || y>=unit.body_y+extent)ok=false;
+            }
+            ok=changes>10 && ok;
+            std::printf("UNIT RGB5%d5 clipped zoom=%d changed=%u status=%s\n",green_bits,zoom,changes,ok?"pass":"FAIL");
+            SelectObject(dc16,previous);DeleteObject(dib16);DeleteDC(dc16);
+        }
+    }
+    // A missing action/key must leave the native canvas byte-for-byte intact.
+    std::vector<std::uint32_t> retained(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*640);
+    c3x_renderer_unit_v1 unknown={};unknown.struct_size=sizeof(unknown);strcpy_s(unknown.unit_key,"PRTO_NotMapped");
+    ok=draw(&unknown,dc)!=C3X_RENDERER_RESULT_OK && std::memcmp(retained.data(),bits,retained.size()*4)==0 && ok;
+    SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);
+    std::printf("UNIT body matrix drawn=%u status=%s\n",drawn,ok?"pass":"FAIL");return ok;
 }

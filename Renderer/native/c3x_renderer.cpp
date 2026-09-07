@@ -39,6 +39,7 @@
 #include "profile_v2/cliff_placement.h"
 #include "profile_v2/source_shadow.h"
 #include "profile_v2/linear_target.h"
+#include "unit_body_renderer.h"
 
 namespace {
 
@@ -344,6 +345,8 @@ std::size_t json_member_position(std::vector<std::uint8_t> const& data,
 
 class RendererState {
 public:
+    c3x_renderer::UnitBodyRenderer unit_bodies;
+    bool unit_rendering_enabled=false;
     RendererTrace trace;
     SceneTopology topology_cache;
     std::uint64_t requested_signature = 0;
@@ -601,6 +604,7 @@ public:
     }
 
     void reset() {
+        unit_bodies.reset_gpu();
         reset_resource_buffers();
         if (context != nullptr)
             context->ClearState();
@@ -1193,6 +1197,7 @@ public:
         route_assets_ready = false;
         resource_assets_ready = false;
         reset_resource_buffers(); resource_animations.clear();
+        unit_bodies.clear();
         city_assets_ready = false;
         mine_assets_ready = false;
         farm_assets_ready = false;
@@ -1648,10 +1653,10 @@ public:
             resource_root, "resource_runtime.bin", resource_bundle, resource_texture_dds);
 
         // Assets are bound once, outside all draw and native unit callbacks.
-        // The first checkpoint is opt-in while temporal/occlusion gates run.
-        char animation_switch[8] = {};
-        GetEnvironmentVariableA("C3X_RENDERER_RESOURCE_ANIMATION", animation_switch, sizeof(animation_switch));
-        if (pickup_profile && animation_switch[0] == '1') {
+        if(unit_rendering_enabled && !load_unit_animations(packs_root+"\\UnitAnimationRuntime")) {
+            unit_bodies.clear();trace.write("unit-bind","complete unit pack rejected; native bodies retained",true);
+        }
+        if (pickup_profile) {
             std::string root = packs_root + "\\ResourceAnimationRuntime";
             std::vector<std::uint8_t> definitions;
             if (read_file((root + "\\bindings.json").c_str(), definitions)) {
@@ -2218,6 +2223,10 @@ public:
         }
         for (auto & animation : resource_animations)
             if (!ensure_dds_texture(animation.dds, animation.view, true)) return false;
+        for(auto & texture:unit_bodies.textures)
+            if(!ensure_dds_texture(texture.dds,texture.view,true)) {
+                unit_bodies.clear();trace.write("unit-bind","texture creation failed; native bodies retained",true);break;
+            }
         if (resource_assets_ready) {
             for (std::size_t index = 0; index < resource_texture_views.size(); ++index)
                 resource_assets_ready = resource_assets_ready && ensure_dds_texture(
@@ -2487,6 +2496,66 @@ public:
             return {height * blend_weight * vertical, height, blend};
         }
         return {0.0f, 0.0f, 0.0f};
+    }
+
+    bool load_unit_animations(std::string const& root) {
+        std::vector<std::uint8_t> data;
+        if(!read_file((root+"\\bindings.json").c_str(),data))return false;
+        float count=0;
+        if(!json_number_after(data,"unit_count",0,count) || count<1 || count>128 || count!=int(count))return false;
+        std::unordered_map<std::string,unsigned> mesh_ids,texture_ids;
+        std::size_t bytes_used=0;
+        for(int i=0;i<int(count);++i) {
+            auto location=json_member_position(data,("unit"+std::to_string(i)).c_str());
+            float complete=0,keys=0;
+            if(!json_number_after(data,"complete",location,complete))return false;
+            if(complete!=1){trace.write("unit-bind",("unit="+std::to_string(i)+" unresolved material contract; native body").c_str(),true);continue;}
+            c3x_renderer::UnitBodyRenderer::Unit unit;
+            if(!json_number_after(data,"key_count",location,keys) || keys<1 || keys>16 || keys!=int(keys) ||
+               !json_number_after(data,"scale",location,unit.scale) || unit.scale<=0 || unit.scale>10 ||
+               !json_number_after(data,"yaw_offset",location,unit.yaw_offset) ||
+               !json_number_after(data,"offset_z",location,unit.offset_z))return false;
+            for(int key=0;key<int(keys);++key) {
+                std::string value;
+                if(!json_string_after(data,("key"+std::to_string(key)).c_str(),location,value) || value.size()>63)return false;
+                unit.keys.push_back(value);
+            }
+            for(char const* name:{"idle","move","attack","death","fortify","fidget","victory","capture","defend"}) {
+                auto action_location=json_member_position(data,name,location);
+                if(action_location==std::string::npos)continue;
+                float parts=0,loop=0;
+                if(!json_number_after(data,"part_count",action_location,parts) || parts<1 || parts>32 || parts!=int(parts) ||
+                   !json_number_after(data,"loop",action_location,loop) || (loop!=0 && loop!=1))return false;
+                c3x_renderer::UnitBodyRenderer::Action action;action.name=name;action.loop=loop!=0;
+                for(int part_index=0;part_index<int(parts);++part_index) {
+                    auto record=json_member_position(data,("part"+std::to_string(part_index)).c_str(),action_location);
+                    c3x_renderer::UnitBodyRenderer::Part part;
+                    std::string mesh,texture;char path[4*MAX_PATH];
+                    if(!json_string_after(data,"mesh",record,mesh) || !json_string_after(data,"texture",record,texture) ||
+                       !json_number_after(data,"tint_r",record,part.tint[0]) || !json_number_after(data,"tint_g",record,part.tint[1]) ||
+                       !json_number_after(data,"tint_b",record,part.tint[2]) || !json_number_after(data,"owner_mask",record,part.mask) ||
+                       !json_number_after(data,"owner_strength",record,part.strength) || !json_number_after(data,"cutout",record,part.cutout) ||
+                       part.mask<0 || part.mask>2 || part.strength<0 || part.strength>1 || part.cutout<0 || part.cutout>1)return false;
+                    if(mesh_ids.find(mesh)==mesh_ids.end()) {
+                        std::vector<std::uint8_t> payload;c3x_renderer::UnitBodyRenderer::Mesh bound;
+                        if(!pack_path(root.c_str(),mesh.c_str(),path,std::size(path)) || !read_file(path,payload) ||
+                           bytes_used+payload.size()>96u*1024u*1024u || !c3x_renderer::decode_animation_mesh(payload,bound.animation))return false;
+                        bytes_used+=payload.size();mesh_ids[mesh]=unsigned(unit_bodies.meshes.size());unit_bodies.meshes.push_back(std::move(bound));
+                    }
+                    if(texture_ids.find(texture)==texture_ids.end()) {
+                        c3x_renderer::UnitBodyRenderer::Texture bound;
+                        if(!load_dds_bytes(root.c_str(),texture.c_str(),bound.dds,DXGI_FORMAT_BC3_UNORM_SRGB,DXGI_FORMAT_BC1_UNORM_SRGB) ||
+                           bytes_used+bound.dds.size()>96u*1024u*1024u)return false;
+                        bytes_used+=bound.dds.size();texture_ids[texture]=unsigned(unit_bodies.textures.size());unit_bodies.textures.push_back(std::move(bound));
+                    }
+                    part.mesh=mesh_ids.at(mesh);part.texture=texture_ids.at(texture);action.parts.push_back(part);
+                }
+                unit.actions.push_back(std::move(action));
+            }
+            trace.write("unit-bind",(unit.keys.front()+" complete clips and materials ready").c_str(),true);
+            unit_bodies.units.push_back(std::move(unit));
+        }
+        return !unit_bodies.units.empty();
     }
 
     int resource_animation_for(c3x_renderer_tile_v1 const & tile) const {
@@ -6112,6 +6181,17 @@ class RendererWorker {
 public:
     explicit RendererWorker(RendererState & state) : renderer_state(state) {}
 
+    int set_unit_rendering(int enabled) {
+        if(enabled!=0 && enabled!=1)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        // Call serialization excludes foreground configure/render jobs. Idle
+        // terrain preparation never reads this unit-only configuration value.
+        renderer_state.unit_rendering_enabled=enabled!=0;
+        renderer_state.trace.write("unit-config",enabled?"enabled; bind at definition load":"disabled; native units",true);
+        return C3X_RENDERER_RESULT_OK;
+    }
+
     ~RendererWorker() {
         reset_and_stop();
     }
@@ -6224,6 +6304,27 @@ public:
         return result;
     }
 
+    int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination) {
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::unique_lock<std::mutex> lock(state_mutex);
+        if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
+        start_locked();job_unit=request;
+        LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
+        int result=submit_locked(lock,Command::unit);
+        lock.unlock();
+        if(result==C3X_RENDERER_RESULT_OK && !renderer_state.unit_bodies.blit(destination,request.body_x,request.body_y))
+            result=C3X_RENDERER_RESULT_ERROR;
+        QueryPerformanceCounter(&finished);
+        char detail[384];std::snprintf(detail,sizeof(detail),
+            "id=%d key=%.63s action=%d queued=%d cursor=%d/%d dir=%d xy=%d,%d reduced=%d color=%06x result=%d cache_hit=%d cache_bytes=%zu ms=%.3f",
+            request.unit_id,request.unit_key,request.action,request.queued_action,request.action_cursor,request.frame_count,
+            request.direction,request.body_x,request.body_y,request.reduced,request.display_color_rgb,result,
+            renderer_state.unit_bodies.cache_hit?1:0,renderer_state.unit_bodies.cache_bytes,
+            renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart));
+        renderer_state.trace.write("unit-body",detail,true);
+        return result;
+    }
+
     void reset_and_stop() {
         std::unique_lock<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
@@ -6245,6 +6346,7 @@ private:
         configure_pack,
         configure_definitions,
         render,
+        unit,
         reset
     };
 
@@ -6270,6 +6372,8 @@ private:
     std::uint64_t latest_job_sequence = 0;
     std::uint64_t completed_job_sequence = 0;
     int completed_result = C3X_RENDERER_RESULT_ERROR;
+    int last_job_result = C3X_RENDERER_RESULT_ERROR;
+    c3x_renderer_unit_v1 job_unit={};
     c3x_renderer_output_v1 completed_output = {};
     std::uint64_t completed_scene_signature=0;
     unsigned fast_cache_hits=0;
@@ -6299,7 +6403,7 @@ private:
     }
 
     int submit_locked(std::unique_lock<std::mutex> & lock, Command command) {
-        foreground_pending.store(true, std::memory_order_relaxed);
+        if(command!=Command::unit)foreground_pending.store(true, std::memory_order_relaxed);
         job_command = command;
         has_job = true;
         std::uint64_t sequence = ++latest_job_sequence;
@@ -6307,7 +6411,7 @@ private:
         completed.wait(lock, [this, sequence] {
             return completed_job_sequence == sequence;
         });
-        return completed_result;
+        return last_job_result;
     }
 
     char const * optional_path(bool present, std::string const & path) const {
@@ -6491,13 +6595,17 @@ private:
                     result = renderer_state.render(job_frame, output)
                         ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_DEVICE_ERROR;
                 }
+            } else if(command==Command::unit) {
+                result=renderer_state.unit_bodies.render(renderer_state.device,renderer_state.context,job_unit)
+                    ? C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
             } else if (command == Command::reset) {
                 renderer_state.trace.write("reset", "device and all caches", true);
             renderer_state.reset();
                 result = C3X_RENDERER_RESULT_OK;
             }
             } catch (...) {
-                renderer_state.reset();
+                if(command==Command::unit)renderer_state.unit_bodies.reset_gpu();
+                else renderer_state.reset();
                 renderer_state.trace.write("worker-error", "resource allocation or runtime exception", true);
                 output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
                 result = C3X_RENDERER_RESULT_ERROR;
@@ -6519,17 +6627,20 @@ private:
                 output.prefetch_blocks_pending = renderer_state.pixel_work_pending();
                 output.prefetch_blocks_built = renderer_state.prepared_blocks;
                 output.pixel_block_cache_bytes = static_cast<unsigned>(renderer_state.pixel_blocks.bytes);
-            } else {
+            } else if(command!=Command::unit) {
                 warm_order.clear(); warm_cursor = 0; warm_signature = 0;
                 warm_tiles.clear();
                 renderer_state.cancel_pixel_preparation();
             }
+            if(command!=Command::unit) {
             completed_resources = command==Command::render ? renderer_state.visible_resource_animations : 0;
             completed_resource_clock=command==Command::render ? RendererState::resource_clock(job_frame) : -1;
             completed_output = output;
             completed_scene_signature=command==Command::render && result==C3X_RENDERER_RESULT_OK ?
                 c3x_renderer::terrain_frame_signature(job_frame,output.content_revision,output.device_generation).complete:0;
             completed_result = result;
+            }
+            last_job_result=result;
             completed_job_sequence = sequence;
             job_command = Command::none;
             has_job = false;
@@ -6640,4 +6751,16 @@ extern "C" __declspec(dllexport) int c3x_renderer_blit(
 
 extern "C" __declspec(dllexport) void c3x_renderer_reset(void) {
     destroy_renderer_worker();
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_unit_draw(
+    c3x_renderer_unit_v1 const* unit,void* destination_hdc) {
+    if(!unit || unit->struct_size!=sizeof(*unit) || unit->unit_key[63]!=0 || !destination_hdc)
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
+    return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc));
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_set_unit_rendering(int enabled) {
+    return get_renderer_worker().set_unit_rendering(enabled);
 }

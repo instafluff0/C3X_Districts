@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from Renderer.tools.asset_compiler import normalized_animation, normalized_pose_cache, normalized_skin
 from Renderer.tools.asset_compiler.resource_animation_converter import load_extract_report
+from Renderer.tools.asset_compiler.school_orientation import align_school_payload
 from Renderer.tools.asset_compiler.unit_model_extractor import SOURCE_UNITS_PER_TILE
 
 
@@ -132,12 +133,19 @@ def build(animated: Path, landmarks: Path, output: Path) -> dict:
             if not (output / texture_name).exists():
                 shutil.copyfile(texture, output / texture_name)
             payload = encode(mesh, skeleton, cache)
+            facing = None
+            if root == landmarks and subject in ("fish", "whales"):
+                pairs = ([(f"Fish{i:02}_Head_Bone", f"Fish{i:02}_Tail_Bone") for i in range(1, 13)]
+                         if subject == "fish" else
+                         [(f"Whale_{name}_Bone_01", f"Whale_{name}_Bone_02") for name in "ABC"])
+                payload, facing = align_school_payload(payload, mesh, skeleton, pairs)
             filename = f"clips/{subject}_{ordinal}.bin"
             (output / filename).write_bytes(payload)
             total += len(payload)
             parts.append({"mesh": filename, "texture": texture_name,
                           "sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload),
-                          "vertices": len(mesh["vertices"]), "bones": len(skeleton["bones"])})
+                          "vertices": len(mesh["vertices"]), "bones": struct.unpack_from("<I", payload, 20)[0],
+                          "facing": facing})
         return {"parts": parts, "duration": cache.duration, "frames": cache.frame_count, "calibration": calibration}
 
     manifest = json.loads((animated / "manifest.json").read_text())
@@ -165,7 +173,7 @@ def build(animated: Path, landmarks: Path, output: Path) -> dict:
     original = json.loads((landmarks / "manifest.json").read_text())
     bindings = {}
     forward_y = {"horses": -1, "cattle": 1, "game": -1, "furs": -1, "ivory": -1,
-                 "whales": -1, "fish": 0, "wheat": -1, "bananas": -1, "rubber": -1}
+                 "whales": 0, "fish": 0, "wheat": -1, "bananas": -1, "rubber": -1}
     for resource, subjects in result["resources"].items():
         name = resource.split("/")[-1]
         selected = 2 if name == "cattle" else 0
@@ -193,7 +201,8 @@ def build(animated: Path, landmarks: Path, output: Path) -> dict:
         bindings[name] = {"mesh": part["mesh"], "texture": part["texture"],
             "scale": scale, "count": instances, "offset_x": offset[0], "offset_y": offset[1],
             "offset_z": offset[2], "yaw": -math.atan2(forward_y[name], 0 if forward_y[name] else 1),
-            "orientation_evidence": "source_rest_bones; visual checkpoint pending"}
+            "orientation_evidence": ("each_school_body_head_minus_tail_aligned_to_SE" if part.get("facing") else
+                                     "source_rest_bones; visual checkpoint pending")}
     (output / "bindings.json").write_text(json.dumps({"schema": "c3x.resource_animation_bindings.v1",
         "bindings": bindings}, indent=2, sort_keys=True)+"\n")
     result["payload_bytes"] = total

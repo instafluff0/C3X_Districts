@@ -1,0 +1,150 @@
+{
+  "classification": "Source ground projection diagnostic; visual gain too small for a new city best",
+  "unchanged_buildings": 7,
+  "source_ground_mapping": {
+    "mapping": "Renderer/terrain_lab/v2/fixtures/beauty/city-generator-source-r1/city-ground-parts.json",
+    "mapping_sha256": "02aa5973c0721c54ecd6aa87fd9db1eb78cb4f3b0638790255d6eed097b710e7",
+    "draws": [
+      {
+        "asset": "city/component/81e6bc964c4f7c5a",
+        "slot": 0,
+        "parts": 1
+      }
+    ],
+    "classification": "explicit source-material/triangle probe; descriptor state and height response unproven"
+  },
+  "pixels": [
+    {
+      "hour": 12,
+      "zoom": 1,
+      "changed_pixels_gt_2": 59,
+      "max_channel_delta": 42,
+      "bounds": [
+        896,
+        451,
+        912,
+        459
+      ],
+      "image_sha256": "25f7831f359261138814f64080cd86855df60523b9b4aabc115aba1050a226e8"
+    },
+    {
+      "hour": 12,
+      "zoom": 2,
+      "changed_pixels_gt_2": 17,
+      "max_channel_delta": 34,
+      "bounds": [
+        448,
+        225,
+        456,
+        229
+      ],
+      "image_sha256": "5acb404d3dca598da685e24cc275615faf6aab7d568b8e8d19e66e0fff094a5a"
+    },
+    {
+      "hour": 0,
+      "zoom": 1,
+      "changed_pixels_gt_2": 53,
+      "max_channel_delta": 30,
+      "bounds": [
+        896,
+        451,
+        912,
+        459
+      ],
+      "image_sha256": "3ad2aa5d3ca1ee21eb3e70a05c9f9b6b6479f61f8026e40750bd62d845b8b667"
+    },
+    {
+      "hour": 0,
+      "zoom": 2,
+      "changed_pixels_gt_2": 16,
+      "max_channel_delta": 27,
+      "bounds": [
+        448,
+        226,
+        456,
+        229
+      ],
+      "image_sha256": "3f95eb12bc4a52ec3bf60f086c78c325c4746a22d905d4a41d9a57f305f814f8"
+    }
+  ],
+  "windows_parity": {
+    "promotion": false,
+    "results": [
+      {
+        "frame": "h12-z1-pan00.bmp",
+        "packet_sha256": "d8f21a018e5272c286f5730308a1dea33a2c188bfe401b3f7c636f80439f0a7e",
+        "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+        "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+        "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+        "metrics": {
+          "rgb_mean_absolute": 0.08856158088235294,
+          "rgb_p99_absolute": 2,
+          "max_channel_delta": 13,
+          "changed_channels": 167715,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.004631493933519404,
+          "pass": true
+        },
+        "d3d11_sha256": "eb1a0d830ec49700817600a2916b5566116a377bf1fd0d3daac0c79cf9dbd2fa"
+      },
+      {
+        "frame": "h12-z2-pan00.bmp",
+        "packet_sha256": "47c3a05d02ee19ce2064253ebd25da709d6c290e6404481be7be073a0afc5a6c",
+        "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+        "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+        "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+        "metrics": {
+          "rgb_mean_absolute": 0.0738235294117647,
+          "rgb_p99_absolute": 2,
+          "max_channel_delta": 11,
+          "changed_channels": 38583,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.005049708824152784,
+          "pass": true
+        },
+        "d3d11_sha256": "4a0edbea11e7cf3d85c50a169c0f426ef151888cb689f55f7448b0342c8c30a2"
+      },
+      {
+        "frame": "h00-z1-pan00.bmp",
+        "packet_sha256": "f1c2c90b123072a458516879c9b5b44093367b7711f3105be33f83dd721d5060",
+        "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+        "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+        "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+        "metrics": {
+          "rgb_mean_absolute": 0.10069791666666666,
+          "rgb_p99_absolute": 3,
+          "max_channel_delta": 11,
+          "changed_channels": 183124,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.002493443566278609,
+          "pass": true
+        },
+        "d3d11_sha256": "69cde6c2cd42dacb3f649b55656b48a99f865a8099af02233682aea67719bf99"
+      },
+      {
+        "frame": "h00-z2-pan00.bmp",
+        "packet_sha256": "f5b9ceb9bc829500bf39d771fa118de2a4c57d1564991db2f8f81b5485c64e02",
+        "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+        "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+        "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+        "metrics": {
+          "rgb_mean_absolute": 0.08386029411764706,
+          "rgb_p99_absolute": 2,
+          "max_channel_delta": 9,
+          "changed_channels": 42338,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0029963051468846116,
+          "pass": true
+        },
+        "d3d11_sha256": "7e54c30807fe78ffaf945ed2d11a9c21585b6e16168ae44b48b165962ba07ffe"
+      }
+    ]
+  },
+  "free_disk_gib": 25.93,
+  "remaining": [
+    "Descriptor state selection",
+    "City generator layout and ground layering",
+    "Height/specular response",
+    "Full city scope and gates"
+  ]
+}

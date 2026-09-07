@@ -1,0 +1,8 @@
+{
+  "command": "call BUILD.bat candidate-compile",
+  "host": "Windows 11",
+  "status": "pass",
+  "returncode": 0,
+  "started_utc": "2026-09-07T07:52:33.708296+00:00",
+  "output_tail": "c3x_renderer.cpp\nterrain_scene_runtime.cpp\nenvironment_runtime.cpp\nterrain_definition_runtime.cpp\nscene_export.cpp\nframe_scheduler.cpp\nGenerating Code...\n   Creating library build\\candidate\\C3XRenderer.lib and object build\\candidate\\C3XRenderer.exp\nnative_smoke.cpp\nenvironment_runtime.cpp\nGenerating Code...\nbiq_preview.cpp\ntest_animation_runtime.cpp\nanimation runtime: timing, skinning, normals, endpoints, malformed payloads passed\ntest_unit_bridge.cpp\n"
+}

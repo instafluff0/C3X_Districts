@@ -140,12 +140,16 @@
       "requested_by_user": true,
       "findings": "terrain_lab/v2/audits/beauty/CITY_QUALITY_CAMPAIGN.md",
       "scope": "Five cultures, four eras, three sizes; readable complete materials, grounded source buildings, stable growth and modest cross-tile footprints; shared night lighting reflected in water.",
-      "current_work": "City r8: grounded expanded source bodies, recovered UV2 light-atlas mapping, stronger emissive windows and GPU HDR glow, reflected light controls, four passing standalone Metal/D3D11 comparisons.",
+      "current_work": "Single-era appearance restored as the generator-profile default. r17 mixed-era render is rejected by user; prior same-era city/night/palace checkpoints remain selected.",
       "approval": null,
-      "next_action": "Review preserved partial r10 culture/era renders; continue corrected city growth and material/light coverage in bounded batches with shared-resource storage. Preserve all milestone gates.",
+      "next_action": "Use applicable generator growth/density/block and ground metadata within one current era. Verify single-era sizes/cultures, clearance, night lights and reflections. Roads remain deferred; no milestone advancement.",
       "night_light_evidence": "terrain_lab/v2/audits/beauty/CITY_NIGHT_r8_EVIDENCE.json",
       "storage_policy": "Shared-resource packets; discard pre-shadow intermediates immediately; six matrix cases by default; stop below 8 GiB free space.",
-      "storage_cleanup": "terrain_lab/v2/audits/beauty/CITY_STORAGE_CLEANUP.json"
+      "storage_cleanup": "terrain_lab/v2/audits/beauty/CITY_STORAGE_CLEANUP.json",
+      "capital_evidence": "terrain_lab/v2/audits/beauty/CITY_CAPITAL_r13_EVIDENCE.json",
+      "palace_intake": "docs/city_palace_asset_import.md",
+      "generator_findings": "terrain_lab/v2/audits/beauty/CITY_GENERATOR_FINDINGS.md",
+      "era_policy": "User explicitly prefers one era only per city; do not adopt the Civ VI historical-era mix."
     },
     "water_effects_exploration": {
       "status": "preserved_user_pivot_to_cities",
@@ -2425,7 +2429,7 @@
   },
   "integration_animation_maintenance": {
     "authorization": "User requested animated southeast-facing resources and enabled units following native movement; DLL implementation with minimal injected bridging and normal debug output. Stop at a functional user-run checkpoint without launching Civ III.",
-    "status": "in_progress",
+    "status": "in_progress_awaiting_gog_unit_inleads",
     "evidence": "docs/animation_integration_checkpoint.md",
     "existing_symbols": [
       "Map_Renderer_m71_Draw_Tiles",
@@ -2437,25 +2441,46 @@
       "Sprite_draw_unit_body_reduced"
     ],
     "audit_candidates": [
-      "Unit_tick_anim context and body-only normal/reduced Sprite calls; verify ABI and supported builds before a concrete patch request."
+      "Steam/PCGames.de equivalents of the three GOG unit-body hooks; no speculative address request."
     ],
-    "required_user_action": [],
+    "required_user_action": [
+      {
+        "package": "handoffs/animation_unit_hooks_gog.md",
+        "symbols": [
+          "Unit_tick_anim",
+          "Sprite_draw_unit_body_normal",
+          "Sprite_draw_unit_body_reduced"
+        ],
+        "capability": "inlead",
+        "build": "GOG VM prototype only; Steam/PCGames.de unverified",
+        "gog_addresses": [
+          "0x005CBF50",
+          "0x005F88B0",
+          "0x005F8940"
+        ],
+        "reason": "Native unit body interception must retain Unit_tick_anim visibility/movement/HUD and both zoom paths. Existing rows are definitions; reduced declaration omits five native stack arguments.",
+        "reduced_signature": "int (__fastcall *) (Sprite * this, int edx, PCX_Image * background, PCX_Image * canvas, int pixel_x, int pixel_y, int scale_x, int scale_y, int scale_divisor, char * palette_path, PCX_Color_Table * color_table)",
+        "fallback": "Leave rows as definitions to retain every native unit body. Do not install zero-address inleads on unverified builds."
+      }
+    ],
     "completed": [
       "Generic bounded animation decoder/evaluator and offline resource compiler; clutter translation units and constant root placement corrected from source metadata.",
       "104 calibrated poses across 26 subjects match CPU skinning; Windows x86 compilation and portable smoke pass.",
       "DLL resource composition with southeast bindings, immutable terrain anchors, 32 MiB pose buffers and 24 MiB exact MSAA4 backdrop cache.",
       "Timed frames, fixed scrolling and resource-removal parity pass at both zooms and noon/night with zero terrain builds/uploads during animation.",
-      "Complete-clip export for six unit families / 48 actions: 576 source-pose comparisons including 192 sockets pass; whole-kit planar root travel removed. Windows x86 native cursor/anchor checks pass; live unit rendering remains unconnected."
+      "Complete-clip export for six unit families / 48 actions: 576 source-pose comparisons including 192 sockets pass; whole-kit planar root travel removed. Windows x86 native cursor/anchor checks pass; live unit rendering remains unconnected.",
+      "DLL unit body rendering implemented with an independent 8 MiB sprite cache, exact native cursor/anchor forwarding, effective display-palette capture, and retained terrain worker publication/preparation. Approved injected smoke and extracted x86 bridge checks pass; CSV hooks remain inactive."
     ],
     "remaining": [
       "Finish southeast calibration for marine school members; land animal bindings are already southeast.",
-      "Enabled unit body rendering and authoritative Animator movement bridge, action logging and disabled-unit controls.",
+      "Apply and compile the documented GOG CSV inleads; finish optional-unit configuration/default activation, Warrior owner material and remaining coverage; verify the combined final candidate.",
       "Combined resource/unit visibility, fog, interruption and retained-object overlap verification.",
       "Remove temporary verification switch, stage normal INSTALL.bat checkpoint and stop for user gameplay without launching Civ III."
     ],
     "game_launched": false,
     "candidate_staged": false,
     "temporal_evidence": "verification/animation/temporal.json",
-    "unit_payload_evidence": "verification/animation/unit-payloads-portable_cpp.json"
+    "unit_payload_evidence": "verification/animation/unit-payloads-portable_cpp.json",
+    "unit_render_evidence": "verification/animation/units.json"
   }
 }

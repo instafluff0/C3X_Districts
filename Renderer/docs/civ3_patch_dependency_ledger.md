@@ -432,3 +432,32 @@ Complete-kit rendering, retained-layer tests and the concrete bridge are still
 required before a patch request. `required_user_action: []`. The Windows x86
 adapter checks and portable full-clip pose proofs do not establish live hook
 correctness or other-build support.
+
+### Concrete GOG unit bridge request (2026-09-07)
+
+The body renderer and thin injected wrappers are now implemented. Existing
+definitions cannot intercept the Animator's direct FLC body calls. The concrete
+`required_user_action` is to apply the three exact `inlead` rows in
+`handoffs/animation_unit_hooks_gog.md` for the GOG VM prototype:
+
+| Symbol | Capability | GOG | Steam / PCGames.de |
+| --- | --- | --- | --- |
+| `Unit_tick_anim` | `inlead` | `0x005CBF50` | unverified; do not patch zero |
+| `Sprite_draw_unit_body_normal` | `inlead` | `0x005F88B0` | unverified; do not patch zero |
+| `Sprite_draw_unit_body_reduced` | `inlead`, corrected nine-stack-argument signature | `0x005F8940` | unverified; do not patch zero |
+
+Signatures are reproduced in the pickup. `Unit_tick_anim` captures context while
+retaining the complete native function. The two primitives replace only a
+successfully rendered current-frame body; native selection, movement, palette
+choice and HUD remain authoritative. Armies remain completely native initially.
+Fallback if the rows remain definitions: every unit body remains native.
+
+`tools/audit_unit_hooks.py` checks current unmodified GOG entry/call bytes and
+records its hash in `verification/animation/unit-hook-audit.json`. Reduced zoom
+ends in `RET 0x24`, with caller pushes for background, canvas, X, Y, scale X,
+scale Y, divisor, the legacy draw argument and effective palette. The old
+four-argument CSV declaration is not suitable for a live inlead. The current
+bridge uses the full audited signature explicitly; no CSV file was edited.
+Approved injected compilation and an executable x86 mock of the actual extracted
+wrapper source pass. New inlead injection still needs compilation after the
+human CSV update. Other-build address audits remain candidates, not guesses.

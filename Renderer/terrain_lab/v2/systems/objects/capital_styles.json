@@ -1,0 +1,19 @@
+{
+  "schema": "c3x.lab.capital_styles.v1",
+  "status": "explicit_lab_comparison_only",
+  "pack": "Renderer/packs/CityPalaceStudy",
+  "styles": {
+    "american/ancient": {
+      "asset": "candidate/city/capital_mesoamerican",
+      "footprint_span_tiles": 0.6,
+      "basis": "Authored pairing with the Mesoamerican source house family; not a universal American capital."
+    },
+    "american/medieval": {
+      "asset": "candidate/city/capital_mesoamerican",
+      "footprint_span_tiles": 0.6,
+      "basis": "Authored pairing with the Mesoamerican source house family; not a universal American capital."
+    }
+  },
+  "unmapped_policy": "No palace body; retain native capital indicator.",
+  "colonial_candidate": "Body decoded, but four operational component sockets remain unresolved; no complete-kit claim."
+}

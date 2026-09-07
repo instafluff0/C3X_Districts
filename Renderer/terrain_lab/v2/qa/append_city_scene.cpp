@@ -42,6 +42,7 @@ int main(int argc,char**argv) {
    d.world_attribute=4;d.normal_attribute=2;d.uv_attribute=1;d.geometry_flags=3;
    float material=0;memcpy(&material,vertices.data()+32,4);
    if(material>=79.5f){d.depth_mode=1;d.blend_mode=2;d.geometry_flags=0;}
+   if(material>=59.5f && material<69.5f){d.depth_mode=1;d.blend_mode=1;d.geometry_flags=2;}
    d.textures[124]=texture(base,true);d.textures[116]=texture(emission,true);
    d.textures[118]=texture(ao,false);d.textures[119]=texture(normal,false);
    recorded.buffers.push_back(std::move(vertices));recorded.draws.push_back(d);

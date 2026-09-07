@@ -91,6 +91,17 @@ enum c3x_renderer_scheduler_state_flags {
 };
 
 #pragma pack(push, 4)
+// Optional body-only ABI, separate from the retained terrain frame contract.
+struct c3x_renderer_unit_v1 {
+    c3x_renderer_u32 struct_size;
+    c3x_renderer_i32 unit_id, action, queued_action, direction;
+    c3x_renderer_i32 action_cursor, frame_count;
+    c3x_renderer_i32 body_x, body_y, sprite_width, sprite_height, reduced;
+    c3x_renderer_i32 hour, season;
+    c3x_renderer_u32 display_color_rgb;
+    char unit_key[64];
+};
+
 struct c3x_renderer_tile_v1 {
     c3x_renderer_i32 tile_x;
     c3x_renderer_i32 tile_y;
@@ -271,6 +282,9 @@ typedef int (*c3x_renderer_set_definition_paths_fn)(char const * mod_root, char 
                                                     char const * scenario_path, char const * custom_path);
 typedef int (*c3x_renderer_render_fn)(struct c3x_renderer_frame_v1 const *, struct c3x_renderer_output_v1 *);
 typedef int (*c3x_renderer_blit_fn)(struct c3x_renderer_output_v1 const *, void * destination_hdc);
+typedef int (*c3x_renderer_unit_draw_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc);
+// Optional unit configuration. Set before definition/asset loading; defaults off.
+typedef int (*c3x_renderer_set_unit_rendering_fn)(int enabled);
 typedef int (*c3x_renderer_export_scene_fn)(struct c3x_renderer_frame_v1 const *, struct c3x_renderer_scene_export_v1 const *);
 typedef int (*c3x_renderer_schedule_fn)(struct c3x_renderer_schedule_v1 const *, struct c3x_renderer_schedule_result_v1 *);
 typedef void (*c3x_renderer_reset_fn)(void);

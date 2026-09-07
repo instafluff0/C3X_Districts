@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
+import struct
 import sys
 from pathlib import Path
 
@@ -16,6 +18,12 @@ from Renderer.tools.asset_compiler.unit_family_action_validator import SOCKET_PR
 
 
 IDENTITY = (1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.)
+# Retained L20 source ArtDef colors, compiled to ordinary linear material data.
+SOURCE_TINTS = {"BaseMale_SkinColor_Caucasian": (.878, .765, .647),
+    "GreatPeople_Military": (.631, .067, .059), "Horse_Default": (.529, .286, .059),
+    "Horse_Secondary": (.404, .345, .239), "Infantry_European": (.651, .514, .239),
+    "Vehicle_Woodland": (.431, .596, .290), "Wood": (.784, .580, .302),
+    None: (1., 1., 1.), "USE_CIV_COLOR": (1., 1., 1.)}
 
 
 def document(root: Path, relative: str) -> dict:
@@ -163,6 +171,58 @@ def build(packs: list[Path], output: Path) -> dict:
             result["units"][unit_id] = unit
     result["unique_payloads"] = len(payloads)
     result["payload_bytes"] = sum(payloads.values())
+    # A small direct-member table avoids runtime interpretation of source
+    # recipes/material names. Unknown owner contracts reject the complete kit.
+    bindings = {"unit_count": len(result["units"])}
+    for index, (unit_id, unit) in enumerate(result["units"].items()):
+        keys = unit["civ3_ids"] or (["PRTO_Warrior"] if unit_id == "unit/warrior" else [])
+        # Fit one authored idle stance once. Never refit moving/death poses.
+        stance = []
+        for part in unit["actions"]["idle"]["parts"]:
+            payload = (output/part["mesh"]).read_bytes()
+            _version, vertices, indices, _bones, _frames = struct.unpack_from("<5I", payload, 8)
+            palette_offset = 32+vertices*64+indices*4
+            for vertex in range(vertices):
+                values = struct.unpack_from("<8f4I4f", payload, 32+vertex*64)
+                position = [0., 0., 0.]
+                for joint, weight in zip(values[8:12], values[12:16]):
+                    if not weight:
+                        continue
+                    matrix = struct.unpack_from("<16f", payload, palette_offset+joint*64)
+                    for axis in range(3):
+                        position[axis] += weight*(sum(values[a]*matrix[a*4+axis] for a in range(3))+matrix[12+axis])
+                stance.append(position)
+        low_z = min(v[2] for v in stance)
+        span = 0.
+        for direction in range(8):
+            cosine, sine = math.cos(direction*math.pi/4), math.sin(direction*math.pi/4)
+            points = [((v[0]*cosine-v[1]*sine-v[0]*sine-v[1]*cosine)*64,
+                       (v[0]*cosine-v[1]*sine+v[0]*sine+v[1]*cosine)*32-(v[2]-low_z)*(150*128/224)) for v in stance]
+            span = max(span, *(max(v[a] for v in points)-min(v[a] for v in points) for a in range(2)))
+        if span<=0:
+            raise ValueError("empty projected unit stance")
+        record = {"key_count": len(keys), "scale": 56/span, "offset_z": -low_z, "yaw_offset": 225.0,
+                  "fit_policy": "fixed_idle_stance_56_pixels_at_normal_zoom",
+                  **{f"key{i}": key for i, key in enumerate(keys)}}
+        complete = bool(keys)
+        for action, data in unit["actions"].items():
+            target = {"part_count": len(data["parts"]), "loop": int(data["loop"])}
+            for i, part in enumerate(data["parts"]):
+                material = part["material"]
+                tint = SOURCE_TINTS[material["source_tint"]]
+                owner = material["owner_color"]
+                if owner is None and material["source_tint"] == "USE_CIV_COLOR":
+                    complete = False
+                mask = 0 if not owner or owner["mode"] == "none" else (1 if owner["mask_source"] == "base_color_alpha_inverse" else 2)
+                target[f"part{i}"] = {"mesh": part["mesh"],
+                    "texture": material["channels"]["base_color"]["texture"],
+                    "tint_r": tint[0], "tint_g": tint[1], "tint_b": tint[2],
+                    "owner_mask": mask, "owner_strength": owner["strength"] if owner else 0,
+                    "cutout": int(material["alpha_mode"] == "mask")}
+            record[action] = target
+        record["complete"] = int(complete)
+        bindings[f"unit{index}"] = record
+    (output/"bindings.json").write_text(json.dumps(bindings, indent=2, sort_keys=True)+"\n")
     (output/"manifest.json").write_text(json.dumps(result, indent=2, sort_keys=True)+"\n", encoding="utf-8")
     # Only retire blobs owned by the previous successful manifest. Interrupted
     # builds or unrelated files are never treated as permission to delete data.

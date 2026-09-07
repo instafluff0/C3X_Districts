@@ -1,0 +1,216 @@
+{
+  "classification": "Lab visual comparison; no native promotion",
+  "terrain_tiles": 100,
+  "matching_houses": 7,
+  "palace": {
+    "asset": "candidate/city/capital_mesoamerican",
+    "slot": "capital",
+    "scale": 2.217730332640699,
+    "rotation": 0,
+    "offset": [
+      0.07,
+      -0.14
+    ],
+    "local_bounds": [
+      -0.3,
+      -0.29978342754436593,
+      0.3,
+      0.29978342754436593
+    ],
+    "sample_start": 35,
+    "ground_height_range": [
+      2.5,
+      2.5
+    ],
+    "minimum_shore_distance": -1.0
+  },
+  "source_geometry_preserved": [
+    {
+      "asset": "candidate/city/capital_mesoamerican",
+      "mesh": "meshes/compound/candidate_city_capital_mesoamerican_00.json",
+      "vertices": 114,
+      "sha256": "6059cb54cec8b2b24297c6104a84f4f71130e64babe20987302bc3a13e9f1de6"
+    },
+    {
+      "asset": "candidate/city/capital_mesoamerican",
+      "mesh": "meshes/compound/candidate_city_capital_mesoamerican_01.json",
+      "vertices": 1690,
+      "sha256": "db18a67fc85344c383bebbb12aae91a063327c06def21050f4c3b07e9b7e1640"
+    },
+    {
+      "asset": "candidate/city/capital_mesoamerican",
+      "mesh": "meshes/compound/candidate_city_capital_mesoamerican_02.json",
+      "vertices": 710,
+      "sha256": "1aefd00eadb27a77531cd7c2bd356dd2a6b83763082bb75a62fafe62194c49ad"
+    },
+    {
+      "asset": "candidate/city/capital_mesoamerican",
+      "mesh": "meshes/compound/candidate_city_capital_mesoamerican_03.json",
+      "vertices": 4,
+      "sha256": "456d978422c374273ace889d76571de670329680f20bd33accc5aa7d9b92cce7"
+    },
+    {
+      "asset": "candidate/city/capital_mesoamerican",
+      "mesh": "meshes/compound/candidate_city_capital_mesoamerican_04.json",
+      "vertices": 94,
+      "sha256": "7c274d6679136d5e8cc34b1c2c4e2aa14e23e80d44b69377ea78cade51c994a9"
+    },
+    {
+      "asset": "candidate/city/capital_mesoamerican",
+      "mesh": "meshes/compound/candidate_city_capital_mesoamerican_05.json",
+      "vertices": 1202,
+      "sha256": "51fb93932399ebf80fad0f5c18dab4609aa03408938fe0718bfc234b6180adda"
+    },
+    {
+      "asset": "candidate/city/capital_mesoamerican",
+      "mesh": "meshes/compound/candidate_city_capital_mesoamerican_06.json",
+      "vertices": 1613,
+      "sha256": "7201506edde53de5d62eefaa7666b5874af2f751221347b32e63c22c26d21792"
+    },
+    {
+      "asset": "candidate/city/capital_mesoamerican",
+      "mesh": "meshes/compound/candidate_city_capital_mesoamerican_07.json",
+      "vertices": 4,
+      "sha256": "10c7779673acc732e2b1854229dc4326e507168075c8ef05050a14575f46cfd6"
+    },
+    {
+      "asset": "candidate/city/capital_south_american",
+      "mesh": "meshes/compound/candidate_city_capital_south_american_00.json",
+      "vertices": 94,
+      "sha256": "cfc76d46db581ba922e27fb292c19a3d4a8b9388ce95c5be53c6f4711a723eba"
+    },
+    {
+      "asset": "candidate/city/capital_south_american",
+      "mesh": "meshes/compound/candidate_city_capital_south_american_01.json",
+      "vertices": 4,
+      "sha256": "f9eb6dae5f0addb08cf3241d194990d320efb99563e1e423d55ecd1d348466d0"
+    },
+    {
+      "asset": "candidate/city/capital_south_american",
+      "mesh": "meshes/compound/candidate_city_capital_south_american_02.json",
+      "vertices": 1408,
+      "sha256": "ce1f2a1aa79af10225e8cc08b13d6901a4aea52a05a87baa5e289e346cc39126"
+    },
+    {
+      "asset": "candidate/city/capital_south_american",
+      "mesh": "meshes/compound/candidate_city_capital_south_american_03.json",
+      "vertices": 4,
+      "sha256": "769bd4c5d891fe096609ec24032baa1ea3ae31122610995e039e52ec408c15a7"
+    },
+    {
+      "asset": "candidate/city/capital_south_american",
+      "mesh": "meshes/compound/candidate_city_capital_south_american_04.json",
+      "vertices": 4,
+      "sha256": "cbc31dfcac9340536f23b640b5ffdbc1f0edca9451f751fe1ff630941e9817e2"
+    },
+    {
+      "asset": "candidate/city/capital_south_american",
+      "mesh": "meshes/compound/candidate_city_capital_south_american_05.json",
+      "vertices": 2144,
+      "sha256": "c18137db474557bf2cd2a056988bf9f1c0e2bbe904ceabae94a3328db93b4b2f"
+    }
+  ],
+  "pixel_differences": [
+    {
+      "hour": 12,
+      "zoom": 1,
+      "city_changed_pixels_gt_2": 926,
+      "city_max_channel_delta": 120
+    },
+    {
+      "hour": 12,
+      "zoom": 2,
+      "city_changed_pixels_gt_2": 256,
+      "city_max_channel_delta": 110
+    },
+    {
+      "hour": 0,
+      "zoom": 1,
+      "city_changed_pixels_gt_2": 895,
+      "city_max_channel_delta": 110
+    },
+    {
+      "hour": 0,
+      "zoom": 2,
+      "city_changed_pixels_gt_2": 243,
+      "city_max_channel_delta": 73
+    }
+  ],
+  "native_capital_indicator": "retained",
+  "standalone_windows_parity": [
+    {
+      "frame": "h12-z1-pan00.bmp",
+      "packet_sha256": "4876650fd32009aa21f77c25124a4346daf280d98138f30fe2c3cc48ef9f1d9c",
+      "shader_sha256": "6bd5ae85f9719a1417fa158a94e6919915a322b15cd71e1a9a3699faab1b2d8b",
+      "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+      "reflection_sha256": "bec1b012df218e7fa0320a3e78a125bf7c80c64ae2c2331db7c3be770bc19362",
+      "metrics": {
+        "rgb_mean_absolute": 0.08856341911764706,
+        "rgb_p99_absolute": 2,
+        "max_channel_delta": 13,
+        "changed_channels": 167713,
+        "silhouette_iou": 1.0,
+        "luminance_mean_delta": 0.0046368818011901835,
+        "pass": true
+      },
+      "d3d11_sha256": "03aa19e7d3e30a37907e6ad71d7dbb85b8c3e16021f7463403e049f37d1473cc"
+    },
+    {
+      "frame": "h12-z2-pan00.bmp",
+      "packet_sha256": "2cfb363eb72da2ff3411931f08d67635b80617ce95013cf13fd470d178b98f51",
+      "shader_sha256": "6bd5ae85f9719a1417fa158a94e6919915a322b15cd71e1a9a3699faab1b2d8b",
+      "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+      "reflection_sha256": "bec1b012df218e7fa0320a3e78a125bf7c80c64ae2c2331db7c3be770bc19362",
+      "metrics": {
+        "rgb_mean_absolute": 0.07383088235294118,
+        "rgb_p99_absolute": 2,
+        "max_channel_delta": 11,
+        "changed_channels": 38589,
+        "silhouette_iou": 1.0,
+        "luminance_mean_delta": 0.005064631618285442,
+        "pass": true
+      },
+      "d3d11_sha256": "e623872a0c44bfeabd4d6d2f7bd1db70f9f6b8353f8a23a011bbc2cd3dd5eaf5"
+    },
+    {
+      "frame": "h00-z1-pan00.bmp",
+      "packet_sha256": "4212a244ef3eeabc520455c1031b46769ef4363c1d5c97bb6719d8765f30706a",
+      "shader_sha256": "6bd5ae85f9719a1417fa158a94e6919915a322b15cd71e1a9a3699faab1b2d8b",
+      "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+      "reflection_sha256": "bec1b012df218e7fa0320a3e78a125bf7c80c64ae2c2331db7c3be770bc19362",
+      "metrics": {
+        "rgb_mean_absolute": 0.10068566176470588,
+        "rgb_p99_absolute": 3,
+        "max_channel_delta": 11,
+        "changed_channels": 183088,
+        "silhouette_iou": 1.0,
+        "luminance_mean_delta": 0.002498232353033553,
+        "pass": true
+      },
+      "d3d11_sha256": "a5f8fe56aca631a4e9e7f150ffe0c007646fe52cfa94574aaddb8d29263feb72"
+    },
+    {
+      "frame": "h00-z2-pan00.bmp",
+      "packet_sha256": "7ff394014447881f623a01cae3a9cbf8f7b417c74799591ab59f6763e45f1a01",
+      "shader_sha256": "6bd5ae85f9719a1417fa158a94e6919915a322b15cd71e1a9a3699faab1b2d8b",
+      "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+      "reflection_sha256": "bec1b012df218e7fa0320a3e78a125bf7c80c64ae2c2331db7c3be770bc19362",
+      "metrics": {
+        "rgb_mean_absolute": 0.08385171568627452,
+        "rgb_p99_absolute": 2,
+        "max_channel_delta": 9,
+        "changed_channels": 42331,
+        "silhouette_iou": 1.0,
+        "luminance_mean_delta": 0.0029876455880756326,
+        "pass": true
+      },
+      "d3d11_sha256": "b6e8e740dde0a3202c85e51b62597085484f5fead5a62e3b890d9e179b717a22"
+    }
+  ],
+  "remaining": [
+    "Other culture mappings",
+    "Colonial attached components",
+    "Production authoritative capital-state binding",
+    "Full city visual and integration gates"
+  ]
+}

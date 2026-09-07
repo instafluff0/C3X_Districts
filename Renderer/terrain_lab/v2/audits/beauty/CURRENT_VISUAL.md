@@ -13,6 +13,14 @@ lights-off/glow-off controls and four passing Metal/D3D11 comparisons.
 Full culture/era/growth coverage, local ground-light transport, material normal
 fidelity and clearance remain active. No city result is promoted.
 
+The subsequent r11 growth probe counts complete neighborhoods by footprint;
+colonial town/city/metropolis layouts preserve their existing building prefix.
+**r13 capital comparison** adds the source Mesoamerican palace, with a reserved
+center site and seven unchanged houses in the no-palace control. Both gameplay
+zooms and noon/midnight render on the same 100-tile coast.
+[Capital at gameplay size](out/city-scene-r13/review/capital-native.png).
+Other cultures and the colonial palace's unresolved components remain open.
+
 # Preserved natural static water
 
 The user responded “Water looks great” to r6 and requested object reflections.

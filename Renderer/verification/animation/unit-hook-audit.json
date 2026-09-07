@@ -1,0 +1,31 @@
+{
+  "schema": "c3x.unit_hook_audit.v1",
+  "status": "pass",
+  "executable_sha256": "838df6f8b3518d5f5f7ff50c7c7add715628ffabbd37221d0bcc7f080afc2746",
+  "build": "GOG address layout; other builds unverified",
+  "byte_checks": {
+    "0x005CBF50": "81eccc000000",
+    "0x005F88B0": "8b41085685c0",
+    "0x005F8940": "8b44240483ec14",
+    "0x005F88C0": "c21800",
+    "0x005F8957": "c22400",
+    "0x005CC361": "5250",
+    "0x005CC36B": "6a02",
+    "0x005CC374": "6a01",
+    "0x005CC378": "6a01"
+  },
+  "body_calls": {
+    "0x005CC33B": "0x005F88B0",
+    "0x005CC3A1": "0x005F8940",
+    "0x005CC861": "0x005F88B0",
+    "0x005CC8BC": "0x005F88B0",
+    "0x005CC926": "0x005F8940",
+    "0x005CC98D": "0x005F8940"
+  },
+  "normal_stack_arguments": 6,
+  "reduced_stack_arguments": 9,
+  "reduced_current_csv_stack_arguments": 4,
+  "native_selection_and_hud": "outside intercepted primitives; retained by original Unit_tick_anim",
+  "native_hooks_enabled": false,
+  "csv_modified": false
+}

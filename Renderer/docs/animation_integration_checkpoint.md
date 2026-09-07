@@ -152,6 +152,44 @@ not been launched.
 
 ## Work still required before the user-run checkpoint
 
+### Body renderer and bridge increment
+
+`native/unit_body_renderer.h` now renders complete unit bodies offscreen on the
+existing D3D worker, then copies premultiplied pixels to the native Animator
+canvas. Five families currently qualify: Archer, Swordsman, Infantry, Fighter
+and Galley. Warrior remains native pending its missing owner-material contract;
+Armies and other unsupported families remain entirely native. A single fixed
+idle-stance fit gives readable normal-zoom bodies without per-pose resizing.
+
+The independent sprite cache is capped at 8 MiB / 128 entries and excludes
+unit identity and pixel position. Its key includes action/cursor, direction,
+source dimensions, zoom, effective color and lighting. Repeated poses and new
+screen occurrences reuse the same bitmap. Unit jobs retain the terrain worker's
+completed publication and queued preparation. Bounded unit scratch/mesh buffers
+never enter terrain cache keys or geometry ownership.
+
+`C3X.h` adds only the optional DLL entry and scoped unit/canvas identities.
+The three wrappers in `injected_code.c` capture the existing current action,
+cursor, exact Sprite/canvas, palette and coordinates and call the original
+native functions. Rendering, skinning, lighting, sprite caching and body logging
+stay in the DLL. The approved injected compile passes. The actual extracted
+wrappers also pass executable x86 checks for both zooms, native fallback,
+disabled/invisible/Army controls, scoped restoration and retained underlay/HUD.
+
+The GOG disassembly proved the current reduced CSV declaration is wrong:
+`RET 0x24` consumes nine stack arguments. The concrete three-row human pickup is
+`handoffs/animation_unit_hooks_gog.md`; other-build addresses remain unverified.
+Until those rows become inleads, no live body replacement occurs. Both animation
+loader switches are still verification-only and the candidate remains unstaged.
+
+`python3 Renderer/native/verify_units.py` exercises the real DLL body renderer,
+eight directions, both zooms, temporal changes, exact repeated/translated sprite
+reuse, native fallback, resource animation and terrain reconstruction after unit
+draws. Reports are in `verification/animation/units.json`. `unit-body` debug
+records include unit/key, native current/queued action, cursor/count, direction,
+anchor, zoom, effective color, result, sprite-cache hit/bytes and elapsed time.
+The normal runtime continues to use OutputDebugStringA only.
+
 1. Finish the enabled-unit body path on the native Animator canvas, including
    authoritative pixel anchors, direction, native action/progress, retained HUD,
    movement timing and focused action-transition logging. Tile unit fields are

@@ -10,7 +10,7 @@ suppression.
 | Family | Offline result | Lab ownership still required |
 | --- | --- | --- |
 | City walls | 19 pieces across complete ancient, medieval, and industrial role kits | L17 perimeter topology, scale, grounding, and both-zoom approval |
-| Capital accent | The generic `BUILDING_PALACE` marker remains composition-only, but two culture-specific installed palace compounds now normalize with emissives and exact fire/smoke sockets | L17 compares the optional candidates at both zooms and uses them only through explicit city-style mapping |
+| Capital accents | Exact installed ArtDef scan finds 47 distinct standard-game palace roots; all bodies normalize with 585 geometry parts, 464 materials, 124 emissive bindings, and exact attachment transforms. The Gran Colombian root retains four unresolved required tree children | L17 selects/calibrates candidates at both zooms through generic pack profiles; no Civ VI civilization ID enters runtime logic |
 | Naval unit | Galley body normalized from three skinned meshes/two materials; eight basic actions converted, validated, and included in the family model-aware pose-cache bake | L20 multi-part rendering, scale/facing, formation, and visual approval |
 | Army commanders | Dedicated Classical and Modern Great General ArtDefs resolved; Modern foot officer is direct, while Classical horse+rider now passes the generic socket/paired-clip compiler; the two-child Army contract preserves Civ III's exact displayed member | L20 calibrates both commander profiles and the full Army matrix; I20 captures both native bodies atomically |
 | Compound units | Horseman, Classical Great General, Catapult, and Tank compile as eight independent animated nodes, four resolved joints, 30 components, 50 textures, 52 model-aware pose caches, and 62 logical node/action bindings across 31 actions through one arbitrary-tree schema | L20 renders/measures the eight-facing/two-zoom matrix, resolves Catapult death if truthful compatible art is found, and runs the promotion render |
@@ -42,8 +42,9 @@ suppression.
   attachment catalog now proves 2,620 exact name/socket/transform joins (88 VFX
   candidates and six analytic-light candidates), but identity alone does not
   decode the resource graph.
-- A culture-neutral capital centerpiece. Two culture-specific palace compounds
-  are now normalized and may be selected only by explicit style mapping.
+- A default capital-profile choice and the Gran Colombian palace's four
+  non-landmark tree children. The 47-root standard palace library is normalized,
+  but L17 must choose the generic/culture fallbacks and visually calibrate them.
 - A proven standalone Radar Tower body and Victory Location marker. An
   observatory body is structurally normalized, but its isolated calibrated
   sheet reads as a flat ornamental plaza rather than a tower or antenna. The

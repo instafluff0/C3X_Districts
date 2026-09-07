@@ -1,0 +1,8 @@
+{
+  "command": "mklink /D \"C:\\Program Files (x86)\\GOG Galaxy\\Games\\Civilization III Complete\\Conquests\\C3X_Shared_Verify\" \"C:\\Mac\\Home\\fun\\Civilization III Complete\\Conquests\\C3X_Districts\" >nul 2>nul & cd /d \"C:\\Program Files (x86)\\GOG Galaxy\\Games\\Civilization III Complete\\Conquests\\C3X_Shared_Verify\" && call TEST_INJECTED_CODE_COMPILE.bat",
+  "host": "Windows 11",
+  "status": "pass",
+  "returncode": 0,
+  "started_utc": "2026-09-07T07:52:53.782108+00:00",
+  "output_tail": "Found GOG executable in \"Civ3Conquests-Unmodded.exe\"\nInjected code compiled successfully.\n"
+}

@@ -1,0 +1,8 @@
+{
+  "command": "set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_VISUAL_PROFILE=pickup-r1\" && set \"C3X_RENDERER_UNIT_ANIMATION=1\" && set \"C3X_RENDERER_PREVIEW_UNITS=1\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\animation\\units-day.log\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\..\\Renderer\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\animation\\units-day.bmp 960 640 75 39 128 12",
+  "host": "Windows 11",
+  "status": "pass",
+  "returncode": 0,
+  "started_utc": "2026-09-07T07:25:14.454243+00:00",
+  "output_tail": "BIQ 100x100 viewport: 387 visible tiles, 0 fallback, output=..\\verification\\animation\\units-day.bmp\nUNIT temporal zoom=0 changed_pixels=32360\nUNIT temporal zoom=1 changed_pixels=8838\nUNIT body matrix drawn=160 status=pass\nUNIT retained terrain unchanged: pass\n"
+}

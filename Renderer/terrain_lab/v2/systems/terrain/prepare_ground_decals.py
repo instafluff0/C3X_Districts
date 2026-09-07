@@ -15,7 +15,7 @@ from generic_decal_compiler import StaticPackage, landmark_base_model, read_artd
 from clutter_blp_extractor import decode_buffer_entry, decode_texture_entry, extract_civbig_texture, TYPE_VERTEX_BUFFER, TYPE_TEXTURE
 
 
-def decode(package, name):
+def decode(package, name, descriptor_index=None):
     package.select_direct_string(name)
     _, owner, _ = landmark_base_model(package)
     variants = [('LandmarkPackageEntry::DecalDescVectorEntry', 'DecalDesc', 92, 0x2c),
@@ -27,8 +27,12 @@ def decode(package, name):
     pointers = package.pointer_fields(vector, kind)
     if len(pointers) != 1: raise ValueError('ambiguous decal array')
     pointer = pointers[0][1]
-    if package.allocations[pointer-1]['element_count'] != 1: raise ValueError('compound decal requires explicit parts')
-    raw = package.array_element(pointer, 0)
+    parts = package.allocations[pointer-1]['element_count']
+    if descriptor_index is None:
+        if parts != 1: raise ValueError('compound decal requires explicit parts')
+        descriptor_index = 0
+    if not 0 <= descriptor_index < parts: raise ValueError('decal part outside descriptor array')
+    raw = package.array_element(pointer, descriptor_index)
     if len(raw) != size or struct.unpack_from('<I', raw, 8)[0] != 4: raise ValueError('unsupported decal primitive')
     vb, ib, start, index_start, count = struct.unpack_from('<5I', raw, offset)
     # The observed ground profile has direct triangle triples in DecalVB.

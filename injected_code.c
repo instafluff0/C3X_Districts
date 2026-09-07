@@ -26697,6 +26697,9 @@ unload_custom_renderer ()
 	is->custom_renderer_set_definition_paths = NULL;
 	is->custom_renderer_render = NULL;
 	is->custom_renderer_blit = NULL;
+	is->custom_renderer_unit_draw = NULL;
+	is->custom_renderer_unit_context = NULL;
+	is->custom_renderer_unit_canvas = NULL;
 	is->custom_renderer_export_scene = NULL;
 	is->custom_renderer_schedule = NULL;
 	is->custom_renderer_reset = NULL;
@@ -26740,6 +26743,90 @@ unload_custom_renderer ()
 	is->custom_renderer_max_map_pass_ticks = 0;
 }
 
+// Capture/forwarding only. Civ III still chooses visibility, timing and HUD order.
+// These entry wrappers remain inactive until the audited CSV inleads are added.
+bool
+forward_custom_unit_body (Sprite * sprite, PCX_Image * canvas, int x, int y, int reduced, PCX_Color_Table * palette)
+{
+	Unit * unit = is->custom_renderer_unit_context;
+	if (unit == NULL || canvas != is->custom_renderer_unit_canvas ||
+	    unit->Body.Animation.Frame_1.Flic_Info == NULL || sprite != &unit->Body.Animation.Frame_1.sprite ||
+	    palette == NULL || palette->JGL_Color_Table == NULL)
+		return false;
+	Animation_Info * info = unit->Body.Animation.Animation_Info;
+	int action = unit->Body.Animation.summary.current_anim_type;
+	int type = unit->Body.UnitTypeID;
+	if (info == NULL || info->Frame_Counts == NULL || action < AT_DEFAULT || action > AT_PLANT ||
+	    type < 0 || type >= p_bic_data->UnitTypeCount)
+		return false;
+	struct c3x_renderer_unit_v1 draw = {0};
+	draw.struct_size = sizeof draw;
+	draw.unit_id = unit->Body.ID;
+	draw.action = action;
+	draw.queued_action = unit->Body.Animation.summary.queued_anim_type;
+	draw.direction = unit->Body.Animation.summary.direction_2;
+	draw.action_cursor = unit->Body.Animation.field_FC;
+	draw.frame_count = info->Frame_Counts[action];
+	draw.body_x = x; draw.body_y = y;
+	draw.sprite_width = sprite->Width; draw.sprite_height = sprite->Height;
+	draw.reduced = reduced;
+	draw.hour = (is->current_config.day_night_cycle_mode != DNCM_OFF && ! is->day_night_cycle_unstarted) ?
+		clamp (0, 23, is->current_day_night_cycle) : 12;
+	draw.season = (is->current_config.seasonal_cycle_mode != SCM_OFF && ! is->seasonal_cycle_unstarted) ?
+		clamp (CS_SUMMER, CS_SPRING, is->current_seasonal_cycle) : CS_SUMMER;
+	memcpy (draw.unit_key, p_bic_data->UnitTypes[type].Civilipedia_Entry, 32);
+	draw.unit_key[32] = '\0';
+	// Read the palette already chosen by the native body call, including hidden nationality.
+	unsigned char color[3] = {0};
+	JGL_Color_Table * table = palette->JGL_Color_Table;
+	((int (__fastcall *) (JGL_Color_Table *, int, unsigned char *, int, int)) table->vtable->m04_Get_Palette_Colors)
+		(table, __, color, 6, 1);
+	draw.display_color_rgb = (color[0] << 16) | (color[1] << 8) | color[2];
+	JGL_Image * image = canvas->JGL.Image;
+	if (image == NULL) return false;
+	HDC dc = image->vtable->acquire_dc (image);
+	if (dc == NULL) return false;
+	int result = is->custom_renderer_unit_draw (&draw, dc);
+	image->vtable->release_dc (image, __, 1);
+	return result == C3X_RENDERER_RESULT_OK;
+}
+
+void __fastcall
+patch_Unit_tick_anim (Unit * this, int edx, PCX_Image * canvas, int offset_x, int offset_y, bool status)
+{
+	Unit * previous_unit = is->custom_renderer_unit_context;
+	PCX_Image * previous_canvas = is->custom_renderer_unit_canvas;
+	is->custom_renderer_unit_context = NULL;
+	is->custom_renderer_unit_canvas = canvas;
+	if (is->current_config.enable_custom_rendering && is->current_config.enable_custom_rendered_units &&
+	    is->custom_renderer_unit_draw != NULL && is->custom_renderer_init_state == IS_OK &&
+	    ! Unit_has_ability (this, __, UTA_Army))
+		is->custom_renderer_unit_context = this;
+	Unit_tick_anim (this, __, canvas, offset_x, offset_y, status);
+	is->custom_renderer_unit_context = previous_unit;
+	is->custom_renderer_unit_canvas = previous_canvas;
+}
+
+int __fastcall
+patch_Sprite_draw_unit_body_normal (Sprite * this, int edx, PCX_Image * background, PCX_Image * canvas,
+				  int x, int y, char * palette_path, PCX_Color_Table * palette)
+{
+	if (forward_custom_unit_body (this, canvas, x, y, 0, palette)) return 0;
+	return Sprite_draw_unit_body_normal (this, __, background, canvas, x, y, palette_path, palette);
+}
+
+int __fastcall
+patch_Sprite_draw_unit_body_reduced (Sprite * this, int edx, PCX_Image * background, PCX_Image * canvas,
+				   int x, int y, int scale_x, int scale_y, int divisor, char * palette_path, PCX_Color_Table * palette)
+{
+	if (scale_x == 1 && scale_y == 1 && divisor == 2 &&
+	    forward_custom_unit_body (this, canvas, x, y, 1, palette)) return 0;
+	// Installed GOG code returns with RET 0x24: nine stack arguments. The old
+	// callable CSV prototype had only four. Keep the audited call explicit until corrected.
+	return ((int (__fastcall *) (Sprite *, int, PCX_Image *, PCX_Image *, int, int, int, int, int, char *, PCX_Color_Table *))
+		Sprite_draw_unit_body_reduced) (this, __, background, canvas, x, y, scale_x, scale_y, divisor, palette_path, palette);
+}
+
 bool
 ensure_custom_renderer_loaded ()
 {
@@ -26765,6 +26852,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_set_definition_paths = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_definition_paths");
 		is->custom_renderer_render = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_render");
 		is->custom_renderer_blit = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_blit");
+		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw");
 		is->custom_renderer_export_scene = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_export_scene");
 		is->custom_renderer_schedule = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_schedule");
 		is->custom_renderer_reset = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_reset");
@@ -26788,6 +26876,9 @@ ensure_custom_renderer_loaded ()
 				scenario_path = NULL;
 			if (! file_exists_at_path (custom_path))
 				custom_path[0] = '\0';
+			c3x_renderer_set_unit_rendering_fn set_units = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_unit_rendering");
+			if (set_units != NULL)
+				set_units (is->current_config.enable_custom_rendered_units ? 1 : 0);
 			log_custom_renderer_event ("definition-start", C3X_RENDERER_RESULT_OK);
 			if (is->custom_renderer_set_definition_paths (is->mod_rel_dir, default_path, scenario_path, custom_path) != C3X_RENDERER_RESULT_OK) {
 				log_custom_renderer_event ("definition-load", C3X_RENDERER_RESULT_ERROR);

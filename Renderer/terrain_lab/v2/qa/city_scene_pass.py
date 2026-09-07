@@ -22,6 +22,7 @@ from cache import Cache,file_hash
 from packet_store import compact_packet
 sys.path.insert(0,str(V2/'systems/objects'))
 import presentation as city
+from city_generator_layout import select_components
 
 def rel(path):return path.relative_to(ROOT).as_posix()
 def save(path,value):path.write_text(json.dumps(value,indent=2)+'\n')
@@ -38,12 +39,20 @@ def main():
     parser.add_argument('--size',type=int,choices=[0,1,2],default=1)
     parser.add_argument('--factor',type=float,default=1)
     parser.add_argument('--channels',action='store_true')
+    parser.add_argument('--source-addressing',action='store_true',help='Respect normalized repeat/clamp addressing on city surface textures')
+    parser.add_argument('--surface-detail',action='store_true',help='Adapt source slope-map detail to the geometric tangent frame')
+    parser.add_argument('--compound-ground',type=Path,help='Explicit normalized source ground-part mapping for this Lab comparison')
     parser.add_argument('--expanded',action='store_true')
     parser.add_argument('--authored-ground',action='store_true',help='place source z=0 at ground; retain negative foundation skirts underground')
     parser.add_argument('--emissive-gain',type=float,default=1.45)
     parser.add_argument('--emissive-uv',type=int,choices=[0,1,2],default=0)
     parser.add_argument('--glow',action='store_true')
     parser.add_argument('--weighted-growth',action='store_true',help='Count a whole source neighborhood by footprint rather than as one house')
+    parser.add_argument('--graduated-growth',action='store_true',help='Grow from lower standalone buildings toward taller buildings and a late neighborhood block')
+    parser.add_argument('--generator-profile',type=Path,help='Use recovered generator parameters while preserving the user-selected single-era appearance')
+    parser.add_argument('--historical-era-mix',action='store_true',help='Reproduce the rejected multi-era diagnostic; not the selected city appearance')
+    parser.add_argument('--capital',action='store_true',help='Add the explicitly mapped palace to this Lab capital city')
+    parser.add_argument('--omit-capital',action='store_true',help='Matched control: retain the reserved palace site but omit its draws')
     parser.add_argument('--anchor',type=int,nargs=2,default=[3,2])
     parser.add_argument('--all-zooms',action='store_true')
     parser.add_argument('--resume',action='store_true',help='retry an input/build failure before any combined render exists')
@@ -51,6 +60,12 @@ def main():
     if shutil.disk_usage(V2).free<8*1024**3:raise ValueError('capture stopped: preserve at least 8 GiB free disk space')
     if not .5<=a.factor<=2:raise ValueError('bounded uniform scale factor required')
     if not 0<=a.emissive_gain<=12 or any(v<0 or v>9 for v in a.anchor):raise ValueError('city parameter bounds')
+    if a.omit_capital and not a.capital:raise ValueError('capital control requires --capital')
+    if a.graduated_growth and (not a.expanded or a.weighted_growth):raise ValueError('graduated growth requires expanded assets and excludes the alternative weighted recipe')
+    if a.generator_profile and (not a.expanded or a.graduated_growth or a.weighted_growth):raise ValueError('generator profile requires expanded assets and excludes alternative growth recipes')
+    if a.historical_era_mix and not a.generator_profile:raise ValueError('historical diagnostic requires generator profile')
+    capital_mapping=city.read(V2.relative_to(ROOT)/'systems/objects/capital_styles.json') if a.capital else None
+    if a.capital and a.pool not in capital_mapping['styles']:raise ValueError('no explicit Lab palace style mapping for this pool')
     pack=Path('Renderer/packs/CityStudyExpanded') if a.expanded else city.PACK
     if a.emissive_uv:
         if not a.expanded:raise ValueError('auxiliary coordinates require the separate expanded study pack')
@@ -58,6 +73,7 @@ def main():
     pool='city/pool/'+a.pool;catalog=city.read(pack/'city_catalog.json')
     if pool not in catalog['pools']:raise ValueError('unknown pool')
     name=a.pool.replace('/','-')+f'-s{a.size}'
+    if a.capital:name+='-capital'+('-control' if a.omit_capital else '')
     if a.anchor!=[3,2]:name+='-at'+'-'.join(map(str,a.anchor))
     fixture=V2/f'fixtures/beauty/city-scene-r{a.revision}'/name
     output=OUT/f'city-scene-r{a.revision}'/name
@@ -104,17 +120,71 @@ def main():
         standalone=sorted([x for x in assets if x['id'] not in blocks],key=lambda x:(-(x['hi'][2]-x['lo'][2]),x['id']))
         compounds=sorted([x for x in assets if x['id'] in blocks],key=lambda x:(-(x['hi'][2]-x['lo'][2]),x['id']))
         ordering=compounds[:1]+standalone
+        if a.graduated_growth:
+            ordering=list(reversed(standalone))+compounds[:1]
         while len(ordering)<11:ordering+=standalone
         if a.weighted_growth and compounds:
             area=lambda x:(x['hi'][0]-x['lo'][0])*(x['hi'][1]-x['lo'][1])
             compound_weight=min(4,max(1,math.ceil(area(compounds[0])/statistics.median(area(x) for x in standalone))))
             stage_counts=[1+max(0,budget-compound_weight) for budget in (4,7,11)]
+    generator=None
+    if a.generator_profile:
+        generator=city.read(a.generator_profile)
+        style,era=a.pool.split('/')
+        source_layers=generator['era_layers'][era]
+        layers=source_layers if a.historical_era_mix else [{'era':era,'order_from_center':0,'weight':1.0}]
+        layer_assets={x['era']:[city.component(asset,pack) for asset in catalog['pools'][f"city/pool/{style}/{x['era']}"]['components']] for x in layers}
+        compound_ids={x['asset_id'] for row in source_report['pools'] for x in row['selected'] if '_Block_' in x['entry']}
+        ordering=select_components(layers,layer_assets,compound_ids)
+        assets=[asset for values in layer_assets.values() for asset in values]
+        source_scale*=generator['model_scale']
     footprint_limit=[.65,.8,.95][a.size] if a.expanded else None
-    layout=city.layout(assets,a.size,factor=a.factor,buildable=buildable,source_scale=source_scale,ordering=ordering,footprint_limit=footprint_limit,stage_counts=stage_counts)
+    palace=None;palace_site=None;house_buildable=buildable
+    if a.capital:
+        mapping=capital_mapping['styles'][a.pool]
+        body=city.component(mapping['asset'],Path(capital_mapping['pack']))
+        span=max(body['hi'][j]-body['lo'][j] for j in (0,1))
+        palace_scale=mapping['footprint_span_tiles']/span*a.factor/1.5
+        palace=city.layout([body],0,buildable=buildable,source_scale=palace_scale,
+                           footprint_limit=footprint_limit,stage_counts=[1,1,1])[0]
+        palace['slot']='capital'
+        hx=(body['hi'][0]-body['lo'][0])*palace_scale/2+.024
+        hy=(body['hi'][1]-body['lo'][1])*palace_scale/2+.024
+        palace_site=[palace['x']-hx,palace['y']-hy,palace['x']+hx,palace['y']+hy]
+        def house_buildable(box):
+            overlaps=box[0]<palace_site[2] and box[2]>palace_site[0] and box[1]<palace_site[3] and box[3]>palace_site[1]
+            return not overlaps and buildable(box)
+    layout=city.layout(assets,a.size,factor=a.factor,buildable=house_buildable,source_scale=source_scale,ordering=ordering,footprint_limit=footprint_limit,stage_counts=stage_counts)
+    if palace and not a.omit_capital:layout.append(palace)
+    ground_parts=city.read(a.compound_ground)['parts'] if a.compound_ground else {}
+    ground_draws=[]
+    for inst in layout:
+        body=inst['asset']
+        if body['id'] in ground_parts:
+            extra=ground_parts[body['id']]
+            projected=[]
+            for part in extra:
+                mesh=part['mesh'];vertices=[]
+                for start in range(0,len(mesh['topology']['indices']),3):
+                    corners=[mesh['vertices'][i] for i in mesh['topology']['indices'][start:start+3]]
+                    span=max(math.dist(x['position'],y['position'])*inst['scale'] for x in corners for y in corners)
+                    steps=max(1,min(24,math.ceil(span/.06)))
+                    def vertex(i,j):
+                        weights=[1-(i+j)/steps,i/steps,j/steps]
+                        return {key:[sum(w*c[key][axis] for w,c in zip(weights,corners)) for axis in range(n)]
+                                for key,n in [('position',3),('uv0',2),('normal',3)]}
+                    for i in range(steps):
+                        for j in range(steps-i):
+                            vertices.extend([vertex(i,j),vertex(i+1,j),vertex(i,j+1)])
+                            if i+j<steps-1:vertices.extend([vertex(i+1,j),vertex(i+1,j+1),vertex(i,j+1)])
+                projected.append(({'vertices':vertices,'topology':{'indices':list(range(len(vertices)))}},part['material']))
+            inst['asset']={**body,'parts':body['parts']+projected}
+            ground_draws.append({'asset':body['id'],'slot':inst['slot'],'parts':len(extra)})
     points=[];instances=[]
     for inst in layout:
         body=inst['asset'];positions=[]
-        for mesh,_ in body['parts']:
+        for mesh,material in body['parts']:
+            if material['alpha_mode']=='blend':continue
             for v in mesh['vertices']:
                 source=[v['position'][0]-(body['lo'][0]+body['hi'][0])*.5,
                         v['position'][1]-(body['lo'][1]+body['hi'][1])*.5,v['position'][2]-(0 if a.authored_ground else body['lo'][2])]
@@ -124,8 +194,19 @@ def main():
         for dx,dy in [(0,0),(bounds[0],bounds[1]),(bounds[0],bounds[3]),(bounds[2],bounds[1]),(bounds[2],bounds[3])]:
             wx=anchor[0]+.5+inst['x']+dx;wy=anchor[1]+.5-inst['y']-dy
             col=math.floor(wx);row=math.floor(wy);points.append([col,row,wx-col,1-(wy-row)])
+        ground_samples={}
+        for part_index,(mesh,material) in enumerate(body['parts']):
+            if material['alpha_mode']!='blend':continue
+            ground_samples[part_index]=len(points)
+            for v in mesh['vertices']:
+                local=[v['position'][j]-(body['lo'][j]+body['hi'][j])/2 for j in (0,1)]+[0]
+                dx,dy,_=[x*inst['scale'] for x in city.rotate(local,inst['rotation'])]
+                wx=anchor[0]+.5+inst['x']+dx;wy=anchor[1]+.5-inst['y']-dy
+                col=math.floor(wx);row=math.floor(wy);points.append([col,row,wx-col,1-(wy-row)])
         instances.append({'asset':body['id'],'slot':inst['slot'],'scale':inst['scale'],'rotation':inst['rotation'],
-                          'offset':[inst['x'],inst['y']],'local_bounds':bounds,'sample_start':sample_start})
+                          'offset':[inst['x'],inst['y']],'local_bounds':bounds,'sample_start':sample_start,
+                          **({'era_layer':body['era_layer'],'order_from_center':body['order_from_center']} if 'era_layer' in body else {}),
+                          **({'ground_samples':ground_samples} if ground_samples else {})})
     pointfile=fixture/'points.csv';pointfile.write_text(''.join(','.join(map(str,p))+'\n' for p in points))
     run([sys.executable,V2/'app/surface_query.py','--fixture',V2/'fixtures/beauty/river-corridor-r3/coastal/fixture.json',
          '--points',pointfile,'--output',fixture/'surface.json'])
@@ -139,16 +220,18 @@ def main():
         if any(x['base']>=11 or x['shore_distance']>-.02 for x in samples):raise ValueError('building footprint reaches water')
         if record['ground_height_range'][1]-record['ground_height_range'][0]>3:raise ValueError('building site needs terrain foundation handling')
         body=inst['asset']
-        for mesh,mat in body['parts']:
-            if mat['alpha_mode']!='opaque':raise ValueError('unsupported city alpha contract')
+        for part_index,(mesh,mat) in enumerate(body['parts']):
+            ground=mat['alpha_mode']=='blend'
+            if mat['alpha_mode'] not in ('opaque','blend'):raise ValueError('unsupported city alpha contract')
             ch=mat['channels'];keys=['base_color','emissive','ambient_occlusion','normal_0']
             textures=tuple(ch.get(k,{}).get('texture','') for k in keys)
             for tex in textures:
                 if tex:inputs[tex]=file_hash(ROOT/tex)
             if ch not in materials:materials.append(ch)
             channel_bits=(1 if textures[2] else 0)+(2 if textures[3] else 0)
+            if a.source_addressing and ch['base_color']['address_u']=='repeat':channel_bits+=4
             vertices=[]
-            for v in mesh['vertices']:
+            for vertex_index,v in enumerate(mesh['vertices']):
                 source=[v['position'][0]-(body['lo'][0]+body['hi'][0])*.5,v['position'][1]-(body['lo'][1]+body['hi'][1])*.5,v['position'][2]-(0 if a.authored_ground else body['lo'][2])]
                 x,y,z=[q*inst['scale'] for q in city.rotate(source,inst['rotation'])]
                 # Use the existing Q7 source projection; publish the conversion
@@ -157,7 +240,12 @@ def main():
                 sx=site['screen_x']+(x-y)*half;sy=site['screen_y']+(x+y)*half_y-height_pixels
                 depth=site['depth']-(x+y)*half_y/height*.75-height_pixels/vertical*.0012
                 world=[site['column']+site['u']+x,site['row']+1-site['v']-y,(site['height']+height_pixels/vertical)/112]
-                vertices.append([sx/width*2-1,1-sy/height*2,depth,*v['uv0'],*city.rotate(v['normal'],inst['rotation']),40+channel_bits,*world,1])
+                if ground:
+                    sample=surface['samples'][record['ground_samples'][part_index]+vertex_index]
+                    if sample['base']>=11 or sample['shore_distance']>-.02:raise ValueError('city ground part reaches water')
+                    sx=sample['screen_x'];sy=sample['screen_y']-.015;depth=sample['depth']-.000001
+                    world=[sample['column']+sample['u'],sample['row']+1-sample['v'],sample['height']/112]
+                vertices.append([sx/width*2-1,1-sy/height*2,depth,*v['uv0'],*city.rotate(v['normal'],inst['rotation']),60 if ground else 40+channel_bits,*world,1])
             groups[(textures,False)].extend(vertices[i] for i in mesh['topology']['indices'])
             if a.emissive_uv and textures[1]:
                 emission_vertices=[]
@@ -176,11 +264,25 @@ def main():
          'uniform_scale_factor':a.factor,'instances':instances,'textures':inputs,'material_declarations':materials,
          'pack':pack.as_posix(),'expanded_pool':a.expanded,'emissive_gain':a.emissive_gain,
          'emissive_uv':a.emissive_uv,'hdr_glow':a.glow,
+         'source_addressing':a.source_addressing,'surface_detail':a.surface_detail,
+         'compound_ground':{'mapping':str(a.compound_ground) if a.compound_ground else None,
+                            'mapping_sha256':file_hash(ROOT/a.compound_ground) if a.compound_ground else None,
+                            'draws':ground_draws,'classification':'explicit source-material/triangle probe; descriptor state and height response unproven'},
          'weighted_growth':a.weighted_growth,'compound_house_equivalents':compound_weight,'stage_component_counts':stage_counts,
+         'graduated_growth':a.graduated_growth,
+         'generator_profile':{'path':str(a.generator_profile) if a.generator_profile else None,
+                              'sha256':file_hash(ROOT/a.generator_profile) if a.generator_profile else None,
+                              'era_policy':'rejected_historical_mix_diagnostic' if a.historical_era_mix else 'single_current_era_user_preference',
+                              'used':(['era weights','center ordering','uniform model scale'] if a.historical_era_mix else ['uniform model scale']) if generator else [],
+                              'adapter':'stable weighted choices; bounded ring preference; source engine algorithm not recovered'},
+         'capital':{'requested':a.capital,'drawn':bool(palace and not a.omit_capital),'reserved_site':palace_site,
+                    'mapping':capital_mapping['styles'][a.pool] if a.capital else None,
+                    'authority':'explicit Lab fixture only; production must use captured Civ III capital status',
+                    'native_capital_indicator':'retained'},
          'grounding':'source_z_zero' if a.authored_ground else 'lowest_source_vertex',
          'footprint_half_extent_tiles':footprint_limit,'cross_tile_extent_authorization':'user permits slight city overlap, especially larger cities',
          'projection':projection,'source_z_pixels_per_unit':80.9543,'scene_world_z_per_source_unit':80.9543/(vertical*112),
-         'material_channels_enabled':['base_color','emissive']+(['ambient_occlusion'] if a.channels else []),
+         'material_channels_enabled':['base_color','emissive']+(['ambient_occlusion'] if a.channels else [])+(['normal_0_slope_adaptation'] if a.surface_detail else []),
          'remaining':['source normal/gloss interpretation','full coast/route/vegetation envelopes','capital and wall states','all culture/era/size matrix']})
     base=OUT/'river-corridor-r3/coastal';report=json.loads((base/'report.json').read_text());jobs=json.loads((base/'batch.json').read_text())
     pairs=[(j,r) for j,r in zip(jobs,report['outputs']) if a.all_zooms or r['zoom']==1]
@@ -199,7 +301,7 @@ def main():
     common=fixture/'city.hlsl'
     common.write_text('#define Q3_NATURAL_WATER 1\n#define PSFeature Q8LegacyPSFeature\n'
         '#include "../../river-corridor-r3/coastal/combined.hlsl"\n#undef PSFeature\n'+
-        f'#define Q8_CITY_CHANNELS {int(a.channels)}\n#define Q8_CITY_SEPARATE_EMISSION {int(a.emissive_uv>0)}\n#define Q8_CITY_EMISSIVE_GAIN {a.emissive_gain}\n#include "../../../../shaders/objects/city_scene_material.hlsl"\n')
+        f'#define Q8_CITY_CHANNELS {int(a.channels)}\n#define Q8_CITY_SURFACE_DETAIL {int(a.surface_detail)}\n#define Q8_CITY_WORLD_Z_TO_SOURCE {vertical*112/80.9543:.12f}\n#define Q8_CITY_SEPARATE_EMISSION {int(a.emissive_uv>0)}\n#define Q8_CITY_EMISSIVE_GAIN {a.emissive_gain}\n#include "../../../../shaders/objects/city_scene_material.hlsl"\n')
     shader=fixture/'combined.hlsl';shader.write_text(f'#define Q3_OBJECT_REFLECTION 1\n#define Q3_REFLECTION_SIZE float2({width}.0,{height}.0)\n#include "city.hlsl"\n')
     reflected=fixture/'reflection.hlsl';reflected.write_text('#define VSMain Q3OriginalVSMain\n#define VSFeature Q3OriginalVSFeature\n#define PSMain Q3OriginalPSMain\n#define Q8_CITY_FEATURE_ENTRY Q3OriginalPSFeature\n#include "city.hlsl"\n#undef VSMain\n#undef VSFeature\n#undef PSMain\n'+f'#define Q3_REFLECTION_HEIGHT_NDC {4*.82*half/height:.12f}\n#include "../../../../shaders/hydrology/planar_reflection_pass.hlsl"\n')
     run([sys.executable,V2/'qa/replay_shader.py','--report',output/'report.json','--shader',shader,
