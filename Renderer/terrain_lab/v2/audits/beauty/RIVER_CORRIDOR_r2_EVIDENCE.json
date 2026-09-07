@@ -1,0 +1,524 @@
+{
+  "schema": "c3x.river_corridor_evidence.v1",
+  "approval": null,
+  "visual_accepted": false,
+  "regions": [
+    {
+      "region": "coastal",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "0b36d0452f61229edeabb163cf1cff6303a5b171a0d96a77cd5b7c629211f624",
+          "after_sha256": "3379c01f4dac0867da9ecdc253537e67661e525d0b60e46ea6b2818c81edeacd",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 455,
+          "instances_after": 428,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/coastal-h12-z1.png",
+          "difference": {
+            "changed_pixels": 10393,
+            "bounds": [
+              523,
+              506,
+              936,
+              640
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "5a2a29e7e5ed3a0e85e488411f5431b5f8a690526c3bd8b03f56288cd5e110fc",
+          "after_sha256": "48df84179d888f8b8053e44569aec6a4d8a95bfc490f3e07c244f392b8e3d8bc",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 455,
+          "instances_after": 428,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/coastal-h12-z2.png",
+          "difference": {
+            "changed_pixels": 2987,
+            "bounds": [
+              261,
+              253,
+              468,
+              320
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "e306fb967d9c09f6067539ca69fcdc411f5761ce656622173eaf58785487ddc7",
+          "after_sha256": "52344829928b78356682f6dd8d6d7cc47cadccd27d193a5e0871726e4c8f504e",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 455,
+          "instances_after": 428,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/coastal-h00-z1.png",
+          "difference": {
+            "changed_pixels": 9991,
+            "bounds": [
+              521,
+              506,
+              936,
+              640
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "850100809218cf2f6b0dc07e2f7612069aa5296057f4b06d824da314770a35e8",
+          "after_sha256": "bd65329fb509522fdd45629bf290a3932e12efd98eaf501f0fc97f156aa9bcfc",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 455,
+          "instances_after": 428,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/coastal-h00-z2.png",
+          "difference": {
+            "changed_pixels": 2846,
+            "bounds": [
+              262,
+              253,
+              468,
+              320
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "inland",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "2e2df4ae6adedd11a7623029065d43cbc628651db87a020d8f1c04eb3be42629",
+          "after_sha256": "4545d007e73043033f4dcb1c90cc104170575082275792fce53d7a9a8b7958bd",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 944,
+          "instances_after": 852,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/inland-h12-z1.png",
+          "difference": {
+            "changed_pixels": 64500,
+            "bounds": [
+              269,
+              122,
+              1246,
+              618
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "e2eaf8ef096e39ceae9f048333d121f9ffde67c1a50289e9970e27f0d90534b9",
+          "after_sha256": "48b0051577b6f47500f85f42b24e0059be0e36cf9a3c020118a163710c2073e7",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 944,
+          "instances_after": 852,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/inland-h12-z2.png",
+          "difference": {
+            "changed_pixels": 17179,
+            "bounds": [
+              134,
+              61,
+              623,
+              309
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "8364cd9bdf370921557f7b593b35b473656256cc4549d15346f9bbaca11eca2c",
+          "after_sha256": "32c6b20d4606c8047f14da80aa1d94d110a718d2d5670b90a8a945fe97c5b7e5",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 944,
+          "instances_after": 852,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/inland-h00-z1.png",
+          "difference": {
+            "changed_pixels": 64151,
+            "bounds": [
+              266,
+              122,
+              1246,
+              618
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "81e4f534dd018599ffb636f6f66a55131aef3d35b4b2e5b6ed326a5991169f90",
+          "after_sha256": "00f2a0f3f12711edfe7a54faa9e34383e73ee2f612359231f282ad20296f01ac",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 944,
+          "instances_after": 852,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/inland-h00-z2.png",
+          "difference": {
+            "changed_pixels": 17048,
+            "bounds": [
+              132,
+              60,
+              623,
+              309
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "wilderness",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "0974496f8a79d0729d9458671916d4a96cd27fec4e0242e8ca7c5698b0f85e50",
+          "after_sha256": "769fcc12f118d48c07081faed0c66c686256225d27090639264d3ec7a405a742",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 410,
+          "instances_after": 401,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/wilderness-h12-z1.png",
+          "difference": {
+            "changed_pixels": 15522,
+            "bounds": [
+              103,
+              24,
+              1176,
+              671
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "bee4fd26ad27f92c6bc9267b75624505fbd4bb2242f633f22c0d44841b5fd30a",
+          "after_sha256": "af4ca76e4f9f96a90554865e518d19aa6bccefdc466d3bc18ac4445dba21255c",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 410,
+          "instances_after": 401,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/wilderness-h12-z2.png",
+          "difference": {
+            "changed_pixels": 6381,
+            "bounds": [
+              53,
+              12,
+              588,
+              336
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "9682d4a544af77c400598a143a7f9b2006b59bb4f2a6d85a242d92a34238ee56",
+          "after_sha256": "e0b6ee3c879cf20d5501bfde95a4b3b0b8f060abf875caa9c373df3551a98b34",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 410,
+          "instances_after": 401,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/wilderness-h00-z1.png",
+          "difference": {
+            "changed_pixels": 6429,
+            "bounds": [
+              99,
+              25,
+              1123,
+              670
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "29ccb075ae21349eb20ea7da4446167b793d9b17fd57568127147533a07f4a98",
+          "after_sha256": "dc8a4ef21990a67025369e60a2d6b48737aa0e127ef744a57f5fc6b7bc48cad3",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 410,
+          "instances_after": 401,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/wilderness-h00-z2.png",
+          "difference": {
+            "changed_pixels": 2060,
+            "bounds": [
+              49,
+              12,
+              562,
+              333
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "freshcanopy",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "ca4543cbaf144ec0e4009b98d1e8de846b5377225630757f2e3e9e415eee54e0",
+          "after_sha256": "370e0e04bebdf404a914f96b05e8696b7c1b43f16b4e5bf81e0db3649d599427",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 1480,
+          "instances_after": 1372,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/freshcanopy-h12-z1.png",
+          "difference": {
+            "changed_pixels": 56575,
+            "bounds": [
+              94,
+              37,
+              1127,
+              626
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "c95dc65e351ae3a6afb827d864908fda0c2c6d9a095b3c186ccb8b5261a89620",
+          "after_sha256": "2a43747be039ad3ad6f11c4c1c6659b9edfaeffbca5e200b5eae89e0c9327018",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 1480,
+          "instances_after": 1372,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/freshcanopy-h12-z2.png",
+          "difference": {
+            "changed_pixels": 20163,
+            "bounds": [
+              47,
+              18,
+              564,
+              313
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "d3fd793356a2b114c4ca1ac967a59d4b8649138185cedb480a06a1615eadc46a",
+          "after_sha256": "77e4e2adbf92959eecc53314ad35fcebf347e5f5b890d22406ef77ace6a36cc6",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 1480,
+          "instances_after": 1372,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/freshcanopy-h00-z1.png",
+          "difference": {
+            "changed_pixels": 45357,
+            "bounds": [
+              94,
+              37,
+              1116,
+              634
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "e2bcdfd8bac0656369afd189bcaad3695dc9b1ec18cac431c78157ed5d683c90",
+          "after_sha256": "cae9172df6b8c89a93330475cf8ea243a595df58239aeaa1a4570f96310668d1",
+          "source_textures_unchanged": true,
+          "remaining_meshes_unchanged": true,
+          "instances_before": 1480,
+          "instances_after": 1372,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r2/review/freshcanopy-h00-z2.png",
+          "difference": {
+            "changed_pixels": 12771,
+            "bounds": [
+              47,
+              18,
+              557,
+              315
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "mouth_material_replay_matches_composition": true
+}

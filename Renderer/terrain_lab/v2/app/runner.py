@@ -603,6 +603,28 @@ def packet(cache, f, module, scene, phase, zoom, pack_hash, query=None):
         environment.pop('C3X_LAB_V2_RELIEF_SCALE',None)
         environment.pop('C3X_LAB_V2_VOLCANO_SCALE',None)
         environment.pop('C3X_LAB_V2_RELIEF_MATERIAL',None)
+        environment.pop('C3X_LAB_V2_CANOPY_VARIATION',None)
+        environment.pop('C3X_LAB_V2_RIVER_CORRIDOR',None)
+        environment.pop('C3X_LAB_V2_RIVER_BANK_ROCKS',None)
+        environment.pop('C3X_LAB_V2_RIVER_POOL_PROFILES',None)
+        if 'river_pool_profiles' in module:
+            resource=module['river_pool_profiles']
+            if (module.get('river_corridor') != 1 or set(resource) != {'path','sha256'} or
+                file_hash(local(resource['path'])) != resource['sha256']):
+                raise ValueError('River pool profiles require a pinned source file and the shared corridor')
+            environment['C3X_LAB_V2_RIVER_POOL_PROFILES']=str(local(resource['path']))
+        if 'river_bank_rocks' in module:
+            if type(module['river_bank_rocks']) is not int or module['river_bank_rocks'] != 1 or module.get('river_corridor') != 1:
+                raise ValueError('Bank rock placement requires the shared river corridor')
+            environment['C3X_LAB_V2_RIVER_BANK_ROCKS']='1'
+        if 'river_corridor' in module:
+            if type(module['river_corridor']) is not int or module['river_corridor'] != 1 or not module.get('hydrology_data'):
+                raise ValueError('River corridor requires the world/hydrology scene adapter')
+            environment['C3X_LAB_V2_RIVER_CORRIDOR']='1'
+        if 'canopy_variation' in module:
+            if type(module['canopy_variation']) is not int or module['canopy_variation'] != 1:
+                raise ValueError('Unsupported source canopy layout version')
+            environment['C3X_LAB_V2_CANOPY_VARIATION']='1'
         if module.get('relief_material_data'):
             if module['relief_material_data']!=1 or not module.get('relief_scale') or not module.get('hydrology_data'):
                 raise ValueError('Relief material data requires broad relief and the existing world/hydrology attributes')

@@ -26706,6 +26706,11 @@ unload_custom_renderer ()
 	is->custom_renderer_tiles = NULL;
 	is->custom_renderer_tile_count = 0;
 	is->custom_renderer_tile_capacity = 0;
+	if (is->custom_renderer_world_topology != NULL) free (is->custom_renderer_world_topology);
+	is->custom_renderer_world_topology = NULL;
+	is->custom_renderer_world_topology_count = 0;
+	is->custom_renderer_world_topology_revision = 0;
+	is->custom_renderer_capture_world_topology = false;
 	is->custom_renderer_frame_active = false;
 	is->custom_renderer_capture_failed = false;
 	is->custom_renderer_composited = false;
@@ -26747,6 +26752,12 @@ ensure_custom_renderer_loaded ()
 	snprintf (path, sizeof path, "%s\\Renderer\\bin\\C3XRenderer.dll", is->mod_rel_dir);
 	path[(sizeof path) - 1] = '\0';
 	log_custom_renderer_event ("load-start", C3X_RENDERER_RESULT_OK);
+	char visual_profile[32] = {0};
+	DWORD (WINAPI * get_environment) (char const *, char *, DWORD) =
+		(void *)(*p_GetProcAddress) (is->kernel32, "GetEnvironmentVariableA");
+	if (get_environment != NULL)
+		get_environment ("C3X_RENDERER_VISUAL_PROFILE", visual_profile, sizeof visual_profile);
+	is->custom_renderer_capture_world_topology = strcmp (visual_profile, "pickup-r1") == 0;
 	is->custom_renderer_module = LoadLibraryA (path);
 	if (is->custom_renderer_module != NULL) {
 		is->custom_renderer_get_api_version = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_get_api_version");
@@ -27123,6 +27134,57 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 	return true;
 }
 
+// Compact topology makes world-continuous nearest-coast queries independent
+// of viewport discovery. Object capture and native anchors remain local. Refresh
+// authoritative type bytes on the game thread; unchanged types retain revision.
+bool
+capture_custom_renderer_world_topology ()
+{
+	Map * map = &p_bic_data->Map;
+	if ((map->Width <= 0) || (map->Height <= 0) || (map->Width & 1) ||
+	    (map->Width > 2048) || (map->Height > 2048)) return false;
+	int count = map->Width * map->Height / 2;
+	bool changed = count != is->custom_renderer_world_topology_count;
+	if (changed) {
+		unsigned int * data = realloc (is->custom_renderer_world_topology, count * sizeof data[0]);
+		if (data == NULL) return false;
+		is->custom_renderer_world_topology = data;
+		is->custom_renderer_world_topology_count = count;
+		memset (data, 0xff, count * sizeof data[0]);
+	}
+	LARGE_INTEGER started, finished;
+	QueryPerformanceCounter (&started);
+	int modified = 0;
+	for (int y = 0; y < map->Height; y++) {
+		for (int x = y & 1; x < map->Width; x += 2) {
+			Tile * tile = tile_at (x, y);
+			if (tile == NULL || tile == p_null_tile) {
+				is->custom_renderer_world_topology_count = 0;
+				return false;
+			}
+			unsigned int value = (unsigned char)tile->vtable->m49_Get_Square_RealType (tile) |
+				((unsigned int)(unsigned char)tile->vtable->m50_Get_Square_BaseType (tile) << 8) |
+				((unsigned int)(unsigned char)tile->vtable->m37_Get_River_Code (tile) << 16) |
+				((unsigned int)(tile->Body.active_tile_effect != NULL) << 24);
+			int index = (y * map->Width + x) / 2;
+			if (is->custom_renderer_world_topology[index] != value) {
+				is->custom_renderer_world_topology[index] = value;
+				modified++;
+			}
+		}
+	}
+	if (changed || modified) is->custom_renderer_world_topology_revision++;
+	QueryPerformanceCounter (&finished);
+	char detail[256];
+	snprintf (detail, sizeof detail,
+		"[C3X renderer] qpc=%lld frame=%u stage=world-topology tiles=%d changed=%d revision=%lld bytes=%u capture_ms=%.3f\n",
+		finished.QuadPart, is->custom_renderer_requested_frames, count, modified,
+		is->custom_renderer_world_topology_revision, count * (unsigned int)sizeof(unsigned int),
+		1000.0 * (double)(finished.QuadPart - started.QuadPart) / (double)is->custom_renderer_qpc_frequency.QuadPart);
+	OutputDebugStringA (detail);
+	return true;
+}
+
 bool
 composite_custom_renderer_frame ()
 {
@@ -27175,6 +27237,15 @@ composite_custom_renderer_frame ()
 	frame.world_height_tiles = p_bic_data->Map.Height;
 	frame.world_wrap_x = (p_bic_data->Map.Flags & 1) != 0;
 	frame.world_wrap_y = (p_bic_data->Map.Flags & 2) != 0;
+	if (is->custom_renderer_capture_world_topology) {
+		if (! capture_custom_renderer_world_topology ()) {
+			log_custom_renderer_event ("world-topology-failed", C3X_RENDERER_RESULT_ERROR);
+			return false;
+		}
+		frame.world_topology_count = is->custom_renderer_world_topology_count;
+		frame.world_topology = is->custom_renderer_world_topology;
+		frame.world_topology_revision = is->custom_renderer_world_topology_revision;
+	}
 
 	LARGE_INTEGER capture_finished;
 	QueryPerformanceCounter (&capture_finished);

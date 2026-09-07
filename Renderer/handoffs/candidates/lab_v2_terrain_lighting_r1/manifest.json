@@ -1,0 +1,4723 @@
+{
+  "schema": "c3x.renderer_integration_preparation.v1",
+  "id": "lab_v2_terrain_lighting_r1",
+  "prepared_on": "2026-09-06",
+  "status": "candidate_preparation_not_promotion",
+  "approval": null,
+  "visual_acceptance": false,
+  "retained_candidate": "shadow-receiver-r1",
+  "historical_handoffs_unchanged": true,
+  "required_gates": [
+    "existing LQ0/LQ1/LQ2 requirements",
+    "D3D11 parity",
+    "explicit visual approval",
+    "deliberate Integration refresh",
+    "native integration and live strategic checkpoint"
+  ],
+  "required_user_action": [],
+  "new_patch_symbols": [],
+  "source_files": [
+    {
+      "path": "Renderer/handoffs/candidates/lab_v2_terrain_lighting_r1/.gitignore",
+      "sha256": "86d784842e7d6a9d78fde7aabdd5d3af90d05231edbd0bd94c77d5768e8cf99f"
+    },
+    {
+      "path": "Renderer/handoffs/candidates/lab_v2_terrain_lighting_r1/IMPLEMENTATION.md",
+      "sha256": "728449e6054758328309788bda31cbd0b6e4cb6aa9d649e268779beaf034bb2f"
+    },
+    {
+      "path": "Renderer/handoffs/candidates/lab_v2_terrain_lighting_r1/README.md",
+      "sha256": "89c5859ae22d05bcb0bae5b01085b015e1bca259ea328907f6712c0d7b4a0eec"
+    },
+    {
+      "path": "Renderer/handoffs/candidates/lab_v2_terrain_lighting_r1/package.py",
+      "sha256": "6570b02caa5b5ae0395e589fe9b094b4a893ba8f3c6b2922922101e399b951a6"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/app/bootstrap_tools.py",
+      "sha256": "f475b19b5dca1ee583196882768fccd1006fd9d1d707c4d19e5087462df84302"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/app/cache.py",
+      "sha256": "517b3048f6a9d09aa1da472cd4aa0a87b303dd5e03071ff4651647ff7d1f818c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/app/native_dispatch.py",
+      "sha256": "4db9cf4ed862908f1a39cd60917136c0776fe80dcd0211d07c3a66411f45d2c4"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/app/packet_store.py",
+      "sha256": "a6d6ce84176b4e32f0f25e50518446e74d51f53ddc0a0ea44d6ae470014e3807"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/app/parity.py",
+      "sha256": "494bd7247663d5741bc1186087f39e47af98efa190cdc6901e4c466c9447ce03"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/app/real_map.py",
+      "sha256": "e49e6cb20bf69bbef4fbe80be8a3c062fc5fe23af5cf42baba4b40779af4a6d3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/app/runner.py",
+      "sha256": "c1057724064287c8f53e045c7196fd1bef4cc0b552552f549fd9c3be9d8dcd55"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/app/surface_query.py",
+      "sha256": "dd7af1541a7c223098888b5c278c919ed85ff5626aaf184d46f95a7c6938f5e8"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/COAST_SOURCE_JOIN_PASS.md",
+      "sha256": "ed9e839e10c6fea9c1ef16725b795d0aa74e01306b898ee0efdb7d9b5dd4dc1e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/RELIEF_SIZE_PASS.md",
+      "sha256": "6b6d4dc294561ac5a8f67a8185e36e21450de43e83adf62891327318ed49e69f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/SHADOW_RECEIVER_DIAGNOSTICS.json",
+      "sha256": "6ec285ff51411f49c488a1da709070317302f707a2c7d8bfb49242a58e62f8b5"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/SHADOW_RECEIVER_PASS.md",
+      "sha256": "b021e407fefc3b310136a8055f92a7dcb14936c546ae60bb321b98834fa5fbda"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/SHADOW_RECEIVER_r1_EVIDENCE.json",
+      "sha256": "6b505198a38c3ea107e298c736ed94bd9286a30d9da9743c059f0e549e88e0ef"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/contracts/interfaces_v1.h",
+      "sha256": "b866ddde950140a9532ffa2689b46bd5818631d62f034b1fba306f6bd80d2569"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/contracts/packet_v1.h",
+      "sha256": "ead0658575ea216c35a245674dc2e203a8eec8ede500f6f3f6fdaacbebb5bd15"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/cities.csv",
+      "sha256": "679414d479708e789c3f83baa278cec1f296b24d5a0cde6a4b687e56aae216b5"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/farms.csv",
+      "sha256": "8d35f87f6e0a1ba54aea86c34b6546942a10a5d90da398c38811e97bc1f8dfe0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/infrastructure.csv",
+      "sha256": "b21db7db325d5c4d0fc9469415698daad7d20535cbfd812ea573b6f03f93150b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/mines.csv",
+      "sha256": "96e2064bb69eec631028694c5013883487a9f3d41b0cd0e0c8387159bcae2ab2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/objects.csv",
+      "sha256": "1e266333ad59d6b8cae1b552400a1293fc78adf845d1ab061d2dbfd82c39c398"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/railroads.csv",
+      "sha256": "744fb9d5153b1bcd12717a4c518105a3af4d4ffc2eab36b90507e436bc3915bf"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/resources.csv",
+      "sha256": "ada32e17884c8ab7e78123490536ef02bb9d51afe10e7ac26d0c63f18d51e773"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/roads.csv",
+      "sha256": "f242790b41f27245840e53d0a18b035cbbc879b33d86c802b76ae132b5068a35"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/terrain.csv",
+      "sha256": "9081b6e17604eea61667503645fcd65e9852cc813a61f6676c9b29d405ddf0e6"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/units.csv",
+      "sha256": "8bdd060d60f686c14b81de90cf92556a357b11c3be0dc272a3bcb6786b6a4293"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/cities.csv",
+      "sha256": "fbb9d5194f83efb40af31380ae02722455b26742c041dfd595ac0b61594aeed0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/farms.csv",
+      "sha256": "edbdd6fb65eb6d7add58e5cdfa12b2579a6fbd6a7a58b2e9a5d11131cfb9c58d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/infrastructure.csv",
+      "sha256": "706e8ffb96559bdd3fe8ec27594a7956c8679aeb6ef0357f62891b17faab4da1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/mines.csv",
+      "sha256": "d2a11a65cb918e4ad2637b3c22bb838447ad5001c2c3b7d8de4df197fdbeb148"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/objects.csv",
+      "sha256": "dfe702d845c8b2f43fd58fdfc40fcbec3200c7496671b17dc6a5e6245e0ac4db"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/railroads.csv",
+      "sha256": "8b56f18574b3f0d8e22dfa80128b1c9ef0c8011fc18f94d16687904c8fce42e2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/resources.csv",
+      "sha256": "de11d0e75f0c613191d81f84c3de2eff3f35698915691e300a8491b411bb41a5"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/roads.csv",
+      "sha256": "e01d76d0d89bf684fd2cbb72afad9e2823b819f7e193f4a746a6a6b03b1188d1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/terrain.csv",
+      "sha256": "8695c519f0700bd9a7cd60e617fb2b41f63931b45ce4c4aec5b30027c5dc206d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/units.csv",
+      "sha256": "8ddb483273c08bd7aa286d89ca4c4e57b0b0a32a1a6b0b5ff0f88412ae2e7a3d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/combined.hlsl",
+      "sha256": "d2d8d5bb25326080c430d909c38b54e192713e40fb9b1bf6e2cf14577ca87cad"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+      "sha256": "2e7053057b702b20c19ad2a41edcf71cdb9d3bab63418315f96180d00b3bba4c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/cities.csv",
+      "sha256": "30fdeb5f699cb26284f10c5eee77894e554c34fb008533a75caa56007525ad37"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/farms.csv",
+      "sha256": "9b142bdf1e31092023f5470ce90c338c674418827cc456840a39a58e56dc73de"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/infrastructure.csv",
+      "sha256": "2aeabd550334dbaa81f20fd0f77543319470ac1f032ef430d21709aa61cf0abc"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/mines.csv",
+      "sha256": "cf18312fa1009d8e3b2485bb4041c84ab559219234728012299e850f4f50e3c3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/objects.csv",
+      "sha256": "4aeaddeb220d0d014cbe4ef6105f4d579644b134c6a90f57431f5950f3db3da7"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/railroads.csv",
+      "sha256": "a37d4c849ceda321b31672d53d02becc146d0cf67c37f0b4929018b7d0f7a20d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/resources.csv",
+      "sha256": "6977705bcd0763e2ab237a1072fb9bc07bb2469e157ea6d3fc4ca94903b05497"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/roads.csv",
+      "sha256": "a201f198abee3776b4d0515b22d6d74da19d331e25e3774f4f537778f95bb440"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/terrain.csv",
+      "sha256": "3163aba788e62f7dfcf3fcc9bfa548f7fe980efe884223dd5ea769ecc4685e93"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/units.csv",
+      "sha256": "9d483bf7c28b74ced0c6c7e877db633c5ed68d6a383273055eb94d3162f1c16c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/cities.csv",
+      "sha256": "b11afeedf3d25fb78f06d512d5d75e58f7caf0adcb30d1dfc4c9f5a05cf74a4e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/farms.csv",
+      "sha256": "cf1a7e3999a7e2e3b0306fef8280947ffbdc8407fd64ab348b499b0172e09556"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/infrastructure.csv",
+      "sha256": "452f14b1d8c160e4a2fdbb22e96f680c7e3b1f9ee14606a82b46a2f84d7b3176"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/mines.csv",
+      "sha256": "6526d64568a114deff5414c5d5461d8a65e3bf3ad24d4a20cc96b2e2283cb86b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/objects.csv",
+      "sha256": "4c70e3a0a38ee59aa20f96cd0bcfda9d6eb7ac9e644ffbce8e36a30ba73a158d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/railroads.csv",
+      "sha256": "14023f5c4afe595a47a3001145f0396d272bfc599fa892485cf9cb68f3983cd8"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/resources.csv",
+      "sha256": "e79ce96489a23b812c31a3f1f9deb59807ec933b4fe3ef938cf50b1455243c3c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/roads.csv",
+      "sha256": "096e2352a20e6a11694950a87546d9a8cb82d768c925c0bd1626404b5f5e7f19"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/terrain.csv",
+      "sha256": "0bf3a68cf9b12f53ce43344e362c83123bfa74b5a5a3979fb49c25293b141841"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/units.csv",
+      "sha256": "10fff3987faa0585373736e761ddf636edaa4645dc1c07eda80f62a86bd29a0f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/cities.csv",
+      "sha256": "02b0a52835b3a775ffe8326e5d582072a5d0795251ef14d62ed5f2cf81e4c977"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/farms.csv",
+      "sha256": "8138316872126e6a584c4d06ab6816d81aa0da684b5f54d0a71715f26432c060"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/infrastructure.csv",
+      "sha256": "e43b0c50e6ae2f769a84e5ce81a6ed01632f9bf0fe8ee469b981815943056586"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/mines.csv",
+      "sha256": "937540b33ae67ea8622093a25bbf248467447cee1f8297520bae8dcc5c2c9aa8"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/objects.csv",
+      "sha256": "751e62fcd70107ba237f00c5b70a93168607cb65fff3e70ca3d7ae37b58060c4"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/railroads.csv",
+      "sha256": "bff3b6b86bf34afe0d3b69d1bae27dde7adf315a7949d4b83878f5b535281c3a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/resources.csv",
+      "sha256": "69523e7a40abf91b67956514d18c16a33f0592061794f1ae4cfd1911219e0033"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/roads.csv",
+      "sha256": "9d25959584b4221fc43ddbcf8772b96e1417368b58c04924e3800ed4db7dcef5"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/terrain.csv",
+      "sha256": "57c8014a461a4ff67dbc7660a181efcc854ae80f5928bcf269c04c3b27d9f786"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/units.csv",
+      "sha256": "97cf64a79b90a1ae8e4b4788144e18ca8125bd4df2e487f6a466a394453339d4"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/cities.csv",
+      "sha256": "7262d8da094a74ea92e95d82d456bcb05b4b3c1a6433869386b30b35bb07b4d3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/farms.csv",
+      "sha256": "a4d2ed3688b60ca320256ac90ad8ee1df814ae6434a5d81cfe82de9c63b7d0ee"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/infrastructure.csv",
+      "sha256": "3f8f928b368d3930f6ed3754e3073ca566089a837e627b99e0b2e8aed5e553ad"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/mines.csv",
+      "sha256": "42606007deb75b785211436058a2535daeec31011be9dfa2b5a2b8a2001bd7dd"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/objects.csv",
+      "sha256": "51272512cd2631a8f3b132a24a5e68049f37d31f10a16e585647fd35a456dfe1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/railroads.csv",
+      "sha256": "563df855a27e61fec41f6b708809a7a36c759454d6faeeb66b33d8834bfc2722"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/resources.csv",
+      "sha256": "53a5e002f7df88e85eaf1738dcc557bc8b7fee6fe4308d0e83cf785a924276eb"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/roads.csv",
+      "sha256": "42ccffa2d4c64b16beb6066777388ecedb1646d8f27e8614ea96660789f6e489"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/terrain.csv",
+      "sha256": "b1a8e71231297f1a112069c74d67f6f8c45e957c433cb366648c73ffa64b5002"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/units.csv",
+      "sha256": "deb625963facf00918516ad4600bc62ea388f4044155bf1eadac9c78f2d063d0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/cities.csv",
+      "sha256": "dcf36225a38f0a84b9652ad7a8778b030678ef114e6b7862a4118e75f887a239"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/farms.csv",
+      "sha256": "c473d4cfbd7740a9d31f61c33b3c1f7f68c9e83872ab6fefcd85c8ff4945e6c2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/infrastructure.csv",
+      "sha256": "fd0ca7929a99cbee0c473087b376f88f04aebbeed3b5f1d6a44d364af3c4d467"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/mines.csv",
+      "sha256": "0d4a69f53277510ae89a610afea988702fda92a67ade3a298d6346e881720826"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/objects.csv",
+      "sha256": "769974f8b390fd590e769d2b47f05efced3a0f387b2c0569fe4762f16ed1d4b0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/railroads.csv",
+      "sha256": "92bb823bac67c3035dd26cec7ddb1752cca96c7d7473e5f4fa7ee80eb0a1ecaa"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/resources.csv",
+      "sha256": "668ef93cd2d0109a371d009cb0f6289237276b4a7c2ad2544643148574dfa873"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/roads.csv",
+      "sha256": "269c86a1042bed81096da06da701b9eb64b0f17d3eb631bd26b0de7234d8dbdf"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/terrain.csv",
+      "sha256": "b1dad6f61cd277c01425b6f75bc9fb3c2d2ad243ef23a400437737e4f0124930"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/units.csv",
+      "sha256": "6473a28332ef63f27caa87051c8b00484cf89085eb3578a1f72592d018f5843c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/coastal/combined.hlsl",
+      "sha256": "4f6de585acf9670505bed4ec892e77b9a7ff27a992fa800e057dac0fc6bfb276"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/coastal/fixture.json",
+      "sha256": "cf02c15e2b85e3975684adb0b0f1476a4acd1b5a850028d9dc5c27864668a2e7"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/coastal/terrain.module.json",
+      "sha256": "952cd7812af6bc569da443b0d46defc599886338eb31106b62acaba1f63376c7"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/combinedvolcano/combined.hlsl",
+      "sha256": "87590349149150a99a8a7319073df4107d9ab1c46ada8f37c513df67b601770e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/combinedvolcano/fixture.json",
+      "sha256": "9095137af77380f5928914bb3681ea6cd3649f2d7707d5108e2530c1fe2feb58"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/combinedvolcano/terrain.module.json",
+      "sha256": "ae2b8d5642d60ddb13de8538a43ec1fe184f7e9d3f9a3fe428860dc9d8369cd9"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshcoast/combined.hlsl",
+      "sha256": "201a4de45927fc887cb711676abd82cf81708d9215b1be87ff68cb1acc1bf1c2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshcoast/fixture.json",
+      "sha256": "5ca008c3eb501e8e6a38230592456c70018c78e1a9444a7f8c3c6451b0ae0a7c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshcoast/terrain.module.json",
+      "sha256": "bb2f09530d4c88959463d131896d472e34236a4f5d6f31f0f85a1f14eb2f0c0e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshrelief/combined.hlsl",
+      "sha256": "97ff29d9726453b15c04be0602e26fcff2b634a86967a49b05fed4ab29bd7f58"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshrelief/fixture.json",
+      "sha256": "f1e789b5fd22d4e5facf22054879c5878dc677d83f381e7adfbb02ae83031a2a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshrelief/terrain.module.json",
+      "sha256": "65d88e0d2ed25b2d16b8ac02e6d4e763de8cfb15f076dfe164e0ffff2b51b301"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshshadow/combined.hlsl",
+      "sha256": "94fe17fa3be9dedea84db73cdf55be6a5064d83dabe2d1b6422bb832ecc74c2d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshshadow/fixture.json",
+      "sha256": "93d411afe383c0c68449528e7a678baec5550cf92c223de6f6db77548f11daf8"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshshadow/terrain.module.json",
+      "sha256": "aa854d3f3da05ee633b2649576f6a723d41dec37c45eb4e80db0a87568550650"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/inland/combined.hlsl",
+      "sha256": "d8dc2c91987dcb308d26873017ca2a3cb60c708282165c5dcaef2c8919320142"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/inland/fixture.json",
+      "sha256": "a72773f4af28f505973bee1130bfa158dd8d44edfd228f1e39cdc534a79931a4"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/inland/terrain.module.json",
+      "sha256": "b47f80aaf9a930642c9c1c3bda6ad2f4da359990ea25d42eccc0dbfea962ee66"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/longcoast/combined.hlsl",
+      "sha256": "d14edd104586b077fdf96ef11aed27bffa1692ebe7cd458e04f9b5a58a308966"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/longcoast/fixture.json",
+      "sha256": "185476d342c20aa0705c354b982948e94dfb21ceb28fb47be7e558e1fe3efc71"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/longcoast/terrain.module.json",
+      "sha256": "c39da2deb278e798a0c349af4caaca6b1c4d2c50d3177202954fea2fb9cb4198"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/wilderness/combined.hlsl",
+      "sha256": "fe7d8b6f322a2b5d5060d3c8d3c6c22ed4e76b903d64bcea05aec206c96f081a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/wilderness/fixture.json",
+      "sha256": "ad21b41010184314b7aa3f9830185fb8ec3ac36b2639e6e1a6c593b382dfca1c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/wilderness/terrain.module.json",
+      "sha256": "3ea4a3468182fbbe06f68609032dc56c8e6d6fc27aad27ccd43e1975bf97ef44"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/provenance.json",
+      "sha256": "5fdd3a7bd717f231e33abe51b42f60d7ed71a18488345f6e9703badb2fa8a063"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/cities.csv",
+      "sha256": "35893d0147fa6bce2d79cf1e7c16664a3e273b14d4dd5633644df7c2fe27161c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/farms.csv",
+      "sha256": "cd513f1568c60b8efc05cc365d1338fbaa89b2870bde9bff89f9bb900f1bbd13"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/infrastructure.csv",
+      "sha256": "ad2e72818383d89d89fef1bf34b9c333b19863309b737ac25c74fab27523e0e0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/mines.csv",
+      "sha256": "15ad83b7596f96cc97170c5db8616dec378ecf058f63a1c777e952c76af6d460"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/objects.csv",
+      "sha256": "6b45ecbb9751c242b3c1eb345e9ffff55c9644336a4aa9174d03663dca98224d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/railroads.csv",
+      "sha256": "a90778e76b85baa9bf7f89d342883e9822ce6b7ad8dbcab7dcc3a060982c4444"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/resources.csv",
+      "sha256": "f297f3e3b69cc9b95baacd9bc757729eb4e20e8be4a8e84849aeae86bfa4933b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/roads.csv",
+      "sha256": "71ae1477b81304a7861f31fc60f9563575722012172877971cc770a7d163b659"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/terrain.csv",
+      "sha256": "535e3483a1f785d6410b4ca63d8f9d4cc9624fa3e2dec128b78faa1d7005d450"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/units.csv",
+      "sha256": "78e981cc994f70f1001515483bd313bff68c3ae35ae977ad3bfba4e89ff0c855"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/adopt_city.py",
+      "sha256": "124347b8d6c73c2992f9e64405464bfc186bceeda1db7cad8894921ee4e774ae"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/check_surface_normals.py",
+      "sha256": "df8c05c1c44ba0b167ddad7841dbc35d3d0e809d20483e2c335cbfce7b68a2e2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/coastal_pass.py",
+      "sha256": "a58db5b42850dbdc11bb9ce57ee52f2c9349b9b4a75cc66d4cc01dc862a588b7"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/gameplay_terrain.py",
+      "sha256": "9ab26c99a5074e8e274683e102179cf907f210cad0bb3f35c8949024cc91d258"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/inspect_relief_size.py",
+      "sha256": "6691be09da5cc609679791ca298ed9712146b5f54e63058b396f2208cf7e84d3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/inspect_shadow_receiver.py",
+      "sha256": "b6008510a9773106b1c2a18dab766e375647ad4fbcc77822bd9d754ebc8462c2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/prepare_checkpoint.py",
+      "sha256": "176067c56957bf19d9671ff34cae0cf930b0f9fa5afadd6fa43cccae734981df"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/present_coastal_pass.py",
+      "sha256": "2a521c0b295b336b4aef2107c18f681c7abb6234cc68da7b4484f1b6df2539d9"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/present_gameplay_terrain.py",
+      "sha256": "4deea5ecf8d356de6db3f23f7575f3acdba203ce6380c3f9b6438f38ac806be0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/relief_size_pass.py",
+      "sha256": "bcce9e76397a8239068fc7b04677baa0967482dd25ec2a31b1a07a8c59d0a13b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/replay_shader.py",
+      "sha256": "d5a945f96cc341b892a62aca1dacf7259e3f0977ea4407dc909effcdfda84076"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/shadow_receiver_pass.py",
+      "sha256": "24336fcec38fde0acb2974cce69f3bd7f8ebf8cbcfd5a4c56b64b69380ecfa0d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/shadow_receiver_probe.cpp",
+      "sha256": "de357fefaf1577be018ccfcfb20c175b779e2c7e35c4195585a399e848a6dd58"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/verify_checkpoint.py",
+      "sha256": "cc28b8b1466cd4d11a32fb0bc9dea5678b1b2cda65b5b4577419514f4642d0ef"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/verify_coastal_pass.py",
+      "sha256": "0cdad3a3fe9ca79615fc46dbba48886d15942a304eafc86e8fcdaab9a4b74a4e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/verify_gameplay_terrain.py",
+      "sha256": "9defce82fe0852de8f74497e2d76f287e809624a10c24df9f433704aa055b6fc"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/qa/volcano_witness.py",
+      "sha256": "07f103967e01f4ed1eeb5ebb5cbd39c2d9116d8ff514f3e881000483da9fd06c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/common/frame_witness.hlsl",
+      "sha256": "c8cecec1ae31f8a7078fc43382355e267bd714c728c08316b7da453f17eabc26"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/common/frozen_l21.hlsl",
+      "sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/common/linear_post_witness.hlsl",
+      "sha256": "4ea064922043f7122f329014d30cfd800ec222cc10b4b3a4c96cd0c0424f49fd"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/common/linear_witness.hlsl",
+      "sha256": "0ba4204c049bd0d48b6775679d853c011fc5feadc31460c713134bc54026f732"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/common/postprocess_contract.hlsl",
+      "sha256": "0443cf6e9b0f42f446334296750e1f329af6891018fa2fb8ca457a520635ba9c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/hydrology/q3-source-bed-only_anchored.hlsl",
+      "sha256": "098829f5dcc21b53732630822d0b1b2bc44c7c7847d93b24cd64be7acc8a45b1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/hydrology/q3-source-island_anchored.hlsl",
+      "sha256": "23ff87a7d26efde391997cb07c4287e1728bfbfc67dcfe68ed9614388448a4cf"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/hydrology/q3-source-mixed_anchored.hlsl",
+      "sha256": "68319e6bdb176ccdf5ae046ce9325baab03563f521e2fbe5c765bd85f07b8b09"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/hydrology/q3-source-shadowed_anchored.hlsl",
+      "sha256": "973cf1aef538cc51c17b189836db2f6234c26bb978f36635cfc749ae1dc39e83"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/hydrology/scene_bed_only.hlsl",
+      "sha256": "0b01c35016e1ad76924e9c4b3c2b0808a7c4bf45f7ff0a564c07945a65da4b06"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/hydrology/scene_linear.hlsl",
+      "sha256": "a98ae01f56dbbc4e64c342118e7715110e06bcd6b777507317ef141f9b98a45d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/hydrology/scene_material_v1.hlsl",
+      "sha256": "e04850b79f3d8edee6cf412e3ba7fd11c1b07e96cc008d15f9a2942363348cee"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/hydrology/static.hlsl",
+      "sha256": "b222d7bdaf35cdb214e2711efc29911ebb8d5c99846344895897bb65496b5dd0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/hydrology/static_linear.hlsl",
+      "sha256": "ccb1acb2fba362a0e6f6b83a773a480519c2c4ac936da9fca30e92d745ee77cd"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/city.hlsl",
+      "sha256": "8f017bf41241335db9a153e76ef3639814930d99b083530a3b3a53200fdbf1c5"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/city_contact_off.hlsl",
+      "sha256": "317ab71488fc85365ea3125f688d15d1df0d2c0ae413ea09694f3d40a441e182"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/city_emissive_only.hlsl",
+      "sha256": "cb9e979af7405874a7c1719d663783e79a3810cb0b3cd4b42d6c360ce2562ee7"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/city_legacy.hlsl",
+      "sha256": "2c46fb00a5aa259faeaf3594beb2b994b942d1a2b9c859c66704f6be65d918a2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/city_linear.hlsl",
+      "sha256": "9b84143b66c612de4d9596d7d350fa64b5002a6fe0e71f4675a21816f053d0ae"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/city_shadows_off.hlsl",
+      "sha256": "34c32b9cb4b70694e9f416e93fc8921e329bf57da8da7571bee16944247ec131"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/frame_shadow_v1.hlsl",
+      "sha256": "9408a62b9ffe4210c13aaf3ca46b7c1d3ff4b634f0dce382649351c04915a424"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/generated/response_adapter.hlsl",
+      "sha256": "c168f9c544d2a64460fd994d05ad210d42d864fc5201a15d96a2e96feeeeebe2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/generated/scene_linear_v1.hlsl",
+      "sha256": "a304ea4440e11f8dd821c2bbe13c464bf3e0541d48e35a03a9f5005f96693046"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/linear_contact_off.hlsl",
+      "sha256": "b155ca74f8495cff9c93f6d6795a3020cd34f4d61ae59e7a329404ec678afafd"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/linear_shadows_off.hlsl",
+      "sha256": "b7c7f79248c1262084dafece063190ce0b6e51a7f62c75795c2f46c156599952"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/proxy.hlsl",
+      "sha256": "a91e5f77908de15a901c375e6a892cdd9ead12892afb3db2a5dad2d3c44e37eb"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/proxy_contact_off.hlsl",
+      "sha256": "8603627c09a94b806266614872da474777f526510de172389060faed3161b6c3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/proxy_emissive_only.hlsl",
+      "sha256": "dd575e3a175ac6b9a37e4b6934ee876d1bdeb9eae8d8acb7140cd957e0990ae7"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/proxy_legacy.hlsl",
+      "sha256": "e39b9923b279f1e2d5c5f3661c03979a4af25461663cfc6988564d3edd015e28"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/proxy_shadows_off.hlsl",
+      "sha256": "06afa456bc04dc779952dd657c056ab69206b992f56c249b1cdad9b7ed45ea51"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/q7_city_contact_off.hlsl",
+      "sha256": "b155ca74f8495cff9c93f6d6795a3020cd34f4d61ae59e7a329404ec678afafd"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/q7_city_emissive_only.hlsl",
+      "sha256": "b62801a8f5eafc60535b333fd764059120c9796f37a31ab251936cf744733e1a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/q7_city_shadows_off.hlsl",
+      "sha256": "b7c7f79248c1262084dafece063190ce0b6e51a7f62c75795c2f46c156599952"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/q7_contact_off.hlsl",
+      "sha256": "57f4f13fb2102456e1b253f84c20b5cfe8c92cb6b69dbe4526186f7e8df6f334"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/q7_emissive_only.hlsl",
+      "sha256": "9ecc293cd338738f7f28f0cdf88b138b20d370f11beb488f3868d38d0f19a5bc"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/q7_shadows_off.hlsl",
+      "sha256": "4ca55446a5bf0bb11d101067c47729a5d6e97d30a01fd58518a80bc1831f499f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/response_v1.hlsl",
+      "sha256": "be03629b1760618cc99d3d3eca0821aff102aa98f952e1c34751d8d1c5485407"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/scene_q2_v1.hlsl",
+      "sha256": "32ab8922fc30d8251a849d391c7772f9d932fc9d6bc1904c0af6c35ba7914c0a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/scene_shadow_v1.hlsl",
+      "sha256": "982b41cb5f98ae52c1c1533b874fd847b6fbe87f6c47520c782320648c0774c0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/scene_world_contact_off.hlsl",
+      "sha256": "5992764bf295dd4a67bd021db6a709b6fd21cc23c6c3ed090924e59d63ca1a04"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/scene_world_shadows_off.hlsl",
+      "sha256": "1c753a5499917139fe466b260bb4aa90657e60647386448703a51b1fbaa1ab74"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/scene_world_v1.hlsl",
+      "sha256": "b4bb64b9a4f371b19ae8ce9c9dda367eb42c9f17db2489feca48709616af2d41"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/lighting/shadow_visibility_v1.hlsl",
+      "sha256": "28e26fbac28780d60ae54d586420456104f0a3916a0546a25d7d9537e0d8b7c4"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/networks/coastal.hlsl",
+      "sha256": "95fc306ac592ba115e8a10f7d125a2d1ac4ae426f3a212a36e3bba0cb0e6bc51"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/networks/coastal_base.hlsl",
+      "sha256": "c316e2832a395727cc6fc5b835aaa610e4254010021c1e4f687140e001c0b295"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/networks/linear.hlsl",
+      "sha256": "c1530ea35a57c03ccf07065e02554c60413ea1dbc79e54a71e84d3fac11c1961"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/networks/routes.hlsl",
+      "sha256": "7d1a8585ce01c38e430bf81fd23614357a61b524717905eed488bbe8cb492518"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/objects/linear_v1.hlsl",
+      "sha256": "b75808734fd6d280218c09b37fe9f17f894a489e8881339f2f17976070cbf9c3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/objects/presentation.hlsl",
+      "sha256": "3b3074154b334fd79ec31ced147102638ac44b94840702f20e291d18c1f30924"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/objects/terrain_linear_v1.hlsl",
+      "sha256": "6215b5e53ac377e0aa0454257973f77d2e757dbd8f7a575ba6698cb0fde579aa"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/relief/coast_rocks.hlsl",
+      "sha256": "959d3de0a7efe2283a5dde0b3db1c9c9d741ef1d989d30c41469723d24e7d03f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/relief/combined_material.hlsl",
+      "sha256": "91e5ed43ae09b5e40e14c00d260db41761a741a5e6c71a7a098b9887c1daf5c2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/relief/relief_v1.hlsl",
+      "sha256": "21db662734019759af5f56af36e65b1e43925bb07d71a6dc00b6b0769c5d6841"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/sampling/bounded.hlsl",
+      "sha256": "3cbee9515d592f8012c7f35a2fab5596a447044011714a4e717ea5384d67c862"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/sampling/ground_lod.hlsl",
+      "sha256": "a63ed49970f6b7cd587cf6f43f98e1f7f531f9e56cbc40811ffad9fd76d998ee"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/sampling/hardware_lod.hlsl",
+      "sha256": "d128ce65bb37028087841c8fb96f3e04b6d2a4f6c7aa48c5eaebf25e5a2c141a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/sampling/legacy_post.hlsl",
+      "sha256": "e0d2296501f8a9ba68dcba2fe0e660ebfef37ca5283d655620968e1b9249ed93"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/sampling/linear_box.hlsl",
+      "sha256": "2665da15737e93ba3374a48dc7341653352bbadacf1ea7d2fd275e510312196e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/sampling/linear_reconstruct.hlsl",
+      "sha256": "dac3fa455dce8ab2ee20dd813f8e47ecb6b23baf54dedda596b0c3340e75ccba"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/sampling/mitchell.hlsl",
+      "sha256": "0e0099960e1fd115cdba45c253adb16d15ecafc00cb446e87481ebe6694cf5e3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/sampling/reconstruction_v1.hlsl",
+      "sha256": "00eb9245631bc22c04072622e577192cc0cb01ae83863cedaf1e86a5a75d8460"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/sampling/sharpen.hlsl",
+      "sha256": "52336b5743a6f30c76bff58f5d84e32202a47a3cfb84b406c62ab247d5aed48c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/sampling/witness.hlsl",
+      "sha256": "9e4028c4ece6172b7469f0a6dc63c2864071c514661977cb6574be852f5bd20c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/albedo.hlsl",
+      "sha256": "24b8aeb81123f01f4fad6ae76a36e7ea9f317a71196ad148cd4606b57a907d03"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/base.hlsl",
+      "sha256": "28e408ac803d75676c634b6307cc433edfc6e18a9094362f04d2d0a1518456a2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/baseline.hlsl",
+      "sha256": "d0f52a7212fe2fabec5cad1726b21312d964fdb4aa74fdf3c0f7eb026381ff18"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/detail.hlsl",
+      "sha256": "e80fcd4523263d0209d8b90d30dcebe2f3cac55d84259831753fa61262daeb0c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/height.hlsl",
+      "sha256": "f7dce305640c584c90c1883456b2181f3d4f4ce46169cab6811fa5d1b4fd0225"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/material_response_v1.hlsl",
+      "sha256": "ea2448a7364730414ffc3fd7e900426deb1f0bac147e13ce4e5879dff64a245b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/normal.hlsl",
+      "sha256": "a5cad249a1c7cc41036fb0e4d6be9574138b3c2305002c52a577735190605d7f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/off.hlsl",
+      "sha256": "d0f52a7212fe2fabec5cad1726b21312d964fdb4aa74fdf3c0f7eb026381ff18"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/roughness.hlsl",
+      "sha256": "fb56ac685d4b22b4cbbf951aa2e6271e77e4e2570f647956f66b449d3a8d3c70"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/scene-linear-off.hlsl",
+      "sha256": "3f8f17de90415fd0b7c2ab1bc167b0d45e4a5d83584bec465e3b169e060b5a05"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/scene-linear-on.hlsl",
+      "sha256": "a3ef03fd29e7850cfc26362265f8d5e4b3362e90b94fb3346c5db957f6ba1310"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/scene_material_v1.hlsl",
+      "sha256": "1a441cf913acdffb108f9f7565489fcf23904da34ab925ba12f9fdb8ee600d74"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/scene_weights_debug.hlsl",
+      "sha256": "a5a9565fca9b5976c1828e5bb8af52c06431395e40f8bd939e654110d3cb6906"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/surface_kind_debug.hlsl",
+      "sha256": "fedd86ef22b4e5d7a00bc6d04f884cdb6c921b4a85a50480b6a59a05b1d8af13"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shaders/terrain/weights.hlsl",
+      "sha256": "18dad03dc0bd6f37a1eebc4bc108094e9e835c78a778dd2135b389dd7c748b30"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/color_response.h",
+      "sha256": "dbf9b59df46edb6f6440874f5c8fdd0d7f7d928a1aa8705cf1a60335d97ace51"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/compose.cpp",
+      "sha256": "41b91817ef8af6cd3b3d4db52031fa3204fdf25daf44e7eb29c0edc127694e7f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/content_hash.h",
+      "sha256": "f5d73ad4665a462f7c75c8a0ac54e70d54cc4335b914a2e80eeac2d3904240f1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/environment_runtime.cpp",
+      "sha256": "9b27492abebb850420ff2d1fb6d5d67cc8f296c135e0047a98d27087b32cd427"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/environment_runtime.h",
+      "sha256": "4da550dd9e57289ddf5f188be124f80f9b93f5c451517d5bafdfa085f48713c2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/frozen_scene.cpp",
+      "sha256": "060a6e3a1afb06f51ff819d64b1ced9ee5fa2f12bc7f2878e035b2fee2e44eb3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/recording_adapter.h",
+      "sha256": "c7b391f2be2174db39c8eff01e33e1388ec3a6c4c6f668590905111ce460c9f0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/scene_exchange.py",
+      "sha256": "9f3cd7263fbce94f4d1fafa9f6e73f6aa3edb60ab3243ff8a6870a50cd3d6d90"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/scene_hooks.h",
+      "sha256": "b16c35044aa93dc827c94320f6f520778d92543f734db759c40dcb225627113f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/source_metadata.h",
+      "sha256": "f4dd8b2e572f376c34205b07d6476bee79cff077170ee5ce5c8a8d8c21072723"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/shared/validate_packet.cpp",
+      "sha256": "1711642d27db4fe656b49b048c40493713908d920cf85ad4b7a49a332b3a24f2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/hydrology/anchor_source_materials.py",
+      "sha256": "e20a3e06a032634c295f64f8be449f06284012c30973655cf7686fb10a2676d2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/hydrology/export.cpp",
+      "sha256": "89cb01c540923699fcaec3e90a4ec5bb977e1a9f37bb5dc9ff28442841a2dab8"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/hydrology/field.h",
+      "sha256": "19a1b02a0fa3960fad4d12b919f750d53a652826726c4740c7e7db54d8ef7f26"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/hydrology/inspect_source.cpp",
+      "sha256": "59979af405da143e85e22632bc8531925bdad35767d53d17cd3de151b0a5a600"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/hydrology/packet.cpp",
+      "sha256": "d9d4ab85a426e21d6eb52e9974b6e534b9b51bb1a62bff6ae0cf3c7f0cdac49d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/hydrology/publish_corridors.py",
+      "sha256": "e1c4ae8fc11260285a356c43c88ece549d571fd448f6834c16a279abdda00dd7"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/hydrology/scene_adapter.h",
+      "sha256": "5898fc95a1c0a1a8941cce116376b7b088050ecf446c0bd8c833d8c144a5d40f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/hydrology/terrain_consumer.h",
+      "sha256": "cfd652d4d109a6abdb307b09adfb4f79abf88efeec8d12251d3f1655b73005ef"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/alpha_coverage_v1.h",
+      "sha256": "1956724fbb775e072b6cfe7cc3f155c608db4c57aeb35562390cf0a14cb7befe"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/city.cpp",
+      "sha256": "e4ee69cd484b8705f8513d88b6807b6e8b85191a5a4841796001ee16fd4d0221"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/city_linear.cpp",
+      "sha256": "c91e58407e58f027f290d1c3423e0db3ab6213d70b31de99b2dd05f0f58cc0ce"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/city_native.cpp",
+      "sha256": "56bba7bf3ea24288a9f36d8ab2caf38afaeb17b9d423ee1344ac7b2ccee392e2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/city_native_reverse.cpp",
+      "sha256": "fc767028bd5d2e59c8b236bcfbbfe202afa8bee507d2a04921c2fe2b6b4735ac"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/city_reverse.cpp",
+      "sha256": "2803620ba6bf5c9ea4e5777a4080f0237c131378608451c49dcdb797934fc216"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/packet_geometry.py",
+      "sha256": "ce93f2b86d76674a1a36ad8462d8ca9dc643a89b32db79d961527a133973a0a1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/prepare_categories.py",
+      "sha256": "e1db07adf6d66f75de7084c39366faa15c4c5d30ec99d1500fb7d54cbba1c618"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/prepare_city.py",
+      "sha256": "303caddd66a782573a09773b0d04cc0df22e6d30a537ec67ecc939d6a432c063"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/prepare_linear_scene.py",
+      "sha256": "f9bebb181f44c897c626d199d57db5409da4c3ca6208a370b9f56f919266dc6a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/prepare_q7_city.py",
+      "sha256": "788ef71a3c6c6a100d7334f6ba5667cf6ea3f32189b59a47f54c7b3de1d1ac28"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/prepare_response.py",
+      "sha256": "bf99c9891ec39e6e0d9620fb91a96b033500d8f3839135d4f66be3c190a083f6"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/proxy.cpp",
+      "sha256": "917f4b98cea5bb35fd189037c526a1d3cfca1ac514c3e6a03cf331be662fc329"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/q7_linear_control.cpp",
+      "sha256": "7a7a4ceee61fde81f06da13c4a91cff09060e52cff4adc7bf7c52fe3ae2fd1a3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp",
+      "sha256": "82bc3d0b4d3d7884674fbfdc55b0cbb82dbbdd56d2bf388bbfd84b06da032a3d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/lighting/shadow_field_v1.h",
+      "sha256": "93f77ce986e9728a29c3e8cdf09440abc3571c9b6c2da5eda3ba4a67be4127ca"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/bridges.py",
+      "sha256": "a197eeed3bf4c6dfc7156abb1973eb34940832669e07bca29b261fb51cb2451f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/clearance.py",
+      "sha256": "2d9e98bb0e108300b05886dff1e21be5119126c25dfd90c9a1b04834a77f7bc2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/clearance_witness.py",
+      "sha256": "213d86f3a14bcbf26dae58cd09884d1412dede4364e4ccc67d176d117c843c4e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/coastal.cpp",
+      "sha256": "3552425abf8f4a6b3e152d2c31f16e8a5528d52ed8256249da561f1145daa941"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/coastal.py",
+      "sha256": "c4a52575007a664ab610bc6cbdd8cbcf5afd2973304c40070c02678cb3d1dc2a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/exchange.py",
+      "sha256": "461486d3e730f31f6f9f3eb0f46cb28bbb815cfdf7cb402264b4b3a6622cf34d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/fixtures.py",
+      "sha256": "f1543c25c435a51b226a95481272201143afbd677abfe81d6b3824e72c9a91d1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/hydrology_adapter.cpp",
+      "sha256": "da3abb6a28c0f495730a4b25e4098d1b953a2261d82e6510695fe70b2a9bcc48"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/linear.cpp",
+      "sha256": "671f4f9d5bf3aa71e29399dc27238e3b2edad525c37c9e67f69f42f4a57cfa27"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/metrics.py",
+      "sha256": "8812b69f4c5f1e2110db5f9d421997469737ee269a18742a201b0f7447ca34cc"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/module.cpp",
+      "sha256": "03d984bc6eb259c9bc78140fe19426b7ddfea6629f587a28ccecaf4b752cda6f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/network.py",
+      "sha256": "bd7a842afe149df48ed804db11108fc775fbfab33fb8cc7742514a3f5c23b636"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/review.py",
+      "sha256": "87fdeef0ebc519eb3035b4f67a207e6669c917db9c24004c408df28ab633c7de"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/source_routes.py",
+      "sha256": "9b170ced2003c538ec8cb870f62150c87c7175b9c87a17e03d23e27ab584abbe"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/networks/states.py",
+      "sha256": "99eb29ad20e2f1e317e6d6ef241b460509fbf4158314fa6e2440148167752fea"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/objects/checks.py",
+      "sha256": "cc2ce36f60dd53743ddd794c2b05e9f56353c37074a97bc9f3869de20bb96a53"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/objects/clearance_adapter.py",
+      "sha256": "3473e99bd82ba1b7d690f68cffa0141f3775d90fff5d7fd9fc6808e7adf97b94"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/objects/collect_metrics.py",
+      "sha256": "afa2073b207bc2b968129b3f54beb6c91971a0cb44a8e5e06614dfaa07a61035"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/objects/linear_provider.cpp",
+      "sha256": "594fcadc2f2b072261318f8df832e9625e84534692cdb9e28c1f3eca97dc3731"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/objects/prepare_linear.py",
+      "sha256": "98a573975bb99893fe7f804535845b5a85263e80c1e1cec83b36751e7f78963c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/objects/prepare_real.py",
+      "sha256": "f59215c1aae4f1f31edfc8e9a928c5621bccc7cf236dbc9a29e133b042709030"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/objects/presentation.py",
+      "sha256": "17912a20c6093d0903a4df3772d53a78f6dcc75c56869d41e2ede6fc8d7b4164"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/objects/provider.cpp",
+      "sha256": "64d1d8dacb6d1dc076b54aa4817313587d6401afd6699c841efff52adb662249"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/objects/publish_evidence.py",
+      "sha256": "7b19a163327a3305d463c9cb4a854d1c0dd9554cb74cbd66e1ab310de11f92c2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/objects/review.py",
+      "sha256": "df8976eb14dc1587479b9e85d91c575602e2116d7d0950f58665dc5495a02782"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/build_fixture.py",
+      "sha256": "39d969f22db8053b5f887aaac0138332d07d56ca59b49f1c86a984d54465895a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/clearance.py",
+      "sha256": "261f1140b73dee4ef0edd92467ecf38572ae031836559c96845d03a198488b8f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/coast_rocks.h",
+      "sha256": "7cf97258ced9155bea7399650cac0a39f69ef2c96fc453e70f438727ff774757"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/continuous_normal.h",
+      "sha256": "d3050ab3448d0a46162ca95edb2a0801e19e1414b674b5a756931a5e87464c75"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/evidence.py",
+      "sha256": "564dc8504def45a861e63f3dd5725ba748744957fc23c4b36bbe27399ba291ca"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/import_selected_relief.py",
+      "sha256": "6ec393c511988d4c33fca904e490c158749dc7785833c645ebd6480cc84debd3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/large_map.py",
+      "sha256": "e15a1e600ca105fef0a832244bb898edf7fb0768708656ae7025176fd7ddd71b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/packet.cpp",
+      "sha256": "198b9dcd496c7e56b3ba1290171e8487c7b3ef56ec7bedd602b1d80567139030"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/placement_adapter.h",
+      "sha256": "4ebdcc6e0d0d35433a3725d634bf6f6a1398b74c7d76aee20f7678e51617abf9"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/prepare_coast_rocks.py",
+      "sha256": "d2182c91146099a97f0e4c740235b7ed7b38461068ca43f2abc40e15992330aa"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/prepare_placement.py",
+      "sha256": "e5368961f65e45b46ef7d10cd2a908bf1eaba587f2e360194402146aeccb038f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/run_checks.py",
+      "sha256": "b5c92f53b4d5d630a617051e9fc5c1d48d782678163a7ef4b5bb72beba534bd1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/sample_hydrology.cpp",
+      "sha256": "e74b60f67a0751981401cd80f5738fdb4e5fec4c97d243a16f918f39cae3966f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/relief/selected_coast_source.py",
+      "sha256": "36cc7d5f447cf140156840f769c5d611511c59a69dbb23447a9e16e36851b178"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/audit_packet.py",
+      "sha256": "48b7c61f7a122786ad695cf44738390380296c9d524abc7414590930fa2bd3db"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/audit_q7_world.py",
+      "sha256": "0707641d514b16a0a52979fa4ccb4eea6db51751d7a92f99a086356cb82402f3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/audit_source_meshes.py",
+      "sha256": "46a9a9f8635b2c46fca50677121205c294e489093e4d8f644425e7d85ebf18e2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/crop_packet.cpp",
+      "sha256": "571d0b908f1225857ca84b5534dde72ce76289c89a514d9438d5d2680f99b9ad"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/inspect_study.py",
+      "sha256": "c5d36a954f15780f505cf6a679cf9c07f0817e14a520a467be66a561931ae2f1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/pan_metrics.py",
+      "sha256": "d43cbe407d3204dfe6b8d45e77049a8aaf523b643b92a9723e4515cf8d7376be"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/prepare_contexts.py",
+      "sha256": "cf272edaa7eacd638af4495846e63738fb4be21a5a441014be9838d2cae18adf"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/quality.py",
+      "sha256": "50d2e395904f02843195a89aa34a2ba413d6a5696c6229425720997d0308d37f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/render_study.py",
+      "sha256": "9e7399e2d0db056d4779c365000f466bf866d93472b4b4ee0c0de60b530b38b8"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/review_media.py",
+      "sha256": "79292e12154278ed31e13d7f5c40498f23890f56f639f142ab6346ae713983e5"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/sampling/witness.cpp",
+      "sha256": "994082d43e63bf23ce416ad79d36b64457daff8e9fde671b140be4ca391254a1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/terrain/builder.cpp",
+      "sha256": "145f6e92f6d85164c7168be6edff38a0d9f0adf6c2f597dd63a1b2750ce62879"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/terrain/checkpoint.py",
+      "sha256": "477e2be1e2003e1c19ad36506a9853a107e4551c1d736f187639b963b23c7502"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/terrain/composed_surface_audit.py",
+      "sha256": "7b82f0f67c28bb04097abe6aad3cad5d5e356983e7b5e0c45986e8615d082016"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/terrain/evidence.py",
+      "sha256": "d948b792101d88d9832e04da795b615bf505564938f8056ceee34376cbf49d6d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/terrain/fixture_matrix.py",
+      "sha256": "d2122c19b04437d7186261f3c9e4c0a2d319d4d43ab8f92349bc48d897fc076d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/terrain/hydrology_consumer.h",
+      "sha256": "a41be53224a163287944d9060bf54ed8001f6a96e07823f882b6984b2aea8aa1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/terrain/material_audit.py",
+      "sha256": "b2aa2cfba4e7450f92e6ad05096962c0b440de03a38a7606baa19a5e139eabf1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/terrain/scene_adapter.h",
+      "sha256": "3fcc1b4885eda29bab6e883dfc7f810a40dd8755f7dfb2ddcdcd1433e3dca679"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/systems/terrain/surface.h",
+      "sha256": "82530048c79209345d4b49267db1cf16a3781231bc26344dc8d50284ffbabfe1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/hydrology/test_field.cpp",
+      "sha256": "fa9b8ebea3a6fb01e2a3eff3bc054fb7979c522befd22b57f9ae11f92ab29e24"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/hydrology/test_field.py",
+      "sha256": "69919303d4d724799dc90b930857e304f789f315c425374bdf283c2479ffc089"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/hydrology/test_varied_coast.cpp",
+      "sha256": "622ca0d0e156e9f734c70a46870541679f079c8c3e8bafd61d9e70d97395ea97"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/hydrology/test_varied_coast.py",
+      "sha256": "b02d98419dfe7a26d11844a3b93430e478a856032534ec7eb4644af292e88c7d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/lighting/make_review.py",
+      "sha256": "bfe6a0bfb238b1a40b5b953d63d5a1f84a1993eaac9b32698161b2f0f5f36209"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/lighting/run_matrix.py",
+      "sha256": "c064a0d8b99d558138d7b7e80e6ca83393c9459df2ebdb32c7b15242bef8d952"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/lighting/run_source_matrix.py",
+      "sha256": "0aa5295180bfbd63f55d754d4448b110655c75a0dbf96820bead0710b7c1b494"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/lighting/shadow_contract.cpp",
+      "sha256": "b7ad988d76dfc9a4e3b603f4be68fbaedc2a01c0959215c22ed597766e204e5e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/lighting/test_lighting.py",
+      "sha256": "f81cb2e36883384fdba8148707acc817788c661ce10fd2b8331f71782145413a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/lighting/verify_evidence.py",
+      "sha256": "d1915968129233dab010c7c4dd47fdcbeb6388ff38b6540a4b373cd5287f067c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/networks/test_clearance.py",
+      "sha256": "51f95ff4722d28db0d0644860c92ad60fb48cc1a5847c5daa2a21d6b4d40338f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/networks/test_networks.py",
+      "sha256": "59c6824d5669ec87101efeb26141e91ad402c3693f9cd427d7b05d38d4d7812a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/objects/test_presentation.py",
+      "sha256": "199c0e4929d52a8690765b3fb0f3b1113a720524a724415f2277e78e465a81d2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/diagnostic.hlsl",
+      "sha256": "300c74326586667ca41811ed25d56e818cc2371360a9580e8a1e7cb393483ecf"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/frame_postprocessor.cpp",
+      "sha256": "cf68f8a577b690ca82d654969375ca97dde73ab0b5ddbf45422cabe75f0f0979"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/linear_boundary_witness.py",
+      "sha256": "c2fc98c1c83d45115bf1699814130f41c407479c5672772639e194fc68313b9f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/linear_owner_a/builder.cpp",
+      "sha256": "b19aa3d040eae293f4a887ede4320b72b65582323dc7c59992a10a0b99e3d1e4"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/linear_owner_a/shader.hlsl",
+      "sha256": "b552fd87894a13dd5a7b21eea00a11072e451deeb08364559e0e5b493d7d2f39"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/linear_owner_b/builder.cpp",
+      "sha256": "5d96e8d864133009a1e83d01ce4e20a0c55284b99097f39b1a1f315600794424"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/linear_owner_b/shader.hlsl",
+      "sha256": "b29de56198d717471d4a68390cec80d39cbd0ca01e815f9ade59c282f58ae40c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/linear_witness.cpp",
+      "sha256": "466819fbf664bb0342f066417d0ab3f4eb2ff0def6d2f2f33de840cf24859db1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/owner_a/builder.cpp",
+      "sha256": "d75fabf313e59c34e933d3c16bb97ac2a26c03fb51a475c21f508d9093be8918"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/owner_b/builder.cpp",
+      "sha256": "be665d6cef159613c62a0db9b07e66a1eabcdeea77c8bb45615f443a5efce3b3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/placement_witness.h",
+      "sha256": "41de96f3bb0a51f8cfb59c7f840233bd26f1c782e00117a9d5d20d71e0975e7b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/test_exchange.py",
+      "sha256": "7a41cd23bdf4ccf52bc2635763ca17b7e30f2f0175ae82cab1710e4697161808"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/platform/test_platform.py",
+      "sha256": "1457f2ffc4f6537cc6d5267e5c1f1f168205b9d5255e9bca8c02c9db2e5d40e6"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/relief/q3_crop_witness.cpp",
+      "sha256": "23e1499107ce431dcf3c90df6281ee414c05a4c588714fb9501b178f8b9c3f4d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/relief/test_clearance.py",
+      "sha256": "12962f06f66f7e4f31edeecdfc2e9e65d1b0bd3c0f339672ea1a08d5067e88a4"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/relief/test_combined_desert.py",
+      "sha256": "551fadd8f91ccc3fc19730eaf9689f50749515e18f39f35608ed42183ef94c9a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/relief/test_continuous_normal.py",
+      "sha256": "219784fcc635c1422ff22c191d434e42d9da46c8134ab13d833a661e93ac8888"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/relief/test_placement_adapter.py",
+      "sha256": "388f4ddb2f956647abc1b8432269ff25ccbd11ceb314184580765221112296ea"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/relief/test_relief.py",
+      "sha256": "085db0de681a3e9261f091f7fffaeb3cbb07187be29d5870dd8d753722d0743d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/relief/test_source_mapping.py",
+      "sha256": "0e570631964ae0208bb39e0d3c41c1853b56ba662f1f9e5332862d7d1abf55b8"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/sampling/test_quality.py",
+      "sha256": "ab52f12b32af075d4fb294e2aa51f36483dc36150799e5ef5ba2f4712f14d5e1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/sampling/verify_evidence.py",
+      "sha256": "042b0b4e03555463c6e69aa74d39aef297cdfa8d9311473bed62b2bf691f06ab"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/sampling/verify_linear_capture.py",
+      "sha256": "b3a9e89a13187b9c013518d9d147b27e89afa9532dc602c3577ff0a23eddcb54"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/sampling/verify_q7_sidecars.py",
+      "sha256": "e8fed2c1acde0cd650f4ef7d3afce7078f4cc80d6afb8a4e668ccb97c0fe1c45"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/sampling/verify_source_metadata.py",
+      "sha256": "8951f0e108fe0605c5fa815306b8eccd7d65158d1d6b9253479d4f2b8b0c1d7a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/terrain/acceptance_gate.py",
+      "sha256": "eaedbe1072868ae5e0f37e4748d38b03bdc2f2d28ad51120ab5aa429f11f647b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/terrain/recapture_test.cpp",
+      "sha256": "5950961df85cf04c3db0208c29fd93154c0b6d9de853ca6fd453147bfe87c8b6"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/terrain/surface_test.cpp",
+      "sha256": "d518c59039cdba0c724796521bb21f889577dc19f49f091ad4217205b6c5c6dc"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/terrain/test_terrain.py",
+      "sha256": "0058f0c87cad16924fb377d640f7442839923ba5f3e243fb849e7e7737f9bc82"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/tests/terrain/verify_evidence.py",
+      "sha256": "37121c092706ff89133430e920ff993fd418d2c79a0ca9b7cfd9e64dcd33e76a"
+    }
+  ],
+  "source_archive": {
+    "path": "Renderer/handoffs/candidates/lab_v2_terrain_lighting_r1/source_snapshot.tar.gz",
+    "sha256": "580bd912b5b90bfbe04284075d333c83951fc41c766c1b51d0032d3ecf9edf97",
+    "contains": "implementation and fixture text only; no pack art or native source"
+  },
+  "references": [
+    {
+      "region": "coastal",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/coastal/fixture.json",
+      "synthetic": false,
+      "tile_count": 100,
+      "viewport": [
+        1360,
+        800
+      ],
+      "projection": {
+        "half_width": 64,
+        "origin": [
+          104,
+          380
+        ]
+      },
+      "terrain": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/coastal/terrain.csv",
+      "terrain_sha256": "3163aba788e62f7dfcf3fcc9bfa548f7fe980efe884223dd5ea769ecc4685e93",
+      "source_region": {
+        "camera": {
+          "hours": [
+            12,
+            18,
+            0,
+            6
+          ],
+          "viewport": [
+            1360,
+            800
+          ],
+          "zooms": [
+            1,
+            2
+          ]
+        },
+        "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+        "coverage": {
+          "land_water_edges": 25,
+          "river_tiles": 7,
+          "terrain": {
+            "coast": 19,
+            "desert": 20,
+            "forest": 3,
+            "grassland": 21,
+            "hills": 9,
+            "jungle": 7,
+            "marsh": 1,
+            "mountain": 1,
+            "ocean": 2,
+            "plains": 6,
+            "sea": 11
+          },
+          "terrain_edges": 90
+        },
+        "extent": [
+          10,
+          10
+        ],
+        "halo": 6,
+        "id": "beauty-coastal-100-v1",
+        "origin": [
+          76,
+          38
+        ],
+        "request_sha256": "bb15ce877dd85386e4104d27d0663f96bd0e12c4b7d5bb7607f45abc60bff6a6",
+        "role": "user_evaluation",
+        "terrain_sha256": "3163aba788e62f7dfcf3fcc9bfa548f7fe980efe884223dd5ea769ecc4685e93",
+        "wrap": {
+          "x": true,
+          "y": false
+        }
+      },
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/coastal/report.json",
+      "report_sha256": "e91ac2bf368fc9bb54f04ed5ab79af3ca45a96a79c7df8d1ee015de7709fabc6",
+      "render_identity": "e751a544228eb1506be75749d971bf326013793a0ea362f056175150b1305191",
+      "module": {
+        "coastal_rocks": {
+          "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/coastal_rocks.bin",
+          "placement_version": 4,
+          "sha256": "9c9c14c1b7203ef3d2ce3789928a5a5cfe1bffdb3a3fa46c09cc72effe0fa49f"
+        },
+        "color_branch": "q6_scene_linear_premultiplied_v1",
+        "complete_materials": 1,
+        "continuous_desert": 3,
+        "continuous_normals": 1,
+        "contract": 1,
+        "direct_hill_source": 1,
+        "fit_viewport": true,
+        "hill_source": {
+          "height_multiplier": 0.7142857142857143,
+          "path": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds",
+          "sha256": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976"
+        },
+        "hydrology_data": 1,
+        "hydrology_hooks": {
+          "coast_segment": "q3_scene::coast_segment",
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q3_scene::initialize_articulated",
+          "shore_sample": "q3_scene::shore_sample",
+          "signed_shore_distance": "q3_scene::signed_shore_distance"
+        },
+        "id": "shadow-receiver-r1-coastal",
+        "linear_adapter": 1,
+        "omit_replaced_shadow_surface": 1,
+        "owner": "Q8-beauty",
+        "packet_postprocessor": {
+          "contract": 1,
+          "owner": "Q6-lighting",
+          "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp"
+        },
+        "projection": {
+          "half_width": 64,
+          "origin": [
+            104,
+            380
+          ]
+        },
+        "provider": "frozen_l21",
+        "relief_material_data": 1,
+        "relief_scale": 1.3,
+        "scene": "complete",
+        "schema": "c3x.lab_v2.module.v1",
+        "shader": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/coastal/combined.hlsl",
+        "suppress_territory": true,
+        "terrain_hooks": {
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q2_scene::initialize",
+          "material_uv": "q2_scene::material_uv",
+          "material_weights": "q2_scene::material_weights"
+        },
+        "volcano_scale": 1.6,
+        "world_positions": 1
+      },
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/coastal/h12-z1-pan00.bmp",
+          "sha256": "78ad6a45215eb6547f9b328b96dc6aa0dd4bd6ee849f566c5bcf22be16b81aea"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/coastal/h12-z2-pan00.bmp",
+          "sha256": "29fd990471ad4a6d6f54fd07c9bbae2852292a6ccfe0fad40ae9cdbc26e94555"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/coastal/h00-z1-pan00.bmp",
+          "sha256": "9c8685618c2b96ccba721725a23446b226cf0b9089f1e6dbc34c7b14f2477cf8"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/coastal/h00-z2-pan00.bmp",
+          "sha256": "06a8ac681addced1547d8fe96f37533a3b28a8422b42b7fb0bb4eb26e34c7219"
+        }
+      ]
+    },
+    {
+      "region": "inland",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/inland/fixture.json",
+      "synthetic": false,
+      "tile_count": 100,
+      "viewport": [
+        1360,
+        800
+      ],
+      "projection": {
+        "half_width": 64,
+        "origin": [
+          104,
+          380
+        ]
+      },
+      "terrain": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/terrain.csv",
+      "terrain_sha256": "0bf3a68cf9b12f53ce43344e362c83123bfa74b5a5a3979fb49c25293b141841",
+      "source_region": {
+        "camera": {
+          "hours": [
+            12,
+            18,
+            0,
+            6
+          ],
+          "viewport": [
+            1360,
+            800
+          ],
+          "zooms": [
+            1,
+            2
+          ]
+        },
+        "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+        "coverage": {
+          "land_water_edges": 7,
+          "river_tiles": 41,
+          "terrain": {
+            "coast": 3,
+            "desert": 1,
+            "forest": 28,
+            "grassland": 40,
+            "hills": 18,
+            "mountain": 10
+          },
+          "terrain_edges": 101
+        },
+        "extent": [
+          10,
+          10
+        ],
+        "halo": 6,
+        "id": "beauty-inland-100-v1",
+        "origin": [
+          60,
+          50
+        ],
+        "request_sha256": "bb15ce877dd85386e4104d27d0663f96bd0e12c4b7d5bb7607f45abc60bff6a6",
+        "role": "user_evaluation",
+        "terrain_sha256": "0bf3a68cf9b12f53ce43344e362c83123bfa74b5a5a3979fb49c25293b141841",
+        "wrap": {
+          "x": true,
+          "y": false
+        }
+      },
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/inland/report.json",
+      "report_sha256": "92a60bdb251cf8f503d0f3e661fe2443c4bf855b406f50e53988eb1645d2f6cc",
+      "render_identity": "3e5f22337b9f8de17c85b241455515f8b88705f5fd15478e0cebeac8db0efe6c",
+      "module": {
+        "coastal_rocks": {
+          "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/coastal_rocks.bin",
+          "placement_version": 4,
+          "sha256": "9c9c14c1b7203ef3d2ce3789928a5a5cfe1bffdb3a3fa46c09cc72effe0fa49f"
+        },
+        "color_branch": "q6_scene_linear_premultiplied_v1",
+        "complete_materials": 1,
+        "continuous_desert": 3,
+        "continuous_normals": 1,
+        "contract": 1,
+        "direct_hill_source": 1,
+        "fit_viewport": true,
+        "hill_source": {
+          "height_multiplier": 0.7142857142857143,
+          "path": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds",
+          "sha256": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976"
+        },
+        "hydrology_data": 1,
+        "hydrology_hooks": {
+          "coast_segment": "q3_scene::coast_segment",
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q3_scene::initialize_articulated",
+          "shore_sample": "q3_scene::shore_sample",
+          "signed_shore_distance": "q3_scene::signed_shore_distance"
+        },
+        "id": "shadow-receiver-r1-inland",
+        "linear_adapter": 1,
+        "omit_replaced_shadow_surface": 1,
+        "owner": "Q8-beauty",
+        "packet_postprocessor": {
+          "contract": 1,
+          "owner": "Q6-lighting",
+          "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp"
+        },
+        "projection": {
+          "half_width": 64,
+          "origin": [
+            104,
+            380
+          ]
+        },
+        "provider": "frozen_l21",
+        "relief_material_data": 1,
+        "relief_scale": 1.3,
+        "scene": "complete",
+        "schema": "c3x.lab_v2.module.v1",
+        "shader": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/inland/combined.hlsl",
+        "suppress_territory": true,
+        "terrain_hooks": {
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q2_scene::initialize",
+          "material_uv": "q2_scene::material_uv",
+          "material_weights": "q2_scene::material_weights"
+        },
+        "volcano_scale": 1.6,
+        "world_positions": 1
+      },
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/inland/h12-z1-pan00.bmp",
+          "sha256": "e65086c66164bf885f9906a946ff02a0a7eeb40677e5609810200c0850bda83c"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/inland/h12-z2-pan00.bmp",
+          "sha256": "1351ebcebfde1d1cb15975a113b2406dead084676950855aa2f080a2fa63223d"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/inland/h00-z1-pan00.bmp",
+          "sha256": "af2fa067253b9fa460c82cde208c6d0143e4128b3ea75c910e8e98e51b52bb71"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/inland/h00-z2-pan00.bmp",
+          "sha256": "6da601c642f6bf27591b10592143e8108cd1f3fafec78fb2835b0ee2ce12dbba"
+        }
+      ]
+    },
+    {
+      "region": "wilderness",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/wilderness/fixture.json",
+      "synthetic": false,
+      "tile_count": 100,
+      "viewport": [
+        1360,
+        800
+      ],
+      "projection": {
+        "half_width": 64,
+        "origin": [
+          104,
+          380
+        ]
+      },
+      "terrain": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/wilderness/terrain.csv",
+      "terrain_sha256": "57c8014a461a4ff67dbc7660a181efcc854ae80f5928bcf269c04c3b27d9f786",
+      "source_region": {
+        "camera": {
+          "hours": [
+            12,
+            18,
+            0,
+            6
+          ],
+          "viewport": [
+            1360,
+            800
+          ],
+          "zooms": [
+            1,
+            2
+          ]
+        },
+        "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+        "coverage": {
+          "land_water_edges": 12,
+          "river_tiles": 1,
+          "terrain": {
+            "coast": 10,
+            "desert": 34,
+            "forest": 5,
+            "grassland": 12,
+            "hills": 14,
+            "jungle": 5,
+            "mountain": 1,
+            "plains": 14,
+            "sea": 5
+          },
+          "terrain_edges": 83
+        },
+        "extent": [
+          10,
+          10
+        ],
+        "halo": 6,
+        "id": "beauty-wilderness-100-v1",
+        "origin": [
+          12,
+          62
+        ],
+        "request_sha256": "bb15ce877dd85386e4104d27d0663f96bd0e12c4b7d5bb7607f45abc60bff6a6",
+        "role": "user_evaluation",
+        "terrain_sha256": "57c8014a461a4ff67dbc7660a181efcc854ae80f5928bcf269c04c3b27d9f786",
+        "wrap": {
+          "x": true,
+          "y": false
+        }
+      },
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/wilderness/report.json",
+      "report_sha256": "43684170666e1cce329a46fac0cb0f34817a73727b07d567f88428af04825969",
+      "render_identity": "3c408a7286b4ed5c3108a48061d516c5e2c7073675d8c6581e60d886af19c2ef",
+      "module": {
+        "coastal_rocks": {
+          "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/coastal_rocks.bin",
+          "placement_version": 4,
+          "sha256": "9c9c14c1b7203ef3d2ce3789928a5a5cfe1bffdb3a3fa46c09cc72effe0fa49f"
+        },
+        "color_branch": "q6_scene_linear_premultiplied_v1",
+        "complete_materials": 1,
+        "continuous_desert": 3,
+        "continuous_normals": 1,
+        "contract": 1,
+        "direct_hill_source": 1,
+        "fit_viewport": true,
+        "hill_source": {
+          "height_multiplier": 0.7142857142857143,
+          "path": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds",
+          "sha256": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976"
+        },
+        "hydrology_data": 1,
+        "hydrology_hooks": {
+          "coast_segment": "q3_scene::coast_segment",
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q3_scene::initialize_articulated",
+          "shore_sample": "q3_scene::shore_sample",
+          "signed_shore_distance": "q3_scene::signed_shore_distance"
+        },
+        "id": "shadow-receiver-r1-wilderness",
+        "linear_adapter": 1,
+        "omit_replaced_shadow_surface": 1,
+        "owner": "Q8-beauty",
+        "packet_postprocessor": {
+          "contract": 1,
+          "owner": "Q6-lighting",
+          "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp"
+        },
+        "projection": {
+          "half_width": 64,
+          "origin": [
+            104,
+            380
+          ]
+        },
+        "provider": "frozen_l21",
+        "relief_material_data": 1,
+        "relief_scale": 1.3,
+        "scene": "complete",
+        "schema": "c3x.lab_v2.module.v1",
+        "shader": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/wilderness/combined.hlsl",
+        "suppress_territory": true,
+        "terrain_hooks": {
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q2_scene::initialize",
+          "material_uv": "q2_scene::material_uv",
+          "material_weights": "q2_scene::material_weights"
+        },
+        "volcano_scale": 1.6,
+        "world_positions": 1
+      },
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/wilderness/h12-z1-pan00.bmp",
+          "sha256": "1fa433c88c10ca8f97a4a198a86496e7adf0712c1bfcae67cc5b4781dd3ae234"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/wilderness/h12-z2-pan00.bmp",
+          "sha256": "aeadf9eb9b978d2626af45f78c1701a40044d397254c0d72a423f1aa8b45d9e0"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/wilderness/h00-z1-pan00.bmp",
+          "sha256": "2ad5ccb6518cbf76955a213ae72b366a9d46cc5f1a9cdbc84a52ba2f4d9a1fd5"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/wilderness/h00-z2-pan00.bmp",
+          "sha256": "eb1feca6647a4af7d8f301da64eac7502e7e714847c5fcbb161238a92a13dd33"
+        }
+      ]
+    },
+    {
+      "region": "longcoast",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/longcoast/fixture.json",
+      "synthetic": false,
+      "tile_count": 128,
+      "viewport": [
+        1616,
+        888
+      ],
+      "projection": {
+        "half_width": 64,
+        "origin": [
+          104,
+          316
+        ]
+      },
+      "terrain": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/longcoast/terrain.csv",
+      "terrain_sha256": "8695c519f0700bd9a7cd60e617fb2b41f63931b45ce4c4aec5b30027c5dc206d",
+      "source_region": {
+        "camera": {
+          "hours": [
+            12,
+            18,
+            0,
+            6
+          ],
+          "viewport": [
+            1616,
+            888
+          ],
+          "zooms": [
+            1,
+            2
+          ]
+        },
+        "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+        "coverage": {
+          "land_water_edges": 48,
+          "river_tiles": 14,
+          "terrain": {
+            "coast": 37,
+            "desert": 1,
+            "floodplain": 2,
+            "forest": 6,
+            "grassland": 28,
+            "hills": 15,
+            "jungle": 4,
+            "marsh": 4,
+            "mountain": 5,
+            "ocean": 4,
+            "plains": 8,
+            "sea": 14
+          },
+          "terrain_edges": 128
+        },
+        "extent": [
+          16,
+          8
+        ],
+        "halo": 6,
+        "id": "beauty-longcoast-128-v1",
+        "origin": [
+          64,
+          38
+        ],
+        "request_sha256": "0b4b5c47d5eb30003765917138568f78b20cd08c989cfef03c0a10c1ae870070",
+        "role": "user_evaluation",
+        "terrain_sha256": "8695c519f0700bd9a7cd60e617fb2b41f63931b45ce4c4aec5b30027c5dc206d",
+        "wrap": {
+          "x": true,
+          "y": false
+        }
+      },
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/longcoast/report.json",
+      "report_sha256": "c887462548e82672e9cbb6223097316ff9face927fe65a0399224b96f0a8951b",
+      "render_identity": "d62b214da198bbdd9679cfd7ffffe17e9c7b5bf558f070821e65df9a5fb023c9",
+      "module": {
+        "coastal_rocks": {
+          "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/coastal_rocks.bin",
+          "placement_version": 4,
+          "sha256": "9c9c14c1b7203ef3d2ce3789928a5a5cfe1bffdb3a3fa46c09cc72effe0fa49f"
+        },
+        "color_branch": "q6_scene_linear_premultiplied_v1",
+        "complete_materials": 1,
+        "continuous_desert": 3,
+        "continuous_normals": 1,
+        "contract": 1,
+        "direct_hill_source": 1,
+        "fit_viewport": true,
+        "hill_source": {
+          "height_multiplier": 0.7142857142857143,
+          "path": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds",
+          "sha256": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976"
+        },
+        "hydrology_data": 1,
+        "hydrology_hooks": {
+          "coast_segment": "q3_scene::coast_segment",
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q3_scene::initialize_articulated",
+          "shore_sample": "q3_scene::shore_sample",
+          "signed_shore_distance": "q3_scene::signed_shore_distance"
+        },
+        "id": "shadow-receiver-r1-longcoast",
+        "linear_adapter": 1,
+        "omit_replaced_shadow_surface": 1,
+        "owner": "Q8-beauty",
+        "packet_postprocessor": {
+          "contract": 1,
+          "owner": "Q6-lighting",
+          "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp"
+        },
+        "projection": {
+          "half_width": 64,
+          "origin": [
+            104,
+            316
+          ]
+        },
+        "provider": "frozen_l21",
+        "relief_material_data": 1,
+        "relief_scale": 1.3,
+        "scene": "complete",
+        "schema": "c3x.lab_v2.module.v1",
+        "shader": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/longcoast/combined.hlsl",
+        "suppress_territory": true,
+        "terrain_hooks": {
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q2_scene::initialize",
+          "material_uv": "q2_scene::material_uv",
+          "material_weights": "q2_scene::material_weights"
+        },
+        "volcano_scale": 1.6,
+        "world_positions": 1
+      },
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/longcoast/h12-z1-pan00.bmp",
+          "sha256": "c13511c2b1777a337046b8c2be1f2603ff20b8e81151bac6a56c13fa6fb226c1"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/longcoast/h12-z2-pan00.bmp",
+          "sha256": "44c4b610323dd9002317bc3ed5aab68e675050f1c8cea4a228686f687f19b89e"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/longcoast/h00-z1-pan00.bmp",
+          "sha256": "38a87ee6f02d6de66261b0dbdecaf58d2c77bb549afddc064d4e8d9ed4c1b1de"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/longcoast/h00-z2-pan00.bmp",
+          "sha256": "af206750bb46c46784ee6e4347b61e09d5915ebc405dd762374df92bd777809d"
+        }
+      ]
+    },
+    {
+      "region": "freshcoast",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshcoast/fixture.json",
+      "synthetic": false,
+      "tile_count": 100,
+      "viewport": [
+        1360,
+        800
+      ],
+      "projection": {
+        "half_width": 64,
+        "origin": [
+          104,
+          380
+        ]
+      },
+      "terrain": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/terrain.csv",
+      "terrain_sha256": "9081b6e17604eea61667503645fcd65e9852cc813a61f6676c9b29d405ddf0e6",
+      "source_region": {
+        "camera": {
+          "hours": [
+            12,
+            0
+          ],
+          "viewport": [
+            1360,
+            800
+          ],
+          "zooms": [
+            1,
+            2
+          ]
+        },
+        "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+        "coverage": {
+          "land_water_edges": 10,
+          "river_tiles": 3,
+          "terrain": {
+            "coast": 12,
+            "desert": 1,
+            "floodplain": 1,
+            "forest": 4,
+            "grassland": 3,
+            "hills": 3,
+            "mountain": 3,
+            "ocean": 59,
+            "sea": 14
+          },
+          "terrain_edges": 51
+        },
+        "extent": [
+          10,
+          10
+        ],
+        "halo": 6,
+        "id": "beauty-freshcoast-100-v1",
+        "origin": [
+          20,
+          30
+        ],
+        "request_sha256": "f9c27e3c57f088068b32b8747f41dc69a737cdf44e997cf02218ee7ef961ad82",
+        "role": "user_evaluation",
+        "terrain_sha256": "9081b6e17604eea61667503645fcd65e9852cc813a61f6676c9b29d405ddf0e6",
+        "wrap": {
+          "x": true,
+          "y": false
+        }
+      },
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshcoast/report.json",
+      "report_sha256": "165df5605c03fc03a780f653b264ed765079ce870c4ed0844abfbb1260334a92",
+      "render_identity": "a4666ab2002168462c5395370ff5870e2cd658c4d095f9a78e1b84902baeac9c",
+      "module": {
+        "coastal_rocks": {
+          "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/coastal_rocks.bin",
+          "placement_version": 4,
+          "sha256": "9c9c14c1b7203ef3d2ce3789928a5a5cfe1bffdb3a3fa46c09cc72effe0fa49f"
+        },
+        "color_branch": "q6_scene_linear_premultiplied_v1",
+        "complete_materials": 1,
+        "continuous_desert": 3,
+        "continuous_normals": 1,
+        "contract": 1,
+        "direct_hill_source": 1,
+        "fit_viewport": true,
+        "hill_source": {
+          "height_multiplier": 0.7142857142857143,
+          "path": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds",
+          "sha256": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976"
+        },
+        "hydrology_data": 1,
+        "hydrology_hooks": {
+          "coast_segment": "q3_scene::coast_segment",
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q3_scene::initialize_articulated",
+          "shore_sample": "q3_scene::shore_sample",
+          "signed_shore_distance": "q3_scene::signed_shore_distance"
+        },
+        "id": "shadow-receiver-r1-freshcoast",
+        "linear_adapter": 1,
+        "omit_replaced_shadow_surface": 1,
+        "owner": "Q8-beauty",
+        "packet_postprocessor": {
+          "contract": 1,
+          "owner": "Q6-lighting",
+          "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp"
+        },
+        "projection": {
+          "half_width": 64,
+          "origin": [
+            104,
+            380
+          ]
+        },
+        "provider": "frozen_l21",
+        "relief_material_data": 1,
+        "relief_scale": 1.3,
+        "scene": "complete",
+        "schema": "c3x.lab_v2.module.v1",
+        "shader": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshcoast/combined.hlsl",
+        "suppress_territory": true,
+        "terrain_hooks": {
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q2_scene::initialize",
+          "material_uv": "q2_scene::material_uv",
+          "material_weights": "q2_scene::material_weights"
+        },
+        "volcano_scale": 1.6,
+        "world_positions": 1
+      },
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshcoast/h12-z1-pan00.bmp",
+          "sha256": "1da291fed448f37f5c227e0016a200248aca2f17626efc740f40773bf1c5e2d7"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshcoast/h12-z2-pan00.bmp",
+          "sha256": "8d6ec07a39639aa73471097ecca4ab6a301063cf309ee1e1eac08b3da9084c1a"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshcoast/h00-z1-pan00.bmp",
+          "sha256": "acd6f111ff520c84cc5c342d700aa29b64341480821363de565017bea1ff46f7"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshcoast/h00-z2-pan00.bmp",
+          "sha256": "1c2019479d235c57a995bd510656cf5ae39a93ecc33ba840086637990913f098"
+        }
+      ]
+    },
+    {
+      "region": "freshrelief",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshrelief/fixture.json",
+      "synthetic": false,
+      "tile_count": 100,
+      "viewport": [
+        1360,
+        800
+      ],
+      "projection": {
+        "half_width": 64,
+        "origin": [
+          104,
+          380
+        ]
+      },
+      "terrain": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/terrain.csv",
+      "terrain_sha256": "b1a8e71231297f1a112069c74d67f6f8c45e957c433cb366648c73ffa64b5002",
+      "source_region": {
+        "camera": {
+          "hours": [
+            12,
+            0
+          ],
+          "viewport": [
+            1360,
+            800
+          ],
+          "zooms": [
+            1,
+            2
+          ]
+        },
+        "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+        "coverage": {
+          "land_water_edges": 14,
+          "river_tiles": 0,
+          "terrain": {
+            "coast": 20,
+            "forest": 1,
+            "grassland": 9,
+            "hills": 3,
+            "mountain": 4,
+            "ocean": 42,
+            "plains": 5,
+            "sea": 16
+          },
+          "terrain_edges": 63
+        },
+        "extent": [
+          10,
+          10
+        ],
+        "halo": 6,
+        "id": "beauty-freshrelief-100-v1",
+        "origin": [
+          46,
+          46
+        ],
+        "request_sha256": "7b90750bf529665b42f372128a140d259de1a7462a309c7b21474f181a522f6e",
+        "role": "user_evaluation",
+        "terrain_sha256": "b1a8e71231297f1a112069c74d67f6f8c45e957c433cb366648c73ffa64b5002",
+        "wrap": {
+          "x": true,
+          "y": false
+        }
+      },
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshrelief/report.json",
+      "report_sha256": "fea8b200048e2b5239e3e0483e88c77748aacc42537b029dce72468b11c7efdf",
+      "render_identity": "9f2df53b4df4070b7cdcb6269948869a047241e89273eb40ac0d9da256048953",
+      "module": {
+        "coastal_rocks": {
+          "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/coastal_rocks.bin",
+          "placement_version": 4,
+          "sha256": "9c9c14c1b7203ef3d2ce3789928a5a5cfe1bffdb3a3fa46c09cc72effe0fa49f"
+        },
+        "color_branch": "q6_scene_linear_premultiplied_v1",
+        "complete_materials": 1,
+        "continuous_desert": 3,
+        "continuous_normals": 1,
+        "contract": 1,
+        "direct_hill_source": 1,
+        "fit_viewport": true,
+        "hill_source": {
+          "height_multiplier": 0.7142857142857143,
+          "path": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds",
+          "sha256": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976"
+        },
+        "hydrology_data": 1,
+        "hydrology_hooks": {
+          "coast_segment": "q3_scene::coast_segment",
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q3_scene::initialize_articulated",
+          "shore_sample": "q3_scene::shore_sample",
+          "signed_shore_distance": "q3_scene::signed_shore_distance"
+        },
+        "id": "shadow-receiver-r1-freshrelief",
+        "linear_adapter": 1,
+        "omit_replaced_shadow_surface": 1,
+        "owner": "Q8-beauty",
+        "packet_postprocessor": {
+          "contract": 1,
+          "owner": "Q6-lighting",
+          "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp"
+        },
+        "projection": {
+          "half_width": 64,
+          "origin": [
+            104,
+            380
+          ]
+        },
+        "provider": "frozen_l21",
+        "relief_material_data": 1,
+        "relief_scale": 1.3,
+        "scene": "complete",
+        "schema": "c3x.lab_v2.module.v1",
+        "shader": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshrelief/combined.hlsl",
+        "suppress_territory": true,
+        "terrain_hooks": {
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q2_scene::initialize",
+          "material_uv": "q2_scene::material_uv",
+          "material_weights": "q2_scene::material_weights"
+        },
+        "volcano_scale": 1.6,
+        "world_positions": 1
+      },
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshrelief/h12-z1-pan00.bmp",
+          "sha256": "1e53a53f176ee9ff539896f0bcb8affe7ab289c056f9822b8f10ef58db5f2ae6"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshrelief/h12-z2-pan00.bmp",
+          "sha256": "99051aac1dd41e55b095d1f20aa97e74666e27142d3bcd70c53bfa5f5163e01d"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshrelief/h00-z1-pan00.bmp",
+          "sha256": "400606679d39e931455f6be60a79e0bd6d5bad7cbac11974678d182daf5f25d4"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshrelief/h00-z2-pan00.bmp",
+          "sha256": "b8161e55e2761de074a0e4060e91723c8d7cb315e3cc38238c41fa9df86dbf88"
+        }
+      ]
+    },
+    {
+      "region": "combinedvolcano",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/combinedvolcano/fixture.json",
+      "synthetic": true,
+      "tile_count": 100,
+      "viewport": [
+        1360,
+        800
+      ],
+      "projection": {
+        "half_width": 64,
+        "origin": [
+          104,
+          380
+        ]
+      },
+      "terrain": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/terrain.csv",
+      "terrain_sha256": "535e3483a1f785d6410b4ca63d8f9d4cc9624fa3e2dec128b78faa1d7005d450",
+      "source_region": null,
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/combinedvolcano/report.json",
+      "report_sha256": "5bbb7a5c05fbf75011a7d351fe8540f4c1fab38719148c3ad42fccc80aa24b59",
+      "render_identity": "dda1ca6f9a28e34be490f5319cc841de112f5247d052c81905bd5e4ae632e8a4",
+      "module": {
+        "coastal_rocks": {
+          "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/coastal_rocks.bin",
+          "placement_version": 4,
+          "sha256": "9c9c14c1b7203ef3d2ce3789928a5a5cfe1bffdb3a3fa46c09cc72effe0fa49f"
+        },
+        "color_branch": "q6_scene_linear_premultiplied_v1",
+        "complete_materials": 1,
+        "continuous_desert": 3,
+        "continuous_normals": 1,
+        "contract": 1,
+        "direct_hill_source": 1,
+        "fit_viewport": true,
+        "hill_source": {
+          "height_multiplier": 0.7142857142857143,
+          "path": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds",
+          "sha256": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976"
+        },
+        "hydrology_data": 1,
+        "hydrology_hooks": {
+          "coast_segment": "q3_scene::coast_segment",
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q3_scene::initialize_articulated",
+          "shore_sample": "q3_scene::shore_sample",
+          "signed_shore_distance": "q3_scene::signed_shore_distance"
+        },
+        "id": "shadow-receiver-r1-combinedvolcano",
+        "linear_adapter": 1,
+        "omit_replaced_shadow_surface": 1,
+        "owner": "Q8-beauty",
+        "packet_postprocessor": {
+          "contract": 1,
+          "owner": "Q6-lighting",
+          "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp"
+        },
+        "projection": {
+          "half_width": 64,
+          "origin": [
+            104,
+            380
+          ]
+        },
+        "provider": "frozen_l21",
+        "relief_material_data": 1,
+        "relief_scale": 1.3,
+        "scene": "complete",
+        "schema": "c3x.lab_v2.module.v1",
+        "shader": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/combinedvolcano/combined.hlsl",
+        "suppress_territory": true,
+        "terrain_hooks": {
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q2_scene::initialize",
+          "material_uv": "q2_scene::material_uv",
+          "material_weights": "q2_scene::material_weights"
+        },
+        "volcano_scale": 1.6,
+        "volcano_source_mapping": 1,
+        "world_positions": 1
+      },
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/combinedvolcano/h12-z1-pan00.bmp",
+          "sha256": "6d6f41e55a70df16fae26062a378692f11d6ee27c6107c4dc68e6e54af5d4f73"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/combinedvolcano/h12-z2-pan00.bmp",
+          "sha256": "9bd07ac315c4bb859e133cb349e5252c4778527bdaae47f6f8afe57f4fa8054d"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/combinedvolcano/h00-z1-pan00.bmp",
+          "sha256": "ce9def29c082c555085a63dd59aa63c21c9c7c6bc4ffabb3a7d70a92fdffbf77"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/combinedvolcano/h00-z2-pan00.bmp",
+          "sha256": "4f0015119abaf4a31060ea902d885a6c1535f06c4f1eae48791f7872705c3f7f"
+        }
+      ]
+    },
+    {
+      "region": "freshshadow",
+      "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshshadow/fixture.json",
+      "synthetic": false,
+      "tile_count": 100,
+      "viewport": [
+        1360,
+        800
+      ],
+      "projection": {
+        "half_width": 64,
+        "origin": [
+          104,
+          380
+        ]
+      },
+      "terrain": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/terrain.csv",
+      "terrain_sha256": "b1dad6f61cd277c01425b6f75bc9fb3c2d2ad243ef23a400437737e4f0124930",
+      "source_region": {
+        "camera": {
+          "hours": [
+            12,
+            0
+          ],
+          "viewport": [
+            1360,
+            800
+          ],
+          "zooms": [
+            1,
+            2
+          ]
+        },
+        "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+        "coverage": {
+          "land_water_edges": 11,
+          "river_tiles": 28,
+          "terrain": {
+            "coast": 7,
+            "desert": 16,
+            "floodplain": 3,
+            "forest": 12,
+            "grassland": 8,
+            "hills": 11,
+            "mountain": 13,
+            "plains": 30
+          },
+          "terrain_edges": 86
+        },
+        "extent": [
+          10,
+          10
+        ],
+        "halo": 6,
+        "id": "beauty-freshshadow-100-v1",
+        "origin": [
+          54,
+          64
+        ],
+        "request_sha256": "3f432ca07d79bf5621b4ffc66e6463dd8a20936d2734f9ac113f9af59729a9b0",
+        "role": "user_evaluation",
+        "terrain_sha256": "b1dad6f61cd277c01425b6f75bc9fb3c2d2ad243ef23a400437737e4f0124930",
+        "wrap": {
+          "x": true,
+          "y": false
+        }
+      },
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshshadow/report.json",
+      "report_sha256": "252ba5f9c9550da42a5c53d5bc7eb8801df74c47385d0c957df694fb98cbb3ab",
+      "render_identity": "6f797e0cb87b44247b2c860c524406285fda63539362ed47becb00d02c8e1c66",
+      "module": {
+        "coastal_rocks": {
+          "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/coastal_rocks.bin",
+          "placement_version": 4,
+          "sha256": "9c9c14c1b7203ef3d2ce3789928a5a5cfe1bffdb3a3fa46c09cc72effe0fa49f"
+        },
+        "color_branch": "q6_scene_linear_premultiplied_v1",
+        "complete_materials": 1,
+        "continuous_desert": 3,
+        "continuous_normals": 1,
+        "contract": 1,
+        "direct_hill_source": 1,
+        "fit_viewport": true,
+        "hill_source": {
+          "height_multiplier": 0.7142857142857143,
+          "path": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds",
+          "sha256": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976"
+        },
+        "hydrology_data": 1,
+        "hydrology_hooks": {
+          "coast_segment": "q3_scene::coast_segment",
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q3_scene::initialize_articulated",
+          "shore_sample": "q3_scene::shore_sample",
+          "signed_shore_distance": "q3_scene::signed_shore_distance"
+        },
+        "id": "shadow-receiver-r1-freshshadow",
+        "linear_adapter": 1,
+        "omit_replaced_shadow_surface": 1,
+        "owner": "Q8-beauty",
+        "packet_postprocessor": {
+          "contract": 1,
+          "owner": "Q6-lighting",
+          "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp"
+        },
+        "projection": {
+          "half_width": 64,
+          "origin": [
+            104,
+            380
+          ]
+        },
+        "provider": "frozen_l21",
+        "relief_material_data": 1,
+        "relief_scale": 1.3,
+        "scene": "complete",
+        "schema": "c3x.lab_v2.module.v1",
+        "shader": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/freshshadow/combined.hlsl",
+        "suppress_territory": true,
+        "terrain_hooks": {
+          "header": "Renderer/terrain_lab/v2/fixtures/beauty/coastal-r01/owner_hooks.h",
+          "initialize": "q2_scene::initialize",
+          "material_uv": "q2_scene::material_uv",
+          "material_weights": "q2_scene::material_weights"
+        },
+        "volcano_scale": 1.6,
+        "world_positions": 1
+      },
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshshadow/h12-z1-pan00.bmp",
+          "sha256": "deb3aa84ab7cceaa3701f0821d7a62922aee44c4c437c093a581a0677c9e00d3"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshshadow/h12-z2-pan00.bmp",
+          "sha256": "d45118e7ffa65a90039f8e690f7ac390b0b6f422765a1b087ce0053836a02c90"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshshadow/h00-z1-pan00.bmp",
+          "sha256": "727e9ce427ee84a672640885031ff4cb28c70516ffb13aa678d2a008d6a8a82f"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "offset": [
+            0,
+            0
+          ],
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/freshshadow/h00-z2-pan00.bmp",
+          "sha256": "f4efef3ab6cfb0cb69ad144865ec092c06c2647ec1f422ab5a56e489cc618020"
+        }
+      ]
+    }
+  ],
+  "pack_roots": {
+    "bridges": "Renderer/packs/RouteDoodadsNormalized",
+    "cities": "Renderer/packs/CityComponentsNormalized",
+    "compound_units": "Renderer/packs/CompoundUnitLab",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "improvements": "Renderer/packs/ImprovementsNormalized",
+    "objects": "Renderer/packs/TileObjectsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "resources": "Renderer/packs/ResourceNormalized",
+    "routes": "Renderer/packs/RouteStylesNormalized",
+    "shore": "Renderer/packs/ShoreNormalized",
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "units": "Renderer/packs/UnitFamilyLab",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "walls": "Renderer/packs/CityAdjunctsNormalized"
+  },
+  "local_assets": [
+    {
+      "path": "Renderer/packs/AmbientEffectsNormalized/textures/effects/effect_pollution_radiation_atlas.dds",
+      "sha256": "d94357dcbcee86f7c08f72c2154ceb773a48aade0a156374ca525814051a976b",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/CityAdjunctsNormalized/manifest.json",
+      "sha256": "d9225be0d3929532f4460bb4d3eaf9de7e74c5543077d150642c62e2092e472c",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/CityAdjunctsNormalized/textures/compound/base_color_91d2603d9e4769f0.dds",
+      "sha256": "023c68bfcf77e28ab92893b74d073391bd088581e83a2aba1ee0802aab685f07",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/CityComponentsNormalized/manifest.json",
+      "sha256": "d16519187ddf0f6d8376d3e38a74b4758878904750d56b87c23bc1a7d8bda2a5",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_21e3ede9be33cd93.dds",
+      "sha256": "0534ac6fbe6e0dab421bda8dbd80e9030804fa7e3101f917884f3d64ba22c164",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_b623d1a79226e93d.dds",
+      "sha256": "c598ed50ca1f8829463acf7c61270c43557601e58b7cfd729809c1755346b9b4",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_b8c5746583383c9b.dds",
+      "sha256": "605e15699cf5f3f88359dc707eca8a763adbb0960932144f8eb249d410ffa6c9",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_e32b91f7eaaa5354.dds",
+      "sha256": "9be8f963d2b05ebfbacea4233e8ef8c158e708c31e6dc7801f3149726c8f7e8e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_55c3a29f6e5f3abb.dds",
+      "sha256": "10962bee267ac8cbb9033c7966dc81647e4df3326a278ecfbbf6fcc440be0846",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_a45f71a86c0c85ad.dds",
+      "sha256": "8afac46ff38f7f93ba1a73ea15fb36d69ce0e28b87217211e27cb952c795c627",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_ca453871fb78698c.dds",
+      "sha256": "081039114b1cff7c78c3cd89971f5c2b956860ea66c1da851b09ce75f2e89f97",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_ec236b11a86326a9.dds",
+      "sha256": "f1106ec61304706b51785706b7e5e395b996f28ebe0ac411aba06d8bd72e8d65",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/manifest.json",
+      "sha256": "f9c45e8f377a470e9b6803e8f97a17218cc610d23d09072b688df04825118159",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/beach_base_color.dds",
+      "sha256": "e3dcc79b4abe70a85cc1415b9fb737d69fd0c72b4771d42b91a67055b1638637",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/beach_height.dds",
+      "sha256": "3fda3afcd88e47f2ccec0aea08061d69f25541a7452b5d3552c20b4a76aae76e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/beach_specular.dds",
+      "sha256": "adc8514f673b1324beecb5421a51cc46b7d648a046d03d5cdcee485d32294183",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/cliff_base_color.dds",
+      "sha256": "e93c7275099e1a6e01fad0a2e0a5d5bb0e46219ffc920e130a473ef9eba61937",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/cliff_height.dds",
+      "sha256": "ec2a3fd4326d5394a2f6b7f43977b9dfdcd20f81b4bb2964395f6da03ab718f0",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/cliff_specular.dds",
+      "sha256": "eb8d5da0ec290c116b838038f565d00c4cf3309482d7b79807879ab17be32748",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/desert_base_color.dds",
+      "sha256": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/desert_height.dds",
+      "sha256": "0a53005b2ace893649e2f40168987b1e07e57af07ff1b0119893e63aa3d68193",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/desert_hills_base_color.dds",
+      "sha256": "0f1367b137b00a1bba254d6a72c96b16035bc9fc5692abc8a0088d6936860193",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/desert_hills_height.dds",
+      "sha256": "ee949a58bf21382480bb426cc8a1c91ea473466c42c7be92ad39108d2eef5b9f",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/desert_hills_specular.dds",
+      "sha256": "828a10e605c9971a44bbf3b1cb53b859423a9e98629af68e3c56423eaf8e33cb",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/desert_specular.dds",
+      "sha256": "828a10e605c9971a44bbf3b1cb53b859423a9e98629af68e3c56423eaf8e33cb",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds",
+      "sha256": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_height.dds",
+      "sha256": "7ced53bf19f07a083aa66403fb6f4831f7410d63a4243ad4c65266e3cc4bc2d0",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_specular.dds",
+      "sha256": "ff3d5e0d6994edcf4b5116abfd8abcbe42eda97a40b37a4850a84c79e3c8806e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassmarsh_base_color.dds",
+      "sha256": "6ffede9b3380d0ee524643d0cd20b32e1a8ee7bd00b6d30aa290cc1cb142ea10",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassmarsh_height.dds",
+      "sha256": "92b8b43002bbe9d13e445ed8bc6a817ebdcf00537e77642183bc45e38b25c5b6",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/grassmarsh_specular.dds",
+      "sha256": "85f5901bb7bdc55566d641bec67e9a9a236d7b15772b6a41d130ce6a1c36def8",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_base_base_color.dds",
+      "sha256": "c298a68129877340f3d5d86b55cb1f72a22656e7397c2a953a496d15dab0ece9",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_base_height.dds",
+      "sha256": "9ef423ef3bc6a8f008de06b9bb19b0f046ce8459556362f19f3ec95d4de16771",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_base_specular.dds",
+      "sha256": "12e755890b1b0503ffa3f082653c93262f458f1ffb67f7252a4fb25a15b6fb05",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_desert_base_base_color.dds",
+      "sha256": "ef61ac42edf3eacee8f47aae347f6c23b9d161f53ec91fc71cb0a72394cb25eb",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_desert_base_height.dds",
+      "sha256": "184524369efd17c008a99a570682c0939f897f8680b49102d94217f10cb16465",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_desert_base_specular.dds",
+      "sha256": "23d719c26acd33d4a88a34603c48101c968c177a324a58f7ad5465e27666e389",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_desert_stripe01_base_color.dds",
+      "sha256": "ba46e65791771bda493a694c01a34ad366c3e6ad8ce266eb5c4520452be694ae",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_desert_stripe02_base_color.dds",
+      "sha256": "12dd4be1ca9425c454d1f722543aeea43e71b8d3761c491c86ad0a6220a26999",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_desert_stripe03_base_color.dds",
+      "sha256": "55b26848e69ffa5198734cfc03bea003b593b0c6519283749d0bcf2b8e7ffddd",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_snow_base_color.dds",
+      "sha256": "8085625ab2d382331c6b2f4278a8a4351cd2ef1de71424d1b5e0a2be0d71dadd",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/mtn_top_base_color.dds",
+      "sha256": "7cbbab6c0a8ca26d8729c67766b476636bf820aadd6f1b4c0044754b58117d29",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/ocean_base_color.dds",
+      "sha256": "78b790fb1f524e910cf1181e50a12aedc96daa4ae36582e24234a781fff0e17f",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/ocean_height.dds",
+      "sha256": "14cb9fdc3d81120dccf39ebaba5bec1cb0266aea60f5dacb28d924d1d5d9cac7",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/ocean_specular.dds",
+      "sha256": "6896d7e41119ef3bff21d2aef22dfb02ce60015e2b3cc15a9ca9929ebecce8d3",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/plains_base_color.dds",
+      "sha256": "233a8d7a3c7c4769d66cc2be0f2fc4a3c85375044ed1e9d2e94c1ea1da28b01b",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/plains_height.dds",
+      "sha256": "4aeb947708e35001a9a25d59ae85a81e96b51756156b318e4b3251a8e8bb72c7",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/plains_specular.dds",
+      "sha256": "ff3d5e0d6994edcf4b5116abfd8abcbe42eda97a40b37a4850a84c79e3c8806e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/continental/height_lod0.dds",
+      "sha256": "a635d15804ad566f01c0ff465ccce99260477b516798c4bd0c58b795ae362f66",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/continental_plains/height_lod0.dds",
+      "sha256": "3ede558bb2d66337a143f485dba39d09fb8ab6bf59e2cc77d18d7d568c86f783",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/continental_snow/height_lod0.dds",
+      "sha256": "8e7acc46a3fe7fb345efb74ca2f8182e670955fc3cd9b6b5e7a61b2c32ed6186",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_01/blend_lod0.dds",
+      "sha256": "4248af8f9d589420877fbc018e6b3778988fd6f95cdddac42ec60c9920818a0c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_01/height_lod0.dds",
+      "sha256": "baff30c84f277cfb9dbbc9e420870e858c73203ef2d4fe42a140a287632bf021",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_02/blend_lod0.dds",
+      "sha256": "2309d7b543f5c32b9f7b233ea920ed5761f68f9978e31d6336e6dd42fbbb47d6",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_02/height_lod0.dds",
+      "sha256": "323446622c368828be9cc6dcb87a96a43edfa52e2932c0725b5ea3688bc21f2e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_02/region_ids_lod0.dds",
+      "sha256": "03e11415a4ba5e007660a81b3dcab8dac944c1c5a37f0ba249c023f0e3e35ded",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_03/blend_lod0.dds",
+      "sha256": "d44fc032ff4a8115245c8f9f6362d2168f4ed68c0ad51d1f7a88f5dd8053f2ea",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_03/height_lod0.dds",
+      "sha256": "9ae00e5df71ccb393c94ce7c33122636f15aa1589f3781644ab17c4b6d53e74e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_04/blend_lod0.dds",
+      "sha256": "89c8653ab7d5b00f518762e91f26dea1cf539b9656195fb6027e213304ed318e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_04/height_lod0.dds",
+      "sha256": "177e528510a2ab4bc727a29a55fb53f72143d736b150188d8ef6c7991dca1c64",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_05/blend_lod0.dds",
+      "sha256": "a8ebaf823abe6eb3cb0f55ac18d80757e4f10b6b1b9e228ce059587314325833",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/relief/mountains/standard/variant_05/height_lod0.dds",
+      "sha256": "cbbf9d74b591bc8b7f35cb236e784e7083f0497b13fea00f2d58ed6142ae4552",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/river_base_color.dds",
+      "sha256": "29ed5f4f4440739e38c08551ba61aae4de505eec6ed20a7132c1413d3ba5c31e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/river_height.dds",
+      "sha256": "3fda3afcd88e47f2ccec0aea08061d69f25541a7452b5d3552c20b4a76aae76e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/river_specular.dds",
+      "sha256": "adc8514f673b1324beecb5421a51cc46b7d648a046d03d5cdcee485d32294183",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/shallows_base_color.dds",
+      "sha256": "78b790fb1f524e910cf1181e50a12aedc96daa4ae36582e24234a781fff0e17f",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/shallows_height.dds",
+      "sha256": "14cb9fdc3d81120dccf39ebaba5bec1cb0266aea60f5dacb28d924d1d5d9cac7",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/shallows_specular.dds",
+      "sha256": "6896d7e41119ef3bff21d2aef22dfb02ce60015e2b3cc15a9ca9929ebecce8d3",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/tundra_base_color.dds",
+      "sha256": "40fb7c51c4cc3148c516ea6873c87c894aa7ef10094ac810268f343364d03f50",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/tundra_height.dds",
+      "sha256": "67bb769a71abd7d52cf6c47901ee377f8f207469c08b21328133f401af2e3bfa",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/tundra_specular.dds",
+      "sha256": "9d301243f42b577fcd76c130d64d6b0eba26b47e81b775a5a2e8e4dbbe86aff9",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/effects/crash_foam.dds",
+      "sha256": "2d07730bcf22b277556bf980a9a96ece3d59c6194ecf700c42fbab13acdf0594",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/effects/ripples_primary.dds",
+      "sha256": "d6b65e993bcbfddb3983fae40ddb89034fc7735f6484f5f7865063cbe5630703",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/effects/turbulence.dds",
+      "sha256": "c098dca114a35a7326adc712bcdb6768ddb8ceda4858ed05d95011d7b8c031a0",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/profiles/coast/dark.dds",
+      "sha256": "4d966f3ec59d02697b534d3fe220d6acc49b231a4b68e90b987415c6ba5fc4d1",
+      "kind": "loaded_texture",
+      "view_formats": [
+        10
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/profiles/coast/scatter.dds",
+      "sha256": "d73b97b3b33f220e7193e936b493b2c2fa601ec0a21c24ec6d22b3dfca7a5bd9",
+      "kind": "loaded_texture",
+      "view_formats": [
+        10
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/relief/river_bank_noise/height_lod0.dds",
+      "sha256": "19908520ce411df1f1c7bf8e7fb784586da1d77acfa992ca299b70de8b5a3466",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/river/clutter_decal_base.dds",
+      "sha256": "fef8e4ef59b9553a10e616f36324face9c18ee776d28eedfe19d64154e1ec52f",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/river/clutter_decal_height.dds",
+      "sha256": "1234202c4af78271338f83b0a1c28587e4ae06dd15df46ec8ea6c42c728fb3a1",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/river/source_decal_base.dds",
+      "sha256": "f45bd72875536085a87c0445a32219aad5d0fdf49789c58827dc97db47930407",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/river/source_decal_height.dds",
+      "sha256": "a477f9fec79aa39feecde2ac62fc400d3436ceaede652a8619ec4f977d2cffcd",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/gloss.dds",
+      "sha256": "73ebcf0226fa5d415cb952acb3fe4953540372864a25143bb03b981faac69e19",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/large_lean0.dds",
+      "sha256": "8b230a1b2390ccadb54b4311cf82e1398214dbef30264217cecdb36639dd6be9",
+      "kind": "loaded_texture",
+      "view_formats": [
+        11
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/large_lean1.dds",
+      "sha256": "220992d25253703f171cfe39c7cb1bc57fe7c56a8dab08a98165060678a6f880",
+      "kind": "loaded_texture",
+      "view_formats": [
+        35
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/non_tiling_mask.dds",
+      "sha256": "7de23d918b3a84e00839702e2751d0f6bc5da35176c68e115757c5ddc6bf5a9f",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/non_tiling_normal0.dds",
+      "sha256": "36036801d169c3460787710ee75258b166ed5480ebdd83b35eda7b138262087b",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/non_tiling_normal1.dds",
+      "sha256": "de808aeb9a8f103644462fd729422997cc9c52eadf6d9c4d0730bd7c00032acd",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/river_lean0.dds",
+      "sha256": "a2e7077d822de404efa2c912ad2ee55cba6ef444697159ee08449a49433e6a12",
+      "kind": "loaded_texture",
+      "view_formats": [
+        11
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/river_lean1.dds",
+      "sha256": "1fb330dfa3bbfda5a16962455d3dcf0d496e93b4a56d5b206eba58aa0313ca8e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        35
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/small_lean0.dds",
+      "sha256": "eaee2214509d17ccfb3438de4cb542e760dcda02c21a6c0c387df391977865c4",
+      "kind": "loaded_texture",
+      "view_formats": [
+        11
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/small_lean1.dds",
+      "sha256": "7e82d8bbe76de9bdf88c6ef1c95a43060e7767edf32565a6dfda3a322495e1d5",
+      "kind": "loaded_texture",
+      "view_formats": [
+        35
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/small_secondary_lean0.dds",
+      "sha256": "ce8d0cf05e243ffb3dd7fc5418db245d8bb6f7251f6b8dc41d1ef16ee4448ff1",
+      "kind": "loaded_texture",
+      "view_formats": [
+        11
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/small_secondary_lean1.dds",
+      "sha256": "d6f686eb560589405a745bd2fcff3acb92f2c001fd2bf1d80fc905842eff18d0",
+      "kind": "loaded_texture",
+      "view_formats": [
+        35
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/tiling_mask.dds",
+      "sha256": "59e9eb2ee3a26e0e9bfa7ab98b961bca0776abf75838c4617f7b5f334116d0dc",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/tiling_normal0.dds",
+      "sha256": "6e280e6dbda894d368c0ea66421d23cd740c564f9a72e4821c6bd261f97f70e4",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/surface/tiling_normal1.dds",
+      "sha256": "cf86d260dcb58d945dce1645e1da691cf5d99d81e8517f6da71d82e30c2db404",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/volcano/active_base.dds",
+      "sha256": "68d1b3617a82a473a3a854784697a867bd672f37a1bb34f311e3b51948b1f5d8",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/volcano/active_specular.dds",
+      "sha256": "4a71c72eeabae0b3954a3c6fc009838523ef1cfa008aab005bc499ab57c4bc7d",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/volcano/base.dds",
+      "sha256": "0df103895e3b863dce886271a36d358c9e07966cae6a3bfd19ff448f1a3a1538",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentSkin/textures/water/volcano/height.dds",
+      "sha256": "1bf210d121afa17fa89aadc17aaca3a00ebe56071a44e7f67d7d5f06aafaee4e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentVegetation/manifest.json",
+      "sha256": "e3236831c847ba7ebbfecfbdb80d06690ca710dbe7963124e969dc8fedb219bd",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_v1_01_base_color.dds",
+      "sha256": "c2b1d3f81f7d054ba000e456f225713824560f6e48ae79bed4738168f2195fbc",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_pine_01_base_color.dds",
+      "sha256": "bcf71c8e6e79efa119c6f04879824738316adc3716798245de5346621c850b89",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_shrub_01_base_color.dds",
+      "sha256": "e4443783893c751447bc8b0ebeeba806b484d3fe47e9c5687189a4782ce02400",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_snow_pine_01_base_color.dds",
+      "sha256": "461dc489f007727365dd741013300199c5b898029f9ed3e03dfb3753488511b1",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/Civ5EnvironmentVegetation/textures/features/jungle_grass_01_base_color.dds",
+      "sha256": "b1cdc61d9145c8e3d7c7ee61dcea40dd493ca2b15bb152d1e2a75b215395c2ac",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/manifest.json",
+      "sha256": "ab0f79ed38e3ddc63f2db73845d46bfb4a0beb37e259b003a6cdecc984aa23eb",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/textures/unit/base_color_0fa45452f49d9ace.dds",
+      "sha256": "e59d4a14cdd342b4e8bc3e7c5a30c4f9818452ffe3235881723bf84180f47ea6",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/textures/unit/base_color_23cf521d75dc7559.dds",
+      "sha256": "df99cd82ae1f9abe5e5628c53ee4a31d9bf70dfd790e6f386712497bb7b8bcf7",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/textures/unit/base_color_4091f5d26a14aa01.dds",
+      "sha256": "27e1c3703247df8159ec9a93e16cf96601a7220e1773fc7094a7a761bee6cb21",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/textures/unit/base_color_41da36444f7aa9b8.dds",
+      "sha256": "6c8a086a8ab0355290bf9ffbe15c029ef37c4c547858c4ea730a432e036eee29",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/textures/unit/base_color_5839fa3534df59f6.dds",
+      "sha256": "eb41eae38b78365b6e1d0f91b4f19526e4285272f6031077e5716aee3630bd10",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/textures/unit/base_color_6bb9eae7ff2ea796.dds",
+      "sha256": "6a23acd61fd4644d718430d75a392eaab8648c482b068e83b188b9c695fd9a6a",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/textures/unit/base_color_74a019e0262b7d2f.dds",
+      "sha256": "4e43dce50446f6dd130e25324eee89a1ebbde3f283acf787e3a52ef9eeab42fc",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/textures/unit/base_color_badfb096a57c47f1.dds",
+      "sha256": "c69e2dfaaf71bd4fd0a2f4245ee5c10db06b616450dd1b4e7f29d50826c21f4b",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/textures/unit/base_color_d03c58ca80d663ba.dds",
+      "sha256": "8f9a70c4d9c5a78dde77db0abd753ca5c4d814f4e007d2491f608504debb4d7e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/CompoundUnitLab/textures/unit/base_color_f073df59cdf84ce3.dds",
+      "sha256": "eefa7741b1881adbafb33304f17140e002fd78838e626b8f418ad4e1d9b2af71",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/manifest.json",
+      "sha256": "daa7408b4136d8da456e32404fd7088b7a3ca23d8bd587606b4c19fad049eb41",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/base_color_211cf603f50c6f54.dds",
+      "sha256": "5c79646e2ceefedb6cbbecd10729f0994e18a1a666d70704a28667fa53710047",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/base_color_8f27cbd468d0e4fd.dds",
+      "sha256": "4ae73e9d66566a9899de949ad83376d633df84cbaace4fb7fd6d2ac90ab47479",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/base_color_bbba55639c23d574.dds",
+      "sha256": "417e443b0a27deea40e9bfb4efb1aa13e1bec26952d488e8b031635b5a01331b",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/base_color_c996c6a9d015eebe.dds",
+      "sha256": "19f2e8899f7e2d7d4b366a4781dcf29980d29edf41639b0c10f64b54cb05d785",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/base_color_e48cf9469a284218.dds",
+      "sha256": "a604fc631087ce1c64e529bcc38808b51ea78dd00993236369eb50f6a1688e4a",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/height_31eb0f0117ea3beb.dds",
+      "sha256": "e6e827c4784539451fb2eb345576d2f629ccc0a58b6207138d706df983518568",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/height_3ba76b3b97d571a8.dds",
+      "sha256": "cc1a6c18426917d32ad1bc4e2def03a1261db032990b563d154efbd851da6223",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/height_6964171784984fe8.dds",
+      "sha256": "9ac38f23e62d942ab0cdf9242296e6d3e481e785562f825ca94b70c520303173",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/height_b37e632844a0e3f2.dds",
+      "sha256": "f9586ec7a3b86fc9da8d69cdd04f0a1f25135243ea17714966323c69669bf1a2",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/height_f0302076c5c278f5.dds",
+      "sha256": "aecc54981d9f339cce61df84dbfbd6797b9c6495b6be37c583dc8b5843857167",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/packs/DecalsNormalized/textures/decals/specular_2af348f2e159d8f7.dds",
+      "sha256": "70c3a614d6b98ff24033b3ff138933e1f9c099b6cd28db77c6f273246a542677",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/packs/FutureGateCandidates/textures/compound/base_color_c68c12748c938e3e.dds",
+      "sha256": "ca8b28fb2a91ffeaa45b878cf2cd9456f808d633fbeea249951f25074601c602",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/manifest.json",
+      "sha256": "43515786ee708de01928cfe32836ce864eb0b6d3137a054788611474c6948c3c",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_17b2b2831e332b19.dds",
+      "sha256": "dfec91c9cec8818ea8d0e97704553993d8e691d6372c660f998b01dfa1cd9796",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_1f89daaa60d4c455.dds",
+      "sha256": "07ad4fa1a4920c58aa0712abb86b948f085851b75816bec3dd795e6f1336de0f",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_275aba078d33c0b4.dds",
+      "sha256": "09a07f1ba5abf08402a579aceddf92e98dea1700ad191fe90247458f20bc24ba",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_3e8274fe098b2692.dds",
+      "sha256": "8685883d413d3e8de6580559602df4cb54ba9a9243782783e3bca493de091bd4",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_b333b8babb7742d9.dds",
+      "sha256": "aa75cad3c6352e7bba592edbe5d69e4e263458bf6b919d6ce1d8d8129899824c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_b7205d1768946f12.dds",
+      "sha256": "9843e8f300a89de0485a0bbc786dc9118c157d884a576bc38f39078f7eafba49",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_bfc63f9720d2fde2.dds",
+      "sha256": "90765ade41adafdc7daa9ec98276ad2fb3974dc6c846d2c232f9724b5a473315",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_dc5aacf616aa21d1.dds",
+      "sha256": "290291be4e8596a1775b50025791dc4ba62220e99ffa13acf370c27b36baa1e8",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_e84062c0f5d31afc.dds",
+      "sha256": "b1812b262667a345a814a936e298bb0a2d73cb6cbf4a99096ee318084c5fcf23",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_eae817cd7ade749d.dds",
+      "sha256": "2837dda5f93764a16a9c2ebd993d9fa6d8b005496e521911fbc8bfbb5986c2bc",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/base_color_f380fc2dd019057a.dds",
+      "sha256": "78e90269ba7de9b47e61bb77e20b3b4c5c9cf032c3ff3a1d8a08e11fad29eddf",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/emissive_7d78d5d874cedffd.dds",
+      "sha256": "70092804059276e69e1dd08b100a75940f9447f66ba1fa3349ba4851cddd9c9f",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/emissive_ca7d5dca1248baa0.dds",
+      "sha256": "445ed6b6c71f3f159358d56a80702ba1f821433d99e7476e0d806e620385dad0",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/emissive_e135f2d2eabef7de.dds",
+      "sha256": "f9898d3718dfcadd6df91600c30d8deb13282484f8ffddd03b70630b1a9f42dc",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ImprovementsNormalized/textures/compound/emissive_e76253f3e1cc755c.dds",
+      "sha256": "299faedd9fd204334753c0d0d8a7f643c010d227081b4e50d3807138d4939c08",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ResourceNormalized/manifest.json",
+      "sha256": "7d9c806ea9bffc0c4c7fc5628f9f06d8128d24a8640c18898845cd18df9ac2a3",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/ResourceNormalized/textures/features/horse_001_base_color.dds",
+      "sha256": "1a009b7dce9e1b301196c1284a296c24737024e3b371f5decb42eac1411dcc54",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ResourceNormalized/textures/features/res_cattle_cow01_base_color.dds",
+      "sha256": "6f015c231f59103f0dff2cbb779b6b913ab70400c5fea8054dec60dfb85d9264",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ResourceNormalized/textures/features/res_dyes_01_base_color.dds",
+      "sha256": "c9e67182fbb4a10b254c53fddad10ee6cd7a579bc917674a12c34d1dc54ac23a",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ResourceNormalized/textures/features/res_gold_rock01_base_color.dds",
+      "sha256": "ad82ede9e6b14d37bd52c86db6ab407384fac3b2e1cda936bde8aac3510dc720",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ResourceNormalized/textures/features/res_iron_rock01_base_color.dds",
+      "sha256": "17eba0f0d3e1f5cca1baf0d9fcd99121ba783cf18c8931b48b5ec4b69dd286b1",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ResourceNormalized/textures/features/res_uranium_rock01_base_color.dds",
+      "sha256": "774153f2fa4e9dca2a9c8dff4e680706d638d45ff7777179244c33e59f24e0b4",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ResourceNormalized/textures/features/res_wheat_tuft01_base_color.dds",
+      "sha256": "5cd7a269b36657823b92797f9b78cdf29b88ed1faf834f3c325acbfbe10f751e",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ResourceNormalized/textures/resources/fish_base_color.dds",
+      "sha256": "7c2f903708a43bca1e149e9b4f1ca59d0249942bc6ba5b37bd190cd8379371b1",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteDoodadsNormalized/manifest.json",
+      "sha256": "9f9c4a07271889fc0896d76c03df764e8154df1d6df2cd53dfe0d7cf274d4ae7",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/RouteDoodadsNormalized/textures/compound/base_color_72be0fde40069438.dds",
+      "sha256": "56c70a4231f6d456d2b6637e2d2a94fb27f18977e4b21aea4898dcc94f5cd8dd",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteDoodadsNormalized/textures/compound/base_color_edf55ca82fd6da3a.dds",
+      "sha256": "8f544c27d1e541d2df4ec7677da1001cb2d383be36ad469c5ed244b2ff1bbc3a",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/manifest.json",
+      "sha256": "b4a3427f57e87e801a0ecc7732005ed10c7e310d4e658d58549f14742856923c",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/textures/routes/base_color_3631908100843d0d.dds",
+      "sha256": "acd894ffacce9be946bcd87a524f8cdd6cf3aac0b7c57463ee6a19dd730ad714",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/textures/routes/base_color_39a5855bea35f6d1.dds",
+      "sha256": "476cdce5ab06e6f2767131a64f8fcf5c6e8dcf09bb45091172689311860618e8",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/textures/routes/base_color_5ae696c133345a83.dds",
+      "sha256": "81709f230e96c5a6196eaa02c1a15baded743e945d3e2e803d57e4f90a1d159d",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/textures/routes/base_color_678d822a9338aab5.dds",
+      "sha256": "955afc1cfa2a8f55f69b3fcce12df95348da307de585c8423615f0cd44833006",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/textures/routes/base_color_6c2f0cc0e38fff7b.dds",
+      "sha256": "b1812b262667a345a814a936e298bb0a2d73cb6cbf4a99096ee318084c5fcf23",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/textures/routes/base_color_a832a6518fdab3b1.dds",
+      "sha256": "841b6720fa63b7862892f8ed8517390de1a286674b0cbd9891b111a2399edd08",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/textures/routes/base_color_ba7297551e6ece35.dds",
+      "sha256": "b3180c567187d876d1a9df50bf82f447b970270a7f81e4fdd710c32fa72f0b14",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/textures/routes/base_color_c3ae5ee0b5879164.dds",
+      "sha256": "7712c5ad71f2e15521b6cb3e9914d16dc542964097188546b96347c8c90f0caf",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/textures/routes/base_color_f5c58170975c3c8b.dds",
+      "sha256": "aa75cad3c6352e7bba592edbe5d69e4e263458bf6b919d6ce1d8d8129899824c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/RouteStylesNormalized/textures/routes/base_color_fc46370d90163f16.dds",
+      "sha256": "0e7760c116770bee1bd0e84c7b8f267c62f01460b2171b32f4d3788005bbff05",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/ShoreNormalized/manifest.json",
+      "sha256": "6dd9eff434ef26d300a81f3e3719b53f800163b8371f8eb98c7d41af66d4bd9a",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/ShoreNormalized/textures/features/river_rock_01_base_color.dds",
+      "sha256": "20b659f193326e8e8227cc328a63d1b356eb041cdba80d6b8b960ed4b8511085",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ShoreNormalized/textures/features/river_rock_02_base_color.dds",
+      "sha256": "20b659f193326e8e8227cc328a63d1b356eb041cdba80d6b8b960ed4b8511085",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ShoreNormalized/textures/features/river_rock_03_base_color.dds",
+      "sha256": "20b659f193326e8e8227cc328a63d1b356eb041cdba80d6b8b960ed4b8511085",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ShoreNormalized/textures/features/river_rock_05_base_color.dds",
+      "sha256": "20b659f193326e8e8227cc328a63d1b356eb041cdba80d6b8b960ed4b8511085",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/ShoreNormalized/textures/features/river_rock_06_base_color.dds",
+      "sha256": "20b659f193326e8e8227cc328a63d1b356eb041cdba80d6b8b960ed4b8511085",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TerrainElementsNormalized/manifest.json",
+      "sha256": "5ddcdc9c77b4d783add7fce0a89f039fecc544fff20f456ce60f1baa8cece396",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/TerrainElementsNormalized/textures/terrain_elements/terrain_feature_volcano/blend_lod0.dds",
+      "sha256": "3ebae1f544bf21ee0f187a4f70c79898c4b60b139c45cccad87e04258932c18a",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/TerrainElementsNormalized/textures/terrain_elements/terrain_feature_volcano/height_lod0.dds",
+      "sha256": "2a6a4bfd3621b7c4f7679f07c1b2a6eb2512d70bf95f36f6193ef3ae1c331462",
+      "kind": "loaded_texture",
+      "view_formats": [
+        61
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/manifest.json",
+      "sha256": "795f2c9f6ccb606b4dad3ea026d8ef72f127332b5c56947c64552f35b9141d4a",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_0bf101ea23dddd00.dds",
+      "sha256": "55d1db0f9884799330774f9c71bca75c5472e4cdc7a07a36d0024d7cf7d1bd90",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_275aba078d33c0b4.dds",
+      "sha256": "09a07f1ba5abf08402a579aceddf92e98dea1700ad191fe90247458f20bc24ba",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_2af93c58e8c29986.dds",
+      "sha256": "a38da20d6c1bce560274e5fa191e7830b670ee64f03bb443ac222817f8bc5a2a",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_30e62c5e2df54b56.dds",
+      "sha256": "fc4eb395e78cb8c8ba33259bae99982545ebf86192c6256520a7313ad95cc3a4",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_427b3617bcb8493c.dds",
+      "sha256": "03d391f9a0ac3698437625c8a42c5fb93a049bf6d18dc9c94e232f03a8fbf45d",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_774811b46aa611d6.dds",
+      "sha256": "a07c216becf6cd69e39cc7cb024173415c51dfdc8341fd474df4f292eb008cfe",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_7bae9a4a12178e25.dds",
+      "sha256": "5e8cf56ce58633752c6b9a5b1c71fdce677f27e05e2851ed5e46bc601827b510",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_a62454839a4e5984.dds",
+      "sha256": "c0d91e2a3416ceffb3433db54fc3bf042c84580b97fa9abff5f4c04d35e02041",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_b333b8babb7742d9.dds",
+      "sha256": "aa75cad3c6352e7bba592edbe5d69e4e263458bf6b919d6ce1d8d8129899824c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_b98c1541dc812f54.dds",
+      "sha256": "5004464473594686a92c38ffa76118bbfb60ed43a6ecd8379b2b81ba13317354",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_bcffabd5bdc5a22d.dds",
+      "sha256": "6afd9ea3de5ed58660e31905c6b6a39ab733a5b4d87fb1c31ed8c807b7c29d0d",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_bfc63f9720d2fde2.dds",
+      "sha256": "90765ade41adafdc7daa9ec98276ad2fb3974dc6c846d2c232f9724b5a473315",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_c9c5708917127918.dds",
+      "sha256": "9a50942595d03dfe7564ca4b2e0073e70f1cc2e9d51f7bd5471e74e53e3080c5",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_e84062c0f5d31afc.dds",
+      "sha256": "b1812b262667a345a814a936e298bb0a2d73cb6cbf4a99096ee318084c5fcf23",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_eae817cd7ade749d.dds",
+      "sha256": "2837dda5f93764a16a9c2ebd993d9fa6d8b005496e521911fbc8bfbb5986c2bc",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_f380fc2dd019057a.dds",
+      "sha256": "78e90269ba7de9b47e61bb77e20b3b4c5c9cf032c3ff3a1d8a08e11fad29eddf",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/base_color_fcb4de93f58dc43f.dds",
+      "sha256": "d7d5921c2d6e89644bf3045ce169fce90562001758a8be6d881c65bff6e6b689",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/TileObjectsNormalized/textures/compound/emissive_21938fc490606716.dds",
+      "sha256": "a83259ced2027fad1b894b83ee600d375e8fd53881d4e1d697d274f0382db4a1",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/packs/UnitFamilyLab/manifest.json",
+      "sha256": "0a20781855f8d4a6bae616dde1a2e935b6d5b0dcfe2dab684e94a475cf3e6b4c",
+      "kind": "pack_manifest"
+    },
+    {
+      "path": "Renderer/packs/UnitFamilyLab/textures/unit/base_color_0d9b0ef32907d5d7.dds",
+      "sha256": "b134f9e040d5aebb45f77696b066afa7608b7f81dd67720772c45b5305cd987c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/UnitFamilyLab/textures/unit/base_color_0fa45452f49d9ace.dds",
+      "sha256": "e59d4a14cdd342b4e8bc3e7c5a30c4f9818452ffe3235881723bf84180f47ea6",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/UnitFamilyLab/textures/unit/base_color_23cf521d75dc7559.dds",
+      "sha256": "df99cd82ae1f9abe5e5628c53ee4a31d9bf70dfd790e6f386712497bb7b8bcf7",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/UnitFamilyLab/textures/unit/base_color_293327faba185985.dds",
+      "sha256": "0522c63c4236a5b07169604aeeb8a6e01cd60dcdee81e0b3b56a1bc07858763a",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/UnitFamilyLab/textures/unit/base_color_4091f5d26a14aa01.dds",
+      "sha256": "27e1c3703247df8159ec9a93e16cf96601a7220e1773fc7094a7a761bee6cb21",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/UnitFamilyLab/textures/unit/base_color_7c9bbdb484223767.dds",
+      "sha256": "c4e03da506778b5ce1a66e8c642e370a860aba737ac63c67769def1feb6debb8",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/UnitFamilyLab/textures/unit/base_color_7faf987bbea627c1.dds",
+      "sha256": "12d22fb9c7ac458a78f4c06d26aa223df783b23080ab25faa1dbac6de4f29e72",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/UnitFamilyLab/textures/unit/base_color_aa794ed653cdcb38.dds",
+      "sha256": "995a86478126e39498957168d95a5c467eeab411fce26411cb948e5ba4b9681b",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/packs/UnitFamilyLab/textures/unit/base_color_d555c86ff27d0cb7.dds",
+      "sha256": "f591b8ea2570b70ea9d1ee725ccbfaf17ee92dc58db3f364fb97050c7e9bf9ca",
+      "kind": "loaded_texture",
+      "view_formats": [
+        78
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_01_base_color.dds",
+      "sha256": "775cbb354f81832d812290d17a4fa94c4b90e16c4067a4035f3537e41bf4f335",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_01_gloss.dds",
+      "sha256": "e4b69782970e620e78194305b8c8330539f0729410a39c2ab903575ea5720233",
+      "kind": "loaded_texture",
+      "view_formats": [
+        71
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_01_normal_0.dds",
+      "sha256": "90b86e92b9dc2f06b0514a22cb6b47fca425939ebd61f7531719c6ad320f321c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_01_normal_1.dds",
+      "sha256": "f55e5f2c71ede71fbb25cbab9453454e88104cbc9192521bd18348ffcee3e405",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_02_base_color.dds",
+      "sha256": "775cbb354f81832d812290d17a4fa94c4b90e16c4067a4035f3537e41bf4f335",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_02_gloss.dds",
+      "sha256": "e4b69782970e620e78194305b8c8330539f0729410a39c2ab903575ea5720233",
+      "kind": "loaded_texture",
+      "view_formats": [
+        71
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_02_normal_0.dds",
+      "sha256": "90b86e92b9dc2f06b0514a22cb6b47fca425939ebd61f7531719c6ad320f321c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_02_normal_1.dds",
+      "sha256": "f55e5f2c71ede71fbb25cbab9453454e88104cbc9192521bd18348ffcee3e405",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_03_base_color.dds",
+      "sha256": "775cbb354f81832d812290d17a4fa94c4b90e16c4067a4035f3537e41bf4f335",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_03_gloss.dds",
+      "sha256": "e4b69782970e620e78194305b8c8330539f0729410a39c2ab903575ea5720233",
+      "kind": "loaded_texture",
+      "view_formats": [
+        71
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_03_normal_0.dds",
+      "sha256": "90b86e92b9dc2f06b0514a22cb6b47fca425939ebd61f7531719c6ad320f321c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_03_normal_1.dds",
+      "sha256": "f55e5f2c71ede71fbb25cbab9453454e88104cbc9192521bd18348ffcee3e405",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_04_base_color.dds",
+      "sha256": "775cbb354f81832d812290d17a4fa94c4b90e16c4067a4035f3537e41bf4f335",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_04_gloss.dds",
+      "sha256": "e4b69782970e620e78194305b8c8330539f0729410a39c2ab903575ea5720233",
+      "kind": "loaded_texture",
+      "view_formats": [
+        71
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_04_normal_0.dds",
+      "sha256": "90b86e92b9dc2f06b0514a22cb6b47fca425939ebd61f7531719c6ad320f321c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_large_04_normal_1.dds",
+      "sha256": "f55e5f2c71ede71fbb25cbab9453454e88104cbc9192521bd18348ffcee3e405",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_small_01_base_color.dds",
+      "sha256": "775cbb354f81832d812290d17a4fa94c4b90e16c4067a4035f3537e41bf4f335",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_small_01_gloss.dds",
+      "sha256": "e4b69782970e620e78194305b8c8330539f0729410a39c2ab903575ea5720233",
+      "kind": "loaded_texture",
+      "view_formats": [
+        71
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_small_01_normal_0.dds",
+      "sha256": "90b86e92b9dc2f06b0514a22cb6b47fca425939ebd61f7531719c6ad320f321c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_small_01_normal_1.dds",
+      "sha256": "f55e5f2c71ede71fbb25cbab9453454e88104cbc9192521bd18348ffcee3e405",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_small_02_base_color.dds",
+      "sha256": "775cbb354f81832d812290d17a4fa94c4b90e16c4067a4035f3537e41bf4f335",
+      "kind": "loaded_texture",
+      "view_formats": [
+        72
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_small_02_gloss.dds",
+      "sha256": "e4b69782970e620e78194305b8c8330539f0729410a39c2ab903575ea5720233",
+      "kind": "loaded_texture",
+      "view_formats": [
+        71
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_small_02_normal_0.dds",
+      "sha256": "90b86e92b9dc2f06b0514a22cb6b47fca425939ebd61f7531719c6ad320f321c",
+      "kind": "loaded_texture",
+      "view_formats": [
+        83
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/selected-coast-source-v1/textures/features/cliff_small_02_normal_1.dds",
+      "sha256": "f55e5f2c71ede71fbb25cbab9453454e88104cbc9192521bd18348ffcee3e405",
+      "kind": "loaded_texture",
+      "view_formats": [
+        80
+      ]
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-coast-rocks-v2/coastal_rocks.bin",
+      "sha256": "9c9c14c1b7203ef3d2ce3789928a5a5cfe1bffdb3a3fa46c09cc72effe0fa49f",
+      "kind": "coastal_rocks"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/relief/selected-source/hills_height_lod0.dds",
+      "sha256": "3cbeb6da52095faca8351e2d1e926ed2cc0a2f5881fe05854ba6e3c91cf4e976",
+      "kind": "hill_source",
+      "view_formats": [
+        61
+      ]
+    }
+  ],
+  "asset_inventory_note": "Loaded dependencies include dormant object bindings; this does not establish object coverage. Licensed payloads are not bundled.",
+  "native_advisory_snapshot": [
+    {
+      "path": "Renderer/native/c3x_renderer.cpp",
+      "sha256": "e9a7aa4bfcbcc789e1d25c0fc4d98985ff393f358577999e7fbe58e235184dfc"
+    },
+    {
+      "path": "Renderer/native/integrated_terrain.hlsl",
+      "sha256": "ba20b74e67984524dda9dfa84a335e6014bfa8a124f0564cecbe8aea4e38e9e1"
+    },
+    {
+      "path": "Renderer/native/terrain_rendering.hlsl",
+      "sha256": "e1216eb007348fee650c8583e4d90dcb800cdfce0850aa76e34a2fccd8ec5dec"
+    },
+    {
+      "path": "Renderer/native/terrain_scene_runtime.h",
+      "sha256": "2c1c7912f8597a7c9ad6be2f13dc1465e2776fc602b07fd7c0758b478ee6d460"
+    },
+    {
+      "path": "Renderer/native/c3x_renderer_api.h",
+      "sha256": "d371e542cc0a5afd2f8275bc7e878a6eec493401114aa3d8b6f6c9fa3a6dd893"
+    }
+  ],
+  "native_snapshot_policy": "Advisory only; integration files may evolve. Never restore them from this package.",
+  "baseline_handoffs": [
+    {
+      "path": "Renderer/handoffs/L10_dunes.json",
+      "sha256": "57e4cdb8a6d74690584c8a87e7590edd1fa6bcf594afd093e75033cb5bdfc62f"
+    },
+    {
+      "path": "Renderer/handoffs/L11_marsh.json",
+      "sha256": "cc3c2bb8e3b5721d11de71d6f755b9b516dff5142d89ed45758d49eed25fa2a8"
+    },
+    {
+      "path": "Renderer/handoffs/L12_volcano.json",
+      "sha256": "6b552bccede382374c552b013b1927688b5f29cab6bbf4157cf566d58b00f46d"
+    },
+    {
+      "path": "Renderer/handoffs/L13A_lighting.json",
+      "sha256": "896d71966fd440b4f3f691d74ab02325cf0c20edfb6c2bd9898c71cacce0d1d0"
+    },
+    {
+      "path": "Renderer/handoffs/L13_rivers.json",
+      "sha256": "80f24f1b6f6bc5d0ada9f19caf202333bb8b5b036488576484c86257d1a4b41d"
+    },
+    {
+      "path": "Renderer/handoffs/L14_roads.json",
+      "sha256": "3d80568dd89dcb103a2e842ab93c1fc0685fbca296b7f13732fde543938def90"
+    },
+    {
+      "path": "Renderer/handoffs/L15_railroads.json",
+      "sha256": "930049122d0c656ca2e14befa80cc38d0e2bee2d467454ca4be17da47481a47c"
+    },
+    {
+      "path": "Renderer/handoffs/L16_resources.json",
+      "sha256": "4d51fc20d0668e530e1011070562effea68c2ea067b858d0a7aca79e8ead61ab"
+    },
+    {
+      "path": "Renderer/handoffs/L17_cities.json",
+      "sha256": "a5533f4c7d8112de3198c51f6453886d0571d2fd73423b9c6d4228d7667f2a5b"
+    },
+    {
+      "path": "Renderer/handoffs/L18_mines.json",
+      "sha256": "224ae8ceff1c9bc1c36dc320510479676c3114e2881b4525346683bfd1a2626b"
+    },
+    {
+      "path": "Renderer/handoffs/L19A_goody_huts_colonies.json",
+      "sha256": "677d98d37390faf594cb228936c1553b6b7db002b6b11aba39142b4a39bdab3e"
+    },
+    {
+      "path": "Renderer/handoffs/L19B_remaining_tile_infrastructure.json",
+      "sha256": "d161498c7100f42a3b3a8d7e907f9cc17f226d47dec57fe2237ce0a3fbd2e4ea"
+    },
+    {
+      "path": "Renderer/handoffs/L19_farms_tundra.json",
+      "sha256": "af4df9871d3b632dcd6ed5b5048d1a91bd66db50973db7bf829aed0c5e66c879"
+    },
+    {
+      "path": "Renderer/handoffs/L20_units.json",
+      "sha256": "8a1002da5ee639d94d7872542e6e08a83e5b7f30a82d5056caf8ce7556a187a0"
+    },
+    {
+      "path": "Renderer/handoffs/L21_complete_beauty_scene.json",
+      "sha256": "426d65f4733b0587ba9ee22a8c6be0f666e1371999427293ca72072dbb91b059"
+    },
+    {
+      "path": "Renderer/handoffs/L9_terrain.json",
+      "sha256": "cbdbf36f5277c8190545bd221b4a581081a788f1997a7cbd1e27dfb700954e68"
+    }
+  ]
+}

@@ -64,6 +64,11 @@ if "%C3X_APPROVED_PAYLOAD%"=="1" (
 
 :approved_terrain_done
 
+if /i "%~1"=="candidate-only" (
+  popd
+  exit /b %C3X_BUILD_RESULT%
+)
+
 copy /y "build\candidate\C3XRenderer.dll" "..\bin\C3XRenderer.dll" >nul
 if errorlevel 1 (
   echo Live C3XRenderer.dll is in use; Renderer\bin still contains a stale build. Exit Civ III and rerun this workflow before INSTALL.bat. 1>&2

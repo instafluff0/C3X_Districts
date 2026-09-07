@@ -111,10 +111,42 @@ float4 q3_water_material(PixelInput input) {
 #endif
  float3 illumination=q6_receiver_illumination(input,normal,1,1);
  if(kind>8.5&&kind<9.5){
-  // Source corridor geometry still carries the frozen analytic distance. This
-  // material witness does not claim Q3 curve/clearance geometry has migrated.
+  // The default keeps the frozen analytic distance. Q3_CONTINUOUS_RIVERS
+  // consumes the opt-in shared corridor, including its terminal presentation.
   float distance_pixels=input.river_data.x;
-#ifdef Q3_STATIC_OPTICS_V2
+#ifdef Q3_CONTINUOUS_RIVERS
+  float2 world=q3_source_world(input);
+  float2 uv=world*q3_source_repeat(.75);
+  float noise=river_bank_noise_texture.Sample(material_sampler,
+   world*float2(q3_source_repeat(.31),q3_source_repeat(.47))+float2(.19,.37)).r-.5;
+  float grain=river_height_texture.Sample(material_sampler,uv).r;
+  float water_width=5.8+noise*.8;
+  float water=1-smoothstep(water_width-1.2,water_width,distance_pixels);
+  float bank_width=9.8+noise*4+(grain-.5)*1.2;
+  float bank=1-smoothstep(bank_width-2.5,bank_width,distance_pixels);
+  // Banks end at the optical shore; the water itself overlaps and dissolves
+  // into the existing sea surface instead of ending in an offshore capsule.
+  float land_bank=smoothstep(-.025,.065,sd);
+  float outlet=smoothstep(-.20,.025,sd);
+  bank*=outlet;clip(bank-.001);
+  water=lerp(1,water,land_bank);
+  float3 bed=river_base_texture.Sample(material_sampler,uv).rgb;
+  float3 sand=beach_base_texture.Sample(material_sampler,uv).rgb;
+  float4 clutter=river_clutter_base_texture.Sample(decal_sampler,frac(world*.5+float2(.23,.41)));
+  float3 dry=lerp(bed,sand,.32)*(0.64+(grain-.5)*.30);
+  dry=lerp(dry,clutter.rgb*.66,clutter.a*.30);
+  float wet=1-smoothstep(water_width,bank_width-1.0,distance_pixels);
+  float3 shore=lerp(dry,dry*.50,wet);
+  float optical_depth=.10+.32*(1-smoothstep(0,5.5,max(0,distance_pixels)));
+  float3 transmitted=bed*exp(-optical_depth*float3(8,4,2));
+  float3 river=lerp(transmitted,float3(.018,.044,.052),1-exp(-optical_depth*5));
+  float2 lean=river_lean0_texture.Sample(material_sampler,
+    world*float2(q3_source_repeat(.92),q3_source_repeat(1.27))).rg*2-1;
+  float3 river_normal=normalize(float3(-lean*.24,1));
+  float3 water_light=q6_receiver_illumination(input,river_normal,1,1);
+  float3 bank_light=q6_receiver_illumination(input,normalize(input.geometry_normal),1,1);
+  return float4(lerp(shore*bank_light,river*water_light,water),bank);
+#elif defined(Q3_STATIC_OPTICS_V2)
   // Keep the captured curve and navigable width. The source river bed remains
   // visible through shallow edges; narrow damp banks replace the sandy outline.
   float water=1-smoothstep(4.6,6.0,distance_pixels);

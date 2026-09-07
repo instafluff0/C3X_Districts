@@ -12,6 +12,8 @@
 #include "recording_adapter.h"
 #include "scene_hooks.h"
 #include "source_metadata.h"
+#include "../systems/objects/canopy_layout.h"
+#include "../systems/hydrology/river_corridor.h"
 
 namespace {
 
@@ -35,6 +37,11 @@ bool biq_scene_enabled = false;
 bool volcano_geometry_enabled = false;
 bool lab_v2_volcano_source_mapping = false;
 bool lab_v2_direct_hill_source = false;
+bool lab_v2_canopy_variation = false;
+bool lab_v2_river_corridor_enabled = false;
+bool lab_v2_river_bank_rocks = false;
+bool lab_v2_river_preparing = false;
+river::Corridor lab_v2_river_corridor;
 int lab_v2_coastal_cliff_join = 0;
 float lab_v2_relief_scale = 1.0f;
 float lab_v2_volcano_scale = 1.0f;
@@ -963,6 +970,10 @@ void build_river_graph() {
 
 float biq_river_node_distance(BiqWindowTile const & tile, float u, float v,
                               unsigned node_kind) {
+    if(lab_v2_river_corridor_enabled && !lab_v2_river_preparing && node_kind!=1u) {
+        auto sample=lab_v2_river_corridor.sample({tile.column+double(u),tile.row+1-double(v)});
+        return float(node_kind==0u?sample.source:sample.mouth);
+    }
     float point_x = static_cast<float>(tile.column + tile.row) + u - v;
     float point_y = static_cast<float>(tile.column - tile.row) + u + v - 1.0f;
     float distance = 1000.0f;
@@ -2390,8 +2401,12 @@ float biq_tile_height(BiqWindowTile const & tile, float u, float v,
     }
     else if (tile.base == 0 && tile.real == 0)
         height += dune_height_value(world_x, world_y) * relief_envelope;
-    if (l13_scene_enabled && tile.river_mask != 0) {
+    if (l13_scene_enabled && !lab_v2_river_preparing && (tile.river_mask != 0 || lab_v2_river_corridor_enabled)) {
         float river_distance = biq_river_distance(tile, u, v);
+        if(lab_v2_river_corridor_enabled) {
+            float valley=1-smoothstep01((river_distance-6.0f)/14.0f);
+            return height*(1-valley)+2.5f*valley;
+        }
         float valley = 1.0f - smoothstep01((river_distance - 4.0f) / 16.0f);
         float valley_floor = 2.5f + (height - 2.5f) * 0.10f;
         height = height * (1.0f - valley * 0.92f) +
@@ -2502,6 +2517,8 @@ float biq_river_edge_distance(BiqWindowTile const & tile, float u, float v,
 }
 
 float biq_river_distance(BiqWindowTile const & tile, float u, float v) {
+    if(lab_v2_river_corridor_enabled && !lab_v2_river_preparing)
+        return float(lab_v2_river_corridor.sample({tile.column+double(u),tile.row+1-double(v)}).distance);
     float distance = 1000.0f;
     if ((tile.river_mask & 2u) != 0)
         distance = std::min(distance, biq_river_edge_distance(
@@ -2793,7 +2810,7 @@ void add_biq_patch(std::vector<Vertex> & vertices, float uv_scale,
                                  authored_height, authored_blend);
     if (l13_scene_enabled && river_geometry_enabled)
         for (BiqWindowTile const & tile : biq_window.tiles)
-            if (tile.river_mask != 0)
+            if (tile.river_mask != 0 || (lab_v2_river_corridor_enabled && lab_v2_river_corridor.affects(tile.column,tile.row)))
                 add_biq_tile_surface(vertices, tile, uv_scale, 9.0f,
                                      authored_height, authored_blend, 32);
     if (l13a_scene_enabled && !lab_v2_omit_legacy_relief_shadow)
@@ -3579,6 +3596,9 @@ bool add_feature_group(FeatureBundle const & bundle, FeatureGroup const & group,
         (group.name == "forest" || group.name == "jungle");
     if (dense_biq_canopy)
         scene_feature_scale = group.name == "forest" ? 0.42f : 0.40f;
+    std::vector<unsigned> canopy_slots;
+    if (dense_biq_canopy && lab_v2_canopy_variation)
+        canopy_slots = canopy::slots(seed, instance_count);
     for (unsigned instance = 0; instance < instance_count; ++instance) {
         FeaturePlacement const * placement = instance < anchor_count
             ? named_feature_placement(bundle, group, anchors[instance])
@@ -3595,11 +3615,12 @@ bool add_feature_group(FeatureBundle const & bundle, FeatureGroup const & group,
             // irregular silhouette while preventing holes in the canopy core.
             // Counts are perfect squares so neither axis gets a partial row.
             unsigned grid_side = group.name == "forest" ? 6u : 7u;
+            unsigned slot = canopy_slots.empty() ? instance : canopy_slots[instance];
             float jitter_x = feature_random(seed + instance * 103u + 59u) - 0.5f;
             float jitter_y = feature_random(seed + instance * 107u + 61u) - 0.5f;
-            x_t = (static_cast<float>(instance % grid_side) + 0.5f + jitter_x * 0.68f) /
+            x_t = (static_cast<float>(slot % grid_side) + 0.5f + jitter_x * 0.68f) /
                   static_cast<float>(grid_side);
-            y_t = (static_cast<float>(instance / grid_side) + 0.5f + jitter_y * 0.68f) /
+            y_t = (static_cast<float>(slot / grid_side) + 0.5f + jitter_y * 0.68f) /
                   static_cast<float>(grid_side);
         }
         float world_y = y_min + (y_max - y_min) * y_t;
@@ -3630,6 +3651,13 @@ bool add_feature_group(FeatureBundle const & bundle, FeatureGroup const & group,
                           placement->scale_variation;
         float scale = placement->scale * (1.0f + variation) * scene_feature_scale;
         float rotation = feature_random(seed + instance * 97u + 47u) * two_pi;
+        if(dense_biq_canopy && lab_v2_river_corridor_enabled) {
+            // Feature-local V is inverted relative to the corner-lattice Y.
+            // Keep trunks out of the actual carved water/bank corridor.
+            auto tile=biq_tile_at(world_x,world_y);
+            if(tile && biq_river_distance(*tile,world_x-tile->column,world_y-tile->row)<9.0f)
+                continue;
+        }
         if(labv2::placement_hooks.accept_vegetation && (group.name=="forest" || group.name=="jungle")) {
             auto tile=biq_tile_at(world_x,world_y);
             if(!tile)throw std::runtime_error("placement filter requires BIQ world coordinates");
@@ -3792,6 +3820,34 @@ bool add_river_rock_scene(FeatureBundle const & bundle,
                 continue;
             float scale = 0.155f + feature_random(seed ^ 0x91c37u) * 0.070f;
             float rotation = feature_random(seed ^ 0x4ad91u) * two_pi;
+            if(lab_v2_river_bank_rocks) {
+                // Match the new displayed channel, not its original tile edge.
+                river::P near{owner->column+double(local_u),owner->row+1-double(local_v)};
+                bool placed=false;
+                for(unsigned attempt=0;attempt<4 && !placed;++attempt) {
+                    river::P point;
+                    double side=((seed&1u)?1.0:-1.0)*((attempt&1u)?-1.0:1.0);
+                    double margin=11.0+feature_random(seed^0x2c07u)*1.5+(attempt/2u)*3.0;
+                    if(!lab_v2_river_corridor.bank_point(near,margin,side,point))continue;
+                    auto receiving=biq_tile_at(float(point.x),float(point.y));
+                    if(!receiving || is_water_terrain(receiving->base))continue;
+                    float u=std::clamp(float(point.x-receiving->column),.00001f,.99999f);
+                    float v=std::clamp(float(receiving->row+1-point.y),.00001f,.99999f);
+                    if(biq_signed_shore_distance(*receiving,u,v)>-.10f)continue;
+                    float ground=biq_tile_height(*receiving,u,v,authored_height,authored_blend);
+                    bool clear=ground<18.f;float c=std::cos(rotation),s=std::sin(rotation);
+                    // Check the posed source body's footprint against the union
+                    // of channels and pools, including nearby other branches.
+                    for(auto const& vertex:bundle.assets[placement.asset_index].vertices) {
+                        river::P q{point.x+(vertex.position[0]*c-vertex.position[1]*s)*scale,
+                                   point.y-(vertex.position[0]*s+vertex.position[1]*c)*scale};
+                        if(lab_v2_river_corridor.sample(q).distance<5.5) {clear=false;break;}
+                    }
+                    if(!clear)continue;
+                    owner=receiving;local_u=u;local_v=v;placed=true;
+                }
+                if(!placed)continue;
+            }
             add_feature_instance(bundle, placement,
                                  static_cast<float>(owner->column) + local_u,
                                  static_cast<float>(owner->row) + local_v,
@@ -4773,6 +4829,10 @@ int main(int argc, char ** argv) {
         lab_v2_coastal_cliff_join=std::atoi(placement)>=3?std::atoi(placement):0;
     lab_v2_omit_legacy_relief_shadow=std::getenv("C3X_LAB_V2_OMIT_REPLACED_SHADOW")!=nullptr;
     if(auto scale=std::getenv("C3X_LAB_V2_RELIEF_SCALE"))lab_v2_relief_scale=std::atof(scale);
+    if(auto canopy=std::getenv("C3X_LAB_V2_CANOPY_VARIATION"))lab_v2_canopy_variation=std::atoi(canopy)==1;
+    if(auto river=std::getenv("C3X_LAB_V2_RIVER_CORRIDOR"))lab_v2_river_corridor_enabled=std::atoi(river)==1;
+    if(auto rocks=std::getenv("C3X_LAB_V2_RIVER_BANK_ROCKS"))lab_v2_river_bank_rocks=std::atoi(rocks)==1;
+    if(auto pools=std::getenv("C3X_LAB_V2_RIVER_POOL_PROFILES"))lab_v2_river_corridor.load_pool_profiles(pools);
     lab_v2_volcano_scale=lab_v2_relief_scale;
     if(auto scale=std::getenv("C3X_LAB_V2_VOLCANO_SCALE"))lab_v2_volcano_scale=std::atof(scale);
     river_geometry_enabled = l13_mode && !beauty_rivers_no_rivers_mode &&
@@ -5919,6 +5979,15 @@ int main(int argc, char ** argv) {
             if (std::sscanf(projection,"%f,%f,%f",&x,&y,&half)!=3 ||
                 !std::isfinite(x) || !std::isfinite(y) || (half!=64 && half!=32)) return 2;
             coast_projection={x,y,half,half*.5f,.82f*half/112.0f};
+        }
+        if(ok && biq_scene_enabled && lab_v2_river_corridor_enabled) {
+            lab_v2_river_preparing=true;
+            lab_v2_river_corridor.build(argv[12],[&](double x,double y) {
+                return biq_world_height(float(x),float(y),
+                    beauty_relief_enabled?&authored_height:nullptr,
+                    beauty_relief_enabled?&authored_blend:nullptr);
+            });
+            lab_v2_river_preparing=false;
         }
         // Exact frozen-source query branch; no GPU work and no appearance mutation.
         if (const char* query = std::getenv("C3X_LAB_V2_SURFACE_QUERY")) {

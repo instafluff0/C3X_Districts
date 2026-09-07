@@ -13,6 +13,35 @@ The end state is a one-command offline source importer plus authored mapping pro
 
 ## Current Position
 
+The user has explicitly resumed the production refresh from the pinned [C3X implementation pickup package](handoffs/candidates/lab_v2_terrain_lighting_r1/README.md), preserving cache/worker behavior. The [native port record](native/profile_v2/README.md) tracks implementation and verification. The installed build remains unchanged while the coupled geometry, source caster and cache gates are incomplete. This supersedes the earlier integration pause awaiting logs; it does not declare visual approval.
+
+The user has started a new active Lab goal for river, forest and jungle quality.
+The [campaign brief](terrain_lab/v2/audits/beauty/RIVER_VEGETATION_CAMPAIGN.md)
+records the target appearance, actual displayed-code findings and the coupled
+implementation sequence. `shadow-receiver-r1` remains the retained visual
+baseline; the integration preparation package remains frozen. The first loop
+now has 16 canopy comparisons and 16 combined `river-corridor-r2` frames across
+the fixed coastal, inland and wilderness regions plus a new 100-tile forest/
+jungle witness. Source-stable canopy ordering, connected source pools, relief-
+aware curves and beach-crossing outlets are implemented as opt-in candidates.
+Offshore pipe caps were rejected and corrected. Actual source terrain matches
+across 3,888 shifted-crop samples. Banks, source-pool shape, corridor-aligned
+clutter and broader coverage remain active work; see
+[the first-loop findings](terrain_lab/v2/audits/beauty/RIVER_VEGETATION_PASS_r2.md).
+No visual acceptance or milestone advancement is claimed. The subsequent
+[bank-rock correction](terrain_lab/v2/audits/beauty/RIVER_BANK_ROCK_PASS_r3.md)
+produces `river-corridor-r3`: the same 16-frame matrix with source rocks placed
+from the actual corridor and all other source instances fixed. This is a small
+placement improvement; bank outline and pool shape remain the larger gaps.
+
+At the user's request, the retained Lab v2 findings are consolidated for native
+implementation in [the terrain/lighting preparation package](handoffs/candidates/lab_v2_terrain_lighting_r1/README.md).
+Its source snapshot, 32 frame hashes and local asset inventory verify. The
+package maps the coupled changes to the evolving native renderer, including
+vertex/binding differences, cache dependencies, rejected experiments and parity
+requirements. This is preparation, not visual promotion or a native code change;
+existing approval/refresh gates remain unchanged.
+
 Lab v2's 2026-09-06 receiver correction retains `shadow-receiver-r1` as
 incremental work in progress on top of the larger `relief-size-r3` bodies.
 A bounded shadow-texel normal offset substantially reduces the thin false

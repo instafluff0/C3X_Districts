@@ -1,0 +1,1758 @@
+{
+  "schema": "c3x.bank_rock_evidence.v1",
+  "approval": null,
+  "regions": [
+    {
+      "region": "coastal",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "3379c01f4dac0867da9ecdc253537e67661e525d0b60e46ea6b2818c81edeacd",
+          "after_sha256": "cd499770179d2c937a83972e4dde1c283a8b9e88e85d55282141af18b8028bac",
+          "rocks_before": [
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                8.5712204,
+                1.02499998
+              ],
+              "source_uniform_scale": 0.2043726,
+              "yaw_radians": 4.97547436,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                9.56103897,
+                2.0250001
+              ],
+              "source_uniform_scale": 0.224757016,
+              "yaw_radians": 0.916370869,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                8.59892368,
+                1.11586988
+              ],
+              "source_uniform_scale": 0.2043726,
+              "yaw_radians": 4.97547436,
+              "ground_authoring_height": 3.38222408,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                9.43976498,
+                3.79045033
+              ],
+              "source_uniform_scale": 0.224757016,
+              "yaw_radians": 0.916370869,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 110,
+            "bounds": [
+              716,
+              569,
+              857,
+              590
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/coastal-h12-z1.png",
+          "resampled": false
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "48df84179d888f8b8053e44569aec6a4d8a95bfc490f3e07c244f392b8e3d8bc",
+          "after_sha256": "399d17f197b02d2638b7f7060459ce4eec242bab0223325e5e3da5683788e911",
+          "rocks_before": [
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                8.5712204,
+                1.02499998
+              ],
+              "source_uniform_scale": 0.2043726,
+              "yaw_radians": 4.97547436,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                9.56103897,
+                2.0250001
+              ],
+              "source_uniform_scale": 0.224757016,
+              "yaw_radians": 0.916370869,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                8.59892368,
+                1.11586988
+              ],
+              "source_uniform_scale": 0.2043726,
+              "yaw_radians": 4.97547436,
+              "ground_authoring_height": 3.38222408,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                9.43976498,
+                3.79045033
+              ],
+              "source_uniform_scale": 0.224757016,
+              "yaw_radians": 0.916370869,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 46,
+            "bounds": [
+              358,
+              284,
+              429,
+              295
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/coastal-h12-z2.png",
+          "resampled": false
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "52344829928b78356682f6dd8d6d7cc47cadccd27d193a5e0871726e4c8f504e",
+          "after_sha256": "dd1cf4ada9279f0246c1b87a856dd13c9c7c5cf6c0b5f83e3e51690c504e18ab",
+          "rocks_before": [
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                8.5712204,
+                1.02499998
+              ],
+              "source_uniform_scale": 0.2043726,
+              "yaw_radians": 4.97547436,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                9.56103897,
+                2.0250001
+              ],
+              "source_uniform_scale": 0.224757016,
+              "yaw_radians": 0.916370869,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                8.59892368,
+                1.11586988
+              ],
+              "source_uniform_scale": 0.2043726,
+              "yaw_radians": 4.97547436,
+              "ground_authoring_height": 3.38222408,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                9.43976498,
+                3.79045033
+              ],
+              "source_uniform_scale": 0.224757016,
+              "yaw_radians": 0.916370869,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 98,
+            "bounds": [
+              716,
+              571,
+              857,
+              596
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/coastal-h00-z1.png",
+          "resampled": false
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "bd65329fb509522fdd45629bf290a3932e12efd98eaf501f0fc97f156aa9bcfc",
+          "after_sha256": "7299c7c22171f9950ec021c167a525728561d4c49c7a57aa14f037694e9fc834",
+          "rocks_before": [
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                8.5712204,
+                1.02499998
+              ],
+              "source_uniform_scale": 0.2043726,
+              "yaw_radians": 4.97547436,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                9.56103897,
+                2.0250001
+              ],
+              "source_uniform_scale": 0.224757016,
+              "yaw_radians": 0.916370869,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                8.59892368,
+                1.11586988
+              ],
+              "source_uniform_scale": 0.2043726,
+              "yaw_radians": 4.97547436,
+              "ground_authoring_height": 3.38222408,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                9.43976498,
+                3.79045033
+              ],
+              "source_uniform_scale": 0.224757016,
+              "yaw_radians": 0.916370869,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 40,
+            "bounds": [
+              358,
+              285,
+              429,
+              296
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/coastal-h00-z2.png",
+          "resampled": false
+        }
+      ]
+    },
+    {
+      "region": "inland",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "4545d007e73043033f4dcb1c90cc104170575082275792fce53d7a9a8b7958bd",
+          "after_sha256": "1a4c2964f977a159aa7f0babbe3dd0dcb96d37ed87365526708251c32ccdb6fa",
+          "rocks_before": [
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                6.9749999,
+                2.57312512
+              ],
+              "source_uniform_scale": 0.185249567,
+              "yaw_radians": 5.69723082,
+              "ground_authoring_height": 2.75127149,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                7.35717392,
+                2.0250001
+              ],
+              "source_uniform_scale": 0.19002831,
+              "yaw_radians": 2.91856766,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.9749999,
+                4.29961395
+              ],
+              "source_uniform_scale": 0.158586234,
+              "yaw_radians": 1.76301682,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                0.429142326,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.155872852,
+              "yaw_radians": 0.800413787,
+              "ground_authoring_height": 16.5131378,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                1.47964537,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.177711815,
+              "yaw_radians": 2.11419177,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.65491748,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.21157527,
+              "yaw_radians": 0.212067261,
+              "ground_authoring_height": 27.1626453,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                5.9749999,
+                5.30150366
+              ],
+              "source_uniform_scale": 0.194263667,
+              "yaw_radians": 4.39319992,
+              "ground_authoring_height": 12.485343,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                7.43981171,
+                7.0250001
+              ],
+              "source_uniform_scale": 0.186786875,
+              "yaw_radians": 0.369953811,
+              "ground_authoring_height": 5.82738304,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                6.93289471,
+                2.53956079
+              ],
+              "source_uniform_scale": 0.185249567,
+              "yaw_radians": 5.69723082,
+              "ground_authoring_height": 5.13235712,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                7.33946133,
+                2.00785303
+              ],
+              "source_uniform_scale": 0.19002831,
+              "yaw_radians": 2.91856766,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                0.454157233,
+                5.05185366
+              ],
+              "source_uniform_scale": 0.155872852,
+              "yaw_radians": 0.800413787,
+              "ground_authoring_height": 10.451292,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                1.28513145,
+                6.73003578
+              ],
+              "source_uniform_scale": 0.177711815,
+              "yaw_radians": 2.11419177,
+              "ground_authoring_height": 4.3416214,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.20665455,
+                6.53085613
+              ],
+              "source_uniform_scale": 0.21157527,
+              "yaw_radians": 0.212067261,
+              "ground_authoring_height": 3.33022642,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                7.46108007,
+                7.04820108
+              ],
+              "source_uniform_scale": 0.186786875,
+              "yaw_radians": 0.369953811,
+              "ground_authoring_height": 7.46220016,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 831,
+            "bounds": [
+              441,
+              186,
+              1046,
+              529
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/inland-h12-z1.png",
+          "resampled": false
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "48b0051577b6f47500f85f42b24e0059be0e36cf9a3c020118a163710c2073e7",
+          "after_sha256": "1e32edc3f95a870a2eeddf588c40e40537473fb22e0262a4ef2195cae508eb5f",
+          "rocks_before": [
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                6.9749999,
+                2.57312512
+              ],
+              "source_uniform_scale": 0.185249567,
+              "yaw_radians": 5.69723082,
+              "ground_authoring_height": 2.75127149,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                7.35717392,
+                2.0250001
+              ],
+              "source_uniform_scale": 0.19002831,
+              "yaw_radians": 2.91856766,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.9749999,
+                4.29961395
+              ],
+              "source_uniform_scale": 0.158586234,
+              "yaw_radians": 1.76301682,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                0.429142326,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.155872852,
+              "yaw_radians": 0.800413787,
+              "ground_authoring_height": 16.5131378,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                1.47964537,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.177711815,
+              "yaw_radians": 2.11419177,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.65491748,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.21157527,
+              "yaw_radians": 0.212067261,
+              "ground_authoring_height": 27.1626453,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                5.9749999,
+                5.30150366
+              ],
+              "source_uniform_scale": 0.194263667,
+              "yaw_radians": 4.39319992,
+              "ground_authoring_height": 12.485343,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                7.43981171,
+                7.0250001
+              ],
+              "source_uniform_scale": 0.186786875,
+              "yaw_radians": 0.369953811,
+              "ground_authoring_height": 5.82738304,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                6.93289471,
+                2.53956079
+              ],
+              "source_uniform_scale": 0.185249567,
+              "yaw_radians": 5.69723082,
+              "ground_authoring_height": 5.13235712,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                7.33946133,
+                2.00785303
+              ],
+              "source_uniform_scale": 0.19002831,
+              "yaw_radians": 2.91856766,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                0.454157233,
+                5.05185366
+              ],
+              "source_uniform_scale": 0.155872852,
+              "yaw_radians": 0.800413787,
+              "ground_authoring_height": 10.451292,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                1.28513145,
+                6.73003578
+              ],
+              "source_uniform_scale": 0.177711815,
+              "yaw_radians": 2.11419177,
+              "ground_authoring_height": 4.3416214,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.20665455,
+                6.53085613
+              ],
+              "source_uniform_scale": 0.21157527,
+              "yaw_radians": 0.212067261,
+              "ground_authoring_height": 3.33022642,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                7.46108007,
+                7.04820108
+              ],
+              "source_uniform_scale": 0.186786875,
+              "yaw_radians": 0.369953811,
+              "ground_authoring_height": 7.46220016,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 292,
+            "bounds": [
+              220,
+              93,
+              523,
+              265
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/inland-h12-z2.png",
+          "resampled": false
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "32c6b20d4606c8047f14da80aa1d94d110a718d2d5670b90a8a945fe97c5b7e5",
+          "after_sha256": "29bee13c0a87611ee5aae0861ebdb08b4b6857d897ed8f9727cabe24954f5508",
+          "rocks_before": [
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                6.9749999,
+                2.57312512
+              ],
+              "source_uniform_scale": 0.185249567,
+              "yaw_radians": 5.69723082,
+              "ground_authoring_height": 2.75127149,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                7.35717392,
+                2.0250001
+              ],
+              "source_uniform_scale": 0.19002831,
+              "yaw_radians": 2.91856766,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.9749999,
+                4.29961395
+              ],
+              "source_uniform_scale": 0.158586234,
+              "yaw_radians": 1.76301682,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                0.429142326,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.155872852,
+              "yaw_radians": 0.800413787,
+              "ground_authoring_height": 16.5131378,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                1.47964537,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.177711815,
+              "yaw_radians": 2.11419177,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.65491748,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.21157527,
+              "yaw_radians": 0.212067261,
+              "ground_authoring_height": 27.1626453,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                5.9749999,
+                5.30150366
+              ],
+              "source_uniform_scale": 0.194263667,
+              "yaw_radians": 4.39319992,
+              "ground_authoring_height": 12.485343,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                7.43981171,
+                7.0250001
+              ],
+              "source_uniform_scale": 0.186786875,
+              "yaw_radians": 0.369953811,
+              "ground_authoring_height": 5.82738304,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                6.93289471,
+                2.53956079
+              ],
+              "source_uniform_scale": 0.185249567,
+              "yaw_radians": 5.69723082,
+              "ground_authoring_height": 5.13235712,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                7.33946133,
+                2.00785303
+              ],
+              "source_uniform_scale": 0.19002831,
+              "yaw_radians": 2.91856766,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                0.454157233,
+                5.05185366
+              ],
+              "source_uniform_scale": 0.155872852,
+              "yaw_radians": 0.800413787,
+              "ground_authoring_height": 10.451292,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                1.28513145,
+                6.73003578
+              ],
+              "source_uniform_scale": 0.177711815,
+              "yaw_radians": 2.11419177,
+              "ground_authoring_height": 4.3416214,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.20665455,
+                6.53085613
+              ],
+              "source_uniform_scale": 0.21157527,
+              "yaw_radians": 0.212067261,
+              "ground_authoring_height": 3.33022642,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                7.46108007,
+                7.04820108
+              ],
+              "source_uniform_scale": 0.186786875,
+              "yaw_radians": 0.369953811,
+              "ground_authoring_height": 7.46220016,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 852,
+            "bounds": [
+              441,
+              186,
+              1039,
+              531
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/inland-h00-z1.png",
+          "resampled": false
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "00f2a0f3f12711edfe7a54faa9e34383e73ee2f612359231f282ad20296f01ac",
+          "after_sha256": "c5482de979c8ca277cd54b801d84642e4098ea1be2024db242c9bb3911433218",
+          "rocks_before": [
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                6.9749999,
+                2.57312512
+              ],
+              "source_uniform_scale": 0.185249567,
+              "yaw_radians": 5.69723082,
+              "ground_authoring_height": 2.75127149,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                7.35717392,
+                2.0250001
+              ],
+              "source_uniform_scale": 0.19002831,
+              "yaw_radians": 2.91856766,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.9749999,
+                4.29961395
+              ],
+              "source_uniform_scale": 0.158586234,
+              "yaw_radians": 1.76301682,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                0.429142326,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.155872852,
+              "yaw_radians": 0.800413787,
+              "ground_authoring_height": 16.5131378,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                1.47964537,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.177711815,
+              "yaw_radians": 2.11419177,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.65491748,
+                5.0250001
+              ],
+              "source_uniform_scale": 0.21157527,
+              "yaw_radians": 0.212067261,
+              "ground_authoring_height": 27.1626453,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                5.9749999,
+                5.30150366
+              ],
+              "source_uniform_scale": 0.194263667,
+              "yaw_radians": 4.39319992,
+              "ground_authoring_height": 12.485343,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                7.43981171,
+                7.0250001
+              ],
+              "source_uniform_scale": 0.186786875,
+              "yaw_radians": 0.369953811,
+              "ground_authoring_height": 5.82738304,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                6.93289471,
+                2.53956079
+              ],
+              "source_uniform_scale": 0.185249567,
+              "yaw_radians": 5.69723082,
+              "ground_authoring_height": 5.13235712,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                7.33946133,
+                2.00785303
+              ],
+              "source_uniform_scale": 0.19002831,
+              "yaw_radians": 2.91856766,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "c110ebaa13f9a69f7e6b0f649f3368cdc5d68fc294751e80b3eb48aae80066a7",
+              "source_xy_anchor": [
+                0.454157233,
+                5.05185366
+              ],
+              "source_uniform_scale": 0.155872852,
+              "yaw_radians": 0.800413787,
+              "ground_authoring_height": 10.451292,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                1.28513145,
+                6.73003578
+              ],
+              "source_uniform_scale": 0.177711815,
+              "yaw_radians": 2.11419177,
+              "ground_authoring_height": 4.3416214,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                2.20665455,
+                6.53085613
+              ],
+              "source_uniform_scale": 0.21157527,
+              "yaw_radians": 0.212067261,
+              "ground_authoring_height": 3.33022642,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                7.46108007,
+                7.04820108
+              ],
+              "source_uniform_scale": 0.186786875,
+              "yaw_radians": 0.369953811,
+              "ground_authoring_height": 7.46220016,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 270,
+            "bounds": [
+              220,
+              93,
+              520,
+              265
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/inland-h00-z2.png",
+          "resampled": false
+        }
+      ]
+    },
+    {
+      "region": "wilderness",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "769fcc12f118d48c07081faed0c66c686256225d27090639264d3ec7a405a742",
+          "after_sha256": "769fcc12f118d48c07081faed0c66c686256225d27090639264d3ec7a405a742",
+          "rocks_before": [],
+          "rocks_after": [],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 0,
+            "bounds": null,
+            "output_size": [
+              1360,
+              800
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/wilderness-h12-z1.png",
+          "resampled": false
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "af4ca76e4f9f96a90554865e518d19aa6bccefdc466d3bc18ac4445dba21255c",
+          "after_sha256": "af4ca76e4f9f96a90554865e518d19aa6bccefdc466d3bc18ac4445dba21255c",
+          "rocks_before": [],
+          "rocks_after": [],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 0,
+            "bounds": null,
+            "output_size": [
+              680,
+              400
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/wilderness-h12-z2.png",
+          "resampled": false
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "e0b6ee3c879cf20d5501bfde95a4b3b0b8f060abf875caa9c373df3551a98b34",
+          "after_sha256": "e0b6ee3c879cf20d5501bfde95a4b3b0b8f060abf875caa9c373df3551a98b34",
+          "rocks_before": [],
+          "rocks_after": [],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 0,
+            "bounds": null,
+            "output_size": [
+              1360,
+              800
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/wilderness-h00-z1.png",
+          "resampled": false
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "dc8a4ef21990a67025369e60a2d6b48737aa0e127ef744a57f5fc6b7bc48cad3",
+          "after_sha256": "dc8a4ef21990a67025369e60a2d6b48737aa0e127ef744a57f5fc6b7bc48cad3",
+          "rocks_before": [],
+          "rocks_after": [],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 0,
+            "bounds": null,
+            "output_size": [
+              680,
+              400
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/wilderness-h00-z2.png",
+          "resampled": false
+        }
+      ]
+    },
+    {
+      "region": "freshcanopy",
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "370e0e04bebdf404a914f96b05e8696b7c1b43f16b4e5bf81e0db3649d599427",
+          "after_sha256": "8fda6607e22b192d8711ad2d70b60b54cbaf75228f39ae4ca67a0a9e40304e0a",
+          "rocks_before": [
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                3.36003208,
+                4.0250001
+              ],
+              "source_uniform_scale": 0.180599302,
+              "yaw_radians": 0.89756161,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                7.29204416,
+                6.0250001
+              ],
+              "source_uniform_scale": 0.213658407,
+              "yaw_radians": 5.5958457,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                0.975000024,
+                7.38809681
+              ],
+              "source_uniform_scale": 0.172127575,
+              "yaw_radians": 2.2109406,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                3.20242572,
+                4.32882261
+              ],
+              "source_uniform_scale": 0.180599302,
+              "yaw_radians": 0.89756161,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                7.39494467,
+                6.24913216
+              ],
+              "source_uniform_scale": 0.213658407,
+              "yaw_radians": 5.5958457,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                0.629156113,
+                7.11240721
+              ],
+              "source_uniform_scale": 0.172127575,
+              "yaw_radians": 2.2109406,
+              "ground_authoring_height": 2.51053643,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 409,
+            "bounds": [
+              543,
+              144,
+              966,
+              403
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/freshcanopy-h12-z1.png",
+          "resampled": false
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "2a43747be039ad3ad6f11c4c1c6659b9edfaeffbca5e200b5eae89e0c9327018",
+          "after_sha256": "d1d2f07599325321249d984272e2ace4466933658d1ef7e1fb4733d8dac15320",
+          "rocks_before": [
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                3.36003208,
+                4.0250001
+              ],
+              "source_uniform_scale": 0.180599302,
+              "yaw_radians": 0.89756161,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                7.29204416,
+                6.0250001
+              ],
+              "source_uniform_scale": 0.213658407,
+              "yaw_radians": 5.5958457,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                0.975000024,
+                7.38809681
+              ],
+              "source_uniform_scale": 0.172127575,
+              "yaw_radians": 2.2109406,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                3.20242572,
+                4.32882261
+              ],
+              "source_uniform_scale": 0.180599302,
+              "yaw_radians": 0.89756161,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                7.39494467,
+                6.24913216
+              ],
+              "source_uniform_scale": 0.213658407,
+              "yaw_radians": 5.5958457,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                0.629156113,
+                7.11240721
+              ],
+              "source_uniform_scale": 0.172127575,
+              "yaw_radians": 2.2109406,
+              "ground_authoring_height": 2.51053643,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 135,
+            "bounds": [
+              271,
+              72,
+              483,
+              202
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/freshcanopy-h12-z2.png",
+          "resampled": false
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "77e4e2adbf92959eecc53314ad35fcebf347e5f5b890d22406ef77ace6a36cc6",
+          "after_sha256": "3adcba64d22d9e79deb0e8424326edcbdf55ee1a4a58709d90b771e649aa8c64",
+          "rocks_before": [
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                3.36003208,
+                4.0250001
+              ],
+              "source_uniform_scale": 0.180599302,
+              "yaw_radians": 0.89756161,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                7.29204416,
+                6.0250001
+              ],
+              "source_uniform_scale": 0.213658407,
+              "yaw_radians": 5.5958457,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                0.975000024,
+                7.38809681
+              ],
+              "source_uniform_scale": 0.172127575,
+              "yaw_radians": 2.2109406,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                3.20242572,
+                4.32882261
+              ],
+              "source_uniform_scale": 0.180599302,
+              "yaw_radians": 0.89756161,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                7.39494467,
+                6.24913216
+              ],
+              "source_uniform_scale": 0.213658407,
+              "yaw_radians": 5.5958457,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                0.629156113,
+                7.11240721
+              ],
+              "source_uniform_scale": 0.172127575,
+              "yaw_radians": 2.2109406,
+              "ground_authoring_height": 2.51053643,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 381,
+            "bounds": [
+              543,
+              144,
+              961,
+              406
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/freshcanopy-h00-z1.png",
+          "resampled": false
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "cae9172df6b8c89a93330475cf8ea243a595df58239aeaa1a4570f96310668d1",
+          "after_sha256": "cbcc50d54ee49208bfbf6e07a4b98782a72255f894c4f009814ae6bc97b4617c",
+          "rocks_before": [
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                3.36003208,
+                4.0250001
+              ],
+              "source_uniform_scale": 0.180599302,
+              "yaw_radians": 0.89756161,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                7.29204416,
+                6.0250001
+              ],
+              "source_uniform_scale": 0.213658407,
+              "yaw_radians": 5.5958457,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                0.975000024,
+                7.38809681
+              ],
+              "source_uniform_scale": 0.172127575,
+              "yaw_radians": 2.2109406,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "rocks_after": [
+            {
+              "mesh_sha256": "7797d01eeab871754c99646c4a1fc8ab809fbc19c9efe18fc45b96a9eae59eaa",
+              "source_xy_anchor": [
+                3.20242572,
+                4.32882261
+              ],
+              "source_uniform_scale": 0.180599302,
+              "yaw_radians": 0.89756161,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "cde9113e486a4cbf36b2d0fba04cd4f8d1b14db5fd2b0a9f3a72a2b8e0a69e7b",
+              "source_xy_anchor": [
+                7.39494467,
+                6.24913216
+              ],
+              "source_uniform_scale": 0.213658407,
+              "yaw_radians": 5.5958457,
+              "ground_authoring_height": 2.5,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            },
+            {
+              "mesh_sha256": "bbfb9bd2759d3a411bfcf4f9c3f5e3d1381ae71c222ec71a736301d3154f1b8a",
+              "source_xy_anchor": [
+                0.629156113,
+                7.11240721
+              ],
+              "source_uniform_scale": 0.172127575,
+              "yaw_radians": 2.2109406,
+              "ground_authoring_height": 2.51053643,
+              "projected_z_pixels_per_source_unit": 150,
+              "ground_projection_vertical_scale": 0.468571424,
+              "world_z_authoring_divisor": 112,
+              "legacy_vertical_calibration_is_uniform_world_transform": false
+            }
+          ],
+          "all_other_source_instances_identical": true,
+          "difference": {
+            "changed_pixels": 119,
+            "bounds": [
+              271,
+              72,
+              481,
+              203
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          },
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/river-corridor-r3/review/freshcanopy-h00-z2.png",
+          "resampled": false
+        }
+      ]
+    }
+  ]
+}

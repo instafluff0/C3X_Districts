@@ -89,7 +89,52 @@
       "untuned_region_evidence": "terrain_lab/v2/fixtures/beauty/shadow-receiver-foundation/freshshadow/BENCHMARKS.json"
     },
     "ordinary_backend": "macos_metal",
-    "promotion_parity_backend": "windows_d3d11"
+    "promotion_parity_backend": "windows_d3d11",
+    "integration_preparation": {
+      "status": "prepared_not_promoted",
+      "path": "handoffs/candidates/lab_v2_terrain_lighting_r1/README.md",
+      "manifest": "handoffs/candidates/lab_v2_terrain_lighting_r1/manifest.json",
+      "requested_by_user": true,
+      "approval": null,
+      "native_changes_in_this_preparation": false,
+      "required_user_action": [],
+      "next_action": "Review candidate implementation map and existing gates before a deliberate native refresh; preserve current production maintenance."
+    },
+    "river_vegetation_campaign": {
+      "status": "active",
+      "requested_by_user": true,
+      "plan": "terrain_lab/v2/audits/beauty/RIVER_VEGETATION_CAMPAIGN.md",
+      "baseline": "shadow-receiver-r1",
+      "scope": [
+        "river continuity, headwater lakes, complete sea outlets, source-backed banks and relief-aware meanders",
+        "world-stable forest/jungle variation preserving source appearance"
+      ],
+      "approval": null,
+      "integration_preparation_preserved": "handoffs/candidates/lab_v2_terrain_lighting_r1/manifest.json",
+      "latest_candidate": "river-corridor-r3",
+      "canopy_candidate": "canopy-variation-r1",
+      "combined_frames": 16,
+      "regions": [
+        "coastal",
+        "inland",
+        "wilderness",
+        "freshcanopy"
+      ],
+      "findings": "terrain_lab/v2/audits/beauty/RIVER_VEGETATION_PASS_r2.md",
+      "evidence": [
+        "terrain_lab/v2/audits/beauty/CANOPY_VARIATION_r1_EVIDENCE.json",
+        "terrain_lab/v2/audits/beauty/RIVER_CORRIDOR_r2_EVIDENCE.json",
+        "terrain_lab/v2/audits/beauty/RIVER_CROP_r1_EVIDENCE.json"
+      ],
+      "remaining_visual_gaps": [
+        "more varied exposed banks and soil transition",
+        "source-backed irregular headwater pools with matched geometry/material coordinates",
+        "remaining steep-relief configurations and wider day/night/zoom coverage"
+      ],
+      "broader_acceptance_pending": true,
+      "bank_rock_findings": "terrain_lab/v2/audits/beauty/RIVER_BANK_ROCK_PASS_r3.md",
+      "bank_rock_evidence": "terrain_lab/v2/audits/beauty/RIVER_BANK_ROCK_r3_EVIDENCE.json"
+    }
   },
   "workstreams": {
     "renderer_lab": {
@@ -2278,5 +2323,34 @@
         }
       ]
     }
-  ]
+  ],
+  "integration_pickup_refresh": {
+    "authorization": "2026-09-06: user explicitly requested implementing the latest C3X implementation pickup package into production while preserving caching/performance. This supersedes the prior pause awaiting logs; do not launch the game.",
+    "status": "in_progress",
+    "candidate": "lab_v2_terrain_lighting_r1",
+    "implementation": "native/profile_v2/README.md",
+    "existing_symbols": [
+      "Map_Renderer_m71_Draw_Tiles",
+      "Map_Renderer_m19_Draw_Tile_by_XY_and_Flags",
+      "Main_Screen_Form_tile_to_screen_coords",
+      "OutputDebugStringA",
+      "QueryPerformanceCounter"
+    ],
+    "audit_candidates": [],
+    "required_user_action": [],
+    "completed": [
+      "Pinned shader/query reference closure copied from the pickup snapshot; active Lab river/vegetation work excluded.",
+      "Portable production material/shoreline kernels pass differential tests against the pinned reference, translated crops and wrap seams.",
+      "Native shader adapter allocates b2 shadows and b3 world settings, retaining b1 viewport; extended shader model 5 inputs compile on Windows.",
+      "MSAA4 scene-linear scratch targets and output transfer pass an off-screen Windows test; native candidate wiring is in progress."
+    ],
+    "remaining": [
+      "Complete production terrain/shore/relief/owner-material geometry and selected cliff assets.",
+      "Add stable source caster fields and complete shadow dependencies without viewport-wide cache invalidation.",
+      "Connect all native world attributes, grounding and shared output; verify four-phase/two-zoom object clearance and cold/warm scroll parity.",
+      "Investigate the frozen-profile incremental boundary smoke failure before completing the native candidate.",
+      "Run integration/full gates, stage the final build and retain manual in-game checkpoint."
+    ],
+    "visual_approval": "pending; no historical Lab acceptance or new convergence gate claimed"
+  }
 }

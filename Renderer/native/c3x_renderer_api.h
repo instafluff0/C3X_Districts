@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 13u
+#define C3X_RENDERER_API_VERSION 14u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -162,6 +162,13 @@ struct c3x_renderer_frame_v1 {
     c3x_renderer_i32 world_height_tiles;
     c3x_renderer_u32 world_wrap_x;
     c3x_renderer_u32 world_wrap_y;
+    // API 14: packed authoritative topology, row-major on Civ III's parity
+    // lattice: index=(y*world_width_tiles+x)/2. Low bytes are base, real,
+    // river mask, active effect. No anchors or object strings. Optional on the
+    // frozen profile; the pickup profile requires complete world coverage.
+    c3x_renderer_u32 world_topology_count;
+    c3x_renderer_u32 const * world_topology;
+    c3x_renderer_i64 world_topology_revision;
 };
 
 struct c3x_renderer_output_v1 {

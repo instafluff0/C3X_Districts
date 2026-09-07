@@ -41,6 +41,17 @@ the nuclear and transient-effect presentation remains native.
 
 M5.1 through M5.3 were implemented with existing symbols. M5.3 proved that the existing timer/map hooks and main-screen animator dirty bit are sufficient; it needs no new callable redraw entry. Other future M6/M7 candidates below are not requests to edit `civ_prog_objects.csv`.
 
+## Lab v2 terrain/lighting preparation — 2026-09-06
+
+The user requested a pickup package for the retained Lab v2 visual work.
+`handoffs/candidates/lab_v2_terrain_lighting_r1/` maps that work to the existing
+native terrain renderer and the established m19/m71 boundary. This preparation
+changes no injected/native implementation and proves no additional capture hook
+necessary. For this preparation only, `audit_candidates = []` and
+`required_user_action = []`. Existing M7.5 requests and production-maintenance
+entries remain unchanged. Re-audit actual consumed halo/state dependencies when
+the deliberate native refresh is implemented; do not add speculative CSV entries.
+
 ## Status Vocabulary
 
 - `available_patch`: already present in `civ_prog_objects.csv` in a patchable form used by C3X.
@@ -338,3 +349,10 @@ M6.6 requires no new patch symbol. The existing tile capture already supplies bo
 - Confirmed capability: its `flags & 0x4010` dispatch owns Civ III mountains, hills, and volcanoes after the custom terrain bitmap is inserted.
 - Implemented use: after a successful custom blit, clear `0x4010` only for the exact captured screen instance of a tile whose custom relief replacement succeeded; retain the native dispatch for per-tile and whole-frame fallback and preserve every unrelated retained-layer bit.
 - `required_user_action: []`. No new patch symbol or supported-build address is required.
+
+## Lab v2 pickup refresh (2026-09-06, in progress)
+
+- Existing symbols: `Map_Renderer_m71_Draw_Tiles`, `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, `Main_Screen_Form_tile_to_screen_coords`, `OutputDebugStringA`, `QueryPerformanceCounter`.
+- Shader/input/linear-output adaptation remains inside the off-screen native renderer. No added patch capability is currently proven necessary.
+- `audit_candidates: []`; `required_user_action: []`.
+- The user explicitly authorized implementing the pickup into production, superseding the earlier pause for logs. Geometry/caster/cache acceptance and the user-run in-game checkpoint remain pending.

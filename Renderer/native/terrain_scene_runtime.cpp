@@ -292,6 +292,10 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
         hash_value(result.ownership, tile.tile_flags);
         hash_value(result.ownership, tile.feature_flags);
     }
+    if (frame.world_topology_count != 0) {
+        hash_value(result.scene, frame.world_topology_revision);
+        hash_value(result.geometry, frame.world_topology_revision);
+    }
     result.environment = fnv_offset;
     hash_value(result.environment, frame.hour);
     hash_value(result.environment, frame.season);

@@ -2655,6 +2655,10 @@ struct district_button_image_set {
 	struct c3x_renderer_tile_v1 * custom_renderer_tiles;
 	int custom_renderer_tile_count;
 	int custom_renderer_tile_capacity;
+	unsigned int * custom_renderer_world_topology;
+	int custom_renderer_world_topology_count;
+	long long custom_renderer_world_topology_revision;
+	bool custom_renderer_capture_world_topology;
 	bool custom_renderer_frame_active;
 	bool custom_renderer_capture_failed;
 	bool custom_renderer_composited;

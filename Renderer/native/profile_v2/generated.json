@@ -1,0 +1,46 @@
+{
+  "schema": "c3x.native.shader_adapter.v1",
+  "candidate": "lab_v2_terrain_lighting_r1",
+  "files": [
+    {
+      "path": "generated/shaders/hydrology/scene_linear.hlsl",
+      "sha256": "a98ae01f56dbbc4e64c342118e7715110e06bcd6b777507317ef141f9b98a45d"
+    },
+    {
+      "path": "generated/shaders/hydrology/scene_material_v1.hlsl",
+      "sha256": "6da5619657efeebec32bf407b164af94ea57a221d5fb76ba33f02070c58b412e"
+    },
+    {
+      "path": "generated/shaders/lighting/frame_shadow_v1.hlsl",
+      "sha256": "83e3c01561fb6bd306ff34ba34899946744e8ec5ef48ec10b43f545fad460d41"
+    },
+    {
+      "path": "generated/shaders/lighting/generated/scene_linear_v1.hlsl",
+      "sha256": "d7d4da96f9f592072b1ad288ebaf7bf4d55f40c8dd3f546a5258728246450351"
+    },
+    {
+      "path": "generated/shaders/lighting/scene_shadow_v1.hlsl",
+      "sha256": "982b41cb5f98ae52c1c1533b874fd847b6fbe87f6c47520c782320648c0774c0"
+    },
+    {
+      "path": "generated/shaders/lighting/shadow_visibility_v1.hlsl",
+      "sha256": "28e26fbac28780d60ae54d586420456104f0a3916a0546a25d7d9537e0d8b7c4"
+    },
+    {
+      "path": "generated/shaders/relief/coast_rocks.hlsl",
+      "sha256": "959d3de0a7efe2283a5dde0b3db1c9c9d741ef1d989d30c41469723d24e7d03f"
+    },
+    {
+      "path": "generated/shaders/relief/combined_material.hlsl",
+      "sha256": "91e5ed43ae09b5e40e14c00d260db41761a741a5e6c71a7a098b9887c1daf5c2"
+    },
+    {
+      "path": "generated/shaders/terrain/scene_material_v1.hlsl",
+      "sha256": "1a441cf913acdffb108f9f7565489fcf23904da34ab925ba12f9fdb8ee600d74"
+    },
+    {
+      "path": "integrated_v2.hlsl",
+      "sha256": "87365a69b73a0b55a57a07ec1eddc5ed4feb6d2a8d508d5de2fee757b8409de1"
+    }
+  ]
+}
