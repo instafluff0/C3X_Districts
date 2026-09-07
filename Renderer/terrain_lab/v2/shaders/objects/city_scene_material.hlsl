@@ -9,10 +9,15 @@
 #ifndef Q8_CITY_EMISSIVE_GAIN
 #define Q8_CITY_EMISSIVE_GAIN 1.45
 #endif
+#ifndef Q8_CITY_SEPARATE_EMISSION
+#define Q8_CITY_SEPARATE_EMISSION 0
+#endif
 Q6SceneOutput Q8_CITY_FEATURE_ENTRY(FeaturePixelInput p) {
  if(p.material_index<39.5)return Q8LegacyPSFeature(p);
  float3 base=city_base_texture_0.Sample(decal_sampler,p.uv).rgb;
  float3 emission=resource_base_texture_0.Sample(decal_sampler,p.uv).rgb;
+ if(p.material_index>=79.5)
+  return q6_scene_output(float4(emission*environment_night_activation*environment_emissive_scale*Q8_CITY_EMISSIVE_GAIN,1));
  float3 n=normalize(p.geometry_normal);
  float ao=1;
 #if Q8_CITY_CHANNELS
@@ -21,6 +26,7 @@ Q6SceneOutput Q8_CITY_FEATURE_ENTRY(FeaturePixelInput p) {
  // normal_1 and gloss remain unbound until their source roles are established.
 #endif
  float3 lit=base*q6_receiver_illumination(p,n,1,ao);
- lit+=emission*environment_night_activation*environment_emissive_scale*Q8_CITY_EMISSIVE_GAIN;
+ if(!Q8_CITY_SEPARATE_EMISSION)
+  lit+=emission*environment_night_activation*environment_emissive_scale*Q8_CITY_EMISSIVE_GAIN;
  return q6_scene_output(float4(lit,1));
 }

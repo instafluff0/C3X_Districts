@@ -34,12 +34,14 @@ int main(int argc,char**argv) {
   unsigned count=u32();if(count>512)throw std::runtime_error("city draw limit");
   for(unsigned i=0;i<count;++i){
    auto base=string(),emission=string(),ao=string(),normal=string();unsigned n=u32();
-   if(n>3000000 || n%3)throw std::runtime_error("city vertex limit");
+   if(n<3 || n>3000000 || n%3)throw std::runtime_error("city vertex limit");
    std::vector<uint8_t> vertices(size_t(n)*52);in.read((char*)vertices.data(),vertices.size());
    labv2::Draw d;d.feature=1;d.depth=1;d.clear_depth=0;d.depth_mode=2;d.blend_mode=0;
    d.constant_buffer=constants;d.vertex_buffer=unsigned(recorded.buffers.size());d.count=n;d.stride=52;
    d.attributes={{3,0},{2,12},{3,20},{1,32},{4,36}};
    d.world_attribute=4;d.normal_attribute=2;d.uv_attribute=1;d.geometry_flags=3;
+   float material=0;memcpy(&material,vertices.data()+32,4);
+   if(material>=79.5f){d.depth_mode=1;d.blend_mode=2;d.geometry_flags=0;}
    d.textures[124]=texture(base,true);d.textures[116]=texture(emission,true);
    d.textures[118]=texture(ao,false);d.textures[119]=texture(normal,false);
    recorded.buffers.push_back(std::move(vertices));recorded.draws.push_back(d);

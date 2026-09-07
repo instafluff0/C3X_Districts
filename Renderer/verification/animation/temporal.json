@@ -1,0 +1,29 @@
+[
+  {
+    "command": "set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_VISUAL_PROFILE=pickup-r1\" && set \"C3X_RENDERER_RESOURCE_ANIMATION=1\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=1\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\animation\\resources-z128-h12.log\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\..\\Renderer\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\animation\\resources-z128-h12.bmp 960 640 75 39 128 12",
+    "host": "Windows 11",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-07T06:27:50.489501+00:00",
+    "output_tail": "ANIMATION temporal frame=0 visible=14 terrain_built=0 terrain_upload=0 ms=1.210\nANIMATION temporal frame=1 visible=14 terrain_built=0 terrain_upload=0 ms=11.957\nANIMATION temporal frame=2 visible=14 terrain_built=0 terrain_upload=0 ms=10.546\nANIMATION temporal frame=3 visible=14 terrain_built=0 terrain_upload=0 ms=12.251\nANIMATION temporal frame=4 visible=14 terrain_built=0 terrain_upload=0 ms=11.769\nANIMATION temporal frame=5 visible=14 terrain_built=0 terrain_upload=0 ms=9.565\nANIMATION temporal: pass changed_frames=5\nBIQ 100x100 viewport: 387 visible tiles, 0 fallback, output=..\\verification\\animation\\resources-z128-h12.bmp\n",
+    "case": "resources-z128-h12"
+  },
+  {
+    "command": "set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_VISUAL_PROFILE=pickup-r1\" && set \"C3X_RENDERER_RESOURCE_ANIMATION=1\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=1\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\animation\\resources-z64-h12.log\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\..\\Renderer\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\animation\\resources-z64-h12.bmp 960 640 75 39 64 12",
+    "host": "Windows 11",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-07T06:27:59.298073+00:00",
+    "output_tail": "ANIMATION temporal frame=0 visible=14 terrain_built=0 terrain_upload=0 ms=2.187\nANIMATION temporal frame=1 visible=14 terrain_built=0 terrain_upload=0 ms=10.052\nANIMATION temporal frame=2 visible=14 terrain_built=0 terrain_upload=0 ms=9.377\nANIMATION temporal frame=3 visible=14 terrain_built=0 terrain_upload=0 ms=9.086\nANIMATION temporal frame=4 visible=14 terrain_built=0 terrain_upload=0 ms=8.840\nANIMATION temporal frame=5 visible=14 terrain_built=0 terrain_upload=0 ms=9.039\nANIMATION temporal: pass changed_frames=5\nBIQ 100x100 viewport: 1045 visible tiles, 0 fallback, output=..\\verification\\animation\\resources-z64-h12.bmp\n",
+    "case": "resources-z64-h12"
+  },
+  {
+    "command": "set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_VISUAL_PROFILE=pickup-r1\" && set \"C3X_RENDERER_RESOURCE_ANIMATION=1\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=1\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\animation\\resources-z128-h0.log\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\..\\Renderer\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\animation\\resources-z128-h0.bmp 960 640 75 39 128 0",
+    "host": "Windows 11",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-07T06:28:05.572213+00:00",
+    "output_tail": "ANIMATION temporal frame=0 visible=14 terrain_built=0 terrain_upload=0 ms=1.107\nANIMATION temporal frame=1 visible=14 terrain_built=0 terrain_upload=0 ms=9.033\nANIMATION temporal frame=2 visible=14 terrain_built=0 terrain_upload=0 ms=8.481\nANIMATION temporal frame=3 visible=14 terrain_built=0 terrain_upload=0 ms=10.795\nANIMATION temporal frame=4 visible=14 terrain_built=0 terrain_upload=0 ms=8.546\nANIMATION temporal frame=5 visible=14 terrain_built=0 terrain_upload=0 ms=10.832\nANIMATION temporal: pass changed_frames=5\nBIQ 100x100 viewport: 387 visible tiles, 0 fallback, output=..\\verification\\animation\\resources-z128-h0.bmp\n",
+    "case": "resources-z128-h0"
+  }
+]

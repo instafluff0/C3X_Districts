@@ -20,6 +20,33 @@ from Renderer.tools.asset_compiler.compound_landmark_importer import (
 
 
 class CompoundLandmarkImporterTests(unittest.TestCase):
+    def test_auxiliary_atlases_follow_sparse_vertex_remapping_without_changing_geometry(self) -> None:
+        for stride, profile, bones in ((24, 0x315CFCD9, None), (32, 0x6679B170, 1)):
+            with self.subTest(stride=stride):
+                data = bytearray(4 * stride)
+                for i, position in enumerate(((9, 9, 9), (0, 0, 0), (1, 0, 0), (0, 1, 0))):
+                    struct.pack_into("<3e", data, i * stride, *position)
+                    struct.pack_into("<2e", data, i * stride + 8, .25, .5)
+                    struct.pack_into("<2e", data, i * stride + stride - 8, i / 4, .25)
+                    struct.pack_into("<2e", data, i * stride + stride - 4, .5, i / 4)
+                    if bones is not None:
+                        data[i * stride + 16] = 255
+                args = (bytes(data), struct.pack("<3H", 3, 1, 2),
+                        {"format": profile, "stride": stride, "count": 4},
+                        {"bytes_per_index": 2, "count": 3},
+                        {"first_index": 0, "index_count": 3, "base_vertex": 0, "vertex_count": 4},
+                        1.0, bones)
+                original, _ = _normalize_geometry(*args)
+                expanded, evidence = _normalize_geometry(*args, auxiliary_uvs=True)
+                self.assertEqual([[.5, .25], [.5, .5], [.5, .75]], [v['uv2'] for v in expanded['vertices']])
+                self.assertEqual(stride - 4, evidence['auxiliary_uv_offsets']['uv2'])
+                for vertex in expanded['vertices']:
+                    vertex.pop('uv1'); vertex.pop('uv2')
+                self.assertEqual(original, expanded)
+                struct.pack_into("<e", data, stride + stride - 4, float('nan'))
+                with self.assertRaisesRegex(ValueError, 'auxiliary UV is not finite'):
+                    _normalize_geometry(bytes(data), *args[1:], auxiliary_uvs=True)
+
     def test_checked_in_infrastructure_probe_has_five_unique_roots(self) -> None:
         mapping = load_mapping(Path(__file__).with_name("infrastructure_source_sets.json"))
         assets = [asset for package in mapping["packages"] for asset in package["assets"]]

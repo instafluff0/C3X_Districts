@@ -38,6 +38,8 @@ def main():
     parser.add_argument('--expanded',action='store_true')
     parser.add_argument('--authored-ground',action='store_true',help='place source z=0 at ground; retain negative foundation skirts underground')
     parser.add_argument('--emissive-gain',type=float,default=1.45)
+    parser.add_argument('--emissive-uv',type=int,choices=[0,1,2],default=0)
+    parser.add_argument('--glow',action='store_true')
     parser.add_argument('--anchor',type=int,nargs=2,default=[3,2])
     parser.add_argument('--all-zooms',action='store_true')
     parser.add_argument('--resume',action='store_true',help='retry an input/build failure before any combined render exists')
@@ -45,6 +47,9 @@ def main():
     if not .5<=a.factor<=2:raise ValueError('bounded uniform scale factor required')
     if not 0<=a.emissive_gain<=12 or any(v<0 or v>9 for v in a.anchor):raise ValueError('city parameter bounds')
     pack=Path('Renderer/packs/CityStudyExpanded') if a.expanded else city.PACK
+    if a.emissive_uv:
+        if not a.expanded:raise ValueError('auxiliary coordinates require the separate expanded study pack')
+        pack=Path('Renderer/packs/CityStudyAuxiliaryUV')
     pool='city/pool/'+a.pool;catalog=city.read(pack/'city_catalog.json')
     if pool not in catalog['pools']:raise ValueError('unknown pool')
     name=a.pool.replace('/','-')+f'-s{a.size}'
@@ -144,9 +149,14 @@ def main():
                 depth=site['depth']-(x+y)*half_y/height*.75-height_pixels/vertical*.0012
                 world=[site['column']+site['u']+x,site['row']+1-site['v']-y,(site['height']+height_pixels/vertical)/112]
                 vertices.append([sx/width*2-1,1-sy/height*2,depth,*v['uv0'],*city.rotate(v['normal'],inst['rotation']),40+channel_bits,*world,1])
-            groups[textures].extend(vertices[i] for i in mesh['topology']['indices'])
+            groups[(textures,False)].extend(vertices[i] for i in mesh['topology']['indices'])
+            if a.emissive_uv and textures[1]:
+                emission_vertices=[]
+                for source,v in zip(mesh['vertices'],vertices):
+                    emission_vertices.append([*v[:3],*source[f'uv{a.emissive_uv}'],*v[5:8],80,*v[9:]])
+                groups[(textures,True)].extend(emission_vertices[i] for i in mesh['topology']['indices'])
     wire=bytearray(struct.pack('<II',0x38514353,len(groups)))
-    for textures,verts in sorted(groups.items()):
+    for (textures,emission_only),verts in sorted(groups.items(),key=lambda x:(x[0][1],x[0][0])):
         for path in textures:
             b=path.encode();wire+=struct.pack('<I',len(b))+b
         wire+=struct.pack('<I',len(verts))
@@ -156,6 +166,7 @@ def main():
          'source_biq_sha256':surface['region']['source_sha256'],'anchor_tile':anchor,'pool':pool,'size':a.size,
          'uniform_scale_factor':a.factor,'instances':instances,'textures':inputs,'material_declarations':materials,
          'pack':pack.as_posix(),'expanded_pool':a.expanded,'emissive_gain':a.emissive_gain,
+         'emissive_uv':a.emissive_uv,'hdr_glow':a.glow,
          'grounding':'source_z_zero' if a.authored_ground else 'lowest_source_vertex',
          'footprint_half_extent_tiles':footprint_limit,'cross_tile_extent_authorization':'user permits slight city overlap, especially larger cities',
          'projection':projection,'source_z_pixels_per_unit':80.9543,'scene_world_z_per_source_unit':80.9543/(vertical*112),
@@ -173,10 +184,11 @@ def main():
     common=fixture/'city.hlsl'
     common.write_text('#define Q3_NATURAL_WATER 1\n#define PSFeature Q8LegacyPSFeature\n'
         '#include "../../river-corridor-r3/coastal/combined.hlsl"\n#undef PSFeature\n'+
-        f'#define Q8_CITY_CHANNELS {int(a.channels)}\n#define Q8_CITY_EMISSIVE_GAIN {a.emissive_gain}\n#include "../../../../shaders/objects/city_scene_material.hlsl"\n')
+        f'#define Q8_CITY_CHANNELS {int(a.channels)}\n#define Q8_CITY_SEPARATE_EMISSION {int(a.emissive_uv>0)}\n#define Q8_CITY_EMISSIVE_GAIN {a.emissive_gain}\n#include "../../../../shaders/objects/city_scene_material.hlsl"\n')
     shader=fixture/'combined.hlsl';shader.write_text(f'#define Q3_OBJECT_REFLECTION 1\n#define Q3_REFLECTION_SIZE float2({width}.0,{height}.0)\n#include "city.hlsl"\n')
     reflected=fixture/'reflection.hlsl';reflected.write_text('#define VSMain Q3OriginalVSMain\n#define VSFeature Q3OriginalVSFeature\n#define PSMain Q3OriginalPSMain\n#define Q8_CITY_FEATURE_ENTRY Q3OriginalPSFeature\n#include "city.hlsl"\n#undef VSMain\n#undef VSFeature\n#undef PSMain\n'+f'#define Q3_REFLECTION_HEIGHT_NDC {4*.82*half/height:.12f}\n#include "../../../../shaders/hydrology/planar_reflection_pass.hlsl"\n')
     run([sys.executable,V2/'qa/replay_shader.py','--report',output/'report.json','--shader',shader,
-         '--reflection-shader',reflected,'--output',output/'combined'])
+         '--reflection-shader',reflected,'--output',output/'combined']+
+         (['--post-shader',V2/'shaders/common/hdr_glow_tiled.hlsl'] if a.glow else []))
 
 if __name__=='__main__':main()

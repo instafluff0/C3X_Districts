@@ -711,6 +711,7 @@ def _normalize_geometry(
     source_units_per_tile: float,
     bone_count: int | None,
     normalize_skin_weights: bool = False,
+    auxiliary_uvs: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     expected_stride = STATIC_VERTEX_PROFILES.get(vertex_entry["format"])
     if expected_stride != vertex_entry["stride"]:
@@ -798,6 +799,14 @@ def _normalize_geometry(
             "normal": [round(value / length, 8) for value in normal_sum],
             "uv0": [round(value, 8) for value in uv],
         }
+        if auxiliary_uvs:
+            # Opt-in city source probe: two additional half2 atlas coordinates.
+            # Their material roles are established separately by matched renders.
+            for channel, offset in ((1, stride - 8), (2, stride - 4)):
+                pair = struct.unpack_from("<ee", vertex_bytes, index * stride + offset)
+                if not all(math.isfinite(value) for value in pair):
+                    raise ValueError("Compound auxiliary UV is not finite")
+                vertex[f"uv{channel}"] = [round(value, 8) for value in pair]
         if bone_count is not None:
             vertex["skin"] = decode_skin_influences(
                 vertex_bytes,
@@ -834,6 +843,9 @@ def _normalize_geometry(
         "omitted_degenerate_triangles": omitted_degenerate_triangles,
         "skinned": bone_count is not None,
         "uv_address": "repeat" if wrap else "clamp",
+        **({"auxiliary_uv_offsets": {"uv1": stride - 8, "uv2": stride - 4},
+            "auxiliary_uv_encoding": "half2", "auxiliary_uv_roles": "city_material_probe"}
+           if auxiliary_uvs else {}),
         "source_vertex_buffer": vertex_entry,
         "source_index_buffer": index_entry,
         "skin_weight_normalization": (
@@ -1100,6 +1112,7 @@ def _compile_asset(
     texture_cache: dict[tuple[str, str], tuple[str, dict[str, Any]]],
     terrain_edit_policy: str = "reject",
     static_bake: bool = False,
+    auxiliary_uvs: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     package.select_direct_string(source_entry)
     landmark, landmark_user_data, base_model = landmark_base_model(package)
@@ -1262,6 +1275,7 @@ def _compile_asset(
                         primitive,
                         source_units_per_tile,
                         bone_count,
+                        auxiliary_uvs=auxiliary_uvs,
                     )
                     if static_bake:
                         if bone_count is not None:

@@ -20,6 +20,7 @@ def main():
     p.add_argument('--shader',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--reflection-shader',type=Path,help='Opt-in same-command-buffer planar reflection pass')
+    p.add_argument('--post-shader',type=Path,help='Opt-in scene-linear contract 2 GPU reconstruction/glow diagnostic')
     p.add_argument('--repeats',type=int,default=1,help='Bounded repeated GPU frames for cost measurement')
     a=p.parse_args();r=json.loads(a.report.read_text());out=a.output.resolve()
     if not 1<=a.repeats<=32:p.error('repeats must be in [1,32]')
@@ -36,11 +37,15 @@ def main():
         for name,path in reflected.items():shutil.copyfile(path,reflection_dir/(name+'.msl'))
         (reflection_dir/'source.hlsl').write_text(runner.shader_source(a.reflection_shader.resolve()))
     jobs=json.loads((a.report.parent/'batch.json').read_text())
+    post=runner.post_shader(cache,a.post_shader.resolve(),out) if a.post_shader else None
     identities=[]
     for job in jobs:
         packet=Path(job[0]);identities.append({'path':runner.relative(packet),'sha256':file_hash(packet)})
         job[1]=str(shaderdir);job[2]=str(out/Path(job[2]).name)
         job[3]=str(out/Path(job[3]).name);job[9]=str(a.repeats)
+        if post:
+            if len(job)!=12 or job[11]!='2':raise ValueError('post diagnostic requires scene-linear contract 2')
+            job[10]=str(post)
         if a.reflection_shader:
             if len(job)!=12:raise ValueError('reflection prototype expects the standard linear replay job')
             job.append(str(reflection_dir))
@@ -52,6 +57,10 @@ def main():
     if a.reflection_shader:
         record['reflection']={'execution':'GPU prepass in the same command buffer; no intermediate readback',
                               'shader_closure_sha256':file_hash(reflection_dir/'source.hlsl')}
+    if post:
+        source=runner.shader_source(a.post_shader.resolve())
+        (out/'postprocess/source.hlsl').write_text(source)
+        record['postprocess']={'contract':2,'shader_closure_sha256':file_hash(out/'postprocess/source.hlsl')}
     for job in jobs:
         bmp=Path(job[2]);runner.run(['sips','-s','format','png',bmp,'--out',bmp.with_suffix('.png')])
         record['outputs'].append({'image':runner.relative(bmp),'sha256':file_hash(bmp)})

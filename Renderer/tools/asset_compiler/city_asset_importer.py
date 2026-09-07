@@ -238,6 +238,7 @@ def compile_city_assets(
     strategy_path: Path = DEFAULT_STRATEGY,
     pack: Path = DEFAULT_PACK,
     report_path: Path = DEFAULT_REPORT,
+    auxiliary_uvs: bool = False,
 ) -> dict[str, Any]:
     strategy = load_strategy(strategy_path)
     blocks = read_city_blocks(assets_root)
@@ -286,6 +287,7 @@ def compile_city_assets(
                         asset_id,
                         100.0,
                         texture_cache,
+                        auxiliary_uvs=auxiliary_uvs,
                     )
                     assets[asset_id] = manifest_asset
                     compiled[source_key] = (asset_id, evidence)
@@ -411,9 +413,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--strategy", type=Path, default=DEFAULT_STRATEGY)
     parser.add_argument("--pack", type=Path, default=DEFAULT_PACK)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument("--auxiliary-uvs", action="store_true", help="Opt-in source atlas-coordinate study")
     args = parser.parse_args(argv)
     try:
-        report = compile_city_assets(args.assets_root, args.strategy, args.pack, args.report)
+        report = compile_city_assets(args.assets_root, args.strategy, args.pack, args.report, args.auxiliary_uvs)
     except (OSError, ValueError, KeyError, TypeError, ET.ParseError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

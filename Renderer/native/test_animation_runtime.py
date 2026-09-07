@@ -57,7 +57,8 @@ class AnimationRuntimeTests(unittest.TestCase):
         max_error = 0.0
         for pack, component, animation, subject in cases:
             skeleton = normalized_skin.load_skeleton(pack / component["skeleton"])
-            cache = normalized_pose_cache.load_pose_cache(pack / animation["pose_cache"])
+            calibrated = subject.get("calibration")
+            cache = normalized_pose_cache.load_pose_cache(runtime / calibrated["pose_cache"] if calibrated else pack / animation["pose_cache"])
             self.assertEqual(len(component["draw_bindings"]), len(subject["parts"]))
             for binding, part in zip(component["draw_bindings"], subject["parts"]):
                 mesh = normalized_skin.load_mesh(pack / component["meshes"][binding["mesh"]], len(skeleton["bones"]))

@@ -216,6 +216,7 @@ int main(int argc, char ** argv) {
         return 1;
 
     char object_option[8]={};bool objects=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_OBJECTS",object_option,sizeof(object_option))!=0;
+    char animation_option[8]={};bool animate=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ANIMATION",animation_option,sizeof(animation_option))!=0;
     auto capture_view = [&]() {
     int center_raw_x = center_x * tile_width / 2;
     int center_raw_y = center_y * tile_height / 2;
@@ -280,6 +281,16 @@ int main(int argc, char ** argv) {
             auto& rail=tiles[candidates[5]];rail.road_mask=15;rail.railroad_mask=15;rail.route_style=3;
         }
     }
+    if (animate) {
+        char const * names[]={"Horses","Cattle","Wheat","Fish","Whales","Game","Furs","Ivory","Bananas","Rubber"};
+        unsigned next=0;
+        for (auto & tile:tiles)
+            if ((tile.tile_flags&C3X_RENDERER_TILE_RENDER) && tile.anchor_x>target_width/5 &&
+                tile.anchor_x<target_width*4/5 && tile.anchor_y>target_height/4 && tile.anchor_y<target_height*3/4 &&
+                next<std::size(names)) {
+                tile.resource_id=int(100+next);strcpy_s(tile.resource_name,names[next++]);
+            }
+    }
     return tiles;
     };
     auto tiles=capture_view();
@@ -317,6 +328,35 @@ int main(int argc, char ** argv) {
     bool ok = result == C3X_RENDERER_RESULT_OK &&
               (pickup ? output.rendered_tile_count >= expected_rendered : output.rendered_tile_count == expected_rendered) &&
               output.fallback_tile_count == 0 && write_bmp(argv[5], output);
+    if(ok && animate) {
+        std::vector<unsigned char> previous;
+        unsigned changes=0;
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        for (int n=0;n<6 && ok;++n) {
+            frame.presentation_time_ticks=1000000+n*200000;
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
+            QueryPerformanceCounter(&end);
+            if (!ok) break;
+            ok=output.visible_animation_count>0 && output.request_continuous_redraw && output.geometry_tiles_built==0 && output.geometry_upload_bytes==0;
+            for (unsigned i=0;i<frame.tile_count;++i)
+                if ((frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER) && frame.tiles[i].resource_id>=100)
+                    ok=ok && (output.replacement_tile_flags[i]&C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED)!=0;
+            auto bytes=static_cast<unsigned char const*>(output.bgra_pixels);
+            std::vector<unsigned char> current(bytes,bytes+std::size_t(output.stride_bytes)*output.height);
+            if (!previous.empty() && current!=previous) ++changes;
+            previous=current;
+            std::string path=std::string(argv[5])+".animation-"+std::to_string(n)+".bmp";
+            ok=ok && write_bmp(path.c_str(),output);
+            std::printf("ANIMATION temporal frame=%d visible=%u terrain_built=%u terrain_upload=%zu ms=%.3f\n",
+                n,output.visible_animation_count,output.geometry_tiles_built,std::size_t(output.geometry_upload_bytes),
+                double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart);
+            ok=ok && render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK &&
+                std::memcmp(output.bgra_pixels,current.data(),current.size())==0;
+        }
+        ok=ok && changes==5;
+        std::printf("ANIMATION temporal: %s changed_frames=%u\n",ok?"pass":"FAIL",changes);
+    }
     char color_option[8]={};
     if(ok && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_COLOR",color_option,sizeof(color_option)))
         ok=write_color_preview(argv[5],module,output);
