@@ -97,11 +97,14 @@ def windows_command_result(relative_cwd: str, command: str) -> dict[str, Any]:
     output = result.stdout or ""
     if output:
         print(output, end="" if output.endswith("\n") else "\n")
+    # Some Parallels/batch combinations return zero after a failing child.
+    # A test failure in the captured stream must never become a staging pass.
+    reported_failure = any(line.startswith("FAIL ") for line in output.splitlines())
     return {
         "command": command,
         "cwd": str(cwd),
         "host": vm,
-        "status": "pass" if result.returncode == 0 else "fail",
+        "status": "pass" if result.returncode == 0 and not reported_failure else "fail",
         "returncode": result.returncode,
         "started_utc": started.isoformat(),
         "output_tail": output[-4000:],
@@ -173,7 +176,7 @@ def approved_terrain_smoke_result() -> dict[str, Any]:
         r'--definitions ..\.. ..\..\Renderer\default.custom_rendering.txt'
     )
     result = native_command_result("Renderer/native", command)
-    if result["status"] == "fail":
+    if result["status"] == "fail" and result.get("returncode") == 255 and not result.get("output_tail", "").strip():
         # Parallels occasionally returns 255 without starting or relaying this
         # otherwise deterministic D3D process immediately after a compiler VM
         # command. Retry once in a fresh guest command; a real renderer failure
@@ -297,7 +300,14 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
         ]
         results.append(command_result(command))
         if results[-1]["status"] == "pass":
-            results.append(command_result([python, "-m", "unittest", "Renderer.native.test_scroll_damage"]))
+            results.append(command_result([
+                python, "-m", "unittest",
+                "Renderer.tools.test_project_state", "Renderer.tools.test_verification",
+                "Renderer.tools.test_state_provenance_compiler", "Renderer.tools.test_analyze_renderer_trace",
+                "Renderer.tools.asset_compiler.test_pack_loader_abi",
+                "Renderer.native.test_native_bridge_contract", "Renderer.native.test_scroll_damage",
+                "Renderer.native.test_profile_v2", "Renderer.tools.test_renderer_dev",
+            ]))
         if results[-1]["status"] == "pass":
             results.append(native_command_result("Renderer/native", "call BUILD.bat portable"))
         if results[-1]["status"] == "pass":
@@ -418,6 +428,7 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
         "Renderer.tools.asset_compiler.test_pack_loader_abi",
         "Renderer.native.test_native_bridge_contract",
         "Renderer.native.test_scroll_damage",
+        "Renderer.native.test_profile_v2",
     ]))
     if results[-1]["status"] == "pass":
         results.append(native_command_result("Renderer/native", "call BUILD.bat portable"))

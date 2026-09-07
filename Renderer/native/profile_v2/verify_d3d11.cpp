@@ -9,11 +9,12 @@
 #include <cstdio>
 #include <cstring>
 #include "linear_target.h"
+#include "test_source_shadow.h"
 
 bool compile(char const* entry,char const* target) {
     ID3DBlob *code=nullptr,*errors=nullptr;
-    HRESULT hr=D3DCompileFromFile(L"integrated_v2.hlsl",nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,
-        entry,target,D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&errors);
+    HRESULT hr=c3x_renderer::profile_v2::compile_cached(L"integrated_v2.hlsl",
+        entry,target,&code,&errors);
     if(errors) { std::fprintf(stderr,"%s",static_cast<char*>(errors->GetBufferPointer())); errors->Release(); }
     if(code) code->Release();
     std::printf("pickup shader %s: %s\n",entry,SUCCEEDED(hr)?"pass":"FAIL");
@@ -27,7 +28,7 @@ int main() {
     HRESULT hr=D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,
         D3D11_SDK_VERSION,&device,&level,&context);
     if(FAILED(hr)) return 2;
-    bool passed=true;
+    bool passed=test_source_shadow(device,context);
     {
         c3x_renderer::profile_v2::LinearTarget linear;
         c3x_renderer::profile_v2::LinearOutput output;

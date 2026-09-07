@@ -32,6 +32,13 @@ def generate():
                                 '? input.relief_material.w : q4_volcano_active(input,fixture_active)')
         if source.name == 'frame_shadow_v1.hlsl':
             text = text.replace('register(b1)', 'register(b2)')
+            begin = text.index('float q6_world_visibility(')
+            text = text[:begin] + (ROOT / 'shadow_receiver.hlsl').read_text() + '\n#endif\n'
+        if source.name == 'scene_shadow_v1.hlsl':
+            text = text.replace('q6_world_visibility(feature_base_texture_0,',
+                                'q6_world_visibility(pickup_shadow_terrain,')
+            text = text.replace('q6_world_visibility(shallow_bed_texture,',
+                                'q6_world_visibility(pickup_shadow_feature,')
         if source.parent.name == 'hydrology' and source.name == 'scene_material_v1.hlsl':
             begin = text.index('float2 q3_source_world(')
             finish = text.index('float4 q3_authored_bed_detail(', begin)
@@ -78,12 +85,26 @@ float q3_source_repeat(float requested) {
     float4 q6_world : TEXCOORD14;
     float4 hydrology_data : TEXCOORD15;
     float4 relief_material : TEXCOORD16;''')
+    adapter = adapter.replace('PixelInput VSIntegrated(IntegratedVertexInput input)\n{',
+        'PixelInput VSIntegrated(IntegratedVertexInput input)\n{\n'
+        '    if(c3x_viewport_reserved.y>0)input.surface_kind=c3x_viewport_reserved.y;')
     adapter = adapter.replace('    output.material_tundra = input.material_tundra;', '''    output.material_tundra = input.material_tundra;
     output.q6_world = input.q6_world;
     output.hydrology_data = input.hydrology_data;
     output.relief_material = input.relief_material;''')
     adapter = adapter.replace('    output.material_index = input.base_terrain;', '''    output.material_index = input.base_terrain;
     output.q6_world = input.q6_world;''')
+    # Features upload only the full-precision fields consumed by this entry.
+    # A separate signature avoids requiring unused terrain input elements.
+    adapter = adapter.replace('FeaturePixelInput VSIntegratedFeature(IntegratedVertexInput input)\n{', '''struct PackedFeatureInput {
+ float3 position:POSITION;float2 uv:TEXCOORD0;float3 normal:NORMAL;
+ float material:TEXCOORD6;float3 world:TEXCOORD14;
+};
+FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)
+{
+ IntegratedVertexInput input=(IntegratedVertexInput)0;
+ input.position=packed.position;input.uv=packed.uv;input.geometry_normal=packed.normal;
+ input.base_terrain=packed.material;input.q6_world=float4(packed.world,1);''')
     # Native coverage lives in accumulated alpha; there is no wire-packet MRT.
     adapter = adapter.replace('return PSMain(input);', 'return PSMain(input).color;')
     adapter = adapter.replace('return PSFeature(input);', 'return PSFeature(input).color;')

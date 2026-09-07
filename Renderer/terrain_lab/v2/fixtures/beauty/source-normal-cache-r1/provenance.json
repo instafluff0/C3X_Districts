@@ -1,0 +1,93 @@
+{
+  "classification": "source-kernel reconstruction verified; per-material cache size/scale and processing boundary remain Lab hypotheses",
+  "normal_scale": 1,
+  "input_height": "normalized source red, BOX downsample before kernel",
+  "mips": "average encoded RG after normal construction, RG16_UNORM",
+  "limitation": "per-material baking precedes cross-material blending; source engine bakes combined height",
+  "source_compute_parity": {
+    "source_shader_sha256": "18f80489b4118e4be4229378482c7a3bcb2c736d5226fc62e52c6b4f04e842c2",
+    "source_disassembly_sha256": "14e01fde361d8980ca645d6d7fb27ea57c1a82cae76abcb9573bf26383d64955",
+    "input_sha256": "aeeaee41c8896e8c2a6fa6860ff710419aa84cb710f4884eda09aced064ecffd",
+    "gpu_output_sha256": "b48220458942ada733a582df93bdb1be3efa56efd774daa6c3f1317275427c73",
+    "pixels": 1024,
+    "max_rgba8_channel_error": 0,
+    "dispatch": "D3D11 WARP, original source bytecode"
+  },
+  "materials": [
+    {
+      "material": "grassland",
+      "height": "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_height.dds",
+      "height_sha256": "7ced53bf19f07a083aa66403fb6f4831f7410d63a4243ad4c65266e3cc4bc2d0",
+      "source_size": [
+        4096,
+        4096
+      ],
+      "cache_size": [
+        1024,
+        1024
+      ],
+      "normal": "Renderer/terrain_lab/v2/fixtures/beauty/source-normal-cache-r1/grassland.dds",
+      "normal_sha256": "00ca67664db752ae1247e36857de969eb8f41b383b390a6f9e0748a1edcfd69e"
+    },
+    {
+      "material": "plains",
+      "height": "Renderer/packs/Civ5EnvironmentSkin/textures/plains_height.dds",
+      "height_sha256": "4aeb947708e35001a9a25d59ae85a81e96b51756156b318e4b3251a8e8bb72c7",
+      "source_size": [
+        4096,
+        4096
+      ],
+      "cache_size": [
+        1024,
+        1024
+      ],
+      "normal": "Renderer/terrain_lab/v2/fixtures/beauty/source-normal-cache-r1/plains.dds",
+      "normal_sha256": "9921e6db38858fd9e8d1c252d51a47a93a30a4373c9c725f67a689d9715cf05a"
+    },
+    {
+      "material": "desert",
+      "height": "Renderer/packs/Civ5EnvironmentSkin/textures/desert_height.dds",
+      "height_sha256": "0a53005b2ace893649e2f40168987b1e07e57af07ff1b0119893e63aa3d68193",
+      "source_size": [
+        2048,
+        2048
+      ],
+      "cache_size": [
+        1024,
+        1024
+      ],
+      "normal": "Renderer/terrain_lab/v2/fixtures/beauty/source-normal-cache-r1/desert.dds",
+      "normal_sha256": "a1e37719f87fe10984c0633a83548f76ba4bfb2d2a91a8e1ed23e3a52e906c1b"
+    },
+    {
+      "material": "marsh",
+      "height": "Renderer/packs/Civ5EnvironmentSkin/textures/grassmarsh_height.dds",
+      "height_sha256": "92b8b43002bbe9d13e445ed8bc6a817ebdcf00537e77642183bc45e38b25c5b6",
+      "source_size": [
+        1024,
+        1024
+      ],
+      "cache_size": [
+        1024,
+        1024
+      ],
+      "normal": "Renderer/terrain_lab/v2/fixtures/beauty/source-normal-cache-r1/marsh.dds",
+      "normal_sha256": "a09ea7d1f1f5b3c618887922eb9ffab3ca15d9ad19dbfd25faccdd60d0ff8a02"
+    },
+    {
+      "material": "tundra",
+      "height": "Renderer/packs/Civ5EnvironmentSkin/textures/tundra_blend_height.dds",
+      "height_sha256": "3e1b48087c924405442f8748413ef1fef8a84219be00912fd03d9b5477327236",
+      "source_size": [
+        2048,
+        2048
+      ],
+      "cache_size": [
+        1024,
+        1024
+      ],
+      "normal": "Renderer/terrain_lab/v2/fixtures/beauty/source-normal-cache-r1/tundra.dds",
+      "normal_sha256": "e7be6dead83abd6e1cc736df540b7932587c94bfa88413941cc3633dbc24bed4"
+    }
+  ]
+}

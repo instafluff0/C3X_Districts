@@ -1,0 +1,160 @@
+{
+  "schema": "c3x.pickup.integration_checkpoint.v1",
+  "candidate": "lab_v2_terrain_lighting_r1",
+  "status": "ready_for_user_run_checkpoint",
+  "game_launched": false,
+  "installed_dll_replaced": true,
+  "prepared_replay": {
+    "viewport": [
+      960,
+      640
+    ],
+    "world": [
+      100,
+      100
+    ],
+    "center": [
+      75,
+      39
+    ],
+    "tile_width": 128,
+    "hour": 12,
+    "foreground_tiles": 387,
+    "selection_p95_ms": 1.303,
+    "selection_max_ms": 2.142,
+    "jumps": [
+      {
+        "raw_offset": [
+          4,
+          0
+        ],
+        "ms": 38.718
+      },
+      {
+        "raw_offset": [
+          8,
+          0
+        ],
+        "ms": 18.096
+      },
+      {
+        "raw_offset": [
+          8,
+          4
+        ],
+        "ms": 18.851
+      },
+      {
+        "raw_offset": [
+          4,
+          4
+        ],
+        "ms": 21.305
+      }
+    ],
+    "meshes_built_each_jump": 0,
+    "upload_bytes_each_jump": 0,
+    "preparation_cancelled": 0,
+    "initial_preparation_bytes": 59974276,
+    "observed_peak_mesh_bytes": 163717472,
+    "cold_geometry_ms_approx": 10000,
+    "log": "Renderer/verification/pickup/prepared-scroll.log",
+    "image": "Renderer/verification/pickup/prepared-scroll.bmp",
+    "limitation": "Off-screen VM replay, not in-game or vanilla-speed evidence. Cold geometry is approximately 10\u201313 seconds.",
+    "pixel_parity": {
+      "changed_pixels": 3,
+      "absolute_channel_error": 33,
+      "bytes": 2457600,
+      "status": "pass"
+    }
+  },
+  "latest_frozen_regression": {
+    "status": "pass",
+    "fix": "32-pixel collar around current and translated clipping boundaries; pickup MSAA path unchanged",
+    "changed_pixels": 174,
+    "absolute_channel_error": 6657,
+    "bytes": 5344928,
+    "prepared_blocks_changed_pixels": 547,
+    "prepared_blocks_error": 19226,
+    "thresholds_changed": false,
+    "report": "Renderer/verification/pickup/full.json"
+  },
+  "pending": [
+    "User-run gameplay checkpoint: subjective scroll/unit-switch experience and diagnostic logs"
+  ],
+  "external_blocker": null,
+  "source_csv_sha256": "d778d526d51e36e52af3166e77ff24435aa605da768dbef0d1d38a572ab42283",
+  "image_sha256": "4982dfd41f150c06b1359be0ee722e6bf1eca9f7d3176e17cc59901fdb49d8de",
+  "dll_sha256": "8273d8d7877a8da8f8bfea69571b096558b3babe9e26c1032b16f008f75db985",
+  "resolved_frozen_regression": {
+    "status": "fail",
+    "test": "several-tile jump overlap versus cold reconstruction",
+    "changed_pixels": 1433,
+    "absolute_channel_error": 45740,
+    "bytes": 5344928,
+    "changed_pixel_limit": 1336,
+    "error_limit": 53449,
+    "portable_native_smoke": "pass",
+    "thresholds_changed": false
+  },
+  "matrix": {
+    "status": "pass",
+    "cases": 18,
+    "zooms": [
+      128,
+      64
+    ],
+    "hours": [
+      12,
+      18,
+      0,
+      6
+    ],
+    "report": "Renderer/verification/pickup/matrix.json",
+    "objects": "Synthetic city, walls, capital, iron, mine, farm, road and railroad; all expected ownership flags verified.",
+    "volcano": "Synthetic volcano at raw (70,50); original BIQ unchanged.",
+    "wrap": "Horizontal seam at both zooms."
+  },
+  "authoritative_edits": {
+    "status": "pass",
+    "terrain": {
+      "built": 84,
+      "reused": 304,
+      "changed_pixels_vs_cold": 0,
+      "channel_error_vs_cold": 0
+    },
+    "volcano_activity": {
+      "built": 24,
+      "reused": 363,
+      "changed_pixels_vs_cold": 0,
+      "channel_error_vs_cold": 0
+    },
+    "report": "Renderer/verification/pickup/edits.json"
+  },
+  "gpu_components": {
+    "status": "pass",
+    "checks": [
+      "four SM5 shader entries",
+      "opaque/cutout source caster pages",
+      "warm reuse",
+      "local/distant invalidation",
+      "MSAA4 premultiplied linear composition and transfer"
+    ],
+    "report": "Renderer/verification/pickup/gpu.json"
+  },
+  "installed_executable_modified": false,
+  "full_workflow": {
+    "status": "pass",
+    "unit_tests": 81,
+    "approved_injected_compile": "pass",
+    "live_checkout_link": "pass",
+    "report": "Renderer/verification/pickup/full.json"
+  },
+  "launcher": {
+    "status": "pass",
+    "path": "Renderer/TEST_IN_GAME.bat",
+    "uses_matching_injection": true,
+    "separate_install_required": false,
+    "dry_run_report": "Renderer/verification/pickup/launcher.json"
+  }
+}

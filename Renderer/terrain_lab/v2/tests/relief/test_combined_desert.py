@@ -21,14 +21,19 @@ class CombinedDesertTests(unittest.TestCase):
 #include <cmath>
 #include <cassert>
 #include <cstdlib>
+#include <stdexcept>
 struct HeightField {};
 struct BiqWindowTile {int column,row,base,real,source_x,source_y;unsigned river_mask=0;};
 BiqWindowTile tiles[8][8];
 bool dune_scene_enabled=true,biq_scene_enabled=true;
 bool volcano_geometry_enabled=false,l13_scene_enabled=false;
+bool lab_v2_river_preparing=false,lab_v2_river_corridor_enabled=false;
 int lab_v2_coastal_cliff_join=0;
 float lab_v2_relief_scale=1;
-namespace labv2 {struct Hooks {void(*shore_sample)(float,float,float*)=nullptr;} hydrology_hooks;}
+namespace labv2 {
+struct Hooks {void(*shore_sample)(float,float,float*)=nullptr;} hydrology_hooks;
+struct TerrainHooks {float(*ground_height)(float,float)=nullptr;} terrain_hooks;
+}
 void rocky_shore(float x,float,float*out){out[0]=2-x;out[1]=.1f;out[2]=1;out[3]=0;}
 int lab_v2_continuous_desert=3;
 float lab_v2_hill_height_multiplier=1;
@@ -60,6 +65,18 @@ int main(int argc,char**argv){
   assert(std::abs(h(x,y,1,t)-h(x+1,y,0,t))<1e-5);
   assert(std::abs(h(x,y,t,0)-h(x,y+1,t,1))<1e-5);
  }
+ // New source-ground displacement must respect the same shore collar and
+ // incident edges, and must not lift the flat water/underlay datum.
+ labv2::terrain_hooks.ground_height=[](float x,float y){return 4.f+.2f*std::sin(x+y);};
+ for(int i=0;i<16;i++)assert(h(1,0,.88f+i*.12f/16,.6f)==2.5f);
+ assert(h(2,0,.5f,.5f)==2.5f);
+ assert(biq_tile_height(*biq_tile_at(0,0),.5f,.5f,nullptr,nullptr,true)==2.5f);
+ for(int y=0;y<3;y++)for(int x=0;x<3;x++)for(int k=0;k<=32;k++){
+  float t=k/32.f;
+  assert(std::abs(h(x,y,1,t)-h(x+1,y,0,t))<1e-5);
+  assert(std::abs(h(x,y,t,0)-h(x,y+1,t,1))<1e-5);
+ }
+ labv2::terrain_hooks.ground_height=nullptr;
  // Shore-straddling triangles need an actual flat collar, not just a zero
  // at the contour. Version 2 fails this regression while inland relief stays.
  for(int i=0;i<16;i++)assert(h(1,0,.88f+i*.12f/16,.6f)==2.5f);

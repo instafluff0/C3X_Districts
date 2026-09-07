@@ -2348,6 +2348,13 @@ float biq_tile_height(BiqWindowTile const & tile, float u, float v,
     float coastal_envelope = biq_coastal_relief_envelope(tile, u, v);
     float height = 2.5f;
     float hill_coastal_envelope=coastal_envelope;
+    if(labv2::terrain_hooks.ground_height && !lab_v2_river_preparing) {
+        float ground=labv2::terrain_hooks.ground_height(world_x,world_y);
+        if(!std::isfinite(ground) || ground<0 || ground>32)
+            throw std::runtime_error("invalid ground height provider");
+        float coast=smoothstep01((-biq_signed_shore_distance(tile,u,v)-.20f)/.42f);
+        height+=ground*coast;
+    }
     if (lab_v2_coastal_cliff_join && labv2::hydrology_hooks.shore_sample) {
         float shore[4];labv2::hydrology_hooks.shore_sample(world_x,world_y,shore);
         // Retain a real flat collar at the water contour, but let the selected

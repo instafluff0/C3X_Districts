@@ -1,6 +1,7 @@
 @echo off
 setlocal
-REM Launch the installed Windows build with bounded renderer diagnostics.
+REM Run the verified injection path against installed Civ III with diagnostics.
+REM RUN.bat keeps the injected API and renderer DLL in sync without reinstalling.
 REM Default 2 records every frame; pass 1 for sampled timings.
 set "C3X_TEST_GAME_DIR=%C3X_RENDERER_CIV3_CONQUESTS%"
 if not defined C3X_TEST_GAME_DIR set "C3X_TEST_GAME_DIR=%ProgramFiles(x86)%\GOG Galaxy\Games\Civilization III Complete\Conquests"
@@ -15,11 +16,23 @@ if not errorlevel 1 (
   pause
   exit /b 1
 )
+set "C3X_TEST_MOD_DIR=%C3X_TEST_GAME_DIR%\C3X_Districts"
+if not exist "%C3X_TEST_MOD_DIR%\RUN.bat" (
+  echo The installed C3X_Districts checkout link was not found. 1>&2
+  pause
+  exit /b 1
+)
+if not exist "%C3X_TEST_MOD_DIR%\Renderer\bin\C3XRenderer.dll" exit /b 1
 set "C3X_TEST_LOG_DIR=%C3X_TEST_GAME_DIR%\C3X_Districts\Renderer\verification"
 if not exist "%C3X_TEST_LOG_DIR%" mkdir "%C3X_TEST_LOG_DIR%"
+set "C3X_RENDERER_VISUAL_PROFILE=pickup-r1"
 set "C3X_RENDERER_TRACE=2"
 if "%~1"=="1" set "C3X_RENDERER_TRACE=1"
 set "C3X_RENDERER_TRACE_FILE=%C3X_TEST_LOG_DIR%\in_game_trace.log"
-echo Starting Civ III with renderer diagnostics. Trace: %C3X_RENDERER_TRACE_FILE%
-start "" /d "%C3X_TEST_GAME_DIR%" "%C3X_TEST_GAME_DIR%\Civ3Conquests.exe"
+if "%~1"=="--check" (
+  echo PASS pickup_test_launcher: installed checkout, renderer DLL, pickup-r1, trace, and RUN.bat route ready; game not launched.
+  exit /b 0
+)
+echo Starting Civ III with pickup-r1 renderer diagnostics. Trace: %C3X_RENDERER_TRACE_FILE%
+start "" /d "%C3X_TEST_MOD_DIR%" "%ComSpec%" /d /c call RUN.bat
 exit /b %errorlevel%

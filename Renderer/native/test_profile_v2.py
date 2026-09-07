@@ -25,6 +25,9 @@ class ProfileV2Tests(unittest.TestCase):
             subprocess.run([compiler, '-std=c++17', '-O2', str(Path(__file__).with_suffix('.cpp')),
                             '-o', str(exe)], check=True)
             subprocess.run([str(exe)], check=True)
+            source = Path(__file__).parent / 'profile_v2/test_cliffs.cpp'
+            subprocess.run([compiler, '-std=c++17', '-O2', str(source), '-o', str(exe)], check=True)
+            subprocess.run([str(exe)], check=True)
 
 
 if __name__ == '__main__':

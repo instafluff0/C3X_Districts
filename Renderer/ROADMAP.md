@@ -13,9 +13,24 @@ The end state is a one-command offline source importer plus authored mapping pro
 
 ## Current Position
 
-The user has explicitly resumed the production refresh from the pinned [C3X implementation pickup package](handoffs/candidates/lab_v2_terrain_lighting_r1/README.md), preserving cache/worker behavior. The [native port record](native/profile_v2/README.md) tracks implementation and verification. The installed build remains unchanged while the coupled geometry, source caster and cache gates are incomplete. This supersedes the earlier integration pause awaiting logs; it does not declare visual approval.
+The user-authorized production refresh from the pinned [C3X implementation pickup package](handoffs/candidates/lab_v2_terrain_lighting_r1/README.md) is ready for the user-run gameplay checkpoint. The [native port record](native/profile_v2/README.md) and [checkpoint](native/profile_v2/checkpoint.json) record passing cache/image/hardware gates, 18 combined scene cases, authoritative edit/reset checks, the full workflow and approved injected compile. The API 14 DLL is staged; `Renderer/TEST_IN_GAME.bat` selects pickup-r1 and matching injection with diagnostics. Prepared jumps take 18–39 ms without mesh builds/uploads; unit redraw p95 is 1.30 ms. Cold geometry still takes about 10–13 seconds. Civ III was not launched; visual approval and LQ gates remain unchanged.
 
-The user has started a new active Lab goal for river, forest and jungle quality.
+The user has reoriented the active Lab goal to **terrain surface richness at matched gameplay scale**. The [campaign brief](terrain_lab/v2/audits/beauty/SURFACE_RICHNESS_CAMPAIGN.md) preserves the complete scope: material bindings, texture scale/filtering, grass/soil/rock variation, surface relief and small shadows, judged in the combined scene against the canonical references. River/canopy work remains preserved; the source-pool r4 diagnostic is unfinished and is not a selected baseline. Existing milestone and integration gates remain unchanged.
+
+The [ground decal source pass](terrain_lab/v2/audits/beauty/GROUND_DECAL_PASS.md) recovers 19 exact grass/plains triangle/UV variants and the selected override textures. Twenty matched diagnostic frames include a wholly unseen 100-tile holdout. The visual gain is subtle and GPU cost excessive, so no new best or Integration promotion is recorded. Effective high-ground layering and complete mountain channel projection remain next; the all-applicable-texture audit is still incomplete.
+
+The [mountain material pass](terrain_lab/v2/audits/beauty/ROCK_CHANNEL_PASS.md) aligns projected color/height/specular and adds eight snow/stripe channels in sixteen matched combined diagnostics. The gray rock relief improves modestly; normal-pipeline bindings, crop/wrap and cost remain open. All 72 test.biq mountains have grass base terrain, so desert coverage is an explicit synthetic material witness. Next, trace continental ground geometry together with the flat/high/hill material graph.
+
+The [continental/source-baking pass](terrain_lab/v2/audits/beauty/CONTINENTAL_GROUND_PASS.md)
+recovers continental height fields and rejects a broad pale high-material mask.
+Installed bytecode confirms alpha-squared weighted material baking and separate
+normalization; a bounded decoder matches 3,029 Microsoft-disassembled instructions.
+Sixteen candidate frames and eight exact disabled controls are recorded. The
+source-weighted diagnostic improves no overall grit and is not promoted. Cached
+height-to-normal/AO processing and source layer contributions remain the next
+investigation; the all-applicable-texture audit and LQ0 remain incomplete.
+
+The preceding Lab goal covered river, forest and jungle quality.
 The [campaign brief](terrain_lab/v2/audits/beauty/RIVER_VEGETATION_CAMPAIGN.md)
 records the target appearance, actual displayed-code findings and the coupled
 implementation sequence. `shadow-receiver-r1` remains the retained visual

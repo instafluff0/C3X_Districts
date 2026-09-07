@@ -30,6 +30,8 @@ if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX biq_preview.cpp /Fo:build\ /Fe:build\biq_preview.exe /link gdi32.lib
 if errorlevel 1 exit /b 1
 
+if /i "%~1"=="candidate-compile" exit /b 0
+
 build\native_smoke.exe "build\candidate\C3XRenderer.dll"
 set "C3X_BUILD_RESULT=%errorlevel%"
 if not "%C3X_BUILD_RESULT%"=="0" (

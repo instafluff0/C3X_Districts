@@ -19,8 +19,9 @@ also calls the existing `Main_Screen_Form_tile_to_screen_coords` definition:
 at GOG `0x4E3B10`, Steam `0x4EC360`, PCGames `0x4E3BD0`. It is an existing callable,
 not a new patch. Every captured logical anchor must agree before adding a halo;
 on mismatch the original capture and dependency validation remain the fallback.
-The twelve-coordinate topology halo now includes a four-coordinate inner ring
-with complete authoritative appearance metadata for optional idle preparation.
+The twelve-coordinate topology halo includes a four-coordinate inner ring in
+the frozen profile and an eight-coordinate ring in pickup-r1, with complete
+authoritative appearance metadata for idle preparation and source casters.
 Capture stays on the game thread. The single D3D worker prepares immutable tile
 meshes from its own snapshot, prioritizes foreground requests, and never modifies
 published pixels or ownership arrays during idle work. Cache compilation,
@@ -30,7 +31,7 @@ The worker also prepares bounded 128-pixel composite blocks using the same
 off-screen draw path. Per-map OutputDebugStringA diagnostics include halo capture,
 pixel-cache use and whole-map timings. No additional native callable is needed.
 `audit_candidates = []` and
-`required_user_action = []` for this increment. The API 13 header is shared by
+`required_user_action = []` for this increment. The API 14 header is shared by
 the DLL and injected compilation; the approved smoke must verify both together.
 The deferred M7.5 requests below remain unchanged.
 
@@ -350,9 +351,9 @@ M6.6 requires no new patch symbol. The existing tile capture already supplies bo
 - Implemented use: after a successful custom blit, clear `0x4010` only for the exact captured screen instance of a tile whose custom relief replacement succeeded; retain the native dispatch for per-tile and whole-frame fallback and preserve every unrelated retained-layer bit.
 - `required_user_action: []`. No new patch symbol or supported-build address is required.
 
-## Lab v2 pickup refresh (2026-09-06, in progress)
+## Lab v2 pickup refresh (2026-09-06, ready for user-run checkpoint)
 
 - Existing symbols: `Map_Renderer_m71_Draw_Tiles`, `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, `Main_Screen_Form_tile_to_screen_coords`, `OutputDebugStringA`, `QueryPerformanceCounter`.
 - Shader/input/linear-output adaptation remains inside the off-screen native renderer. No added patch capability is currently proven necessary.
 - `audit_candidates: []`; `required_user_action: []`.
-- The user explicitly authorized implementing the pickup into production, superseding the earlier pause for logs. Geometry/caster/cache acceptance and the user-run in-game checkpoint remain pending.
+- The user explicitly authorized implementing the pickup into production, superseding the earlier pause for logs. Geometry/caster/cache engineering checks, full workflow and approved injected compilation pass. API 14 DLL staged; the launcher uses matching RUN.bat injection. Only the user-run gameplay checkpoint remains pending.

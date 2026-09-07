@@ -14,7 +14,7 @@ public:
     void clear() { values.clear(); }
     bool empty() const { return values.empty(); }
     std::vector<Change> update(World next,std::uint32_t const* data,std::size_t count) {
-        if(next.width<=0 || next.height<=0 || (next.width&1) ||
+        if(next.width<=0 || next.height<=0 || (next.width&1) || (next.wrap_y && (next.height&1)) ||
             next.width>2048 || next.height>2048 || !data ||
             count!=std::size_t(next.width)*next.height/2)
             throw std::invalid_argument("incomplete authoritative world topology");

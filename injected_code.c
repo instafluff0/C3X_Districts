@@ -27024,8 +27024,9 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 		if (dx < min_x) min_x = dx; if (dx > max_x) max_x = dx;
 		if (dy < min_y) min_y = dy; if (dy > max_y) max_y = dy;
 	}
-	int warm_min_x = min_x - 4, warm_max_x = max_x + 4;
-	int warm_min_y = min_y - 4, warm_max_y = max_y + 4;
+	int appearance_halo = is->custom_renderer_capture_world_topology ? 8 : 4;
+	int warm_min_x = min_x - appearance_halo, warm_max_x = max_x + appearance_halo;
+	int warm_min_y = min_y - appearance_halo, warm_max_y = max_y + appearance_halo;
 	min_x -= halo; max_x += halo; min_y -= halo; max_y += halo;
 	int width = max_x - min_x + 1, height = max_y - min_y + 1;
 	if (width <= 0 || height <= 0 || width > 256 || height > 256 ||

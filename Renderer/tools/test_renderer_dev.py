@@ -96,6 +96,21 @@ class RendererDevTests(unittest.TestCase):
         self.assertEqual(255, result["retry_after_returncode"])
         self.assertEqual(2, run.call_count)
 
+    def test_reported_windows_failure_overrides_zero_exit(self) -> None:
+        completed = mock.Mock(returncode=0, stdout="FAIL native_renderer_smoke: pixel mismatch\n")
+        with mock.patch.object(renderer_dev.subprocess, "run", return_value=completed), \
+             mock.patch("builtins.print"):
+            result = renderer_dev.windows_command_result("Renderer/native", "call BUILD.bat candidate-only")
+        self.assertEqual("fail", result["status"])
+
+    def test_approved_smoke_does_not_retry_real_failure(self) -> None:
+        failed = {"status": "fail", "returncode": 1, "output_tail": "FAIL native_renderer_smoke"}
+        with mock.patch.object(Path, "is_file", return_value=True), \
+             mock.patch.object(renderer_dev, "native_command_result", return_value=failed) as run:
+            result = renderer_dev.approved_terrain_smoke_result()
+        self.assertEqual("fail", result["status"])
+        self.assertEqual(1, run.call_count)
+
     def test_lab_workflow_runs_the_authorized_gate_script(self) -> None:
         source = Path(renderer_dev.__file__).read_text(encoding="utf-8")
         self.assertIn('f"RUN_{results[0][\'next_step\']}.bat"', source)

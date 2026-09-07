@@ -2,6 +2,7 @@
 #include "terrain_query.h"
 #include <cstring>
 #include <limits>
+#include <unordered_map>
 #include <stdexcept>
 
 namespace c3x_renderer { namespace profile_v2 {
@@ -13,7 +14,7 @@ class CoastIndex {
         std::uint64_t revision=0;
         std::vector<CoastSegment> segments;
     };
-    std::map<std::uint64_t,Node> nodes;
+    std::unordered_map<std::uint64_t,Node> nodes;
     int origin_x,origin_y,side;
     std::uint64_t fold(std::uint64_t h,std::uint64_t value) const {
         for(int i=0;i<8;i++) { h=(h^(value&255))*1099511628211ull; value>>=8; }
@@ -46,6 +47,19 @@ class CoastIndex {
         return dx*dx+dy*dy;
     }
 public:
+    template<class Observe>
+    std::vector<CoastSegment> cell(int c,int r,Observe observe) const {
+        int x=origin_x,y=origin_y,size=side;std::uint64_t id=1;
+        if(c<x || r<y || c>=x+size || r>=y+size)return {};
+        for(;;){
+            auto found=nodes.find(id);
+            if(found==nodes.end()){observe(id,0);return {};}
+            if(size==1){observe(id,found->second.revision);return found->second.segments;}
+            size/=2;int child=(c>=x+size?1:0)+(r>=y+size?2:0);
+            x+=(child&1)*size;y+=(child>>1)*size;id=id*4+child;
+        }
+    }
+    struct Certificate {std::uint64_t id,revision;double squared;};
     struct Nearest {
         double squared=std::numeric_limits<double>::infinity();
         Point foot;
@@ -68,14 +82,17 @@ public:
         set(1,origin_x,origin_y,side,c,r,segments);
     }
     template<class Observe>
-    Nearest nearest(Point p,Observe observe,double limit=std::numeric_limits<double>::infinity()) const {
+    Nearest nearest(Point p,Observe observe,double limit=std::numeric_limits<double>::infinity(),
+                    std::vector<Certificate>* certificates=nullptr) const {
         Nearest result; result.foot=p; result.squared=limit;
         auto visit=[&](auto&& self,std::uint64_t id,int x,int y,int size)->void {
-            if(box_distance_squared(p,x,y,size)>result.squared) return;
+            double distance=box_distance_squared(p,x,y,size);
+            if(distance>result.squared) return;
             auto found=nodes.find(id);
-            if(found==nodes.end()) { observe(id,0); return; }
+            if(found==nodes.end()) { observe(id,0);if(certificates)certificates->push_back({id,0,distance});return; }
             if(size==1) {
                 observe(id,found->second.revision);
+                if(certificates)certificates->push_back({id,found->second.revision,distance});
                 for(auto const& segment:found->second.segments) {
                     Point ab=segment.b-segment.a;
                     double t=std::clamp(dot(p-segment.a,ab)/std::max(1e-15,dot(ab,ab)),0.,1.);
@@ -99,7 +116,7 @@ public:
         return result;
     }
     std::size_t estimated_bytes() const {
-        std::size_t bytes=nodes.size()*(sizeof(Node)+sizeof(std::uint64_t)+4*sizeof(void*));
+        std::size_t bytes=nodes.size()*(sizeof(Node)+sizeof(std::uint64_t)+4*sizeof(void*))+nodes.bucket_count()*sizeof(void*);
         for(auto const& pair:nodes) bytes+=pair.second.segments.capacity()*sizeof(CoastSegment);
         return bytes;
     }

@@ -101,7 +101,7 @@
       "next_action": "Review candidate implementation map and existing gates before a deliberate native refresh; preserve current production maintenance."
     },
     "river_vegetation_campaign": {
-      "status": "active",
+      "status": "preserved_user_reoriented_focus",
       "requested_by_user": true,
       "plan": "terrain_lab/v2/audits/beauty/RIVER_VEGETATION_CAMPAIGN.md",
       "baseline": "shadow-receiver-r1",
@@ -134,6 +134,23 @@
       "broader_acceptance_pending": true,
       "bank_rock_findings": "terrain_lab/v2/audits/beauty/RIVER_BANK_ROCK_PASS_r3.md",
       "bank_rock_evidence": "terrain_lab/v2/audits/beauty/RIVER_BANK_ROCK_r3_EVIDENCE.json"
+    },
+    "surface_richness_campaign": {
+      "status": "active",
+      "requested_by_user": true,
+      "plan": "terrain_lab/v2/audits/beauty/SURFACE_RICHNESS_CAMPAIGN.md",
+      "baseline": "river-corridor-r3 (four regions); shadow-receiver-r1 (broader preserved matrix)",
+      "scope": [
+        "terrain material bindings, scale and filtering",
+        "grass/soil/rock variation, surface relief and small shadows in composition",
+        "matched gameplay scale against canonical sea_and_shore.png and mountain.png; day/night, two zooms and an untuned region",
+        "complete applicable source ground-texture and layer audit, explicitly requested by user"
+      ],
+      "approval": null,
+      "latest_experiment": "continental/source-baking: recovered grass/plains/snow height fields; rejected pale high-material mask and river-routing-changing r1 geometry. Sixteen diagnostic frames plus eight exact disabled controls. Source bytecode confirms alpha-squared weighting and normalization; four source-blend-r1 frames change a limited sand/grass boundary, not overall grit. No promotion.",
+      "integration_preparation_preserved": "handoffs/candidates/lab_v2_terrain_lighting_r1/manifest.json",
+      "layer_audit": "terrain_lab/v2/audits/beauty/GROUND_LAYER_FINDINGS.md",
+      "next_action": "Reconstruct extracted cached height-to-normal/AO stages and source layer contributions before further bump tuning; see CONTINENTAL_GROUND_PASS.md and GROUND_BAKE_DECODE_EVIDENCE.json. Complete source-weight diagnostic coverage, explicit river XY parity for continental r2, named mountain bindings, crop/wrap and controlled cost. All-applicable texture/layer audit and overall visual quality remain incomplete."
     }
   },
   "workstreams": {
@@ -2326,7 +2343,7 @@
   ],
   "integration_pickup_refresh": {
     "authorization": "2026-09-06: user explicitly requested implementing the latest C3X implementation pickup package into production while preserving caching/performance. This supersedes the prior pause awaiting logs; do not launch the game.",
-    "status": "in_progress",
+    "status": "ready_for_user_run_checkpoint",
     "candidate": "lab_v2_terrain_lighting_r1",
     "implementation": "native/profile_v2/README.md",
     "existing_symbols": [
@@ -2339,18 +2356,19 @@
     "audit_candidates": [],
     "required_user_action": [],
     "completed": [
-      "Pinned shader/query reference closure copied from the pickup snapshot; active Lab river/vegetation work excluded.",
-      "Portable production material/shoreline kernels pass differential tests against the pinned reference, translated crops and wrap seams.",
-      "Native shader adapter allocates b2 shadows and b3 world settings, retaining b1 viewport; extended shader model 5 inputs compile on Windows.",
-      "MSAA4 scene-linear scratch targets and output transfer pass an off-screen Windows test; native candidate wiring is in progress."
+      "Pinned archive verified: 358 source members, 233 local assets, 32 retained frames; active Lab source work excluded.",
+      "API 14 authoritative world capture, local coast/relief dependencies, source cliffs/casters, and scene-linear MSAA4 output integrated.",
+      "Bounded mesh/viewport/pixel caches preserved; immutable unit redraws do not cancel preparation; prepared jumps build/upload no meshes.",
+      "Pickup replay p95 unit redraw 1.30 ms; fixed jumps 18\u201339 ms; cached/cold pixel parity passes unchanged thresholds.",
+      "18 both-zoom/day-night/wrap/source-object/synthetic-volcano matrix cases pass; terrain/activity edits match fresh reset exactly.",
+      "Windows source-shadow/cutout/MSAA hardware checks and full workflow pass, including 81 unit tests and approved injected compile.",
+      "Verified DLL staged and test launcher dry run passes. Launcher uses matching RUN.bat injection; Civ III was not launched."
     ],
     "remaining": [
-      "Complete production terrain/shore/relief/owner-material geometry and selected cliff assets.",
-      "Add stable source caster fields and complete shadow dependencies without viewport-wide cache invalidation.",
-      "Connect all native world attributes, grounding and shared output; verify four-phase/two-zoom object clearance and cold/warm scroll parity.",
-      "Investigate the frozen-profile incremental boundary smoke failure before completing the native candidate.",
-      "Run integration/full gates, stage the final build and retain manual in-game checkpoint."
+      "User-run gameplay checkpoint and logs. First-map cold geometry remains approximately 10\u201313 seconds in the measured scene."
     ],
-    "visual_approval": "pending; no historical Lab acceptance or new convergence gate claimed"
+    "visual_approval": "pending; no historical Lab acceptance or new convergence gate claimed",
+    "evidence": "native/profile_v2/checkpoint.json",
+    "test_launcher": "Renderer/TEST_IN_GAME.bat"
   }
 }

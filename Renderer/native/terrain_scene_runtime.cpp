@@ -108,7 +108,7 @@ bool load_feature_bundle(std::string const & path, FeatureBundle & output) {
     std::uint32_t version = 0, texture_count = 0, asset_count = 0, group_count = 0;
     if (!consume_u32(data, cursor, version) || !consume_u32(data, cursor, texture_count) ||
         !consume_u32(data, cursor, asset_count) || !consume_u32(data, cursor, group_count) ||
-        version != 1 || texture_count == 0 || texture_count > 8 || asset_count == 0 ||
+        version != 1 || texture_count == 0 || texture_count > 32 || asset_count == 0 ||
         asset_count > 256 || group_count == 0 || group_count > 16)
         return false;
     output.texture_paths.resize(texture_count);

@@ -13,6 +13,16 @@ public:
     void clear() { topology.clear(); coast.clear(); source_revision=-1; ready=false; }
     WorldTopology const& world() const { return topology; }
     std::uint64_t node_revision(std::uint64_t id) const { return coast.revision(id); }
+    template<class Observe>
+    std::vector<CoastSegment> cell(int c,int r,Observe observe) const {
+        auto dimensions=topology.dimensions();int x=c+r,y=c-r;
+        if(dimensions.wrap_x)x=mod(x,dimensions.width);
+        if(dimensions.wrap_y)y=mod(y,dimensions.height);
+        int cc=(x+y)/2,rr=(x-y)/2;
+        auto segments=coast.cell(cc,rr,observe);Point offset{double(c-cc),double(r-rr)};
+        for(auto& segment:segments){segment.a=segment.a+offset;segment.b=segment.b+offset;}
+        return segments;
+    }
     Update update(World dimensions,std::uint32_t const* values,std::size_t count,std::int64_t revision) {
         World previous=topology.dimensions();
         bool same=previous.width==dimensions.width && previous.height==dimensions.height &&
@@ -63,24 +73,24 @@ public:
     ShoreSample sample(Point corner,ObserveNode observe_node,ObserveTile observe_tile) const {
         if(!ready) throw std::runtime_error("world coast field is not ready");
         World dimensions=topology.dimensions(); Point p=corner-Point{.5,.5};
-        auto nearest=coast.nearest(p,[](auto,auto){});
+        std::vector<CoastIndex::Certificate> certificates;certificates.reserve(64);
+        auto nearest=coast.nearest(p,[](auto,auto){},std::numeric_limits<double>::infinity(),&certificates);
         Point foot=nearest.foot;
         int nx=dimensions.wrap_x ? 1 : 0,ny=dimensions.wrap_y ? 1 : 0;
-        // Compare periodic images before collecting dependency certificates.
-        // This avoids depending on a distant unwrapped coast at a wrap seam.
+        // Retain visited leaf/empty-subtree certificates with their distance.
+        // Filtering against the final nearest distance is exactly the old
+        // second traversal, without repeating its tree/hash/segment work.
         for(int y=-ny;y<=ny;y++) for(int x=-nx;x<=nx;x++) {
+            if(x==0 && y==0)continue;
             Point offset{(x*dimensions.width+y*dimensions.height)*.5,
                          (x*dimensions.width-y*dimensions.height)*.5};
-            auto candidate=coast.nearest(p+offset,[](auto,auto){},nearest.squared);
+            auto candidate=coast.nearest(p+offset,[](auto,auto){},nearest.squared,&certificates);
             if(candidate.cell && candidate.squared<nearest.squared) {
                 nearest=candidate; foot=candidate.foot-offset;
             }
         }
-        for(int y=-ny;y<=ny;y++) for(int x=-nx;x<=nx;x++) {
-            Point offset{(x*dimensions.width+y*dimensions.height)*.5,
-                         (x*dimensions.width-y*dimensions.height)*.5};
-            coast.nearest(p+offset,observe_node,nearest.squared);
-        }
+        for(auto const& certificate:certificates)
+            if(certificate.squared<=nearest.squared)observe_node(certificate.id,certificate.revision);
         auto lookup=[&](int c,int r) {
             auto index=topology.index(c,r);
             if(index!=std::size_t(-1)) observe_tile(index,topology.at(index));

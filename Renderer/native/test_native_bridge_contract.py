@@ -150,7 +150,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("views[73] = water_clutter_base_view", renderer)
         self.assertIn("instance_count = tile.real_terrain_type == 7 ? 36u : 49u", renderer)
         self.assertIn('"feature/forest/leafy"', renderer)
-        self.assertIn("texture_count > 8", native)
+        self.assertIn("texture_count > 32", native)
         self.assertIn("feature_base_texture_7 : register(t97)", shader)
         self.assertIn("PSSetShaderResources(94, 4, feature_texture_views.data() + 4)", renderer)
         self.assertIn("tile.real_terrain_type == 7 ? 0.42f : 0.40f", renderer)

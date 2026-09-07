@@ -108,6 +108,10 @@ int main() {
     auto closer=edits.nearest({1.25,.25},observed); near(closer.squared,.15*.15);
     edits.set_cell(1,0,{}); assert(!valid());
     port::WorldTopology topology;
+    bool rejected_odd_wrap=false;std::vector<std::uint32_t> odd(100*79/2,2|(2<<8));
+    try {topology.update({100,79,true,true},odd.data(),odd.size());}
+    catch(std::invalid_argument const&) {rejected_odd_wrap=true;}
+    assert(rejected_odd_wrap);
     std::vector<std::uint32_t> packed(100*80/2,2u|(2u<<8));
     auto changed=topology.update({100,80,true,true},packed.data(),packed.size());
     assert(changed.size()==packed.size());

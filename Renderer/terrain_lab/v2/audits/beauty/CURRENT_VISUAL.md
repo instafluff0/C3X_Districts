@@ -1,6 +1,39 @@
-# River, forest and jungle campaign
+# Active focus: terrain surface richness
 
-The user-directed goal remains active. Latest combined candidate:
+The user reoriented the active goal to terrain surface richness at matched
+gameplay scale and explicitly requires complete source texture/layer auditing.
+[Campaign](SURFACE_RICHNESS_CAMPAIGN.md) and [initial layer findings](GROUND_LAYER_FINDINGS.md).
+The first gradient diagnostic is rejected; four disabled-branch control frames
+are byte-identical to r3. No new visual best or approval is recorded.
+
+[Recovered ground decal pass](GROUND_DECAL_PASS.md): exact triangle/UV data
+for 19 variants, selected override color/height textures, and 20 matched
+diagnostic frames including a new wholly unseen 100-tile region. Patch
+variation is subtle and GPU cost is excessive; r4 is not promoted. Current
+default-off controls remain byte-identical in four frames. Missing high-ground
+roles and mountain channel/projection coherence are the next corrections.
+
+[Mountain channel correction](ROCK_CHANNEL_PASS.md): sixteen combined r2
+diagnostic frames have coherent projected height/specular and eight additional
+snow/stripe channels. Gray rock faces show modestly clearer granular relief;
+the overall best is not replaced pending normal composition, crop/wrap and
+cost checks. All 72 source mountains have grass base terrain, so desert
+material coverage is explicitly synthetic. Four default-off controls are
+byte-identical. Continental ground geometry and flat/high/hill layering are
+the next source investigation.
+
+[Continental ground and source baking](CONTINENTAL_GROUND_PASS.md): source
+continental height fields are recovered, but the first high-ground mask is
+rejected for broad pale patches. Bytecode inspection confirms alpha-squared
+weighted material baking and separate normalization. Four source-weighted
+diagnostic frames change only an upper sand/grass transition; the missing
+whole-scene grit remains. Sixteen candidate frames and eight exact controls
+are recorded. Next, reconstruct cached height-to-normal/AO processing and the
+layer contribution graph. No best, approval, or frozen pickup is replaced.
+
+# Preserved river, forest and jungle campaign
+
+The preceding campaign is preserved. Latest complete combined candidate:
 **river-corridor-r3**, following **river-corridor-r2** and **canopy-variation-r1**. Sixteen matched frames
 cover the three fixed gameplay regions and the new 100-tile forest/jungle
 witness. This candidate has not replaced the complete preserved baseline below.

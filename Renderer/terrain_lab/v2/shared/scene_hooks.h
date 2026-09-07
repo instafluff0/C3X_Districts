@@ -6,6 +6,9 @@ struct TerrainHooksV1 {
   // Continuous local lattice column+u,row+(1-v); grass/plains/desert/marsh/tundra.
   void (*material_uv)(float x,float y,float uv_scale,float uv[2]) = nullptr;
   void (*material_weights)(float x,float y,float weights[5]) = nullptr;
+  // Optional ground displacement in projected height pixels. Caller retains
+  // water datum, shore collar, raised-body composition and river-floor clamps.
+  float (*ground_height)(float x,float y) = nullptr;
 };
 inline TerrainHooksV1 terrain_hooks;
 struct HydrologyHooksV1 {

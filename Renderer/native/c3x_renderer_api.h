@@ -38,7 +38,8 @@ enum c3x_renderer_tile_flags {
     C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED = 2048u,
     C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED = 4096u,
     // Full authoritative appearance, captured outside the visible draw set.
-    // Paired with TOPOLOGY_HALO; permits bounded idle mesh preparation only.
+    // Paired with TOPOLOGY_HALO; permits bounded idle mesh preparation.
+    // A source-shadow profile may consume the necessary caster ring in foreground.
     C3X_RENDERER_TILE_PREFETCH = 8192u
 };
 

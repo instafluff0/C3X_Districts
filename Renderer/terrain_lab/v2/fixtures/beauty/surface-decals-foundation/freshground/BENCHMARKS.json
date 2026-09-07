@@ -1,0 +1,66 @@
+{
+  "region": {
+    "camera": {
+      "hours": [
+        12,
+        0
+      ],
+      "viewport": [
+        1360,
+        800
+      ],
+      "zooms": [
+        1,
+        2
+      ]
+    },
+    "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+    "coverage": {
+      "land_water_edges": 22,
+      "river_tiles": 17,
+      "terrain": {
+        "coast": 19,
+        "forest": 21,
+        "grassland": 25,
+        "hills": 3,
+        "mountain": 7,
+        "plains": 15,
+        "sea": 10
+      },
+      "terrain_edges": 97
+    },
+    "extent": [
+      10,
+      10
+    ],
+    "halo": 6,
+    "id": "beauty-freshground-100-v1",
+    "origin": [
+      68,
+      26
+    ],
+    "request_sha256": "0ff74eb78c9eff076124d19ba2f00909ccd1ef74b732dba02276a5f378cbaece",
+    "role": "user_evaluation",
+    "terrain_sha256": "c7e1e2fdd6067efc72f5431a11bfa7bcfda65c7e718038cfb48fefc51d70866d",
+    "wrap": {
+      "x": true,
+      "y": false
+    }
+  },
+  "projection": {
+    "origin": [
+      104,
+      380
+    ],
+    "half_width": 64
+  },
+  "selection": "Before viewing: max minimum wrapped origin distance among even-coordinate 10x10 crops with >=15 grassland, >=15 plains, >=3 hills and ALL 100 tiles outside prior beauty regions.",
+  "previously_unseen_tiles": 100,
+  "selection_score": 160,
+  "gameplay_crop": [
+    360,
+    220,
+    1000,
+    540
+  ]
+}

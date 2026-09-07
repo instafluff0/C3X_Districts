@@ -879,12 +879,52 @@ cbuffer Q6SharedShadow : register(b2) {
  float4 Q6ShadowOrigin;
  float4 Q6ShadowFlags; // enabled, tighter contact, reserved, reserved
 };
-float q6_world_visibility(Texture2D field,float4 world,float3 normal,bool water) {
- if(world.w<=.5 || Q6ShadowFlags.x<=.5)return 1;
- return q6_shadow_visibility(field,world.xyz-Q6ShadowOrigin.xyz,normal,
-  Q6ShadowU,Q6ShadowV,Q6ShadowL,Q6_CAST_SHADOWS,
-  !water && Q6_SCENE_CONTACT && Q6ShadowFlags.y>.5);
+// World-aligned six-tile pages preserve the retained 6/1024 sampling density.
+// Source depths use R32_FLOAT physical light distance, avoiding page-dependent
+// normalization/quantization. Page identity never contains a screen anchor.
+Texture2DArray pickup_shadow_terrain : register(t25);
+Texture2DArray pickup_shadow_feature : register(t17);
+cbuffer C3XShadowPages : register(b4) { float4 pickup_pages[64]; };
+int pickup_page(int2 page) {
+ uint key=(uint(page.x)*73856093u ^ uint(page.y)*19349663u)&63u;
+ [loop]for(int n=0;n<33;n++) {
+  float4 entry=pickup_pages[(key+uint(n))&63u];
+  if(entry.w<.5)return -1;
+  if(all(page==int2(entry.xy)))return int(entry.z);
+ }
+ return -1;
 }
+float pickup_blocker(Texture2DArray field,int2 texel,int2 center_page,int center_slot) {
+ int2 page=int2(floor(float2(texel)/1024.));
+ int slot=all(page==center_page)?center_slot:pickup_page(page);
+ return slot<0?-1e6:field.Load(int4(texel-page*1024,slot,0)).r;
+}
+float q6_world_visibility(Texture2DArray field,float4 world,float3 normal,bool water) {
+ if(world.w<=.5 || Q6ShadowFlags.x<=.5)return 1;
+ const float texel=6./1024.;
+ float3 offset=world.xyz+normal*texel;
+ float2 uv=float2(dot(offset,Q6ShadowU.xyz),dot(offset,Q6ShadowV.xyz))/texel;
+ float z=dot(offset,Q6ShadowL.xyz);
+ float2 plane=float2(dot(world.xyz,Q6ShadowU.xyz),dot(world.xyz,Q6ShadowV.xyz))/texel;
+ float plane_z=dot(world.xyz,Q6ShadowL.xyz);
+ float2 ux=ddx(plane),uy=ddy(plane);float zx=ddx(plane_z),zy=ddy(plane_z);
+ float determinant=ux.x*uy.y-ux.y*uy.x;
+ float2 gradient=0;
+ if(abs(determinant)>1e-12)gradient=float2(zx*uy.y-zy*ux.y,zy*ux.x-zx*uy.x)/determinant;
+ int2 center=int2(floor(uv));int2 center_page=int2(floor(float2(center)/1024.));
+ int center_slot=pickup_page(center_page);float sum=0,closest_delta=0;
+ [unroll]for(int y=-1;y<=1;y++)[unroll]for(int x=-1;x<=1;x++) {
+  int2 sample= center+int2(x,y);
+  float blocker=pickup_blocker(field,sample,center_page,center_slot);
+  float receiver=z+dot(gradient,float2(sample)+.5-uv);
+  sum+=step(blocker,receiver+.00060);
+  if(x==0 && y==0)closest_delta=blocker-receiver;
+ }
+ float soft=sum/9;
+ if(!water && Q6ShadowFlags.y>.5 && closest_delta>.0039 && closest_delta<.024)soft=min(soft,.15);
+ return soft;
+}
+
 #endif
 
 #endif
@@ -895,7 +935,7 @@ float q6_receiver_visibility(PixelInput input,float3 normal,float legacy_shadow)
   bool water=input.surface_kind>3.5 && input.surface_kind<6.5;
   water=water || (input.surface_kind>8.5 && input.surface_kind<9.5);
   // Main t25 aliases a feature-only source binding; Q0 binds one common field.
-  float visibility=q6_world_visibility(feature_base_texture_0,input.q6_world,normal,water);
+  float visibility=q6_world_visibility(pickup_shadow_terrain,input.q6_world,normal,water);
   return visibility;
  }
 #endif
@@ -910,7 +950,7 @@ float3 q6_receiver_illumination(FeaturePixelInput input,float3 normal,
 #ifdef Q6_WORLD_SHADOWS
  if(input.q6_world.w>.5 && Q6ShadowFlags.x>.5) {
   // Feature t17 aliases the bed-only source binding.
-  float visibility=q6_world_visibility(shallow_bed_texture,input.q6_world,normal,false);
+  float visibility=q6_world_visibility(pickup_shadow_feature,input.q6_world,normal,false);
   return frame_illumination(normal,visibility,ambient_visibility);
  }
 #endif
@@ -2665,6 +2705,7 @@ float2 translated_position(IntegratedVertexInput input)
 
 PixelInput VSIntegrated(IntegratedVertexInput input)
 {
+    if(c3x_viewport_reserved.y>0)input.surface_kind=c3x_viewport_reserved.y;
     PixelInput output;
     output.position = float4(translated_position(input),
                              translated_depth(input, false), 1.0);
@@ -2694,8 +2735,15 @@ float4 PSIntegrated(PixelInput input) : SV_TARGET
     return PSMain(input).color;
 }
 
-FeaturePixelInput VSIntegratedFeature(IntegratedVertexInput input)
+struct PackedFeatureInput {
+ float3 position:POSITION;float2 uv:TEXCOORD0;float3 normal:NORMAL;
+ float material:TEXCOORD6;float3 world:TEXCOORD14;
+};
+FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)
 {
+ IntegratedVertexInput input=(IntegratedVertexInput)0;
+ input.position=packed.position;input.uv=packed.uv;input.geometry_normal=packed.normal;
+ input.base_terrain=packed.material;input.q6_world=float4(packed.world,1);
     FeaturePixelInput output;
     output.position = float4(translated_position(input),
                              translated_depth(input, true), 1.0);

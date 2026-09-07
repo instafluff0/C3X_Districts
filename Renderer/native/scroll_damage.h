@@ -22,7 +22,7 @@ struct TileFootprint {
 inline bool scroll_damage(std::vector<TileFootprint> const & previous,
                           std::vector<TileFootprint> const & current,
                           int width, int height, int & dx, int & dy,
-                          std::vector<PixelRect> & rectangles) {
+                          std::vector<PixelRect> & rectangles, int clip_guard = 0) {
     if (width <= 0 || height <= 0 || previous.empty() || current.empty()) return false;
     std::unordered_map<std::uint64_t, TileFootprint const *> old_tiles, new_tiles;
     for (auto const & tile : previous)
@@ -62,6 +62,15 @@ inline bool scroll_damage(std::vector<TileFootprint> const & previous,
     mark({std::min(width, width + dx), 0, width, height});
     mark({0, 0, width, std::max(0, dy)});
     mark({0, std::min(height, height + dy), width, height});
+    // A translated bitmap also carries the old viewport's clipped primitive
+    // interpolation. Repaint a bounded collar at both clipping boundaries;
+    // footprint identity alone cannot describe those rasterizer differences.
+    if (clip_guard > 0) {
+        for (int edge : {0, width, dx, width + dx})
+            mark({edge-clip_guard, 0, edge+clip_guard, height});
+        for (int edge : {0, height, dy, height + dy})
+            mark({0, edge-clip_guard, width, edge+clip_guard});
+    }
     for (auto const & old : previous) {
         auto next = new_tiles.find(old.coordinate);
         if (next == new_tiles.end() || next->second->mesh != old.mesh)

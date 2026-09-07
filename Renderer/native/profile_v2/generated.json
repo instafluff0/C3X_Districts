@@ -12,7 +12,7 @@
     },
     {
       "path": "generated/shaders/lighting/frame_shadow_v1.hlsl",
-      "sha256": "83e3c01561fb6bd306ff34ba34899946744e8ec5ef48ec10b43f545fad460d41"
+      "sha256": "af461bae3e374db26e9e5df20b2eccd40fb58c61a7a0e46a08e61093388773cc"
     },
     {
       "path": "generated/shaders/lighting/generated/scene_linear_v1.hlsl",
@@ -20,7 +20,7 @@
     },
     {
       "path": "generated/shaders/lighting/scene_shadow_v1.hlsl",
-      "sha256": "982b41cb5f98ae52c1c1533b874fd847b6fbe87f6c47520c782320648c0774c0"
+      "sha256": "bdb07dce1be952c994fbdba07cbcc8bd5fd3f373314df90edc7eecf4f4878c17"
     },
     {
       "path": "generated/shaders/lighting/shadow_visibility_v1.hlsl",
@@ -40,7 +40,7 @@
     },
     {
       "path": "integrated_v2.hlsl",
-      "sha256": "87365a69b73a0b55a57a07ec1eddc5ed4feb6d2a8d508d5de2fee757b8409de1"
+      "sha256": "586048731524b32479df748bb3185e02dadcc775d3805027be056cf6d534752e"
     }
   ]
 }

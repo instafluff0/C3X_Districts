@@ -488,7 +488,7 @@ def packet(cache, f, module, scene, phase, zoom, pack_hash, query=None):
             includes += ['#define LAB_V2_CONTINUOUS_NORMALS 1',
                          '#include "'+str(V2/'systems/relief/continuous_normal.h')+'"']
             hook_identity['continuous_normals'] = 1
-        for family,required,optional in [('terrain_hooks',{'initialize','material_weights'},{'material_uv'}),('hydrology_hooks',{'initialize','signed_shore_distance'},{'shore_sample','coast_segment'}),('placement_hooks',{'initialize','accept_vegetation'},set())]:
+        for family,required,optional in [('terrain_hooks',{'initialize','material_weights'},{'material_uv','ground_height'}),('hydrology_hooks',{'initialize','signed_shore_distance'},{'shore_sample','coast_segment'}),('placement_hooks',{'initialize','accept_vegetation'},set())]:
             if not module.get(family):continue
             hooks=module[family];header=local(hooks['header']);owned(header,hooks.get('owner',module['owner']))
             if not (required|{'header'}).issubset(hooks) or set(hooks)-required-optional-{'header','owner'} or any(not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_:]*',hooks[k]) for k in hooks if k not in ('header','owner')):

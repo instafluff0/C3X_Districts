@@ -80,6 +80,19 @@ int main() {
         }
         assert(unchanged > 0);
     }
+    {
+        auto shifted=old;for(auto& tile:shifted)tile.anchor_x-=256;
+        int dx=0,dy=0;std::vector<PixelRect> guarded;
+        assert(scroll_damage(old,shifted,1024,512,dx,dy,guarded,32));
+        int retained=0;
+        for(int y=0;y<512;++y)for(int x=0;x<1024;++x){
+            int count=0;for(auto r:guarded)count+=x>=r.left && x<r.right && y>=r.top && y<r.bottom;
+            assert(count<=1);
+            if(x<32 || x>=736 || y<32 || y>=480)assert(count==1);
+            retained+=count==0;
+        }
+        assert(retained>1024*512/2); // retain useful overlap despite the collar
+    }
     auto current = old;
     int dx=0,dy=0; std::vector<PixelRect> rectangles;
     current[0].anchor_x++;

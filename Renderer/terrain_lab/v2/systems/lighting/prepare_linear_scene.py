@@ -99,6 +99,35 @@ def generate():
 #ifdef Q4_RELIEF_MATERIAL_DATA
     output.relief_material = input.relief_material;
 #endif''')
+    marker = 'float4 sample_land_clutter(Texture2D atlas, float2 world_position,'
+    assert s.count(marker) == 1
+    s = s.replace(marker, '''#ifdef Q2_SOURCE_GROUND_DECALS
+#include "../../terrain/ground_decals.hlsl"
+#endif
+''' + marker)
+    marker = '    return atlas.Sample(decal_sampler, macro_decal_uv(world_position, scale, offset));'
+    assert s.count(marker) == 1
+    s = s.replace(marker, '''#ifdef Q2_SOURCE_GROUND_DECALS
+    return q2_ground_field(atlas,atlas,world_position,abs(scale-4.25)<.01,false);
+#endif
+''' + marker)
+    marker = '''    float2 uv = macro_decal_uv(world_position, scale, offset);
+    float height = height_atlas.Sample'''
+    assert s.count(marker) == 1
+    s = s.replace(marker, '''#ifdef Q2_SOURCE_GROUND_DECALS
+    return q2_ground_field(height_atlas,base_atlas,world_position,abs(scale-4.25)<.01,true).r;
+#endif
+''' + marker)
+    marker = '        albedo = lerp(albedo, grass_clutter.rgb, grass_clutter_weight);'
+    assert s.count(marker) == 1
+    s = s.replace(marker, '''#ifdef Q2_GROUND_DECAL_SOURCE_ALPHA
+        // The source patch alpha already encodes coverage. The legacy full-
+        // atlas attenuation suppressed its rock/earth detail a second time.
+        grass_clutter_weight = weights.x * grass_clutter.a *
+            (abs(input.real_terrain - 6.0) < .25 || q4_volcano_surface(input) ? .18 : 1.0);
+        plains_clutter_weight = weights.y * plains_clutter.a;
+#endif
+''' + marker)
     # Seven material evaluation call sites, not the function definition.
     calls = list(re.finditer(r'frame_illumination\(', s))
     assert len(calls) == 8
@@ -149,11 +178,91 @@ def generate():
         old = name + '_texture.Sample(material_sampler, input.uv).rgb'
         s = re.sub(r'\b' + re.escape(old),
                    'q4_relief_color(' + name + '_texture, input)', s)
+    marker = '#ifdef Q8_DEBUG_ALBEDO'
+    assert s.count(marker) == 1
+    s=s.replace(marker,'''#ifdef Q4_COHERENT_ROCK_CHANNELS
+        if(mountain_surface && input.surface_kind<1.5 && mountain_mask>0) {
+#ifdef Q4_COMPLETE_ROCK_CHANNELS
+            float3 rock_normal=q4_complete_rock_normal(input,desert_mountain);
+#else
+            float3 rock_normal=desert_mountain
+                ? q4_rock_material_normal(desert_mountain_height_texture,input)
+                : q4_rock_material_normal(mountain_height_texture,input);
+#endif
+            material_normal=normalize(lerp(material_normal,rock_normal,mountain_mask));
+        }
+#endif
+'''+marker)
+    marker = '                desert_mountain = input.base_terrain < 0.5;'
+    assert s.count(marker)==1
+    s=s.replace(marker,'''#ifdef Q4_DIAGNOSTIC_DESERT_MOUNTAINS
+                desert_mountain = true; // Explicit synthetic material-branch witness only.
+#else
+'''+marker+'''
+#endif''')
+    for name in ('mountain','desert_mountain'):
+        old=name+'_specular_texture.Sample(material_sampler, input.uv).r'
+        assert s.count(old)>=1
+        s=re.sub(r'\b'+re.escape(old),'''(
+#ifdef Q4_COMPLETE_ROCK_CHANNELS
+                q4_complete_rock_specular(input,'''+('true' if name=='desert_mountain' else 'false')+''')
+#elif defined(Q4_COHERENT_ROCK_CHANNELS)
+                q4_relief_color('''+name+'''_specular_texture,input).r
+#else
+                '''+old+'''
+#endif
+                )''',s)
+    marker = '\n        float grass_scale = abs(input.real_terrain - 5.0) < 0.25 ? 3.85 : 4.65;'
+    assert s.count(marker)==1
+    s=s.replace(marker,'''
+#ifdef Q2_CONTINENTAL_MATERIAL
+        float2 high_mix=q2_continental_mix(input);
+        albedo+=high_mix.x*(q2_grass_high_color.Sample(material_sampler,input.uv).rgb-grass)
+            +high_mix.y*(q2_plains_high_color.Sample(material_sampler,input.uv).rgb-plains);
+#endif
+'''+marker)
+    marker = '        float3 micro_normal = normalize(float3('
+    assert s.count(marker)==1
+    s=s.replace(marker,'''#ifdef Q2_CONTINENTAL_MATERIAL
+        height_left+=q2_continental_height_delta(input,input.uv-float2(height_texel.x,0));
+        height_right+=q2_continental_height_delta(input,input.uv+float2(height_texel.x,0));
+        height_down+=q2_continental_height_delta(input,input.uv-float2(0,height_texel.y));
+        height_up+=q2_continental_height_delta(input,input.uv+float2(0,height_texel.y));
+#endif
+'''+marker)
+    marker = '        q2_material_specular(input, world_position, geometry_normal, specular);'
+    assert s.count(marker)==1
+    s=s.replace(marker,'''#ifdef Q2_CONTINENTAL_MATERIAL
+        specular+=q2_continental_specular_delta(input);
+#endif
+'''+marker)
+    marker = '    float3 albedo = base_color_texture.Sample(material_sampler, input.uv).rgb;'
+    assert s.count(marker)==1
+    s=s.replace(marker,'''#ifdef Q2_SOURCE_ALPHA_BLEND
+    if(biq_layout>.5) q2_source_blend(input);
+#endif
+'''+marker)
     marker = 'float4 q6_raw_feature(FeaturePixelInput input)'
+    normal_marker = '            : micro_normal;'
+    assert s.count(normal_marker)==1
+    s=s.replace(normal_marker,normal_marker+'''
+#ifdef Q2_CACHED_NORMAL
+        q2_cached_normal(input,geometry_normal,material_normal);
+#endif
+''')
     s = s.replace(marker, '''#ifdef Q2_MATERIAL_RESPONSE
 #include "../../terrain/scene_material_v1.hlsl"
 #endif
+#ifdef Q2_CACHED_NORMAL
+#include "../../terrain/cached_normal.hlsl"
+#endif
 #include "../../relief/combined_material.hlsl"
+#ifdef Q2_SOURCE_ALPHA_BLEND
+#include "../../terrain/source_blend.hlsl"
+#endif
+#ifdef Q2_CONTINENTAL_MATERIAL
+#include "../../terrain/continental_material.hlsl"
+#endif
 #include "../scene_shadow_v1.hlsl"
 #ifdef Q4_COASTAL_ROCKS
 #include "../../relief/coast_rocks.hlsl"

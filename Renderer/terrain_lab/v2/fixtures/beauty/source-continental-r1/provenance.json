@@ -1,0 +1,323 @@
+{
+  "schema": "c3x.continental_ground_source_audit.v1",
+  "classification": "recovered source channels; engine placement, blend and unit evaluation unproven",
+  "records": [
+    {
+      "source_tree": "base",
+      "package_relative": "Platforms/Windows/BLPs/terrain/TerrainElementSet_Base.blp",
+      "package_sha256": "88f94d408d6cd0239e9e143f41d767fb0368d886e4497f020a9c4c2574b69a9a",
+      "entry": "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_GRASSLAND",
+      "grid_dimensions": [
+        4096,
+        4096
+      ],
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 24.0,
+        "height_scale": 14.0
+      },
+      "channels": [
+        {
+          "role": "height",
+          "lod": 0,
+          "dimensions": [
+            2048,
+            2048
+          ],
+          "source_resource": "TER_Hills_Continental_Element_0",
+          "source_index": 205,
+          "payload_sha256": "8414aaafe6f377b76d4b8371d6ce1f4874028f9fc7ec4460c95b81f2d3453ae8",
+          "min": 7,
+          "max": 191,
+          "mean": 94.77809166908264,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/base-continental_hill_grassland-height-lod0.dds",
+          "dds_sha256": "a635d15804ad566f01c0ff465ccce99260477b516798c4bd0c58b795ae362f66"
+        },
+        {
+          "role": "height",
+          "lod": 1,
+          "dimensions": [
+            1024,
+            1024
+          ],
+          "source_resource": "TER_Hills_Continental_Element_1",
+          "source_index": 206,
+          "payload_sha256": "8c052b90284888488ebd88759585c82a2ded28c29cdb746c48833603ece0ed9e",
+          "min": 7,
+          "max": 190,
+          "mean": 94.77667999267578,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/base-continental_hill_grassland-height-lod1.dds",
+          "dds_sha256": "f0b709c55b64474a8927746563b72685c92ce751ba3f5e8ee63a2f83da403e25"
+        }
+      ]
+    },
+    {
+      "source_tree": "base",
+      "package_relative": "Platforms/Windows/BLPs/terrain/TerrainElementSet_Base.blp",
+      "package_sha256": "88f94d408d6cd0239e9e143f41d767fb0368d886e4497f020a9c4c2574b69a9a",
+      "entry": "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_SNOW",
+      "grid_dimensions": [
+        4096,
+        4096
+      ],
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 24.0,
+        "height_scale": 12.0
+      },
+      "channels": [
+        {
+          "role": "height",
+          "lod": 0,
+          "dimensions": [
+            2048,
+            2048
+          ],
+          "source_resource": "TER_Hills_Continental_Element_Snow_0",
+          "source_index": 211,
+          "payload_sha256": "542e8009ed2584902373866350157ee4b3b8ede6f0c01c1d91e93a1bd0fb30b4",
+          "min": 48,
+          "max": 195,
+          "mean": 105.76438546180725,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/base-continental_hill_snow-height-lod0.dds",
+          "dds_sha256": "8e7acc46a3fe7fb345efb74ca2f8182e670955fc3cd9b6b5e7a61b2c32ed6186"
+        },
+        {
+          "role": "height",
+          "lod": 1,
+          "dimensions": [
+            1024,
+            1024
+          ],
+          "source_resource": "TER_Hills_Continental_Element_Snow_1",
+          "source_index": 212,
+          "payload_sha256": "e53869ffed35f3884b1c41dce428e8522d37925a22d09dda17eb5bd0f7a729d2",
+          "min": 48,
+          "max": 194,
+          "mean": 105.76445484161377,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/base-continental_hill_snow-height-lod1.dds",
+          "dds_sha256": "adaa4ce856de859abec6ad095013b945c1309af83b2f613120f4f4052428743f"
+        }
+      ]
+    },
+    {
+      "source_tree": "base",
+      "package_relative": "Platforms/Windows/BLPs/terrain/TerrainElementSet_Base.blp",
+      "package_sha256": "88f94d408d6cd0239e9e143f41d767fb0368d886e4497f020a9c4c2574b69a9a",
+      "entry": "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_PLAINS",
+      "grid_dimensions": [
+        4096,
+        4096
+      ],
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 16.0,
+        "height_scale": 10.0
+      },
+      "channels": [
+        {
+          "role": "height",
+          "lod": 0,
+          "dimensions": [
+            2048,
+            2048
+          ],
+          "source_resource": "TER_Hills_Continental_Element_Plains_0",
+          "source_index": 208,
+          "payload_sha256": "2a962689b40c9d8b4d81f0c8c1e9d0fffc58d2eaac37f77a12d5fe94ce1c4baa",
+          "min": 6,
+          "max": 172,
+          "mean": 85.10806584358215,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/base-continental_hill_plains-height-lod0.dds",
+          "dds_sha256": "3ede558bb2d66337a143f485dba39d09fb8ab6bf59e2cc77d18d7d568c86f783"
+        },
+        {
+          "role": "height",
+          "lod": 1,
+          "dimensions": [
+            1024,
+            1024
+          ],
+          "source_resource": "TER_Hills_Continental_Element_Plains_1",
+          "source_index": 209,
+          "payload_sha256": "342307f531b1ac9b6bff89139f11837b69737b3cfa7f98e0b1810b2d4ed22510",
+          "min": 6,
+          "max": 172,
+          "mean": 85.10696125030518,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/base-continental_hill_plains-height-lod1.dds",
+          "dds_sha256": "ee3bbea77d9e8b33d2ecc4dde8b800582475ddb5fc5c6f125151de93abefd600"
+        }
+      ]
+    },
+    {
+      "source_tree": "selected_overlay",
+      "package_relative": "Platforms/Windows/BLPs/terrain/TerrainElementSet_Base.blp",
+      "package_sha256": "28fc31b554c902885d8dc3b52c9557969f84b5919d5eb2f7b1d1e04fde646cd4",
+      "entry": "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_GRASSLAND",
+      "grid_dimensions": [
+        4096,
+        4096
+      ],
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 24.0,
+        "height_scale": 14.0
+      },
+      "channels": [
+        {
+          "role": "height",
+          "lod": 0,
+          "dimensions": [
+            2048,
+            2048
+          ],
+          "source_resource": "TER_Hills_Continental_Element_0",
+          "source_index": 208,
+          "payload_sha256": "8414aaafe6f377b76d4b8371d6ce1f4874028f9fc7ec4460c95b81f2d3453ae8",
+          "min": 7,
+          "max": 191,
+          "mean": 94.77809166908264,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/selected_overlay-continental_hill_grassland-height-lod0.dds",
+          "dds_sha256": "a635d15804ad566f01c0ff465ccce99260477b516798c4bd0c58b795ae362f66"
+        },
+        {
+          "role": "height",
+          "lod": 1,
+          "dimensions": [
+            1024,
+            1024
+          ],
+          "source_resource": "TER_Hills_Continental_Element_1",
+          "source_index": 209,
+          "payload_sha256": "8c052b90284888488ebd88759585c82a2ded28c29cdb746c48833603ece0ed9e",
+          "min": 7,
+          "max": 190,
+          "mean": 94.77667999267578,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/selected_overlay-continental_hill_grassland-height-lod1.dds",
+          "dds_sha256": "f0b709c55b64474a8927746563b72685c92ce751ba3f5e8ee63a2f83da403e25"
+        }
+      ]
+    },
+    {
+      "source_tree": "selected_overlay",
+      "package_relative": "Platforms/Windows/BLPs/terrain/TerrainElementSet_Base.blp",
+      "package_sha256": "28fc31b554c902885d8dc3b52c9557969f84b5919d5eb2f7b1d1e04fde646cd4",
+      "entry": "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_SNOW",
+      "grid_dimensions": [
+        4096,
+        4096
+      ],
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 24.0,
+        "height_scale": 12.0
+      },
+      "channels": [
+        {
+          "role": "height",
+          "lod": 0,
+          "dimensions": [
+            2048,
+            2048
+          ],
+          "source_resource": "TER_Hills_Continental_Element_Snow_0",
+          "source_index": 214,
+          "payload_sha256": "542e8009ed2584902373866350157ee4b3b8ede6f0c01c1d91e93a1bd0fb30b4",
+          "min": 48,
+          "max": 195,
+          "mean": 105.76438546180725,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/selected_overlay-continental_hill_snow-height-lod0.dds",
+          "dds_sha256": "8e7acc46a3fe7fb345efb74ca2f8182e670955fc3cd9b6b5e7a61b2c32ed6186"
+        },
+        {
+          "role": "height",
+          "lod": 1,
+          "dimensions": [
+            1024,
+            1024
+          ],
+          "source_resource": "TER_Hills_Continental_Element_Snow_1",
+          "source_index": 215,
+          "payload_sha256": "e53869ffed35f3884b1c41dce428e8522d37925a22d09dda17eb5bd0f7a729d2",
+          "min": 48,
+          "max": 194,
+          "mean": 105.76445484161377,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/selected_overlay-continental_hill_snow-height-lod1.dds",
+          "dds_sha256": "adaa4ce856de859abec6ad095013b945c1309af83b2f613120f4f4052428743f"
+        }
+      ]
+    },
+    {
+      "source_tree": "selected_overlay",
+      "package_relative": "Platforms/Windows/BLPs/terrain/TerrainElementSet_Base.blp",
+      "package_sha256": "28fc31b554c902885d8dc3b52c9557969f84b5919d5eb2f7b1d1e04fde646cd4",
+      "entry": "ART_DEF_TERRAIN_ELEMENT_CONTINENTAL_HILL_PLAINS",
+      "grid_dimensions": [
+        4096,
+        4096
+      ],
+      "parameters": {
+        "noise_scale": 0.0,
+        "base_height": 16.0,
+        "height_scale": 10.0
+      },
+      "channels": [
+        {
+          "role": "height",
+          "lod": 0,
+          "dimensions": [
+            2048,
+            2048
+          ],
+          "source_resource": "TER_Hills_Continental_Element_Plains_0",
+          "source_index": 211,
+          "payload_sha256": "2a962689b40c9d8b4d81f0c8c1e9d0fffc58d2eaac37f77a12d5fe94ce1c4baa",
+          "min": 6,
+          "max": 172,
+          "mean": 85.10806584358215,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/selected_overlay-continental_hill_plains-height-lod0.dds",
+          "dds_sha256": "3ede558bb2d66337a143f485dba39d09fb8ab6bf59e2cc77d18d7d568c86f783"
+        },
+        {
+          "role": "height",
+          "lod": 1,
+          "dimensions": [
+            1024,
+            1024
+          ],
+          "source_resource": "TER_Hills_Continental_Element_Plains_1",
+          "source_index": 212,
+          "payload_sha256": "342307f531b1ac9b6bff89139f11837b69737b3cfa7f98e0b1810b2d4ed22510",
+          "min": 6,
+          "max": 172,
+          "mean": 85.10696125030518,
+          "dds": "Renderer/terrain_lab/v2/fixtures/beauty/source-continental-r1/selected_overlay-continental_hill_plains-height-lod1.dds",
+          "dds_sha256": "ee3bbea77d9e8b33d2ecc4dde8b800582475ddb5fc5c6f125151de93abefd600"
+        }
+      ]
+    }
+  ],
+  "compiled_fields": [
+    {
+      "family": "grassland",
+      "size": [
+        64,
+        64
+      ],
+      "filter": "32x32 area average, rounded to R8",
+      "source_dds_sha256": "a635d15804ad566f01c0ff465ccce99260477b516798c4bd0c58b795ae362f66",
+      "filtered_payload_sha256": "2d82589a2a168d9acc1cb5dc0dc4382ffd723e680fe81cb064b5d6ba75c1d7cc"
+    },
+    {
+      "family": "plains",
+      "size": [
+        64,
+        64
+      ],
+      "filter": "32x32 area average, rounded to R8",
+      "source_dds_sha256": "3ede558bb2d66337a143f485dba39d09fb8ab6bf59e2cc77d18d7d568c86f783",
+      "filtered_payload_sha256": "f92798b189b0ceee9f2dc1f6c704b02e50978f674acd077a675ca44c4c9cfea9"
+    }
+  ],
+  "compiled_header_sha256": "d4573a971661d14e3a127b9c3090ac234dabec28ee669e99be20bcba86d9b23d"
+}
