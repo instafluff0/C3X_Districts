@@ -85,3 +85,61 @@ EXCLUDED = [
  'Source-only camps, analytic lights, particle bindings and scenario palaces are not silently enabled.',
  'Legacy L21 border frame hashes are pre-territory; they do not validate the final border revision.',
 ]
+
+# The current Lab state of the art is intentionally a set of isolated witnesses.
+# It does not select the older combined-scene fixture, whose composition predates
+# the source-fidelity corrections below.
+STATE_OF_ART_STUDIES = [
+    {
+        'id': 'mountain',
+        'fixture': V2+'fixtures/relief/beauty-mountain.fixture.json',
+        'module': V2+'systems/relief/beauty_mountain.module.json',
+        'source': V2+'systems/relief/beauty_mountain.cpp',
+        'shader': V2+'shaders/relief/beauty_mountain.hlsl',
+        'audit': V2+'audits/relief/BEAUTY_MOUNTAIN_STUDY.md',
+        'report': V2+'audits/relief/out/beauty-mountain-civ5-r4/report.json',
+        'review_image': V2+'audits/relief/out/beauty-mountain-civ5-r4/h12-z1-pan00.png',
+        'review_sha256': 'c3e0329aa617255fd144abe930b34aad413fed66b7d3caac209c355709722429',
+        'raw_sha256': '3ac8808024a27ed6f644dd7046ca2cc9e1793e1af216d0f12ff0184517de59e1',
+        'disposition': 'user_retained',
+    },
+    {
+        'id': 'grass_plains_tundra_hills',
+        'fixture': V2+'fixtures/relief/beauty-terrain.fixture.json',
+        'module': V2+'systems/relief/beauty_terrain.module.json',
+        'source': V2+'systems/relief/beauty_terrain.cpp',
+        'shader': V2+'shaders/relief/beauty_terrain.hlsl',
+        'audit': V2+'audits/relief/CIV5_TERRAIN_SOURCE_PASS.md',
+        'report': V2+'audits/relief/out/beauty-land-types-r1/report.json',
+        'review_image': V2+'audits/relief/out/beauty-land-types-r1/h12-z1-pan00-civ5-lut.png',
+        'review_sha256': '8892fefd1ee4c2aead09a027289269741a91655b11d7cf865925e04b8db6339a',
+        'raw_sha256': '2be5cd230b0d70ec07ebb0a4b7cc00b913136a01f0d423cf3475fa2f55109215',
+        'disposition': 'agent_visual_qa_pass',
+    },
+    {
+        'id': 'forest',
+        'fixture': V2+'fixtures/objects/beauty-trees.fixture.json',
+        'module': V2+'systems/objects/beauty_objects.module.json',
+        'source': V2+'systems/objects/beauty_objects.cpp',
+        'shader': V2+'shaders/objects/beauty_objects.hlsl',
+        'audit': V2+'audits/objects/CIV5_TREE_SOURCE_PASS.md',
+        'report': V2+'audits/objects/out/beauty-trees-r18/report.json',
+        'review_image': V2+'audits/objects/out/beauty-trees-r18/h12-z1-pan00-civ5-lut.png',
+        'review_sha256': 'fbd3c494d19d16c7becf7729db7d0c4e993eb788262ec6ad10ad1131ecf32bc4',
+        'raw_sha256': '36365a40cdb66430d624cb8af188f0bd04ff285f8c87c974570e14d276ddc209',
+        'disposition': 'user_good_for_now',
+    },
+    {
+        'id': 'warrior',
+        'fixture': V2+'fixtures/objects/beauty-warrior.fixture.json',
+        'module': V2+'systems/objects/beauty_objects.module.json',
+        'source': V2+'systems/objects/beauty_objects.cpp',
+        'shader': V2+'shaders/objects/beauty_objects.hlsl',
+        'audit': V2+'audits/objects/WARRIOR_SOURCE_PASS.md',
+        'report': V2+'audits/objects/out/beauty-warrior-r4/report.json',
+        'review_image': V2+'audits/objects/out/beauty-warrior-r4/h12-z1-pan00-civ5-lut.png',
+        'review_sha256': 'e90022920d1317fc113051475280d51fc4222ca37324acca898a58f4e8111d1a',
+        'raw_sha256': '35e3930cfa63fdbbc442a92644f254c5986e2e1627541e4ba38e835bdc82736d',
+        'disposition': 'user_good_for_now',
+    },
+]

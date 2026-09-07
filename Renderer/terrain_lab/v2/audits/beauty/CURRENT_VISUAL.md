@@ -1,14 +1,20 @@
-# Current pickup: complete Lab consolidation
+# Current pickup: isolated source-faithful Lab state of the art
 
-The user requested one implementation handoff covering all selected Lab work,
-older goody huts/infrastructure/territory, and integration's newer animation
-work. Start at the [complete pickup catalog](../../../../handoffs/candidates/lab_v2_complete_r2/README.md).
-It pins selected conditional scenes and source dependencies without duplicating
-art or replacing the earlier terrain-only record. The audit confirms current
-unit shadow direction differs from the pickup world basis; posed resources
-receive static shadows but do not cast their current poses. The package supplies
-an executable coordinate contract and bounded native work orders. No new visual
-best, native implementation, human approval or milestone closure is claimed.
+The current visual authority is the four-study
+[Lab state-of-the-art pickup](../../../../handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.md):
+mountain, grassland/plains/tundra/hills, forest and Warrior. Cities are excluded
+from this update and preserve their existing r2 selection unchanged.
+These are isolated macOS Metal witnesses using upstream art and metadata; they
+do not wait on a combined scene, Windows or Civ III integration. The retained
+images are machine-pinned in `LAB_STATE_OF_ART.json` and are revalidated by the
+pickup's focused validator.
+
+The old `beauty-scene.fixture.json` is superseded as current evidence. It
+predates the source-fidelity corrections and can place trees through buildings.
+Future composition must enforce the source forest exclusions for buildings,
+rivers and coastlines without flattening or shortening source objects. The
+broader historical pickup catalog remains available for later Integration, but
+does not override these four current visual selections.
 
 # Preserved focus: city quality
 

@@ -1,9 +1,32 @@
 # Consolidation checkpoint and acceptance ledger
 
-The deliverable is an implementation-preparation catalog with executable pin,
-replay and shadow-coordinate checks. It does not claim a new combined visual
-improvement or Civ VI-equivalent quality. Images remain the acceptance evidence;
-test counts and hashes support reproducibility only.
+## Current Mac Lab checkpoint
+
+The authoritative current checkpoint is the four-study manifest in
+`LAB_STATE_OF_ART.json`. It records the retained mountain, land-type/hill,
+forest and Warrior images and the exact source/module/shader
+entry points that produced them. The required fast gate is:
+
+```sh
+python3 Renderer/handoffs/candidates/lab_v2_complete_r2/validate_state_of_art.py
+```
+
+Fresh macOS Metal renders must reproduce each report's raw-image hash, after
+which the exact Civ V Environment Skin noon LUT review images are inspected.
+This checkpoint requires no Windows VM, Civ III launch, combined scene or
+integration change. The top-level package remains unpromoted because those are
+separate future responsibilities, not because the isolated Lab is incomplete.
+Cities are excluded from this update and retain the pre-existing r2 selection.
+
+The prior combined beauty scene is not current evidence and must not be used to
+evaluate city/forest composition: it permits trees inside buildings. Future
+composition owns the confirmed `ClipBuildings`, `ClipRiver` and
+`ClipCoastline` rules and must preserve complete source proportions.
+
+The broader deliverable remains an implementation-preparation catalog with
+executable pin, replay and shadow-coordinate checks. Its historical combined
+cases do not override the isolated visual selections above. Images remain the
+acceptance evidence; tests and hashes support reproducibility only.
 
 ## Verification at preparation
 

@@ -91,7 +91,7 @@
     "ordinary_backend": "macos_metal",
     "promotion_parity_backend": "windows_d3d11",
     "integration_preparation": {
-      "status": "prepared_not_promoted",
+      "status": "prepared_mac_lab_state_of_art_not_promoted",
       "path": "handoffs/candidates/lab_v2_terrain_lighting_r1/README.md",
       "manifest": "handoffs/candidates/lab_v2_terrain_lighting_r1/manifest.json",
       "requested_by_user": true,
@@ -231,10 +231,21 @@
       "requested_by_user": true,
       "path": "handoffs/candidates/lab_v2_complete_r2/README.md",
       "manifest": "handoffs/candidates/lab_v2_complete_r2/manifest.json",
-      "scope": "All selected Lab and historical object systems reconciled with current native pickup and animation baseline; no native edits or formal gate advancement.",
+      "scope": "Historical implementation catalog preserved; current visual authority is four isolated source-faithful macOS Metal studies for mountain, grassland/plains/tundra/hills, forest and Warrior. Cities are unchanged and excluded from this update; no native edits or formal gate advancement.",
       "baseline_commit": "a0683e0d2a5cb0694961d1993b4c56a8aa1d1323",
       "approval": null,
       "required_user_action": [],
+      "lab_state_of_art": {
+        "path": "handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.json",
+        "status": "agent_visual_qa_pass",
+        "fresh_raw_hash_matches": 4,
+        "fresh_review_hash_matches": 4,
+        "deterministic_metal_variants_passed": 32,
+        "lab_v2_python_tests_passed": 97,
+        "combined_scene_authoritative": false,
+        "cities_changed": false,
+        "windows_or_civ3_used": false
+      },
       "shadow_status": "Current units self/cast on flat ground, but coordinate probe confirms direction mismatch against pickup. Animated resources receive static shadows and are excluded as posed casters. S1-S4 remain native work.",
       "known_blockers": [
         "Frozen L19A tile_object_runtime.bin hash mismatch; full prerequisites fail after 379 unit tests pass",

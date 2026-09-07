@@ -101,6 +101,19 @@ control uses the same geometry and shader but recreates the planar, incomplete-
 material failure. This is an unoptimized standalone finding only; it does not
 close LQ0, establish D3D parity, or change Game Integration.
 
+The current [isolated Lab state of the art](handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.md)
+consolidates that mountain with the source-faithful grassland/plains/tundra and
+variable rocky-hill study, the full Civ V Environment Skin forest recipe, and
+the corrected Warrior. Fresh macOS Metal runs reproduce all four raw and review
+hashes exactly; 32 deterministic render variants and 97 Lab-v2 Python tests
+pass. Direct visual inspection retains all four. The pickup makes upstream
+assets/metadata authoritative, forbids arbitrary height shortening and
+nonuniform object scaling, and labels shader/placement inference explicitly.
+Cities are excluded from this update and keep the pre-existing r2 disposition.
+The old combined beauty scene is non-authoritative because it predates these
+fixes and may place vegetation through buildings. No Windows, Civ III,
+Integration, or LQ0 gate is advanced.
+
 The [continental/source-baking pass](terrain_lab/v2/audits/beauty/CONTINENTAL_GROUND_PASS.md)
 recovers continental height fields and rejects a broad pale high-material mask.
 Installed bytecode confirms alpha-squared weighted material baking and separate

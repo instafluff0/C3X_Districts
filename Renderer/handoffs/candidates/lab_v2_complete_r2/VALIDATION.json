@@ -3,12 +3,23 @@
   "package": "lab_v2_complete_r2",
   "approval": null,
   "gates_advanced": [],
+  "isolated_lab_state_of_art": {
+    "status": "agent_visual_qa_pass",
+    "backend": "macOS Metal",
+    "fresh_quick_raw_hash_matches": 4,
+    "fresh_review_conversion_hash_matches": 4,
+    "deterministic_check_variants_passed": 32,
+    "direct_visual_inspection": "pass",
+    "combined_scene_used": false,
+    "windows_or_civ3_used": false,
+    "cities": "excluded from this update; pre-existing r2 selection unchanged"
+  },
   "pin_verification": {
     "source_and_historical": true,
     "evidence": true,
     "local_assets": true,
     "packets": true,
-    "total_pins": 1661,
+    "total_pins": 1698,
     "advisory_working_importer_drift": "Pinned committed Git blobs verified; concurrent importer changes are not selected"
   },
   "source_extraction": "Pinned unit_family_asset_importer.py extracted, SHA-256 verified, temporary copy removed",
@@ -117,6 +128,12 @@
     "production_shadow_unification_complete": false
   },
   "lab_v2_contract": "pass",
+  "lab_v2_python_tests": {
+    "passed": 97,
+    "failed": 0,
+    "batches": [91, 6],
+    "note": "test_relief.py runs in a separate process to avoid the legacy duplicate clearance module name used by the networks and relief suites"
+  },
   "project_state": "pass; LQ0 remains next",
   "focused_city_tests": 33,
   "current_unit_shadow_test": 1,

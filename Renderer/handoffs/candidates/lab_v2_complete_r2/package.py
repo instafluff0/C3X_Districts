@@ -6,9 +6,12 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
-from catalog import AUDITS, BEAUTY, CASES, ENTRIES, EXCLUDED, SYSTEMS, V2
+from catalog import (
+    AUDITS, BEAUTY, CASES, ENTRIES, EXCLUDED, STATE_OF_ART_STUDIES, SYSTEMS, V2,
+)
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
@@ -35,6 +38,133 @@ def write(p, d): p.write_text(json.dumps(d, indent=2)+'\n')
 def pin(p):
     if not p.is_file(): raise ValueError('Missing required input: '+relative(p))
     return {'path':relative(p), 'sha256':sha(p), 'bytes':p.stat().st_size}
+
+def replace_pin(rows, path):
+    row = pin(local(path))
+    rows[:] = [old for old in rows if old['path'] != path]
+    rows.append(row)
+    rows.sort(key=lambda item:item['path'])
+
+def state_document():
+    studies=[]
+    for spec in STATE_OF_ART_STUDIES:
+        report=read(local(spec['report']))
+        if len(report.get('outputs', [])) != 1:
+            raise ValueError('State-of-art witness must contain one bounded output: '+spec['id'])
+        raw=report['outputs'][0]
+        if raw['sha256'] != spec['raw_sha256']:
+            raise ValueError('Recorded raw hash drift: '+spec['id'])
+        review=pin(local(spec['review_image']))
+        if review['sha256'] != spec['review_sha256']:
+            raise ValueError('Recorded review hash drift: '+spec['id'])
+        studies.append({
+            **spec,
+            'review_image': review,
+            'raw_image': {
+                'path': raw['image'],
+                'sha256': raw['sha256'],
+                'bytes': local(raw['image']).stat().st_size,
+            },
+            'settings': report['effective']['settings'],
+            'source_pack_hash': report['effective']['pack_hash'],
+            'shader_hashes': report['effective']['shader_hashes'],
+        })
+    return {
+        'schema':'c3x.lab_state_of_art.v1',
+        'id':'lab-v2-isolated-state-of-art-r1',
+        'status':'agent_visual_qa_pass',
+        'scope':'isolated macOS Metal studies; no combined scene and no Civ III/Windows integration',
+        'visual_target':'Civ VI rendering quality using the Civ V Environment Skin workshop assets',
+        'quality_contract':{
+            'upstream_assets_are_authority':True,
+            'authored_metadata_is_preserved':True,
+            'uniform_object_scaling_only':True,
+            'arbitrary_height_shortening_forbidden':True,
+            'confirmed_source_and_lab_inference_are_separate':True,
+            'review_pipeline':'scene-linear Metal, 4x MSAA, 16x anisotropy, exact source noon LUT where recorded',
+        },
+        'composition_contract':{
+            'combined_scene_authoritative':False,
+            'superseded_fixture':V2+'fixtures/objects/beauty-scene.fixture.json',
+            'city_excludes_trees':True,
+            'basis':'Clutter.artdef ClipBuildings=true; final placement is an Integration responsibility',
+        },
+        'visual_qa':{
+            'date':'2026-09-07',
+            'backend':'macOS Metal',
+            'fresh_quick_raw_hash_matches':4,
+            'fresh_review_conversion_hash_matches':4,
+            'deterministic_check_variants_passed':32,
+            'direct_inspection':'pass',
+            'observations':[
+                'Mountain silhouette is intact with readable ridges, strata, snow and face separation.',
+                'Grassland, plains and tundra are distinct; hill footprints and rock patches vary across all six hills.',
+                'Forest crowns retain irregular opacity-masked silhouettes and mixed full-height source forms.',
+                'Warrior viewer-right arm and eye are free of the prior clamped-UV metallic smear.',
+            ],
+        },
+        'excluded_from_current_update':{
+            'cities':'Preserve the pre-existing r2 city catalog and implementation unchanged; no isolated city witness is selected by this update.',
+        },
+        'confirmed_cross_system_findings':[
+            'High-definition appearance depends on preserving source material channels, source normals, texture address modes, macro relief and final sampling; asset reuse alone is insufficient.',
+            'Mountain macro height defines silhouette; material height maps add shading detail and must not replace or flatten the authored relief.',
+            'Forest bodies and compound clumps are authored meshes. ArtDef recipes drive variants and counts; placement order remains inferred and deterministic.',
+            'Warrior skin requires authored packed normals and per-material repeat/clamp addressing. Guessed LEAN decoding is disabled.',
+            'Warrior placement uses uniform XYZ scale. Source vertices, UVs and proportions are not stretched or shortened.',
+            'Grassland, plains and tundra retain distinct source material families. Hills use authored relief plus stable per-hill variation; rock-patch composition is an explicitly labeled Lab inference.',
+        ],
+        'known_inferences_and_pending':[
+            'Exact Firaxis forest scatter order, opacity coverage, LEAN BRDF, ambient SH and temporal postprocessing are not recovered.',
+            'Hill rock-patch alpha combined with hill-top material is an inferred readability treatment, not a recovered Firaxis shader equation.',
+            'The two source tundra snow-hill decal families are identified but not yet imported; the Lab does not fabricate replacements.',
+            'Cities are deliberately excluded from this update and retain their pre-existing r2 disposition.',
+            'No combined scene is current evidence. Future composition must apply building, river and coastline vegetation exclusion before visual review.',
+        ],
+        'studies':studies,
+    }
+
+def refresh_state():
+    state_path=HERE/'LAB_STATE_OF_ART.json'
+    write(state_path,state_document())
+    d=read(HERE/'manifest.json')
+    d['status']='prepared_mac_lab_state_of_art_not_promoted'
+    d['state_of_art']=pin(state_path)
+    excluded_city_pins={
+        V2+'fixtures/objects/beauty-city.fixture.json',
+        V2+'audits/objects/CITY_ACCEPTANCE.md',
+        V2+'audits/objects/out/beauty-city-r3/report.json',
+        V2+'audits/objects/out/beauty-city-r3/h12-z1-pan00.bmp',
+        V2+'audits/objects/out/beauty-city-r3/h12-z1-pan00-civ5-lut.png',
+    }
+    for collection in ('source_files','evidence_files'):
+        d[collection]=[row for row in d[collection]
+                       if row['path'] not in excluded_city_pins]
+    source_paths={
+        relative(HERE/name) for name in [
+            'README.md','IMPLEMENTATION.md','CHECKPOINT.md','VALIDATION.json','LAB_STATE_OF_ART.md',
+            'LAB_STATE_OF_ART.json','catalog.py','package.py','validate_state_of_art.py',
+        ]
+    }
+    source_paths.add(V2+'audits/beauty/CURRENT_VISUAL.md')
+    source_paths.add(V2+'tests/test_lab_state_of_art_pickup.py')
+    for spec in STATE_OF_ART_STUDIES:
+        source_paths.update(spec[key] for key in ('fixture','module','source','shader','audit'))
+        replace_pin(d['evidence_files'],spec['report'])
+        replace_pin(d['evidence_files'],spec['review_image'])
+        raw=read(local(spec['report']))['outputs'][0]['image']
+        replace_pin(d['evidence_files'],raw)
+    for path in source_paths:replace_pin(d['source_files'],path)
+    for path in (
+        'Renderer/packs/BeautyStudies/manifest.json',
+        'Renderer/packs/BeautyStudies/beauty_objects.bin',
+        'Renderer/packs/Civ5EnvironmentSkin/manifest.json',
+        'Renderer/packs/Civ5EnvironmentVegetation/manifest.json',
+        'Renderer/packs/UnitWarriorLab/manifest.json',
+    ):
+        if local(path).is_file():replace_pin(d['local_assets'],path)
+    write(HERE/'manifest.json',d)
+    print('Refreshed isolated Lab state of the art and package pins')
 
 def shadow_probe():
     compiler = shutil.which('c++')
@@ -168,7 +298,8 @@ def freeze():
 
 def verify(with_evidence=False, with_assets=False, with_packets=False):
     d=read(HERE/'manifest.json');errors=[]
-    if d['approval'] is not None or d['visual_acceptance'] or d['status']!='prepared_not_promoted':
+    if (d['approval'] is not None or d['visual_acceptance'] or
+            d['status'] not in {'prepared_not_promoted','prepared_mac_lab_state_of_art_not_promoted'}):
         errors.append('Preparation/approval contract changed')
     actual={relative(p) for p in (ROOT/'Renderer/handoffs').glob('L*.json')}
     if actual!={r['path'] for r in d['historical_handoffs']}:errors.append('Historical handoff inventory changed')
@@ -190,6 +321,11 @@ def verify(with_evidence=False, with_assets=False, with_packets=False):
         p=local(row['path'])
         if not p.is_file() or sha(p)!=row['sha256']:print('ADVISORY native baseline changed:',row['path'])
     if errors:raise ValueError('\n'.join(errors))
+    if 'state_of_art' in d:
+        state=d['state_of_art'];path=local(state['path'])
+        if not path.is_file() or sha(path)!=state['sha256']:
+            raise ValueError('State-of-art manifest drift')
+        subprocess.run([sys.executable,str(HERE/'validate_state_of_art.py')],check=True,cwd=ROOT)
     print('PASS',len(rows),'pins; preparation only, visual and integration gates remain open')
 
 def replay(case_id, output):
@@ -226,12 +362,17 @@ def replay(case_id, output):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('command',choices=['freeze','verify','list','shadows','replay','extract-source'])
+    p.add_argument('command',choices=['freeze','refresh-state','verify','list','state','shadows','replay','extract-source'])
     p.add_argument('--evidence',action='store_true');p.add_argument('--assets',action='store_true')
     p.add_argument('--packets',action='store_true');p.add_argument('--case');p.add_argument('--output',type=Path)
     p.add_argument('--source')
     a=p.parse_args()
     if a.command=='freeze':freeze()
+    elif a.command=='refresh-state':refresh_state()
+    elif a.command=='state':
+        d=read(HERE/'LAB_STATE_OF_ART.json')
+        for row in d['studies']:
+            print(row['id']+': '+row['disposition']+' | '+row['review_image']['path'])
     elif a.command=='verify':verify(a.evidence,a.assets,a.packets)
     elif a.command=='shadows':print(json.dumps(shadow_probe(),indent=2))
     elif a.command=='extract-source':

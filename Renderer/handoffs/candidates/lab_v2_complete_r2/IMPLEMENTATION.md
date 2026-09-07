@@ -1,5 +1,27 @@
 # Implementation map and pickup order
 
+## 0. Begin with the current isolated Lab state of the art
+
+Before using the older composed-system catalog below, read
+[LAB_STATE_OF_ART.md](LAB_STATE_OF_ART.md) and consume
+[LAB_STATE_OF_ART.json](LAB_STATE_OF_ART.json). Those four Metal witnesses are
+the current appearance and source-fidelity authority. They supersede the old
+combined beauty-scene as visual evidence without deleting its historical files.
+Cities are excluded from this update: preserve the pre-existing r2 city catalog
+and implementation without treating the isolated city experiment as a pickup.
+
+Carry each system independently. Preserve the authored mountain relief, tree
+bodies/recipe/masks/normals, Warrior geometry/UVs/proportions, Warrior
+address modes, terrain material families and high-quality sampling contract.
+Only translation, rotation and uniform XYZ scale are permitted for intact
+objects unless a later visual audit proves a different need. Missing source
+behavior stays explicitly pending; do not substitute procedural crowns, fake
+snow decals, guessed LEAN normals or flattened geometry.
+
+When composition resumes elsewhere, apply the forest source exclusions before
+placement: buildings, rivers and coastlines exclude trees. The superseded scene
+that allows trees inside buildings is not a fallback or an acceptance witness.
+
 All paths below are repository-relative. Native ownership is based on the
 Integration agent’s read-only report at commit
 `a0683e0d2a5cb0694961d1993b4c56a8aa1d1323`, independently checked against source.

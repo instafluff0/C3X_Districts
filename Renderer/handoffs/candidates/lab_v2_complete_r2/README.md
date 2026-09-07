@@ -1,34 +1,40 @@
 # Consolidated Renderer Lab pickup r2
 
-This is the single entry point for the selected Lab work and the current
-production baseline. It replaces the **terrain-only package as a navigation
-entry point**, not its immutable historical record. It supplies 24 system
-dispositions, 27 selected conditional scene witnesses, source hashes, portable
-replay jobs, the implementation order and concrete unresolved work. It copies
-no licensed art, packet archives, native code or cache directories.
+This is the single entry point for selected Lab work. Its authoritative current
+visual layer is the [isolated Lab state of the art](LAB_STATE_OF_ART.md): four
+source-faithful macOS Metal studies for mountain, grassland/plains/tundra/hills,
+forest and Warrior. Cities are explicitly unchanged. The older 24-system/27-scene catalog remains
+available as implementation history, but it is not the current beauty target.
+The package copies no licensed art, packet archives, native code or caches.
 
-**Prepared for implementation; not promoted or visually accepted.** There is
-not yet one production image combining every newer Lab system. Existing
-LQ0/LQ1/LQ2, pending formal Integration gates, and M9/M10/M11 remain unchanged.
-Historical L9–L21 approvals apply to their recorded versions only. The user’s
-requested consolidation does not retroactively approve experimental revisions.
+**Mac Lab state of the art prepared; not promoted into Integration.** A combined
+scene is deliberately not required by this pickup. The obsolete beauty-scene
+fixture is specifically non-authoritative because it predates the isolated
+fixes and can place trees through city buildings. Existing Integration gates
+and M9/M10/M11 remain unchanged.
 
 Read [IMPLEMENTATION.md](IMPLEMENTATION.md) for the pickup order and interface
 map, [SHADOWS.md](SHADOWS.md) for the confirmed unit/resource gaps and exact
 coordinate conversion, and [CHECKPOINT.md](CHECKPOINT.md) for validation and
-remaining acceptance work. [manifest.json](manifest.json) is the immutable
-machine-readable catalog. [catalog.py](catalog.py) makes its selection policy
+remaining acceptance work. [manifest.json](manifest.json) is the versioned
+machine-readable catalog; its historical selections remain pinned while the
+user-directed state-of-art layer is refreshed explicitly. [catalog.py](catalog.py) makes its selection policy
 readable without parsing thousands of hashes.
 
 From the repository root:
 
 ```sh
 python3 Renderer/handoffs/candidates/lab_v2_complete_r2/package.py list
+python3 Renderer/handoffs/candidates/lab_v2_complete_r2/package.py state
+python3 Renderer/handoffs/candidates/lab_v2_complete_r2/validate_state_of_art.py
 python3 Renderer/handoffs/candidates/lab_v2_complete_r2/package.py verify --evidence --assets --packets
 python3 Renderer/handoffs/candidates/lab_v2_complete_r2/package.py shadows
 ```
 
-`verify` checks pins, not visual quality. Native hashes are advisory: integration
+`validate_state_of_art.py` checks the four current witnesses, their source entry
+points, render settings, retained image hashes and cross-system invariants.
+`verify` additionally checks the historical package pins. Visual quality still
+requires direct inspection. Native hashes are advisory: integration
 may continue improving native code, and this package must never restore an old
 native implementation over those changes. Common Lab/tool-library files are
 pinned for dependency completeness; only the explicit system/case selections
@@ -59,7 +65,7 @@ are advisory, not selected changes. Retrieve an exact pinned file with
 This never overwrites active source. The initial r1 preparation catalog is
 superseded by r2's committed importer pins; use r2 for pickup.
 
-The selected natural-scene stack is shadow-receiver-r1 → canopy-variation-r1 /
+The historical natural-scene stack is shadow-receiver-r1 → canopy-variation-r1 /
 river-corridor-r3 → water-natural-r6 + GPU water-reflection-r5. Current American
 capital selections are r111 inland and r112 freshcanopy, with corrected source
 materials, source-hull paving, facade-plane night lights, central placement and
