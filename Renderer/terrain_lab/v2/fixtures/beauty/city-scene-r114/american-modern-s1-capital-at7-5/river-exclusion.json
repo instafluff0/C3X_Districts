@@ -1,0 +1,14 @@
+{
+  "threshold_pixels": 12.3999996,
+  "polygons": [],
+  "polygon_count": 0,
+  "matched_terrain_draws": 2,
+  "river_triangles": 26624,
+  "anchor_tile": [
+    7,
+    5
+  ],
+  "terrain_packet": "Renderer/terrain_lab/v2/app/.cache/geometry/2b5a04da7fc40d61ef172c0590fb84a84b50e0c353323715abb332e590d9f1f0/payload",
+  "terrain_packet_sha256": "a379ead8b0c2c5df2fce5f14f702f92be5f8d313edf9dd1a46c3e51c642f3fb3",
+  "classification": "Lab rendered distance-field adapter; generic convex city-local exclusion polygons"
+}

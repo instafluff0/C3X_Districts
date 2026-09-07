@@ -20,6 +20,23 @@ def inside(box,region):
 
 
 class GrowthPlacement(unittest.TestCase):
+    def test_central_landmark_is_surrounded_and_keeps_growth_prefix(self):
+        house=body('house',.14,.14);palace=[-.2,-.2,.2,.2]
+        land=lambda b:inside(b,[-.65,-.65,.65,.65]) and not growth.overlaps(b,palace)
+        result,stats=growth.solve([house],7,1,.65,land,neighbor_gap=.1,connected_prefixes=(4,7),
+                                 fixed_neighbors=[palace],surround_center=[0,0])
+        self.assertEqual(stats['status'],'fit')
+        sides=[next(s for s in range(4) if growth.surround_sector(s,item['x'],item['y'],[0,0])) for item in result]
+        self.assertEqual(set(sides[:4]),set(range(4)));self.assertEqual(len(set(sides[4:])),3)
+        boxes=[[r['x']-.07,r['y']-.07,r['x']+.07,r['y']+.07] for r in result]
+        for n in (4,7):self.assertTrue(growth.connected([palace]+boxes[:n],.1))
+
+    def test_surrounded_capital_cannot_hide_a_one_sided_site(self):
+        house=body('house',.1,.1);palace=[-.2,-.2,.2,.2]
+        result,stats=growth.solve([house],4,1,.6,lambda b:b[0]>.25,
+                                 neighbor_gap=.15,fixed_neighbors=[palace],surround_center=[0,0])
+        self.assertIsNone(result)
+
     def test_staged_search_keeps_each_prefix_and_landmark_connected(self):
         house=body('house',.1,.1);palace=[-.45,-.12,-.24,.12]
         land=lambda b:inside(b,[-.5,-.3,.5,.3]) and not growth.overlaps(b,palace)

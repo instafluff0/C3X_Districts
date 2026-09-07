@@ -131,6 +131,14 @@
         "capture": {
           "source": "ANIMATION_SettlerLeader_CaptureB",
           "loop": false
+        },
+        "build": {
+          "source": "ANIMATION_SettlerLeader_CITYA",
+          "loop": false,
+          "exclude_roles": [
+            "Staff"
+          ],
+          "presentation_note": "CITYA is a founding gesture; hide the staff that its source socket stows away from the hand."
         }
       },
       "member_index": 0,
@@ -168,13 +176,66 @@
         "capture": {
           "source": "ANIMATION_Builder_Captured01",
           "loop": false
+        },
+        "road": {
+          "source": "ANIMATION_Builder_BuildAction01_Shovel",
+          "loop": true,
+          "tools": [
+            "Builder_Shovel"
+          ]
+        },
+        "mine": {
+          "source": "ANIMATION_Builder_BuildAction02_2H",
+          "loop": true,
+          "tools": [
+            "Builder_PickAxe"
+          ]
+        },
+        "irrigate": {
+          "source": "ANIMATION_Builder_BuildAction01_Shovel",
+          "loop": true,
+          "tools": [
+            "Builder_Shovel"
+          ]
+        },
+        "fortress": {
+          "source": "ANIMATION_Builder_BuildAction02_2H",
+          "loop": true,
+          "tools": [
+            "Builder_SledgeHammer"
+          ]
+        },
+        "forest": {
+          "source": "ANIMATION_Builder_BuildAction03_Axe",
+          "loop": true,
+          "tools": [
+            "Builder_Axe"
+          ]
+        },
+        "jungle": {
+          "source": "ANIMATION_Builder_BuildAction03_Axe",
+          "loop": true,
+          "tools": [
+            "Builder_Axe"
+          ]
+        },
+        "plant": {
+          "source": "ANIMATION_Builder_BuildAction01_Shovel",
+          "loop": true,
+          "tools": [
+            "Builder_Shovel"
+          ]
+        },
+        "build": {
+          "source": "ANIMATION_Builder_BuildAction02_2H",
+          "loop": false,
+          "tools": [
+            "Builder_SledgeHammer"
+          ]
         }
       },
       "member_index": 0,
-      "action_scope": "civilian",
-      "exclude_roles": [
-        "Tool"
-      ]
+      "action_scope": "civilian"
     }
   ],
   "deferred_archetype_probes": [],
@@ -194,5 +255,5 @@
     "unsupported_policy": "complete_native_unit_body_fallback"
   },
   "runtime_integration": "not_enabled",
-  "selection_notes": "One human body per native sprite: Scout dog, Settler donkey and extra Builder formation members excluded explicitly. Non-work Builder poses hide tools. Worker specialty jobs retain native rendering in this checkpoint."
+  "selection_notes": "One human body per native sprite. Explicit per-action tools; native work/build timing and gameplay remain authoritative."
 }

@@ -2,6 +2,7 @@
 #define C3X_UNIT_BODY_RENDERER_H
 
 #include "unit_animation_runtime.h"
+#include "unit_shadow.h"
 
 namespace c3x_renderer {
 
@@ -28,6 +29,7 @@ public:
         for(auto & mesh:meshes) release(mesh.indices);
         for(auto & texture:textures) release(texture.view);
         release(vertex);release(pixel);release(layout);release(settings);release(vertices);
+        release(shadow_view);release(shadow_texture);
         release(sampler);release(raster);release(target);release(output);release(readback);
         linear.reset();transfer.reset(); capacity=0; image_width=image_height=0;target_width=target_height=0;
         cache.clear();cache_bytes=0;pixels.clear();
@@ -36,7 +38,7 @@ public:
     void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();}
 
     bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request) {
-        cache_hit=false;failure_reason="invalid-request-or-device";
+        cache_hit=false;keyed_pixels=cast_pixels=0;failure_reason="invalid-request-or-device";
         if(!device || !context || request.struct_size!=sizeof(request) ||
            request.unit_key[63]!=0 || request.hour<0 || request.hour>23 ||
            (request.reduced!=0 && request.reduced!=1))return false;
@@ -64,7 +66,7 @@ public:
             action->loop?request.action_cursor%request.frame_count:std::min(request.action_cursor,request.frame_count-1),
             request.frame_count,w,h,request.reduced,request.hour,request.season,request.display_color_rgb};
         for(auto & saved:cache)if(saved.key==key) {
-            saved.used=++serial; pixels=saved.pixels;image_width=w;image_height=h;cache_hit=true;failure_reason="none";return true;
+            saved.used=++serial; pixels=saved.pixels;image_width=w;image_height=h;cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";return true;
         }
         failure_reason="gpu-target-setup";
         if(!ensure(device,w,h))return false;
@@ -80,14 +82,36 @@ public:
         context->IASetInputLayout(layout);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
         context->PSSetSamplers(0,1,&sampler);context->PSSetConstantBuffers(0,1,&settings);
-        std::vector<FeatureSourceVertex> posed;
-        std::vector<std::array<float,9>> upload;
-        for(auto const& part:action->parts) {
+        std::vector<std::vector<FeatureSourceVertex>> poses(action->parts.size());
+        std::vector<std::vector<UnitShadow::Point>> positions(action->parts.size());
+        std::vector<UnitShadow::Point> all_points;
+        for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
+            auto const& part=action->parts[part_index];
+            if(part.mesh>=meshes.size() || !sample_animation_mesh(meshes[part.mesh].animation,
+                pose.phase*meshes[part.mesh].animation.duration,false,poses[part_index]))return false;
+            for(auto const& p:poses[part_index]) {
+                UnitShadow::Point point={(p.position[0]*cosine-p.position[1]*sine)*scale,
+                    (p.position[0]*sine+p.position[1]*cosine)*scale,(p.position[2]+found->offset_z)*scale};
+                positions[part_index].push_back(point);all_points.push_back(point);
+            }
+        }
+        UnitShadow shadow;
+        auto light=environment.sun_intensity>=environment.moon_intensity?environment.sun_direction:environment.moon_direction;
+        if(!shadow.fit(all_points,light[0],light[1])){failure_reason="pose-envelope";return false;}
+        for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
+            auto const& mesh=meshes[action->parts[part_index].mesh];auto const& points=positions[part_index];
+            for(std::size_t i=0;i<mesh.animation.indices.size();i+=3)
+                shadow.triangle(points[mesh.animation.indices[i]],points[mesh.animation.indices[i+1]],points[mesh.animation.indices[i+2]]);
+        }
+        context->UpdateSubresource(shadow_texture,0,nullptr,shadow.heights.data(),UnitShadow::extent*4,0);
+        context->PSSetShaderResources(1,1,&shadow_view);
+        std::vector<std::array<float,11>> upload;
+        for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
+            auto const& part=action->parts[part_index];
+            auto const& posed=poses[part_index];
             failure_reason="missing-part-or-texture";
             if(part.mesh>=meshes.size() || part.texture>=textures.size() || !textures[part.texture].view)return false;
             auto & mesh=meshes[part.mesh];
-            failure_reason="pose-sampling";
-            if(!sample_animation_mesh(mesh.animation,pose.phase*mesh.animation.duration,false,posed))return false;
             upload.resize(posed.size());
             for(std::size_t i=0;i<posed.size();++i) {
                 auto const& p=posed[i];
@@ -96,7 +120,8 @@ public:
                 float sx=float(pose.anchor_x-request.body_x)+(x-y)*64*zoom;
                 float sy=float(pose.anchor_y-request.body_y)+(x+y)*32*zoom-z*(150.f*128/224)*zoom;
                 upload[i]={2*sx/w-1,1-2*sy/h,.5f-(x+y)*.05f-z*.001f,
-                    p.normal[0]*cosine-p.normal[1]*sine,p.normal[0]*sine+p.normal[1]*cosine,p.normal[2],p.uv[0],p.uv[1],z};
+                    p.normal[0]*cosine-p.normal[1]*sine,p.normal[0]*sine+p.normal[1]*cosine,p.normal[2],p.uv[0],p.uv[1],z,
+                    (x-shadow.dx*z-shadow.left)/shadow.width,(y-shadow.dy*z-shadow.top)/shadow.height};
             }
             // The ground plane hides buried anatomy/stowed equipment. Bound
             // the visible polygon, including intersections of crossing edges,
@@ -140,22 +165,29 @@ public:
             }
             values[7]=part.strength;values[11]=environment.sun_intensity;values[19]=environment.moon_intensity;values[27]=part.cutout;
             context->UpdateSubresource(settings,0,nullptr,values,0,0);
-            UINT stride=36,offset=0;context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
+            UINT stride=44,offset=0;context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
             context->IASetIndexBuffer(mesh.indices,DXGI_FORMAT_R32_UINT,0);
             context->PSSetShaderResources(0,1,&textures[part.texture].view);
             context->DrawIndexed(UINT(mesh.animation.indices.size()),0,0);
         }
-        ID3D11ShaderResourceView* empty=nullptr;context->PSSetShaderResources(0,1,&empty);
+        ID3D11ShaderResourceView* empty[2]={};context->PSSetShaderResources(0,2,empty);
         failure_reason="gpu-body-readback";
         transfer.draw(context,linear,target,environment.exposure);
         context->OMSetRenderTargets(0,nullptr,nullptr);context->CopyResource(readback,output);
         D3D11_MAPPED_SUBRESOURCE mapped={};
         if(FAILED(context->Map(readback,0,D3D11_MAP_READ,0,&mapped)))return false;
         pixels.resize(std::size_t(w)*h);
+        cast_pixels=0;
         for(int y=0;y<h;++y)for(int x=0;x<w;++x) {
             auto p=static_cast<std::uint8_t const*>(mapped.pData)+std::size_t(y)*mapped.RowPitch+x*4;
             unsigned alpha=p[3];
-            pixels[std::size_t(y)*w+x]=(alpha<<24)|(((p[2]*alpha+127)/255)<<16)|(((p[1]*alpha+127)/255)<<8)|((p[0]*alpha+127)/255);
+            float sx=(float(x)+.5f-float(pose.anchor_x-request.body_x))/(64*zoom);
+            float sy=(float(y)+.5f-float(pose.anchor_y-request.body_y))/(32*zoom);
+            float fade=std::clamp(float(std::min({x,y,w-1-x,h-1-y}))/3,0.f,1.f);
+            unsigned shade=unsigned(255*.48f*environment.shadow_strength*fade*shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
+            unsigned combined=alpha+(shade*(255-alpha)+127)/255;
+            if(shade && alpha<255)++cast_pixels;
+            pixels[std::size_t(y)*w+x]=(combined<<24)|(((p[2]*alpha+127)/255)<<16)|(((p[1]*alpha+127)/255)<<8)|((p[0]*alpha+127)/255);
         }
         context->Unmap(readback,0);image_width=w;image_height=h;
         std::size_t size=pixels.size()*4;
@@ -163,26 +195,62 @@ public:
             auto old=std::min_element(cache.begin(),cache.end(),[](Cached const& a,Cached const& b){return a.used<b.used;});
             cache_bytes-=old->pixels.size()*4;cache.erase(old);
         }
-        cache.push_back({key,++serial,pixels});cache_bytes+=size;
+        cache.push_back({key,++serial,pixels,cast_pixels});cache_bytes+=size;
         failure_reason="none";return true;
     }
 
-    // Runs on the game's calling thread, after the complete body succeeds.
-    bool blit(HDC destination,int x,int y) {
+    // The native Animator canvas uses magenta as a color key. Resolve partial
+    // coverage against its current pixels, substituting the supplied terrain
+    // underlay only at keyed pixels; never blend a fringe with magenta.
+    bool blit(HDC destination,int x,int y,HDC background=nullptr) {
         if(!destination || pixels.size()!=std::size_t(image_width)*image_height)return false;
         if(blit_width!=image_width || blit_height!=image_height) {
             reset_blit();BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
             info.bmiHeader.biWidth=image_width;info.bmiHeader.biHeight=-image_height;
             info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
-            dc=CreateCompatibleDC(destination);if(!dc)return false;
+            dc=CreateCompatibleDC(destination);underlay_dc=CreateCompatibleDC(destination);
+            if(!dc || !underlay_dc)return false;
             bitmap=CreateDIBSection(destination,&info,DIB_RGB_COLORS,&bits,nullptr,0);
-            if(!bitmap){reset_blit();return false;}previous=SelectObject(dc,bitmap);
+            underlay_bitmap=CreateDIBSection(destination,&info,DIB_RGB_COLORS,&underlay_bits,nullptr,0);
+            if(!bitmap || !underlay_bitmap){reset_blit();return false;}
+            previous=SelectObject(dc,bitmap);underlay_previous=SelectObject(underlay_dc,underlay_bitmap);
             blit_width=image_width;blit_height=image_height;
         }
-        std::memcpy(bits,pixels.data(),pixels.size()*4);
-        BLENDFUNCTION blend={AC_SRC_OVER,0,255,AC_SRC_ALPHA};
-        return AlphaBlend(destination,x,y,image_width,image_height,dc,0,0,image_width,image_height,blend)!=FALSE;
+        RECT clip={};int clip_type=GetClipBox(destination,&clip);
+        if(clip_type==ERROR)return false;if(clip_type==NULLREGION)return true;
+        auto target_pixels=static_cast<std::uint32_t*>(bits);
+        auto ground=static_cast<std::uint32_t*>(underlay_bits);
+        std::fill_n(target_pixels,pixels.size(),0xffff00ffu);
+        std::fill_n(ground,pixels.size(),0xffff00ffu);
+        if(!BitBlt(dc,0,0,image_width,image_height,destination,x,y,SRCCOPY))return false;
+        if(background && !BitBlt(underlay_dc,0,0,image_width,image_height,background,x,y,SRCCOPY))return false;
+        GdiFlush();
+        keyed_pixels=0;
+        auto keyed=[](std::uint32_t value){return (value&0x00f800f8u)==0x00f800f8u && (value&0x0000f800u)==0;};
+        for(std::size_t i=0;i<pixels.size();++i) {
+            int px=x+int(i%image_width),py=y+int(i/image_width);
+            if(px<clip.left || px>=clip.right || py<clip.top || py>=clip.bottom){target_pixels[i]=0x00ff00ffu;continue;}
+            auto source=pixels[i];unsigned alpha=source>>24;
+            if(!alpha){target_pixels[i]=0x00ff00ffu;continue;}
+            auto below=target_pixels[i];
+            if(alpha<255 && keyed(below)) {
+                if(!background)return false; // Reject atomically; native body remains.
+                below=ground[i];++keyed_pixels;
+                if(keyed(below)) {target_pixels[i]=0x00ff00ffu;continue;} // outside the native underlay
+            }
+            std::uint32_t result=0;
+            for(unsigned shift:{0u,8u,16u}) {
+                unsigned channel=((source>>shift)&255)+((((below>>shift)&255)*(255-alpha)+127)/255);
+                result|=std::min(channel,255u)<<shift;
+            }
+            // An actual body color must not become the native transparent key.
+            if(keyed(result))result^=0x00000800u;
+            target_pixels[i]=result;
+        }
+        return TransparentBlt(destination,x,y,image_width,image_height,dc,0,0,
+                              image_width,image_height,RGB(255,0,255))!=FALSE;
     }
+    unsigned keyed_pixels=0,cast_pixels=0;
 
 private:
     struct Key {
@@ -190,31 +258,37 @@ private:
         bool operator==(Key const& b) const {return unit==b.unit && action==b.action && direction==b.direction &&
             cursor==b.cursor && frames==b.frames && width==b.width && height==b.height && reduced==b.reduced && hour==b.hour && season==b.season && color==b.color;}
     };
-    struct Cached {Key key;std::uint64_t used;std::vector<std::uint32_t> pixels;};
+    struct Cached {Key key;std::uint64_t used;std::vector<std::uint32_t> pixels;unsigned cast_pixels;};
     std::vector<Cached> cache;std::uint64_t serial=0;
     ID3D11VertexShader *vertex=nullptr;ID3D11PixelShader *pixel=nullptr;ID3D11InputLayout *layout=nullptr;
     ID3D11Buffer *settings=nullptr,*vertices=nullptr;UINT capacity=0;
     ID3D11SamplerState *sampler=nullptr;ID3D11RasterizerState *raster=nullptr;
+    ID3D11Texture2D* shadow_texture=nullptr;ID3D11ShaderResourceView* shadow_view=nullptr;
     profile_v2::LinearTarget linear;profile_v2::LinearOutput transfer;
     ID3D11Texture2D *output=nullptr,*readback=nullptr;ID3D11RenderTargetView *target=nullptr;
     int target_width=0,target_height=0;
     HDC dc=nullptr;HBITMAP bitmap=nullptr;HGDIOBJ previous=nullptr;void* bits=nullptr;
     int blit_width=0,blit_height=0;
+    HDC underlay_dc=nullptr;HBITMAP underlay_bitmap=nullptr;HGDIOBJ underlay_previous=nullptr;void* underlay_bits=nullptr;
     void reset_blit() {
         if(dc && previous)SelectObject(dc,previous);previous=nullptr;
         if(bitmap)DeleteObject(bitmap);bitmap=nullptr;if(dc)DeleteDC(dc);dc=nullptr;
+        if(underlay_dc && underlay_previous)SelectObject(underlay_dc,underlay_previous);
+        if(underlay_bitmap)DeleteObject(underlay_bitmap);if(underlay_dc)DeleteDC(underlay_dc);
+        underlay_dc=nullptr;underlay_bitmap=nullptr;underlay_previous=nullptr;underlay_bits=nullptr;
         bits=nullptr;blit_width=blit_height=0;
     }
     bool ensure(ID3D11Device* device,int w,int h) {
         if(!pixel) {
             char const* source=R"(
+Texture2D<float> shadow_map : register(t1);
 Texture2D<float4> base : register(t0);SamplerState sample_base : register(s0);
 cbuffer Material : register(b0) {float4 tint,owner,sun,sun_color,moon,moon_color,ambient;};
-struct Input {float3 p:POSITION;float3 n:NORMAL;float2 uv:TEXCOORD0;float ground:TEXCOORD1;};
-struct Output {float4 p:SV_Position;float3 n:NORMAL;float2 uv:TEXCOORD0;float ground:TEXCOORD1;};
-Output VS(Input i){Output o;o.p=float4(i.p,1);o.n=i.n;o.uv=i.uv;o.ground=i.ground;return o;}
+struct Input {float3 p:POSITION;float3 n:NORMAL;float2 uv:TEXCOORD0;float3 shadow:TEXCOORD1;};
+struct Output {float4 p:SV_Position;float3 n:NORMAL;float2 uv:TEXCOORD0;float3 shadow:TEXCOORD1;};
+Output VS(Input i){Output o;o.p=float4(i.p,1);o.n=i.n;o.uv=i.uv;o.shadow=i.shadow;return o;}
 float4 PS(Output i):SV_Target {
- clip(i.ground);
+ clip(i.shadow.x);
  float4 b=base.Sample(sample_base,i.uv);if(ambient.w>.5)clip(b.a-.5);
  float3 albedo=b.rgb*tint.rgb;
  float mask=tint.w<.5?0:(tint.w<1.5?smoothstep(.06,.94,1-b.a):1);
@@ -222,7 +296,13 @@ float4 PS(Output i):SV_Target {
  float3 ramp=lerp(owner.rgb*.32,saturate(owner.rgb*.90+float3(.24,.24,.20)),smoothstep(.08,.86,value));
  albedo=lerp(albedo,lerp(ramp,albedo,.14),mask*owner.w);
  float3 n=normalize(i.n);
- float3 light=ambient.rgb+sun_color.rgb*sun.w*saturate(dot(n,sun.xyz))+moon_color.rgb*moon.w*saturate(dot(n,moon.xyz));
+ int2 cell=int2(floor(i.shadow.yz*128));float occluded=0;
+ [unroll]for(int oy=-1;oy<=1;++oy)[unroll]for(int ox=-1;ox<=1;++ox) {
+   int2 q=cell+int2(ox,oy);
+   if(all(q>=0) && all(q<128))occluded+=(shadow_map.Load(int3(q,0))>i.shadow.x+.006)?1.0/9:0;
+ }
+ float visibility=1-.78*occluded;
+ float3 light=ambient.rgb+visibility*(sun_color.rgb*sun.w*saturate(dot(n,sun.xyz))+moon_color.rgb*moon.w*saturate(dot(n,moon.xyz)));
  return float4(albedo*max(light,.02),1);
 })";
             ID3DBlob *vs=nullptr,*ps=nullptr,*error=nullptr;
@@ -235,7 +315,7 @@ float4 PS(Output i):SV_Target {
             D3D11_INPUT_ELEMENT_DESC elements[]={{"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0},
-                {"TEXCOORD",1,DXGI_FORMAT_R32_FLOAT,0,32,D3D11_INPUT_PER_VERTEX_DATA,0}};
+                {"TEXCOORD",1,DXGI_FORMAT_R32G32B32_FLOAT,0,32,D3D11_INPUT_PER_VERTEX_DATA,0}};
             if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,4,vs->GetBufferPointer(),vs->GetBufferSize(),&layout);
             release(vs);release(ps);
             D3D11_BUFFER_DESC b={};b.ByteWidth=112;b.Usage=D3D11_USAGE_DEFAULT;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
@@ -244,6 +324,13 @@ float4 PS(Output i):SV_Target {
             if(SUCCEEDED(hr))hr=device->CreateSamplerState(&s,&sampler);
             D3D11_RASTERIZER_DESC r={};r.FillMode=D3D11_FILL_SOLID;r.CullMode=D3D11_CULL_NONE;r.DepthClipEnable=TRUE;r.MultisampleEnable=TRUE;
             if(SUCCEEDED(hr))hr=device->CreateRasterizerState(&r,&raster);
+            if(FAILED(hr)){reset_gpu();return false;}
+        }
+        if(!shadow_texture) {
+            D3D11_TEXTURE2D_DESC d={};d.Width=d.Height=UnitShadow::extent;d.MipLevels=d.ArraySize=1;
+            d.Format=DXGI_FORMAT_R32_FLOAT;d.SampleDesc.Count=1;d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+            HRESULT hr=device->CreateTexture2D(&d,nullptr,&shadow_texture);
+            if(SUCCEEDED(hr))hr=device->CreateShaderResourceView(shadow_texture,nullptr,&shadow_view);
             if(FAILED(hr)){reset_gpu();return false;}
         }
         if(!linear.ensure(device,UINT(w),UINT(h)) || !transfer.ensure(device))return false;

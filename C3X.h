@@ -2649,7 +2649,7 @@ struct district_button_image_set {
 	c3x_renderer_set_definition_paths_fn custom_renderer_set_definition_paths;
 	c3x_renderer_render_fn custom_renderer_render;
 	c3x_renderer_blit_fn custom_renderer_blit;
-	c3x_renderer_unit_draw_fn custom_renderer_unit_draw;
+	c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw;
 	Unit * custom_renderer_unit_context;
 	PCX_Image * custom_renderer_unit_canvas;
 	c3x_renderer_export_scene_fn custom_renderer_export_scene;

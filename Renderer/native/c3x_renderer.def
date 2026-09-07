@@ -6,7 +6,9 @@ EXPORTS
     c3x_renderer_render
     c3x_renderer_blit
     c3x_renderer_unit_draw
+    c3x_renderer_unit_draw_background
     c3x_renderer_set_unit_rendering
     c3x_renderer_export_scene
     c3x_renderer_schedule
+    c3x_renderer_schedule_idle
     c3x_renderer_reset

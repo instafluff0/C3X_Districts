@@ -140,9 +140,9 @@
       "requested_by_user": true,
       "findings": "terrain_lab/v2/audits/beauty/CITY_QUALITY_CAMPAIGN.md",
       "scope": "Five cultures, four eras, three sizes; readable complete materials, grounded source buildings, stable growth and modest cross-tile footprints; shared night lighting reflected in water.",
-      "current_work": "A partial environment reflection trial now uses the existing modern metalness maps with shared sky/ground radiance. The r2 inland-large and wilderness-medium cases show modest cool-facade separation with unchanged geometry, source textures, paving, local lights and shadows; outside-city pixels remain exact. Source-family roughness attenuation corrected the initial roof washout, but the Asian dielectric result remains unselected and its prior palace appearance is retained. Eight current Windows comparisons, independent material-bit isolation checks and an exact disabled control pass. The older American capital has no bound metalness in its earlier material layout, exposing the next concrete material intake gap. The analytic fallback is not recovered source environment calibration or a global default; all gates remain open.",
+      "current_work": "Restored American capital materials, corrected axis-aligned paving to the source footprint, and moved palace light proxies to emitting facade planes. The latest user preference requires a central palace surrounded by orthogonal buildings. Selected r111 inland and r112 freshcanopy compose that rule with the corrected paving, local lights and modern materials. Four final Windows comparisons, twenty independent composition checks and 33 focused tests pass. Strict coastal placement remains unresolved; the prior coastal scene is preserved. No native changes, quality acceptance or gate advancement.",
       "approval": null,
-      "next_action": "Restore complete source house/palace material inputs for the older American capital/lake fixture while preserving its layout, night lights, paving and reflection witness; use the appropriate normalized palace root and geometry fingerprints. Investigate actual source or authored environment probe radiance, SH and LEAN1 variance instead of repeatedly adjusting the analytic hemisphere. Retain r2 modern inland/wilderness as provisional material candidates and the prior Asian palace appearance. Continue broader single-era culture/era/size coverage, less repetitive architecture and open ground, and connected usable-land reasoning for unresolved coastal capital and medium/large river fits. Keep authoritative Civ III capital state and generic modder mappings; connecting roads, native delivery and all manual/milestone gates remain deferred.",
+      "next_action": "Keep the palace at the city core, surrounded by other buildings, and align source footprints to a common right-angle grid. Carry forward --central-capital --orthogonal-buildings, source-hull paving and source-facade capital light positions. Resolve the coastal footprint/foundation constraint without erasing terrain or vegetation or moving the palace to the neighborhood edge. Broaden single-era culture/era/size coverage, source environment/LEAN1 response and varied open ground. Preserve actual Civ III capital authority, generic modder mappings, prior Asian material appearance and all existing manual/milestone gates; connecting roads and native delivery remain deferred.",
       "night_light_evidence": "terrain_lab/v2/audits/beauty/CITY_NIGHT_r8_EVIDENCE.json",
       "storage_policy": "Shared-resource packets; discard pre-shadow intermediates immediately; six matrix cases by default; stop below 8 GiB free space.",
       "storage_cleanup": "terrain_lab/v2/audits/beauty/CITY_STORAGE_CLEANUP.json",
@@ -185,7 +185,20 @@
       "palace_composition_cleanup": "terrain_lab/v2/audits/beauty/CITY_PALACE_COMPOSITION_CLEANUP.json",
       "environment_material_findings": "terrain_lab/v2/audits/beauty/CITY_ENVIRONMENT_PASS.md",
       "environment_material_evidence": "terrain_lab/v2/audits/beauty/CITY_ENVIRONMENT_EVIDENCE.json",
-      "environment_material_cleanup": "terrain_lab/v2/audits/beauty/CITY_ENVIRONMENT_CLEANUP.json"
+      "environment_material_cleanup": "terrain_lab/v2/audits/beauty/CITY_ENVIRONMENT_CLEANUP.json",
+      "composition_preference": "User: palace always central and surrounded by ordinary buildings; all buildings aligned to right-angle city axes, preserving source proportions and one era per city.",
+      "capital_material_findings": "terrain_lab/v2/audits/beauty/CITY_CAPITAL_MATERIAL_PASS.md",
+      "capital_material_evidence": "terrain_lab/v2/audits/beauty/CITY_CAPITAL_MATERIAL_EVIDENCE.json",
+      "capital_material_cleanup": "terrain_lab/v2/audits/beauty/CITY_CAPITAL_MATERIAL_CLEANUP.json",
+      "palace_ground_alignment_findings": "terrain_lab/v2/audits/beauty/CITY_PALACE_GROUND_ALIGNMENT_PASS.md",
+      "palace_ground_alignment_evidence": "terrain_lab/v2/audits/beauty/CITY_PALACE_GROUND_ALIGNMENT_EVIDENCE.json",
+      "palace_ground_alignment_cleanup": "terrain_lab/v2/audits/beauty/CITY_PALACE_GROUND_ALIGNMENT_CLEANUP.json",
+      "palace_facade_alignment_findings": "terrain_lab/v2/audits/beauty/CITY_PALACE_FACADE_ALIGNMENT_PASS.md",
+      "palace_facade_alignment_evidence": "terrain_lab/v2/audits/beauty/CITY_PALACE_FACADE_ALIGNMENT_EVIDENCE.json",
+      "palace_facade_alignment_cleanup": "terrain_lab/v2/audits/beauty/CITY_PALACE_FACADE_ALIGNMENT_CLEANUP.json",
+      "central_capital_findings": "terrain_lab/v2/audits/beauty/CITY_CENTRAL_CAPITAL_PASS.md",
+      "central_capital_evidence": "terrain_lab/v2/audits/beauty/CITY_CENTRAL_CAPITAL_EVIDENCE.json",
+      "central_capital_cleanup": "terrain_lab/v2/audits/beauty/CITY_CENTRAL_CAPITAL_CLEANUP.json"
     },
     "water_effects_exploration": {
       "status": "preserved_user_pivot_to_cities",
@@ -2491,9 +2504,13 @@
       "Ordinary enable_custom_rendered_units is forwarded to an optional DLL configuration entry before loading; disabled units skip pack loading. Temporary animation runtime environment switches removed. RGB555/RGB565 clipped-body and config-off canvas checks pass.",
       "560 day/night action draws including interrupted/held endpoints pass after generic unit ground clipping; explicit fallback reasons logged. Verified candidate staged to Renderer/bin with matching SHA-256 for normal INSTALL.bat.",
       "Added Warrior, Scout, Settler and Worker/Builder through a separate offline intake: nine families / 70 actions, 852 source-pose samples and 576 movement / 912 action draws pass. Correct scientific-number parsing restores Scout; compatible staff clips fix Settler. Existing cache budgets and injected bridge unchanged.",
-      "Final nine-family DLL passes prepared multi-tile scroll parity with zero mesh builds and is staged byte-for-byte for normal INSTALL.bat. Full rerun passes 374 prerequisite tests and retains the known unrelated L19A hash failure."
+      "Final nine-family DLL passes prepared multi-tile scroll parity with zero mesh builds and is staged byte-for-byte for normal INSTALL.bat. Full rerun passes 374 prerequisite tests and retains the known unrelated L19A hash failure.",
+      "Native underlay forwarding and color-key-aware DLL composition pass 32-bit and clipped RGB555/RGB565 parity at both zooms/day-night. Bounded posed self/cast shadows retain the 8 MiB sprite cache. Non-consuming mouse redraw deferral passes extracted checks; approved injected compilation passes. Final nine-family DLL is staged byte-for-byte for INSTALL.bat; 379 broader prerequisite tests pass before the known L19A hash failure.",
+      "User confirms mouse clicks and shadows work. Expanded production pack to 79 actions: Settler founding and Worker jobs with per-action tools; six static fortify poses now have baked local-joint transitions. Successful body draws expand the existing native Unit.Body.Rect without a new hook. 951 source-pose comparisons and 1128 day/night action draws pass; approved injected compilation passes. Final DLL staged byte-for-byte for INSTALL.bat; full workflow has only the known L19A hash failure after 379 passing prerequisite tests."
     ],
-    "remaining": [],
+    "remaining": [
+      "User-run checkpoint for civilian actions, fortify transitions and remaining intermittent split bodies."
+    ],
     "game_launched": false,
     "candidate_staged": true,
     "temporal_evidence": "verification/animation/temporal.json",
@@ -2520,7 +2537,7 @@
         "fallback": "Leave rows as definitions to retain every native unit body. Do not install zero-address inleads on unverified builds."
       }
     ],
-    "manual_checkpoint": "User runs normal INSTALL.bat, enables custom rendering/units as desired, and tests resources, supported unit movement/actions, retained HUD/fog and scrolling. Agent did not launch the game.",
+    "manual_checkpoint": "Use normal INSTALL.bat, then test Settler founding, Worker road/mine/irrigation/clearing/planting and fortify at both zooms; check moving/overlapping units for remaining split or stale pixels. Normal OutputDebugStringA logging remains enabled. Agent did not launch Civ III.",
     "checkpoint_evidence": "verification/animation/candidate-checkpoint.json",
     "known_unrelated_failures": [
       "Full workflow: frozen L19A tile-object pack hash differs after Lab pack changes; production DLL does not consume this pack.",
@@ -2528,9 +2545,13 @@
     ],
     "resource_user_feedback": "Resources look good so far, though a little dark; brightness tuning remains separate.",
     "prototype_limits": [
-      "Worker specialty jobs and civilian unsupported actions remain native.",
+      "Civilian combat and unknown families/actions retain native bodies.",
       "Scout/Settler companion animals and extra formation members omitted; one body per native sprite.",
-      "Warrior/Scout victory reuses fidget; staffed Settler uses explicitly mapped compatible staff-humanoid clips."
-    ]
+      "Warrior/Scout victory reuses fidget. Six pose-only fortify clips receive an offline baked idle-to-pose transition; Fighter fortify retains its idle alias.",
+      "Worker tool choices and right-hand socket are explicit local presentation mappings. The Settler founding gesture hides its stowed staff.",
+      "Unit shadows receive on a flat local ground plane; terrain/object receivers and cross-unit shadows remain outside this prototype. Caster cutout silhouettes are approximated by mesh triangles.",
+      "The dirty-rectangle fix addresses a verified native crop mismatch; intermittent split-body behavior awaits the user-run checkpoint."
+    ],
+    "user_feedback": "Mouse clicks now work; units mostly normal, shadows as expected. Remaining report concerned civilian actions, fortify snaps, and intermittent split bodies."
   }
 }

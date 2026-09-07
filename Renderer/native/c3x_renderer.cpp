@@ -2523,7 +2523,7 @@ public:
                 if(!json_string_after(data,("key"+std::to_string(key)).c_str(),location,value) || value.size()>63)return false;
                 unit.keys.push_back(value);
             }
-            for(char const* name:{"idle","move","attack","death","fortify","fidget","victory","capture","defend"}) {
+            for(char const* name:{"idle","move","attack","death","fortify","fidget","victory","capture","defend","fortress","build","road","mine","irrigate","jungle","forest","plant"}) {
                 auto action_location=json_member_position(data,name,location);
                 if(action_location==std::string::npos)continue;
                 float parts=0,loop=0;
@@ -6307,7 +6307,7 @@ public:
         return result;
     }
 
-    int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination) {
+    int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
@@ -6315,15 +6315,15 @@ public:
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
         int result=submit_locked(lock,Command::unit);
         lock.unlock();
-        if(result==C3X_RENDERER_RESULT_OK && !renderer_state.unit_bodies.blit(destination,request.body_x,request.body_y)) {
+        if(result==C3X_RENDERER_RESULT_OK && !renderer_state.unit_bodies.blit(destination,request.body_x,request.body_y,background)) {
             result=C3X_RENDERER_RESULT_ERROR;renderer_state.unit_bodies.failure_reason="native-canvas-blit";
         }
         QueryPerformanceCounter(&finished);
         char detail[384];std::snprintf(detail,sizeof(detail),
-            "id=%d key=%.63s action=%d queued=%d cursor=%d/%d dir=%d xy=%d,%d reduced=%d color=%06x result=%d reason=%s cache_hit=%d cache_bytes=%zu ms=%.3f",
+            "id=%d key=%.63s action=%d queued=%d cursor=%d/%d dir=%d xy=%d,%d reduced=%d color=%06x result=%d reason=%s cache_hit=%d cache_bytes=%zu keyed=%u shadow_pixels=%u ms=%.3f",
             request.unit_id,request.unit_key,request.action,request.queued_action,request.action_cursor,request.frame_count,
             request.direction,request.body_x,request.body_y,request.reduced,request.display_color_rgb,result,renderer_state.unit_bodies.failure_reason,
-            renderer_state.unit_bodies.cache_hit?1:0,renderer_state.unit_bodies.cache_bytes,
+            renderer_state.unit_bodies.cache_hit?1:0,renderer_state.unit_bodies.cache_bytes,renderer_state.unit_bodies.keyed_pixels,renderer_state.unit_bodies.cast_pixels,
             renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart));
         renderer_state.trace.write("unit-body",detail,true);
         return result;
@@ -6765,6 +6765,35 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_draw(
     return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc));
 }
 
+extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_background(
+    c3x_renderer_unit_v1 const* unit,void* destination_hdc,void* background_hdc) {
+    if(!unit || unit->struct_size!=sizeof(*unit) || unit->unit_key[63]!=0 || !destination_hdc || !background_hdc)
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
+    return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc));
+}
+
 extern "C" __declspec(dllexport) int c3x_renderer_set_unit_rendering(int enabled) {
     return get_renderer_worker().set_unit_rendering(enabled);
+}
+
+// Ambient redraws are optional. Leave native mouse press/hold/release processing
+// an uninterrupted interval. GetKeyState reads the processed button state;
+// avoid GetQueueStatus/GetAsyncKeyState, whose change bits are consumable.
+extern "C" int c3x_renderer_schedule(c3x_renderer_schedule_v1 const*,c3x_renderer_schedule_result_v1*);
+extern "C" __declspec(dllexport) int c3x_renderer_schedule_idle(
+    c3x_renderer_schedule_v1 const* input,c3x_renderer_schedule_result_v1* output) {
+    int result=c3x_renderer_schedule(input,output);
+    if(result!=C3X_RENDERER_RESULT_OK)return result;
+    bool busy=(GetKeyState(VK_LBUTTON)&0x8000) || (GetKeyState(VK_RBUTTON)&0x8000) ||
+        (GetKeyState(VK_MBUTTON)&0x8000);
+    static bool previous_busy=false;
+    bool defer=busy || previous_busy; // one quiet timer tick after release
+    if(busy!=previous_busy) {
+        OutputDebugStringA(busy?"[C3X renderer] ambient-input paused for native mouse processing\n":
+                               "[C3X renderer] ambient-input resumed after native mouse processing\n");
+        previous_busy=busy;
+    }
+    if(defer){output->request_redraw=0;output->dirty_flags=0;output->skipped_frame_count=0;output->rebase_clock=1;}
+    return result;
 }

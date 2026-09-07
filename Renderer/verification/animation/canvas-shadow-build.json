@@ -1,0 +1,18 @@
+[
+  {
+    "command": "call BUILD.bat candidate-compile",
+    "host": "Windows 11",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-07T15:31:22.378156+00:00",
+    "output_tail": "c3x_renderer.cpp\nterrain_scene_runtime.cpp\nenvironment_runtime.cpp\nterrain_definition_runtime.cpp\nscene_export.cpp\nframe_scheduler.cpp\nGenerating Code...\n   Creating library build\\candidate\\C3XRenderer.lib and object build\\candidate\\C3XRenderer.exp\nnative_smoke.cpp\nenvironment_runtime.cpp\nGenerating Code...\nbiq_preview.cpp\ntest_animation_runtime.cpp\nanimation runtime: timing, skinning, normals, endpoints, malformed payloads passed\ntest_unit_bridge.cpp\n"
+  },
+  {
+    "command": "mklink /D \"C:\\Program Files (x86)\\GOG Galaxy\\Games\\Civilization III Complete\\Conquests\\C3X_Shared_Verify\" \"C:\\Mac\\Home\\fun\\Civilization III Complete\\Conquests\\C3X_Districts\" >nul 2>nul & cd /d \"C:\\Program Files (x86)\\GOG Galaxy\\Games\\Civilization III Complete\\Conquests\\C3X_Shared_Verify\" && call TEST_INJECTED_CODE_COMPILE.bat",
+    "host": "Windows 11",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-07T15:31:53.175298+00:00",
+    "output_tail": "Found GOG executable in \"Civ3Conquests-Unmodded.exe\"\nInjected code compiled successfully.\n"
+  }
+]

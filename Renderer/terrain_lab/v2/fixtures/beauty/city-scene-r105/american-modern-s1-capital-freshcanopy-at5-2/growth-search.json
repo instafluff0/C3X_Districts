@@ -1,0 +1,53 @@
+{
+  "nodes": 7,
+  "backtracks": 0,
+  "candidate_counts": {
+    "0": 33,
+    "1": 32,
+    "2": 9,
+    "3": 36,
+    "4": 52,
+    "5": 69,
+    "6": 62
+  },
+  "grid_step": 0.07,
+  "preserved_prefix": 0,
+  "node_limit": 20000,
+  "slot_extents": [
+    0.65,
+    0.65,
+    0.65,
+    0.65,
+    0.8,
+    0.8,
+    0.8
+  ],
+  "neighbor_gap": 0.08,
+  "connected_prefixes": [
+    4,
+    7
+  ],
+  "ranking": "compact envelope, nearby houses, center, remaining freedom",
+  "fixed_neighbors": [
+    [
+      -0.3,
+      -0.2997834359285159,
+      0.3,
+      0.2997834359285159
+    ]
+  ],
+  "surround_center": [
+    0,
+    0
+  ],
+  "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+  "candidate_cost": "authored projected landmark visibility preference",
+  "status": "fit",
+  "palace_attempt": 0,
+  "palace_site": [
+    -0.324,
+    -0.32378343592851594,
+    0.324,
+    0.32378343592851594
+  ]
+}

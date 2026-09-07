@@ -1,0 +1,128 @@
+{
+  "files": [
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/paving-off/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/paving-off/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/windows-paving-off/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/windows-paving-off/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/ground/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/ground/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/inland-lights/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/inland-lights/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/windows-inland-environment/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/windows-inland-environment/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/inland-environment/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/inland-environment/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/holdout-ground/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/holdout-ground/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/windows-holdout-environment/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/windows-holdout-environment/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/previous-paving-off/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/previous-paving-off/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/environment/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/environment/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/windows-environment/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/windows-environment/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/holdout-lights/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/holdout-lights/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/inland-ground/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/inland-ground/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/holdout-environment/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/holdout-environment/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/lights/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-facade-alignment-r1/lights/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    }
+  ],
+  "count": 30,
+  "bytes_removed": 261120000,
+  "free_bytes_after": 12798005248,
+  "preserved": "All rendered images, packets, shared textures, inputs and previous bests"
+}

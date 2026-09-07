@@ -36,6 +36,14 @@ inline char const * native_unit_action(int action) {
     case 8: return "fidget";
     case 9: return "victory";
     case 10: return "capture";
+    case 11: return "fortress";
+    case 12: return "build";
+    case 13: return "road";
+    case 14: return "mine";
+    case 15: return "irrigate";
+    case 16: return "jungle";
+    case 17: return "forest";
+    case 18: return "plant";
     default: return nullptr;
     }
 }

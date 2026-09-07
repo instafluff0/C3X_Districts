@@ -27,6 +27,7 @@ from city_ground_geometry import clip_ground_to_land_cells
 from mesh_fingerprint import geometry_digest,material_digest
 from city_growth_layout import solve as solve_growth, bounds as growth_bounds
 from city_exclusion import Exclusion
+from settlement_ground import footprint_alignment
 
 def rel(path):return path.relative_to(ROOT).as_posix()
 def save(path,value):path.write_text(json.dumps(value,indent=2)+'\n')
@@ -78,11 +79,15 @@ def main():
     parser.add_argument('--historical-era-mix',action='store_true',help='Reproduce the rejected multi-era diagnostic; not the selected city appearance')
     parser.add_argument('--capital',action='store_true',help='Add the explicitly mapped palace to this Lab capital city')
     parser.add_argument('--capital-composition',action='store_true',help='Keep the city compact while discouraging foreground coverage of its palace')
+    parser.add_argument('--central-capital',action='store_true',help='Fix the palace at the city core and require surrounding house sectors at every growth stage')
+    parser.add_argument('--orthogonal-buildings',action='store_true',help='Align normalized footprints to the city grid before applying quarter-turn layout choices')
     parser.add_argument('--omit-capital',action='store_true',help='Matched control: retain the reserved palace site but omit its draws')
     parser.add_argument('--anchor',type=int,nargs=2,default=[3,2])
     parser.add_argument('--all-zooms',action='store_true')
     parser.add_argument('--resume',action='store_true',help='retry an input/build failure before any combined render exists')
     a=parser.parse_args()
+    if a.orthogonal_buildings and not a.growth_search_nodes:raise ValueError('orthogonal building alignment requires constrained layout')
+    if a.central_capital and (not a.capital or not a.growth_search_nodes or a.growth_neighbor_gap is None):raise ValueError('central capital requires capital and connected growth search')
     if a.source_surface!='off' and (not a.source_normals or a.ao_uv is None):raise ValueError('source surface requires an explicit source-frame mapping and auxiliary AO layout')
     if a.extra_materials and (a.source_surface=='off' or a.emissive_uv!=2):raise ValueError('extra materials require source frame layout and UV2 emission')
     if (a.opacity_cutouts or a.metalness) and not a.extra_materials:raise ValueError('extra material flags require a mapping')
@@ -212,6 +217,15 @@ def main():
         ordering=select_components(layers,layer_assets,compound_ids)
         assets=[asset for values in layer_assets.values() for asset in values]
         source_scale*=generator['model_scale']
+    alignment_records={}
+    def grid_aligned(body):
+        if not a.orthogonal_buildings:return body
+        rotation=footprint_alignment([v['position'][:2] for mesh,mat in body['parts'] if mat['alpha_mode']!='blend' for v in mesh['vertices']])
+        alignment_records[body['id']]=rotation
+        return {**body,'grid_rotation':rotation}
+    if a.orthogonal_buildings:
+        assets=[grid_aligned(body) for body in assets]
+        if ordering:ordering=[grid_aligned(body) for body in ordering]
     footprint_limit=[.65,.8,.95][a.size] if a.expanded else None
     if a.footprint_limit is not None:footprint_limit=a.footprint_limit
     palace=None;palace_site=None;palace_attempts=[];core_center=[0,0]
@@ -228,7 +242,7 @@ def main():
                  abs(-1+(i%51)*gridstep)<=footprint_limit and abs(-1+(i//51)*gridstep)<=footprint_limit]
             if not dry:raise ValueError('capital footprint has no dry land')
             core_center=[sum(p[j] for p in dry)/len(dry) for j in range(2)]
-        body=city.component(mapping['asset'],Path(mapping.get('pack',capital_mapping['pack'])))
+        body=grid_aligned(city.component(mapping['asset'],Path(mapping.get('pack',capital_mapping['pack']))))
         span=max(body['hi'][j]-body['lo'][j] for j in (0,1))
         palace_scale=mapping['footprint_span_tiles']/span*a.factor/1.5
         preserved_capital=None;preserved_houses=[]
@@ -246,9 +260,12 @@ def main():
         def palace_buildable(box):
             center=[(box[0]+box[2])/2,(box[1]+box[3])/2]
             if a.capital_composition and core is not None and any(abs(v-core_center[j])>core+1e-10 for j,v in enumerate(center)):return False
-            return buildable(box) and all(math.dist(center,p)>(.21 if a.growth_search_nodes else .001) for p in palace_attempts)
+            return buildable(box) and all(math.dist(center,p)>(.069 if a.central_capital else .21 if a.growth_search_nodes else .001) for p in palace_attempts)
         for attempt in range(25):
-            if preserved_capital:
+            if a.central_capital and attempt==0:
+                palace=dict(asset=body,slot='capital',x=core_center[0],y=core_center[1],rotation=body.get('grid_rotation',0),scale=palace_scale)
+                if preserved_capital and (preserved_capital['offset']!=core_center or preserved_capital['rotation']!=palace['rotation']):raise ValueError('preserved palace is not at the requested city core')
+            elif preserved_capital:
                 palace=dict(asset=body,slot='capital',x=preserved_capital['offset'][0],y=preserved_capital['offset'][1],rotation=preserved_capital['rotation'],scale=palace_scale)
                 if core is not None and any(abs(v-core_center[j])>core+1e-10 for j,v in enumerate(preserved_capital['offset'])):raise ValueError('preserved palace violates the center envelope')
             else:
@@ -304,11 +321,13 @@ def main():
                 layout,search=solve_growth(ordering,counts[plan_size],source_scale,footprint_limit,house_buildable,
                      preserved_houses,site_budget,a.growth_grid_step,limits,a.growth_neighbor_gap,
                      counts[:plan_size+1] if a.growth_neighbor_gap is not None else (),[palace_box],focal_cost if a.capital_composition else None,
-                     staged_connection=a.growth_neighbor_gap is not None)
+                     staged_connection=a.growth_neighbor_gap is not None and not a.central_capital,
+                     surround_center=[palace['x'],palace['y']] if a.central_capital else None)
                 remaining_nodes-=search['nodes'];search.update(palace_attempt=attempt,palace_site=palace_site)
                 layout_attempts.append(search);save(fixture/'growth-search.json',search)
                 save(fixture/'capital-growth-search.json',{'total_node_limit':a.growth_search_nodes,'nodes_used':a.growth_search_nodes-remaining_nodes,'site_minimum_separation':.21,'attempts':layout_attempts})
                 if layout is not None:
+                    if a.central_capital:core_center=[palace['x'],palace['y']]
                     search['planned_size']=plan_size
                     search['planned_instances']=[{**{k:v for k,v in i.items() if k!='asset'},'asset':i['asset']['id']} for i in layout]
                     layout=layout[:counts[a.size]];break
@@ -550,11 +569,13 @@ def main():
                               'adapter':'stable weighted choices; bounded ring preference; source engine algorithm not recovered'},
          'capital':{'requested':a.capital,'drawn':bool(palace and not a.omit_capital),'reserved_site':palace_site,'placement_attempts':palace_attempts,
                     'center_offset':core_center,
-                    'composition':'compact_with_focal_visibility_preference' if a.capital_composition else 'first_legal_layout',
+                    'composition':'central_surrounded' if a.central_capital else 'compact_with_focal_visibility_preference' if a.capital_composition else 'first_legal_layout',
                     'mapping':capital_mapping['styles'][a.pool] if a.capital else None,
                     'authority':'explicit Lab fixture only; production must use captured Civ III capital status',
                     'native_capital_indicator':'retained'},
          'grounding':'source_z_zero' if a.authored_ground else 'lowest_source_vertex',
+         'grid_alignment':{'enabled':a.orthogonal_buildings,'asset_rotations':alignment_records,
+                           'basis':'Offline minimum-area normalized footprint rectangle; uniform rigid rotation, then quarter-turn layout choices'},
          'footprint_half_extent_tiles':footprint_limit,'cross_tile_extent_authorization':'user permits slight city overlap, especially larger cities',
          'projection':projection,'source_z_pixels_per_unit':80.9543,'scene_world_z_per_source_unit':80.9543/(vertical*112),
          'material_channels_enabled':(['base_color','emissive']

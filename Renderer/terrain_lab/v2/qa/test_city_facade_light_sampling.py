@@ -13,6 +13,21 @@ probe=importlib.util.module_from_spec(spec);spec.loader.exec_module(probe)
 
 
 class FacadeSampling(unittest.TestCase):
+    def test_light_tracks_rotated_wall_instead_of_axis_aligned_box(self):
+        normal=np.array([.5,3**.5/2,0]);tangent=np.array([-normal[1],normal[0],0])
+        points=np.array([normal*.2+tangent*t+np.array([0,0,.1]) for t in [-.15,0,.15]])
+        position,direction=probe.facade_plane_proxy(points,np.tile(normal,(3,1)),np.ones(3))
+        np.testing.assert_allclose(direction,normal)
+        np.testing.assert_allclose(position,normal*.212+np.array([0,0,.1]))
+        self.assertAlmostEqual(float((position-points[1])@normal),.012)
+
+    def test_facade_proxy_is_translation_and_rotation_equivariant(self):
+        points=np.array([[.2,-.1,.1],[.2,.1,.1]]);normals=np.array([[1.,0,0],[1.,0,0]])
+        rot=np.array([[.6,-.8,0],[.8,.6,0],[0,0,1]]);shift=np.array([3.,-2.,.4])
+        p,n=probe.facade_plane_proxy(points,normals,np.array([1.,2.]))
+        q,m=probe.facade_plane_proxy(points@rot.T+shift,normals@rot.T,np.array([1.,2.]))
+        np.testing.assert_allclose(q,p@rot.T+shift);np.testing.assert_allclose(m,n@rot.T)
+
     def test_proxy_budget_keeps_dim_building_and_original_order(self):
         lights=[dict(owner=owner,intensity=intensity,color_linear=[1,1,1],range=1)
                 for owner,intensity in [(0,9),(0,8),(0,7),(1,.1),(1,.2),(2,1)]]

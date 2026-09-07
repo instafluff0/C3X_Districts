@@ -707,6 +707,31 @@ Natural wonders, constructed wonders, and C3X districts are late, separate categ
 - Layer boundaries for roads, rivers, fog, and other overlays must be verified in-game rather than assumed from decompiled names.
 - Scenario and user override semantics must be deterministic before packs become large.
 
+## Civilian actions and unit redraw follow-up (2026-09-07)
+
+The user confirms mouse clicks and unit shadows now work. The next production
+pack adds Settler founding and Worker construction/clearing/planting clips with
+one tool per action. Six pose-only fortify bindings now have offline baked
+transitions. The small existing body bridge expands Civ III's own unit dirty
+rectangle after successful replacement, addressing pixels left outside the
+native FLC crop. No new patch entry, gameplay timing change or cache budget
+increase is needed. There are 79 actions, 951 source-pose checks and 34.4 MB of
+payloads. Details and the next user-run checkpoint are in
+`docs/animation_integration_checkpoint.md`; unrelated Lab gates remain unchanged.
+
+## Unit native-canvas follow-up (2026-09-07)
+
+The user reported pink unit fringes, missing shadows and mouse actions failing
+while keyboard B still opens the city-name dialog. The DLL now composes against
+the native underlay and adds cached posed self/cast shadows. A small bridge
+change forwards the background already supplied to the native sprite call;
+click and city-command handlers are unchanged. The DLL also yields optional
+ambient redraws during mouse presses and one release tick. Mouse root cause
+remains unproven and must be checked in-game. Details and executable tests are
+in `docs/animation_integration_checkpoint.md`. Normal INSTALL.bat remains the
+entry point; the agent does not launch the game. Unrelated Lab gates and the
+known full-workflow L19A hash failure remain unchanged.
+
 ## Animation gameplay checkpoint ready (2026-09-07)
 
 The tested animation DLL is staged for normal INSTALL.bat. The GOG unit inleads
@@ -942,3 +967,17 @@ The analytic fallback is not source environment parity or a global default.
 Removed 249.0 MiB of new completed readbacks; all images and replay inputs
 remain. No native or milestone advancement. See
 `terrain_lab/v2/audits/beauty/CITY_ENVIRONMENT_PASS.md`.
+
+### Central, orthogonal capitals and corrected paving light
+
+The American capital now has restored source materials, a paving footprint that
+follows its foundation, and facade-aligned local lights that reach the paving
+border. The user's latest composition rule places the palace at the city core,
+surrounded by ordinary buildings on a shared right-angle grid. Selected r111
+inland and r112 freshcanopy preserve source proportions, single-era appearance,
+100-tile terrain and matched cameras. Four Windows comparisons, twenty independent
+composition checks and 33 focused tests pass. The strict coastal surrounding fit
+remains unresolved after bounded site and side-assignment trials; its preceding
+scene is preserved. No native changes or milestone/manual approval is implied.
+See `terrain_lab/v2/audits/beauty/CITY_CENTRAL_CAPITAL_PASS.md`, with the material,
+paving and local-light evidence linked from the city campaign.

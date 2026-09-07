@@ -18,6 +18,95 @@ not a claim that gameplay movement, fog and HUD behavior have been observed.
 The exact staged DLL/source/asset identities are recorded in
 `verification/animation/candidate-checkpoint.json`.
 
+## Follow-up: civilian jobs, fortify transitions and split bodies
+
+The user confirms mouse clicks now work and units have the expected shadows.
+The input-aware scheduler and existing cache budgets are preserved.
+
+The production animation pack now contains 79 actions across nine families.
+Settler BUILD uses the source leader CITYA gesture; its stowed staff is hidden
+during this action after offscreen inspection showed it floating away from the hand. Worker BUILD/FORTRESS, ROAD,
+MINE, IRRIGATE, FOREST/JUNGLE clearing and PLANT map to explicitly selected
+construction clips and one tool per action. Shovel, pickaxe, axe and hammer
+choices are offline mappings; the DLL consumes generic parts. Non-work poses
+hide all tools. The Tool socket uses the inferred right-hand inventory binding;
+this is a local presentation mapping, not a claim of exact source-engine jobs.
+Civ III still owns work completion, founding, timing and cursor advancement.
+
+Six fortify sources were two-frame pose-only clips: Archer, Swordsman, Infantry,
+Warrior, Scout and Settler. The runtime compiler now bakes a 16-sample transition
+from the idle pose into each authored fortify pose using local joint transforms,
+shortest-path normalized quaternion interpolation and smooth easing. Native
+cursor progress still determines its duration, interruptions and held endpoint.
+Worker's existing stop clip remains; Fighter deliberately retains its idle
+alias, without an invented ground brace. Frozen Lab source packs are unchanged.
+
+The native `Animator::tick_all_unit_anims` obtains a pointer to `Unit.Body.Rect`
+from `Unit::FUN_005cbc30`, draws the unit, then unions that same rectangle into
+its dirty bounds. Those native bounds use the FLC's cropped Width2/Height2/
+Width3/Height3, which can miss custom geometry. After successful custom drawing,
+the existing body bridge now expands that rectangle to the full constrained
+custom canvas envelope, including shadows. Civ III therefore presents and later
+erases the complete footprint. Failure/native fallback leaves its rectangle
+unchanged. No new hook or CSV entry is needed; no native sprite dimensions or
+animation fields are changed. This addresses a concrete stale-pixel mechanism;
+the user's intermittent split-body report still needs an in-game confirmation.
+
+The expanded checks include raw source endpoints for generated transitions,
+local-joint rotation preservation, 951 real evaluator pose comparisons (307
+socket samples), per-action component selection, actual extracted bridge bounds,
+and headless day/night/both-zoom action rendering. The payload is 34,361,036 bytes;
+posed body/shadow cache remains 8 MiB. All 379 broad prerequisite tests pass;
+the full workflow retains the known unrelated L19A pack hash failure.
+
+## Follow-up: native canvas, shadows and mouse report
+
+The user observed magenta unit fringes and missing shadows. The renderer had
+blended partial coverage against the Animator canvas's magenta color key.
+The new optional `c3x_renderer_unit_draw_background` export receives the native
+sprite call's existing background DC. Injected changes only acquire/forward/
+release that surface and resolve the new exports; no click, command, city,
+animation-advancement or gameplay handler is changed. Old unit-draw ABI remains
+available for clients drawing directly onto an opaque canvas. No CSV edits.
+
+The DLL resolves partial pixels against the current canvas, using the supplied
+underlay where the canvas is keyed. Zero coverage stays keyed; finished body and
+shadow pixels are written without magenta contamination. Missing underlay or
+failed reads reject before destination mutation. Native clipping bounds are
+honored for partially offscreen sprites. The two native DCs are released on
+success and failure, including a failed second acquisition.
+
+A bounded 128x128 directional height map is built from the current whole-kit
+pose on cache misses. It drives filtered self-shadow comparisons in the shader
+and a ground-plane cast silhouette. Sun/moon direction and shared environment
+strength drive presentation. The 8 MiB sprite cache retains the combined body
+and shadow, and terrain caches remain untouched. Shadows currently receive on
+a flat unit-local ground plane; terrain/object receiving and cross-unit shadows
+are outside this prototype. Source cutout silhouettes are approximated by their
+mesh triangles. Static resource-shadow limitations remain unchanged.
+
+The user clarified that keyboard B opens the city-name dialog, while toolbar
+clicks fail and map clicks enter the pathfinder. Decompiled native code shows
+that the name dialog precedes AT_BUILD playback, and the map click path uses a
+250 ms hold timer. This supports investigating input timing, not claiming a
+missing Settler clip prevents city founding. Root cause is **not yet proven**.
+The optional `c3x_renderer_schedule_idle` export now defers ambient redraw
+requests while a mouse button is held and for one timer tick after release.
+It uses GetKeyState only; it does not consume queue messages or change bits.
+The pure scheduler, native input handling and native unit callbacks are unchanged.
+`ambient-input` debug records report pause/resume; `unit-body` additionally
+reports resolved keyed pixels and cast-shadow pixels. The subsequent user report confirms normal mouse behavior with this guard.
+
+`verify_units.py` runs synthetic shadow and input-guard checks, the extracted
+native bridge (including two distinct DCs and failure cleanup), and real DLL
+rendering. The expanded matrix checks opaque versus color-key composition,
+RGB555/RGB565 clipped canvases, day/night, both zooms, all nine unit families,
+held endpoints/fallback, cached translation and unchanged terrain reconstruction.
+See `unit-presentation-contracts.json`, `canvas-shadow-build.json` and `units.json`
+under `verification/animation`. The approved injected compile passes.
+The full workflow rerun passes 379 prerequisite tests and still stops at the
+known unrelated L19A asset hash mismatch; no gate or threshold was relaxed.
+
 ## Coverage
 
 Ten animated resource families: bananas, cattle, furs, game, horses, ivory,
@@ -27,8 +116,9 @@ continue to use their static custom bodies.
 Nine custom unit families: Archer, Swordsman, Infantry, Fighter, Galley,
 Warrior, Scout, Settler and Worker (also matched by PRTO_Builder).
 Combat families have basic movement/combat clips. Settler and Worker have idle,
-move, fidget, fortify/stop and capture; their combat, founding/build and Worker
-specialty jobs retain native rendering in this checkpoint. Other families,
+move, fidget, fortify/stop, capture and build; Worker also has the native job
+slots listed above. Civilian combat and other unsupported actions retain native
+rendering. Other families,
 Armies and failed replacements also retain their complete native bodies.
 The new bodies use a separate `UnitEarlyLab` offline intake, leaving frozen
 Lab packs intact. One human member is selected explicitly for Scout/Settler;

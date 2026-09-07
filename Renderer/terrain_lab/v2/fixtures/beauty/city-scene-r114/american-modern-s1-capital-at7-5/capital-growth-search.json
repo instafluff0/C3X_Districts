@@ -1,0 +1,1332 @@
+{
+  "total_node_limit": 20000,
+  "nodes_used": 0,
+  "site_minimum_separation": 0.21,
+  "attempts": [
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 6,
+        "1": 11,
+        "2": 0,
+        "3": 0,
+        "4": 66,
+        "5": 67,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.22239571696881277,
+          -0.22204185805681037,
+          0.2222547942030316,
+          0.2221611726460638
+        ]
+      ],
+      "surround_center": [
+        0,
+        0
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 0,
+      "palace_site": [
+        -0.24639571696881277,
+        -0.24604185805681036,
+        0.2462547942030316,
+        0.2461611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 6,
+        "1": 13,
+        "2": 0,
+        "3": 0,
+        "4": 44,
+        "5": 87,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.15239571696881277,
+          -0.2920418580568104,
+          0.2922547942030316,
+          0.1521611726460638
+        ]
+      ],
+      "surround_center": [
+        0.07,
+        -0.07
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 1,
+      "palace_site": [
+        -0.17639571696881276,
+        -0.3160418580568104,
+        0.3162547942030316,
+        0.1761611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 13,
+        "2": 0,
+        "3": 0,
+        "4": 48,
+        "5": 72,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.15239571696881277,
+          -0.22204185805681037,
+          0.2922547942030316,
+          0.2221611726460638
+        ]
+      ],
+      "surround_center": [
+        0.07,
+        0.0
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 2,
+      "palace_site": [
+        -0.17639571696881276,
+        -0.24604185805681036,
+        0.3162547942030316,
+        0.2461611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 14,
+        "2": 0,
+        "3": 0,
+        "4": 50,
+        "5": 57,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.15239571696881277,
+          -0.15204185805681036,
+          0.2922547942030316,
+          0.2921611726460638
+        ]
+      ],
+      "surround_center": [
+        0.07,
+        0.07
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 3,
+      "palace_site": [
+        -0.17639571696881276,
+        -0.17604185805681036,
+        0.3162547942030316,
+        0.3161611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 14,
+        "2": 0,
+        "3": 0,
+        "4": 32,
+        "5": 73,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.08239571696881276,
+          -0.22204185805681037,
+          0.36225479420303164,
+          0.2221611726460638
+        ]
+      ],
+      "surround_center": [
+        0.14,
+        0.0
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 4,
+      "palace_site": [
+        -0.10639571696881275,
+        -0.24604185805681036,
+        0.38625479420303166,
+        0.2461611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 7,
+        "2": 0,
+        "3": 6,
+        "4": 46,
+        "5": 41,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.15239571696881277,
+          -0.08204185805681036,
+          0.2922547942030316,
+          0.36216117264606384
+        ]
+      ],
+      "surround_center": [
+        0.07,
+        0.14
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 5,
+      "palace_site": [
+        -0.17639571696881276,
+        -0.10604185805681035,
+        0.3162547942030316,
+        0.38616117264606387
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 14,
+        "2": 0,
+        "3": 0,
+        "4": 30,
+        "5": 57,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.08239571696881276,
+          -0.15204185805681036,
+          0.36225479420303164,
+          0.2921611726460638
+        ]
+      ],
+      "surround_center": [
+        0.14,
+        0.07
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 6,
+      "palace_site": [
+        -0.10639571696881275,
+        -0.17604185805681036,
+        0.38625479420303166,
+        0.3161611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 13,
+        "2": 0,
+        "3": 0,
+        "4": 14,
+        "5": 69,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.012395716968812753,
+          -0.22204185805681037,
+          0.4322547942030316,
+          0.2221611726460638
+        ]
+      ],
+      "surround_center": [
+        0.21000000000000002,
+        0.0
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 7,
+      "palace_site": [
+        -0.036395716968812754,
+        -0.24604185805681036,
+        0.4562547942030316,
+        0.2461611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 7,
+        "2": 0,
+        "3": 7,
+        "4": 28,
+        "5": 42,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.08239571696881276,
+          -0.08204185805681036,
+          0.36225479420303164,
+          0.36216117264606384
+        ]
+      ],
+      "surround_center": [
+        0.14,
+        0.14
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 8,
+      "palace_site": [
+        -0.10639571696881275,
+        -0.10604185805681035,
+        0.38625479420303166,
+        0.38616117264606387
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 7,
+        "2": 0,
+        "3": 6,
+        "4": 40,
+        "5": 26,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.15239571696881277,
+          -0.01204185805681035,
+          0.2922547942030316,
+          0.4321611726460638
+        ]
+      ],
+      "surround_center": [
+        0.07,
+        0.21000000000000002
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 9,
+      "palace_site": [
+        -0.17639571696881276,
+        -0.03604185805681035,
+        0.3162547942030316,
+        0.4561611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 12,
+        "2": 0,
+        "3": 0,
+        "4": 14,
+        "5": 53,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.012395716968812753,
+          -0.15204185805681036,
+          0.4322547942030316,
+          0.2921611726460638
+        ]
+      ],
+      "surround_center": [
+        0.21000000000000002,
+        0.07
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 10,
+      "palace_site": [
+        -0.036395716968812754,
+        -0.17604185805681036,
+        0.4562547942030316,
+        0.3161611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 0,
+        "1": 1,
+        "2": 0,
+        "3": 0,
+        "4": 142,
+        "5": 17,
+        "6": 0
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.7823957169688128,
+          -0.5020418580568105,
+          -0.33774520579696843,
+          -0.05783882735393622
+        ]
+      ],
+      "surround_center": [
+        -0.56,
+        -0.28
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 11,
+      "palace_site": [
+        -0.8063957169688128,
+        -0.5260418580568105,
+        -0.3137452057969684,
+        -0.03383882735393622
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 0,
+        "1": 12,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 64,
+        "6": 8
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          0.05760428303118725,
+          -0.22204185805681037,
+          0.5022547942030317,
+          0.2221611726460638
+        ]
+      ],
+      "surround_center": [
+        0.28,
+        0.0
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 12,
+      "palace_site": [
+        0.03360428303118725,
+        -0.24604185805681036,
+        0.5262547942030317,
+        0.2461611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 6,
+        "1": 7,
+        "2": 0,
+        "3": 7,
+        "4": 24,
+        "5": 28,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.08239571696881276,
+          -0.01204185805681035,
+          0.36225479420303164,
+          0.4321611726460638
+        ]
+      ],
+      "surround_center": [
+        0.14,
+        0.21000000000000002
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 13,
+      "palace_site": [
+        -0.10639571696881275,
+        -0.03604185805681035,
+        0.38625479420303166,
+        0.4561611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 6,
+        "2": 0,
+        "3": 7,
+        "4": 12,
+        "5": 39,
+        "6": 4
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.012395716968812753,
+          -0.08204185805681036,
+          0.4322547942030316,
+          0.36216117264606384
+        ]
+      ],
+      "surround_center": [
+        0.21000000000000002,
+        0.14
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 14,
+      "palace_site": [
+        -0.036395716968812754,
+        -0.10604185805681035,
+        0.4562547942030316,
+        0.38616117264606387
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 7,
+        "1": 0,
+        "2": 0,
+        "3": 6,
+        "4": 34,
+        "5": 12,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.15239571696881277,
+          0.057958141943189656,
+          0.2922547942030316,
+          0.5021611726460639
+        ]
+      ],
+      "surround_center": [
+        0.07,
+        0.28
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 15,
+      "palace_site": [
+        -0.17639571696881276,
+        0.033958141943189656,
+        0.3162547942030316,
+        0.5261611726460639
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 0,
+        "1": 10,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 48,
+        "6": 9
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          0.05760428303118725,
+          -0.15204185805681036,
+          0.5022547942030317,
+          0.2921611726460638
+        ]
+      ],
+      "surround_center": [
+        0.28,
+        0.07
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 16,
+      "palace_site": [
+        0.03360428303118725,
+        -0.17604185805681036,
+        0.5262547942030317,
+        0.3161611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 6,
+        "1": 6,
+        "2": 0,
+        "3": 7,
+        "4": 10,
+        "5": 25,
+        "6": 5
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.012395716968812753,
+          -0.01204185805681035,
+          0.4322547942030316,
+          0.4321611726460638
+        ]
+      ],
+      "surround_center": [
+        0.21000000000000002,
+        0.21000000000000002
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 17,
+      "palace_site": [
+        -0.036395716968812754,
+        -0.03604185805681035,
+        0.4562547942030316,
+        0.4561611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 5,
+        "1": 0,
+        "2": 0,
+        "3": 7,
+        "4": 20,
+        "5": 14,
+        "6": 3
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.08239571696881276,
+          0.057958141943189656,
+          0.36225479420303164,
+          0.5021611726460639
+        ]
+      ],
+      "surround_center": [
+        0.14,
+        0.28
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 18,
+      "palace_site": [
+        -0.10639571696881275,
+        0.033958141943189656,
+        0.38625479420303166,
+        0.5261611726460639
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 0,
+        "1": 5,
+        "2": 0,
+        "3": 7,
+        "4": 0,
+        "5": 34,
+        "6": 11
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          0.05760428303118725,
+          -0.08204185805681036,
+          0.5022547942030317,
+          0.36216117264606384
+        ]
+      ],
+      "surround_center": [
+        0.28,
+        0.14
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 19,
+      "palace_site": [
+        0.03360428303118725,
+        -0.10604185805681035,
+        0.5262547942030317,
+        0.38616117264606387
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 0,
+        "1": 10,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 56,
+        "6": 13
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          0.12760428303118726,
+          -0.22204185805681037,
+          0.5722547942030316,
+          0.2221611726460638
+        ]
+      ],
+      "surround_center": [
+        0.35000000000000003,
+        0.0
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 20,
+      "palace_site": [
+        0.10360428303118727,
+        -0.24604185805681036,
+        0.5962547942030316,
+        0.2461611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 6,
+        "1": 0,
+        "2": 0,
+        "3": 6,
+        "4": 28,
+        "5": 6,
+        "6": 2
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.15239571696881277,
+          0.12795814194318966,
+          0.2922547942030316,
+          0.5721611726460638
+        ]
+      ],
+      "surround_center": [
+        0.07,
+        0.35000000000000003
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 21,
+      "palace_site": [
+        -0.17639571696881276,
+        0.10395814194318967,
+        0.3162547942030316,
+        0.5961611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 0,
+        "1": 8,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 40,
+        "6": 16
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          0.12760428303118726,
+          -0.15204185805681036,
+          0.5722547942030316,
+          0.2921611726460638
+        ]
+      ],
+      "surround_center": [
+        0.35000000000000003,
+        0.07
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 22,
+      "palace_site": [
+        0.10360428303118727,
+        -0.17604185805681036,
+        0.5962547942030316,
+        0.3161611726460638
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 5,
+        "1": 0,
+        "2": 0,
+        "3": 7,
+        "4": 8,
+        "5": 12,
+        "6": 6
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.012395716968812753,
+          0.057958141943189656,
+          0.4322547942030316,
+          0.5021611726460639
+        ]
+      ],
+      "surround_center": [
+        0.21000000000000002,
+        0.28
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 23,
+      "palace_site": [
+        -0.036395716968812754,
+        0.033958141943189656,
+        0.4562547942030316,
+        0.5261611726460639
+      ]
+    },
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 0,
+        "1": 5,
+        "2": 0,
+        "3": 7,
+        "4": 0,
+        "5": 21,
+        "6": 12
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        4,
+        7
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          0.05760428303118725,
+          -0.01204185805681035,
+          0.5022547942030317,
+          0.4321611726460638
+        ]
+      ],
+      "surround_center": [
+        0.28,
+        0.21000000000000002
+      ],
+      "connection_policy": "Neighborhood connects through the central courtyard; each four-slot group occupies four sides",
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 24,
+      "palace_site": [
+        0.03360428303118725,
+        -0.03604185805681035,
+        0.5262547942030317,
+        0.4561611726460638
+      ]
+    }
+  ]
+}

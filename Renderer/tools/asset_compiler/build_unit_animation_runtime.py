@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from Renderer.tools.asset_compiler import normalized_animation, normalized_pose_cache, normalized_skin
 from Renderer.tools.asset_compiler.build_resource_animation_runtime import encode, pack_path
 from Renderer.tools.asset_compiler.build_l20_unit_runtime import OWNER_COLOR_OVERRIDES
-from Renderer.tools.asset_compiler.unit_family_action_validator import SOCKET_PROFILE
+from Renderer.tools.asset_compiler.unit_family_action_validator import SOCKET_PROFILE, _best_group
 
 
 IDENTITY = (1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.)
@@ -83,6 +83,28 @@ def native_anchor_caches(caches: dict, driver_id: str, skeleton: dict) -> dict:
     return result
 
 
+def fortify_transition(skeleton: dict, idle, target):
+    """Bake a transition for pose-only clips; native cursor still owns duration."""
+    names = {b["name"] for b in skeleton["bones"]}
+    start = normalized_skin.sample_pose(skeleton, idle, _best_group(idle, names)[0], 0., False)
+    end = normalized_skin.sample_pose(skeleton, target, _best_group(target, names)[0], target.duration, False)
+    frames = []
+    for frame in range(16):
+        t = frame/15
+        t = t*t*(3-2*t)
+        pose = []
+        for a, b in zip(start, end):
+            sign = -1 if sum(x*y for x,y in zip(a.orientation,b.orientation)) < 0 else 1
+            q = [(1-t)*x+t*sign*y for x,y in zip(a.orientation,b.orientation)]
+            length = math.sqrt(sum(x*x for x in q))
+            pose.append(normalized_animation.Transform(
+                tuple((1-t)*x+t*y for x,y in zip(a.position,b.position)),
+                tuple(x/length for x in q),
+                tuple((1-t)*x+t*y for x,y in zip(a.scale_shear,b.scale_shear))))
+        frames.extend(v for matrix in normalized_skin.world_matrices(skeleton,pose) for v in matrix)
+    return normalized_pose_cache.PoseCache(.5,30.,16,tuple(b["name"] for b in skeleton["bones"]),tuple(frames))
+
+
 def build(packs: list[Path], output: Path) -> dict:
     previous = output/"manifest.json"
     old_payloads = set()
@@ -138,9 +160,19 @@ def build(packs: list[Path], output: Path) -> dict:
                 if any(c.frame_count != clip.frame_count or abs(c.duration-clip.duration)>1e-5
                        for c in caches.values()):
                     raise ValueError(f"unit parts disagree on action timing: {unit_id}/{action}")
+                transition = action == "fortify" and clip.frame_count <= 2
+                if transition:
+                    idle_record = manifest["animations"][recipe["actions"]["idle"]]
+                    idle_clip = normalized_animation.load_clip(pack_path(pack, idle_record["clip"]))
+                    caches = {asset: fortify_transition(skeleton, idle_clip, clip) for asset,skeleton in skeletons.items()}
                 caches = native_anchor_caches(caches, driver_id, skeletons[driver_id])
                 parts = []
+                selected = set(recipe.get("action_components", {}).get(action, components))
+                if not selected or selected - components.keys() or driver_id not in selected:
+                    raise ValueError(f"invalid action component selection: {unit_id}/{action}")
                 for asset, component in components.items():
+                    if asset not in selected:
+                        continue
                     bindings = component.get("draw_bindings", [{"mesh": 0, "material": 0}])
                     for binding in bindings:
                         meshes = component["meshes"] if "meshes" in component else [component["mesh"]]
@@ -166,7 +198,8 @@ def build(packs: list[Path], output: Path) -> dict:
                                 "channels": channels, "source_tint": component.get("tint"),
                                 "owner_color": OWNER_COLOR_OVERRIDES.get(asset, component.get("owner_color"))},
                             "source_mesh": mesh_relative, "source_material": material_relative})
-                unit["actions"][action] = {"duration": clip.duration, "frames": clip.frame_count,
+                unit["actions"][action] = {"duration": caches[driver_id].duration, "frames": caches[driver_id].frame_count,
+                    "presentation": "idle_to_static_fortify" if transition else "source_clip",
                     "loop": animation["loop"], "parts": parts}
             result["units"][unit_id] = unit
     result["unique_payloads"] = len(payloads)

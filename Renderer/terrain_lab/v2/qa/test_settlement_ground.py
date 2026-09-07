@@ -3,11 +3,32 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'systems/objects'))
-from settlement_ground import coverage,rectangle_distance
+from settlement_ground import coverage,rectangle_distance,convex_hull,polygon_distance,footprint_alignment
 from city_ground_geometry import clip_ground_to_land_cells
 
 
 class SettlementGroundTests(unittest.TestCase):
+    def test_baked_thirty_degree_rotation_is_removed_without_deforming_mesh(self):
+        import math
+        angle=-math.pi/6;c=math.cos(angle);s=math.sin(angle)
+        rectangle=[(x*c-y*s,x*s+y*c) for x in (-2,2) for y in (-1,1)]
+        self.assertAlmostEqual(footprint_alignment(rectangle),-angle)
+        self.assertEqual(footprint_alignment([(-2,-1),(2,-1),(2,1),(-2,1)]),0)
+
+    def test_rotated_foundation_does_not_pave_bounding_box_corners(self):
+        hull=convex_hull([(0,1),(1,0),(0,-1),(-1,0),(0,0),(0,1)])
+        self.assertEqual(len(hull),4)
+        self.assertEqual(coverage(.8,.8,[],.1,.025,[hull]),0)
+        self.assertEqual(coverage(.8,.8,[(-1,-1,1,1)],.1,.025),1)
+        self.assertEqual(coverage(.45,.45,[],.1,.025,[hull]),1)
+        self.assertAlmostEqual(polygon_distance(0,0,hull),-2**-.5)
+        self.assertAlmostEqual(polygon_distance(1.1,0,hull),.1)
+
+    def test_mesh_footprint_preserves_rectangle_union_and_feather(self):
+        hull=convex_hull([(0,0),(1,0),(1,1),(0,1)])
+        for x,y in [(.5,.5),(1.06,1.08),(1.09,1.09),(1.08,.4),(-.2,.5)]:
+            self.assertAlmostEqual(coverage(x,y,[(0,0,1,1)],.1,.025),coverage(x,y,[],.1,.025,[hull]))
+
     def test_overlap_is_a_union_and_small_gap_connects(self):
         boxes=[(0,0,1,1),(.9,0,2,1)]
         self.assertEqual(coverage(.95,.5,boxes,.1,.025),1)

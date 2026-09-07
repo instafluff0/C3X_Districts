@@ -633,8 +633,57 @@ bool preview_units(HMODULE module,char const* path,int hour) {
             }
             ok=changes>10 && ok;
             std::printf("UNIT RGB5%d5 clipped zoom=%d changed=%u status=%s\n",green_bits,zoom,changes,ok?"pass":"FAIL");
+            if(ok) {
+                auto with_background=reinterpret_cast<c3x_renderer_unit_draw_background_fn>(GetProcAddress(module,"c3x_renderer_unit_draw_background"));
+                auto reference=std::vector<std::uint16_t>(values,values+384*256);
+                HDC bg16=CreateCompatibleDC(nullptr);void* bg_bits=nullptr;
+                HBITMAP bg_dib=CreateDIBSection(bg16,reinterpret_cast<BITMAPINFO*>(&format),DIB_RGB_COLORS,&bg_bits,nullptr,0);
+                HGDIOBJ bg_old=bg_dib?SelectObject(bg16,bg_dib):nullptr;
+                if(!with_background || !bg16 || !bg_dib || !bg_bits)ok=false;
+                if(ok) {
+                    std::fill_n(static_cast<std::uint16_t*>(bg_bits),384*256,std::uint16_t(0x4210));
+                    std::uint16_t key=green_bits==5?0x7c1f:0xf81f;
+                    std::fill_n(values,384*256,key);
+                    ok=with_background(&unit,dc16,bg16)==C3X_RENDERER_RESULT_OK;GdiFlush();
+                    for(int i=0;i<384*256;++i)if((values[i]==key?std::uint16_t(0x4210):values[i])!=reference[i])ok=false;
+                }
+                std::printf("UNIT RGB5%d5 magenta clipped parity zoom=%d status=%s\n",green_bits,zoom,ok?"pass":"FAIL");
+                if(bg16 && bg_old)SelectObject(bg16,bg_old);
+                if(bg_dib)DeleteObject(bg_dib);if(bg16)DeleteDC(bg16);
+            }
             SelectObject(dc16,previous);DeleteObject(dib16);DeleteDC(dc16);
         }
+    }
+    if(ok) {
+        auto with_background=reinterpret_cast<c3x_renderer_unit_draw_background_fn>(GetProcAddress(module,"c3x_renderer_unit_draw_background"));
+        HDC background=CreateCompatibleDC(nullptr);void* underlay_bits=nullptr;
+        HBITMAP underlay=CreateDIBSection(background,&info,DIB_RGB_COLORS,&underlay_bits,nullptr,0);
+        if(!with_background || !background || !underlay || !underlay_bits)ok=false;
+        HGDIOBJ previous=underlay?SelectObject(background,underlay):nullptr;
+        if(ok)for(int zoom=0;zoom<2 && ok;++zoom) {
+            auto ground=static_cast<std::uint32_t*>(underlay_bits);
+            auto canvas=static_cast<std::uint32_t*>(bits);
+            for(int i=0;i<1024*1152;++i)ground[i]=0xff205030u+unsigned((i%1024)/8)*0x10101u;
+            std::memcpy(canvas,ground,1024*1152*4);
+            c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Settler");
+            unit.unit_id=45;unit.action=2;unit.direction=3;unit.frame_count=16;unit.action_cursor=7;
+            unit.sprite_width=unit.sprite_height=191;unit.reduced=zoom;unit.body_x=100;unit.body_y=100;
+            unit.hour=hour;unit.display_color_rgb=0x205bdd;
+            ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK;GdiFlush();
+            auto reference=std::vector<std::uint32_t>(canvas,canvas+1024*1152);
+            std::fill_n(canvas,1024*1152,0x00ff00ffu);
+            ok=with_background(&unit,dc,background)==C3X_RENDERER_RESULT_OK && ok;GdiFlush();
+            unsigned changed=0;
+            for(int i=0;i<1024*1152;++i) {
+                auto composed=canvas[i]==0x00ff00ffu?ground[i]:canvas[i];
+                if((composed&0xffffffu)!=(reference[i]&0xffffffu))ok=false;
+                if(canvas[i]!=0x00ff00ffu)++changed;
+            }
+            ok=changed>10 && ok;
+            std::printf("UNIT magenta underlay parity zoom=%d changed=%u status=%s\n",zoom,changed,ok?"pass":"FAIL");
+        }
+        if(background && previous)SelectObject(background,previous);
+        if(underlay)DeleteObject(underlay);if(background)DeleteDC(background);
     }
     unsigned action_draws=0;
     for(int row=0;row<9 && ok;++row)for(int zoom=0;zoom<2 && ok;++zoom) {
@@ -656,11 +705,32 @@ bool preview_units(HMODULE module,char const* path,int hour) {
         ok=pose(1,5,0);
         idle.assign(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*1152);
         // Native cursor/action changes interrupt any previous pose immediately.
-        std::vector<int> actions=row<7?std::vector<int>{2,3,4,5,6,7,8,9}:std::vector<int>{2,7,8,10};
-        for(int action:actions)for(int cursor:{0,7,15})if(ok)ok=pose(action,cursor,1);
+        std::vector<int> actions=row<7?std::vector<int>{2,3,4,5,6,7,8,9}:(row==7?std::vector<int>{2,7,8,10,12}:std::vector<int>{2,7,8,10,11,12,13,14,15,16,17,18});
+        bool save_actions=hour==12 && zoom==0 && (row==5 || row>=7);
+        std::vector<std::uint32_t> action_sheet(save_actions?std::size_t(573)*191*actions.size():0,0xff565b62u);
+        for(std::size_t action_index=0;action_index<actions.size();++action_index)for(int step=0;step<3;++step)if(ok) {
+            ok=pose(actions[action_index],step==2?15:step*7,1);
+            if(save_actions)for(int cy=0;cy<191;++cy)for(int cx=0;cx<191;++cx)
+                action_sheet[(action_index*191+cy)*573+step*191+cx]=static_cast<std::uint32_t*>(bits)[(100+cy)*1024+100+cx];
+        }
+        if(save_actions && ok) {
+            c3x_renderer_output_v1 sheet={};sheet.width=573;sheet.height=unsigned(191*actions.size());
+            sheet.stride_bytes=573*4;sheet.bgra_pixels=action_sheet.data();
+            auto filename=std::string(path)+".actions-"+names[row]+".bmp";
+            ok=write_bmp(filename.c_str(),sheet);
+        }
         if(ok) {
+            ok=pose(7,0,0);
+            auto fortify_first=std::vector<std::uint32_t>(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*1152);
+            ok=pose(7,7,0) && ok;
+            bool changed=std::memcmp(fortify_first.data(),bits,fortify_first.size()*4)!=0;
+            ok=pose(7,15,0) && ok;
+            changed=changed || std::memcmp(fortify_first.data(),bits,fortify_first.size()*4)!=0;
+            if(!changed && row!=3){std::printf("FAIL fortify has no visible transition key=%s zoom=%d\n",unit.unit_key,zoom);ok=false;}
+            // Fighter deliberately binds fortify to idle; it has no ground brace.
+            std::printf("UNIT fortify %s key=%s zoom=%d status=%s\n",row==3?"idle alias":"transition",unit.unit_key,zoom,(changed || row==3)?"pass":"FAIL");
             int held_action=row<7?6:10;
-            ok=pose(held_action,15,0);
+            ok=pose(held_action,15,0) && ok;
             auto death=std::vector<std::uint32_t>(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*1152);
             ok=pose(held_action,1000,1) && std::memcmp(death.data(),bits,death.size()*4)==0 && ok;
             unit.unit_id+=100; // Fresh identity with a queued attack still uses current idle.
@@ -675,7 +745,7 @@ bool preview_units(HMODULE module,char const* path,int hour) {
                 // Reset before the non-mutating unsupported action assertion.
                 std::memcpy(bits,idle.data(),idle.size()*4);
             }
-            unit.action=18; // Unsupported worker action must leave the native canvas intact.
+            unit.action=19; // An invalid native action must leave the canvas intact.
             ok=draw(&unit,dc)!=C3X_RENDERER_RESULT_OK && std::memcmp(idle.data(),bits,idle.size()*4)==0 && ok;
         }
     }

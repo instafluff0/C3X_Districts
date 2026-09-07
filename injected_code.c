@@ -26746,7 +26746,7 @@ unload_custom_renderer ()
 // Capture/forwarding only. Civ III still chooses visibility, timing and HUD order.
 // The audited GOG inleads retain the original unit routine and its body arguments.
 bool
-forward_custom_unit_body (Sprite * sprite, PCX_Image * canvas, int x, int y, int reduced, PCX_Color_Table * palette)
+forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * canvas, int x, int y, int reduced, PCX_Color_Table * palette)
 {
 	Unit * unit = is->custom_renderer_unit_context;
 	if (unit == NULL || canvas != is->custom_renderer_unit_canvas ||
@@ -26783,11 +26783,22 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * canvas, int x, int y, int
 		(table, __, color, 6, 1);
 	draw.display_color_rgb = (color[0] << 16) | (color[1] << 8) | color[2];
 	JGL_Image * image = canvas->JGL.Image;
-	if (image == NULL) return false;
+	if (image == NULL || background == NULL || background->JGL.Image == NULL) return false;
 	HDC dc = image->vtable->acquire_dc (image);
 	if (dc == NULL) return false;
-	int result = is->custom_renderer_unit_draw (&draw, dc);
+	JGL_Image * underlay = background->JGL.Image;
+	HDC background_dc = (underlay == image) ? dc : underlay->vtable->acquire_dc (underlay);
+	int result = (background_dc != NULL) ? is->custom_renderer_unit_draw (&draw, dc, background_dc) : C3X_RENDERER_RESULT_ERROR;
+	if (background_dc != NULL && underlay != image) underlay->vtable->release_dc (underlay, __, 0);
 	image->vtable->release_dc (image, __, 1);
+	if (result == C3X_RENDERER_RESULT_OK) {
+		// Animator unions this same Rect after tick_anim, then erases it next frame.
+		// Its native FLC crop does not cover the custom body and shadow envelope.
+		if (unit->Body.Rect.left > x) unit->Body.Rect.left = x;
+		if (unit->Body.Rect.top > y) unit->Body.Rect.top = y;
+		if (unit->Body.Rect.right < x + sprite->Width / (reduced ? 2 : 1)) unit->Body.Rect.right = x + sprite->Width / (reduced ? 2 : 1);
+		if (unit->Body.Rect.bottom < y + sprite->Height / (reduced ? 2 : 1)) unit->Body.Rect.bottom = y + sprite->Height / (reduced ? 2 : 1);
+	}
 	return result == C3X_RENDERER_RESULT_OK;
 }
 
@@ -26811,7 +26822,7 @@ int __fastcall
 patch_Sprite_draw_unit_body_normal (Sprite * this, int edx, PCX_Image * background, PCX_Image * canvas,
 				  int x, int y, char * palette_path, PCX_Color_Table * palette)
 {
-	if (forward_custom_unit_body (this, canvas, x, y, 0, palette)) return 0;
+	if (forward_custom_unit_body (this, background, canvas, x, y, 0, palette)) return 0;
 	return Sprite_draw_unit_body_normal (this, __, background, canvas, x, y, palette_path, palette);
 }
 
@@ -26820,7 +26831,7 @@ patch_Sprite_draw_unit_body_reduced (Sprite * this, int edx, PCX_Image * backgro
 				   int x, int y, int scale_x, int scale_y, int divisor, char * palette_path, PCX_Color_Table * palette)
 {
 	if (scale_x == 1 && scale_y == 1 && divisor == 2 &&
-	    forward_custom_unit_body (this, canvas, x, y, 1, palette)) return 0;
+	    forward_custom_unit_body (this, background, canvas, x, y, 1, palette)) return 0;
 	return Sprite_draw_unit_body_reduced (this, __, background, canvas, x, y, scale_x, scale_y, divisor, palette_path, palette);
 }
 
@@ -26849,9 +26860,9 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_set_definition_paths = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_definition_paths");
 		is->custom_renderer_render = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_render");
 		is->custom_renderer_blit = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_blit");
-		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw");
+		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_export_scene = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_export_scene");
-		is->custom_renderer_schedule = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_schedule");
+		is->custom_renderer_schedule = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_schedule_idle");
 		is->custom_renderer_reset = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_reset");
 		if ((is->custom_renderer_get_api_version != NULL) &&
 		    (is->custom_renderer_set_pack_path != NULL) &&

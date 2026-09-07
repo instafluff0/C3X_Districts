@@ -483,3 +483,30 @@ Audit candidates: none for these added basic body bindings.
 `required_user_action: []`.
 Civilian unsupported actions and Worker specialty jobs retain native bodies;
 this extension does not claim the future worker-job capture/tool-selection gate.
+
+
+### 2026-09-07 unit native-canvas follow-up
+
+Existing symbols: `Unit_tick_anim`, `Sprite_draw_unit_body_normal`,
+`Sprite_draw_unit_body_reduced`, and `on_timer_0x9F6500`. Both sprite inleads
+already supply the native background PCX surface; the bridge now forwards its
+DC to a new optional DLL export. The existing timer delegates ambient scheduling
+to the input-aware DLL export. Native signatures/addresses are unchanged;
+no mouse or city command hook is added. `required_user_action: []`.
+Audit candidates: none required for the canvas/shadow fix. The reported mouse
+issue remains a user-run diagnostic checkpoint, not a proven founding bug.
+
+
+### 2026-09-07 civilian actions and unit dirty bounds
+
+Existing symbols: `Unit_tick_anim`, `Sprite_draw_unit_body_normal` and
+`Sprite_draw_unit_body_reduced`, with unchanged GOG addresses/signatures.
+The successful body callback expands the existing `Unit.Body.Rect`; native
+`Animator::tick_all_unit_anims` unions that same rectangle after `Unit_tick_anim`.
+This covers the custom body's constrained canvas instead of only the original
+FLC crop. No new `Unit::FUN_005cbc30` or Animator inlead is necessary. Source
+`FUN_005cbc30` and the Animator union order are read-only audit evidence.
+Civilian actions already arrive through the existing action/cursor capture.
+Fortify transitions and tool selection are offline pack changes.
+Audit candidates: none required. `required_user_action: []`.
+User confirms the previous mouse-click and shadow fixes work; retain the input guard.

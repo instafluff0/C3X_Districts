@@ -353,6 +353,7 @@ def compile_unit_families(
                 {
                     "asset": asset_id,
                     "role": component["role"],
+                    "source_entry": component["source_entry"],
                     "attachment_point": component["point"],
                     "scale": component["scale"],
                     "tint": component["tint"],
@@ -412,6 +413,17 @@ def compile_unit_families(
                     "source_action": source_action,
                 }
             )
+        action_components = {}
+        for action, record in all_actions.items():
+            tools = record.get("tools", [])
+            available_tools = {c["source_entry"] for c in component_records if c["role"] == "Tool"}
+            if not isinstance(tools, list) or len(set(tools)) != len(tools) or set(tools) - available_tools:
+                raise ValueError(f"{slug}/{action} selects unavailable or duplicate tools")
+            hidden = record.get("exclude_roles", [])
+            if not isinstance(hidden, list) or set(hidden) - {c["role"] for c in component_records}:
+                raise ValueError(f"{slug}/{action} excludes unavailable roles")
+            action_components[action] = [c["asset"] for c in component_records
+                if c["role"] not in hidden and (c["role"] != "Tool" or c["source_entry"] in tools)]
         driver = next(
             record["asset"]
             for record in component_records
@@ -439,6 +451,7 @@ def compile_unit_families(
                 "formation": source_recipe["formation"],
                 "movement": source_recipe["movement"],
                 "actions": actions,
+                "action_components": action_components,
                 "runtime_integration": "not_enabled",
             },
         )

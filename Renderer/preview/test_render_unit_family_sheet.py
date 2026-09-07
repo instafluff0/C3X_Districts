@@ -24,9 +24,10 @@ class RenderUnitFamilySheetTests(unittest.TestCase):
 
     def test_inferred_profile_covers_proof_pack_rigid_points(self) -> None:
         self.assertEqual(
-            {"Root", "ArmBand", "Hat", "WeaponPrimary", "WeaponSecondary"},
+            {"Root", "ArmBand", "Hat", "WeaponPrimary", "WeaponSecondary", "Tool"},
             set(SOCKET_PROFILE),
         )
+        self.assertEqual("Inven_R_Hand", SOCKET_PROFILE["Tool"]["bone"])
 
     def test_basic_sheet_is_deliberately_limited_to_eight_actions(self) -> None:
         self.assertEqual(

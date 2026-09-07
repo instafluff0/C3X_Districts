@@ -1,0 +1,49 @@
+{
+  "nodes": 7,
+  "backtracks": 0,
+  "candidate_counts": {
+    "0": 217,
+    "1": 210,
+    "2": 106,
+    "3": 217,
+    "4": 322,
+    "5": 432,
+    "6": 316
+  },
+  "grid_step": 0.07,
+  "preserved_prefix": 0,
+  "node_limit": 2000,
+  "slot_extents": [
+    0.65,
+    0.65,
+    0.65,
+    0.65,
+    0.8,
+    0.8,
+    0.8
+  ],
+  "neighbor_gap": 0.08,
+  "connected_prefixes": [
+    4,
+    7
+  ],
+  "ranking": "compact envelope, nearby houses, center, remaining freedom",
+  "fixed_neighbors": [
+    [
+      -0.44,
+      -0.43978343592851593,
+      0.15999999999999998,
+      0.1597834359285159
+    ]
+  ],
+  "candidate_cost": "authored projected landmark visibility preference",
+  "staged_connection": true,
+  "status": "fit",
+  "palace_attempt": 0,
+  "palace_site": [
+    -0.464,
+    -0.46378343592851595,
+    0.18399999999999997,
+    0.1837834359285159
+  ]
+}

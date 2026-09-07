@@ -59,5 +59,23 @@ call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker fortify ANIMATION
 if errorlevel 1 exit /b %errorlevel%
 call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker capture ANIMATION_Builder_Captured01
 if errorlevel 1 exit /b %errorlevel%
-echo Converted 24 early-unit animation clips.
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" settler build ANIMATION_SettlerLeader_CITYA
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker road ANIMATION_Builder_BuildAction01_Shovel
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker mine ANIMATION_Builder_BuildAction02_2H
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker irrigate ANIMATION_Builder_BuildAction01_Shovel
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker fortress ANIMATION_Builder_BuildAction02_2H
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker forest ANIMATION_Builder_BuildAction03_Axe
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker jungle ANIMATION_Builder_BuildAction03_Axe
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker plant ANIMATION_Builder_BuildAction01_Shovel
+if errorlevel 1 exit /b %errorlevel%
+call "%TOOLS_DIR%CONVERT_UNIT_FAMILY_ANIMATION_ONE.bat" worker build ANIMATION_Builder_BuildAction02_2H
+if errorlevel 1 exit /b %errorlevel%
+echo Converted 33 early-unit animation clips.
 exit /b 0

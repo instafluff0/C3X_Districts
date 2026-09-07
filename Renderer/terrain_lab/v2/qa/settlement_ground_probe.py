@@ -11,13 +11,13 @@ import subprocess
 import sys
 
 from PIL import Image
-from city_scene_pass import ROOT,V2,Cache,executable,compact_packet,rel,save
+from city_scene_pass import ROOT,V2,Cache,executable,compact_packet,rel,save,city
 from cache import file_hash
 from city_ground_geometry import clip_ground_to_land_cells
-from settlement_ground import coverage,grid
+from settlement_ground import coverage,grid,convex_hull
 
 
-def prepare(augmentation,parts,binding,output,margin,feather):
+def prepare(augmentation,parts,binding,output,margin,feather,capital_footprint='bounds'):
     data=json.loads((ROOT/augmentation).read_text());surface=json.loads((ROOT/augmentation.parent/'surface.json').read_text())
     ground=json.loads((ROOT/parts).read_text());material=json.loads((ROOT/binding).read_text())['replacement']
     path=ROOT/material['texture']
@@ -30,13 +30,32 @@ def prepare(augmentation,parts,binding,output,margin,feather):
     crop=image.crop(tuple(round(v*s) for v,s in zip(atlas_uv,image.size*2)))
     alpha_range=crop.getchannel('A').getextrema()
     if alpha_range[0]<128:raise ValueError('underlay crop crosses a transparent atlas-piece boundary')
-    boxes=[];densities=[]
+    boxes=[];coverage_boxes=[];polygons=[];densities=[];footprint_sources=[]
     scales=[instance['scale'] for instance in data['instances'] if instance['slot']!='capital']
     scale=scales[0]
     if any(abs(s-scale)>1e-8 for s in scales):raise ValueError('one-era underlay requires a uniform ordinary city scale')
     for instance in data['instances']:
         site=surface['samples'][instance['sample_start']];x=site['column']+site['u'];y=site['row']+1-site['v']
-        x0,y0,x1,y1=instance['local_bounds'];boxes.append([x+x0,y-y1,x+x1,y-y0])
+        x0,y0,x1,y1=instance['local_bounds'];box=[x+x0,y-y1,x+x1,y-y0];boxes.append(box)
+        if instance['slot']=='capital' and capital_footprint=='source-hull':
+            mapping=data['capital']['mapping'];pack=Path(mapping['pack'])
+            body=city.component(instance['asset'],pack);points=[]
+            for mesh,body_material in body['parts']:
+                if body_material['alpha_mode']=='blend':continue
+                for v in mesh['vertices']:
+                    local=[v['position'][j]-(body['lo'][j]+body['hi'][j])/2 for j in (0,1)]+[0]
+                    dx,dy,_=city.rotate(local,instance['rotation'])
+                    points.append([x+dx*instance['scale'],y-dy*instance['scale']])
+            hull=convex_hull(points)
+            if any(not box[0]-1e-8<=p[0]<=box[2]+1e-8 or not box[1]-1e-8<=p[1]<=box[3]+1e-8 for p in hull):
+                raise ValueError('source footprint no longer matches frozen instance bounds')
+            polygons.append(hull)
+            manifest=json.loads((ROOT/pack/'manifest.json').read_text())
+            landmark=pack/manifest['assets'][instance['asset']]['landmark']
+            source=json.loads((ROOT/landmark).read_text())
+            paths=[landmark]+[pack/p for p in source['components']['geometry']]
+            footprint_sources.append({'asset':instance['asset'],'files':{p.as_posix():file_hash(ROOT/p) for p in paths}})
+        else:coverage_boxes.append(box)
     # Use the complete configured source pool, not the visible growth-stage
     # subset, so existing paving coordinates do not shift when a city grows.
     for parts_for_asset in ground['parts'].values():
@@ -50,7 +69,7 @@ def prepare(augmentation,parts,binding,output,margin,feather):
     density=statistics.median(densities)
     if not 50<=density<=2000:raise ValueError('source-derived texel density outside city probe range')
     period=[(atlas_uv[i+2]-atlas_uv[i])*image.size[i]/density for i in (0,1)]
-    xy,triangles=grid(boxes,margin);alpha=[coverage(x,y,boxes,margin,feather) for x,y in xy]
+    xy,triangles=grid(boxes,margin);alpha=[coverage(x,y,coverage_boxes,margin,feather,polygons) for x,y in xy]
     points=output/'points.csv'
     points.write_text(''.join(f'{math.floor(x)},{math.floor(y)},{x-math.floor(x)},{1-(y-math.floor(y))}\n' for x,y in xy))
     subprocess.run([sys.executable,str(V2/'app/surface_query.py'),'--fixture',str(ROOT/surface['fixture']),
@@ -80,6 +99,8 @@ def prepare(augmentation,parts,binding,output,margin,feather):
             'atlas_crop':'Manually inspected unmarked interior; source alpha retained, mirrored at source-derived texel density',
             'texels_per_tile':density,'density_basis':'complete configured source pool, independent of visible growth stage',
             'uniform_ordinary_city_scale':scale,'tile_period':period,'margin':margin,'feather':feather,'boxes':boxes,
+            'capital_footprint':capital_footprint,'coverage_boxes':coverage_boxes,'coverage_polygons':polygons,
+            'footprint_sources':footprint_sources,
             'excluded_vegetation_cells':sorted(excluded),'grid_step':.025,'grid_vertices':len(xy),'emitted_vertices':len(emitted),
             'shore_boundary':-.02,'surface_sha256':file_hash(output/'surface.json'),'ground_sha256':file_hash(output/'ground.bin'),
             'remaining':['Source engine ground-height/material-state semantics','Complete route/river mesh clearance','Height-map/specular ground response']}
@@ -92,13 +113,15 @@ def main():
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--margin',type=float,default=.1);p.add_argument('--feather',type=float,default=.025)
     p.add_argument('--gain',type=float,default=1)
+    p.add_argument('--capital-footprint',choices=['bounds','source-hull'],default='bounds',
+                   help='Preserve authored palace orientation in the added paving footprint')
     a=p.parse_args();source=ROOT/a.source_render;output=ROOT/a.output
     output.resolve().relative_to(V2/'audits/beauty/out')
     if output.exists():raise ValueError('preserve earlier settlement candidate')
     if not .02<=a.margin<=.2 or not .01<=a.feather<=a.margin or not 0<=a.gain<=1:raise ValueError('bounded settlement parameters required')
     if shutil.disk_usage(V2).free<8*1024**3:raise ValueError('preserve 8 GiB free space')
     output.mkdir(parents=True)
-    data=prepare(a.augmentation,a.ground_parts,a.binding,output,a.margin,a.feather);data['gain']=a.gain
+    data=prepare(a.augmentation,a.ground_parts,a.binding,output,a.margin,a.feather,a.capital_footprint);data['gain']=a.gain
     base=json.loads((source/'report.json').read_text());input_path=ROOT/base['source_report']
     report=json.loads(input_path.read_text());jobs=json.loads((input_path.parent/'batch.json').read_text())
     exe=executable(V2/'qa/append_settlement_ground.cpp',Cache(V2/'app/.cache'))

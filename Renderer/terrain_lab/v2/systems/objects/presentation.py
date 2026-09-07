@@ -78,7 +78,7 @@ def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,s
             x,y=math.cos(angle)*r,math.sin(angle)*r*.78
             rotation=angle+.55;sc=scale*[.92,1,1.08][size]
         else:
-            sc=scale;rotation=0 if i%2==0 else math.pi/2
+            sc=scale;rotation=a.get('grid_rotation',0)+(0 if i%2==0 else math.pi/2)
             local=box(a,0,0,rotation,sc);proj=box(a,0,0,rotation,sc,True)
             candidates=[]
             search=7 if footprint_limit is None else math.ceil(footprint_limit/.07)

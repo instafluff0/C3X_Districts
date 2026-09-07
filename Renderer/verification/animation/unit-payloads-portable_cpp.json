@@ -3,10 +3,10 @@
   "status": "pass",
   "backend": "portable_cpp",
   "units": 9,
-  "actions": 70,
-  "part_pose_samples": 852,
-  "socket_pose_samples": 270,
+  "actions": 79,
+  "part_pose_samples": 951,
+  "socket_pose_samples": 307,
   "maximum_position_error_tiles": 7.056569040209126e-08,
-  "payload_bytes": 27934624,
+  "payload_bytes": 34361036,
   "scope": "actual portable DLL evaluator versus raw authored clips; source-payload proof; live gameplay behavior is a separate checkpoint"
 }

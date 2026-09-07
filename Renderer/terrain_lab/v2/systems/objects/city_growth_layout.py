@@ -47,7 +47,14 @@ def shares_frontage(a,b,maximum_gap):
            (shared_y>=max(.04,.2*min(a[3]-a[1],b[3]-b[1])) and x_gap<=maximum_gap)
 
 
-def solve(order, count, scale, extent, buildable, preserved=(), node_limit=20000, grid_step=.07, slot_extents=None, neighbor_gap=None, connected_prefixes=(), fixed_neighbors=(), candidate_cost=None, staged_connection=False):
+def surround_sector(slot,x,y,center):
+    """Stable front/front/back/back sides keep the first four around the core."""
+    dx=x-center[0];dy=y-center[1]
+    along,across=((dx,dy),(dy,dx),(-dx,dy),(-dy,dx))[slot%4]
+    return along>abs(across)*1.5+.02
+
+
+def solve(order, count, scale, extent, buildable, preserved=(), node_limit=20000, grid_step=.07, slot_extents=None, neighbor_gap=None, connected_prefixes=(), fixed_neighbors=(), candidate_cost=None, staged_connection=False, surround_center=None):
     if not 0<count<=32 or not 0<node_limit<=200000:
         raise ValueError('invalid bounded city growth search')
     if grid_step not in (.035,.07):raise ValueError('unsupported city placement grid')
@@ -65,6 +72,11 @@ def solve(order, count, scale, extent, buildable, preserved=(), node_limit=20000
     if slot_extents is not None:stats['slot_extents']=limits
     if neighbor_gap is not None:stats.update(neighbor_gap=neighbor_gap,connected_prefixes=list(connected_prefixes),ranking='compact envelope, nearby houses, center, remaining freedom')
     if fixed_neighbors:stats['fixed_neighbors']=list(fixed_neighbors)
+    if surround_center is not None:
+        if len(surround_center)!=2 or not all(math.isfinite(v) for v in surround_center) or not fixed_neighbors or count<4:
+            raise ValueError('surrounded core requires a fixed landmark and at least four houses')
+        stats['surround_center']=list(surround_center)
+        stats['connection_policy']='Neighborhood connects through the central courtyard; each four-slot group occupies four sides'
     if candidate_cost is not None:stats['candidate_cost']='authored projected landmark visibility preference'
     if staged_connection:
         if neighbor_gap is None:raise ValueError('staged connection requires a neighbor gap')
@@ -75,6 +87,7 @@ def solve(order, count, scale, extent, buildable, preserved=(), node_limit=20000
         if item['slot']!=i or item['asset']!=asset['id'] or abs(item['scale']-scale)>1e-10:
             raise ValueError('preserved growth prefix differs from requested source bodies/scale')
         local=bounds(asset,item['rotation'],scale);x,y=item['offset']
+        if surround_center is not None and not surround_sector(i,x,y,surround_center):raise ValueError('preserved house violates surrounded core')
         if max(abs(a-b) for a,b in zip(local,item['local_bounds']))>1e-8:
             raise ValueError('preserved source body geometry changed')
         box=[local[j]+(x,y)[j%2] for j in range(4)]
@@ -88,12 +101,14 @@ def solve(order, count, scale, extent, buildable, preserved=(), node_limit=20000
     for i in range(len(preserved),count):
         asset=order[i%len(order)];candidates=[]
         for turn in (i%2,1-i%2):
-            rotation=turn*math.pi/2;local=bounds(asset,rotation,scale)
+            rotation=asset.get('grid_rotation',0)+turn*math.pi/2;local=bounds(asset,rotation,scale)
             for ix in range(-steps,steps+1):
                 for iy in range(-steps,steps+1):
                     x,y=ix*grid_step,iy*grid_step
+                    if surround_center is not None and not surround_sector(i,x,y,surround_center):continue
                     box=[local[j]+(x,y)[j%2] for j in range(4)];padded=expanded(box)
                     if any(abs(v)>limits[i] for v in padded) or not buildable(padded):continue
+                    if surround_center is not None and i<4 and neighbor_gap is not None and not any(shares_frontage(box,f,neighbor_gap) for f in fixed_neighbors):continue
                     if any(overlaps(padded,c['box']) for c in chosen.values()):continue
                     cost=candidate_cost(asset,rotation,x,y,scale) if candidate_cost else 0
                     if not math.isfinite(cost) or cost<0:raise ValueError('invalid placement cost')
@@ -109,7 +124,8 @@ def solve(order, count, scale, extent, buildable, preserved=(), node_limit=20000
                     # A wide courtyard must not disguise isolated house groups
                     # in a smaller growth stage. Later houses cannot repair a
                     # prefix that is already fully assigned.
-                    if not connected(houses,neighbor_gap) or not connected(list(fixed_neighbors)+houses,neighbor_gap):return None
+                    if surround_center is None and not connected(houses,neighbor_gap):return None
+                    if not connected(list(fixed_neighbors)+houses,neighbor_gap):return None
                     if any(not any(shares_frontage(f,b,neighbor_gap) for b in houses) for f in fixed_neighbors):return None
         if not remaining:
             return dict(chosen)
@@ -118,6 +134,8 @@ def solve(order, count, scale, extent, buildable, preserved=(), node_limit=20000
         slot=min((i for i in remaining if i<stage),key=lambda i:(len(remaining[i]),i))
         proposals=[]
         for rank,candidate in enumerate(remaining[slot]):
+            if surround_center is not None and neighbor_gap is not None and chosen:
+                if not any(gap(candidate['box'],b)<=neighbor_gap for b in list(fixed_neighbors)+[c['box'] for c in chosen.values()]):continue
             if staged_connection:
                 if chosen and not any(gap(candidate['box'],c['box'])<=neighbor_gap for c in chosen.values()):continue
                 if not chosen and fixed_neighbors and not any(shares_frontage(candidate['box'],f,neighbor_gap) for f in fixed_neighbors):continue

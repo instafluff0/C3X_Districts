@@ -58,7 +58,18 @@ def bounded_lights(lights,budget):
     return [light for i,light in enumerate(lights) if i in selected]
 
 
-def derive(augmentation,surface,light_budget=48):
+def facade_plane_proxy(points,normals,weights,offset=.012):
+    """Place a light beyond its sampled wall, retaining the wall's orientation."""
+    direction=np.average(normals,axis=0,weights=weights);direction[2]=0
+    length=np.linalg.norm(direction)
+    if length<.5:raise ValueError('facade samples have incompatible directions')
+    direction/=length
+    center=np.average(points,axis=0,weights=weights)
+    support=max(points@direction)
+    return center+direction*(support-float(center@direction)+offset),direction
+
+
+def derive(augmentation,surface,light_budget=48,source_facade_slots=()):
     if augmentation['emissive_uv']!=2 or augmentation['grounding']!='source_z_zero':raise ValueError('probe requires verified UV2 emission and source ground zero')
     metric=1/augmentation['scene_world_z_per_source_unit'];pack=Path(augmentation['pack'])
     normal_binding=augmentation.get('source_normals') or {}
@@ -73,7 +84,7 @@ def derive(augmentation,surface,light_budget=48):
         local=instance['local_bounds']
         boxes.append({'low':(origin+np.array([local[0],local[1],max(0,body['lo'][2])*scale])).tolist(),
                       'high':(origin+np.array([local[2],local[3],body['hi'][2]*scale])).tolist(),'owner':owner})
-        groups=defaultdict(list)
+        groups=defaultdict(list);group_normals=defaultdict(list)
         for mesh,material in body['parts']:
             channel=material['channels'].get('emissive')
             if not channel or material['alpha_mode']!='opaque':continue
@@ -105,6 +116,7 @@ def derive(augmentation,surface,light_budget=48):
                         sign=1 if world_normal[axis]>0 else -1
                         point=np.array(city.rotate((pos-center).tolist(),rotation))*scale
                         groups[axis,sign].append((point,color,area/36,luminance))
+                        if instance['slot'] in source_facade_slots:group_normals[axis,sign].append(world_normal)
         for (axis,sign),samples in sorted(groups.items()):
             weights=np.array([a*l for _,_,a,l in samples]);total=float(weights.sum())
             if total<1e-6:continue
@@ -114,6 +126,9 @@ def derive(augmentation,surface,light_budget=48):
             # inset centroid living inside its owning building.
             pos[axis]=local[axis+2 if sign>0 else axis]+sign*.012
             direction=[0.,0.,0.];direction[axis]=float(sign)
+            if instance['slot'] in source_facade_slots:
+                pos,direction=facade_plane_proxy(np.array([p for p,_,_,_ in samples]),np.array(group_normals[axis,sign]),weights)
+                direction=direction.tolist()
             color=sum(c*a for _,c,a,_ in samples)/sum(a for _,_,a,_ in samples)
             span=max(local[2]-local[0],local[3]-local[1]);radius=max(.32,min(.55,span*1.6))
             intensity=augmentation['emissive_gain']*min(2.5,max(.35,total/(radius*radius)*30))

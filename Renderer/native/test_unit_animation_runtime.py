@@ -45,6 +45,27 @@ class UnitAnimationRuntimeTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.scratch.cleanup()
 
+    def test_static_fortify_blends_local_joints_without_shrinking(self):
+        from Renderer.tools.asset_compiler.build_unit_animation_runtime import fortify_transition
+        from Renderer.tools.asset_compiler import normalized_animation as a
+        identity = (1.,0.,0.,0.,1.,0.,0.,0.,1.)
+        skeleton = {"bones": [{"name":"Root", "parent":-1,
+            "local":{"position":(0.,0.,0.),"orientation":(0.,0.,0.,1.),"scale_shear":identity}}]}
+        def clip(q,x):
+            track=a.TransformTrack("Root",0,a.Channel(a.CONSTANT,3,(x,0.,0.)),
+                a.Channel(a.CONSTANT,4,q),a.Channel(a.CONSTANT,9,identity))
+            return a.AnimationClip(1/30,30.,2,(a.TrackGroup("Root",(track,)),))
+        cache=fortify_transition(skeleton,clip((0.,0.,0.,1.),0.),clip((0.,0.,1.,0.),2.))
+        self.assertEqual(cache.frame_count,16)
+        self.assertAlmostEqual(cache.matrices[12],0.)
+        self.assertAlmostEqual(cache.matrices[-4],2.)
+        for frame in range(16):
+            m=cache.matrices[frame*16:(frame+1)*16]
+            for row in range(3):self.assertAlmostEqual(sum(m[row*4+c]**2 for c in range(3)),1.)
+        # Equivalent opposite quaternion signs take the same shortest path.
+        same=fortify_transition(skeleton,clip((0.,0.,0.,1.),0.),clip((0.,0.,0.,-1.),0.))
+        for frame in range(16):self.assertAlmostEqual(same.matrices[frame*16],1.)
+
     def test_complete_source_kits_at_native_action_phases(self):
         runtime = ROOT/"Renderer/packs/UnitAnimationRuntime"
         if not (runtime/"manifest.json").exists():
@@ -67,18 +88,31 @@ class UnitAnimationRuntimeTests(unittest.TestCase):
             for action, compiled in unit["actions"].items():
                 animation = source["animations"][recipe["actions"][action]]
                 clip = normalized_animation.load_clip(pack/animation["clip"])
-                self.assertEqual(compiled["frames"], clip.frame_count)
+                transition = compiled.get("presentation") == "idle_to_static_fortify"
+                self.assertEqual(compiled["frames"], 16 if transition else clip.frame_count)
                 self.assertEqual(compiled["loop"], animation["loop"])
-                self.assertEqual({p["asset"] for p in compiled["parts"]}, set(components))
-                expected_count = sum(len(c.get("draw_bindings", [None])) for c in components.values())
+                selected = set(recipe.get("action_components", {}).get(action, components))
+                self.assertEqual({p["asset"] for p in compiled["parts"]}, selected)
+                expected_count = sum(len(c.get("draw_bindings", [None])) for a, c in components.items() if a in selected)
                 self.assertEqual(len(compiled["parts"]), expected_count)
                 # Native initial/ongoing/final phases, including exact one-shot endpoints.
-                for frame in (0, clip.frame_count//2, clip.frame_count-1):
-                    time = clip.duration*frame/(clip.frame_count-1)
+                # Baked transitions retain raw source endpoints. Their interior
+                # rotation/translation contract is checked independently below.
+                samples = (0,15) if transition else (0,clip.frame_count//2,clip.frame_count-1)
+                for frame in samples:
+                    time = compiled["duration"]*frame/(compiled["frames"]-1)
+                    source_clip = clip
+                    source_time = time
+                    if transition:
+                        if frame == 0:
+                            source_clip = normalized_animation.load_clip(pack/source["animations"][recipe["actions"]["idle"]]["clip"])
+                            source_time = 0.
+                        else:
+                            source_time = clip.duration
                     worlds = {}
                     for asset, skeleton in skeletons.items():
-                        group, _ = _best_group(clip, {b["name"] for b in skeleton["bones"]})
-                        pose = normalized_skin.sample_pose(skeleton, clip, group, time, False)
+                        group, _ = _best_group(source_clip, {b["name"] for b in skeleton["bones"]})
+                        pose = normalized_skin.sample_pose(skeleton, source_clip, group, source_time, False)
                         worlds[asset] = normalized_skin.world_matrices(skeleton, pose)
                     root = next(i for i, b in enumerate(skeletons[driver]["bones"]) if b["parent"] == -1)
                     rest_root = normalized_skin.world_matrices(skeletons[driver])[root]

@@ -113,7 +113,7 @@ int main(int argc, char ** argv) {
     assert(prepare_native_unit_pose(draw, false, pose) && pose.phase == 1);
     assert(prepare_native_unit_pose(draw, true, pose) && pose.phase == 0);
     retained = pose;
-    for (auto bad : {0, 11, 19, -1}) {
+    for (auto bad : {0, 19, -1}) {
         draw.action = bad; assert(!prepare_native_unit_pose(draw, false, pose));
         assert(pose.anchor_x == retained.anchor_x && pose.phase == retained.phase);
     }

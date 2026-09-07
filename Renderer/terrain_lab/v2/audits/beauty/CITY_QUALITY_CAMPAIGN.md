@@ -363,3 +363,29 @@ city default. Broader single-era coverage, open-ground composition, unresolved
 coastal/river growth and all milestone/manual gates remain part of the active
 goal. Cleanup removes 30 new completed readbacks (249.0 MiB), retaining all
 images, rejected trials and replay resources.
+
+
+### Current capital composition preference and selected scenes
+
+The user now requires the palace at the city core, surrounded by ordinary
+buildings, with all footprints aligned to the city grid and quarter-turn choices.
+This supersedes the foreground-palace preference. Keep one era per city.
+[Current central-capital findings](CITY_CENTRAL_CAPITAL_PASS.md) select r111
+inland and r112 freshcanopy provisionally. [Gameplay comparison](out/city-central-capital-r2/inland-native.png)
+and [previously untuned region](out/city-central-capital-r2/holdout-native.png)
+show the centered, aligned palace with corrected paving and local lighting.
+Four Windows frames, twenty independent composition checks and 33 focused tests
+pass; all milestone/manual gates remain open.
+
+Supporting completed work: [American capital materials](CITY_CAPITAL_MATERIAL_PASS.md),
+[aligned paving footprint](CITY_PALACE_GROUND_ALIGNMENT_PASS.md), and
+[light reaching the paving border](CITY_PALACE_FACADE_ALIGNMENT_PASS.md).
+The final recipe uses `--central-capital --orthogonal-buildings`, source-hull
+paving and facade-plane capital lights. The coastal seven-house surrounded fit
+remains unresolved after 25 legal-core attempts and alternate side assignments;
+retain `out/city-palace-facade-alignment-r1/environment/render` there. Do not
+claim that fallback meets the new central layout preference. Next resolve its
+footprint/foundation constraint, broaden single-era styles and sizes, and improve
+source environment/variance response and open-ground materials. Connecting roads
+and native delivery remain deferred. Completed readback cleanup is recorded in
+the four corresponding capital/material/ground/facade cleanup reports.
