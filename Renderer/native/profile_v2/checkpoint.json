@@ -80,12 +80,12 @@
     "report": "Renderer/verification/pickup/full.json"
   },
   "pending": [
-    "User runs normal INSTALL.bat and checks corrected materials/gradients with usual debugger output. Initial preparation remains slow."
+    "User-run gameplay check through normal INSTALL.bat; cold first exposure remains noticeable. Edge speckling is deferred."
   ],
   "external_blocker": null,
   "source_csv_sha256": "d778d526d51e36e52af3166e77ff24435aa605da768dbef0d1d38a572ab42283",
   "image_sha256": "4982dfd41f150c06b1359be0ee722e6bf1eca9f7d3176e17cc59901fdb49d8de",
-  "dll_sha256": "ac85901c046bcd4baf8d51a3c22d834379ce1db52662c6095d5ba5ae1cc52246",
+  "dll_sha256": "c9940d1a01dcbb3dc95c171302de3dc95534ffc8cc5df5a73734e30d2f15ce43",
   "resolved_frozen_regression": {
     "status": "fail",
     "test": "several-tile jump overlap versus cold reconstruction",
@@ -265,5 +265,184 @@
       "Cold preparation still slow.",
       "16-bit gradient preservation introduces fine dither."
     ]
+  },
+  "cold_query_optimization": {
+    "schema": "c3x.cold_query_optimization.v1",
+    "candidate": "lab_v2_terrain_lighting_r1",
+    "viewport": [
+      960,
+      640
+    ],
+    "before_cold_render_ms": 11018.929,
+    "after_cold_render_ms": 5358.1,
+    "before_jumps": [
+      {
+        "offset": [
+          -48,
+          24
+        ],
+        "ms": 5813.031,
+        "built": 387
+      },
+      {
+        "offset": [
+          -16,
+          -12
+        ],
+        "ms": 1831.346,
+        "built": 302
+      },
+      {
+        "offset": [
+          0,
+          0
+        ],
+        "ms": 3.722,
+        "built": 0
+      },
+      {
+        "offset": [
+          -48,
+          24
+        ],
+        "ms": 3.552,
+        "built": 0
+      },
+      {
+        "offset": [
+          0,
+          0
+        ],
+        "ms": 3.372,
+        "built": 0
+      }
+    ],
+    "after_jumps": [
+      {
+        "offset": [
+          -48,
+          24
+        ],
+        "ms": 2845.133,
+        "built": 387
+      },
+      {
+        "offset": [
+          -16,
+          -12
+        ],
+        "ms": 1042.247,
+        "built": 302
+      },
+      {
+        "offset": [
+          0,
+          0
+        ],
+        "ms": 3.984,
+        "built": 0
+      },
+      {
+        "offset": [
+          -48,
+          24
+        ],
+        "ms": 4.304,
+        "built": 0
+      },
+      {
+        "offset": [
+          0,
+          0
+        ],
+        "ms": 3.556,
+        "built": 0
+      }
+    ],
+    "cold_image_byte_identical": true,
+    "minimap_cached_cold_parity": {
+      "changed": 0,
+      "error": 0,
+      "bytes": 2457600
+    },
+    "sample_scratch_bytes_observed": 950272,
+    "query_profile_baseline": {
+      "shore_queries": 676718,
+      "shore_ms": 6049.995,
+      "ground_ms": 9296.22
+    },
+    "implementation": [
+      "Exact per-tile coastline disk and compact search tree, with leaf/empty-subtree invalidation certificates.",
+      "Generation-cleared bounded exact point tables; no interpolation or cross-owner dependency reuse.",
+      "Height-only normal samples skip unrelated material/owner work; zero-hit height cache removed.",
+      "Lazy direct lookup of nearby authoritative tiles preserves first-access dependencies."
+    ],
+    "cache_budgets_unchanged": true,
+    "disk_cache_added": false,
+    "fog_edge_changes": false,
+    "game_launched": false,
+    "legacy_frozen_regression": {
+      "status": "existing_failure_reproduced_on_previous_dll",
+      "check": "incremental boundary versus authoritative cold rebuild",
+      "previous_changed": 1803,
+      "previous_error": 50799,
+      "candidate_changed": 1676,
+      "candidate_error": 47872,
+      "bytes": 5344928,
+      "thresholds_unchanged": true
+    },
+    "limitations": [
+      "Cold initial rendering and uncached distant jumps still take seconds.",
+      "Timings are headless VM observations, not vanilla-speed gameplay proof.",
+      "Existing older frozen-profile boundary parity failure remains open."
+    ],
+    "reports": [
+      "Renderer/verification/pickup/cold-query-final-build.json",
+      "Renderer/verification/pickup/minimap-before.json",
+      "Renderer/verification/pickup/minimap.json",
+      "Renderer/verification/pickup/replay.json",
+      "Renderer/verification/pickup/edits.json",
+      "Renderer/verification/pickup/matrix.json",
+      "Renderer/verification/pickup/cold-query-previous-frozen.json"
+    ],
+    "focused_tests": 50,
+    "native_portable_smoke": "pass",
+    "production_matrix_cases": 18,
+    "production_matrix_status": "pass",
+    "terrain_edit_parity": {
+      "changed_pixels": 0,
+      "channel_error": 0,
+      "rebuilt": 95,
+      "reused": 293
+    },
+    "volcano_activity_edit_parity": {
+      "changed_pixels": 0,
+      "channel_error": 0,
+      "rebuilt": 25,
+      "reused": 362
+    },
+    "dll_staged": true,
+    "pending": [
+      "User-run gameplay check through normal INSTALL.bat; cold first exposure remains noticeable. Edge speckling is deferred."
+    ],
+    "prepared_replay": {
+      "status": "pass",
+      "unit_redraw_p95_ms": 1.134,
+      "jump_ms": [
+        56.921,
+        24.558,
+        33.904,
+        38.867,
+        8.238
+      ],
+      "jump_mesh_builds": 0,
+      "cached_cold_parity": {
+        "changed": 0,
+        "error": 9,
+        "bytes": 2457600
+      },
+      "observed_mesh_peak_bytes": 139213268
+    },
+    "dll_sha256": "c9940d1a01dcbb3dc95c171302de3dc95534ffc8cc5df5a73734e30d2f15ce43"
   }
 }

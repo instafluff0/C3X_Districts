@@ -13,7 +13,7 @@ The end state is a one-command offline source importer plus authored mapping pro
 
 ## Current Position
 
-The user-authorized production refresh from the pinned [C3X implementation pickup package](handoffs/candidates/lab_v2_terrain_lighting_r1/README.md) is ready for the user-run gameplay checkpoint. The [native port record](native/profile_v2/README.md) and [checkpoint](native/profile_v2/checkpoint.json) record passing cache/image/hardware gates, 18 combined scene cases, authoritative edit/reset checks, the full workflow and approved injected compile. The API 14 DLL is staged; the usual `INSTALL.bat` installs matching code, and normal game launches select pickup-r1 with detailed diagnostics by default. Prepared jumps take 18–39 ms without mesh builds/uploads; unit redraw p95 is 1.30 ms. Cold geometry still takes about 10–13 seconds. Civ III was not launched; visual approval and LQ gates remain unchanged. The reported logging execute fault was mapped to a direct injected OutputDebugStringA import retaining an invalid installer address; it now uses the established game import pointer. Normal gameplay logs only through OutputDebugStringA, without automatic file output. The next user log proceeds past that logging call; no recurrence of that execute fault is reported.
+The user-authorized production refresh from the pinned [C3X implementation pickup package](handoffs/candidates/lab_v2_terrain_lighting_r1/README.md) is ready for the user-run gameplay checkpoint. The [native port record](native/profile_v2/README.md) and [checkpoint](native/profile_v2/checkpoint.json) record passing cache/image/hardware gates, 18 combined scene cases, authoritative edit/reset checks, the full workflow and approved injected compile. The API 14 DLL is staged; the usual `INSTALL.bat` installs matching code, and normal game launches select pickup-r1 with detailed diagnostics by default. Latest cold and minimap measurements are recorded below; first exposure remains noticeable. Civ III was not launched; visual approval and LQ gates remain unchanged. The reported logging execute fault was mapped to a direct injected OutputDebugStringA import retaining an invalid installer address; it now uses the established game import pointer. Normal gameplay logs only through OutputDebugStringA, without automatic file output. The next user log proceeds past that logging call; no recurrence of that execute fault is reported.
 
 The next in-game report isolated a black-map ownership failure: rendering succeeded,
 but caster/prefetch-only tiles incorrectly claimed native replacement. The old DLL
@@ -36,7 +36,23 @@ The DLL is staged for normal INSTALL.bat. Runtime destination-format diagnostics
 will confirm the game's actual surface; full Lab parity and cold-load speed remain
 open. This correction does not promote active Lab experiments.
 
-The active Lab goal is **more natural static water**, with animation and coastal surf deferred. The user said “Water looks great” about water-natural-r6 and requested object reflections. [water-reflection-r5](terrain_lab/v2/audits/beauty/WATER_OBJECT_REFLECTIONS.md) adds planar GPU prepasses in the standalone Metal and D3D11 Lab, preserving r6's open-water appearance. Twenty matched frames cover the fixed scenes and coastal holdout; eight offline/GPU comparisons and four exact disabled controls support the implementation. Four shifted-camera probes preserve offscreen-object reflections; sixteen focused Metal/D3D11 comparisons pass with identical Windows repeats. The extra local Metal GPU cost is 3.2–7.5 ms in eight-frame samples. Native delivery, provider halo/culling coverage, multiple river elevations and visual review remain open; implementation notes are ready. The [earlier water exploration](terrain_lab/v2/audits/beauty/WATER_EFFECTS_EXPLORATION.md), [surface-richness campaign](terrain_lab/v2/audits/beauty/SURFACE_RICHNESS_CAMPAIGN.md), source-normal/AO work and frozen pickup remain preserved. Milestone and integration gates are unchanged.
+The user then confirmed slow cold starts/minimap jumps and explicitly deferred
+edge speckling. Exact prepared coastline queries, bounded allocation-reusing point
+scratch and height-only normal samples reduce a controlled 960x640 cold render
+from 11.019 to 5.358 seconds, with a byte-identical image. New distant views improve
+from 5.813/1.831 seconds to 2.845/1.042 seconds; retained revisits take about 4 ms.
+Existing cache budgets and the color/fog paths are unchanged; no disk cache was
+added. Fifty focused tests, 18 production scene cases and authoritative edit/reset
+checks pass. The exact-final-binary prepared-scroll witness passes with zero mesh builds/uploads;
+the tested DLL is staged for normal INSTALL.bat.
+An expanded older frozen-profile boundary test fails on both the previous and new
+DLLs, so this is not a clean full-workflow pass; unchanged thresholds and that
+existing limitation are recorded in the pickup checkpoint. Cold exposures still
+hitch; no vanilla-speed claim or milestone advancement is made.
+
+The active Lab goal is now **city quality across sizes, eras and cultures, including reflected night lights**. The user permits modest cross-tile footprints, especially for larger cities. The [city campaign](terrain_lab/v2/audits/beauty/CITY_QUALITY_CAMPAIGN.md) records complete cities composed with the current 100-tile water scene, a visible building-scale comparison, expanded source intake (132 components) and a source-origin foundation correction under review. Source material coordinates, full contextual coverage and all acceptance gates remain open.
+
+The preceding Lab goal covered **more natural static water**, with animation and coastal surf deferred. The user said “Water looks great” about water-natural-r6 and requested object reflections. [water-reflection-r5](terrain_lab/v2/audits/beauty/WATER_OBJECT_REFLECTIONS.md) adds planar GPU prepasses in the standalone Metal and D3D11 Lab, preserving r6's open-water appearance. Twenty matched frames cover the fixed scenes and coastal holdout; eight offline/GPU comparisons and four exact disabled controls support the implementation. Four shifted-camera probes preserve offscreen-object reflections; sixteen focused Metal/D3D11 comparisons pass with identical Windows repeats. The extra local Metal GPU cost is 3.2–7.5 ms in eight-frame samples. Native delivery, provider halo/culling coverage, multiple river elevations and visual review remain open; implementation notes are ready. The [earlier water exploration](terrain_lab/v2/audits/beauty/WATER_EFFECTS_EXPLORATION.md), [surface-richness campaign](terrain_lab/v2/audits/beauty/SURFACE_RICHNESS_CAMPAIGN.md), source-normal/AO work and frozen pickup remain preserved. Milestone and integration gates are unchanged.
 
 The [ground decal source pass](terrain_lab/v2/audits/beauty/GROUND_DECAL_PASS.md) recovers 19 exact grass/plains triangle/UV variants and the selected override textures. Twenty matched diagnostic frames include a wholly unseen 100-tile holdout. The visual gain is subtle and GPU cost excessive, so no new best or Integration promotion is recorded. Effective high-ground layering and complete mountain channel projection remain next; the all-applicable-texture audit is still incomplete.
 
@@ -658,3 +674,15 @@ Natural wonders, constructed wonders, and C3X districts are late, separate categ
 - GPU readback may be slow, but it is acceptable for the first bridge and can be optimized after correctness.
 - Layer boundaries for roads, rivers, fog, and other overlays must be verified in-game rather than assumed from decompiled names.
 - Scenario and user override semantics must be deterministic before packs become large.
+
+## Animation integration foundation (2026-09-06)
+
+The user authorized southeast-facing animated resources and enabled unit bodies,
+with the renderer in the DLL and a later user-run gameplay checkpoint. The generic
+validated skin-palette compiler/evaluator now covers 26 subjects in 10 resource
+families (8.95 MB payloads); 104 authored samples match normalized CPU skinning
+within 6.575e-7 tiles. Portable and Windows x86 playback/rejection checks pass.
+Resource dynamic composition, facing calibration and the native Animator unit
+bridge remain in progress; production animation is not enabled or staged yet.
+See `docs/animation_integration_checkpoint.md`. Terrain caches, the installed
+performance DLL, injected sources and the deferred fog-edge work are unchanged.

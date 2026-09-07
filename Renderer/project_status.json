@@ -3,7 +3,7 @@
   "last_updated": "2026-09-06",
   "current_milestone": "LAB_V2",
   "integration_performance_maintenance": {
-    "authorization": "2026-09-06: user resumed production cache, scrolling, unit-selection performance and timestamped diagnostics independently of Lab updates.",
+    "authorization": "2026-09-06: user reported slow cold starts and minimap jumps, then explicitly deferred edge speckling. Continue DLL performance maintenance without launching Civ III.",
     "status": "ready_for_in_game_test",
     "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
     "scope": "Optimize the existing production map plane without promoting new Lab systems or advancing I19/M9-M11.",
@@ -16,13 +16,13 @@
     ],
     "audit_candidates": [],
     "required_user_action": [],
-    "verified_increment": "API 13 consolidated test build: bounded indexed mesh and exact pixel-block caches, foreground-priority idle mesh/GPU preparation, stable pixel projection, per-map OutputDebugStringA diagnostics, and detailed test launcher. Full Windows workflow passed; final injected diagnostics passed the approved compile smoke. User requested consolidation and will launch the game and provide logs/experience.",
+    "verified_increment": "Exact prepared coast queries, bounded compilation scratch, lazy authoritative neighborhood lookup, and height-only normal evaluation halve the measured cold render without changing its pixels. Production visual and edit checks pass; final prepared-scroll passes and the tested DLL is staged for normal INSTALL.bat.",
     "remaining_work": [
-      "Await the user-run Windows in-game session; do not launch the game or continue optimization before reviewing the supplied logs and experience.",
-      "Validate actual capture/projection-guard use, native whole-map/blit cost and rapid consecutive scrolls. Prepared replay jumps are 12.451\u201324.604 ms; redraws during preparation p95 2.356 ms, with a 54.392 ms maximum outlier.",
-      "Cold first exposures and rapid recentering can still hitch. Incremental/cold comparisons passed bounded raster tolerances, but earlier intermittent failures remain an investigation item; do not claim vanilla-speed parity."
+      "User runs normal INSTALL.bat and checks cold start/minimap behavior with usual OutputDebugStringA diagnostics; agent did not launch Civ III.",
+      "First exposure to new areas still takes seconds; no vanilla-speed claim. Edge speckling is explicitly deferred.",
+      "An existing legacy frozen-profile boundary parity failure reproduces with both old and new DLLs; thresholds unchanged."
     ],
-    "evidence": "evidence/integration_cache_worker/README.md"
+    "evidence": "native/profile_v2/checkpoint.json"
   },
   "manual_evidence_policy": {
     "mode": "strategic_batched_checkpoints",
@@ -73,7 +73,7 @@
     "rule": "Historical L9-L21 handoffs are immutable. The user assigned sole lead ownership of the complete Lab v2 implementation and combined visual review. Q0-Q8 are requirement categories; exclusive ownership and cross-owner start blockers are superseded. LQ0/LQ1/LQ2 acceptance gates remain; Game Integration is paused.",
     "execution_policy": "single_lead; LQ0 remains the next global closure checkpoint while the authorized lead improves the combined Lab scene",
     "combined_visual_checkpoint": {
-      "scope": "terrain and lighting; cities, units and improvements deferred by user",
+      "scope": "cities and shared terrain/lighting/water composition; user permits modest cross-tile city footprints, especially larger cities; units and improvements remain deferred",
       "benchmarks": "terrain_lab/v2/fixtures/beauty/gameplay-100-v1/BENCHMARKS.json",
       "review": "terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md",
       "approval": null,
@@ -135,8 +135,17 @@
       "bank_rock_findings": "terrain_lab/v2/audits/beauty/RIVER_BANK_ROCK_PASS_r3.md",
       "bank_rock_evidence": "terrain_lab/v2/audits/beauty/RIVER_BANK_ROCK_r3_EVIDENCE.json"
     },
+    "city_quality_campaign": {
+      "status": "in_progress",
+      "requested_by_user": true,
+      "findings": "terrain_lab/v2/audits/beauty/CITY_QUALITY_CAMPAIGN.md",
+      "scope": "Five cultures, four eras, three sizes; readable complete materials, grounded source buildings, stable growth and modest cross-tile footprints; shared night lighting reflected in water.",
+      "current_work": "Matched 100-tile coastal city probes, expanded 132-component intake, source-origin foundation correction and material-coordinate investigation.",
+      "approval": null,
+      "next_action": "Verify source-origin grounding; improve source selection and material fidelity; prove localized night lights in the water with controls, then expand combined size/era/culture/holdout coverage. Preserve all milestone gates."
+    },
     "water_effects_exploration": {
-      "status": "active_user_pivot",
+      "status": "preserved_user_pivot_to_cities",
       "requested_by_user": true,
       "findings": "terrain_lab/v2/audits/beauty/WATER_EFFECTS_EXPLORATION.md",
       "evidence": "terrain_lab/v2/audits/beauty/WATER_REFLECTION_r5_EVIDENCE.json",
@@ -2377,13 +2386,43 @@
       "Corrected native ownership publication and cache copies preserve caster meshes with zero non-RENDER replacement flags; strict injected validator retained and exercised from its actual source.",
       "Exact inland flat-ground certificate preserves terrain/coast edit dependencies; reference image unchanged byte-for-byte and cold/cached scroll parity remains 3 pixels / 33 channel error.",
       "User screenshots isolated unscoped JSON material binding: root mountain/coast channels now resolve correctly. Pinned source/assets verified; headless pickup checks now include production custom skin/vegetation overrides.",
-      "Actual RGB555 terrain copy reproduces screenshot banding; final-copy ordered rounding restores gradients on known RGB555/RGB565 DIBs with full-color caches unchanged. Fifty focused tests and Windows GDI smoke pass; destination-format logs identify runtime format."
+      "Actual RGB555 terrain copy reproduces screenshot banding; final-copy ordered rounding restores gradients on known RGB555/RGB565 DIBs with full-color caches unchanged. Fifty focused tests and Windows GDI smoke pass; destination-format logs identify runtime format.",
+      "Cold ground profiling isolated 676,718 coastline queries. Exact per-tile coast preparation and bounded scratch reuse reduce a controlled cold render from 11.019 to 5.358 seconds, byte-identical.",
+      "Distant minimap witness improves from 5.813/1.831 seconds to 2.845/1.042 seconds, with roughly 4 ms retained-view revisits. Fifty focused tests, production matrix and edit witnesses pass.",
+      "Exact-final-binary prepared scroll passes unchanged parity tolerances with zero mesh builds/uploads; tested DLL staged byte-for-byte for normal INSTALL.bat."
     ],
     "remaining": [
-      "User runs INSTALL.bat and checks corrected materials/gradients using usual OutputDebugStringA diagnostics. Full Lab visual parity remains open; cold first-map preparation remains slow."
+      "User-run gameplay checkpoint. Cold first exposures remain noticeable; edge speckling is deferred by user.",
+      "Existing older frozen-profile boundary parity regression remains open; also fails on previous DLL."
     ],
     "visual_approval": "pending; no historical Lab acceptance or new convergence gate claimed",
     "evidence": "native/profile_v2/checkpoint.json",
     "test_launcher": "INSTALL.bat, then launch Civ III normally"
+  },
+  "integration_animation_maintenance": {
+    "authorization": "User requested animated southeast-facing resources and enabled units following native movement; DLL implementation with minimal injected bridging and normal debug output. Stop at a functional user-run checkpoint without launching Civ III.",
+    "status": "in_progress",
+    "evidence": "docs/animation_integration_checkpoint.md",
+    "existing_symbols": [
+      "Map_Renderer_m71_Draw_Tiles",
+      "Map_Renderer_m19_Draw_Tile_by_XY_and_Flags",
+      "QueryPerformanceCounter",
+      "OutputDebugStringA",
+      "Unit_tick_anim"
+    ],
+    "audit_candidates": [
+      "Unit_tick_anim context and body-only normal/reduced Sprite calls; verify ABI and supported builds before a concrete patch request."
+    ],
+    "required_user_action": [],
+    "completed": [
+      "Generic bounded animation decoder/evaluator and offline resource compiler.",
+      "26 subjects, 104 authored pose samples match normalized CPU skinning; Windows x86 executable checks pass."
+    ],
+    "remaining": [
+      "Southeast calibration and visible resource dynamic composition independent of terrain caches.",
+      "Enabled unit body rendering and authoritative Animator movement bridge.",
+      "Dynamic debug summaries, temporal/cache/fog/ownership verification and staged normal-install gameplay checkpoint."
+    ],
+    "game_launched": false
   }
 }

@@ -43,7 +43,7 @@ def component(asset,pack=PACK):
     hi=[max(v[i] for v in points) for i in range(3)]
     return dict(id=asset,parts=parts,lo=lo,hi=hi,sockets=l.get('attachment_points',[]))
 
-def layout(assets,size,recipe='stable',factor=1,exclusions=None):
+def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,source_scale=None,ordering=None,footprint_limit=None):
     """Stable slots: largest skyline body first, later growth only appends."""
     counts=[4,7,11];result=[]
     # Uniform per-pool scale; preserve relative source building proportions.
@@ -52,7 +52,8 @@ def layout(assets,size,recipe='stable',factor=1,exclusions=None):
     # Long low compounds must not shrink every cottage to a few pixels. This
     # modest per-pool uniform floor is capped by the largest source footprint.
     scale=max(.205/span,min(12/(80.9543*typical_height),.32/span))*factor
-    order=sorted(assets,key=lambda a: (-(a['hi'][2]-a['lo'][2]),a['id']))
+    if source_scale is not None:scale=source_scale
+    order=ordering if ordering is not None else sorted(assets,key=lambda a: (-(a['hi'][2]-a['lo'][2]),a['id']))
     placed=[]
     def box(a,x,y,rotation,sc,screen=False):
         points=[]
@@ -77,13 +78,16 @@ def layout(assets,size,recipe='stable',factor=1,exclusions=None):
             sc=scale;rotation=0 if i%2==0 else math.pi/2
             local=box(a,0,0,rotation,sc);proj=box(a,0,0,rotation,sc,True)
             candidates=[]
-            for ix in range(-7,8):
-                for iy in range(-7,8):
+            search=7 if footprint_limit is None else math.ceil(footprint_limit/.07)
+            for ix in range(-search,search+1):
+                for iy in range(-search,search+1):
                     x,y=ix*.07,iy*.07
-                    if abs(x)+abs(y)>(.91 if recipe=='compact' else .77):continue
+                    if footprint_limit is None and abs(x)+abs(y)>(.91 if recipe=='compact' else .77):continue
                     b=[local[0]+x,local[1]+y,local[2]+x,local[3]+y]
                     expanded=[b[0]-.012,b[1]-.012,b[2]+.012,b[3]+.012]
+                    if footprint_limit is not None and any(abs(v)>footprint_limit for v in expanded):continue
                     if any(overlap(expanded,q[0])>0 for q in placed):continue
+                    if buildable is not None and not buildable(expanded):continue
                     if exclusions and intersects(expanded,exclusions):continue
                     dx,dy=project([x,y,0]);pb=[proj[0]+dx,proj[1]+dy,proj[2]+dx,proj[3]+dy]
                     occlusion=sum(overlap(pb,q[1])/min(area(pb),area(q[1])) for q in placed)

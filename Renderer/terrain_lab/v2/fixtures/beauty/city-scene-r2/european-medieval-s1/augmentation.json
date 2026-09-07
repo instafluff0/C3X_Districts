@@ -1,0 +1,284 @@
+{
+  "classification": "source_adaptation; explicit Lab city augmentation",
+  "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "anchor_tile": [
+    3,
+    2
+  ],
+  "pool": "city/pool/european/medieval",
+  "size": 1,
+  "uniform_scale_factor": 1.5,
+  "instances": [
+    {
+      "asset": "city/component/02f0fb9418ca8751",
+      "slot": 0,
+      "scale": 3.483185446152445,
+      "rotation": 0,
+      "offset": [
+        -0.07,
+        -0.14
+      ],
+      "local_bounds": [
+        -0.14313715192782703,
+        -0.12653761370193403,
+        0.14313715192782703,
+        0.12653761370193403
+      ],
+      "sample_start": 0,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.61366868
+    },
+    {
+      "asset": "city/component/9372c1432c3f5f23",
+      "slot": 1,
+      "scale": 3.483185446152445,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        -0.07,
+        0.21000000000000002
+      ],
+      "local_bounds": [
+        -0.13123172856844137,
+        -0.1451780896081456,
+        0.13123172856844137,
+        0.1451780896081456
+      ],
+      "sample_start": 5,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.572641551
+    },
+    {
+      "asset": "city/component/45b4e5476b262097",
+      "slot": 2,
+      "scale": 3.483185446152445,
+      "rotation": 0,
+      "offset": [
+        0.28,
+        -0.14
+      ],
+      "local_bounds": [
+        -0.15375,
+        -0.10565208544825934,
+        0.15375,
+        0.10565208544825934
+      ],
+      "sample_start": 10,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0
+    },
+    {
+      "asset": "city/component/0b29e76d7a7d6d9e",
+      "slot": 3,
+      "scale": 3.483185446152445,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        0.21000000000000002,
+        0.21000000000000002
+      ],
+      "local_bounds": [
+        -0.09762442278236629,
+        -0.1499402310864163,
+        0.09762442278236627,
+        0.1499402310864163
+      ],
+      "sample_start": 15,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.923274577
+    },
+    {
+      "asset": "city/component/02f0fb9418ca8751",
+      "slot": 4,
+      "scale": 3.483185446152445,
+      "rotation": 0,
+      "offset": [
+        0.14,
+        -0.42000000000000004
+      ],
+      "local_bounds": [
+        -0.14313715192782703,
+        -0.12653761370193403,
+        0.14313715192782703,
+        0.12653761370193403
+      ],
+      "sample_start": 20,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.887132764
+    },
+    {
+      "asset": "city/component/9372c1432c3f5f23",
+      "slot": 5,
+      "scale": 3.483185446152445,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        0.49000000000000005,
+        0.14
+      ],
+      "local_bounds": [
+        -0.13123172856844137,
+        -0.1451780896081456,
+        0.13123172856844137,
+        0.1451780896081456
+      ],
+      "sample_start": 25,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0
+    },
+    {
+      "asset": "city/component/45b4e5476b262097",
+      "slot": 6,
+      "scale": 3.483185446152445,
+      "rotation": 0,
+      "offset": [
+        0.0,
+        0.49000000000000005
+      ],
+      "local_bounds": [
+        -0.15375,
+        -0.10565208544825934,
+        0.15375,
+        0.10565208544825934
+      ],
+      "sample_start": 30,
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -0.65510124
+    }
+  ],
+  "textures": {
+    "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_71f385973db77352.dds": "0ad43f6a2497f78a52a0e78292c73e8b52a1983bbff164897db03b07d65dc086",
+    "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_72dbe66f7a221388.dds": "29bc2cfddbb21b1446721738ff1c3f52913ccb5c73987b925e23378779e06d55",
+    "Renderer/packs/CityComponentsNormalized/textures/compound/ambient_occlusion_c730c8a9db2764ba.dds": "61cf1448947d243aa13f0925dff1a1be0f1d89dd850de448268f67b0c8831ec5",
+    "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_948c36ceb513b52d.dds": "f6770e4119cdb73ac4a635bf02569fce476f79dd74a8e0d461a5e686520adb2f"
+  },
+  "material_declarations": [
+    {
+      "ambient_occlusion": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/ambient_occlusion_c730c8a9db2764ba.dds"
+      },
+      "base_color": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_71f385973db77352.dds"
+      },
+      "emissive": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_72dbe66f7a221388.dds"
+      },
+      "gloss": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/gloss_636d8313eefbebf0.dds"
+      },
+      "normal_0": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_948c36ceb513b52d.dds"
+      },
+      "normal_1": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_1_89f387b77a45fb7f.dds"
+      }
+    },
+    {
+      "ambient_occlusion": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/ambient_occlusion_c730c8a9db2764ba.dds"
+      },
+      "base_color": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/base_color_71f385973db77352.dds"
+      },
+      "emissive": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/emissive_72dbe66f7a221388.dds"
+      },
+      "gloss": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/gloss_636d8313eefbebf0.dds"
+      },
+      "normal_0": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_0_948c36ceb513b52d.dds"
+      },
+      "normal_1": {
+        "address_u": "repeat",
+        "address_v": "repeat",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityComponentsNormalized/textures/compound/normal_1_89f387b77a45fb7f.dds"
+      }
+    }
+  ],
+  "projection": {
+    "half_height": 32.0,
+    "half_width": 64.0,
+    "height": 800.0,
+    "origin_x": 104.0,
+    "origin_y": 380.0,
+    "vertical_scale": 0.468571424,
+    "width": 1360.0
+  },
+  "source_z_pixels_per_unit": 80.9543,
+  "scene_world_z_per_source_unit": 1.5425743290738958,
+  "material_channels_enabled": [
+    "base_color",
+    "emissive"
+  ],
+  "remaining": [
+    "source normal/gloss interpretation",
+    "full coast/route/vegetation envelopes",
+    "capital and wall states",
+    "all culture/era/size matrix"
+  ]
+}

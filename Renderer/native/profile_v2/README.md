@@ -126,8 +126,9 @@ The final controlled headless comparison, with production custom skin overrides:
 | Cached revisits | 3.4–3.7 ms | 3.6–4.3 ms |
 
 The initial before/after BMP is byte-identical. The minimap cached/cold comparison
-also has zero channel error. Prepared fixed jumps continue to build/upload no
-meshes; terrain and volcano edits match reset renders. Unit-style redraw p95 is
+also has zero channel error. Final prepared fixed jumps take 24.6–56.9 ms and
+continue to build/upload no meshes; cached/cold comparison has zero pixels beyond
+tolerance and 9 total channel error. Terrain and volcano edits match reset renders. Unit-style redraw p95 is
 1.296 ms in the final minimap witness. Observed exact-point scratch is 950,272
 bytes, plus the bounded per-tile coast search. Existing retained GPU/bitmap cache
 budgets are unchanged, and no disk cache was added. New `query-cache` debugger

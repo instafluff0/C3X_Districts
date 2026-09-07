@@ -381,3 +381,14 @@ cache retention preserve this invariant without weakening the injected validator
 Existing symbols: Map_Renderer_m71_Draw_Tiles, Map_Renderer_m19_Draw_Tile_by_XY_and_Flags,
 OutputDebugStringA. Audit candidates: none. required_user_action: none for patch
 symbols or CSV entries. The ordinary INSTALL.bat workflow remains the test route.
+
+## Animation integration foundation (2026-09-06)
+
+Existing symbols: `Map_Renderer_m71_Draw_Tiles`,
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, `QueryPerformanceCounter`,
+`OutputDebugStringA`, and callable GOG `Unit_tick_anim`. The offline resource
+compiler and DLL animation evaluator add no native patch. Audit candidates:
+scoped Unit tick context and ordinary/reduced body-only Sprite calls, subject to
+the remaining ABI and supported-build proof in `i20_unit_body_replacement_spike.md`.
+`required_user_action: []`. No CSV entry changed and no body suppression enabled.
+See `animation_integration_checkpoint.md` for the remaining implementation work.

@@ -1,4 +1,13 @@
-# Active focus: natural static water
+# Active focus: city quality
+
+The user redirected the Lab to city sizes, eras and cultures, including night
+lights reflected in water, and permits modest cross-tile city footprints.
+[Current campaign and findings](CITY_QUALITY_CAMPAIGN.md). Complete source cities
+now render inside the fixed 100-tile coastal water scene. A scale comparison
+improves roof/facade readability; source variety, underground foundation placement
+and material/night-light fidelity remain active. No city result is promoted.
+
+# Preserved natural static water
 
 The user responded “Water looks great” to r6 and requested object reflections.
 [water-reflection-r5](WATER_OBJECT_REFLECTIONS.md) now renders real planar object
