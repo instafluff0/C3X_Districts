@@ -37,7 +37,7 @@ def build_family_pose_caches(pack: Path, report_path: Path | None = None) -> dic
     components = {}
     for asset_id, asset in manifest.get("assets", {}).items():
         document = json.loads((pack / asset["component"]).read_text(encoding="utf-8"))
-        if document.get("binding_mode") == "vertex_skin":
+        if document.get("binding_mode") in {"vertex_skin", "mixed"}:
             components[asset_id] = normalized_skin.load_skeleton(pack / document["skeleton"])
 
     baked: dict[tuple[str, str], dict[str, Any]] = {}

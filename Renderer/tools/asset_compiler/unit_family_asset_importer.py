@@ -18,7 +18,7 @@ from Renderer.tools.asset_compiler import normalized_animation
 from Renderer.tools.asset_compiler.grassland_pack_builder import validate_runtime_independence
 from Renderer.tools.asset_compiler.indexed_static_package import IndexedStaticPackage
 from Renderer.tools.asset_compiler.unit_member_resolver import ASSETS_ROOT, resolve_unit
-from Renderer.tools.asset_compiler.unit_model_extractor import _compile_component
+from Renderer.tools.asset_compiler.unit_model_extractor import _compile_component, _model_base
 
 
 RENDERER_ROOT = Path(__file__).resolve().parents[2]
@@ -249,9 +249,27 @@ def _physical_package(assets_root: Path, content: str, logical: str) -> Path:
     if relative.is_absolute() or ".." in relative.parts or "\\" in logical:
         raise ValueError(f"unsafe unit package path: {logical}")
     path = assets_root / content / "Platforms" / "Windows" / "BLPs" / relative
+    if not path.is_file() and content != "Base":
+        path = assets_root / "Base/Platforms/Windows/BLPs" / relative
     if not path.is_file():
         raise FileNotFoundError(path)
     return path
+
+
+class SourceDataRoots:
+    """Offline-only content lookup: the selected package, then inherited Base."""
+    def __init__(self, assets_root: Path, content: str):
+        self.roots = [assets_root / content / "Platforms/Windows/BLPs/SHARED_DATA",
+                      assets_root / "Base/Platforms/Windows/BLPs/SHARED_DATA"]
+
+    def __truediv__(self, name):
+        for root in self.roots:
+            if (root / name).is_file():
+                return root / name
+        return self.roots[0] / name
+
+    def __iter__(self):
+        return iter(self.roots)
 
 
 def _initial_entry(path: Path, entries: list[str]) -> str:
@@ -295,7 +313,8 @@ def compile_unit_families(
         raise FileNotFoundError(shared_data)
     resolved = []
     for unit in strategy["units"]:
-        recipe = resolve_unit(assets_root, unit["source_artdef"], "Any", member_index=unit.get("member_index"))
+        content = unit.get("source_content", strategy["source_content"])
+        recipe = resolve_unit(assets_root, unit["source_artdef"], "Any", member_index=unit.get("member_index"), content=content)
         excluded = set(unit.get("exclude_roles", []))
         available = {item["role"] for item in recipe["selected_components"]}
         if excluded - available:
@@ -305,15 +324,21 @@ def compile_unit_families(
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for unit, recipe in resolved:
         for component in recipe["selected_components"]:
-            grouped[component["source_package"]].append({"unit": unit, "component": component})
+            content = unit.get("source_content", strategy["source_content"])
+            candidate = _physical_package(assets_root, content, component["source_package"])
+            if content != "Base" and (component["source_entry"].encode("ascii") + b"\0") not in candidate.read_bytes():
+                content = "Base"
+            component["package_content"] = content
+            grouped[(content, component["source_package"])].append({"unit": unit, "component": component})
     packages = {}
     package_reports = {}
-    for logical, items in grouped.items():
-        path = _physical_package(assets_root, strategy["source_content"], logical)
-        packages[logical] = IndexedStaticPackage(
-            path, _initial_entry(path, [item["component"]["source_entry"] for item in items])
+    for (content, logical), items in grouped.items():
+        path = _physical_package(assets_root, content, logical)
+        packages[(content, logical)] = IndexedStaticPackage(
+            path, _initial_entry(path, [item["component"]["source_entry"] for item in items] +
+                strategy.get("package_anchors", {}).get(content + "/" + logical, []))
         )
-        package_reports[logical] = {"path": str(path), "sha256": _sha256(path)}
+        package_reports[content + "/" + logical] = {"path": str(path), "sha256": _sha256(path)}
 
     assets = {}
     units = {}
@@ -322,16 +347,32 @@ def compile_unit_families(
     source_animation_evidence = []
     texture_cache: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
     for unit, source_recipe in resolved:
+        content = unit.get("source_content", strategy["source_content"])
+        shared_data = SourceDataRoots(assets_root, content)
         slug = unit["slug"]
         component_records = []
         role_counts: dict[str, int] = defaultdict(int)
         for component in source_recipe["selected_components"]:
+            package_key = (component["package_content"], component["source_package"])
+            try:
+                _model_base(packages[package_key], component["source_entry"])
+            except ValueError:
+                if package_key[0] == "Base":
+                    raise
+                package_key = ("Base", component["source_package"])
+                if package_key not in packages:
+                    path = _physical_package(assets_root, "Base", component["source_package"])
+                    packages[package_key] = IndexedStaticPackage(path, _initial_entry(path,
+                        [component["source_entry"], "Warrior_Armor_01", "Male_Cauc_Head_01"]))
+                # A name in an overlay can merely reference an inherited body.
+                # The typed model-entry lookup, not string presence, decides.
+                _model_base(packages[package_key], component["source_entry"])
             role = re.sub(r"[^a-z0-9]+", "_", component["role"].lower()).strip("_")
             role_counts[role] += 1
             key = role if role_counts[role] == 1 else f"{role}_{role_counts[role]}"
             asset, evidence = _compile_component(
-                packages[component["source_package"]],
-                shared_data,
+                packages[package_key],
+                SourceDataRoots(assets_root, package_key[0]),
                 pack,
                 component,
                 texture_cache,
@@ -346,7 +387,30 @@ def compile_unit_families(
                 )
             component_path = pack / asset["component"]
             component_document = json.loads(component_path.read_text(encoding="utf-8"))
+            # Some vehicle hulls use a rigid vertex stream driven by an authored
+            # bone. Bind those explicitly offline to the ordinary skin format.
+            rigid_bone = unit.get("rigid_driver_bone")
+            if rigid_bone:
+                component_document["rigid_driver_bone"] = rigid_bone
+            if rigid_bone and component_document["binding_mode"] == "rigid_attachment" and component["point"] == "Root":
+                skeleton = json.loads((pack / component_document["skeleton"]).read_text(encoding="utf-8"))
+                names = [bone["name"] for bone in skeleton["bones"]]
+                if rigid_bone not in names:
+                    raise ValueError(f"{slug} has no authored rigid driver {rigid_bone}")
+                for mesh_path in component_document["meshes"]:
+                    mesh = json.loads((pack / mesh_path).read_text(encoding="utf-8"))
+                    for vertex in mesh["vertices"]:
+                        vertex["joints"] = [names.index(rigid_bone), 0, 0, 0]
+                        vertex["weights"] = [1., 0., 0., 0.]
+                    mesh["skin"] = {"joint_count": len(names), "influences_per_vertex": 4}
+                    mesh["schema"] = "c3x.normalized_skinned_mesh.v0"
+                    _write_json(pack / mesh_path, mesh)
+                component_document["binding_mode"] = "vertex_skin"
+                for draw in component_document["draw_bindings"]:
+                    draw["binding_mode"] = "vertex_skin"
+                component_document["rigid_driver_bone"] = rigid_bone
             component_document["owner_color"] = owner_color
+            component_document["tint_rgb"] = component.get("tint_rgb", [1., 1., 1.])
             _write_json(component_path, component_document)
             assets[asset_id] = asset
             component_records.append(
@@ -428,7 +492,7 @@ def compile_unit_families(
             record["asset"]
             for record in component_records
             if json.loads((pack / assets[record["asset"]]["component"]).read_text(encoding="utf-8"))["binding_mode"]
-            == "vertex_skin"
+            in {"vertex_skin", "mixed"}
         )
         recipe_relative = Path("units") / f"{slug}_recipe.json"
         _write_json(

@@ -1,0 +1,1534 @@
+{
+  "schema": "c3x.source_unit_family_strategy.v0",
+  "source_content": "Base",
+  "source_units_per_tile": 100.0,
+  "units": [
+    {
+      "slug": "aztec_eagle_warrior",
+      "civ3_ids": [
+        "PRTO_Jaguar_Warrior"
+      ],
+      "source_artdef": "UNIT_AZTEC_EAGLE_WARRIOR",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_EagleWarrior_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_EagleWarrior_Run",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_EagleWarrior_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Warrior_DeathMeleeA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_EagleWarrior_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_EagleWarrior_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_EagleWarrior_Block",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_EagleWarrior_Taunt2",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "crossbowman",
+      "civ3_ids": [
+        "PRTO_Longbowman"
+      ],
+      "source_artdef": "UNIT_CROSSBOWMAN",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "ranged",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Crossbowman_Idle_CombatA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Crossbowman_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Crossbowman_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Crossbowman_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Crossbowman_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Crossbowman_Idle_CombatD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Crossbowman_ReactA",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Crossbowman_VictoryA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "spearman",
+      "civ3_ids": [
+        "PRTO_Spearman"
+      ],
+      "source_artdef": "UNIT_SPEARMAN",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "anti_cavalry",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Spearman_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Spearman_RunFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Spearman_PokeAttack",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Spearman_DeathFlyBackA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Spearman_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Spearman_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Spearman_React",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Spearman_VictoryA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "pikeman",
+      "civ3_ids": [
+        "PRTO_Pikeman",
+        "PRTO_Swiss_Mercenary"
+      ],
+      "source_artdef": "UNIT_PIKEMAN",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "anti_cavalry",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Pikeman_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Pikeman_Run",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Pikemen_AttackInfantry",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Pikeman_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Pikeman_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Pikeman_BreathingIdleB",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Pikeman_Block",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Pikeman_BreathingCombatIdleB",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "greek_hoplite",
+      "civ3_ids": [
+        "PRTO_Hoplite"
+      ],
+      "source_artdef": "UNIT_GREEK_HOPLITE",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "anti_cavalry",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Hoplite_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Hoplite_RunFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Hoplite_PokeAttack",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Spearman_DeathFlyBackA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Spearman_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Hoplite_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Hoplite_React",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Hoplite_VictoryA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "man_at_arms",
+      "civ3_ids": [
+        "PRTO_Medieval_Infantry"
+      ],
+      "source_artdef": "UNIT_MAN_AT_ARMS",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Swordsman_IdleB",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_UnitMedium_Run_SwordAndShieldA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Swordsman_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Warrior_DeathMeleeA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Warrior_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Swordsman_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Swordsman_ReactA",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Hoplite_VictoryA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "roman_legion",
+      "civ3_ids": [
+        "PRTO_Legionary"
+      ],
+      "source_artdef": "UNIT_ROMAN_LEGION",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Swordsman_IdleB",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Legion_Run_SwordAndShield",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Swordsman_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Warrior_DeathMeleeA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Warrior_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Legion_CombatD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Swordsman_ReactA",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Hoplite_VictoryA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "japanese_samurai",
+      "civ3_ids": [
+        "PRTO_Samurai"
+      ],
+      "source_artdef": "UNIT_JAPANESE_SAMURAI",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Samurai_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Samurai_RunCombat_KatanaA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Samurai_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Warrior_DeathMeleeA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Samurai_RunStop_KatanaA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Samurai_ReactA",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "musketman",
+      "civ3_ids": [
+        "PRTO_Musketman"
+      ],
+      "source_artdef": "UNIT_MUSKETMAN",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "gunpowder",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Musketman_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Redcoat_RunFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Musketman_ShootAndReload",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Redcoat_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Musketman_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Musketman_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Redcoat_BlockB",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Redcoat_HeroicA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "french_garde_imperiale",
+      "civ3_ids": [
+        "PRTO_Musketeer"
+      ],
+      "source_artdef": "UNIT_FRENCH_GARDE_IMPERIALE",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "gunpowder",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Musketman_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Redcoat_RunFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Musketman_ShootAndReload",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Redcoat_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Musketman_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Musketman_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Redcoat_BlockB",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Redcoat_HeroicA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "line_infantry",
+      "civ3_ids": [
+        "PRTO_Rifleman"
+      ],
+      "source_artdef": "UNIT_LINE_INFANTRY",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "gunpowder",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Musketman_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Redcoat_RunFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Redcoat_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Redcoat_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Redcoat_BraceB",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Redcoat_IdleC",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Redcoat_BlockB",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Redcoat_HeroicA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "ranger",
+      "civ3_ids": [
+        "PRTO_Guerilla"
+      ],
+      "source_artdef": "UNIT_RANGER",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "modern_ranged",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Ranger_IdlePoseA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Ranger_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Ranger_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Infantry_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Ranger_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Ranger_IdlePoseD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Ranger_React",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Ranger_IdlePoseB",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "mechanized_infantry",
+      "civ3_ids": [
+        "PRTO_Mech_Infantry"
+      ],
+      "source_artdef": "UNIT_MECHANIZED_INFANTRY",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "armored",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_MechanizedInfantryVehicle_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_MechanizedInfantryVehicle_Run",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_MechanizedInfantryVehicle_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_MechanizedInfantryVehicle_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_MechanizedInfantryVehicle_StopRun",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_MechanizedInfantryVehicle_TurnLeft",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "mobile_sam",
+      "civ3_ids": [
+        "PRTO_Mobile_SAM"
+      ],
+      "source_artdef": "UNIT_MOBILE_SAM",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "anti_air",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_SAM_Idle",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_SAM_Run",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_SAM_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_SAM_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_SAM_RunStop",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_SAM_TurnLeft",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "rocket_artillery",
+      "civ3_ids": [
+        "PRTO_Radar_Artillery"
+      ],
+      "source_artdef": "UNIT_ROCKET_ARTILLERY",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "siege",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_RocketArtillery_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_RocketArtillery_Run",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_RocketArtillery_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_RocketArtillery_Destroyed",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_RocketArtillery_CombatA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_RocketArtillery_StrafeBack",
+          "loop": false
+        },
+        "victory": {
+          "alias": "fortify",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "caravel",
+      "civ3_ids": [
+        "PRTO_Caravel"
+      ],
+      "source_artdef": "UNIT_CARAVEL",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_melee",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Caravel_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Caravel_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Caravel_Attack_Cannons_L",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Caravel_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Caravel_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "frigate",
+      "civ3_ids": [
+        "PRTO_Frigate"
+      ],
+      "source_artdef": "UNIT_FRIGATE",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_ranged",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Frigate_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Frigate_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Frigate_AttackL",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Frigate_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Frigate_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "privateer",
+      "civ3_ids": [
+        "PRTO_Privateer"
+      ],
+      "source_artdef": "UNIT_PRIVATEER",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_raider",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Privateer_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Privateer_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Privateer_Attack_L",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Privateer_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Privateer_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "ironclad",
+      "civ3_ids": [
+        "PRTO_Ironclad"
+      ],
+      "source_artdef": "UNIT_IRONCLAD",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_melee",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Ironclad_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Ironclad_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Ironclad_AttackL",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Ironclad_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Ironclad_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "modernembark",
+      "civ3_ids": [
+        "PRTO_Transport"
+      ],
+      "source_artdef": "UNIT_MODERNEMBARK",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_transport",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Troop_Embark_Modern_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Troop_Embark_Modern_RunA",
+          "loop": true
+        },
+        "attack": {
+          "alias": "idle",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Troop_Embark_Modern_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Troop_Embark_Modern_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      },
+      "rigid_driver_bone": "Body_CTRL"
+    },
+    {
+      "slug": "aircraft_carrier",
+      "civ3_ids": [
+        "PRTO_Carrier"
+      ],
+      "source_artdef": "UNIT_AIRCRAFT_CARRIER",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_carrier",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_AircraftCarrier_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_AircraftCarrier_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_AircraftCarrier_AttackLeft",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_AircraftCarrier_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_AircraftCarrier_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_AircraftCarrier_AttackAirRight",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "submarine",
+      "civ3_ids": [
+        "PRTO_Submarine"
+      ],
+      "source_artdef": "UNIT_SUBMARINE",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_raider",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Nuclear_Submarine_IdleSurfacedA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Nuclear_Submarine_RunSurfaceA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Nuclear_Submarine_Attack_Torpedos",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Nuclear_Submarine_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Nuclear_Submarine_RunSurfaceStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "destroyer",
+      "civ3_ids": [
+        "PRTO_Destroyer"
+      ],
+      "source_artdef": "UNIT_DESTROYER",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_melee",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Destroyer_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Destroyer_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Destroyer_Attack_L",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Destroyer_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Destroyer_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "battleship",
+      "civ3_ids": [
+        "PRTO_Battleship"
+      ],
+      "source_artdef": "UNIT_BATTLESHIP",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_ranged",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Battleship_Idle_A",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Battleship_Run",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Battleship_Attack_Left",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Battleship_Death_A",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Battleship_Idle_Combat_A",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Battleship_Run_Combat",
+          "loop": false
+        },
+        "victory": {
+          "alias": "fortify",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "missile_cruiser",
+      "civ3_ids": [
+        "PRTO_AEGIS_Cruiser",
+        "PRTO_Cruiser"
+      ],
+      "source_artdef": "UNIT_MISSILE_CRUISER",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_ranged",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_MissileCruiser_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_MissileCruiser_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_MissileCruiser_AttackL",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_MissileCruiser_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_MissileCruiser_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_MissileCruiser_AttackAirR",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "nuclear_submarine",
+      "civ3_ids": [
+        "PRTO_Nuclear_Submarine"
+      ],
+      "source_artdef": "UNIT_NUCLEAR_SUBMARINE",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_raider",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Nuclear_Submarine_IdleSurfacedA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Nuclear_Submarine_RunSurfaceA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Nuclear_Submarine_Attack_Torpedos",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Nuclear_Submarine_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Nuclear_Submarine_RunSurfaceStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Nuclear_Submarine_Attack_MissileA",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "bomber",
+      "civ3_ids": [
+        "PRTO_Bomber"
+      ],
+      "source_artdef": "UNIT_BOMBER",
+      "member_index": 0,
+      "domain": "air",
+      "archetype": "air_bomber",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Bomber_IdleGround",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Bomber_IdleA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Bomber_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Bomber_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "alias": "idle",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "move",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "helicopter",
+      "civ3_ids": [
+        "PRTO_Helicopter"
+      ],
+      "source_artdef": "UNIT_HELICOPTER",
+      "member_index": 0,
+      "domain": "air",
+      "archetype": "air_transport",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Helicopter_IdleB",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Helicopter_Run",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Helicopter_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Helicopter_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Helicopter_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Helicopter_Dodge",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Helicopter_HeroA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "jet_fighter",
+      "civ3_ids": [
+        "PRTO_Jet_Fighter",
+        "PRTO_F-15",
+        "PRTO_Stealth_Fighter"
+      ],
+      "source_artdef": "UNIT_JET_FIGHTER",
+      "member_index": 0,
+      "domain": "air",
+      "archetype": "air_fighter",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_JetFighter_IdleGround",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Fighter_IdleA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Fighter_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Fighter_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "alias": "idle",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Fighter_TurnRight",
+          "loop": false
+        },
+        "victory": {
+          "alias": "move",
+          "loop": false
+        }
+      },
+      "rigid_driver_bone": "Body"
+    },
+    {
+      "slug": "jet_bomber",
+      "civ3_ids": [
+        "PRTO_Stealth_Bomber"
+      ],
+      "source_artdef": "UNIT_JET_BOMBER",
+      "member_index": 0,
+      "domain": "air",
+      "archetype": "air_bomber",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Bomber_IdleGround",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Bomber_IdleA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Bomber_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Bomber_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "alias": "idle",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "move",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "spanish_conquistador",
+      "civ3_ids": [
+        "PRTO_Conquistador"
+      ],
+      "source_artdef": "UNIT_SPANISH_CONQUISTADOR",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "gunpowder",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Conquistador_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Conquistador_RunFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Conquistador_AttackFireRifleKneel",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Redcoat_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Conquistador_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Conquistador_IdleC",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Conquistador_HopBackDefend",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Conquistador_ReadyWeaponMatch",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "norwegian_berserker",
+      "civ3_ids": [
+        "PRTO_Berserk"
+      ],
+      "source_artdef": "UNIT_NORWEGIAN_BERSERKER",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Berzerker_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Berzerker_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Berzerker_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Berzerker_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Berzerker_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Berzerker_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Berzerker_React",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Berzerker_IdleCombatD",
+          "loop": false
+        }
+      }
+    }
+  ],
+  "runtime": {
+    "direction_count": 8,
+    "body_ownership": "unit_body_only",
+    "retained_native_layers": [
+      "selection_cursor",
+      "health_bar",
+      "activity_marks",
+      "stack_indicators",
+      "hud"
+    ],
+    "movement_policy": "authoritative_civ3_anchor_and_segment_progress",
+    "action_timing_policy": "civ3_effective_duration_until_synchronization_hook_is_audited",
+    "owner_color_policy": "civ3_ntp_palette_with_inferred_source_mask_mapping",
+    "unsupported_policy": "complete_native_unit_body_fallback"
+  },
+  "runtime_integration": "not_enabled",
+  "deferred_archetype_probes": []
+}

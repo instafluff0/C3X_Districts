@@ -139,6 +139,10 @@ def build(packs: list[Path], output: Path) -> dict:
             if unit_id in result["units"]:
                 raise ValueError(f"duplicate unit binding: {unit_id}")
             recipe = document(pack, entry["recipe"])
+            if entry.get("type") == "compound":
+                from Renderer.tools.asset_compiler.compile_compound_animation import compile_unit
+                result["units"][unit_id] = compile_unit(pack, manifest, recipe, publish)
+                continue
             # The original Warrior proof predates the explicit driver field.
             driver_id = recipe.get("animation_driver")
             if driver_id is None and unit_id == "unit/warrior":
@@ -148,7 +152,7 @@ def build(packs: list[Path], output: Path) -> dict:
             components = {record["asset"]: document(pack, manifest["assets"][record["asset"]]["component"])
                           for record in recipe["components"]}
             skeletons = {asset: normalized_skin.load_skeleton(pack_path(pack, item["skeleton"]))
-                         for asset, item in components.items() if item["binding_mode"] == "vertex_skin"}
+                         for asset, item in components.items() if item["binding_mode"] in {"vertex_skin", "mixed"}}
             unit = {"actions": {}, "civ3_ids": recipe.get("civ3_ids", []),
                     "member_scale": recipe["member"]["member_scale"]*recipe["member"]["variation_scale"],
                     "source_pack": pack.name, "source_recipe": entry["recipe"]}
@@ -179,13 +183,15 @@ def build(packs: list[Path], output: Path) -> dict:
                         materials = component["materials"] if "materials" in component else [component["material"]]
                         mesh_relative = meshes[binding["mesh"]]
                         material_relative = materials[binding["material"]]
-                        if component["binding_mode"] == "vertex_skin":
+                        mode = binding.get("binding_mode", component["binding_mode"])
+                        if mode == "vertex_skin":
                             mesh = normalized_skin.load_mesh(pack_path(pack, mesh_relative), len(skeletons[asset]["bones"]))
                             payload = encode(mesh, skeletons[asset], caches[asset])
-                        elif component["binding_mode"] == "rigid_attachment":
+                        elif mode == "rigid_attachment":
                             mesh = document(pack, mesh_relative)
-                            payload = socket_payload(mesh, caches[driver_id],
-                                sockets[component["attachment_point"]]["bone"], component["model_scale"])
+                            local_driver = asset if asset in caches and component.get("rigid_driver_bone") else driver_id
+                            payload = socket_payload(mesh, caches[local_driver],
+                                component.get("rigid_driver_bone") or sockets[component["attachment_point"]]["bone"], component["model_scale"])
                         else:
                             raise ValueError(f"unsupported complete-kit binding: {asset}")
                         material = document(pack, material_relative)
@@ -196,6 +202,7 @@ def build(packs: list[Path], output: Path) -> dict:
                         parts.append({"asset": asset, "mesh": publish(payload, "clips", "bin"),
                             "bytes": len(payload), "material": {"alpha_mode": material.get("alpha_mode", "opaque"),
                                 "channels": channels, "source_tint": component.get("tint"),
+                                "tint_rgb": component.get("tint_rgb"),
                                 "owner_color": OWNER_COLOR_OVERRIDES.get(asset, component.get("owner_color"))},
                             "source_mesh": mesh_relative, "source_material": material_relative})
                 unit["actions"][action] = {"duration": caches[driver_id].duration, "frames": caches[driver_id].frame_count,
@@ -242,7 +249,7 @@ def build(packs: list[Path], output: Path) -> dict:
             target = {"part_count": len(data["parts"]), "loop": int(data["loop"])}
             for i, part in enumerate(data["parts"]):
                 material = part["material"]
-                tint = SOURCE_TINTS[material["source_tint"]]
+                tint = material.get("tint_rgb") or SOURCE_TINTS[material["source_tint"]]
                 owner = material["owner_color"]
                 if owner is None and material["source_tint"] == "USE_CIV_COLOR":
                     complete = False

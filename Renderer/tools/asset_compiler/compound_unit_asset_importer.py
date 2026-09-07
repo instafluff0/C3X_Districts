@@ -21,12 +21,13 @@ from Renderer.tools.asset_compiler.indexed_static_package import IndexedStaticPa
 from Renderer.tools.asset_compiler.unit_family_action_validator import _best_group
 from Renderer.tools.asset_compiler.unit_family_asset_importer import (
     _initial_entry,
+    SourceDataRoots,
     _physical_package,
     default_owner_color_for_component,
     load_owner_color_contract,
 )
 from Renderer.tools.asset_compiler.unit_member_resolver import ASSETS_ROOT, resolve_unit
-from Renderer.tools.asset_compiler.unit_model_extractor import _compile_component
+from Renderer.tools.asset_compiler.unit_model_extractor import _compile_component, _model_base
 
 
 RENDERER_ROOT = Path(__file__).resolve().parents[2]
@@ -148,6 +149,12 @@ def _select_bone(
     for candidate in candidates:
         if candidate in names:
             return candidate
+    # Some ArtDef sockets omit the model prefix used by the exported skeleton.
+    # Resolve only an unambiguous suffix and record the full bone in the recipe.
+    matches = {name for name in names for candidate in candidates
+               if name.lower().endswith("_" + candidate.lower())}
+    if len(matches) == 1:
+        return next(iter(matches))
     raise ValueError(f"{label} has none of the required bones: {', '.join(candidates)}")
 
 
@@ -241,6 +248,7 @@ def compile_compound_units(
     resolved: list[tuple[dict[str, Any], dict[str, dict[str, Any]]]] = []
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for composition in source_sets["compositions"]:
+        content = composition.get("source_content", source_sets["source_content"])
         nodes = {}
         for node in [composition["parent"], *composition["children"]]:
             recipe = resolve_unit(
@@ -248,11 +256,15 @@ def compile_compound_units(
                 composition["source_artdef"],
                 "Any",
                 node["variation"],
-                composition["member_index"],
+                composition["member_index"], content=content,
             )
             nodes[node["id"]] = recipe
             for component in recipe["selected_components"]:
-                grouped[component["source_package"]].append(
+                component["package_content"] = content
+                candidate = _physical_package(assets_root, content, component["source_package"])
+                if content != "Base" and (component["source_entry"].encode("ascii") + b"\0") not in candidate.read_bytes():
+                    component["package_content"] = "Base"
+                grouped[(component["package_content"], component["source_package"])].append(
                     {"composition": composition, "node": node, "component": component}
                 )
         parent_recipe = nodes[composition["parent"]["id"]]
@@ -270,13 +282,13 @@ def compile_compound_units(
 
     packages = {}
     package_reports = {}
-    for logical, items in grouped.items():
+    for (content, logical), items in grouped.items():
         path = _physical_package(assets_root, content, logical)
-        packages[logical] = IndexedStaticPackage(
+        packages[(content, logical)] = IndexedStaticPackage(
             path,
             _initial_entry(path, [item["component"]["source_entry"] for item in items]),
         )
-        package_reports[logical] = {"path": str(path), "sha256": _sha256(path)}
+        package_reports[content + "/" + logical] = {"path": str(path), "sha256": _sha256(path)}
 
     assets: dict[str, Any] = {}
     units: dict[str, Any] = {}
@@ -285,6 +297,8 @@ def compile_compound_units(
     animation_evidence = []
     texture_cache: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
     for composition, source_nodes in resolved:
+        content = composition.get("source_content", source_sets["source_content"])
+        shared_data = SourceDataRoots(assets_root, content)
         slug = composition["slug"]
         compiled_nodes = {}
         source_node_records = [composition["parent"], *composition["children"]]
@@ -295,14 +309,24 @@ def compile_compound_units(
             component_records = []
             driver_candidates = []
             for component in source_recipe["selected_components"]:
+                package_key=(component["package_content"],component["source_package"])
+                try:
+                    _model_base(packages[package_key],component["source_entry"])
+                except ValueError:
+                    if package_key[0]=="Base":raise
+                    package_key=("Base",component["source_package"])
+                    if package_key not in packages:
+                        path=_physical_package(assets_root,"Base",component["source_package"])
+                        packages[package_key]=IndexedStaticPackage(path,_initial_entry(path,[component["source_entry"],"Warrior_Armor_01","Male_Cauc_Head_01"]))
+                    _model_base(packages[package_key],component["source_entry"])
                 role = re.sub(r"[^a-z0-9]+", "_", component["role"].lower()).strip("_")
                 role_counts[role] += 1
                 key = role if role_counts[role] == 1 else f"{role}_{role_counts[role]}"
                 compile_slug = f"{slug}_{node_id}"
                 try:
                     asset, evidence = _compile_component(
-                        packages[component["source_package"]],
-                        shared_data,
+                        packages[package_key],
+                        SourceDataRoots(assets_root,package_key[0]),
                         pack,
                         component,
                         texture_cache,
@@ -319,6 +343,7 @@ def compile_compound_units(
                 document["owner_color"] = default_owner_color_for_component(
                     component, tint_strength
                 )
+                document["tint_rgb"] = component.get("tint_rgb")
                 _write_json(document_path, document)
                 assets[asset_id] = asset
                 component_records.append(
@@ -356,7 +381,7 @@ def compile_compound_units(
                 "animation_driver": driver_id,
                 "skeleton": skeleton_path,
                 "member_scale": source_recipe["member"]["member_scale"],
-                "variation_scale": source_recipe["member"]["variation_scale"],
+                "variation_scale": source_recipe["member"]["variation_scale"] * node.get("scale_multiplier", 1.0),
                 "source_track_group": skeleton["track_group"],
             }
 

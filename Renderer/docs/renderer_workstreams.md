@@ -1,5 +1,14 @@
 # Renderer Workstreams And Promotion Contract
 
+The complete Lab implementation-preparation entry point is now
+[lab_v2_complete_r2](../handoffs/candidates/lab_v2_complete_r2/README.md).
+It reconciles the selected natural/city scene work, all historical L9–L21
+systems, and current pickup/animation maintenance. Use its per-system native
+dispositions and shadow work orders before beginning a port. This navigation
+update does not advance outstanding Lab/Integration gates or undo separately
+authorized native performance and animation work. The earlier terrain-only
+handoff remains immutable.
+
 The custom renderer has two complementary workstreams with one-way, versioned
 handoffs.  They share source-agnostic packs, renderer definitions, and visible
 scene records, but they do not share responsibility for judging the same

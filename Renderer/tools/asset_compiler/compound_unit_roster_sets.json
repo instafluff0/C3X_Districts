@@ -1,0 +1,2000 @@
+{
+  "schema": "c3x.source_compound_unit_sets.v0",
+  "source_content": "Base",
+  "runtime_integration": "not_enabled",
+  "compositions": [
+    {
+      "slug": "horseman",
+      "civ3_ids": [
+        "PRTO_Horseman"
+      ],
+      "source_artdef": "UNIT_HORSEMAN",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "body",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": [
+            "RiderAttach"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatA",
+            "rider": "ANIMATION_Cavalry_CombatA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_RunFwdB",
+            "rider": "ANIMATION_Cavalry_RunFwdB"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_AttackA",
+            "rider": "ANIMATION_Cavalry_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_MountedDeathA",
+            "rider": "ANIMATION_Cavalry_DeathB"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_BraceA",
+            "rider": "ANIMATION_Cavalry_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatB",
+            "rider": "ANIMATION_Cavalry_IdleD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_ReactA",
+            "rider": "ANIMATION_Cavalry_ReactA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_Victory",
+            "rider": "ANIMATION_Cavalry_Victory"
+          }
+        }
+      }
+    },
+    {
+      "slug": "cavalry",
+      "civ3_ids": [
+        "PRTO_Cavalry",
+        "PRTO_Sipahi"
+      ],
+      "source_artdef": "UNIT_CAVALRY",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "body",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": [
+            "RiderAttach"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatA",
+            "rider": "ANIMATION_Cavalry_CombatA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_RunFwdB",
+            "rider": "ANIMATION_Cavalry_RunFwdB"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_AttackA",
+            "rider": "ANIMATION_Cavalry_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_MountedDeathA",
+            "rider": "ANIMATION_Cavalry_DeathB"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_BraceA",
+            "rider": "ANIMATION_Cavalry_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatB",
+            "rider": "ANIMATION_Cavalry_IdleD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_ReactA",
+            "rider": "ANIMATION_Cavalry_ReactA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_Victory",
+            "rider": "ANIMATION_Cavalry_Victory"
+          }
+        }
+      }
+    },
+    {
+      "slug": "russian_cossack",
+      "civ3_ids": [
+        "PRTO_Cossack"
+      ],
+      "source_artdef": "UNIT_RUSSIAN_COSSACK",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "body",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": [
+            "RiderAttach"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatA",
+            "rider": "ANIMATION_Cavalry_CombatA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_RunFwdB",
+            "rider": "ANIMATION_Cavalry_RunFwdB"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_AttackA",
+            "rider": "ANIMATION_Cavalry_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_MountedDeathA",
+            "rider": "ANIMATION_Cavalry_DeathB"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_BraceA",
+            "rider": "ANIMATION_Cavalry_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatB",
+            "rider": "ANIMATION_Cavalry_IdleD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_ReactA",
+            "rider": "ANIMATION_Cavalry_ReactA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_Victory",
+            "rider": "ANIMATION_Cavalry_Victory"
+          }
+        }
+      }
+    },
+    {
+      "slug": "arabian_mamluk",
+      "civ3_ids": [
+        "PRTO_Ansar_Warrior"
+      ],
+      "source_artdef": "UNIT_ARABIAN_MAMLUK",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "body",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": [
+            "RiderAttach"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatA",
+            "rider": "ANIMATION_Cavalry_CombatA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_RunFwdB",
+            "rider": "ANIMATION_Cavalry_RunFwdB"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_AttackA",
+            "rider": "ANIMATION_Cavalry_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_MountedDeathA",
+            "rider": "ANIMATION_Cavalry_DeathB"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_BraceA",
+            "rider": "ANIMATION_Cavalry_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatB",
+            "rider": "ANIMATION_Cavalry_IdleD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_ReactA",
+            "rider": "ANIMATION_Cavalry_ReactA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_Victory",
+            "rider": "ANIMATION_Cavalry_Victory"
+          }
+        }
+      }
+    },
+    {
+      "slug": "macedonian_hetairoi",
+      "civ3_ids": [
+        "PRTO_Ancient_Cavalry"
+      ],
+      "source_artdef": "UNIT_MACEDONIAN_HETAIROI",
+      "source_content": "DLC/Macedonia_Persia",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "body",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": [
+            "RiderAttach"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatA",
+            "rider": "ANIMATION_Cavalry_CombatA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_RunFwdB",
+            "rider": "ANIMATION_Cavalry_RunFwdB"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_AttackA",
+            "rider": "ANIMATION_Cavalry_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_MountedDeathA",
+            "rider": "ANIMATION_Cavalry_DeathB"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_BraceA",
+            "rider": "ANIMATION_Cavalry_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatB",
+            "rider": "ANIMATION_Cavalry_IdleD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_ReactA",
+            "rider": "ANIMATION_Cavalry_ReactA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_Victory",
+            "rider": "ANIMATION_Cavalry_Victory"
+          }
+        }
+      }
+    },
+    {
+      "slug": "hungary_huszar",
+      "civ3_ids": [
+        "PRTO_Hussar"
+      ],
+      "source_artdef": "UNIT_HUNGARY_HUSZAR",
+      "source_content": "DLC/Expansion2",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "body",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": [
+            "RiderAttach"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatA",
+            "rider": "ANIMATION_Cavalry_CombatA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_RunFwdB",
+            "rider": "ANIMATION_Cavalry_RunFwdB"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_AttackA",
+            "rider": "ANIMATION_Cavalry_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_MountedDeathA",
+            "rider": "ANIMATION_Cavalry_DeathB"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_BraceA",
+            "rider": "ANIMATION_Cavalry_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatB",
+            "rider": "ANIMATION_Cavalry_IdleD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_ReactA",
+            "rider": "ANIMATION_Cavalry_ReactA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_Victory",
+            "rider": "ANIMATION_Cavalry_Victory"
+          }
+        }
+      }
+    },
+    {
+      "slug": "knight",
+      "civ3_ids": [
+        "PRTO_Knight"
+      ],
+      "source_artdef": "UNIT_KNIGHT",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "body",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": [
+            "RiderAttach"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatA",
+            "rider": "ANIMATION_Knight_IdleA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_RunFwdB",
+            "rider": "ANIMATION_KnightMounted_RunFwdB"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_AttackA",
+            "rider": "ANIMATION_Cavalry_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_MountedDeathA",
+            "rider": "ANIMATION_Knight_JoustDeathA"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_BraceA",
+            "rider": "ANIMATION_Knight_RunStopC"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatB",
+            "rider": "ANIMATION_Knight_IdleD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_ReactA",
+            "rider": "ANIMATION_Knight_JoustDefendA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_Victory",
+            "rider": "ANIMATION_Knight_IdleC"
+          }
+        }
+      }
+    },
+    {
+      "slug": "mongolian_keshig",
+      "civ3_ids": [
+        "PRTO_Rider",
+        "PRTO_Keshik"
+      ],
+      "source_artdef": "UNIT_MONGOLIAN_KESHIG",
+      "source_content": "DLC/Expansion1",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "body",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": [
+            "RiderAttach"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatA",
+            "rider": "ANIMATION_Saka_HorseArcher_IdleC"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_RunFwdB",
+            "rider": "ANIMATION_SakaHorseArcher_RunFwdB"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_AttackA",
+            "rider": "ANIMATION_Saka_HorseArcher_AttackLeftA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_UnitHorse_MountedDeathA",
+            "rider": "ANIMATION_Cavalry_DeathB"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_BraceA",
+            "rider": "ANIMATION_Saka_HorseArcher_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_CombatB",
+            "rider": "ANIMATION_Saka_HorseArcher_IdleC"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_ReactA",
+            "rider": "ANIMATION_Saka_HorseArcher_DefendFrontA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_CavalryHorse_Victory",
+            "rider": "ANIMATION_Saka_HorseArcher_IdleC"
+          }
+        }
+      }
+    },
+    {
+      "slug": "great_general_classical",
+      "civ3_ids": [
+        "PRTO_Leader",
+        "PRTO_Army"
+      ],
+      "source_artdef": "UNIT_GREAT_GENERAL",
+      "member_index": 0,
+      "parent": {
+        "id": "mount",
+        "variation": "Horse"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "mount",
+          "socket": "RiderAttach",
+          "socket_bone_candidates": [
+            "RiderAttach"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "mount": "ANIMATION_UnitHorse_BreathingA",
+            "rider": "ANIMATION_GreatGeneralClassic_IdleA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "alias": "idle"
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "mount": "ANIMATION_UnitHorse_RunFwdB",
+            "rider": "ANIMATION_Cavalry_RunFwdB"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "alias": "defend"
+        },
+        "attack": {
+          "loop": false,
+          "alias": "defend"
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "mount": "ANIMATION_UnitHorse_ReactRangedA",
+            "rider": "ANIMATION_GreatGeneralClassic_ReactRangedA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "mount": "ANIMATION_UnitHorse_MountedDeathA",
+            "rider": "ANIMATION_Cavalry_DeathB"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "alias": "idle"
+        }
+      }
+    },
+    {
+      "slug": "catapult",
+      "civ3_ids": [
+        "PRTO_Catapult"
+      ],
+      "source_artdef": "UNIT_CATAPULT",
+      "member_index": 0,
+      "parent": {
+        "id": "vehicle",
+        "variation": "CatapultA"
+      },
+      "children": [
+        {
+          "id": "operator",
+          "variation": "OperatorA",
+          "virtual_member": "OperatorA",
+          "parent": "vehicle",
+          "socket": "Operator",
+          "socket_bone_candidates": [
+            "Operator",
+            "CatapultOperator"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "vehicle": "ANIMATION_Catapult_IdleA",
+            "operator": "ANIMATION_CatapultOperator_IdleA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "vehicle": "ANIMATION_Catapult_IdleB",
+            "operator": "ANIMATION_CatapultOperator_IdleCombatA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "vehicle": "ANIMATION_Catapult_RunFwdA",
+            "operator": "ANIMATION_CatapultOperator_RunFwdA"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "vehicle": "ANIMATION_Catapult_BraceA",
+            "operator": "ANIMATION_CatapultOperator_BraceA"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "vehicle": "ANIMATION_Catapult_AttackA",
+            "operator": "ANIMATION_CatapultOperator_AttackA"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "vehicle": "ANIMATION_Catapult_DefendA",
+            "operator": "ANIMATION_CatapultOperator_DefendA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "alias": "idle"
+        },
+        "death": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "tank",
+      "civ3_ids": [
+        "PRTO_Tank"
+      ],
+      "source_artdef": "UNIT_TANK",
+      "member_index": 0,
+      "parent": {
+        "id": "vehicle",
+        "variation": "A",
+        "component_attachment_bones": {
+          "TeamColor": [
+            "tankAll",
+            "tankBody"
+          ]
+        }
+      },
+      "children": [
+        {
+          "id": "gunner",
+          "variation": "TankGunner",
+          "virtual_member": "TankGunner",
+          "parent": "vehicle",
+          "socket": "GunnerAttach",
+          "socket_bone_candidates": [
+            "hatchPivot"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ],
+          "scale_multiplier": 0.45
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "vehicle": "ANIMATION_Tank_IdleA",
+            "gunner": "ANIMATION_TankGunner_IdleD"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "vehicle": "ANIMATION_Tank_BreatheSingleA",
+            "gunner": "ANIMATION_TankGunner_BreatheSingleA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "vehicle": "ANIMATION_Tank_Run",
+            "gunner": "ANIMATION_TankGunner_Run"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "vehicle": "ANIMATION_Tank_BraceA",
+            "gunner": "ANIMATION_TankGunner_BraceA"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "vehicle": "ANIMATION_Tank_AttackA",
+            "gunner": "ANIMATION_TankGunner_AttackA"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "vehicle": "ANIMATION_Tank_DefendA",
+            "gunner": "ANIMATION_TankGunner_DefendA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "vehicle": "ANIMATION_Tank_TankDeathA",
+            "gunner": "ANIMATION_TankGunner_TankDeathA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "vehicle": "ANIMATION_Tank_Hero",
+            "gunner": "ANIMATION_TankGunner_Hero"
+          }
+        }
+      }
+    },
+    {
+      "slug": "modern_armor",
+      "civ3_ids": [
+        "PRTO_Modern_Armor"
+      ],
+      "source_artdef": "UNIT_MODERN_ARMOR",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "A",
+        "component_attachment_bones": {
+          "TeamColor": [
+            "Body",
+            "Root"
+          ]
+        }
+      },
+      "children": [
+        {
+          "id": "modernarmorgunner",
+          "variation": "ModernArmorGunner",
+          "virtual_member": "ModernArmorGunner",
+          "parent": "body",
+          "socket": "GunnerAttach",
+          "socket_bone_candidates": [
+            "GunnerAttach"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_ModernArmor_IdleA",
+            "modernarmorgunner": "ANIMATION_ModernArmorGunner_IdleA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_ModernArmor_Run",
+            "modernarmorgunner": "ANIMATION_ModernArmorGunner_Run"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_ModernArmor_Attack",
+            "modernarmorgunner": "ANIMATION_ModernArmorGunner_Attack"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_ModernArmor_Death",
+            "modernarmorgunner": "ANIMATION_ModernArmorGunner_Death"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_ModernArmor_RunStop",
+            "modernarmorgunner": "ANIMATION_ModernArmorGunner_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_ModernArmor_IdleD",
+            "modernarmorgunner": "ANIMATION_ModernArmorGunner_IdleD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_ModernArmor_Defend",
+            "modernarmorgunner": "ANIMATION_ModernArmorGunner_Defend"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_ModernArmor_Victory",
+            "modernarmorgunner": "ANIMATION_ModernArmorGunner_Victory"
+          }
+        }
+      }
+    },
+    {
+      "slug": "artillery",
+      "civ3_ids": [
+        "PRTO_Artillery"
+      ],
+      "source_artdef": "UNIT_ARTILLERY",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "A"
+      },
+      "children": [
+        {
+          "id": "operator",
+          "variation": "Operator",
+          "virtual_member": "Operator",
+          "parent": "body",
+          "socket": "AttachInfantry",
+          "socket_bone_candidates": [
+            "Artillery_AttachInfantry"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_Artillery_IdleA",
+            "operator": "ANIMATION_ArtilleryInfantry_IdleA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_Artillery_MovementPushSlowed",
+            "operator": "ANIMATION_ArtilleryInfantry_MovementPushSlowed"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Artillery_AttackA",
+            "operator": "ANIMATION_ArtilleryInfantry_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Artillery_DeathB",
+            "operator": "ANIMATION_ArtilleryInfantry_DeathB"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Artillery_BraceA",
+            "operator": "ANIMATION_ArtilleryInfantry_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Artillery_IdleD",
+            "operator": "ANIMATION_ArtilleryInfantry_IdleD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Artillery_DefendA",
+            "operator": "ANIMATION_ArtilleryInfantry_DefendA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Artillery_IdleA",
+            "operator": "ANIMATION_ArtilleryInfantry_IdleA"
+          }
+        }
+      }
+    },
+    {
+      "slug": "antiair_gun",
+      "civ3_ids": [
+        "PRTO_Flak"
+      ],
+      "source_artdef": "UNIT_ANTIAIR_GUN",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "A"
+      },
+      "children": [
+        {
+          "id": "operator",
+          "variation": "Operator",
+          "virtual_member": "Operator",
+          "parent": "body",
+          "socket": "Operator",
+          "socket_bone_candidates": [
+            "All"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ],
+          "calibration_note": "The logical Operator socket is absent from the exported skeleton; retain the shared All frame and the operator clip local offset."
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_AntiAir_Idle",
+            "operator": "ANIMATION_AntiAirInfantry_Idle"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_AntiAir_Run",
+            "operator": "ANIMATION_AntiAirInfantry_Run"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AntiAir_AttackAirA",
+            "operator": "ANIMATION_AntiAirInfantry_AttackAirA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AntiAir_Death",
+            "operator": "ANIMATION_AntiAirInfantry_Death"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AntiAir_RunStop",
+            "operator": "ANIMATION_AntiAirInfantry_RunStop"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AntiAir_Idle",
+            "operator": "ANIMATION_AntiAirInfantry_Idle"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AntiAir_Reverse",
+            "operator": "ANIMATION_AntiAirInfantry_Reverse"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AntiAir_Idle",
+            "operator": "ANIMATION_AntiAirInfantry_Idle"
+          }
+        }
+      }
+    },
+    {
+      "slug": "trebuchet",
+      "civ3_ids": [
+        "PRTO_Trebuchet"
+      ],
+      "source_artdef": "UNIT_TREBUCHET",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "CatapultA"
+      },
+      "children": [
+        {
+          "id": "operatora",
+          "variation": "OperatorA",
+          "virtual_member": "OperatorA",
+          "parent": "body",
+          "socket": "Operator",
+          "socket_bone_candidates": [
+            "CatapultOperator"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_Trebuchet_IdleA",
+            "operatora": "ANIMATION_CatapultOperator_IdleA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_Trebuchet_RunFwdA",
+            "operatora": "ANIMATION_TrebuchetOperator_RunFwdA"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Trebuchet_AttackA",
+            "operatora": "ANIMATION_TrebuchetOperator_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Trebuchet_IdleA",
+            "operatora": "ANIMATION_CatapultOperator_IdleA"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Trebuchet_BraceA",
+            "operatora": "ANIMATION_CatapultOperator_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Trebuchet_IdleCombatA",
+            "operatora": "ANIMATION_CatapultOperator_IdleCombatA"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Trebuchet_DefendA",
+            "operatora": "ANIMATION_TrebuchetOperator_DefendA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Trebuchet_IdleA",
+            "operatora": "ANIMATION_CatapultOperator_IdleA"
+          }
+        }
+      }
+    },
+    {
+      "slug": "korean_hwacha",
+      "civ3_ids": [
+        "PRTO_Hwacha"
+      ],
+      "source_artdef": "UNIT_KOREAN_HWACHA",
+      "source_content": "DLC/Expansion1",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "HwachaA"
+      },
+      "children": [
+        {
+          "id": "operatora",
+          "variation": "OperatorA",
+          "virtual_member": "OperatorA",
+          "parent": "body",
+          "socket": "Operator",
+          "socket_bone_candidates": [
+            "Operator"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_Hwacha_IdleA",
+            "operatora": "ANIMATION_HwachaOperator_IdleA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_Hwacha_RunFwdA",
+            "operatora": "ANIMATION_HwachaOperator_RunFwdA"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Hwacha_AttackA",
+            "operatora": "ANIMATION_HwachaOperator_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Hwacha_IdleA",
+            "operatora": "ANIMATION_HwachaOperator_IdleA"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Hwacha_RunFwdStopA",
+            "operatora": "ANIMATION_HwachaOperator_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Hwacha_IdleA",
+            "operatora": "ANIMATION_HwachaOperator_IdleCombatA"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Hwacha_TurnLeft",
+            "operatora": "ANIMATION_HwachaOperator_DefendA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Hwacha_IdleA",
+            "operatora": "ANIMATION_HwachaOperator_IdleA"
+          }
+        }
+      }
+    },
+    {
+      "slug": "field_cannon",
+      "civ3_ids": [
+        "PRTO_Cannon"
+      ],
+      "source_artdef": "UNIT_FIELD_CANNON",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "FieldCannon"
+      },
+      "children": [
+        {
+          "id": "fieldcrew_left",
+          "variation": "FieldCrew_Left",
+          "virtual_member": "FieldCrew_Left",
+          "parent": "body",
+          "socket": "AttachOperatorL",
+          "socket_bone_candidates": [
+            "AttachOperatorL"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        },
+        {
+          "id": "fieldcrew_right",
+          "variation": "FieldCrew_Right",
+          "virtual_member": "FieldCrew_Right",
+          "parent": "body",
+          "socket": "AttachOperatorR",
+          "socket_bone_candidates": [
+            "AttachOperatorR"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_FieldCannon_IdlePoseA",
+            "fieldcrew_left": "ANIMATION_FieldCannonOperatorL_IdlePoseA",
+            "fieldcrew_right": "ANIMATION_FieldCannonOperatorR_IdlePoseA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_FieldCannon_RunA",
+            "fieldcrew_left": "ANIMATION_FieldCannonOperatorL_RunA",
+            "fieldcrew_right": "ANIMATION_FieldCannonOperatorR_RunA"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_FieldCannon_AttackA",
+            "fieldcrew_left": "ANIMATION_FieldCannonOperatorL_AttackA",
+            "fieldcrew_right": "ANIMATION_FieldCannonOperatorR_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_FieldCannon_IdlePoseA",
+            "fieldcrew_left": "ANIMATION_FieldCannonOperatorL_IdlePoseA",
+            "fieldcrew_right": "ANIMATION_FieldCannonOperatorR_IdlePoseA"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_FieldCannon_BraceA",
+            "fieldcrew_left": "ANIMATION_FieldCannonOperatorL_BraceA",
+            "fieldcrew_right": "ANIMATION_FieldCannonOperatorR_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_FieldCannon_CombatIdlePoseA",
+            "fieldcrew_left": "ANIMATION_FieldCannonOperatorL_IdlePoseD",
+            "fieldcrew_right": "ANIMATION_FieldCannonOperatorR_IdlePoseD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_FieldCannon_DefendA",
+            "fieldcrew_left": "ANIMATION_FieldCannonOperatorL_DefendA",
+            "fieldcrew_right": "ANIMATION_FieldCannonOperatorR_DefendA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_FieldCannon_IdlePoseA",
+            "fieldcrew_left": "ANIMATION_FieldCannonOperatorL_IdlePoseA",
+            "fieldcrew_right": "ANIMATION_FieldCannonOperatorR_IdlePoseA"
+          }
+        }
+      }
+    },
+    {
+      "slug": "modern_at",
+      "civ3_ids": [
+        "PRTO_TOW_Infantry"
+      ],
+      "source_artdef": "UNIT_MODERN_AT",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Rocketeer"
+      },
+      "children": [
+        {
+          "id": "support",
+          "variation": "Support",
+          "virtual_member": "Support",
+          "parent": "body",
+          "socket": "attachSupport",
+          "socket_bone_candidates": [
+            "attachSupport"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_AT_Crew_IdleA",
+            "support": "ANIMATION_AT_Crew_Support_IdleA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_AT_Crew_RunFwdA",
+            "support": "ANIMATION_AT_Crew_Support_RunFwdA"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AT_Crew_AttackA",
+            "support": "ANIMATION_AT_Crew_Support_AttackA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AT_Crew_DeathA",
+            "support": "ANIMATION_AT_Crew_Support_DeathA"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AT_Crew_BraceA",
+            "support": "ANIMATION_AT_Crew_Support_BraceA"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AT_Crew_IdleD",
+            "support": "ANIMATION_AT_Crew_Support_IdleC"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AT_Crew_Defend",
+            "support": "ANIMATION_AT_Crew_Support_Defend"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_AT_Crew_IdleA",
+            "support": "ANIMATION_AT_Crew_Support_IdleA"
+          }
+        }
+      }
+    },
+    {
+      "slug": "heavy_chariot",
+      "civ3_ids": [
+        "PRTO_Chariot",
+        "PRTO_Three_Man_Chariot"
+      ],
+      "source_artdef": "UNIT_HEAVY_CHARIOT",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Cart"
+      },
+      "children": [
+        {
+          "id": "rider",
+          "variation": "Rider",
+          "virtual_member": "Rider",
+          "parent": "body",
+          "socket": "attachRider",
+          "socket_bone_candidates": [
+            "attachRider"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        },
+        {
+          "id": "horsel",
+          "variation": "HorseL",
+          "virtual_member": "HorseL",
+          "parent": "body",
+          "socket": "attachHorseL",
+          "socket_bone_candidates": [
+            "attachHorseL"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        },
+        {
+          "id": "horser",
+          "variation": "HorseR",
+          "virtual_member": "HorseR",
+          "parent": "body",
+          "socket": "attachHorseR",
+          "socket_bone_candidates": [
+            "attachHorseR"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_HeavyChariot_Cart_IdleA",
+            "rider": "ANIMATION_HeavyChariot_SpearmanIdleA",
+            "horsel": "ANIMATION_UnitHorse_BreathingA",
+            "horser": "ANIMATION_UnitHorse_BreathingA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_HeavyChariot_CartRunA",
+            "rider": "ANIMATION_HeavyChariot_SpearmanRunA",
+            "horsel": "ANIMATION_UnitHorse_RunFwdB",
+            "horser": "ANIMATION_UnitHorse_RunFwdB"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_HeavyChariot_CartAttackB",
+            "rider": "ANIMATION_HeavyChariot_SpearmanAttackB",
+            "horsel": "ANIMATION_HeavyChariot_HorseLAttackB",
+            "horser": "ANIMATION_HeavyChariot_HorseRAttackB"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_HeavyChariot_Cart_DeathA",
+            "rider": "ANIMATION_UnitMedium_MountedDeathA",
+            "horsel": "ANIMATION_UnitHorse_MountedDeathA",
+            "horser": "ANIMATION_UnitHorse_MountedDeathA"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_HeavyChariot_CartRunStopA",
+            "rider": "ANIMATION_HeavyChariot_SpearmanBraceA",
+            "horsel": "ANIMATION_UnitHorse_RunStopC",
+            "horser": "ANIMATION_UnitHorse_RunStopC"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_HeavyChariot_Cart_IdleA",
+            "rider": "ANIMATION_HeavyChariot_SpearmanIdleA",
+            "horsel": "ANIMATION_UnitHorse_BreathingB",
+            "horser": "ANIMATION_UnitHorse_BreathingB"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_HeavyChariot_CartRunStopA",
+            "rider": "ANIMATION_HeavyChariot_SpearmanRunStopA",
+            "horsel": "ANIMATION_UnitHorse_ReactRangedA",
+            "horser": "ANIMATION_UnitHorse_ReactRangedA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_HeavyChariot_Cart_IdleA",
+            "rider": "ANIMATION_HeavyChariot_SpearmanIdleA",
+            "horsel": "ANIMATION_UnitHorse_BreathingA",
+            "horser": "ANIMATION_UnitHorse_BreathingA"
+          }
+        }
+      }
+    },
+    {
+      "slug": "egyptian_chariot_archer",
+      "civ3_ids": [
+        "PRTO_War_Chariot"
+      ],
+      "source_artdef": "UNIT_EGYPTIAN_CHARIOT_ARCHER",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Cart"
+      },
+      "children": [
+        {
+          "id": "archer",
+          "variation": "Archer",
+          "virtual_member": "Archer",
+          "parent": "body",
+          "socket": "attachArcher",
+          "socket_bone_candidates": [
+            "attachArcher"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        },
+        {
+          "id": "horsec",
+          "variation": "HorseC",
+          "virtual_member": "HorseC",
+          "parent": "body",
+          "socket": "attachHorseC",
+          "socket_bone_candidates": [
+            "attachHorseC"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_MaryannuChariot_Cart_IdleA",
+            "archer": "ANIMATION_Archer_StandingIdleA",
+            "horsec": "ANIMATION_UnitHorse_BreathingA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_MaryannuChariot_CartRunA",
+            "archer": "ANIMATION_SakaHorseArcher_RunFwdB",
+            "horsec": "ANIMATION_UnitHorse_RunFwdB"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_MaryannuChariot_Cart_IdleA",
+            "archer": "ANIMATION_Archer_FireArrowStraightA",
+            "horsec": "ANIMATION_UnitHorse_BreathingA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_HeavyChariot_Cart_DeathA",
+            "archer": "ANIMATION_UnitMedium_MountedDeathA",
+            "horsec": "ANIMATION_UnitHorse_MountedDeathA"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_MaryannuChariot_CartRunStopA",
+            "archer": "ANIMATION_Archer_BraceA",
+            "horsec": "ANIMATION_UnitHorse_RunStopC"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_MaryannuChariot_Cart_IdleA",
+            "archer": "ANIMATION_Archer_StandingIdleC",
+            "horsec": "ANIMATION_UnitHorse_BreathingB"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_MaryannuChariot_CartRunStopA",
+            "archer": "ANIMATION_Crossbowman_ReactA",
+            "horsec": "ANIMATION_UnitHorse_ReactRangedA"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_MaryannuChariot_Cart_IdleA",
+            "archer": "ANIMATION_Crossbowman_VictoryA",
+            "horsec": "ANIMATION_UnitHorse_BreathingA"
+          }
+        }
+      }
+    },
+    {
+      "slug": "indian_varu",
+      "civ3_ids": [
+        "PRTO_War_Elephant"
+      ],
+      "source_artdef": "UNIT_INDIAN_VARU",
+      "source_content": "Base",
+      "member_index": 0,
+      "parent": {
+        "id": "body",
+        "variation": "Cart"
+      },
+      "children": [
+        {
+          "id": "driver",
+          "variation": "Driver",
+          "virtual_member": "Driver",
+          "parent": "body",
+          "socket": "attachDriver",
+          "socket_bone_candidates": [
+            "attachDriver"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        },
+        {
+          "id": "ridera",
+          "variation": "RiderA",
+          "virtual_member": "RiderA",
+          "parent": "body",
+          "socket": "attachRiderA",
+          "socket_bone_candidates": [
+            "attachRiderA"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        },
+        {
+          "id": "riderb",
+          "variation": "RiderB",
+          "virtual_member": "RiderB",
+          "parent": "body",
+          "socket": "attachRiderB",
+          "socket_bone_candidates": [
+            "attachRiderB"
+          ],
+          "child_root_bone_candidates": [
+            "Root",
+            "root",
+            "skin_root"
+          ]
+        }
+      ],
+      "actions": {
+        "idle": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_Varu_IdleA",
+            "driver": "ANIMATION_VaruDriver_IdlePoseA",
+            "ridera": "ANIMATION_VaruRiderA_IdlePoseA",
+            "riderb": "ANIMATION_VaruRiderB_IdlePoseA"
+          }
+        },
+        "move": {
+          "loop": true,
+          "nodes": {
+            "body": "ANIMATION_Varu_Run",
+            "driver": "ANIMATION_VaruDriver_Run",
+            "ridera": "ANIMATION_VaruRiderA_Run",
+            "riderb": "ANIMATION_VaruRiderB_Run"
+          }
+        },
+        "attack": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Varu_HeroA",
+            "driver": "ANIMATION_VaruDriver_HeroA",
+            "ridera": "ANIMATION_VaruRiderA_HeroA",
+            "riderb": "ANIMATION_VaruRiderB_HeroA"
+          }
+        },
+        "death": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Varu_Death",
+            "driver": "ANIMATION_VaruDriver_Death",
+            "ridera": "ANIMATION_VaruRiderA_Death",
+            "riderb": "ANIMATION_VaruRiderB_Death"
+          }
+        },
+        "fortify": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Varu_RunStop",
+            "driver": "ANIMATION_VaruDriver_RunStop",
+            "ridera": "ANIMATION_VaruRiderA_RunStop",
+            "riderb": "ANIMATION_VaruRiderB_RunStop"
+          }
+        },
+        "fidget": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Varu_IdleA",
+            "driver": "ANIMATION_VaruDriver_IdlePoseD",
+            "ridera": "ANIMATION_VaruRiderA_IdlePoseD",
+            "riderb": "ANIMATION_VaruRiderB_IdlePoseD"
+          }
+        },
+        "defend": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Varu_Dodge",
+            "driver": "ANIMATION_VaruDriver_Dodge",
+            "ridera": "ANIMATION_VaruRiderA_Dodge",
+            "riderb": "ANIMATION_VaruRiderB_Dodge"
+          }
+        },
+        "victory": {
+          "loop": false,
+          "nodes": {
+            "body": "ANIMATION_Varu_HeroA",
+            "driver": "ANIMATION_VaruDriver_HeroA",
+            "ridera": "ANIMATION_VaruRiderA_HeroA",
+            "riderb": "ANIMATION_VaruRiderB_HeroA"
+          }
+        }
+      }
+    }
+  ],
+  "instance_contract": {
+    "anchor": "one_authoritative_civ3_unit_anchor",
+    "facing": "one_shared_eight_direction_facing",
+    "clock": "one_authoritative_action_clock_with_node_local_clips",
+    "owner_color": "one_display_color_table_id_applied_per_component_mask",
+    "hud": "one_retained_native_parent_hud",
+    "failure": "atomic_complete_unit_body",
+    "runtime_dispatch": "recipe_data_only_no_unit_name_branches"
+  }
+}

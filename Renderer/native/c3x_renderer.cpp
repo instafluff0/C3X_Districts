@@ -1655,8 +1655,11 @@ public:
         resource_assets_ready = load_runtime_bundle(
             resource_root, "resource_runtime.bin", resource_bundle, resource_texture_dds);
 
-        // Assets are bound once, outside all draw and native unit callbacks.
-        if(unit_rendering_enabled && !load_unit_animations(packs_root+"\\UnitAnimationRuntime")) {
+        // Bind the catalog once. Payloads are resident only when needed.
+        char unit_pack[128]="UnitAnimationRuntime",unit_root[4*MAX_PATH];
+        GetEnvironmentVariableA("C3X_RENDERER_UNIT_PACK",unit_pack,sizeof(unit_pack));
+        if(unit_rendering_enabled && (!pack_path(packs_root.c_str(),unit_pack,unit_root,std::size(unit_root)) ||
+            !load_unit_animations(unit_root))) {
             unit_bodies.clear();trace.write("unit-bind","complete unit pack rejected; native bodies retained",true);
         }
         if (pickup_profile) {
@@ -2226,10 +2229,6 @@ public:
         }
         for (auto & animation : resource_animations)
             if (!ensure_dds_texture(animation.dds, animation.view, true)) return false;
-        for(auto & texture:unit_bodies.textures)
-            if(!ensure_dds_texture(texture.dds,texture.view,true)) {
-                unit_bodies.clear();trace.write("unit-bind","texture creation failed; native bodies retained",true);break;
-            }
         if (resource_assets_ready) {
             for (std::size_t index = 0; index < resource_texture_views.size(); ++index)
                 resource_assets_ready = resource_assets_ready && ensure_dds_texture(
@@ -2507,7 +2506,6 @@ public:
         float count=0;
         if(!json_number_after(data,"unit_count",0,count) || count<1 || count>128 || count!=int(count))return false;
         std::unordered_map<std::string,unsigned> mesh_ids,texture_ids;
-        std::size_t bytes_used=0;
         for(int i=0;i<int(count);++i) {
             auto location=json_member_position(data,("unit"+std::to_string(i)).c_str());
             float complete=0,keys=0;
@@ -2540,25 +2538,94 @@ public:
                        !json_number_after(data,"owner_strength",record,part.strength) || !json_number_after(data,"cutout",record,part.cutout) ||
                        part.mask<0 || part.mask>2 || part.strength<0 || part.strength>1 || part.cutout<0 || part.cutout>1)return false;
                     if(mesh_ids.find(mesh)==mesh_ids.end()) {
-                        std::vector<std::uint8_t> payload;c3x_renderer::UnitBodyRenderer::Mesh bound;
-                        if(!pack_path(root.c_str(),mesh.c_str(),path,std::size(path)) || !read_file(path,payload) ||
-                           bytes_used+payload.size()>96u*1024u*1024u || !c3x_renderer::decode_animation_mesh(payload,bound.animation))return false;
-                        bytes_used+=payload.size();mesh_ids[mesh]=unsigned(unit_bodies.meshes.size());unit_bodies.meshes.push_back(std::move(bound));
+                        c3x_renderer::UnitBodyRenderer::Mesh bound;
+                        if(!pack_path(root.c_str(),mesh.c_str(),path,std::size(path)))return false;
+                        bound.path=path;mesh_ids[mesh]=unsigned(unit_bodies.meshes.size());unit_bodies.meshes.push_back(std::move(bound));
                     }
                     if(texture_ids.find(texture)==texture_ids.end()) {
                         c3x_renderer::UnitBodyRenderer::Texture bound;
-                        if(!load_dds_bytes(root.c_str(),texture.c_str(),bound.dds,DXGI_FORMAT_BC3_UNORM_SRGB,DXGI_FORMAT_BC1_UNORM_SRGB) ||
-                           bytes_used+bound.dds.size()>96u*1024u*1024u)return false;
-                        bytes_used+=bound.dds.size();texture_ids[texture]=unsigned(unit_bodies.textures.size());unit_bodies.textures.push_back(std::move(bound));
+                        if(!pack_path(root.c_str(),texture.c_str(),path,std::size(path)))return false;
+                        bound.path=path;texture_ids[texture]=unsigned(unit_bodies.textures.size());unit_bodies.textures.push_back(std::move(bound));
                     }
                     part.mesh=mesh_ids.at(mesh);part.texture=texture_ids.at(texture);action.parts.push_back(part);
                 }
                 unit.actions.push_back(std::move(action));
             }
-            trace.write("unit-bind",(unit.keys.front()+" complete clips and materials ready").c_str(),true);
+            trace.write("unit-bind",(unit.keys.front()+" animation catalog ready; payloads load on demand").c_str(),true);
             unit_bodies.units.push_back(std::move(unit));
         }
         return !unit_bodies.units.empty();
+    }
+
+    bool prepare_unit_action(c3x_renderer::UnitBodyRenderer::Action const& action) {
+        // All parts of the current action are pinned together. CPU palettes,
+        // index buffers and compressed texture copies share a fixed residency
+        // budget; sprite-cache hits never enter this path or touch disk.
+        auto & bodies=unit_bodies;
+        auto used=++bodies.payload_serial;
+        auto reserve=[&](std::size_t bytes) {
+            constexpr std::size_t budget=96u*1024u*1024u;
+            if(bytes>budget)return false;
+            while(bodies.resident_bytes>budget-bytes) {
+                std::uint64_t oldest=UINT64_MAX;int mesh_id=-1,texture_id=-1;
+                for(unsigned i=0;i<bodies.meshes.size();++i) {
+                    auto const& m=bodies.meshes[i];
+                    bool pinned=std::any_of(action.parts.begin(),action.parts.end(),[&](auto const& p){return p.mesh==i;});
+                    if(m.bytes && !pinned && m.used<oldest){oldest=m.used;mesh_id=int(i);texture_id=-1;}
+                }
+                for(unsigned i=0;i<bodies.textures.size();++i) {
+                    auto const& t=bodies.textures[i];
+                    bool pinned=std::any_of(action.parts.begin(),action.parts.end(),[&](auto const& p){return p.texture==i;});
+                    if(t.bytes && !pinned && t.used<oldest){oldest=t.used;texture_id=int(i);mesh_id=-1;}
+                }
+                if(mesh_id>=0) {
+                    auto & m=bodies.meshes[mesh_id];bodies.resident_bytes-=m.bytes;m.bytes=0;
+                    bodies.release(m.indices);m.animation={};
+                } else if(texture_id>=0) {
+                    auto & t=bodies.textures[texture_id];bodies.resident_bytes-=t.bytes;t.bytes=0;
+                    bodies.release(t.view);std::vector<std::uint8_t>().swap(t.dds);
+                } else return false;
+            }
+            return true;
+        };
+        unsigned loads=0;
+        for(auto const& part:action.parts) {
+            if(part.mesh>=bodies.meshes.size() || part.texture>=bodies.textures.size())return false;
+            auto & mesh=bodies.meshes[part.mesh];auto & texture=bodies.textures[part.texture];
+            if(mesh.failed || texture.failed)return false;
+            if(!mesh.bytes) {
+                std::vector<std::uint8_t> payload;c3x_renderer::AnimationMesh decoded;
+                if(!read_file(mesh.path.c_str(),payload) || !c3x_renderer::decode_animation_mesh(payload,decoded)) {
+                    mesh.failed=true;trace.write("unit-payload","invalid mesh; only this kit falls back",true);return false;
+                }
+                std::size_t bytes=decoded.vertices.capacity()*sizeof(c3x_renderer::AnimationVertex)+
+                    decoded.indices.capacity()*sizeof(std::uint32_t)*2+decoded.palettes.capacity()*sizeof(float);
+                if(!reserve(bytes))return false;
+                mesh.animation=std::move(decoded);mesh.bytes=bytes;bodies.resident_bytes+=bytes;++loads;
+            }
+            mesh.used=used;
+            if(!texture.bytes) {
+                std::vector<std::uint8_t> dds;
+                if(!read_file(texture.path.c_str(),dds) || dds.size()<156 ||
+                   std::memcmp(dds.data(),"DDS ",4)!=0 || std::memcmp(dds.data()+84,"DX10",4)!=0 ||
+                   (read_u32(dds,128)!=DXGI_FORMAT_BC3_UNORM_SRGB && read_u32(dds,128)!=DXGI_FORMAT_BC1_UNORM_SRGB)) {
+                    texture.failed=true;trace.write("unit-payload","missing texture; only this kit falls back",true);return false;
+                }
+                // Budget the retained DDS plus its GPU compressed copy.
+                if(!reserve(dds.size()*2))return false;
+                if(!ensure_dds_texture(dds,texture.view,true)) {
+                    texture.failed=true;trace.write("unit-payload","invalid texture; only this kit falls back",true);return false;
+                }
+                texture.bytes=dds.size()*2;texture.dds=std::move(dds);bodies.resident_bytes+=texture.bytes;++loads;
+            } else if(!texture.view && !ensure_dds_texture(texture.dds,texture.view,true))return false;
+            texture.used=used;
+        }
+        if(loads) {
+            char message[160];std::snprintf(message,sizeof(message),"action=%s loaded=%u resident_bytes=%zu budget_bytes=%u",
+                action.name.c_str(),loads,bodies.resident_bytes,96u*1024u*1024u);
+            trace.write("unit-payload",message,true);
+        }
+        return true;
     }
 
     int resource_animation_for(c3x_renderer_tile_v1 const & tile) const {
@@ -6600,7 +6667,8 @@ private:
                         ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_DEVICE_ERROR;
                 }
             } else if(command==Command::unit) {
-                result=renderer_state.unit_bodies.render(renderer_state.device,renderer_state.context,job_unit)
+                result=renderer_state.unit_bodies.render(renderer_state.device,renderer_state.context,job_unit,
+                    [&](auto const& action){return renderer_state.prepare_unit_action(action);})
                     ? C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
             } else if (command == Command::reset) {
                 renderer_state.trace.write("reset", "device and all caches", true);

@@ -981,3 +981,28 @@ remains unresolved after bounded site and side-assignment trials; its preceding
 scene is preserved. No native changes or milestone/manual approval is implied.
 See `terrain_lab/v2/audits/beauty/CITY_CENTRAL_CAPITAL_PASS.md`, with the material,
 paving and local-light evidence linked from the city campaign.
+
+### Complete Lab implementation-preparation catalog
+
+The user requested consolidation of every selected Lab system, including older
+goody huts, colonies, infrastructure and territorial borders, and reconciliation
+with integration's unit/resource animation work. The single entry point is
+`handoffs/candidates/lab_v2_complete_r2/README.md`: 24 system dispositions,
+27 conditional scene witnesses, pinned implementation/library dependencies,
+portable replay jobs, native landing points, binding/cache/ownership rules and
+explicit remaining gates. No asset/cache archives are duplicated.
+
+The read-only native audit agrees with the Integration agent's baseline at
+`a0683e0d2a5cb0694961d1993b4c56a8aa1d1323`. Units already self-shadow and cast on
+flat local ground. The new executable coordinate probe proves their direction
+is opposite the pickup world at noon/midnight; posed resources receive static
+shadows but are excluded as source casters. A generic frame/pose/normal adapter
+and bounded S1–S4 native work orders make those gaps concrete without overwriting
+native caching, dirty bounds or animation changes.
+
+The full workflow again passes 379 prerequisite unit tests and fails the frozen
+L19A tile-object runtime hash check; expected hashes and thresholds are unchanged.
+The older frozen-profile boundary failure also remains explicit. No native edits,
+injected compilation, installation, game launch, new visual-best claim or
+milestone/manual gate advancement is part of this preparation. The terrain-only
+package and historical L9–L21 records remain immutable.

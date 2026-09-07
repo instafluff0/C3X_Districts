@@ -225,6 +225,29 @@
       "integration_preparation_preserved": "handoffs/candidates/lab_v2_terrain_lighting_r1/manifest.json",
       "layer_audit": "terrain_lab/v2/audits/beauty/GROUND_LAYER_FINDINGS.md",
       "next_action": "Reconstruct extracted cached height-to-normal/AO stages and source layer contributions before further bump tuning; see CONTINENTAL_GROUND_PASS.md and GROUND_BAKE_DECODE_EVIDENCE.json. Complete source-weight diagnostic coverage, explicit river XY parity for continental r2, named mountain bindings, crop/wrap and controlled cost. All-applicable texture/layer audit and overall visual quality remain incomplete."
+    },
+    "consolidated_integration_preparation": {
+      "status": "prepared_not_promoted",
+      "requested_by_user": true,
+      "path": "handoffs/candidates/lab_v2_complete_r2/README.md",
+      "manifest": "handoffs/candidates/lab_v2_complete_r2/manifest.json",
+      "scope": "All selected Lab and historical object systems reconciled with current native pickup and animation baseline; no native edits or formal gate advancement.",
+      "baseline_commit": "a0683e0d2a5cb0694961d1993b4c56a8aa1d1323",
+      "approval": null,
+      "required_user_action": [],
+      "shadow_status": "Current units self/cast on flat ground, but coordinate probe confirms direction mismatch against pickup. Animated resources receive static shadows and are excluded as posed casters. S1-S4 remain native work.",
+      "known_blockers": [
+        "Frozen L19A tile_object_runtime.bin hash mismatch; full prerequisites fail after 379 unit tests pass",
+        "Older frozen-profile incremental boundary parity failure remains open",
+        "No all-new-system combined production visual checkpoint yet"
+      ],
+      "historical_package": "handoffs/candidates/lab_v2_terrain_lighting_r1/README.md",
+      "gates_advanced": [],
+      "delivery": {
+        "recipient": "Integration agent",
+        "status": "concrete package and validation sent directly",
+        "validation": "handoffs/candidates/lab_v2_complete_r2/VALIDATION.json"
+      }
     }
   },
   "barbarian_camp_offline_preparation": {

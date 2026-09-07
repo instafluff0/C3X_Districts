@@ -161,6 +161,8 @@ def _bin(attachment_bins: ET.Element, path: str, culture: str) -> dict[str, Any]
     cultures = _child_collection(leaf, "Cultures")
     available = {_name(item): item for item in _items(cultures)}
     selected_culture = culture if culture in available else "Any"
+    if selected_culture not in available and len(available) == 1:
+        selected_culture = next(iter(available))
     if selected_culture not in available:
         raise ValueError(f"Unit attachment bin {path!r} has neither {culture!r} nor Any")
     culture_node = available[selected_culture]
@@ -195,17 +197,63 @@ def _find_root_item(document: ET.Element, collection: str, name: str) -> ET.Elem
     return _named_item(_root_collection(document, collection), name)
 
 
+def _merge_artdef(base: ET.Element, overlay: ET.Element) -> None:
+    """Overlay named fields and collections, retaining inherited base entries."""
+    for tag, identity in (("m_RootCollections", "m_CollectionName"),
+                          ("m_ChildCollections", "m_CollectionName"),
+                          ("m_Fields/m_Values", "m_ParamName")):
+        source = overlay.find(tag)
+        if source is None:
+            continue
+        target = base.find(tag)
+        if target is None:
+            if "/" in tag:
+                fields = base.find("m_Fields")
+                if fields is None:
+                    fields = ET.SubElement(base, "m_Fields")
+                fields.append(source)
+            else:
+                base.append(source)
+            continue
+        for item in source.findall("Element"):
+            matches = [x for x in target.findall("Element") if _text(x, identity) == _text(item, identity)]
+            if len(matches) > 1:
+                raise ValueError("ambiguous inherited ArtDef entry")
+            if not matches:
+                target.append(item)
+            elif identity == "m_ParamName":
+                target.remove(matches[0]); target.append(item)
+            else:
+                collection = matches[0]
+                for value in item.findall("Element"):
+                    existing = [x for x in collection.findall("Element") if _name(x) == _name(value)]
+                    if len(existing) > 1:
+                        raise ValueError("ambiguous inherited ArtDef element")
+                    if existing:
+                        _merge_artdef(existing[0], value)
+                    else:
+                        collection.append(value)
+
+
 def resolve_unit(
     assets_root: Path,
     unit_name: str,
     culture: str = "Any",
     variation_name: str | None = None,
     member_index: int | None = None,
+    content: str = "Base",
 ) -> dict[str, Any]:
     units_path = assets_root / "Base/ArtDefs/Units.artdef"
     bins_path = assets_root / "Base/ArtDefs/Unit_Bins.artdef"
     units = ET.parse(units_path).getroot()
     bins = ET.parse(bins_path).getroot()
+    if content != "Base":
+        relative = Path(content)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("unsafe source content path")
+        for filename, document in (("Units.artdef", units), ("Unit_Bins.artdef", bins)):
+            path = assets_root / content / "ArtDefs" / filename
+            _merge_artdef(document, ET.parse(path).getroot())
     unit = _find_root_item(units, "Units", unit_name)
     members = _items(_child_collection(unit, "Members"))
     if member_index is None:
@@ -291,6 +339,19 @@ def resolve_unit(
                         **selection,
                     }
                 )
+    for component in selected_components:
+        tint = component["tint"]
+        if not tint or tint == "USE_CIV_COLOR":
+            component["tint_rgb"] = [1., 1., 1.]
+            continue
+        try:
+            tint_node = _find_root_item(units, "UnitTintTypes", tint)
+        except ValueError:
+            tint_node = _find_root_item(bins, "UnitTintTypes", tint)
+        colors = _items(_child_collection(tint_node, "Colors"))
+        selected = next((color for color in colors if _name(color) == "Colors"), colors[0])
+        field = _field(selected, "Color")
+        component["tint_rgb"] = [float(_text(field, "m_" + channel)) / 255. for channel in ("r", "g", "b")]
     return {
         "schema": "c3x.source_unit_recipe.v0",
         "unit": unit_name,

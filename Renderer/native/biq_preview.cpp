@@ -174,6 +174,8 @@ bool write_color_preview(char const* path, HMODULE module, c3x_renderer_output_v
     return ok;
 }
 
+#include "unit_roster_preview.h"
+
 int main(int argc, char ** argv) {
     if (argc != 11 && argc != 12) {
         std::fprintf(stderr, "usage: biq_preview <dll> <mod-root> <definitions> <scene.csv> <out.bmp> <width> <height> <center-x> <center-y> <tile-width> [hour]\n");
@@ -517,6 +519,7 @@ int main(int argc, char ** argv) {
         auto bytes=static_cast<unsigned char const*>(output.bgra_pixels);
         std::vector<unsigned char> retained(bytes,bytes+output.stride_bytes*output.height);
         ok=preview_units(module,argv[5],frame.hour);
+        if(ok)ok=preview_unit_roster(module,argv[5],frame.hour);
         if(ok)ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK &&
             !output.geometry_tiles_built && !output.geometry_upload_bytes &&
             std::memcmp(retained.data(),output.bgra_pixels,retained.size())==0;

@@ -22,6 +22,7 @@ SOCKET_PROFILE = {
     "Hat": {"bone": "Head", "status": "inferred_lab_profile"},
     "WeaponPrimary": {"bone": "Inven_R_Hand", "status": "inferred_lab_profile"},
     "WeaponSecondary": {"bone": "Inven_L_Hand", "status": "inferred_lab_profile"},
+    "Shield": {"bone": "Inven_L_Hand", "status": "inferred_shield_alias"},
 }
 
 
@@ -97,7 +98,7 @@ def validate_family_actions(pack: Path) -> dict[str, Any]:
             for component_record in recipe["components"]:
                 asset_id = component_record["asset"]
                 document, skeleton = components[asset_id]
-                if document["binding_mode"] != "vertex_skin":
+                if document["binding_mode"] not in {"vertex_skin", "mixed"}:
                     continue
                 bone_names = {bone["name"] for bone in skeleton["bones"]}
                 group_index, common = _best_group(clip, bone_names)
@@ -109,6 +110,8 @@ def validate_family_actions(pack: Path) -> dict[str, Any]:
                 mesh_paths = document.get("meshes") or [document["mesh"]]
                 sampled_vertices = 0
                 for mesh_relative in mesh_paths:
+                    if document["binding_mode"] == "mixed" and json.loads((pack / mesh_relative).read_text())["schema"] != normalized_skin.MESH_SCHEMA:
+                        continue
                     mesh = normalized_skin.load_mesh(
                         pack / mesh_relative, len(skeleton["bones"])
                     )

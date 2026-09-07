@@ -10,14 +10,16 @@ namespace c3x_renderer {
 // or native window presentation are owned here. The caller supplies the canvas.
 class UnitBodyRenderer {
 public:
-    struct Mesh { AnimationMesh animation; ID3D11Buffer *indices=nullptr; };
-    struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; };
+    struct Mesh { AnimationMesh animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
+    struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Part { unsigned mesh=0,texture=0; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
     struct Action { std::string name; bool loop=false; std::vector<Part> parts; };
     struct Unit { std::vector<std::string> keys; float scale=1,yaw_offset=0,offset_z=0; std::vector<Action> actions; };
     std::vector<Mesh> meshes;
     std::vector<Texture> textures;
     std::vector<Unit> units;
+    std::size_t resident_bytes=0;
+    std::uint64_t payload_serial=0;
     std::vector<std::uint32_t> pixels;
     int image_width=0,image_height=0;
     bool cache_hit=false;
@@ -35,9 +37,10 @@ public:
         cache.clear();cache_bytes=0;pixels.clear();
     }
     ~UnitBodyRenderer() {reset_gpu();reset_blit();}
-    void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();}
+    void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();resident_bytes=0;payload_serial=0;}
 
-    bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request) {
+    template<class Prepare>
+    bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare) {
         cache_hit=false;keyed_pixels=cast_pixels=0;failure_reason="invalid-request-or-device";
         if(!device || !context || request.struct_size!=sizeof(request) ||
            request.unit_key[63]!=0 || request.hour<0 || request.hour>23 ||
@@ -68,6 +71,8 @@ public:
         for(auto & saved:cache)if(saved.key==key) {
             saved.used=++serial; pixels=saved.pixels;image_width=w;image_height=h;cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";return true;
         }
+        failure_reason="animation-payload-load";
+        if(!prepare(*action))return false;
         failure_reason="gpu-target-setup";
         if(!ensure(device,w,h))return false;
         auto environment=evaluate_environment(float(request.hour),request.season);

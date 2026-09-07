@@ -1,4 +1,16 @@
-# Active focus: city quality
+# Current pickup: complete Lab consolidation
+
+The user requested one implementation handoff covering all selected Lab work,
+older goody huts/infrastructure/territory, and integration's newer animation
+work. Start at the [complete pickup catalog](../../../../handoffs/candidates/lab_v2_complete_r2/README.md).
+It pins selected conditional scenes and source dependencies without duplicating
+art or replacing the earlier terrain-only record. The audit confirms current
+unit shadow direction differs from the pickup world basis; posed resources
+receive static shadows but do not cast their current poses. The package supplies
+an executable coordinate contract and bounded native work orders. No new visual
+best, native implementation, human approval or milestone closure is claimed.
+
+# Preserved focus: city quality
 
 The user redirected the Lab to city sizes, eras and cultures, including night
 lights reflected in water, and permits modest cross-tile city footprints.

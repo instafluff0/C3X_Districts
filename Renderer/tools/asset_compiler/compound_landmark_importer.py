@@ -763,6 +763,7 @@ def _normalize_geometry(
         raise ValueError("Compound mesh contains a non-finite UV")
 
     normal_sums = [[0.0, 0.0, 0.0] for _ in positions]
+    strongest_normals = [(0.0, (0.0, 0.0, 0.0)) for _ in positions]
     kept_indices = []
     omitted_degenerate_triangles = 0
     for start in range(0, len(indices), 3):
@@ -781,6 +782,8 @@ def _normalize_geometry(
             continue
         kept_indices.extend((ia, ib, ic))
         for vertex in (ia, ib, ic):
+            if length > strongest_normals[vertex][0]:
+                strongest_normals[vertex] = (length, cross)
             for axis in range(3):
                 normal_sums[vertex][axis] += cross[axis]
     if not kept_indices:
@@ -792,7 +795,11 @@ def _normalize_geometry(
             continue
         length = math.sqrt(sum(value * value for value in normal_sum))
         if length <= 1.0e-12:
-            raise ValueError("Compound mesh referenced vertex has no geometric normal")
+            # Oppositely wound faces can cancel at shared thin geometry.
+            # Retain the largest incident face's orientation deterministically.
+            length, normal_sum = strongest_normals[index]
+            if length <= 1.0e-12:
+                raise ValueError("Compound mesh referenced vertex has no geometric normal")
         vertex = {
             "source_index": index,
             "position": [round(value, 8) for value in position],

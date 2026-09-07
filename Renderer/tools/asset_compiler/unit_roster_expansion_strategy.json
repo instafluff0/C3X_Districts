@@ -1,0 +1,666 @@
+{
+  "schema": "c3x.source_unit_family_strategy.v0",
+  "source_content": "Base",
+  "source_units_per_tile": 100.0,
+  "units": [
+    {
+      "slug": "zulu_impi",
+      "civ3_ids": [
+        "PRTO_Impi"
+      ],
+      "source_artdef": "UNIT_ZULU_IMPI",
+      "source_content": "DLC/Expansion1",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "anti_cavalry",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Impi_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Impi_RunFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Impi_PokeAttack",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Spearman_DeathFlyBackA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Impi_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Impi_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Impi_React",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Impi_VictoryA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "inca_warakaq",
+      "civ3_ids": [
+        "PRTO_Chasquis_Scout"
+      ],
+      "source_artdef": "UNIT_INCA_WARAKAQ",
+      "source_content": "DLC/Expansion2",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "recon",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Slinger_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Slinger_Run",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Slinger_Attack",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Warrior_DeathMeleeA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "alias": "idle",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "idle",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "mayan_hulche",
+      "civ3_ids": [
+        "PRTO_Javelin_Thrower"
+      ],
+      "source_artdef": "UNIT_MAYAN_HULCHE",
+      "source_content": "DLC/GranColombia_Maya",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "ranged",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Hulche_StandingIdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Hulche_RunCombat",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Hulche_Attack",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Warrior_DeathMeleeA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Hulche_CombatIdleA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Hulche_StrafeBack",
+          "loop": false
+        },
+        "victory": {
+          "alias": "fortify",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "persian_immortal",
+      "civ3_ids": [
+        "PRTO_Immortals"
+      ],
+      "source_artdef": "UNIT_PERSIAN_IMMORTAL",
+      "source_content": "DLC/Macedonia_Persia",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Immortal_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Immortal_RunFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Immortal_PokeAttack",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Immortal_DeathFlyBackA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Immortal_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Immortal_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Immortal_React",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Immortal_VictoryA",
+          "loop": false
+        }
+      },
+      "exclude_roles": [
+        "Arrow",
+        "Weapon"
+      ]
+    },
+    {
+      "slug": "teutonic_knight",
+      "civ3_ids": [
+        "PRTO_Crusader"
+      ],
+      "source_artdef": "UNIT_TEUTONIC_KNIGHT",
+      "source_content": "DLC/BlackDeathScenario",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Swordsman_IdleB",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_UnitMedium_Run_SwordAndShieldA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Swordsman_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Warrior_DeathMeleeA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Warrior_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Swordsman_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Swordsman_ReactA",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Hoplite_VictoryA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "spec_ops",
+      "civ3_ids": [
+        "PRTO_Marine",
+        "PRTO_Paratrooper",
+        "PRTO_WWII_Paratrooper"
+      ],
+      "source_artdef": "UNIT_SPEC_OPS",
+      "source_content": "DLC/Expansion1",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "modern_melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Infantry_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Infantry_StrafeFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Infantry_GunBurstSights",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Infantry_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Infantry_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Infantry_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Infantry_ReactB",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Infantry_VictoryA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "phoenicia_bireme",
+      "civ3_ids": [
+        "PRTO_Curragh"
+      ],
+      "source_artdef": "UNIT_PHOENICIA_BIREME",
+      "source_content": "DLC/Expansion2",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_melee",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Bireme_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Bireme_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Bireme_Attack_L",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Bireme_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Bireme_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "byzantine_dromon",
+      "civ3_ids": [
+        "PRTO_Dromon"
+      ],
+      "source_artdef": "UNIT_BYZANTINE_DROMON",
+      "source_content": "DLC/Byzantium_Gaul",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_ranged",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Dromon_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Dromon_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Dromon_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Dromon_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Dromon_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Dromon_RunStartA",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "de_zeven_provincien",
+      "civ3_ids": [
+        "PRTO_Man-O-War"
+      ],
+      "source_artdef": "UNIT_DE_ZEVEN_PROVINCIEN",
+      "source_content": "DLC/Expansion1",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_ranged",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_DeZevenProvincien_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_DeZevenProvincien_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_DeZevenProvincien_AttackL",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_DeZevenProvincien_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_DeZevenProvincien_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "galleon",
+      "civ3_ids": [
+        "PRTO_Galleon"
+      ],
+      "source_artdef": "UNIT_GALLEON",
+      "source_content": "DLC/PiratesScenario",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_transport",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Frigate_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Frigate_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Frigate_AttackL",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Frigate_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Frigate_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      },
+      "exclude_roles": [
+        "Long_Flag",
+        "Long_Flag001",
+        "Long_Flag002",
+        "Chain_Shot_FX"
+      ]
+    },
+    {
+      "slug": "portuguese_nau",
+      "civ3_ids": [
+        "PRTO_Carrack"
+      ],
+      "source_artdef": "UNIT_PORTUGUESE_NAU",
+      "source_content": "DLC/Portugal",
+      "member_index": 0,
+      "domain": "sea",
+      "archetype": "naval_melee",
+      "minimum_matching_tracks": 1,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Nau_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Nau_RunA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Nau_AttackL",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Caravel_Death",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Nau_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "alias": "idle",
+          "loop": false
+        },
+        "defend": {
+          "alias": "fortify",
+          "loop": false
+        },
+        "victory": {
+          "alias": "idle",
+          "loop": false
+        }
+      },
+      "rigid_driver_bone": "Body"
+    },
+    {
+      "slug": "gaul_gaesatae",
+      "civ3_ids": [
+        "PRTO_Gallic_Swordsman"
+      ],
+      "source_artdef": "UNIT_GAUL_GAESATAE",
+      "source_content": "DLC/Byzantium_Gaul",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Spearman_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Spearman_RunFwdA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Spearman_PokeAttack",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Spearman_DeathFlyBackA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Spearman_BraceA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Spearman_IdleD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Spearman_React",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Spearman_VictoryA",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "medjay",
+      "civ3_ids": [
+        "PRTO_Libyan_Mercenary"
+      ],
+      "source_artdef": "UNIT_MEDJAY",
+      "source_content": "DLC/Nubia_Amanitore",
+      "member_index": 0,
+      "domain": "land",
+      "archetype": "anti_cavalry",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Medjay_IdleCombatA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Medjay_RunFwd",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Swordsman_AttackA",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Warrior_DeathMeleeA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fortify": {
+          "source": "ANIMATION_Medjay_RunStopA",
+          "loop": false
+        },
+        "fidget": {
+          "source": "ANIMATION_Medjay_IdleCombatD",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Medjay_ReactA",
+          "loop": false
+        },
+        "victory": {
+          "source": "ANIMATION_Hoplite_VictoryA",
+          "loop": false
+        }
+      }
+    }
+  ],
+  "runtime": {
+    "direction_count": 8,
+    "body_ownership": "unit_body_only",
+    "retained_native_layers": [
+      "selection_cursor",
+      "health_bar",
+      "activity_marks",
+      "stack_indicators",
+      "hud"
+    ],
+    "movement_policy": "authoritative_civ3_anchor_and_segment_progress",
+    "action_timing_policy": "civ3_effective_duration_until_synchronization_hook_is_audited",
+    "owner_color_policy": "civ3_ntp_palette_with_inferred_source_mask_mapping",
+    "unsupported_policy": "complete_native_unit_body_fallback"
+  },
+  "runtime_integration": "not_enabled",
+  "deferred_archetype_probes": [],
+  "package_anchors": {
+    "DLC/PiratesScenario/units/units.blp": [
+      "Pirate_Galleon"
+    ]
+  }
+}
