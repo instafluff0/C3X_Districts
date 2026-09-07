@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile representative non-Warrior unit families into a generic local pack."""
+"""Compile explicitly selected unit members and actions into a generic local pack."""
 
 from __future__ import annotations
 
@@ -59,8 +59,18 @@ def load_strategy(path: Path = DEFAULT_STRATEGY) -> dict[str, Any]:
             raise ValueError(f"{slug} has an invalid source ArtDef")
         if unit.get("domain") not in {"land", "sea", "air"}:
             raise ValueError(f"{slug} has an invalid domain")
+        member = unit.get("member_index")
+        if member is not None and (type(member) is not int or member < 0):
+            raise ValueError(f"{slug} has an invalid member index")
+        excluded = unit.get("exclude_roles", [])
+        if not isinstance(excluded, list) or any(not isinstance(role, str) or not role for role in excluded):
+            raise ValueError(f"{slug} has invalid excluded roles")
+        scope = unit.get("action_scope", "combat")
+        if scope not in {"combat", "civilian"}:
+            raise ValueError(f"{slug} has an invalid action scope")
+        required = REQUIRED_ACTIONS if scope == "combat" else {"idle", "move"}
         actions = unit.get("actions")
-        if not isinstance(actions, dict) or set(actions) != REQUIRED_ACTIONS:
+        if not isinstance(actions, dict) or set(actions) != required:
             raise ValueError(f"{slug} must define idle, move, attack, and death")
         for action, record in {**actions, **unit.get("additional_actions", {})}.items():
             if not SAFE_ID.fullmatch(action) or not isinstance(record, dict):
@@ -283,7 +293,15 @@ def compile_unit_families(
     shared_data = assets_root / strategy["source_content"] / "Platforms" / "Windows" / "BLPs" / "SHARED_DATA"
     if not shared_data.is_dir():
         raise FileNotFoundError(shared_data)
-    resolved = [(unit, resolve_unit(assets_root, unit["source_artdef"], "Any")) for unit in strategy["units"]]
+    resolved = []
+    for unit in strategy["units"]:
+        recipe = resolve_unit(assets_root, unit["source_artdef"], "Any", member_index=unit.get("member_index"))
+        excluded = set(unit.get("exclude_roles", []))
+        available = {item["role"] for item in recipe["selected_components"]}
+        if excluded - available:
+            raise ValueError("excluded role does not exist in selected source member")
+        recipe["selected_components"] = [item for item in recipe["selected_components"] if item["role"] not in excluded]
+        resolved.append((unit, recipe))
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for unit, recipe in resolved:
         for component in recipe["selected_components"]:
@@ -409,6 +427,7 @@ def compile_unit_families(
                 "civ3_ids": unit["civ3_ids"],
                 "domain": unit["domain"],
                 "archetype": unit["archetype"],
+                "action_scope": unit.get("action_scope", "combat"),
                 "member": {
                     "count": source_recipe["member"]["count"],
                     "member_scale": source_recipe["member"]["member_scale"],

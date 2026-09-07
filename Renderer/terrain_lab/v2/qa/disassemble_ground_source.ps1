@@ -1,3 +1,4 @@
+param([string]$Source = '')
 $ErrorActionPreference = 'Stop'
 # Local licensed-source inspection only; output stays in the ignored audit directory.
 Add-Type -TypeDefinition @'
@@ -27,8 +28,8 @@ public class GroundShaderInspection {
     }
 }
 '@
-$source = Join-Path $PSScriptRoot '../audits/beauty/out/ground-shader-source'
+if (!$Source) { $Source = Join-Path $PSScriptRoot '../audits/beauty/out/ground-shader-source' }
 $files = @(Get-ChildItem $source -Filter '*.dxbc')
 if ($files.Count -eq 0) { throw 'No extracted source shaders found' }
 foreach ($file in $files) { [GroundShaderInspection]::Write($file.FullName) }
-Write-Output "PASS disassembled $($files.Count) local terrain shader containers"
+Write-Output "PASS disassembled $($files.Count) local shader containers"

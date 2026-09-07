@@ -64,7 +64,8 @@ def validate_family_actions(pack: Path) -> dict[str, Any]:
     unit_reports = {}
     for unit_id, unit_entry in manifest["units"].items():
         recipe = json.loads((pack / unit_entry["recipe"]).read_text(encoding="utf-8"))
-        if not basic_actions.issubset(recipe["actions"]):
+        required = {"idle", "move"} if recipe.get("action_scope") == "civilian" else basic_actions
+        if not required.issubset(recipe["actions"]):
             raise ValueError(f"{unit_id} does not bind every basic action")
         driver_id = recipe["animation_driver"]
         driver_document, driver_skeleton = components[driver_id]

@@ -1,0 +1,358 @@
+{
+  "classification": "Partial modern material gain; no general environment, city or milestone acceptance",
+  "cases": {
+    "inland-large": {
+      "source": "Renderer/terrain_lab/v2/audits/beauty/out/city-growth-hierarchy-r1/inland-large/ground/render",
+      "augmentation_sha256": "fe8493bdb7e0ff9c20627fed61caad51b9d91e1387ce50b87722de9f5298e73f",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "tile_count": 100,
+      "source_body_count": 11,
+      "material_packet_checks": [
+        {
+          "pass": true,
+          "changed_material_vertices": 27954,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 27954,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        }
+      ],
+      "matched_pixels": [
+        {
+          "changed_pixels_gt_2": 7398,
+          "max_channel_delta": 40,
+          "bounds": [
+            741,
+            354,
+            827,
+            490
+          ],
+          "before_sha256": "e0fb5014d2e87fb542e362b87c35bd450ca5200ea8f4fa4b364e69253edecf04",
+          "after_sha256": "85179cac1e32555e20980b1ee3422a39ee85b02f919a468e854092e11c0e7721",
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0
+        },
+        {
+          "changed_pixels_gt_2": 4730,
+          "max_channel_delta": 51,
+          "bounds": [
+            739,
+            347,
+            827,
+            489
+          ],
+          "before_sha256": "bca1c62132431016a789b8de0af634144854c84b7b63b48bafc8f57176b8ca28",
+          "after_sha256": "77ad2f77df327ef7fbc18b4c2c2e216880d2ea3f08cfbbd366928e3eb2696fb9",
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0
+        }
+      ],
+      "windows": {
+        "promotion": false,
+        "results": [
+          {
+            "frame": "h12-z1-pan00.bmp",
+            "packet_sha256": "0ff1665a3d0b497f3507509720052b7cdf04c9779e1e26ee6ea5e4f3d0c5ef03",
+            "shader_sha256": "0ff41cc3983c234b2747bc9bdc3aad1e8d022c4ee78fb7cf4a71ce70dc9b33ee",
+            "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+            "reflection_sha256": "51785ea6adb0b8cf3f46884513c2e747a61d22b2b32e859daf4bf69c7fcd8770",
+            "metrics": {
+              "rgb_mean_absolute": 0.005432904411764706,
+              "rgb_p99_absolute": 0,
+              "max_channel_delta": 10,
+              "changed_channels": 12443,
+              "silhouette_iou": 1.0,
+              "luminance_mean_delta": 0.0002072170955772676,
+              "pass": true
+            },
+            "d3d11_sha256": "234b291b3883ebf4b7c17c1454a2a8351bc59588b0962aeeb9c05eeb73401999"
+          },
+          {
+            "frame": "h00-z1-pan00.bmp",
+            "packet_sha256": "962d81143b0932877b2c4ee7c95a84086de59fe1179341095041a237492bf2b4",
+            "shader_sha256": "0ff41cc3983c234b2747bc9bdc3aad1e8d022c4ee78fb7cf4a71ce70dc9b33ee",
+            "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+            "reflection_sha256": "51785ea6adb0b8cf3f46884513c2e747a61d22b2b32e859daf4bf69c7fcd8770",
+            "metrics": {
+              "rgb_mean_absolute": 0.007182291666666667,
+              "rgb_p99_absolute": 0,
+              "max_channel_delta": 7,
+              "changed_channels": 14180,
+              "silhouette_iou": 1.0,
+              "luminance_mean_delta": 0.0002368696690263117,
+              "pass": true
+            },
+            "d3d11_sha256": "3f7232980048af1a3c74338077a0727bbab99877e9d9a4998c32c61095800537"
+          }
+        ]
+      },
+      "selection": "Provisional modern material candidate"
+    },
+    "wilderness-medium": {
+      "source": "Renderer/terrain_lab/v2/audits/beauty/out/city-growth-hierarchy-r1/wilderness-medium/ground/render",
+      "augmentation_sha256": "737a745385689730ed7aeb36e7c17a6fbff260c4739f2b6a11e1b523499d995c",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "tile_count": 100,
+      "source_body_count": 7,
+      "material_packet_checks": [
+        {
+          "pass": true,
+          "changed_material_vertices": 14178,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 14178,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        }
+      ],
+      "matched_pixels": [
+        {
+          "changed_pixels_gt_2": 3170,
+          "max_channel_delta": 39,
+          "bounds": [
+            843,
+            299,
+            897,
+            398
+          ],
+          "before_sha256": "32e31dc2208f49dba22d8691583028a60a57164f4209384f963992e4020ce04f",
+          "after_sha256": "d7f9629193684a23c051f6eddf91281d753acc5ae3e6a34930bdd55c76eaa3c7",
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0
+        },
+        {
+          "changed_pixels_gt_2": 2079,
+          "max_channel_delta": 48,
+          "bounds": [
+            843,
+            299,
+            897,
+            395
+          ],
+          "before_sha256": "d3a591563ecbf2ce85194e311de5bfff543819ec78283d1668901272280e2b5d",
+          "after_sha256": "998fb6673936e4001748ba640146dcbac3321c6f5b1ce84125363c5036238f7e",
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0
+        }
+      ],
+      "windows": {
+        "promotion": false,
+        "results": [
+          {
+            "frame": "h12-z1-pan00.bmp",
+            "packet_sha256": "8bb0b8e38322dc9287d50544212a20c883ea3de6daec0985f6bf6aafcc2f2cfa",
+            "shader_sha256": "393d007f4c67ced9e52157cea93e813744625935f846d0c0fe99ccbc1383052c",
+            "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+            "reflection_sha256": "98969fb97b76947067f82617a46486cf485080f42cfeec552305fdcc07763971",
+            "metrics": {
+              "rgb_mean_absolute": 0.0638357843137255,
+              "rgb_p99_absolute": 2,
+              "max_channel_delta": 13,
+              "changed_channels": 114027,
+              "silhouette_iou": 1.0,
+              "luminance_mean_delta": 0.0018595915444825284,
+              "pass": true
+            },
+            "d3d11_sha256": "936ebfa4512cf5fbdfab84394c2f27259ce8d51e98a32b0a250e5fa0dca9eddb"
+          },
+          {
+            "frame": "h00-z1-pan00.bmp",
+            "packet_sha256": "6bfda9cf631a71f8475657f7d04f861d01e7d84cd0e4dc16d877008f87e17a71",
+            "shader_sha256": "393d007f4c67ced9e52157cea93e813744625935f846d0c0fe99ccbc1383052c",
+            "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+            "reflection_sha256": "98969fb97b76947067f82617a46486cf485080f42cfeec552305fdcc07763971",
+            "metrics": {
+              "rgb_mean_absolute": 0.07332077205882354,
+              "rgb_p99_absolute": 2,
+              "max_channel_delta": 10,
+              "changed_channels": 124753,
+              "silhouette_iou": 1.0,
+              "luminance_mean_delta": 0.0007514972428120125,
+              "pass": true
+            },
+            "d3d11_sha256": "3895147ffc9d5e5cf3daf8ad3d89ea6c8d266c347f886f3c2de163bcfc5ac853"
+          }
+        ]
+      },
+      "selection": "Provisional modern material candidate"
+    },
+    "asian-medium": {
+      "source": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-medium/render",
+      "augmentation_sha256": "9fb21d114acfdfa88f328ed6c5728ddf1904480bb2c634303fad03bd1c0a2325",
+      "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+      "tile_count": 100,
+      "source_body_count": 17,
+      "material_packet_checks": [],
+      "matched_pixels": [
+        {
+          "changed_pixels_gt_2": 5633,
+          "max_channel_delta": 40,
+          "bounds": [
+            767,
+            410,
+            894,
+            511
+          ],
+          "before_sha256": "53db0206cee4806f5419ecf2b5430c7b68a7321e5027ac9644a8ffa998bd6613",
+          "after_sha256": "73583624974ea9998422ea316ed8a5a73341cc2fac965dfc2ab4ea0cc226a831",
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0
+        },
+        {
+          "changed_pixels_gt_2": 3662,
+          "max_channel_delta": 22,
+          "bounds": [
+            767,
+            411,
+            894,
+            511
+          ],
+          "before_sha256": "5ec359ca1fefca2f42ffc0d1feee49357136656950f46d9af84f7e5a61b1bf30",
+          "after_sha256": "be0d226a591a7ec75cd19e521b7afb387cbc1b3b6b30d8e410e199b5aba43b6c",
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0
+        }
+      ],
+      "windows": {
+        "promotion": false,
+        "results": [
+          {
+            "frame": "h12-z1-pan00.bmp",
+            "packet_sha256": "37510155a2d53593f08ad2fa6e35bdd9f14209f073c58fa45f0041ffc6a75a21",
+            "shader_sha256": "14c430253e5b5ad5ef0b36fe4a2dc285d371e2cf39edd94729f3f8d64eae076d",
+            "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+            "reflection_sha256": "f6ab6980acca0a4a3fa93ebeac71b939080c29b7127ea2de6ffc6665e9b35ddf",
+            "metrics": {
+              "rgb_mean_absolute": 0.005412071078431373,
+              "rgb_p99_absolute": 0,
+              "max_channel_delta": 10,
+              "changed_channels": 12418,
+              "silhouette_iou": 1.0,
+              "luminance_mean_delta": 0.00018831488968777086,
+              "pass": true
+            },
+            "d3d11_sha256": "bff6031f0e5a8281d7188740a27294171fa54464a11fe53b72c6f27a8ea58ad9"
+          },
+          {
+            "frame": "h00-z1-pan00.bmp",
+            "packet_sha256": "f63c3c6385d13b8e04e2ff73c7577dca0ccf6f598bbb267fb5cfc053129ae462",
+            "shader_sha256": "14c430253e5b5ad5ef0b36fe4a2dc285d371e2cf39edd94729f3f8d64eae076d",
+            "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+            "reflection_sha256": "f6ab6980acca0a4a3fa93ebeac71b939080c29b7127ea2de6ffc6665e9b35ddf",
+            "metrics": {
+              "rgb_mean_absolute": 0.007178308823529412,
+              "rgb_p99_absolute": 0,
+              "max_channel_delta": 7,
+              "changed_channels": 14167,
+              "silhouette_iou": 1.0,
+              "luminance_mean_delta": 0.00023824705873437993,
+              "pass": true
+            },
+            "d3d11_sha256": "c7ac2f1829667234e30fb52a7467a341613c43f5bf09d916100d26b602e14446"
+          }
+        ]
+      },
+      "selection": "Unselected; roof hue still drifts toward gray"
+    }
+  },
+  "disabled_control": [
+    {
+      "hour": 12,
+      "pixel_exact": true,
+      "original_sha256": "e0fb5014d2e87fb542e362b87c35bd450ca5200ea8f4fa4b364e69253edecf04",
+      "disabled_sha256": "e0fb5014d2e87fb542e362b87c35bd450ca5200ea8f4fa4b364e69253edecf04"
+    },
+    {
+      "hour": 0,
+      "pixel_exact": true,
+      "original_sha256": "bca1c62132431016a789b8de0af634144854c84b7b63b48bafc8f57176b8ca28",
+      "disabled_sha256": "bca1c62132431016a789b8de0af634144854c84b7b63b48bafc8f57176b8ca28"
+    }
+  ],
+  "disabled_windows": {
+    "promotion": false,
+    "results": [
+      {
+        "frame": "h12-z1-pan00.bmp",
+        "packet_sha256": "7b7a4ef7653eba08618182a12500e7e49856a391988a10c60ec48e6b49193a14",
+        "shader_sha256": "ea10881c9cf2583b2595179b49a9b0d656f3aea033c319a53e77a06b035ef728",
+        "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+        "reflection_sha256": "dc9f88729ff24be6721913a1fef6fd2fd0459132070ffa2b8be68302f93fcc5e",
+        "metrics": {
+          "rgb_mean_absolute": 0.005438419117647059,
+          "rgb_p99_absolute": 0,
+          "max_channel_delta": 10,
+          "changed_channels": 12444,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.00021365202204598225,
+          "pass": true
+        },
+        "d3d11_sha256": "0078918b9d2203288c0c9b84dfba6350d6bae3fc30630cd88864b12943756649"
+      },
+      {
+        "frame": "h00-z1-pan00.bmp",
+        "packet_sha256": "67e3f1ebf465054bafe4c155a6e326c9a212f22bdc7cefdc8f2e38420abbff5c",
+        "shader_sha256": "ea10881c9cf2583b2595179b49a9b0d656f3aea033c319a53e77a06b035ef728",
+        "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+        "reflection_sha256": "dc9f88729ff24be6721913a1fef6fd2fd0459132070ffa2b8be68302f93fcc5e",
+        "metrics": {
+          "rgb_mean_absolute": 0.007185049019607843,
+          "rgb_p99_absolute": 0,
+          "max_channel_delta": 7,
+          "changed_channels": 14189,
+          "silhouette_iou": 1.0,
+          "luminance_mean_delta": 0.0002360795955036712,
+          "pass": true
+        },
+        "d3d11_sha256": "ffcaf4957971c8863bd8ab43090acc1fe369b600e7c31e77a3d81c0293caeed4"
+      }
+    ]
+  },
+  "isolated_environment_vs_direct_only": [
+    {
+      "changed_pixels_gt_2": 7607,
+      "max_channel_delta": 110,
+      "bounds": [
+        741,
+        347,
+        827,
+        490
+      ],
+      "before_sha256": "baa6b63c95a74343a30af7c0080f4aedf28087802eb0d1f481cad914c39b3510",
+      "after_sha256": "85179cac1e32555e20980b1ee3422a39ee85b02f919a468e854092e11c0e7721",
+      "outside_city_roi_max": 0,
+      "outside_city_roi_changed_pixels": 0
+    },
+    {
+      "changed_pixels_gt_2": 6604,
+      "max_channel_delta": 73,
+      "bounds": [
+        739,
+        350,
+        827,
+        489
+      ],
+      "before_sha256": "66d84af14edc10a83391a7331996a34c2bb3fdc460b584ac57bde44443d65b2e",
+      "after_sha256": "77ad2f77df327ef7fbc18b4c2c2e216880d2ea3f08cfbbd366928e3eb2696fb9",
+      "outside_city_roi_max": 0,
+      "outside_city_roi_changed_pixels": 0
+    }
+  ],
+  "source_findings_sha256": "a8f387e92515bc5848e0bbe161ced9a23c97799eae7c8ec43ae696afdc7739d0",
+  "rejected_trials": [
+    "r1 analytic reflection omitted source roughness attenuation and washed out Asian roofs",
+    "r2 Asian roof hue remains unconvincing; retain the earlier palace appearance",
+    "The early American capital has no bound metalness in its old material layout; attempted preparation rejected before rendering"
+  ],
+  "generalization": "Wilderness medium was not used to choose sky colors or roughness attenuation. Identical recipe, source scale, placement, terrain and lighting; no regional adjustment.",
+  "remaining": [
+    "Recovered or authored environment probe calibration instead of the analytic hemisphere fallback",
+    "Full older American capital material intake; preserve its existing lake reflection evidence meanwhile",
+    "LEAN1 variance and exact active source material/environment constants",
+    "Dielectric roof response, facade variety, open ground, broader culture/era/size coverage",
+    "No new strong water-reflection claim; all human/native/milestone gates remain open"
+  ]
+}

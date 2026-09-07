@@ -1,0 +1,482 @@
+{
+  "classification": "Provisional American modern capital composition improvement; full city goal and all gates remain open",
+  "single_era": true,
+  "matched_source_bodies": 8,
+  "palace_visibility": [
+    {
+      "revision": 19,
+      "hour": 12,
+      "roi": [
+        850,
+        405,
+        907,
+        456
+      ],
+      "palace_area_effect_pixels_gt_2": 878,
+      "whole_scene_effect_pixels_gt_2": 908,
+      "interior_lake_max_channel_delta": 0,
+      "interpretation": "Localized palace/control image contribution, not a geometric visible-surface percentage."
+    },
+    {
+      "revision": 19,
+      "hour": 0,
+      "roi": [
+        850,
+        405,
+        907,
+        456
+      ],
+      "palace_area_effect_pixels_gt_2": 879,
+      "whole_scene_effect_pixels_gt_2": 1062,
+      "interior_lake_max_channel_delta": 0,
+      "interpretation": "Localized palace/control image contribution, not a geometric visible-surface percentage."
+    },
+    {
+      "revision": 21,
+      "hour": 12,
+      "roi": [
+        850,
+        405,
+        907,
+        456
+      ],
+      "palace_area_effect_pixels_gt_2": 1082,
+      "whole_scene_effect_pixels_gt_2": 1096,
+      "interior_lake_max_channel_delta": 0,
+      "interpretation": "Localized palace/control image contribution, not a geometric visible-surface percentage."
+    },
+    {
+      "revision": 21,
+      "hour": 0,
+      "roi": [
+        850,
+        405,
+        907,
+        456
+      ],
+      "palace_area_effect_pixels_gt_2": 1056,
+      "whole_scene_effect_pixels_gt_2": 1126,
+      "interior_lake_max_channel_delta": 0,
+      "interpretation": "Localized palace/control image contribution, not a geometric visible-surface percentage."
+    }
+  ],
+  "growth": [
+    {
+      "size": 0,
+      "houses": 4,
+      "stable_prefix": true,
+      "fixed_palace": true
+    },
+    {
+      "size": 1,
+      "houses": 7,
+      "stable_prefix": true,
+      "fixed_palace": true
+    },
+    {
+      "size": 2,
+      "houses": 11,
+      "stable_prefix": true,
+      "fixed_palace": true
+    }
+  ],
+  "layout_pixels": [
+    {
+      "hour": 12,
+      "zoom": 1,
+      "changed_pixels_gt_2": 9060,
+      "max_channel_delta": 153,
+      "bounds": [
+        818,
+        367,
+        981,
+        520
+      ],
+      "outside_roi_max": 0,
+      "lake_max_channel_delta": 6,
+      "image_sha256": "7c12f6c877200209541df09045accdc1dc082ab33b1f92922122abee2f9f5fcf"
+    },
+    {
+      "hour": 12,
+      "zoom": 2,
+      "changed_pixels_gt_2": 2358,
+      "max_channel_delta": 132,
+      "bounds": [
+        409,
+        183,
+        490,
+        256
+      ],
+      "outside_roi_max": 0,
+      "lake_max_channel_delta": 6,
+      "image_sha256": "568b88c03037218708d49348881ecdc188f47dfd2b8f513b4bfbd3b4a375000b"
+    },
+    {
+      "hour": 0,
+      "zoom": 1,
+      "changed_pixels_gt_2": 10409,
+      "max_channel_delta": 203,
+      "bounds": [
+        781,
+        367,
+        957,
+        518
+      ],
+      "outside_roi_max": 0,
+      "lake_max_channel_delta": 57,
+      "image_sha256": "d34cee39a42e0d1610132aab270734cdafcea50585439c4609fa55fd937e5dbb"
+    },
+    {
+      "hour": 0,
+      "zoom": 2,
+      "changed_pixels_gt_2": 2650,
+      "max_channel_delta": 183,
+      "bounds": [
+        394,
+        183,
+        478,
+        258
+      ],
+      "outside_roi_max": 0,
+      "lake_max_channel_delta": 33,
+      "image_sha256": "d75bc6e8c71f98fb62c617d5ea840fb54b3d0a3407c99243fd1aab602e065f0b"
+    }
+  ],
+  "composed_paving_pixels": [
+    {
+      "hour": 12,
+      "zoom": 1,
+      "changed_pixels_gt_2": 724,
+      "max_channel_delta": 45,
+      "bounds": [
+        793,
+        413,
+        938,
+        487
+      ],
+      "outside_roi_max": 1,
+      "lake_max_channel_delta": 0,
+      "image_sha256": "75c988a21364c3344f9ed560f58eebc317061c935ec7b1e322d1cbf97502e227"
+    },
+    {
+      "hour": 12,
+      "zoom": 2,
+      "changed_pixels_gt_2": 207,
+      "max_channel_delta": 37,
+      "bounds": [
+        397,
+        206,
+        468,
+        243
+      ],
+      "outside_roi_max": 0,
+      "lake_max_channel_delta": 0,
+      "image_sha256": "59bec5c647d6a06a8b7efbf167d62262e93097f4eeeae90ee6e36038132b3b73"
+    },
+    {
+      "hour": 0,
+      "zoom": 1,
+      "changed_pixels_gt_2": 652,
+      "max_channel_delta": 35,
+      "bounds": [
+        794,
+        413,
+        938,
+        487
+      ],
+      "outside_roi_max": 0,
+      "lake_max_channel_delta": 0,
+      "image_sha256": "9d7a45764f2fa2443e1d94e230d50930789461f1ec9d97fc14f6f2d0683c12e4"
+    },
+    {
+      "hour": 0,
+      "zoom": 2,
+      "changed_pixels_gt_2": 185,
+      "max_channel_delta": 26,
+      "bounds": [
+        397,
+        206,
+        468,
+        243
+      ],
+      "outside_roi_max": 0,
+      "lake_max_channel_delta": 0,
+      "image_sha256": "4348764a5a9bde81944af2eafacae8d9187489af0d9d32e5c6443a62ffb76fa8"
+    }
+  ],
+  "paving_ground_clipping": [
+    [
+      {
+        "part": 6,
+        "input_triangles": 578,
+        "output_triangles": 646,
+        "wet_input_vertices": 0,
+        "shore_boundary": -0.02,
+        "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+      }
+    ],
+    [
+      {
+        "part": 3,
+        "input_triangles": 162,
+        "output_triangles": 198,
+        "wet_input_vertices": 0,
+        "shore_boundary": -0.02,
+        "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+      }
+    ],
+    [
+      {
+        "part": 4,
+        "input_triangles": 234,
+        "output_triangles": 270,
+        "wet_input_vertices": 0,
+        "shore_boundary": -0.02,
+        "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+      }
+    ],
+    [
+      {
+        "part": 3,
+        "input_triangles": 162,
+        "output_triangles": 153,
+        "wet_input_vertices": 0,
+        "shore_boundary": -0.02,
+        "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+      }
+    ],
+    [
+      {
+        "part": 3,
+        "input_triangles": 200,
+        "output_triangles": 240,
+        "wet_input_vertices": 0,
+        "shore_boundary": -0.02,
+        "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+      }
+    ],
+    [
+      {
+        "part": 4,
+        "input_triangles": 128,
+        "output_triangles": 160,
+        "wet_input_vertices": 0,
+        "shore_boundary": -0.02,
+        "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+      }
+    ],
+    [
+      {
+        "part": 2,
+        "input_triangles": 328,
+        "output_triangles": 400,
+        "wet_input_vertices": 0,
+        "shore_boundary": -0.02,
+        "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+      }
+    ],
+    []
+  ],
+  "holdout": {
+    "name": "american-modern-s1-capital-freshcanopy-at5-4",
+    "scope": "Previously unused for city tuning; existing natural-scene fixture.",
+    "site_selection": "fixtures/beauty/city-scene-foundation/freshcanopy-site-survey/selection.json",
+    "same_asset_scale_order_recipe": true,
+    "full_clearance_acceptance": false
+  },
+  "standalone_windows_parity": [
+    {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "5c004854c2be251364d3fd2951b4382734e42559be7e452fa0dbf44fbe1f23f9",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.08856893382352941,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 13,
+            "changed_channels": 167741,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.004631194852730807,
+            "pass": true
+          },
+          "d3d11_sha256": "1a82f70a73c2e1dc60bc9e8fb545dce73db9612b5440766c28b6dc8889403c6e"
+        },
+        {
+          "frame": "h12-z2-pan00.bmp",
+          "packet_sha256": "f92e50a0beddc34cfadcdc6a4d16dcabe7f259e38eb0c0dae547e1810fed0da6",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.07382107843137255,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 11,
+            "changed_channels": 38581,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.005042091912370833,
+            "pass": true
+          },
+          "d3d11_sha256": "be5df71c4fe0c7af9b4461cda45b3d49df170afd058dc92ec2a5a76bbd7b6bf2"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "3e762368dfe2920de9bf30dfee006899f2cfe8a4af24e46f1976f9f91d0ea09e",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.10069056372549019,
+            "rgb_p99_absolute": 3,
+            "max_channel_delta": 11,
+            "changed_channels": 183101,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.002489654228070696,
+            "pass": true
+          },
+          "d3d11_sha256": "fc4445aa4b31f9af83529514f1ca3837e29d695de09a344297c91626f24b50fb"
+        },
+        {
+          "frame": "h00-z2-pan00.bmp",
+          "packet_sha256": "cfd27a79a04984155e49c411136688016f85aa82b4ba2328cc88dbfc875b888f",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.08385661764705882,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 9,
+            "changed_channels": 42335,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0029797235292293514,
+            "pass": true
+          },
+          "d3d11_sha256": "91bb82aa36019c15370a176d756bb6c13057100663df10c9cfe9112afa3ce2f6"
+        }
+      ]
+    },
+    {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "4c1bb949dd1e3a64e7083b98412d9a37968b7c3be4e8331935432902049ab9fa",
+          "shader_sha256": "e5b6907fcaac23cd20885a7f96c7c9bacdecb7af5738a78534165b4ca1f60a16",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "f6907173f76f53929834a9931d1eb6f8af713f5b575d6daeb6b7a56c8524a2a4",
+          "metrics": {
+            "rgb_mean_absolute": 0.06542279411764707,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 11,
+            "changed_channels": 129610,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.000987061029238462,
+            "pass": true
+          },
+          "d3d11_sha256": "c5d0b23282072e58709d18846ebd05c3e6ab831129f0c9cc5671b02336631cc4"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "4f10fa681ed47fb6a170d7218de768ead6b2b3ea9880531ed8c039b7bf3127e6",
+          "shader_sha256": "e5b6907fcaac23cd20885a7f96c7c9bacdecb7af5738a78534165b4ca1f60a16",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "f6907173f76f53929834a9931d1eb6f8af713f5b575d6daeb6b7a56c8524a2a4",
+          "metrics": {
+            "rgb_mean_absolute": 0.07903952205882353,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 10,
+            "changed_channels": 145433,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0008180740810143214,
+            "pass": true
+          },
+          "d3d11_sha256": "bc418b351fd02b4906b1eff94a149bd873143b195f56ea5248129e6aa415cefe"
+        }
+      ]
+    },
+    {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "070fedd6cc6833021786374f300ffe189ac6920a940b458c85c96e78726d7332",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.08856924019607842,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 13,
+            "changed_channels": 167742,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.004631128492402187,
+            "pass": true
+          },
+          "d3d11_sha256": "b6a5916eeb8afddec8964c1610561163b29598184a10086e6485a74c10a81411"
+        },
+        {
+          "frame": "h12-z2-pan00.bmp",
+          "packet_sha256": "70f6171c483150ae879e208d5ed636e6261521b81e9790ed587e676db42b9d83",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.07382107843137255,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 11,
+            "changed_channels": 38581,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.005042091912377681,
+            "pass": true
+          },
+          "d3d11_sha256": "e132018017a9b96901cc09bffd2420bb3a4032859816f4b7bd71247573d01555"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "c8d6f7c4a3af88548108b278866d9a83bb00236c158e95514efd1b7d48535b6d",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.10069056372549019,
+            "rgb_p99_absolute": 3,
+            "max_channel_delta": 11,
+            "changed_channels": 183101,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.002489654228070696,
+            "pass": true
+          },
+          "d3d11_sha256": "572cd0252be48d3b115c4c839e969163f9651b1b3fc60f421ab8a87846a19638"
+        },
+        {
+          "frame": "h00-z2-pan00.bmp",
+          "packet_sha256": "f24a80f5b2386bc73fc8f3abf3ba04ddaa91b4417b3868038e3e3c949d1c1396",
+          "shader_sha256": "7b49f9c8abe3d4553c0f8190665b7ed838c3ec312d98b6f294762d8e5b40a006",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "5e14eff77884f0a88a86a0344d7660122fad478cdf56d0c548c71da890e97ea7",
+          "metrics": {
+            "rgb_mean_absolute": 0.08385661764705882,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 9,
+            "changed_channels": 42335,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0029797235292293514,
+            "pass": true
+          },
+          "d3d11_sha256": "24da2f0dd890a864a8417400c951866700befd624f4968c2a915fcce67fde87b"
+        }
+      ]
+    }
+  ],
+  "free_disk_gib": 28.08,
+  "remaining": [
+    "Other eras/cultures and capital mappings",
+    "Full fixed-region and clearance coverage",
+    "Broad ground coverage and complete material appearance",
+    "Local night light transport",
+    "Human visual checkpoint and all existing milestone gates"
+  ]
+}

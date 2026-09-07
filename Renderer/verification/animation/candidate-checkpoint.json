@@ -1,28 +1,56 @@
 {
   "schema": "c3x.animation_candidate_checkpoint.v1",
-  "status": "compiled_verified_not_staged",
+  "status": "staged_for_user_run_checkpoint",
   "game_launched": false,
-  "candidate_staged": false,
+  "installer_run": false,
+  "candidate_staged": true,
   "sha256": {
-    "Renderer/native/build/candidate/C3XRenderer.dll": "6a88bc0940435b6d98a69ba4f1a3cdf78e18dc81955f5434291fe7fcf8575705",
+    "Renderer/native/build/candidate/C3XRenderer.dll": "1a1e4c79aa1c0e8c261d49ec18574f52c4bec887415e4b8d8464436608c87b7e",
+    "Renderer/bin/C3XRenderer.dll": "1a1e4c79aa1c0e8c261d49ec18574f52c4bec887415e4b8d8464436608c87b7e",
+    "Renderer/native/c3x_renderer.cpp": "84d282dc8df9ebab437df669c4467f150823c3199bdd3f21a885d9576bda8dcf",
+    "Renderer/native/unit_body_renderer.h": "c60e4a33969b9b820301910d187231a8cf0e6d3d338ab988adb1b49ed642b4a3",
     "Renderer/packs/ResourceAnimationRuntime/bindings.json": "2f9d94adf4bc8504ed1b4ff390c61999c6416be942d1866c84e410975bbd69a8",
     "Renderer/packs/ResourceAnimationRuntime/manifest.json": "80f4b4e411b34970955bfe4b44959e78bbb31f7f7c61d452d8cf5e5904e10ee8",
-    "Renderer/packs/UnitAnimationRuntime/bindings.json": "a349984a63ce738a8c61c4e60d5b2a35ff05e8160b2af44faada89776ffd2fff",
-    "Renderer/packs/UnitAnimationRuntime/manifest.json": "95a144d4d1394a2bee4b0c8be184266d61250de1bd40a962a1dc5aee09a3791b",
+    "Renderer/packs/UnitAnimationRuntime/bindings.json": "40d73f3cd180dc7bf70714a1002a7eefa8c94ac4532a7066201cc2acb0ede03b",
+    "Renderer/packs/UnitAnimationRuntime/manifest.json": "3641d0edad8054548ea2c62c235d1fc6868d99e2f70233b306524d06efcb5338",
+    "Renderer/tools/asset_compiler/unit_early_strategy.json": "63cdbae99b77625872c18c788fd5f54dfcaccf9ee4a1fe39388a988e29a15f5a",
     "C3X.h": "05911138d7f7ebdc1bb157b9e49b39ec969e2d95939b62c31d0a5e1f4af7977e",
-    "injected_code.c": "6c4efbdf936f232cba6af8729cbd9c279aaba99ccb46b9b60093ee5fbc037993",
+    "injected_code.c": "11aaab388c9625e32d8fd778d1a1014636128a0711f03d086501b8e80f8883b3",
     "civ_prog_objects.csv": "10e5e3f5347503df7807987555a64a89fe139f739e855be3f428f5c52358ad5e"
   },
+  "unit_families": [
+    "Archer",
+    "Swordsman",
+    "Infantry",
+    "Fighter",
+    "Galley",
+    "Warrior",
+    "Scout",
+    "Settler",
+    "Worker/Builder"
+  ],
+  "unit_actions": 70,
+  "payload_bytes": 27934624,
   "evidence": [
     "Renderer/verification/animation/units.json",
+    "Renderer/verification/animation/unit-payloads-portable_cpp.json",
     "Renderer/verification/animation/resource-payloads-portable_cpp.json",
     "Renderer/verification/animation/unit-body-build.json",
-    "Renderer/verification/animation/unit-injected-compile.json"
+    "Renderer/verification/animation/final-native.json",
+    "Renderer/verification/animation/staging.json",
+    "Renderer/verification/pickup/replay.json",
+    "Renderer/verification/animation/full.json"
   ],
-  "required_user_action": "Apply the exact three existing GOG CSV row changes from Renderer/handoffs/animation_unit_hooks_gog.md; current rows are still define.",
-  "pending": [
-    "Approved injected compile after human CSV inlead/signature edits.",
-    "Action-interruption and retained-object/visibility checkpoint review; five supported unit families only in initial prototype.",
-    "Final normal INSTALL.bat staging and user-run gameplay checkpoint."
-  ]
+  "required_user_action": [],
+  "manual_checkpoint": "Use INSTALL.bat and enable_custom_rendered_units = true; user runs Civ III. Test added unit movement/actions, both zooms, HUD/fog and scrolling with normal OutputDebugStringA output.",
+  "prototype_limits": [
+    "Worker specialty jobs and civilian unsupported actions remain native.",
+    "Scout/Settler companion animals and extra formation members omitted; one body per native sprite.",
+    "Warrior/Scout victory reuses fidget; staffed Settler uses explicitly mapped compatible staff-humanoid clips."
+  ],
+  "known_unrelated_failures": [
+    "Full workflow: frozen L19A tile-object pack hash differs after Lab pack changes; production DLL does not consume this pack.",
+    "Existing legacy frozen-profile incremental boundary parity failure remains; thresholds unchanged."
+  ],
+  "resource_user_feedback": "Resources look good so far, though a little dark; brightness tuning remains separate."
 }

@@ -1,0 +1,57 @@
+{
+  "schema": "c3x.lab.culture_material_intake.v1",
+  "classification": "Shared normalized pack retained; only source-backed normal/frame and ground mappings plus empty extra-channel overlays added",
+  "files": [
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/asian-medieval-extra/.gitignore",
+      "bytes": 17,
+      "sha256": "06aca88a242d8aa37ea36a02ff0bbe005204abf359225525b6e4d069f49cf07d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/asian-medieval-extra/mapping.json",
+      "bytes": 4388,
+      "sha256": "50ad6d3f784c3415dda75f171896c21737f757ed1bf41734764a02d82f0f61cc"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/asian-medieval-extra/source-evidence.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/asian-medieval-ground.json",
+      "bytes": 122992,
+      "sha256": "ad181765f8ee6a872ef7f2d2b9dfc64765b2a511de58bacb5ab5fe9ee003508d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/asian-medieval-normals.json",
+      "bytes": 1352914,
+      "sha256": "ce8faaa49ad54700b2bb82cee43b89142a686494471988fbfb240e7aa0aec51d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/mediterranean-ancient-extra/.gitignore",
+      "bytes": 17,
+      "sha256": "06aca88a242d8aa37ea36a02ff0bbe005204abf359225525b6e4d069f49cf07d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/mediterranean-ancient-extra/mapping.json",
+      "bytes": 4388,
+      "sha256": "b50a0048125e82a1e0530bbab3bd7980b6e4d981d8072691f0a47d674c416c3f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/mediterranean-ancient-extra/source-evidence.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/mediterranean-ancient-ground.json",
+      "bytes": 146514,
+      "sha256": "a14f3bab36b5b585c56027b63eaa74e3ac1705d4d319e116fb1e126542d0495d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/mediterranean-ancient-normals.json",
+      "bytes": 1271903,
+      "sha256": "a0d039bcc37bd3c566b4b42d48b13579ee76bb3c11319fcfeb03f528b6d8d04c"
+    }
+  ],
+  "bytes": 2903139
+}

@@ -1,0 +1,857 @@
+{
+  "classification": "Provisional small ground-material improvement; no full urban ground or city-quality acceptance",
+  "cases": {
+    "wilderness": {
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "changed_pixels_any": 403,
+          "changed_pixels_gt_2": 295,
+          "max_channel_delta": 69,
+          "bounds": [
+            822,
+            362,
+            898,
+            403
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "9cbacd2448f396219007e5f51517a1d1af5ca70fee71d19df72669284aff2878"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "changed_pixels_any": 405,
+          "changed_pixels_gt_2": 289,
+          "max_channel_delta": 49,
+          "bounds": [
+            822,
+            362,
+            897,
+            403
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "ce190e84c2baef9282fee839bb4046ee7434417cb4bd82290e4caca39194e784"
+        }
+      ],
+      "binding_report_sha256": "66de5c2b0296230db2e06a2e23ee3425b702100d555a7bcff099433f5e6286c4",
+      "same_main_reflection_post_shaders": true,
+      "geometry_and_constants_unchanged": true
+    },
+    "medieval": {
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "changed_pixels_any": 474,
+          "changed_pixels_gt_2": 274,
+          "max_channel_delta": 29,
+          "bounds": [
+            380,
+            383,
+            494,
+            435
+          ],
+          "outside_city_roi_max": 1,
+          "outside_city_roi_changed_pixels": 1,
+          "sha256": "511e98881dc7629fa67b6006c211cd4b22766cf3919baf20d0ae42213dd19bfe"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "changed_pixels_any": 461,
+          "changed_pixels_gt_2": 215,
+          "max_channel_delta": 23,
+          "bounds": [
+            380,
+            386,
+            492,
+            435
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "b589ad4f699b2ca519017436017c64fc5ad74c0d81904369a9708cda8c7a69b4"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "changed_pixels_any": 159,
+          "changed_pixels_gt_2": 74,
+          "max_channel_delta": 24,
+          "bounds": [
+            190,
+            193,
+            246,
+            217
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "68dea97baba1035adc582964aebd575349b704cdc4e1b3de41007f0f3c72a496"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "changed_pixels_any": 147,
+          "changed_pixels_gt_2": 63,
+          "max_channel_delta": 19,
+          "bounds": [
+            190,
+            193,
+            246,
+            217
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "e32c11e3d93dc95b659b4369e12d8877f95d38eb74e118394f4a489cce226c2e"
+        }
+      ],
+      "binding_report_sha256": "a74c09d1de504bb36d4643961d5d82a19635a0b5a7140ccd7061b8198af5346e",
+      "same_main_reflection_post_shaders": true,
+      "geometry_and_constants_unchanged": true
+    },
+    "inland": {
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "changed_pixels_any": 849,
+          "changed_pixels_gt_2": 682,
+          "max_channel_delta": 59,
+          "bounds": [
+            733,
+            450,
+            839,
+            482
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "97520e406c18b4d5aaf2df9217bd1b1b8bde10687a04466273ebe8b12efa72bc"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "changed_pixels_any": 837,
+          "changed_pixels_gt_2": 630,
+          "max_channel_delta": 43,
+          "bounds": [
+            733,
+            450,
+            838,
+            482
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "cbaf889ea5bf55bf1b41ff50c8f7e890e03a47a8e542e75fc9ca79a664bd0262"
+        }
+      ],
+      "binding_report_sha256": "0d535cc9bfd3cf4a7dae8c028eb5f6c34ef373bd673d59d2e6dcd9b0b197f2f8",
+      "same_main_reflection_post_shaders": true,
+      "geometry_and_constants_unchanged": true
+    },
+    "freshshadow": {
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "changed_pixels_any": 273,
+          "changed_pixels_gt_2": 187,
+          "max_channel_delta": 72,
+          "bounds": [
+            586,
+            434,
+            625,
+            455
+          ],
+          "outside_city_roi_max": 1,
+          "outside_city_roi_changed_pixels": 1,
+          "sha256": "dd28c5bc4602ce206aa0c60580beb017d555762de902df5284e55d920d66921f"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "changed_pixels_any": 267,
+          "changed_pixels_gt_2": 178,
+          "max_channel_delta": 53,
+          "bounds": [
+            587,
+            435,
+            625,
+            455
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "d256ba222a0e0b9c32da6f5621014e0c80e639cb738102bf0af91d7d52c8f65c"
+        }
+      ],
+      "binding_report_sha256": "62c7176dbe65db4d8489bfe2f4127862b5f314531250bcc7616890d8b55995f6",
+      "same_main_reflection_post_shaders": true,
+      "geometry_and_constants_unchanged": true
+    },
+    "capital": {
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "changed_pixels_any": 673,
+          "changed_pixels_gt_2": 544,
+          "max_channel_delta": 59,
+          "bounds": [
+            826,
+            449,
+            939,
+            487
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "4f939dcd4d1c3fad404d9de77988fd9b5dffc9a042352ae4f8bf4627b5585232"
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "changed_pixels_any": 664,
+          "changed_pixels_gt_2": 516,
+          "max_channel_delta": 41,
+          "bounds": [
+            826,
+            449,
+            939,
+            487
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "1f8c50281840a1febdc8c1ccddc467bfe55bf77c524015fc388fe8ff2f727b4b"
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "changed_pixels_any": 206,
+          "changed_pixels_gt_2": 152,
+          "max_channel_delta": 56,
+          "bounds": [
+            413,
+            225,
+            469,
+            243
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "7eb93948e33132b42d776a6b10fe62e6d5f575e101e433c9458600f86a34bd00"
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "changed_pixels_any": 197,
+          "changed_pixels_gt_2": 149,
+          "max_channel_delta": 35,
+          "bounds": [
+            413,
+            225,
+            469,
+            243
+          ],
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0,
+          "sha256": "e292f18922d9786e817fa42428b69dfd6f1929ea48aef33b71cda6bd5eb3f807"
+        }
+      ],
+      "binding_report_sha256": "79ebda77d1dee3c83a482b0d5fa641dea661f629e2ecfb68d1605884e90c799f",
+      "same_main_reflection_post_shaders": true,
+      "geometry_and_constants_unchanged": true
+    }
+  },
+  "disabled_control": [
+    {
+      "hour": 12,
+      "changed_pixels_any": 0,
+      "changed_pixels_gt_2": 0,
+      "max_channel_delta": 0,
+      "bounds": null
+    },
+    {
+      "hour": 0,
+      "changed_pixels_any": 0,
+      "changed_pixels_gt_2": 0,
+      "max_channel_delta": 0,
+      "bounds": null
+    }
+  ],
+  "disabled_packets_byte_identical": true,
+  "superseded_equal_texture_rebinding_control": [
+    {
+      "hour": 12,
+      "original_direct_replay": {
+        "changed_pixels_any": 0,
+        "changed_pixels_gt_2": 0,
+        "max_channel_delta": 0,
+        "bounds": null
+      },
+      "equal_texture_different_resource_id": {
+        "changed_pixels_any": 1,
+        "changed_pixels_gt_2": 0,
+        "max_channel_delta": 1,
+        "bounds": null
+      }
+    },
+    {
+      "hour": 0,
+      "original_direct_replay": {
+        "changed_pixels_any": 0,
+        "changed_pixels_gt_2": 0,
+        "max_channel_delta": 0,
+        "bounds": null
+      },
+      "equal_texture_different_resource_id": {
+        "changed_pixels_any": 0,
+        "changed_pixels_gt_2": 0,
+        "max_channel_delta": 0,
+        "bounds": null
+      }
+    }
+  ],
+  "capital_lake_roi_unchanged": {
+    "changed_pixels_any": 0,
+    "changed_pixels_gt_2": 0,
+    "max_channel_delta": 0,
+    "bounds": null
+  },
+  "standalone_windows_parity": [
+    {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "d27ed5627815e24d4c189da0a195c352674c8f45bc218412ad842490ffed5be7",
+          "shader_sha256": "544f26351f0c5242481726a66ac113e97f52ae912f47d6db926e456332f00176",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "dafcafef43f3986957cf8cb36be3ac25a0f9ede94f2a5cb49b64b4929a05467f",
+          "metrics": {
+            "rgb_mean_absolute": 0.06408547794117647,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 13,
+            "changed_channels": 114539,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0018469068019733052,
+            "pass": true
+          },
+          "d3d11_sha256": "0519dccaac7326b0fd57b8b6388f645ef4a48e37959d48edae8507063aeb254e"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "1f5e6361332fd71d0ec4feb7cd64d7f42ffbf3e3a6325552d25258585940280b",
+          "shader_sha256": "544f26351f0c5242481726a66ac113e97f52ae912f47d6db926e456332f00176",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "dafcafef43f3986957cf8cb36be3ac25a0f9ede94f2a5cb49b64b4929a05467f",
+          "metrics": {
+            "rgb_mean_absolute": 0.07333976715686275,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 10,
+            "changed_channels": 124831,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0007789154413074036,
+            "pass": true
+          },
+          "d3d11_sha256": "725d8343e28cb7243fa7989bc528346e5b2543a30a79d3245e762da8f2661454"
+        }
+      ]
+    },
+    {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "2d03b74a96829f14c8b139387f90af747644c04e35ceced398b981a1017374eb",
+          "shader_sha256": "73a0e57d8c180e808c09e0bee5a135bfef5d407e1d33deaa7ee1b2e8cd43dac9",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "19497d1a2073ef526906b01efbf267211176e8ea2a47faf710a1a606c42a2374",
+          "metrics": {
+            "rgb_mean_absolute": 0.08857383578431373,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 13,
+            "changed_channels": 167734,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.004630933087969692,
+            "pass": true
+          },
+          "d3d11_sha256": "1aaec670c650fa35816cf61c680efa2bd8ccf4765abadeccd4c949649d038614"
+        },
+        {
+          "frame": "h12-z2-pan00.bmp",
+          "packet_sha256": "3cf49d81ad5148803ed2172ad582cef1843d78d22604faab458bb0114122eb6e",
+          "shader_sha256": "73a0e57d8c180e808c09e0bee5a135bfef5d407e1d33deaa7ee1b2e8cd43dac9",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "19497d1a2073ef526906b01efbf267211176e8ea2a47faf710a1a606c42a2374",
+          "metrics": {
+            "rgb_mean_absolute": 0.07382107843137255,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 11,
+            "changed_channels": 38580,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.005039458088864408,
+            "pass": true
+          },
+          "d3d11_sha256": "4911e455f1e5193c07be349e3136880e50d6f11787c4aae65edeb253f4899105"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "6230096ac68d3f38e4e877841e0036934203740b4e73a86089ecb150b2d1e6fe",
+          "shader_sha256": "73a0e57d8c180e808c09e0bee5a135bfef5d407e1d33deaa7ee1b2e8cd43dac9",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "19497d1a2073ef526906b01efbf267211176e8ea2a47faf710a1a606c42a2374",
+          "metrics": {
+            "rgb_mean_absolute": 0.10069025735294118,
+            "rgb_p99_absolute": 3,
+            "max_channel_delta": 11,
+            "changed_channels": 183103,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0024971409928505584,
+            "pass": true
+          },
+          "d3d11_sha256": "266d5344402a9212b777bee4d11baa1526c885ce07b073e3cac4f31233233852"
+        },
+        {
+          "frame": "h00-z2-pan00.bmp",
+          "packet_sha256": "2d064df221ece3fbf76b71964f58df0de735b3f145d132f2a0ea2ad217331ea4",
+          "shader_sha256": "73a0e57d8c180e808c09e0bee5a135bfef5d407e1d33deaa7ee1b2e8cd43dac9",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "19497d1a2073ef526906b01efbf267211176e8ea2a47faf710a1a606c42a2374",
+          "metrics": {
+            "rgb_mean_absolute": 0.0838406862745098,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 9,
+            "changed_channels": 42322,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0029892132351592676,
+            "pass": true
+          },
+          "d3d11_sha256": "7c4de3b4ff7c4ab160670e60ea3b9753538c41395f42ab7f69969ceda1e5b8e7"
+        }
+      ]
+    },
+    {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "02c67cfd51c9fe5ab39fba790485704b140b47a459ec922646c7517ba039c6d6",
+          "shader_sha256": "3e241bf29ec2477d66fce60db5651d1e93e5690cb92b3934d29e41ce8b1a6c71",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "829c857c0b45f3e0dc290ec0907fff1cf7653a0609ac42ee738d989be5a8ffdc",
+          "metrics": {
+            "rgb_mean_absolute": 0.00541390931372549,
+            "rgb_p99_absolute": 0,
+            "max_channel_delta": 10,
+            "changed_channels": 12421,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.00019015312498873646,
+            "pass": true
+          },
+          "d3d11_sha256": "926d27e484bfae069327e25adc25902fd3768f575f93806a368723c9fd44585d"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "f277c72c676c4acd0ef91c846aa8ad80b49533eba979775dccf00a0f27bf2246",
+          "shader_sha256": "3e241bf29ec2477d66fce60db5651d1e93e5690cb92b3934d29e41ce8b1a6c71",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "829c857c0b45f3e0dc290ec0907fff1cf7653a0609ac42ee738d989be5a8ffdc",
+          "metrics": {
+            "rgb_mean_absolute": 0.0071795343137254905,
+            "rgb_p99_absolute": 0,
+            "max_channel_delta": 7,
+            "changed_channels": 14171,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.00023693235285634942,
+            "pass": true
+          },
+          "d3d11_sha256": "06dced52580b79a86eb991737190f0c28b0118873944bf57311be897b3497267"
+        }
+      ]
+    },
+    {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "aeafd71d5954833ce7ab442fa045e8fba5678b4338a55848b18b593b092eadcf",
+          "shader_sha256": "727e0ab6f1622ac6e5909c5545d09368a30e563f79cf359357efe4cac5acfbae",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "71bbbef850b3ba35969b51b798cf7d667adf2bf9eda7a35a00e1d69b7cbed307",
+          "metrics": {
+            "rgb_mean_absolute": 0.020400122549019607,
+            "rgb_p99_absolute": 1,
+            "max_channel_delta": 10,
+            "changed_channels": 46756,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0010661007353200522,
+            "pass": true
+          },
+          "d3d11_sha256": "2b5c4431c01a5e4f11fbeaa7feb60231134951572fa39bd8ad0a23531f0fcc4f"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "7a05ef60b3efd983935eb5bfd868e9850006c43bb889bbb4c0cc2a32707255a8",
+          "shader_sha256": "727e0ab6f1622ac6e5909c5545d09368a30e563f79cf359357efe4cac5acfbae",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "71bbbef850b3ba35969b51b798cf7d667adf2bf9eda7a35a00e1d69b7cbed307",
+          "metrics": {
+            "rgb_mean_absolute": 0.02639123774509804,
+            "rgb_p99_absolute": 1,
+            "max_channel_delta": 6,
+            "changed_channels": 53044,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0009321659924325478,
+            "pass": true
+          },
+          "d3d11_sha256": "17813fb268e090b35d504dc76458c4b466786ada6f2160e0db22736e28910a29"
+        }
+      ]
+    },
+    {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "24dc33d72ac521b6e1010e1429a178b8cc43c3f66a429f654ec1b7b50980cdb0",
+          "shader_sha256": "44f10e7024a1e6113c70ad46f1a2d2f4993b686c1045c067ea16ee2624790e11",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "9b28333982b5dc46d4a8f4b28ce272444ef3b304512fb4adaf2a544dde34b8fd",
+          "metrics": {
+            "rgb_mean_absolute": 0.08856893382352941,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 13,
+            "changed_channels": 167741,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.004631194852628088,
+            "pass": true
+          },
+          "d3d11_sha256": "360614778e219a1eaf65c8c8a4482a3baefda5f8c187ea714453c7290191d6a3"
+        },
+        {
+          "frame": "h12-z2-pan00.bmp",
+          "packet_sha256": "c252ab508438a3cdc52fe698c64fae1e4186cf24d2f2e6d03b0a4677d17658c3",
+          "shader_sha256": "44f10e7024a1e6113c70ad46f1a2d2f4993b686c1045c067ea16ee2624790e11",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "9b28333982b5dc46d4a8f4b28ce272444ef3b304512fb4adaf2a544dde34b8fd",
+          "metrics": {
+            "rgb_mean_absolute": 0.07382107843137255,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 11,
+            "changed_channels": 38581,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.005042091912363985,
+            "pass": true
+          },
+          "d3d11_sha256": "f3f23fa3448418ad2645419a4978ffcaf14508865add5785af994dfaeb8df050"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "a71014a23daeff142930c7bc84dc78b6b7616c51e07dc6b9cd4b41be28e4b825",
+          "shader_sha256": "44f10e7024a1e6113c70ad46f1a2d2f4993b686c1045c067ea16ee2624790e11",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "9b28333982b5dc46d4a8f4b28ce272444ef3b304512fb4adaf2a544dde34b8fd",
+          "metrics": {
+            "rgb_mean_absolute": 0.10069087009803922,
+            "rgb_p99_absolute": 3,
+            "max_channel_delta": 11,
+            "changed_channels": 183102,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.002489849632482647,
+            "pass": true
+          },
+          "d3d11_sha256": "25cf746261e78042d4228ed4c060d74ce1ab7dee83fcb31f108d70b4a50c1d0b"
+        },
+        {
+          "frame": "h00-z2-pan00.bmp",
+          "packet_sha256": "bc2de5b7b0a3b92bcb6b12c027089a1c8b2a6f832c6f33c30d49f024d2a57163",
+          "shader_sha256": "44f10e7024a1e6113c70ad46f1a2d2f4993b686c1045c067ea16ee2624790e11",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "9b28333982b5dc46d4a8f4b28ce272444ef3b304512fb4adaf2a544dde34b8fd",
+          "metrics": {
+            "rgb_mean_absolute": 0.08385661764705882,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 9,
+            "changed_channels": 42335,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0029797235292293514,
+            "pass": true
+          },
+          "d3d11_sha256": "89e0ec0d6ad0e353536c49b80f386218fd0c1fcfe3c52586e0e3600a4c6d543c"
+        }
+      ]
+    }
+  ],
+  "source_bindings": [
+    {
+      "schema": "c3x.lab.ground_binding_override.v1",
+      "classification": "Explicit Lab era-ground binding hypothesis; no recovered engine height/state selector",
+      "expected": {
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_b333b8babb7742d9.dds",
+        "sha256": "aa75cad3c6352e7bba592edbe5d69e4e263458bf6b919d6ce1d8d8129899824c"
+      },
+      "replacement": {
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_185f6344efc21ad8.dds",
+        "sha256": "0e7760c116770bee1bd0e84c7b8f267c62f01460b2171b32f4d3788005bbff05"
+      },
+      "source": {
+        "package": "Base/Platforms/Windows/BLPs/route_decal_materials.blp",
+        "sha256": "77dbb4a14d21255518adda5c888a43c7e21b0df3ce847d6671bfd921be4cb80e",
+        "material": "Decal_Parts_Modern_01",
+        "material_evidence": {
+          "entry": 49,
+          "name_pointer": 51,
+          "texture_slots": {
+            "base_color": {
+              "status": "accepted",
+              "source": {
+                "index": 16,
+                "name": "Decals_Parts_Modern_01_B",
+                "class": "Decal_BaseColor"
+              }
+            },
+            "height": {
+              "status": "accepted",
+              "source": {
+                "index": 18,
+                "name": "Decals_Parts_Modern_01_H",
+                "class": "Decal_Heightmap"
+              }
+            },
+            "specular": {
+              "status": "class_mismatch",
+              "expected_class": "Decal_Spec",
+              "source": {
+                "index": 1,
+                "name": "Decals_Ancient_01_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "fog_color": {
+              "status": "accepted",
+              "source": {
+                "index": 17,
+                "name": "Decals_Parts_Modern_01_FOW",
+                "class": "Decal_FOWColor"
+              }
+            }
+          }
+        },
+        "texture": {
+          "index": 16,
+          "name": "Decals_Parts_Modern_01_B",
+          "class": "Decal_BaseColor"
+        },
+        "payload_sha256": "fc46370d90163f16e5e241b2ed765d5ac27715daf35e674fb66898ab789db082",
+        "metadata": {
+          "width": 512,
+          "height": 512,
+          "mip_count": 8,
+          "dxgi_format": 78,
+          "format_name": "BC3_UNORM_SRGB",
+          "color_space": "srgb",
+          "payload_bytes": 349520,
+          "relative_offset": 6295552,
+          "metadata_offset": 88,
+          "resource_offset_field": 32,
+          "resource_size_field": 40
+        },
+        "matches_existing_normalized_payload_exactly": true,
+        "generator_bindings": [
+          {
+            "artdef": "Base/ArtDefs/CityGenerators.artdef",
+            "sha256": "a1debb4133a194d3d0836bbca5d0104af92d59f1877c74ce3956d58d6799c348",
+            "record": {
+              "name": "MOD_OVERRIDE",
+              "fields": {
+                "Tag_Era": {
+                  "m_ElementName": "ARTERA_MODERN",
+                  "m_RootCollectionName": "ArtEra",
+                  "m_ArtDefPath": "Eras.artdef",
+                  "m_CollectionIsLocked": "true",
+                  "m_TemplateName": "Eras"
+                },
+                "Normal Material": {
+                  "m_EntryName": "Decal_Parts_Modern_01",
+                  "m_XLPClass": "RouteDecalMaterial",
+                  "m_XLPPath": "RouteDecalMaterials.xlp",
+                  "m_BLPPackage": "route_decal_materials",
+                  "m_LibraryName": "RouteDecalMaterial"
+                },
+                "Pillaged Material": {
+                  "m_EntryName": "Decal_Parts_Modern_PIL",
+                  "m_XLPClass": "RouteDecalMaterial",
+                  "m_XLPPath": "RouteDecalMaterials.xlp",
+                  "m_BLPPackage": "route_decal_materials",
+                  "m_LibraryName": "RouteDecalMaterial"
+                },
+                "HeightRange": {
+                  "m_x": "10.000000",
+                  "m_y": "100.000000"
+                }
+              },
+              "children": {},
+              "replace_merged_collections": {},
+              "append_merged_parameter_collections": false
+            }
+          }
+        ]
+      },
+      "unchanged": [
+        "source ground triangles",
+        "source atlas UVs",
+        "city body materials",
+        "city era",
+        "city placement",
+        "terrain",
+        "shadow map",
+        "local lights",
+        "reflection and glow shaders"
+      ],
+      "unresolved": [
+        "HeightRange application",
+        "normal/pillaged state selection",
+        "ground height channel",
+        "broader coverage between compounds"
+      ]
+    },
+    {
+      "schema": "c3x.lab.ground_binding_override.v1",
+      "classification": "Explicit Lab era-ground binding hypothesis; no recovered engine height/state selector",
+      "expected": {
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_b333b8babb7742d9.dds",
+        "sha256": "aa75cad3c6352e7bba592edbe5d69e4e263458bf6b919d6ce1d8d8129899824c"
+      },
+      "replacement": {
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_1674b3260ef12664.dds",
+        "sha256": "81709f230e96c5a6196eaa02c1a15baded743e945d3e2e803d57e4f90a1d159d"
+      },
+      "source": {
+        "package": "Base/Platforms/Windows/BLPs/route_decal_materials.blp",
+        "sha256": "77dbb4a14d21255518adda5c888a43c7e21b0df3ce847d6671bfd921be4cb80e",
+        "material": "Decal_Parts_Classical_01",
+        "material_evidence": {
+          "entry": 43,
+          "name_pointer": 45,
+          "texture_slots": {
+            "base_color": {
+              "status": "accepted",
+              "source": {
+                "index": 7,
+                "name": "Decals_Parts_Classical_01_B",
+                "class": "Decal_BaseColor"
+              }
+            },
+            "height": {
+              "status": "accepted",
+              "source": {
+                "index": 8,
+                "name": "Decals_Parts_Classical_01_H",
+                "class": "Decal_Heightmap"
+              }
+            },
+            "specular": {
+              "status": "class_mismatch",
+              "expected_class": "Decal_Spec",
+              "source": {
+                "index": 1,
+                "name": "Decals_Ancient_01_FOW",
+                "class": "Decal_FOWColor"
+              }
+            },
+            "fog_color": {
+              "status": "accepted",
+              "source": {
+                "index": 12,
+                "name": "Decals_Parts_Industrial_01_FOW",
+                "class": "Decal_FOWColor"
+              }
+            }
+          }
+        },
+        "texture": {
+          "index": 7,
+          "name": "Decals_Parts_Classical_01_B",
+          "class": "Decal_BaseColor"
+        },
+        "payload_sha256": "5ae696c133345a83e6637fb5e0b0f70c5ba00bd1fd3abacc19e4f08f5315fb1f",
+        "metadata": {
+          "width": 512,
+          "height": 512,
+          "mip_count": 8,
+          "dxgi_format": 78,
+          "format_name": "BC3_UNORM_SRGB",
+          "color_space": "srgb",
+          "payload_bytes": 349520,
+          "relative_offset": 3148288,
+          "metadata_offset": 88,
+          "resource_offset_field": 32,
+          "resource_size_field": 40
+        },
+        "matches_existing_normalized_payload_exactly": true,
+        "generator_bindings": [
+          {
+            "artdef": "Base/ArtDefs/CityGenerators.artdef",
+            "sha256": "a1debb4133a194d3d0836bbca5d0104af92d59f1877c74ce3956d58d6799c348",
+            "record": {
+              "name": "CLA_OVERRIDE",
+              "fields": {
+                "Tag_Era": {
+                  "m_ElementName": "ARTERA_CLASSICAL",
+                  "m_RootCollectionName": "ArtEra",
+                  "m_ArtDefPath": "Eras.artdef",
+                  "m_CollectionIsLocked": "true",
+                  "m_TemplateName": "Eras"
+                },
+                "Normal Material": {
+                  "m_EntryName": "Decal_Parts_Classical_01",
+                  "m_XLPClass": "RouteDecalMaterial",
+                  "m_XLPPath": "RouteDecalMaterials.xlp",
+                  "m_BLPPackage": "route_decal_materials",
+                  "m_LibraryName": "RouteDecalMaterial"
+                },
+                "Pillaged Material": {
+                  "m_EntryName": "Decal_Parts_Classical_PIL",
+                  "m_XLPClass": "RouteDecalMaterial",
+                  "m_XLPPath": "RouteDecalMaterials.xlp",
+                  "m_BLPPackage": "route_decal_materials",
+                  "m_LibraryName": "RouteDecalMaterial"
+                },
+                "HeightRange": {
+                  "m_x": "10.000000",
+                  "m_y": "100.000000"
+                }
+              },
+              "children": {},
+              "replace_merged_collections": {},
+              "append_merged_parameter_collections": false
+            }
+          }
+        ]
+      },
+      "unchanged": [
+        "source ground triangles",
+        "source atlas UVs",
+        "city body materials",
+        "city era",
+        "city placement",
+        "terrain",
+        "shadow map",
+        "local lights",
+        "reflection and glow shaders"
+      ],
+      "unresolved": [
+        "HeightRange application",
+        "normal/pillaged state selection",
+        "ground height channel",
+        "broader coverage between compounds"
+      ]
+    }
+  ],
+  "holdout": "Freshshadow uses the same modern atlas replacement without local tuning; its crowded layout remains unaccepted",
+  "limitations": [
+    "Source HeightRange application and state selection unproven",
+    "Ground height channel absent",
+    "Pads remain mostly under bodies; coherent inter-building ground and skyline arrangement are unfinished",
+    "Native delivery, broad culture/era/size coverage and all approval gates remain open"
+  ]
+}

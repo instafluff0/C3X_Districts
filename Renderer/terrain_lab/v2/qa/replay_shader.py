@@ -22,6 +22,7 @@ def main():
     p.add_argument('--reflection-shader',type=Path,help='Opt-in same-command-buffer planar reflection pass')
     p.add_argument('--post-shader',type=Path,help='Opt-in scene-linear contract 2 GPU reconstruction/glow diagnostic')
     p.add_argument('--repeats',type=int,default=1,help='Bounded repeated GPU frames for cost measurement')
+    p.add_argument('--prepare-only',action='store_true',help='Freeze shaders and batch for an independent backend; do not render or write a passing report')
     a=p.parse_args();r=json.loads(a.report.read_text());out=a.output.resolve()
     if not 1<=a.repeats<=32:p.error('repeats must be in [1,32]')
     runner.owned(out,'Q8-beauty');out.mkdir(parents=True,exist_ok=True)
@@ -38,6 +39,10 @@ def main():
         (reflection_dir/'source.hlsl').write_text(runner.shader_source(a.reflection_shader.resolve()))
     jobs=json.loads((a.report.parent/'batch.json').read_text())
     post=runner.post_shader(cache,a.post_shader.resolve(),out) if a.post_shader else None
+    if post:
+        # Publish the complete frozen shader closure before GPU execution so
+        # another backend can render while this backend compiles its pipeline.
+        (out/'postprocess/source.hlsl').write_text(runner.shader_source(a.post_shader.resolve()))
     identities=[]
     for job in jobs:
         packet=Path(job[0]);identities.append({'path':runner.relative(packet),'sha256':file_hash(packet)})
@@ -50,6 +55,11 @@ def main():
             if len(job)!=12:raise ValueError('reflection prototype expects the standard linear replay job')
             job.append(str(reflection_dir))
     batch=out/'batch.json';batch.write_bytes(canonical(jobs))
+    if a.prepare_only:
+        (out/'preparation.json').write_bytes(canonical({'classification':'Prepared only; no Metal output or parity claim',
+              'packets':identities,'source_report':runner.relative(a.report),
+              'shader_closure_sha256':file_hash(shaderdir/'source.hlsl')}))
+        print('PREPARED only:',runner.relative(out));return
     runner.run([metal,'--batch',batch])
     record={'kind':'shader_only_diagnostic','promotion':False,'source_report':runner.relative(a.report),
         'source_report_sha256':file_hash(a.report),'shader_closure_sha256':file_hash(shaderdir/'source.hlsl'),
@@ -58,8 +68,6 @@ def main():
         record['reflection']={'execution':'GPU prepass in the same command buffer; no intermediate readback',
                               'shader_closure_sha256':file_hash(reflection_dir/'source.hlsl')}
     if post:
-        source=runner.shader_source(a.post_shader.resolve())
-        (out/'postprocess/source.hlsl').write_text(source)
         record['postprocess']={'contract':2,'shader_closure_sha256':file_hash(out/'postprocess/source.hlsl')}
     for job in jobs:
         bmp=Path(job[2]);runner.run(['sips','-s','format','png',bmp,'--out',bmp.with_suffix('.png')])

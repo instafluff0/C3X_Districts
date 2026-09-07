@@ -10,7 +10,7 @@ float value_at(std::vector<uint8_t> const& b,size_t offset) {
  float value;memcpy(&value,b.data()+offset,4);return value;
 }
 int main(int argc,char**argv) {
- if(argc!=5)return 2;
+ if(argc!=5 && argc!=6)return 2;
  auto p=labv2::read_packet(argv[1]);
  if(p.color_branch!=1)throw std::runtime_error("Q6 shadows require scene-linear packet");
  auto e=c3x_renderer::evaluate_environment(float(atof(argv[3])),0);
@@ -87,6 +87,32 @@ int main(int argc,char**argv) {
    std::max(std::abs(dot(v,basis.V)),std::abs(dot(v,basis.L)))));
  }
  float span=std::ceil((extent*2+.5f)*4)/4;
+ int reference_resolution=0;
+ if(argc==6) {
+  // Explicit matched-comparison frame. Rebuild all current casters, but retain
+  // the prior light grid so moving a city cannot shift distant forest texels.
+  auto reference=labv2::read_packet(argv[5]);
+  if(reference.draws.empty() || reference.color_branch!=1 || reference.binding_contract!=2)
+   throw std::runtime_error("unsupported shadow frame reference packet");
+  auto const& frame=reference.buffers.at(reference.draws.front().frame_buffer);
+  if(frame.size()!=80)throw std::runtime_error("unsupported shadow frame reference");
+  for(int axis=0;axis<3;axis++) {
+   if(std::abs(value_at(frame,axis*4)-basis.U[axis])>1e-6f ||
+      std::abs(value_at(frame,(4+axis)*4)-basis.V[axis])>1e-6f ||
+      std::abs(value_at(frame,(8+axis)*4)-basis.L[axis])>1e-6f)
+    throw std::runtime_error("shadow reference has a different light direction");
+   origin[axis]=value_at(frame,(12+axis)*4);
+   if(!std::isfinite(origin[axis]))throw std::runtime_error("invalid shadow reference origin");
+  }
+  span=value_at(frame,12);reference_resolution=int(value_at(frame,28));
+  if(!std::isfinite(span) || span<=0 || (reference_resolution!=1024 && reference_resolution!=2048 && reference_resolution!=4096))
+   throw std::runtime_error("invalid shadow reference dimensions");
+  for(int corner=0;corner<8;corner++) {
+   F3 v;for(int axis=0;axis<3;axis++)v[axis]=((corner&(1<<axis))?high[axis]:low[axis])-origin[axis];
+   if(std::max(std::abs(dot(v,basis.U)),std::max(std::abs(dot(v,basis.V)),std::abs(dot(v,basis.L))))>=span*.5f)
+    throw std::runtime_error("current scene exceeds preserved shadow frame");
+  }
+ }
  for(auto& triangle:triangles)for(auto& v:triangle)for(int i=0;i<3;i++)v[i]-=origin[i];
  auto alpha=[&](size_t i,float a,float b,float c) {
   auto const& mask=coverage[i];if(!mask.binding)return true;
@@ -98,6 +124,7 @@ int main(int argc,char**argv) {
  // or penumbra just because another tile enters the scene.
  int resolution=1024;
  while(span/resolution>6.f/1024 && resolution<4096)resolution*=2;
+ if(reference_resolution)resolution=reference_resolution;
  p.textures.push_back(raster_shadow_field(triangles,basis.U,basis.V,basis.L,resolution,span,alpha));
  float constants[]={basis.U[0],basis.U[1],basis.U[2],span,
   basis.V[0],basis.V[1],basis.V[2],float(resolution),basis.L[0],basis.L[1],basis.L[2],0,

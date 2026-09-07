@@ -1,0 +1,163 @@
+{
+  "classification": "Unrendered Lab layout; visual acceptance pending",
+  "pool": "city/pool/american/modern",
+  "size": 1,
+  "anchor_tile": [
+    7,
+    5
+  ],
+  "benchmark_region": "coastal",
+  "river_exclusion": null,
+  "instances": [
+    {
+      "slot": 0,
+      "x": -0.6300000000000001,
+      "y": 0.07,
+      "rotation": 0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/81e6bc964c4f7c5a"
+    },
+    {
+      "slot": 1,
+      "x": -0.14,
+      "y": 0.49000000000000005,
+      "rotation": 1.5707963267948966,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/201c181c2d3d95c2"
+    },
+    {
+      "slot": 2,
+      "x": 0.07,
+      "y": 0.6300000000000001,
+      "rotation": 0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/f65b0689b7acb564"
+    },
+    {
+      "slot": 3,
+      "x": 0.35000000000000003,
+      "y": 0.77,
+      "rotation": 1.5707963267948966,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/81157340c6bc8609"
+    },
+    {
+      "slot": 4,
+      "x": 0.28,
+      "y": 0.56,
+      "rotation": 0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/1a2cdd77f4c26999"
+    },
+    {
+      "slot": 5,
+      "x": 0.6300000000000001,
+      "y": 0.07,
+      "rotation": 1.5707963267948966,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/790e2a73c14737d8"
+    },
+    {
+      "slot": 6,
+      "x": 0.56,
+      "y": -0.21000000000000002,
+      "rotation": 0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/1a71fb8ac25f1241"
+    },
+    {
+      "slot": "capital",
+      "x": 0.07,
+      "y": 0.0,
+      "rotation": 0,
+      "scale": 17.03217235422944,
+      "asset": "city/palace/root/0d0c35f4a4c9651a"
+    }
+  ],
+  "search": [
+    {
+      "nodes": 0,
+      "backtracks": 0,
+      "candidate_counts": {},
+      "grid_step": 0.07,
+      "preserved_prefix": 7,
+      "node_limit": 20000,
+      "fixed_neighbors": [
+        [
+          -0.22999999999999998,
+          -0.2997834359285159,
+          0.37,
+          0.2997834359285159
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "fit",
+      "palace_attempt": 0,
+      "palace_site": [
+        -0.254,
+        -0.32378343592851594,
+        0.394,
+        0.32378343592851594
+      ],
+      "planned_size": 1,
+      "planned_instances": [
+        {
+          "slot": 0,
+          "x": -0.6300000000000001,
+          "y": 0.07,
+          "rotation": 0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/81e6bc964c4f7c5a"
+        },
+        {
+          "slot": 1,
+          "x": -0.14,
+          "y": 0.49000000000000005,
+          "rotation": 1.5707963267948966,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/201c181c2d3d95c2"
+        },
+        {
+          "slot": 2,
+          "x": 0.07,
+          "y": 0.6300000000000001,
+          "rotation": 0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/f65b0689b7acb564"
+        },
+        {
+          "slot": 3,
+          "x": 0.35000000000000003,
+          "y": 0.77,
+          "rotation": 1.5707963267948966,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/81157340c6bc8609"
+        },
+        {
+          "slot": 4,
+          "x": 0.28,
+          "y": 0.56,
+          "rotation": 0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/1a2cdd77f4c26999"
+        },
+        {
+          "slot": 5,
+          "x": 0.6300000000000001,
+          "y": 0.07,
+          "rotation": 1.5707963267948966,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/790e2a73c14737d8"
+        },
+        {
+          "slot": 6,
+          "x": 0.56,
+          "y": -0.21000000000000002,
+          "rotation": 0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/1a71fb8ac25f1241"
+        }
+      ]
+    }
+  ]
+}

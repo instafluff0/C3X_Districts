@@ -3,6 +3,7 @@
 Descriptor selection is an explicit diagnostic, not recovered state semantics.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -21,10 +22,19 @@ def main():
     selection.add_argument('--asset')
     selection.add_argument('--pool', help='Recover every selected component in one culture/era pool')
     parser.add_argument('--descriptor-index', type=int, default=0)
+    parser.add_argument('--binding-override', type=Path, help='Fingerprint-checked generic era-ground atlas override; preserves exact triangles and UVs')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if args.output.exists():
         raise ValueError('preserve existing city ground evidence')
+    binding = None
+    if args.binding_override:
+        binding = json.loads((ROOT / args.binding_override).read_text())
+        if binding['schema'] != 'c3x.lab.ground_binding_override.v1':
+            raise ValueError('unknown ground binding override')
+        for key in ('expected', 'replacement'):
+            if hashlib.sha256((ROOT / binding[key]['texture']).read_bytes()).hexdigest() != binding[key]['sha256']:
+                raise ValueError('ground binding texture fingerprint changed')
     report = json.loads((V2 / 'audits/beauty/out/city-source-expanded-r1/build.json').read_text())
     if args.pool:
         pool_id = args.pool if args.pool.startswith('city/pool/') else 'city/pool/' + args.pool
@@ -53,6 +63,8 @@ def main():
                              'uv0': [u, v], 'normal': [0, 0, 1]})
         channel = dict(decal['channels']['base_color'])
         channel['texture'] = (pack / channel['texture']).relative_to(ROOT).as_posix()
+        if binding and channel['texture'] == binding['expected']['texture']:
+            channel['texture'] = binding['replacement']['texture']
         parts[item['asset_id']] = [{'mesh': {'vertices': vertices, 'topology': {'indices': list(range(len(vertices)))}},
                                   'material': {'alpha_mode': 'blend', 'channels': {'base_color': channel}},
                                   'source_descriptor_index': args.descriptor_index,
@@ -61,6 +73,11 @@ def main():
     data = {'schema': 'c3x.lab.city_ground_parts.v1',
             'classification': 'explicit operational-material probe; source descriptor state selector remains unproven',
             'parts': parts}
+    if binding:
+        data['binding_override'] = {
+            'path': (ROOT / args.binding_override).relative_to(ROOT).as_posix(),
+            'sha256': hashlib.sha256((ROOT / args.binding_override).read_bytes()).hexdigest(),
+            'classification': 'era ground atlas hypothesis; source height/state application remains unproven'}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(data, indent=2) + '\n')
     print(str(args.output))

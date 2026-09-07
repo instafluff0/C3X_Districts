@@ -59,6 +59,21 @@ the existing 47-root pack. Eight standalone Windows comparisons pass; gains are
 partial, and the palace's obscured facade/scattered city layout are still visible
 limitations. Previous bests and all gates remain preserved.
 
+The [r21/r22 capital composition pass](terrain_lab/v2/audits/beauty/CITY_COMPOSITION_PASS.md)
+aligns visibility scoring with authored ground, makes the American palace facade
+clearer, and preserves its placement plus existing buildings through all three
+sizes. A region new to city tuning renders with the same recipe. Exact dry-cell
+clipping lets source paving survive composition; ten Windows comparisons pass.
+This is a provisional family-specific improvement, with full city/material and
+milestone acceptance still open.
+
+The [r28 city material pass](terrain_lab/v2/audits/beauty/CITY_AO_MATERIAL_PASS.md)
+uses UV1 for the tested medieval source AO atlas while preserving diffuse UV0
+and emissive UV2. Combined repeat addressing and paving improve eave/recess
+separation; a new inland city witness and the ancient capital broaden checks.
+Fourteen Windows comparisons pass. Tangent/LEAN/gloss, broad ground coverage,
+other families and all existing city gates remain unfinished.
+
 The user's subsequent reference review exposed omitted city-generator and grounding
 metadata. The [generator findings](terrain_lab/v2/audits/beauty/CITY_GENERATOR_FINDINGS.md)
 record mixed-era center ordering and growth/fill parameters, plus recovered city
@@ -696,8 +711,13 @@ Natural wonders, constructed wonders, and C3X districts are late, separate categ
 
 The tested animation DLL is staged for normal INSTALL.bat. The GOG unit inleads
 and corrected reduced signature compile successfully. Ten resource families
-animate facing southeast; five custom unit families follow native cursors and
-anchors. Other units retain native bodies. Both zooms, day/night, action
+animate facing southeast; nine custom unit families follow native cursors and
+anchors, now including Warrior, Scout, Settler and Worker/Builder. Civilian
+coverage is idle/move/fidget/fortify-stop/capture; specialty Worker jobs and
+unsupported families retain native bodies. The extension fixes scientific
+notation in material numbers (which hid Scout) and gives the staffed Settler
+compatible staff-humanoid clips. All 852 source-pose samples and 576 movement /
+912 action draws pass; existing cache budgets remain unchanged. Both zooms, day/night, action
 interruptions, held endpoints, RGB555/RGB565 clipping, config-off, cache reuse
 and terrain preservation pass. The agent did not launch Civ III and stops for
 the batched user-run checkpoint in `docs/animation_integration_checkpoint.md`.
@@ -771,3 +791,154 @@ The three existing GOG CSV definitions need the audited inlead/signature changes
 in `handoffs/animation_unit_hooks_gog.md` before live unit activation. No animation
 DLL has been staged and Civ III was not launched. See
 `docs/animation_integration_checkpoint.md` for coverage and remaining gates.
+
+### Lab city source-normal diagnostic
+
+Opt-in r29/r30 decode the tested static source normal bytes without changing
+geometry, coordinate sets, material bindings or lighting. Coastal and inland
+pixels change subtly; no new visual best or promotion is claimed. Six standalone
+Windows comparisons and ten focused tests pass. The next material work remains
+tangent/LEAN/gloss interpretation, broad grounding and local night light transport.
+See `terrain_lab/v2/audits/beauty/CITY_SOURCE_NORMAL_PASS.md`. Integration state
+and all milestone gates are unchanged by this Lab experiment.
+
+### Lab city source material restoration
+
+The installed shader audit resolves authored tangent-frame and normal-Z decoding
+and cooked dual-lobe roughness roles. r31–r33 apply the bounded material adapter
+with modest visual gains and exact disabled controls; ten Windows comparisons
+pass. The audit also identifies omitted source metalness/opacity slots. Normalize
+those and recover variance/environment/local-light contributions next. City
+quality and all milestone gates remain open; integration code is unchanged by
+this Lab pass. See `terrain_lab/v2/audits/beauty/CITY_SOURCE_SURFACE_PASS.md`.
+
+### Lab city opacity and wilderness clearance
+
+r34 restores small roof openings with exact r36 disabled controls. Direct-only
+metalness r35 is unselected because environment specular is missing. The fixed
+wilderness site exposed forest overlap; a four-body stage now clears vegetation,
+but seven-body growth failed 33 bounded alternatives and remains unresolved.
+Eight Windows comparisons and twelve focused tests pass. One-era style, broader
+palace intake, earlier candidates and all gates remain preserved. Next work is
+coherent urban composition, environment lighting and a broader placement strategy.
+See `terrain_lab/v2/audits/beauty/CITY_EXTRA_MATERIAL_PASS.md`.
+
+### Lab city growth and shadow composition
+
+A constrained-first layout search resolves the seven-body wilderness city while
+preserving a four-body growth prefix. The eleven-body inland case fits; the
+wilderness large stage remains unresolved. A previously untuned city region
+(freshshadow) still looks crowded, so no general city recipe is accepted.
+Matched comparison also exposed all-scene shadow-grid refitting: retaining a
+checked prior grid removes unrelated terrain pixel changes. The selected local
+candidate changes 8,515 day / 7,130 night pixels, with exact outside-city identity.
+Ten Windows comparisons and seventeen focused tests pass. Native code and gates
+remain unchanged. See `terrain_lab/v2/audits/beauty/CITY_GROWTH_PASS.md`.
+
+### Lab city local night-light spill
+
+Facade-light r3 adds bounded warm light around actual emissive lower facades,
+using unchanged scene packets and the shared night activation. It is an authored
+source-informed approximation, not recovered source light binding. Five combined
+cases retain daylight within isolated 1/255 rounding; blocker/reflection controls
+confirm local effects and preserved capital lake reflections. Fourteen Windows
+comparisons and twenty focused tests pass. Layout, urban ground, environment
+specular, broad city coverage and native delivery remain open. No gate advances.
+See `terrain_lab/v2/audits/beauty/CITY_FACADE_LIGHT_PASS.md`.
+
+### Lab city era grounding material
+
+Ground-binding r1 replaces default dirt pads with source-era paving on the five
+fixed facade-light candidates. Geometry, UVs, shadows and light shaders stay
+matched; the gain is visible but small. Fourteen Windows comparisons pass, and
+the corrected no-op packets/images match exactly. Broader urban ground, source
+height/state behavior, city layouts and all gates remain open. See
+`terrain_lab/v2/audits/beauty/CITY_GROUND_BINDING_PASS.md`.
+
+### Lab connected modern city ground
+
+Settlement-ground r2 joins the modern building bases with a projected footprint
+union, reusing source paving and keeping its coordinates fixed through growth.
+Twelve Windows comparisons, six analytic tests and sixteen packet isolation
+checks pass. The medieval attempts are rejected; broad flat stone remains worse
+than the prior best. Next, improve the small-city growth hierarchy and broaden
+culture/era coverage. All gates remain open. See
+`terrain_lab/v2/audits/beauty/CITY_SETTLEMENT_GROUND_PASS.md`.
+
+### Lab single-era city growth hierarchy
+
+Growth r51/r53-r57 keeps smaller modern cities low and reserves the tallest
+compound for the large stage, with exact earlier-building prefixes and unchanged
+source scale. The recipe also reduces freshshadow congestion without local growth
+tuning. Twelve Windows gameplay-size comparisons and seven focused layout tests
+pass; independent packet/frame controls preserve composition. The large wilderness
+fit remains unresolved, and the new wilderness reflection witness is weak.
+Next broaden single-era culture/era/capital coverage and facade response. Previous
+candidates and all gates remain preserved. See
+`terrain_lab/v2/audits/beauty/CITY_GROWTH_HIERARCHY_PASS.md`.
+
+### Lab individual-house culture density
+
+Asian medieval and ancient-brick medium cities now use sixteen source houses
+at unchanged scale, producing more readable neighborhoods than their matched
+seven-house controls. Twelve Windows frames complete; four baseline Metal
+comparisons pass and eight denser-frame comparisons remain pending. Prolonged
+Metal compilation persisted after reducing spill proxies; static shader data
+needs a different implementation. The large scattered layout is unselected and
+future large holdout placement remains unresolved. Twelve focused tests pass.
+No native changes or gate advancement. See
+`terrain_lab/v2/audits/beauty/CITY_CULTURE_DENSITY_PASS.md`.
+
+### Lab buffered city lights
+
+Generic b1 frame data resolves the dense-city Metal compile bottleneck without
+backend changes. Six full replays take 2.58-5.24 seconds. Eight Windows transport
+controls are byte-identical to their prior static-array frames, superseding the
+pending dense-city comparisons; all twelve new Metal/D3D checks pass. Full
+53-proxy spill improves local night readability on inland and holdout medium
+cities while daylight remains exact. Geometry, material and shadow-prefix checks
+pass. Large scattered growth remains unselected; next improve connected city
+placement and broader culture/era/palace coverage. No native or gate advancement.
+See `terrain_lab/v2/audits/beauty/CITY_LIGHT_BUFFER_PASS.md`.
+
+### Lab connected city growth and river clearance
+
+Connected Asian large growth preserves the original sixteen houses and joins
+its last eight into a coherent neighborhood, reducing bounding area 24.5%.
+The river holdout revealed missing corridor clearance in old and new candidates;
+generic convex bank exclusions now produce a clear eight-house correction.
+Sixteen-house river growth remains budget-exhausted. Ancient large growth and a
+previously city-untuned 100-tile coastal case provide additional coverage. Twelve
+Windows comparisons, independent terrain/light/frame checks and fifteen focused
+tests pass. Next broaden single-era palace landmarks and culture coverage;
+river-site medium/large growth and material richness remain open. No native or
+milestone advancement. See
+`terrain_lab/v2/audits/beauty/CITY_CONNECTED_GROWTH_PASS.md`.
+
+### Lab single-era palace composition
+
+The broader palace library now supplies East Asian medieval and ancient-brick
+capitals. Staged house connectivity and shared palace frontage improve the
+small capital and preserve exact 8/16/24 growth. Dry-land-centered placement
+adds main coastal coverage without changing the inland layout. The separate
+capital-untuned coastal holdout remains unresolved; its failures are retained.
+Twelve Windows comparisons, 36 independent composition checks and 23 focused
+tests pass. Removed 614.3 MiB of completed new linear readbacks, retaining all
+images and replay inputs. Facade/material variety, broader city coverage and
+all gates remain open; no native or milestone advancement. See
+`terrain_lab/v2/audits/beauty/CITY_PALACE_COMPOSITION_PASS.md`.
+
+### Lab city environment material trial
+
+An authored sky/ground reflection fallback enables the existing modern
+metalness maps without leaving facades starved of indirect light. The r2
+inland-large and wilderness-medium cases provide modest local material gains.
+Source-family roughness attenuation fixes part of the initial washout, but the
+Asian dielectric roofs remain unselected. Eight current Windows comparisons,
+four independent material-byte inspections and a pixel-exact disabled control
+pass. The older American capital lacks the newer material bindings; restore
+that complete intake next while preserving its lake reflection witness.
+The analytic fallback is not source environment parity or a global default.
+Removed 249.0 MiB of new completed readbacks; all images and replay inputs
+remain. No native or milestone advancement. See
+`terrain_lab/v2/audits/beauty/CITY_ENVIRONMENT_PASS.md`.

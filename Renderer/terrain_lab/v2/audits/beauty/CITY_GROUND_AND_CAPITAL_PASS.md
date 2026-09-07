@@ -102,3 +102,11 @@ After parity and pixel checks, the regenerable r18/r19 linear GPU intermediates
 were removed (174.3 MiB reclaimed). PNG/BMP references, validity masks, source
 inputs, replay packets and shared blobs remain. Evidence revalidation passes
 after cleanup; retained previous-best revisions were not altered.
+
+## Subsequent composition work
+
+[r21/r22](CITY_COMPOSITION_PASS.md) improves the American palace facade and
+combines the new layout with source paving. It also resolves categorical water
+tiles with a negative smoothed shore through exact dry-cell clipping. The r19
+first-legal layout remains a preserved diagnostic rather than the current
+capital-composition candidate.

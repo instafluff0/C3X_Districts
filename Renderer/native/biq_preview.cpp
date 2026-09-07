@@ -548,16 +548,16 @@ bool preview_units(HMODULE module,char const* path,int hour) {
     auto configure=reinterpret_cast<c3x_renderer_set_unit_rendering_fn>(GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
     if(!draw || !configure)return false;
     BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
-    info.bmiHeader.biWidth=1024;info.bmiHeader.biHeight=-640;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
+    info.bmiHeader.biWidth=1024;info.bmiHeader.biHeight=-1152;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
     HDC dc=CreateCompatibleDC(nullptr);void* bits=nullptr;
     HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&bits,nullptr,0);
     if(!dc || !bitmap){if(bitmap)DeleteObject(bitmap);if(dc)DeleteDC(dc);return false;}
     auto old=SelectObject(dc,bitmap);bool ok=true;unsigned drawn=0;
-    char const* names[]={"Archer","Swordsman","Infantry","Fighter","Galley"};
+    char const* names[]={"Archer","Swordsman","Infantry","Fighter","Galley","Warrior","Scout","Settler","Worker"};
     std::vector<std::uint32_t> first;
     for(int zoom=0;zoom<2 && ok;++zoom)for(int phase=0;phase<2 && ok;++phase) {
-        std::fill_n(static_cast<std::uint32_t*>(bits),1024*640,0xff565b62u);
-        for(int row=0;row<5 && ok;++row)for(int direction=1;direction<=8 && ok;++direction) {
+        std::fill_n(static_cast<std::uint32_t*>(bits),1024*1152,0xff565b62u);
+        for(int row=0;row<9 && ok;++row)for(int direction=1;direction<=8 && ok;++direction) {
             c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);unit.unit_id=row;
             sprintf_s(unit.unit_key,"PRTO_%s",names[row]);
             unit.action=2;unit.action_cursor=phase*7;unit.frame_count=16;unit.direction=direction;
@@ -569,33 +569,43 @@ bool preview_units(HMODULE module,char const* path,int hour) {
             if(result!=C3X_RENDERER_RESULT_OK) {std::printf("FAIL unit body key=%s direction=%d phase=%d zoom=%d result=%d\n",unit.unit_key,direction,phase,zoom,result);ok=false;}
             else ++drawn;
         }
-        c3x_renderer_output_v1 picture={};picture.width=1024;picture.height=640;picture.stride_bytes=4096;picture.bgra_pixels=bits;
+        c3x_renderer_output_v1 picture={};picture.width=1024;picture.height=1152;picture.stride_bytes=4096;picture.bgra_pixels=bits;
         std::string filename=std::string(path)+".units-z"+std::to_string(zoom)+"-p"+std::to_string(phase)+".bmp";
         if(ok)ok=write_bmp(filename.c_str(),picture);
         auto begin=static_cast<std::uint32_t const*>(bits);
-        if(phase==0)first.assign(begin,begin+1024*640);
+        if(phase==0)first.assign(begin,begin+1024*1152);
         else if(ok) {
-            std::size_t changes=0;for(unsigned i=0;i<first.size();++i)if(first[i]!=begin[i])++changes;
-            std::printf("UNIT temporal zoom=%d changed_pixels=%zu\n",zoom,changes);ok=changes>100;
+            std::size_t changes=0;
+            for(int row=0;row<9;++row) {
+                unsigned changed=0, visible=0;
+                for(int y=row*128;y<(row+1)*128;++y)for(int x=0;x<1024;++x) {
+                    auto index=y*1024+x;
+                    if(first[index]!=begin[index])++changed;
+                    if(begin[index]!=0xff565b62u)++visible;
+                }
+                std::printf("UNIT family key=%s zoom=%d changed=%u visible=%u\n",names[row],zoom,changed,visible);
+                ok=ok && changed>10 && visible>10;changes+=changed;
+            }
+            std::printf("UNIT temporal zoom=%d changed_pixels=%zu\n",zoom,changes);ok=ok && changes>100;
         }
     }
     if(ok) {
         // Reuse one pose at a new authoritative location and another unit ID.
-        std::fill_n(static_cast<std::uint32_t*>(bits),1024*640,0xff565b62u);
+        std::fill_n(static_cast<std::uint32_t*>(bits),1024*1152,0xff565b62u);
         c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Archer");
         unit.unit_id=41;unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=8;
         unit.sprite_width=unit.sprite_height=191;unit.body_x=100;unit.body_y=100;unit.hour=hour;unit.display_color_rgb=0x205bdd;
         ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK;
-        std::vector<std::uint32_t> original(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*640);
-        std::fill_n(static_cast<std::uint32_t*>(bits),1024*640,0xff565b62u);
+        std::vector<std::uint32_t> original(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*1152);
+        std::fill_n(static_cast<std::uint32_t*>(bits),1024*1152,0xff565b62u);
         unit.unit_id=42;unit.body_x+=128;
         ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK && ok;
         auto actual=static_cast<std::uint32_t const*>(bits);
-        for(int y=0;y<640;++y)for(int x=0;x<1024;++x)
+        for(int y=0;y<1152;++y)for(int x=0;x<1024;++x)
             if(actual[y*1024+x]!=(x>=128?original[y*1024+x-128]:0xff565b62u))ok=false;
         std::printf("UNIT cached anchor translation: %s\n",ok?"pass":"FAIL");
-        auto snapshot=std::vector<std::uint32_t>(actual,actual+1024*640);
-        std::fill_n(static_cast<std::uint32_t*>(bits),1024*640,0xff565b62u);
+        auto snapshot=std::vector<std::uint32_t>(actual,actual+1024*1152);
+        std::fill_n(static_cast<std::uint32_t*>(bits),1024*1152,0xff565b62u);
         ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK && std::memcmp(snapshot.data(),bits,snapshot.size()*4)==0 && ok;
         std::printf("UNIT repeated native cursor: %s\n",ok?"pass":"FAIL");
         ok=configure(2)==C3X_RENDERER_RESULT_BAD_ARGUMENT && ok;
@@ -627,14 +637,14 @@ bool preview_units(HMODULE module,char const* path,int hour) {
         }
     }
     unsigned action_draws=0;
-    for(int row=0;row<5 && ok;++row)for(int zoom=0;zoom<2 && ok;++zoom) {
+    for(int row=0;row<9 && ok;++row)for(int zoom=0;zoom<2 && ok;++zoom) {
         c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);unit.unit_id=80+row;
         sprintf_s(unit.unit_key,"PRTO_%s",names[row]);unit.direction=3;unit.frame_count=16;
         unit.sprite_width=unit.sprite_height=191;unit.body_x=100;unit.body_y=100;
         unit.hour=hour;unit.reduced=zoom;unit.display_color_rgb=0x205bdd;
         std::vector<std::uint32_t> idle;
         auto pose=[&](int action,int cursor,int queued) {
-            std::fill_n(static_cast<std::uint32_t*>(bits),1024*640,0xff565b62u);
+            std::fill_n(static_cast<std::uint32_t*>(bits),1024*1152,0xff565b62u);
             unit.action=action;unit.action_cursor=cursor;unit.queued_action=queued;
             int result=draw(&unit,dc);GdiFlush();
             if(result!=C3X_RENDERER_RESULT_OK) {
@@ -644,22 +654,34 @@ bool preview_units(HMODULE module,char const* path,int hour) {
             ++action_draws;return true;
         };
         ok=pose(1,5,0);
-        idle.assign(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*640);
+        idle.assign(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*1152);
         // Native cursor/action changes interrupt any previous pose immediately.
-        for(int action:{2,3,4,5,6,7,8,9})for(int cursor:{0,7,15})if(ok)ok=pose(action,cursor,1);
+        std::vector<int> actions=row<7?std::vector<int>{2,3,4,5,6,7,8,9}:std::vector<int>{2,7,8,10};
+        for(int action:actions)for(int cursor:{0,7,15})if(ok)ok=pose(action,cursor,1);
         if(ok) {
-            ok=pose(6,15,0);
-            auto death=std::vector<std::uint32_t>(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*640);
-            ok=pose(6,1000,1) && std::memcmp(death.data(),bits,death.size()*4)==0 && ok;
+            int held_action=row<7?6:10;
+            ok=pose(held_action,15,0);
+            auto death=std::vector<std::uint32_t>(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*1152);
+            ok=pose(held_action,1000,1) && std::memcmp(death.data(),bits,death.size()*4)==0 && ok;
             unit.unit_id+=100; // Fresh identity with a queued attack still uses current idle.
             ok=pose(1,5,3) && std::memcmp(idle.data(),bits,idle.size()*4)==0 && ok;
+            if(row>=7) {
+                unit.action=3;
+                ok=draw(&unit,dc)!=C3X_RENDERER_RESULT_OK && std::memcmp(idle.data(),bits,idle.size()*4)==0 && ok;
+            }
+            if(row==8) {
+                strcpy_s(unit.unit_key,"PRTO_Builder");unit.action=1;
+                ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK && ok;
+                // Reset before the non-mutating unsupported action assertion.
+                std::memcpy(bits,idle.data(),idle.size()*4);
+            }
             unit.action=18; // Unsupported worker action must leave the native canvas intact.
             ok=draw(&unit,dc)!=C3X_RENDERER_RESULT_OK && std::memcmp(idle.data(),bits,idle.size()*4)==0 && ok;
         }
     }
     std::printf("UNIT action interruption and held endpoint: %s draws=%u\n",ok?"pass":"FAIL",action_draws);
     // A missing action/key must leave the native canvas byte-for-byte intact.
-    std::vector<std::uint32_t> retained(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*640);
+    std::vector<std::uint32_t> retained(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*1152);
     c3x_renderer_unit_v1 unknown={};unknown.struct_size=sizeof(unknown);strcpy_s(unknown.unit_key,"PRTO_NotMapped");
     ok=draw(&unknown,dc)!=C3X_RENDERER_RESULT_OK && std::memcmp(retained.data(),bits,retained.size()*4)==0 && ok;
     SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);

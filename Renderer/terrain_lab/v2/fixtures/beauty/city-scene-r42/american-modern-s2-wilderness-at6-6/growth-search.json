@@ -1,0 +1,20 @@
+{
+  "nodes": 200000,
+  "backtracks": 53462,
+  "candidate_counts": {
+    "0": 33,
+    "1": 166,
+    "2": 137,
+    "3": 160,
+    "4": 166,
+    "5": 205,
+    "6": 126,
+    "7": 173,
+    "8": 210,
+    "9": 166,
+    "10": 137
+  },
+  "preserved_prefix": 0,
+  "node_limit": 200000,
+  "status": "budget_exhausted"
+}

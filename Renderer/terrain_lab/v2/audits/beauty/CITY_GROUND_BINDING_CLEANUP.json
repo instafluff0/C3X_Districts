@@ -1,0 +1,177 @@
+{
+  "reason": "Completed new render intermediates; retain BMP/PNG images, frozen shaders, reports, previous candidates and shared replay packets",
+  "removed_files": [
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/inland/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "0d97a51f707e2b18c75d9137d85275a9b100db18b0af5217d61132a314d3f03f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/inland/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "27133f9aa62980b87f506b06e532cf10d6ba0716e663b2092bad79ff55e2ac0c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/capital/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "12e78fb1724d0fa45fd6bf9a01133230e708a9182f5db5de13bfe58e30e9e2c0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/capital/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "db00627cc0664502e3c233b73b8491be46c7b2a533d280030b803b9a2787ae0b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/capital/render/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "30192cf207ec6aae123d417571ce69e876cccef06f1e9988d41c5fffce55b720"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/capital/render/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "668094d4577afc437d04655f36673099289c977583c69e4a713e96fdb7d72f02"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-medieval/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "72193d66e862a2cf36723bf45794815e6d120bd6afa7398eb5a755048cc6ef6c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-medieval/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "209a4c6571a15576630a996047fb5dc9a4bd0909db12f8d065eddec75ac78f61"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-medieval/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 2176000,
+      "sha256": "e0561a9d3fc0a1f88703ba3a0e7883668281779e6229aea00ec8581ffc6a6fa6"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-medieval/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 2176000,
+      "sha256": "f6a559bef8f406c6f848989ecc05deda4f6bf61c99ad02c0a294c532dc92a43c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/disabled-exact/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "b910934d482afd0a688e02fe64cfb99d69e30a6c439abafaeb81a972abdc8d9a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/disabled-exact/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "9fa9b5ff5c1f1daaa65573d0ade0842c9ff484c6d303b1947c0ce3cb6a5abf6f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-wilderness/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "da05c5d0f555a34e9d8f056ccb5e5796ff4c689beb76926fc851ade07238f89e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-wilderness/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "a77023ec3e0808a3a97dfc8c6672d4aa523cb2086c174e837ece5b39dc7dd2e6"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/wilderness/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "4790af34d429f9b3f5fcc7e4692feb4c7497f8097964d59c63d68764989ff3a2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/wilderness/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "d2cda4ff5119bd22cc42981042e40f3800d8c41e0d5acdbd40c48d5b8463db9b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-capital/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "a3383cb1fea3c4668097bff51450a2acac814e1e456f35fe2aa436620ba50549"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-capital/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "32f7945168b779d87e4cbf5cf3194a7a072a4f428c27b24cb74a0e79456704e4"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-capital/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 2176000,
+      "sha256": "3dfaaa10e585cc1875bea331cf2c28dd60c846c64b555e13bcbdb4715d91ef5f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-capital/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 2176000,
+      "sha256": "232d5d250e5ae0da5ece61e65b8ffefd93dbfd28f9806e57d2a52c2c0fbff45d"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/medieval/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "fa2a9d60fed8d955fd090f01a7cec8f1a8daf5a952de0e62b70214ac846ce3d9"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/medieval/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "470773c0566e59226447bb7ee0511262c0758e6f3286f3540e58063c22a17d70"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/medieval/render/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "4ebc545aeb8848abb68c7961d46fe86d2814ba30d5b4ef2046c88759a8f39dfa"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/medieval/render/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "3b39078bf55c7ba2586e35498b1025ec7793065d4291b9a6dbd18b4521310158"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-inland/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "7a00dcb058ee899946fd5097b919a3ed1533e5c15e3cc00cde9d8be7b7332f9c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-inland/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "5cb5cfeb5e605cbdf2b81347226a28034a0eb6ca4080d3b89ec1b4a74a304046"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-freshshadow/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "5a4c99c03889dca54057dd08074f6b3ad8206ccb99c074af79f74bbfa8a60349"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/windows-freshshadow/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "527330f0c359fa62ba8d011741765afdd543e71587947aa0e623fd2f4fe44cdd"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/freshshadow/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "0c670cfef35fff553aad7525956f77e0eaa465d32f73b25c980bdd9f46af56da"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/freshshadow/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "91c3534f52a6f93a6ecb557c113bc52fd635d5fdf207404d11e5cee3a8f4847b"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/disabled/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "b910934d482afd0a688e02fe64cfb99d69e30a6c439abafaeb81a972abdc8d9a"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/disabled/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "1aa688e261bebe3e510e5b9ee25ac8403e27afc86bdb30afabeefe2c905d64a2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/direct-replay/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "5d06eb4d307fabc52524768daaa7cc3f6ef57636a66b3cd5bd4c5bf1e16f4ca9"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-ground-binding-r1/direct-replay/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "7102f59d7348a4cea70d5ac4e70334b26760be7b82a172b5245ae231601b5a48"
+    }
+  ],
+  "removed_bytes": 269824000,
+  "remaining_free_bytes": 27358773248
+}

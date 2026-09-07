@@ -1,0 +1,55 @@
+{
+  "classification": "Installed rigid-model shader-family evidence; exact active city permutation not established",
+  "source": "Base/Binaries/Win64Steam/ShaderAutoGen_Windows_DX11_FinalRelease.bs",
+  "source_sha256": "9d511ac04639936ada55e36d3bc6224e5fc514b16299a2c0f683c6e0d079c469",
+  "shaders": [
+    {
+      "stage": "vertex",
+      "offset": 1784304,
+      "bytes": 8536,
+      "sha256": "4f8d0180032c7f5d42021a7dae74bf82a922278009541761faed10817b26037a",
+      "disassembly": "Renderer/terrain_lab/v2/audits/beauty/out/city-shader-source-r1/vertex-1784304.asm",
+      "disassembly_sha256": "1a3e920801298c589c4ab202af796fad2188fda63d94c4149b8a163b6bfde0b5"
+    },
+    {
+      "stage": "model",
+      "offset": 1835904,
+      "bytes": 17224,
+      "sha256": "e6115bacfa1e76b156106be0d89810b03445b3b4b797697887a8ba585765df4d",
+      "disassembly": "Renderer/terrain_lab/v2/audits/beauty/out/city-shader-source-r1/model-1835904.asm",
+      "disassembly_sha256": "8db9b3619b5aae7d389be9ef8175297ff7b44cf2dde607c4eca1f8383b75e555"
+    },
+    {
+      "stage": "model-opacity",
+      "offset": 1870480,
+      "bytes": 17360,
+      "sha256": "d2032b0bf736fc0d09cec4875fe3dfa2dd0dc6ce2c8e70b7a84f6ed5abec6c2a",
+      "disassembly": "Renderer/terrain_lab/v2/audits/beauty/out/city-shader-source-r1/model-opacity-1870480.asm",
+      "disassembly_sha256": "ce56acbf8a721793e54fadb95d29efb21d5f59444528cc5d92ec43750e155461"
+    }
+  ],
+  "findings": {
+    "frame": "Position payload contains octahedral normal bytes; two SNORM8 octahedral tangent directions feed the pixel shader",
+    "normal_texture": "Normal XY is remapped from UNORM; Z is reconstructed as sqrt(max(0,1-dot(XY,XY)))",
+    "cooked_gloss": "RGB is consumed as two lobe variance parameters and a broad component, not a scalar gloss slider",
+    "variance": "Scalar LEAN1 modifies both lobe variances using g_LeanInfo and UV screen derivatives",
+    "environment": "Source uses roughness-filtered environment cubearray and spherical-harmonic irradiance",
+    "local_lighting": "Source evaluates structured point and spot light lists",
+    "opacity": "Inspected permutation samples opacity at UV0 and writes rounded sample coverage; output alpha remains instance fade. Lab single-sample cutoff 0.5 is an adaptation, not exact source MSAA"
+  },
+  "extra_material_slots": {
+    "records": 100,
+    "roster": "Renderer/terrain_lab/v2/audits/beauty/out/city-shader-source-r1/modern-extra-slots.json",
+    "sha256": "57fccd337eafba6a7f0538ede3a381e03b2fb7740a162287c46452c001adc51c",
+    "roles": [
+      "Generic_Metalness",
+      "Generic_OPAC"
+    ]
+  },
+  "remaining": [
+    "Exact active material permutation and constant bindings",
+    "LEAN1 variance scale",
+    "General importer intake beyond the modern Lab overlay",
+    "Source environment lighting normalization and local-light attachment conversion"
+  ]
+}

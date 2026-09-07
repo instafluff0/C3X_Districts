@@ -1,0 +1,17 @@
+{
+  "nodes": 7,
+  "backtracks": 0,
+  "candidate_counts": {
+    "0": 190,
+    "1": 418,
+    "2": 385,
+    "3": 447,
+    "4": 418,
+    "5": 486,
+    "6": 381
+  },
+  "grid_step": 0.07,
+  "preserved_prefix": 0,
+  "node_limit": 20000,
+  "status": "fit"
+}

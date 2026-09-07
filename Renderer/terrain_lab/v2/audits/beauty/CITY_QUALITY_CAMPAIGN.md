@@ -268,3 +268,98 @@ night material and seven matched surrounding city pieces; its facade occlusion
 and wider scattered composition remain defects. Six focused tests and eight
 standalone Windows comparisons pass. No overall city-best replacement, full Lab
 pass, fresh-region acceptance or milestone advancement is claimed.
+
+## Capital composition and growth, r21/r22
+
+[Combined findings](CITY_COMPOSITION_PASS.md): focal visibility scoring now uses
+the authored ground plane, improving the modern palace facade contribution.
+The 4/7/11 ordinary-building sequence and palace remain fixed as the city grows.
+A city-untuned terrain region renders with the same recipe. r22 combines source
+paving, with exact dry-cell and smoothed-shore clipping. Ten Windows comparisons
+and seven focused tests pass. This is a provisional American modern composition
+improvement; other cultures/eras, broad ground coverage, materials, local light
+transport and all existing gates remain open. No full Lab pass is claimed.
+
+## Source AO coordinate recovery and combined materials
+
+[r23-r28 findings](CITY_AO_MATERIAL_PASS.md) establish source-atlas alignment and
+visible shading improvement from UV1 AO for the tested medieval bodies. Diffuse
+UV0 and emissive UV2 stay unchanged. The final r28 case combines that material
+fix with source repeat addressing and ground pieces. AO-disabled controls retain
+original geometry/bindings and match the baseline within one 1/255 pixel. The
+ancient composition and a city-untuned inland region provide wider checks; the
+ancient AO delta itself is too small to count as an improvement. Fourteen Windows
+comparisons pass. Not all source maps are in use: tangent/LEAN/gloss and source
+ground-height response remain unresolved, along with broad coverage and gates.
+
+### Source-normal diagnostic r29/r30
+
+The source static vertex normal bytes now have an opt-in, geometry-checked Lab
+decoder. Matched coastal and inland renders show subtle roof/corner changes,
+not a new accepted best; r28 remains the preceding material candidate. Six
+Windows comparisons and ten focused tests pass. Tangent/LEAN/gloss interpretation,
+urban ground coverage and local night lighting remain open. See
+[CITY_SOURCE_NORMAL_PASS.md](CITY_SOURCE_NORMAL_PASS.md).
+
+### Source shader material restoration r31–r33
+
+Installed rigid-model shader inspection establishes octahedral tangent directions,
+reconstructed normal-map Z and cooked dual-lobe roughness parameters. The opt-in
+combined pass makes modest medieval material gains, preserves modern windows/
+reflection, and passes the inland regression witness. Four disabled images match
+r29 exactly; ten Windows comparisons pass. Source material slots 0x2c metalness
+and 0x30 opacity are omitted by the current importer and are the next concrete
+intake work, alongside variance/environment/local-light response. Full city
+quality and all gates remain open. See
+[CITY_SOURCE_SURFACE_PASS.md](CITY_SOURCE_SURFACE_PASS.md).
+
+### Connected neighborhoods and rendered river constraints
+
+The [connected-growth pass](CITY_CONNECTED_GROWTH_PASS.md) joins the Asian large
+city's detached outer houses while keeping its original sixteen-body prefix.
+It also finds and fixes missing river-bank exclusion for the small holdout;
+r64/r68/r69 remain preserved overlap diagnostics. The medium river fit is still
+unresolved. Ancient large growth and a previously city-untuned coastal region
+render without local recipe changes. Twelve Windows comparisons pass; visible
+acceptance remains provisional. Next broaden single-era palace landmarks and
+source facade variation, retaining river/forest clearance, shared lighting and
+all native/milestone gates.
+
+### Broader single-era capital composition
+
+[Palace composition findings](CITY_PALACE_COMPOSITION_PASS.md) connect the
+47-root source library to the Asian medieval and ancient-brick house families.
+Selected r93/r94/r92 retains the palace and exact 8/16/24-house prefixes,
+with a matched r95 palace-off control. The small palace joins its neighborhood
+instead of sitting across a gap. Source proportions, authored paving and
+night windows survive composition. Ancient inland r77 and main coastal r98
+add coverage; separate capital-untuned coast r99 does not fit and remains
+explicit negative evidence. Twelve Windows comparisons and independent packet
+checks pass, supporting the pixels without granting visual acceptance.
+
+Continue connected usable-land reasoning for the unresolved coast/river
+growth, broader single-era styles, facade/environment response and varied
+open ground. The current canonical comparison still shows clear gaps in
+window/facade detail and deliberate ground composition. No new reflection
+quality claim or native gate advancement. Cleanup removes only 74 completed
+new linear readbacks (614.3 MiB), preserving images, failures and replay inputs.
+
+### City environment reflection and remaining material gaps
+
+[Environment findings](CITY_ENVIRONMENT_PASS.md) preserve two provisional
+modern material candidates with shared sky/ground reflection and existing
+metalness maps. The same recipe works on inland-large and wilderness-medium
+without moving geometry or changing source textures, paving or local lights.
+The source-family roughness attenuation was missing from the first trial;
+restoring it reduces washout, but the Asian roof result remains unselected.
+The prior palace appearance is retained. Eight current Windows comparisons,
+four independent material-bit inspections and an exact disabled control pass.
+
+The American capital/lake fixture still uses an earlier city material layout
+without bound metalness. Restore the complete house/palace material inputs
+there next and verify its night reflections together. The analytic environment
+is an authored approximation, not recovered cube/SH calibration or a global
+city default. Broader single-era coverage, open-ground composition, unresolved
+coastal/river growth and all milestone/manual gates remain part of the active
+goal. Cleanup removes 30 new completed readbacks (249.0 MiB), retaining all
+images, rejected trials and replay resources.

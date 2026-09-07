@@ -1,0 +1,95 @@
+{
+  "classification": "Only disposable linear sidecars from completed r34-r39 renders; rendered PNG/BMP, packets, candidates and failure records retained",
+  "removed_files": [
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r34/american-modern-s1-at7-5/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r34/american-modern-s1-at7-5/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r34/american-modern-s1-at7-5/combined/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r34/american-modern-s1-at7-5/combined/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r34/windows-opacity/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r34/windows-opacity/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r34/windows-opacity/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 2176000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r34/windows-opacity/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 2176000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r35/american-modern-s1-at7-5/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r35/american-modern-s1-at7-5/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r36/american-modern-s1-at7-5/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r36/american-modern-s1-at7-5/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r36/american-modern-s1-at7-5/combined/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r36/american-modern-s1-at7-5/combined/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r37/windows-wilderness-opacity/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r37/windows-wilderness-opacity/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r37/american-modern-s1-wilderness-at6-6/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r37/american-modern-s1-wilderness-at6-6/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r39/american-modern-s0-wilderness-at6-6/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r39/american-modern-s0-wilderness-at6-6/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r39/windows-small-wilderness/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r39/windows-small-wilderness/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000
+    }
+  ],
+  "removed_bytes": 178432000,
+  "free_bytes_after": 28773494784
+}

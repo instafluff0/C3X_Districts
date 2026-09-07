@@ -1,0 +1,12 @@
+{
+  "nodes": 0,
+  "backtracks": 0,
+  "candidate_counts": {
+    "4": 12,
+    "5": 25,
+    "6": 0
+  },
+  "preserved_prefix": 4,
+  "node_limit": 20000,
+  "status": "no_grid_solution"
+}

@@ -140,9 +140,9 @@
       "requested_by_user": true,
       "findings": "terrain_lab/v2/audits/beauty/CITY_QUALITY_CAMPAIGN.md",
       "scope": "Five cultures, four eras, three sizes; readable complete materials, grounded source buildings, stable growth and modest cross-tile footprints; shared night lighting reflected in water.",
-      "current_work": "Single-era r18 adds exact source paving under all selected modern/medieval components with sampled shoreline clipping. r19 connects the American palace from the 47-root pack; palace facade occlusion and scattered wider layout remain unresolved. Previous overall city bests retained.",
+      "current_work": "A partial environment reflection trial now uses the existing modern metalness maps with shared sky/ground radiance. The r2 inland-large and wilderness-medium cases show modest cool-facade separation with unchanged geometry, source textures, paving, local lights and shadows; outside-city pixels remain exact. Source-family roughness attenuation corrected the initial roof washout, but the Asian dielectric result remains unselected and its prior palace appearance is retained. Eight current Windows comparisons, independent material-bit isolation checks and an exact disabled control pass. The older American capital has no bound metalness in its earlier material layout, exposing the next concrete material intake gap. The analytic fallback is not recovered source environment calibration or a global default; all gates remain open.",
       "approval": null,
-      "next_action": "Improve palace visibility and compact organization using combined composition evidence; investigate grounding-material/block/filler coverage within one era. Validate sizes, cultures and fresh terrain regions, night lights/reflections and existing gates. Roads remain deferred; no milestone advancement.",
+      "next_action": "Restore complete source house/palace material inputs for the older American capital/lake fixture while preserving its layout, night lights, paving and reflection witness; use the appropriate normalized palace root and geometry fingerprints. Investigate actual source or authored environment probe radiance, SH and LEAN1 variance instead of repeatedly adjusting the analytic hemisphere. Retain r2 modern inland/wilderness as provisional material candidates and the prior Asian palace appearance. Continue broader single-era culture/era/size coverage, less repetitive architecture and open ground, and connected usable-land reasoning for unresolved coastal capital and medium/large river fits. Keep authoritative Civ III capital state and generic modder mappings; connecting roads, native delivery and all manual/milestone gates remain deferred.",
       "night_light_evidence": "terrain_lab/v2/audits/beauty/CITY_NIGHT_r8_EVIDENCE.json",
       "storage_policy": "Shared-resource packets; discard pre-shadow intermediates immediately; six matrix cases by default; stop below 8 GiB free space.",
       "storage_cleanup": "terrain_lab/v2/audits/beauty/CITY_STORAGE_CLEANUP.json",
@@ -150,8 +150,42 @@
       "palace_intake": "docs/city_palace_asset_import.md",
       "generator_findings": "terrain_lab/v2/audits/beauty/CITY_GENERATOR_FINDINGS.md",
       "era_policy": "User explicitly prefers one era only per city; do not adopt the Civ VI historical-era mix.",
+      "settlement_ground_findings": "terrain_lab/v2/audits/beauty/CITY_SETTLEMENT_GROUND_PASS.md",
+      "settlement_ground_evidence": "terrain_lab/v2/audits/beauty/CITY_SETTLEMENT_GROUND_r1_r2_EVIDENCE.json",
+      "ground_binding_findings": "terrain_lab/v2/audits/beauty/CITY_GROUND_BINDING_PASS.md",
+      "ground_binding_evidence": "terrain_lab/v2/audits/beauty/CITY_GROUND_BINDING_r1_EVIDENCE.json",
       "ground_capital_findings": "terrain_lab/v2/audits/beauty/CITY_GROUND_AND_CAPITAL_PASS.md",
-      "ground_capital_evidence": "terrain_lab/v2/audits/beauty/CITY_GROUND_CAPITAL_r18_r19_EVIDENCE.json"
+      "ground_capital_evidence": "terrain_lab/v2/audits/beauty/CITY_GROUND_CAPITAL_r18_r19_EVIDENCE.json",
+      "capital_composition_findings": "terrain_lab/v2/audits/beauty/CITY_COMPOSITION_PASS.md",
+      "capital_composition_evidence": "terrain_lab/v2/audits/beauty/CITY_COMPOSITION_r21_r22_EVIDENCE.json",
+      "ao_material_findings": "terrain_lab/v2/audits/beauty/CITY_AO_MATERIAL_PASS.md",
+      "ao_material_evidence": "terrain_lab/v2/audits/beauty/CITY_AO_r28_EVIDENCE.json",
+      "source_normal_findings": "terrain_lab/v2/audits/beauty/CITY_SOURCE_NORMAL_PASS.md",
+      "source_normal_evidence": "terrain_lab/v2/audits/beauty/CITY_SOURCE_NORMAL_r29_r30_EVIDENCE.json",
+      "source_surface_findings": "terrain_lab/v2/audits/beauty/CITY_SOURCE_SURFACE_PASS.md",
+      "source_surface_evidence": "terrain_lab/v2/audits/beauty/CITY_SOURCE_SURFACE_r31_r33_EVIDENCE.json",
+      "shader_material_source": "terrain_lab/v2/audits/beauty/CITY_SHADER_MATERIAL_SOURCE.json",
+      "extra_material_findings": "terrain_lab/v2/audits/beauty/CITY_EXTRA_MATERIAL_PASS.md",
+      "extra_material_evidence": "terrain_lab/v2/audits/beauty/CITY_EXTRA_MATERIAL_r34_r39_EVIDENCE.json",
+      "growth_findings": "terrain_lab/v2/audits/beauty/CITY_GROWTH_PASS.md",
+      "growth_evidence": "terrain_lab/v2/audits/beauty/CITY_GROWTH_r40_r49_EVIDENCE.json",
+      "facade_light_findings": "terrain_lab/v2/audits/beauty/CITY_FACADE_LIGHT_PASS.md",
+      "facade_light_evidence": "terrain_lab/v2/audits/beauty/CITY_FACADE_LIGHT_r1_r3_EVIDENCE.json",
+      "growth_hierarchy_findings": "terrain_lab/v2/audits/beauty/CITY_GROWTH_HIERARCHY_PASS.md",
+      "growth_hierarchy_evidence": "terrain_lab/v2/audits/beauty/CITY_GROWTH_HIERARCHY_EVIDENCE.json",
+      "culture_density_findings": "terrain_lab/v2/audits/beauty/CITY_CULTURE_DENSITY_PASS.md",
+      "culture_density_evidence": "terrain_lab/v2/audits/beauty/CITY_CULTURE_DENSITY_EVIDENCE.json",
+      "light_buffer_findings": "terrain_lab/v2/audits/beauty/CITY_LIGHT_BUFFER_PASS.md",
+      "light_buffer_evidence": "terrain_lab/v2/audits/beauty/CITY_LIGHT_BUFFER_EVIDENCE.json",
+      "connected_growth_findings": "terrain_lab/v2/audits/beauty/CITY_CONNECTED_GROWTH_PASS.md",
+      "connected_growth_evidence": "terrain_lab/v2/audits/beauty/CITY_CONNECTED_GROWTH_EVIDENCE.json",
+      "connected_growth_cleanup": "terrain_lab/v2/audits/beauty/CITY_CONNECTED_GROWTH_CLEANUP.json",
+      "palace_composition_findings": "terrain_lab/v2/audits/beauty/CITY_PALACE_COMPOSITION_PASS.md",
+      "palace_composition_evidence": "terrain_lab/v2/audits/beauty/CITY_PALACE_COMPOSITION_EVIDENCE.json",
+      "palace_composition_cleanup": "terrain_lab/v2/audits/beauty/CITY_PALACE_COMPOSITION_CLEANUP.json",
+      "environment_material_findings": "terrain_lab/v2/audits/beauty/CITY_ENVIRONMENT_PASS.md",
+      "environment_material_evidence": "terrain_lab/v2/audits/beauty/CITY_ENVIRONMENT_EVIDENCE.json",
+      "environment_material_cleanup": "terrain_lab/v2/audits/beauty/CITY_ENVIRONMENT_CLEANUP.json"
     },
     "water_effects_exploration": {
       "status": "preserved_user_pivot_to_cities",
@@ -2455,7 +2489,9 @@
       "DLL unit body rendering implemented with an independent 8 MiB sprite cache, exact native cursor/anchor forwarding, effective display-palette capture, and retained terrain worker publication/preparation. Approved injected smoke and extracted x86 bridge checks pass; GOG CSV inleads supplied; approved injection compilation passes.",
       "Per-sample southeast calibration for 12 fish and three whales preserves each posed centroid and complete deformation, including cross-rig weights; actual evaluator and all-frame heading checks pass.",
       "Ordinary enable_custom_rendered_units is forwarded to an optional DLL configuration entry before loading; disabled units skip pack loading. Temporary animation runtime environment switches removed. RGB555/RGB565 clipped-body and config-off canvas checks pass.",
-      "560 day/night action draws including interrupted/held endpoints pass after generic unit ground clipping; explicit fallback reasons logged. Verified candidate staged to Renderer/bin with matching SHA-256 for normal INSTALL.bat."
+      "560 day/night action draws including interrupted/held endpoints pass after generic unit ground clipping; explicit fallback reasons logged. Verified candidate staged to Renderer/bin with matching SHA-256 for normal INSTALL.bat.",
+      "Added Warrior, Scout, Settler and Worker/Builder through a separate offline intake: nine families / 70 actions, 852 source-pose samples and 576 movement / 912 action draws pass. Correct scientific-number parsing restores Scout; compatible staff clips fix Settler. Existing cache budgets and injected bridge unchanged.",
+      "Final nine-family DLL passes prepared multi-tile scroll parity with zero mesh builds and is staged byte-for-byte for normal INSTALL.bat. Full rerun passes 374 prerequisite tests and retains the known unrelated L19A hash failure."
     ],
     "remaining": [],
     "game_launched": false,
@@ -2489,6 +2525,12 @@
     "known_unrelated_failures": [
       "Full workflow: frozen L19A tile-object pack hash differs after Lab pack changes; production DLL does not consume this pack.",
       "Existing legacy frozen-profile incremental boundary parity failure remains; thresholds unchanged."
+    ],
+    "resource_user_feedback": "Resources look good so far, though a little dark; brightness tuning remains separate.",
+    "prototype_limits": [
+      "Worker specialty jobs and civilian unsupported actions remain native.",
+      "Scout/Settler companion animals and extra formation members omitted; one body per native sprite.",
+      "Warrior/Scout victory reuses fidget; staffed Settler uses explicitly mapped compatible staff-humanoid clips."
     ]
   }
 }

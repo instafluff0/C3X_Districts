@@ -1028,9 +1028,12 @@ public:
         std::size_t count = 0;
         while (position < data.size() && count + 1 < std::size(number) &&
                (std::isdigit(static_cast<unsigned char>(bytes[position])) != 0 ||
-                bytes[position] == '-' || bytes[position] == '+' || bytes[position] == '.'))
+                bytes[position] == '-' || bytes[position] == '+' || bytes[position] == '.' ||
+                bytes[position] == 'e' || bytes[position] == 'E'))
             number[count++] = bytes[position++];
-        if (count == 0)
+        if (count == 0 || (position < data.size() &&
+            std::isspace(static_cast<unsigned char>(bytes[position])) == 0 &&
+            bytes[position] != ',' && bytes[position] != '}' && bytes[position] != ']'))
             return false;
         char * end = nullptr;
         value = std::strtof(number, &end);

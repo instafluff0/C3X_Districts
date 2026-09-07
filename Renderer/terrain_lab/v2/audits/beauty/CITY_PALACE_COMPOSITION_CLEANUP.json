@@ -1,0 +1,453 @@
+{
+  "classification": "Completed new linear readbacks only; images, replay packets, shared assets, rejected trials and previous bests retained",
+  "files": [
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r74/asian-medieval-s1-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r74/asian-medieval-s1-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r74/asian-medieval-s1-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r74/asian-medieval-s1-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r74/asian-medieval-s1-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r74/asian-medieval-s1-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r75/asian-medieval-s0-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r75/asian-medieval-s0-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r75/asian-medieval-s0-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r75/asian-medieval-s0-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r75/asian-medieval-s0-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r75/asian-medieval-s0-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r77/mediterranean-ancient-s1-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r77/mediterranean-ancient-s1-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r77/mediterranean-ancient-s1-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r77/mediterranean-ancient-s1-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r77/mediterranean-ancient-s1-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r77/mediterranean-ancient-s1-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r79/asian-medieval-s1-capital-control-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r79/asian-medieval-s1-capital-control-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r79/asian-medieval-s1-capital-control-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r79/asian-medieval-s1-capital-control-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r79/asian-medieval-s1-capital-control-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r79/asian-medieval-s1-capital-control-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r80/asian-medieval-s2-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r80/asian-medieval-s2-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r80/asian-medieval-s2-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r80/asian-medieval-s2-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r80/asian-medieval-s2-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r80/asian-medieval-s2-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r82/asian-medieval-s0-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r82/asian-medieval-s0-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r82/asian-medieval-s0-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r82/asian-medieval-s0-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r82/asian-medieval-s0-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r82/asian-medieval-s0-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r83/asian-medieval-s1-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r83/asian-medieval-s1-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r83/asian-medieval-s1-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r83/asian-medieval-s1-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r83/asian-medieval-s1-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r83/asian-medieval-s1-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r84/mediterranean-ancient-s1-capital/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r84/mediterranean-ancient-s1-capital/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r84/mediterranean-ancient-s1-capital/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r84/mediterranean-ancient-s1-capital/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r84/mediterranean-ancient-s1-capital/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r84/mediterranean-ancient-s1-capital/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r85/asian-medieval-s1-capital-control-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r85/asian-medieval-s1-capital-control-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r85/asian-medieval-s1-capital-control-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r85/asian-medieval-s1-capital-control-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r85/asian-medieval-s1-capital-control-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r85/asian-medieval-s1-capital-control-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r86/asian-medieval-s2-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r86/asian-medieval-s2-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r86/asian-medieval-s2-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r86/asian-medieval-s2-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r86/asian-medieval-s2-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r86/asian-medieval-s2-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r87/mediterranean-ancient-s1-capital/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r87/mediterranean-ancient-s1-capital/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r87/mediterranean-ancient-s1-capital/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r87/mediterranean-ancient-s1-capital/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r87/mediterranean-ancient-s1-capital/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r87/mediterranean-ancient-s1-capital/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r88/asian-medieval-s0-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r88/asian-medieval-s0-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r88/asian-medieval-s0-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r88/asian-medieval-s0-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r88/asian-medieval-s0-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r88/asian-medieval-s0-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r89/asian-medieval-s1-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r89/asian-medieval-s1-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r89/asian-medieval-s1-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r89/asian-medieval-s1-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r89/asian-medieval-s1-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r89/asian-medieval-s1-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r90/asian-medieval-s1-capital-control-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r90/asian-medieval-s1-capital-control-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r90/asian-medieval-s1-capital-control-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r90/asian-medieval-s1-capital-control-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r90/asian-medieval-s1-capital-control-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r90/asian-medieval-s1-capital-control-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r92/asian-medieval-s2-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r92/asian-medieval-s2-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r92/asian-medieval-s2-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r92/asian-medieval-s2-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r92/asian-medieval-s2-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r92/asian-medieval-s2-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r93/asian-medieval-s0-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r93/asian-medieval-s0-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r93/asian-medieval-s0-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r93/asian-medieval-s0-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r93/asian-medieval-s0-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r93/asian-medieval-s0-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r94/asian-medieval-s1-capital-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r94/asian-medieval-s1-capital-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r94/asian-medieval-s1-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r94/asian-medieval-s1-capital-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r94/asian-medieval-s1-capital-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r94/asian-medieval-s1-capital-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r95/asian-medieval-s1-capital-control-inland-at7-4/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r95/asian-medieval-s1-capital-control-inland-at7-4/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r95/asian-medieval-s1-capital-control-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r95/asian-medieval-s1-capital-control-inland-at7-4/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r95/asian-medieval-s1-capital-control-inland-at7-4/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r95/asian-medieval-s1-capital-control-inland-at7-4/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r98/mediterranean-ancient-s1-capital/combined/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r98/mediterranean-ancient-s1-capital/combined/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r98/mediterranean-ancient-s1-capital/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r98/mediterranean-ancient-s1-capital/combined/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r98/mediterranean-ancient-s1-capital/combined/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r98/mediterranean-ancient-s1-capital/combined/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-coast/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-coast/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-coast/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-coast/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-coast/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-coast/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-medium/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-medium/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-medium/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-medium/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-medium/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/ancient-medium/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-large/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-large/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-large/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-large/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-large/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-large/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium-initial/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium-initial/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium-initial/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium-initial/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium-initial/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-medium-initial/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-palace-off/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-palace-off/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-palace-off/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-palace-off/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-palace-off/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-palace-off/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-small/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-small/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-small/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-small/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-small/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/asian-small/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/windows-ancient-medium/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/windows-ancient-medium/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/windows-ancient-medium/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/windows-ancient-medium/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/windows-ancient-medium/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r1/windows-ancient-medium/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/ancient-coast/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/ancient-coast/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/ancient-coast/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/ancient-coast/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/ancient-coast/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/ancient-coast/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-large/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-large/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-large/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-large/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-large/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-large/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-medium/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-medium/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-medium/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-medium/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-medium/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-medium/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-palace-off/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-palace-off/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-palace-off/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-palace-off/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-palace-off/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-palace-off/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-small/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-small/render/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-small/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-small/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-small/render/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/asian-small/render/report.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-ancient-coast/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-ancient-coast/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-ancient-coast/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-ancient-coast/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-ancient-coast/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-ancient-coast/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-large/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-large/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-large/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-large/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-large/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-large/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-medium/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-medium/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-medium/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-medium/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-medium/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-medium/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-palace-off/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-palace-off/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-palace-off/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-palace-off/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-palace-off/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-palace-off/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-small/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-small/h00-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-small/evidence.json"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-small/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "retained_bitmap": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-small/h12-z1-pan00.bmp",
+      "completion": "Renderer/terrain_lab/v2/audits/beauty/out/city-palace-composition-r2/windows-asian-small/evidence.json"
+    }
+  ],
+  "count": 74,
+  "bytes_removed": 644096000,
+  "free_before": 15843155968,
+  "free_after": 16486731776
+}

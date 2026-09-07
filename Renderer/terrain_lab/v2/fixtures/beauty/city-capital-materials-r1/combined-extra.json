@@ -1,0 +1,1328 @@
+{
+  "schema": "c3x.lab.material_overlay.v1",
+  "materials": {
+    "city/component/1a71fb8ac25f1241:material_00": {
+      "material_digest": "bccf1c68a39d203048d442e623e2493a14eddab3a09361d9df047d337c68e2c8",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/1a71fb8ac25f1241:material_01": {
+      "material_digest": "80ebed1069ee288aca96aa4a60fc4d56ab3d0e3c805feaf39122f0a5adaba00b",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/1a71fb8ac25f1241:material_02": {
+      "material_digest": "0e4d6a2d7ba895fca989c39de91a27be20d659f51430071104e10838e042d728",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/1a71fb8ac25f1241:material_03": {
+      "material_digest": "ba024c2f24113cda8a62b7f527fc4016613cdbb7591cd14de44a55aea7a46e81",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/1a2cdd77f4c26999:material_00": {
+      "material_digest": "7684d7b814f671ffb0382ab2980dbe49dc8d91a3bf1f3b17a79844999611f1e1",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/1a2cdd77f4c26999:material_01": {
+      "material_digest": "fa13a45235350c3b6270f271cf8021c377a467c4a9f48d2c929b1984629c523d",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/1a2cdd77f4c26999:material_02": {
+      "material_digest": "f3622b2f4edb26fabae6022e9fa943071607bba9b6884638be6c1792b01d65b2",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/1a2cdd77f4c26999:material_03": {
+      "material_digest": "dadb2534780abdc50ff98cc0897e1a8349de69214620c900cbd5d68dfa639ea6",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/1a2cdd77f4c26999:material_04": {
+      "material_digest": "1c1a4c754053156abecc3a90cc637ee956395f8e7519cc1865897b4d6cc3aef7",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/1a2cdd77f4c26999:material_05": {
+      "material_digest": "a9104e3204ca8033888b2f75bc575badb005cb0faed1805054bb08403b280b8f",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/790e2a73c14737d8:material_00": {
+      "material_digest": "7684d7b814f671ffb0382ab2980dbe49dc8d91a3bf1f3b17a79844999611f1e1",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/790e2a73c14737d8:material_01": {
+      "material_digest": "fa13a45235350c3b6270f271cf8021c377a467c4a9f48d2c929b1984629c523d",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/790e2a73c14737d8:material_02": {
+      "material_digest": "f3622b2f4edb26fabae6022e9fa943071607bba9b6884638be6c1792b01d65b2",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/790e2a73c14737d8:material_03": {
+      "material_digest": "dadb2534780abdc50ff98cc0897e1a8349de69214620c900cbd5d68dfa639ea6",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/790e2a73c14737d8:material_04": {
+      "material_digest": "1c1a4c754053156abecc3a90cc637ee956395f8e7519cc1865897b4d6cc3aef7",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/790e2a73c14737d8:material_05": {
+      "material_digest": "cc2b0134a1d7b0ad472d37811c6e77f114b16d86b1e15e832eb9a32521658263",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_e8395c4aa88966d1.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/790e2a73c14737d8:material_06": {
+      "material_digest": "b22a1102d6056385eb30abd09c0ca4b9458e25aa432b0cfd85fea6f4785005d9",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/e18f5ef810f915df:material_00": {
+      "material_digest": "7684d7b814f671ffb0382ab2980dbe49dc8d91a3bf1f3b17a79844999611f1e1",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/e18f5ef810f915df:material_01": {
+      "material_digest": "fa13a45235350c3b6270f271cf8021c377a467c4a9f48d2c929b1984629c523d",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/e18f5ef810f915df:material_02": {
+      "material_digest": "f3622b2f4edb26fabae6022e9fa943071607bba9b6884638be6c1792b01d65b2",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/e18f5ef810f915df:material_03": {
+      "material_digest": "dadb2534780abdc50ff98cc0897e1a8349de69214620c900cbd5d68dfa639ea6",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/e18f5ef810f915df:material_04": {
+      "material_digest": "9f6ed3f1b654fe1a949ff7b03518d83591356df73850de08042b1361dc000b29",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_e8395c4aa88966d1.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/e18f5ef810f915df:material_05": {
+      "material_digest": "a9104e3204ca8033888b2f75bc575badb005cb0faed1805054bb08403b280b8f",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/f65b0689b7acb564:material_00": {
+      "material_digest": "7684d7b814f671ffb0382ab2980dbe49dc8d91a3bf1f3b17a79844999611f1e1",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/f65b0689b7acb564:material_01": {
+      "material_digest": "fa13a45235350c3b6270f271cf8021c377a467c4a9f48d2c929b1984629c523d",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/f65b0689b7acb564:material_02": {
+      "material_digest": "f3622b2f4edb26fabae6022e9fa943071607bba9b6884638be6c1792b01d65b2",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/f65b0689b7acb564:material_03": {
+      "material_digest": "dadb2534780abdc50ff98cc0897e1a8349de69214620c900cbd5d68dfa639ea6",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/f65b0689b7acb564:material_04": {
+      "material_digest": "1c1a4c754053156abecc3a90cc637ee956395f8e7519cc1865897b4d6cc3aef7",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/f65b0689b7acb564:material_05": {
+      "material_digest": "cc2b0134a1d7b0ad472d37811c6e77f114b16d86b1e15e832eb9a32521658263",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_e8395c4aa88966d1.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/f65b0689b7acb564:material_06": {
+      "material_digest": "b22a1102d6056385eb30abd09c0ca4b9458e25aa432b0cfd85fea6f4785005d9",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/201c181c2d3d95c2:material_00": {
+      "material_digest": "7684d7b814f671ffb0382ab2980dbe49dc8d91a3bf1f3b17a79844999611f1e1",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/201c181c2d3d95c2:material_01": {
+      "material_digest": "fa13a45235350c3b6270f271cf8021c377a467c4a9f48d2c929b1984629c523d",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/201c181c2d3d95c2:material_02": {
+      "material_digest": "f3622b2f4edb26fabae6022e9fa943071607bba9b6884638be6c1792b01d65b2",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/201c181c2d3d95c2:material_03": {
+      "material_digest": "dadb2534780abdc50ff98cc0897e1a8349de69214620c900cbd5d68dfa639ea6",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/201c181c2d3d95c2:material_04": {
+      "material_digest": "1c1a4c754053156abecc3a90cc637ee956395f8e7519cc1865897b4d6cc3aef7",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "clamp",
+          "address_v": "clamp"
+        }
+      }
+    },
+    "city/component/201c181c2d3d95c2:material_05": {
+      "material_digest": "a9104e3204ca8033888b2f75bc575badb005cb0faed1805054bb08403b280b8f",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81157340c6bc8609:material_00": {
+      "material_digest": "18d0df8c3361e867a62e3c3d1fa05fb158bf6a6ed0db2322533d61975d9c0c88",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81157340c6bc8609:material_01": {
+      "material_digest": "fa13a45235350c3b6270f271cf8021c377a467c4a9f48d2c929b1984629c523d",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81157340c6bc8609:material_02": {
+      "material_digest": "4648bc89de07334867fd6e7953b6eb20e35d012d910a68eb839da8107cc56ecc",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81157340c6bc8609:material_03": {
+      "material_digest": "dadb2534780abdc50ff98cc0897e1a8349de69214620c900cbd5d68dfa639ea6",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81157340c6bc8609:material_04": {
+      "material_digest": "ba47a5290aaec72d68a77d627031df13b97870c54f807bb13ce1e96c1ef77fca",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81157340c6bc8609:material_05": {
+      "material_digest": "0f431cf85609e7e0881192e74f131f930d9ff0188e6fb9b675eba07a79bb6d55",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81157340c6bc8609:material_06": {
+      "material_digest": "b22a1102d6056385eb30abd09c0ca4b9458e25aa432b0cfd85fea6f4785005d9",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9b49d289b858afde:material_00": {
+      "material_digest": "18d0df8c3361e867a62e3c3d1fa05fb158bf6a6ed0db2322533d61975d9c0c88",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9b49d289b858afde:material_01": {
+      "material_digest": "80ebed1069ee288aca96aa4a60fc4d56ab3d0e3c805feaf39122f0a5adaba00b",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9b49d289b858afde:material_02": {
+      "material_digest": "4648bc89de07334867fd6e7953b6eb20e35d012d910a68eb839da8107cc56ecc",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9b49d289b858afde:material_03": {
+      "material_digest": "9d174587943e5d3284b204b804ad07a0887d6bc22a8e3dfd5c594482249a2434",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9b49d289b858afde:material_04": {
+      "material_digest": "7eef63c735e8db5e1c4364b17674fd01493eacbc204f6f391b1ae0b27e5cfff0",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/322da9341b97edb6:material_00": {
+      "material_digest": "84796f84e51d55deb152232fd8e74374da71cfe9a0d9ab536ba0b692631a0bec",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0a7efb252ec7b603.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_b8cb359ff0bcbf23.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/322da9341b97edb6:material_01": {
+      "material_digest": "fa13a45235350c3b6270f271cf8021c377a467c4a9f48d2c929b1984629c523d",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/322da9341b97edb6:material_02": {
+      "material_digest": "4651d033a2dc029b31c77dcd7e95f98b49fe9d985da6084d7a2444774b65bb54",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/322da9341b97edb6:material_03": {
+      "material_digest": "dadb2534780abdc50ff98cc0897e1a8349de69214620c900cbd5d68dfa639ea6",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/322da9341b97edb6:material_04": {
+      "material_digest": "e2e7123a69e44ef4689742ca5c3e153820a46b2e9d20b7442898674b94dbc639",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/322da9341b97edb6:material_05": {
+      "material_digest": "0f431cf85609e7e0881192e74f131f930d9ff0188e6fb9b675eba07a79bb6d55",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/322da9341b97edb6:material_06": {
+      "material_digest": "2cb0c92e59e3004b4cb4434c0b92fc3a713db214e4661dcb542f21260d37b47e",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/322da9341b97edb6:material_07": {
+      "material_digest": "aec81b7c6fc44ffb6a5158e015e8000c4d0041ce9813d0a3f746527302090944",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_e8395c4aa88966d1.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/322da9341b97edb6:material_08": {
+      "material_digest": "cc3a05f99b4899438bc3ff1e09673e01b4b58cb9bfbe702908e6a21691d01042",
+      "channels": {}
+    },
+    "city/component/322da9341b97edb6:material_09": {
+      "material_digest": "d2c8ce65bbf7f9d4f562d7a233e3334f625925b1bf0784065a96a2d99268f554",
+      "channels": {}
+    },
+    "city/component/322da9341b97edb6:material_10": {
+      "material_digest": "cfa7a6c785c034a58904ee77d222ee854ead197d2a5d7e60ec925efbbdec665d",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/536fd4ebef9105ef:material_00": {
+      "material_digest": "84796f84e51d55deb152232fd8e74374da71cfe9a0d9ab536ba0b692631a0bec",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0a7efb252ec7b603.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_b8cb359ff0bcbf23.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/536fd4ebef9105ef:material_01": {
+      "material_digest": "fa13a45235350c3b6270f271cf8021c377a467c4a9f48d2c929b1984629c523d",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/536fd4ebef9105ef:material_02": {
+      "material_digest": "4651d033a2dc029b31c77dcd7e95f98b49fe9d985da6084d7a2444774b65bb54",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/536fd4ebef9105ef:material_03": {
+      "material_digest": "dadb2534780abdc50ff98cc0897e1a8349de69214620c900cbd5d68dfa639ea6",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/536fd4ebef9105ef:material_04": {
+      "material_digest": "e2e7123a69e44ef4689742ca5c3e153820a46b2e9d20b7442898674b94dbc639",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/536fd4ebef9105ef:material_05": {
+      "material_digest": "0f431cf85609e7e0881192e74f131f930d9ff0188e6fb9b675eba07a79bb6d55",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/536fd4ebef9105ef:material_06": {
+      "material_digest": "2cb0c92e59e3004b4cb4434c0b92fc3a713db214e4661dcb542f21260d37b47e",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/536fd4ebef9105ef:material_07": {
+      "material_digest": "aec81b7c6fc44ffb6a5158e015e8000c4d0041ce9813d0a3f746527302090944",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_e8395c4aa88966d1.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/536fd4ebef9105ef:material_08": {
+      "material_digest": "cc3a05f99b4899438bc3ff1e09673e01b4b58cb9bfbe702908e6a21691d01042",
+      "channels": {}
+    },
+    "city/component/536fd4ebef9105ef:material_09": {
+      "material_digest": "d2c8ce65bbf7f9d4f562d7a233e3334f625925b1bf0784065a96a2d99268f554",
+      "channels": {}
+    },
+    "city/component/536fd4ebef9105ef:material_10": {
+      "material_digest": "cfa7a6c785c034a58904ee77d222ee854ead197d2a5d7e60ec925efbbdec665d",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_00": {
+      "material_digest": "3d71922ca74bad2741011419db6ec4f6926cf50fd86714c4902d3b8c8af9c25a",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_264485ac0961e859.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_01": {
+      "material_digest": "b793ccf4e4be0383d944b6276783560554ce41d88e37724f387c78f4532effcc",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_264485ac0961e859.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_02": {
+      "material_digest": "cdd3a2782bd2c0f2d2dcfd03f90d051b18a1402bd2f88f849e272109f50944bc",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0a7efb252ec7b603.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_b8cb359ff0bcbf23.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_03": {
+      "material_digest": "38ff560fd0b0a7a9f5b87bfb7827b6692583863339c2134a138ae11feaf43e15",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0a7efb252ec7b603.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_b8cb359ff0bcbf23.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_04": {
+      "material_digest": "7392643aa07788bb8efcd814e114bb22a9ae5cb253df960c927b691aa9316492",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_05": {
+      "material_digest": "4f97732754001ea582eb0d07c1f9eceac0ba6dfe6e48bbf2b0227956c4aa894b",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_06": {
+      "material_digest": "077831a408745771c8611068df9ec2134de782a32719230af0b95e66a99e0e58",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_07": {
+      "material_digest": "9c0d1dbf6000b97aa68d55e1bf6e2c744374b8ef7de12251b8018e587423de0e",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_08": {
+      "material_digest": "4c896e3b2ef3e380fce02117d7bfc62b89dc4d02cd00b223877a97e44eabb6b3",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_09": {
+      "material_digest": "f9e3f6f2e28186ec4a1ab4d2914c5d5b0b9d2b8b63e913ef108b942127a2c9c8",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_10": {
+      "material_digest": "75dc767cab44644f4a3a5cc3be5eee895caebc4061c160a89ebe0801c524d32c",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_e8395c4aa88966d1.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/9663bf8c9fceffde:material_11": {
+      "material_digest": "cf79b19c4d2925e43c579e0a1e5616e2c7e046ce530d5292bc8455cb0d22e692",
+      "channels": {}
+    },
+    "city/component/9663bf8c9fceffde:material_12": {
+      "material_digest": "7ff744cb3aabd9064aadbaa4dd81d0dc935a626f9ab975775b284ec6e81f21a9",
+      "channels": {}
+    },
+    "city/component/9663bf8c9fceffde:material_13": {
+      "material_digest": "f780e22227eb34e152a2840c36614baf9ad9f7c9bcb5c5c5489c15f7ed001abf",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81e6bc964c4f7c5a:material_00": {
+      "material_digest": "3d71922ca74bad2741011419db6ec4f6926cf50fd86714c4902d3b8c8af9c25a",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_264485ac0961e859.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81e6bc964c4f7c5a:material_01": {
+      "material_digest": "b793ccf4e4be0383d944b6276783560554ce41d88e37724f387c78f4532effcc",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_264485ac0961e859.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81e6bc964c4f7c5a:material_02": {
+      "material_digest": "cdd3a2782bd2c0f2d2dcfd03f90d051b18a1402bd2f88f849e272109f50944bc",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0a7efb252ec7b603.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_b8cb359ff0bcbf23.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81e6bc964c4f7c5a:material_03": {
+      "material_digest": "38ff560fd0b0a7a9f5b87bfb7827b6692583863339c2134a138ae11feaf43e15",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0a7efb252ec7b603.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        },
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_b8cb359ff0bcbf23.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81e6bc964c4f7c5a:material_04": {
+      "material_digest": "7392643aa07788bb8efcd814e114bb22a9ae5cb253df960c927b691aa9316492",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81e6bc964c4f7c5a:material_05": {
+      "material_digest": "4f97732754001ea582eb0d07c1f9eceac0ba6dfe6e48bbf2b0227956c4aa894b",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_fc3c761525ad97f0.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81e6bc964c4f7c5a:material_06": {
+      "material_digest": "077831a408745771c8611068df9ec2134de782a32719230af0b95e66a99e0e58",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81e6bc964c4f7c5a:material_07": {
+      "material_digest": "9c0d1dbf6000b97aa68d55e1bf6e2c744374b8ef7de12251b8018e587423de0e",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_0cbcd9508e4146e5.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81e6bc964c4f7c5a:material_08": {
+      "material_digest": "4c896e3b2ef3e380fce02117d7bfc62b89dc4d02cd00b223877a97e44eabb6b3",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/opacity_69d988203137d729.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/component/81e6bc964c4f7c5a:material_09": {
+      "material_digest": "d2c8ce65bbf7f9d4f562d7a233e3334f625925b1bf0784065a96a2d99268f554",
+      "channels": {}
+    },
+    "city/component/81e6bc964c4f7c5a:material_10": {
+      "material_digest": "07e04f8177f82378f31a63ef8e455ddbf3b0d031afcb3528f554e341fe081620",
+      "channels": {}
+    },
+    "city/component/81e6bc964c4f7c5a:material_11": {
+      "material_digest": "17f1dae8e645f892520ed718321faf8661362a7d1409e34940426e5305b5e55c",
+      "channels": {
+        "metalness": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/textures/metalness_1d50f41462121a8a.dds",
+          "format": "BC4_UNORM",
+          "color_space": "linear",
+          "component": "r",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    },
+    "city/palace/root/0d0c35f4a4c9651a:material_00": {
+      "material_digest": "2617db43b94d43cd455a202f23676dfa3aaca25bf421641c6589e6b600ea2ba8",
+      "channels": {}
+    },
+    "city/palace/root/0d0c35f4a4c9651a:material_01": {
+      "material_digest": "90fb581797bd4ad3984925fadc96580f8de1fff72ee853e3033de32c75ce30bb",
+      "channels": {}
+    },
+    "city/palace/root/0d0c35f4a4c9651a:material_02": {
+      "material_digest": "ab5ea7ea5ea581e502732b1371017cd6e2fa3da606ad0300e466071f870e8f6c",
+      "channels": {}
+    },
+    "city/palace/root/0d0c35f4a4c9651a:material_03": {
+      "material_digest": "4a0e0b7feedd06931a6dde92d3ba5a614f2d668336cbc115f06fd9a984d344c3",
+      "channels": {}
+    },
+    "city/palace/root/0d0c35f4a4c9651a:material_04": {
+      "material_digest": "9aa86b34d85576427ec01caf920463c9b2fae1ebda842591f0823ededac4d639",
+      "channels": {}
+    },
+    "city/palace/root/0d0c35f4a4c9651a:material_05": {
+      "material_digest": "9698ba3f6c5db99fbbfe990795ebc8e36209d61c0d38097a47a0bbe51d6f048b",
+      "channels": {}
+    },
+    "city/palace/root/0d0c35f4a4c9651a:material_06": {
+      "material_digest": "8e9d1a44464ef56c6f498169735fc6a010164c3596823b894ce8e3cf74e60327",
+      "channels": {}
+    },
+    "city/palace/root/0d0c35f4a4c9651a:material_07": {
+      "material_digest": "d1a80c1be2265f9e035184474f9e471cfa13d6d0deb49867da453ca8266b24fd",
+      "channels": {}
+    },
+    "city/palace/root/0d0c35f4a4c9651a:material_08": {
+      "material_digest": "4205801c718de143387df79bebc61da3f61e3283fc0b210614562049346f1352",
+      "channels": {
+        "opacity": {
+          "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-capital-materials-r1/palace-extra/textures/opacity_09147ddfc5dbd4b8.dds",
+          "format": "BC3_UNORM",
+          "color_space": "linear",
+          "component": "a",
+          "address_u": "repeat",
+          "address_v": "repeat"
+        }
+      }
+    }
+  },
+  "opacity_policy": "Coverage mask in alpha, UV0; single-sample threshold 0.5 is the explicit Lab adapter",
+  "source_runtime_dependency": null,
+  "composition": [
+    "Renderer/terrain_lab/v2/fixtures/beauty/city-extra-materials-r1/modern/mapping.json",
+    "Renderer/terrain_lab/v2/fixtures/beauty/city-capital-materials-r1/palace-extra/mapping.json"
+  ]
+}

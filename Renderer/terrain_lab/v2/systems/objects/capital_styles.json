@@ -3,6 +3,22 @@
   "status": "explicit_lab_comparison_only",
   "pack": "Renderer/packs/CityPalaceStudy",
   "styles": {
+    "asian/medieval": {
+      "asset": "city/palace/root/079e88fbd22dd1ce",
+      "center_half_extent_tiles": 0.35,
+      "center_reference": "dry_land_centroid",
+      "pack": "Renderer/packs/CityPalacesNormalized",
+      "footprint_span_tiles": 0.6,
+      "basis": "Explicit East Asian palace with the single-era medieval Asian house family. Source selector is provenance; generic style override only."
+    },
+    "mediterranean/ancient": {
+      "asset": "city/palace/root/cbb941762b70fc8b",
+      "center_half_extent_tiles": 0.35,
+      "center_reference": "dry_land_centroid",
+      "pack": "Renderer/packs/CityPalacesNormalized",
+      "footprint_span_tiles": 0.6,
+      "basis": "Explicit ancient-brick palace with the ancient-brick house family; respects the source ancient-era selection and the user's single-era policy."
+    },
     "american/ancient": {
       "asset": "candidate/city/capital_mesoamerican",
       "footprint_span_tiles": 0.6,

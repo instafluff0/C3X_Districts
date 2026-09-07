@@ -1,0 +1,17 @@
+{
+  "default": {
+    "pass": true,
+    "draws": 15,
+    "source_origin_z": 0.802575,
+    "reference_origin_z": 0.802575,
+    "identical_frame_texture_check": true
+  },
+  "reference": {
+    "pass": true,
+    "draws": 15,
+    "source_origin_z": 0.802575,
+    "reference_origin_z": 0.802575,
+    "identical_frame_texture_check": true
+  },
+  "source_sha256": "911c6fb6a44d88a3e1e2f2ec14821b2d2db5d4bcdc2b27abbd51cf00bd62187e"
+}

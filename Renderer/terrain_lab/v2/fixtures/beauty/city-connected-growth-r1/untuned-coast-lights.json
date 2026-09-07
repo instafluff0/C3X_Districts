@@ -1,0 +1,1205 @@
+{
+  "schema": "c3x.lab.local_facade_lights.v1",
+  "classification": "Authored emissive-spill approximation; not decoded source light bindings or exact area-light transport",
+  "z_metric": 0.6482669788757361,
+  "emission_sampling": "UV2 clamp, matching the displayed separate emission shader",
+  "lights": [
+    {
+      "owner": 0,
+      "position": [
+        8.658328489932561,
+        -3.254917487451928,
+        0.04988850568884813
+      ],
+      "range": 0.3509487394158066,
+      "color_linear": [
+        0.49276113545081335,
+        0.119835198018437,
+        0.0030465538299843864
+      ],
+      "intensity": 2.8,
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 38,
+      "source_sample_centroid": [
+        8.742999297123147,
+        -3.254917487451928,
+        0.04988850568884813
+      ]
+    },
+    {
+      "owner": 1,
+      "position": [
+        8.73743619819608,
+        -3.0124739335844226,
+        0.04693904532776992
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.4927898248928761,
+        0.11984105577282493,
+        0.0030468640119745804
+      ],
+      "intensity": 2.8,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 38,
+      "source_sample_centroid": [
+        8.69817247789118,
+        -3.0124739335844226,
+        0.04693904532776992
+      ]
+    },
+    {
+      "owner": 2,
+      "position": [
+        8.068676908382697,
+        -3.156347894818563,
+        0.06137911243743426
+      ],
+      "range": 0.4458338899753739,
+      "color_linear": [
+        0.1461026251909408,
+        0.08796164616651012,
+        0.003258839392315264
+      ],
+      "intensity": 2.8,
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 1,
+      "source_sample_centroid": [
+        8.109135855680833,
+        -3.156347894818563,
+        0.06137911243743426
+      ]
+    },
+    {
+      "owner": 2,
+      "position": [
+        8.223716987507835,
+        -3.3369667830797702,
+        0.047683941366534
+      ],
+      "range": 0.4458338899753739,
+      "color_linear": [
+        0.4564792859619165,
+        0.11482143795830908,
+        0.0033141098958863803
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "sample_count": 44,
+      "source_sample_centroid": [
+        8.223716987507835,
+        -3.305734365241782,
+        0.047683941366534
+      ]
+    },
+    {
+      "owner": 2,
+      "position": [
+        8.223256722182798,
+        -3.1030332749202296,
+        0.06137911243743427
+      ],
+      "range": 0.4458338899753739,
+      "color_linear": [
+        0.05980319067628646,
+        0.034978876352342404,
+        0.0024282158683906997
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sample_count": 1,
+      "source_sample_centroid": [
+        8.223256722182798,
+        -3.1178007717031053,
+        0.06137911243743427
+      ]
+    },
+    {
+      "owner": 4,
+      "position": [
+        8.47604199701256,
+        -3.6766258306303574,
+        0.0688667657930982
+      ],
+      "range": 0.5268026580171433,
+      "color_linear": [
+        0.42305758311742603,
+        0.19568975483511217,
+        0.003891792385444887
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "sample_count": 4,
+      "source_sample_centroid": [
+        8.47604199701256,
+        -3.661470066292244,
+        0.0688667657930982
+      ]
+    },
+    {
+      "owner": 5,
+      "position": [
+        7.854169867264051,
+        -3.4342794305184703,
+        0.07379783237697998
+      ],
+      "range": 0.507193009710362,
+      "color_linear": [
+        0.4584024944443791,
+        0.19980689784580813,
+        0.003587912700456446
+      ],
+      "intensity": 2.8,
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 5,
+      "source_sample_centroid": [
+        7.916963753773549,
+        -3.4342794305184703,
+        0.07379783237697998
+      ]
+    },
+    {
+      "owner": 5,
+      "position": [
+        8.165830132295948,
+        -3.565563143315236,
+        0.05526129838770114
+      ],
+      "range": 0.507193009710362,
+      "color_linear": [
+        0.4640446531602492,
+        0.12476030433579247,
+        0.004254343401572197
+      ],
+      "intensity": 2.8,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 45,
+      "source_sample_centroid": [
+        8.01956284699746,
+        -3.565563143315236,
+        0.05526129838770114
+      ]
+    },
+    {
+      "owner": 5,
+      "position": [
+        8.06808756213925,
+        -3.670497815534488,
+        0.07842708469039585
+      ],
+      "range": 0.507193009710362,
+      "color_linear": [
+        0.5298929357390415,
+        0.24224596817933794,
+        0.002990076592478924
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "sample_count": 2,
+      "source_sample_centroid": [
+        8.06808756213925,
+        -3.5241945736955564,
+        0.07842708469039585
+      ]
+    },
+    {
+      "owner": 5,
+      "position": [
+        8.051246208674607,
+        -3.329502184465512,
+        0.06592926544377359
+      ],
+      "range": 0.507193009710362,
+      "color_linear": [
+        0.3138026607350203,
+        0.13534156494103616,
+        0.0026409967096321756
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sample_count": 3,
+      "source_sample_centroid": [
+        8.051246208674607,
+        -3.3450441099719117,
+        0.06592926544377359
+      ]
+    },
+    {
+      "owner": 6,
+      "position": [
+        8.628637347413326,
+        -3.556659849722309,
+        0.0850164050913864
+      ],
+      "range": 0.4520331129973311,
+      "color_linear": [
+        0.46643009637103394,
+        0.24637411219953337,
+        0.0038381264705515923
+      ],
+      "intensity": 2.8,
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 4,
+      "source_sample_centroid": [
+        8.775850926972574,
+        -3.556659849722309,
+        0.0850164050913864
+      ]
+    },
+    {
+      "owner": 6,
+      "position": [
+        8.931362594586675,
+        -3.528897700831569,
+        0.08492160343262328
+      ],
+      "range": 0.4520331129973311,
+      "color_linear": [
+        0.5974674643415776,
+        0.3085559329706013,
+        0.0035619635556729413
+      ],
+      "intensity": 2.8,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 5,
+      "source_sample_centroid": [
+        8.891809676185536,
+        -3.528897700831569,
+        0.08492160343262328
+      ]
+    },
+    {
+      "owner": 6,
+      "position": [
+        8.724088522744733,
+        -3.653260347811666,
+        0.06165256128493175
+      ],
+      "range": 0.4520331129973311,
+      "color_linear": [
+        0.4550030155960603,
+        0.1464089939314874,
+        0.0034599531629650997
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "sample_count": 46,
+      "source_sample_centroid": [
+        8.724088522744733,
+        -3.5072178592795282,
+        0.06165256128493175
+      ]
+    },
+    {
+      "owner": 6,
+      "position": [
+        8.834277280508378,
+        -3.346739652188334,
+        0.08459583973568643
+      ],
+      "range": 0.4520331129973311,
+      "color_linear": [
+        0.9275455216868619,
+        0.5250564328447761,
+        0.0038048662853645433
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sample_count": 2,
+      "source_sample_centroid": [
+        8.834277280508378,
+        -3.389489800260751,
+        0.08459583973568643
+      ]
+    },
+    {
+      "owner": 7,
+      "position": [
+        8.470547477912994,
+        -3.2119406937128194,
+        0.08018354173054029
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.38421317929974586,
+        0.15559249574741388,
+        0.0020880579190023334
+      ],
+      "intensity": 2.8,
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 3,
+      "source_sample_centroid": [
+        8.511754073862832,
+        -3.2119406937128194,
+        0.08018354173054029
+      ]
+    },
+    {
+      "owner": 7,
+      "position": [
+        8.543448545828197,
+        -3.3309178541648166,
+        0.04922256504500783
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.4564914434758801,
+        0.11482442072990721,
+        0.0033143792667842038
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "sample_count": 44,
+      "source_sample_centroid": [
+        8.543448545828197,
+        -3.2628733593533563,
+        0.04922256504500783
+      ]
+    },
+    {
+      "owner": 7,
+      "position": [
+        8.565637161584176,
+        -3.1090822038351833,
+        0.08415871930694625
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.17649490501659296,
+        0.0685047718481738,
+        0.006482541662840155
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sample_count": 4,
+      "source_sample_centroid": [
+        8.565637161584176,
+        -3.1464530464695737,
+        0.08415871930694625
+      ]
+    },
+    {
+      "owner": 8,
+      "position": [
+        8.528528658779651,
+        -2.79894332564456,
+        0.08403506195959345
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.34485222283630784,
+        0.14343407290299534,
+        0.002070302225301209
+      ],
+      "intensity": 2.8,
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 4,
+      "source_sample_centroid": [
+        8.573145517789447,
+        -2.79894332564456,
+        0.08403506195959345
+      ]
+    },
+    {
+      "owner": 8,
+      "position": [
+        8.751471313220348,
+        -2.797025942908336,
+        0.08457980160976805
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.26872052432480437,
+        0.11039528894458453,
+        0.002655734116530866
+      ],
+      "intensity": 2.8,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 5,
+      "source_sample_centroid": [
+        8.687335729360694,
+        -2.797025942908336,
+        0.08457980160976805
+      ]
+    },
+    {
+      "owner": 8,
+      "position": [
+        8.634998290265216,
+        -2.700547461670818,
+        0.08570585009201337
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.3253916156615815,
+        0.15597512452963413,
+        0.0027976531952011736
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sample_count": 4,
+      "source_sample_centroid": [
+        8.634998290265216,
+        -2.7425187237109774,
+        0.08570585009201337
+      ]
+    },
+    {
+      "owner": 9,
+      "position": [
+        8.755944093227901,
+        -2.9140629198754864,
+        0.08943542215012815
+      ],
+      "range": 0.4539308250770173,
+      "color_linear": [
+        0.4599111206104828,
+        0.20815655396921062,
+        0.0036554774379379184
+      ],
+      "intensity": 2.8,
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 6,
+      "source_sample_centroid": [
+        8.797157484509857,
+        -2.9140629198754864,
+        0.08943542215012815
+      ]
+    },
+    {
+      "owner": 9,
+      "position": [
+        8.944055954772098,
+        -3.004190215238267,
+        0.08965809367893882
+      ],
+      "range": 0.4539308250770173,
+      "color_linear": [
+        0.6094222101326756,
+        0.2890720177753587,
+        0.004388029792580349
+      ],
+      "intensity": 2.8,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 3,
+      "source_sample_centroid": [
+        8.909723962721412,
+        -3.004190215238267,
+        0.08965809367893882
+      ]
+    },
+    {
+      "owner": 10,
+      "position": [
+        7.7045801026948455,
+        -2.872139872033809,
+        0.08427377629071009
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.26890840994890747,
+        0.11044506981710724,
+        0.00265600333991088
+      ],
+      "intensity": 2.8,
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 5,
+      "source_sample_centroid": [
+        7.742833594763937,
+        -2.872139872033809,
+        0.08427377629071009
+      ]
+    },
+    {
+      "owner": 10,
+      "position": [
+        7.895419921305154,
+        -2.8702229414118245,
+        0.08372402424296853
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.35550933302555204,
+        0.14916578723710108,
+        0.001987704227994454
+      ],
+      "intensity": 2.8,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 4,
+      "source_sample_centroid": [
+        7.857404840948953,
+        -2.8702229414118245,
+        0.08372402424296853
+      ]
+    },
+    {
+      "owner": 10,
+      "position": [
+        7.794662840876795,
+        -2.968147851129092,
+        0.08602732956788914
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.3066857312635012,
+        0.15100144300380341,
+        0.003960845374014035
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "sample_count": 4,
+      "source_sample_centroid": [
+        7.794662840876795,
+        -2.9267356434444185,
+        0.08602732956788914
+      ]
+    },
+    {
+      "owner": 10,
+      "position": [
+        7.820654949113181,
+        -2.771852158870908,
+        0.04779112451174607
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.45647990823587103,
+        0.11482159062941301,
+        0.0033141236834497256
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "sample_count": 44,
+      "source_sample_centroid": [
+        7.820654949113181,
+        -2.8118546618012004,
+        0.04779112451174607
+      ]
+    },
+    {
+      "owner": 11,
+      "position": [
+        8.472815522905456,
+        -2.809045852796478,
+        0.08137770426300496
+      ],
+      "range": 0.32260962849746155,
+      "color_linear": [
+        0.44886985640766225,
+        0.17923021625851507,
+        0.0012275477441208225
+      ],
+      "intensity": 2.8,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 2,
+      "source_sample_centroid": [
+        8.405330299977495,
+        -2.809045852796478,
+        0.08137770426300496
+      ]
+    },
+    {
+      "owner": 12,
+      "position": [
+        7.8883285187125605,
+        -2.904917463451928,
+        0.04669787609596084
+      ],
+      "range": 0.3509487394158066,
+      "color_linear": [
+        0.49276113545081335,
+        0.119835198018437,
+        0.0030465538299843864
+      ],
+      "intensity": 2.8,
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 38,
+      "source_sample_centroid": [
+        7.972999325903145,
+        -2.904917463451928,
+        0.04669787609596084
+      ]
+    },
+    {
+      "owner": 13,
+      "position": [
+        9.057526055115577,
+        -3.5974362121960803,
+        0.046698925676007884
+      ],
+      "range": 0.32,
+      "color_linear": [
+        0.4927898248928761,
+        0.11984105577282493,
+        0.0030468640119745804
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "sample_count": 38,
+      "source_sample_centroid": [
+        9.057526055115577,
+        -3.5581724918911815,
+        0.046698925676007884
+      ]
+    },
+    {
+      "owner": 14,
+      "position": [
+        7.82303324392023,
+        -3.1467432528172026,
+        0.06137911243743427
+      ],
+      "range": 0.4458338899753739,
+      "color_linear": [
+        0.05980319067628646,
+        0.034978876352342404,
+        0.0024282158683906997
+      ],
+      "intensity": 2.8,
+      "direction": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 1,
+      "source_sample_centroid": [
+        7.837800740703106,
+        -3.1467432528172026,
+        0.06137911243743427
+      ]
+    },
+    {
+      "owner": 14,
+      "position": [
+        8.05696675207977,
+        -3.1462829874921656,
+        0.047683941366534
+      ],
+      "range": 0.4458338899753739,
+      "color_linear": [
+        0.4564792859619165,
+        0.11482143795830908,
+        0.0033141098958863803
+      ],
+      "intensity": 2.8,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "sample_count": 44,
+      "source_sample_centroid": [
+        8.025734334241783,
+        -3.1462829874921656,
+        0.047683941366534
+      ]
+    },
+    {
+      "owner": 14,
+      "position": [
+        7.876347863818563,
+        -3.3013230666173046,
+        0.06137911243743426
+      ],
+      "range": 0.4458338899753739,
+      "color_linear": [
+        0.1461026251909408,
+        0.08796164616651012,
+        0.003258839392315264
+      ],
+      "intensity": 2.8,
+      "direction": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "sample_count": 1,
+      "source_sample_centroid": [
+        7.876347863818563,
+        -3.2608641193191676,
+        0.06137911243743426
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "low": [
+        8.670328489932562,
+        -3.32508538198788,
+        0.01766087465707783
+      ],
+      "high": [
+        8.88967145206744,
+        -3.11491467601212,
+        0.12883470977145717
+      ],
+      "owner": 0
+    },
+    {
+      "low": [
+        8.554563773803919,
+        -3.092826844038077,
+        0.014710364715952579
+      ],
+      "high": [
+        8.72543619819608,
+        -2.927173135961923,
+        0.12588419983033194
+      ],
+      "owner": 1
+    },
+    {
+      "low": [
+        8.080676908382696,
+        -3.3249667830797702,
+        0.01447024506419054
+      ],
+      "high": [
+        8.359323089617305,
+        -3.1150332749202296,
+        0.1522119359379909
+      ],
+      "owner": 2
+    },
+    {
+      "low": [
+        8.199542768819114,
+        -3.6624513756197756,
+        0.01447024506419054
+      ],
+      "high": [
+        8.380457215180886,
+        -3.3375486243802244,
+        0.16628656368945338
+      ],
+      "owner": 3
+    },
+    {
+      "low": [
+        8.407289255869792,
+        -3.6646258306303574,
+        0.01447024506419054
+      ],
+      "high": [
+        8.592710744130208,
+        -3.3353741693696426,
+        0.1677098315554773
+      ],
+      "owner": 4
+    },
+    {
+      "low": [
+        7.866169867264052,
+        -3.658497815534488,
+        0.01447024506419054
+      ],
+      "high": [
+        8.153830132295948,
+        -3.341502184465512,
+        0.1909567154660586
+      ],
+      "owner": 5
+    },
+    {
+      "low": [
+        8.640637347413326,
+        -3.641260347811666,
+        0.01447024506419054
+      ],
+      "high": [
+        8.919362594586675,
+        -3.358739652188334,
+        0.23555277930440538
+      ],
+      "owner": 6
+    },
+    {
+      "low": [
+        8.482547477912993,
+        -3.3189178541648165,
+        0.014507910533282823
+      ],
+      "high": [
+        8.657452508087006,
+        -3.1210822038351833,
+        0.23685558076204152
+      ],
+      "owner": 7
+    },
+    {
+      "low": [
+        8.540528658779651,
+        -2.887452532329182,
+        0.014782289821496881
+      ],
+      "high": [
+        8.739471313220347,
+        -2.712547461670818,
+        0.23712996005025558
+      ],
+      "owner": 8
+    },
+    {
+      "low": [
+        8.767944093227902,
+        -3.081853384136568,
+        0.01763069424059039
+      ],
+      "high": [
+        8.932055954772098,
+        -2.798146618463432,
+        0.27524399978674535
+      ],
+      "owner": 9
+    },
+    {
+      "low": [
+        7.716580102694845,
+        -2.956147851129092,
+        0.01447024506419054
+      ],
+      "high": [
+        7.883419921305155,
+        -2.783852158870908,
+        0.29817701073732633
+      ],
+      "owner": 10
+    },
+    {
+      "low": [
+        8.259184505094543,
+        -2.8874525120870063,
+        0.01447024506419054
+      ],
+      "high": [
+        8.460815522905458,
+        -2.7125474819129938,
+        0.29817701073732633
+      ],
+      "owner": 11
+    },
+    {
+      "low": [
+        7.90032851871256,
+        -2.97508535798788,
+        0.01447024506419054
+      ],
+      "high": [
+        8.119671480847439,
+        -2.76491465201212,
+        0.1256440801785699
+      ],
+      "owner": 12
+    },
+    {
+      "low": [
+        8.977173144661924,
+        -3.5854362121960803,
+        0.01447024506419054
+      ],
+      "high": [
+        9.142826852738077,
+        -3.4145637878039197,
+        0.1256440801785699
+      ],
+      "owner": 13
+    },
+    {
+      "low": [
+        7.83503324392023,
+        -3.2893230666173046,
+        0.01447024506419054
+      ],
+      "high": [
+        8.04496675207977,
+        -3.0106768853826957,
+        0.1522119359379909
+      ],
+      "owner": 14
+    },
+    {
+      "low": [
+        8.197548638380225,
+        -3.100457213180886,
+        0.01447024506419054
+      ],
+      "high": [
+        8.522451389619777,
+        -2.919542766819114,
+        0.16628656368945338
+      ],
+      "owner": 15
+    }
+  ],
+  "texture_sha256": {
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_4af5ff7203b54bf8.dds": "65c8bfb95893b1119508fb8127ab5b3bbdccf0c4880fb41422839b28779acc35"
+  },
+  "source_attachment_audit": [
+    {
+      "asset": "city/component/54e0844b5aaf8e4f",
+      "source_sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "operational"
+        }
+      ],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/52f1a911f55d5874",
+      "source_sockets": [],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/a21d0b8948b3e04d",
+      "source_sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "operational"
+        }
+      ],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/37dce7627789f3e1",
+      "source_sockets": [],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/dfcb43de34109abf",
+      "source_sockets": [],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/f9328c8bf9110e11",
+      "source_sockets": [],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/ca31cbba31f78f34",
+      "source_sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "pillaged"
+        }
+      ],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/e614b2e0ed2e6276",
+      "source_sockets": [],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/60086ac55525c719",
+      "source_sockets": [],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/3e0c044ce5844e5d",
+      "source_sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "pillaged"
+        }
+      ],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/7603a8ac1e0a4c15",
+      "source_sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "pillaged"
+        }
+      ],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/07f1bedbab5860af",
+      "source_sockets": [],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/54e0844b5aaf8e4f",
+      "source_sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "operational"
+        }
+      ],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/52f1a911f55d5874",
+      "source_sockets": [],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/a21d0b8948b3e04d",
+      "source_sockets": [
+        {
+          "binding_status": "resource_unresolved",
+          "bone": 1,
+          "id": "attachment_00",
+          "semantic": "smoke",
+          "skeleton": 0,
+          "state_hint": "operational"
+        }
+      ],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    },
+    {
+      "asset": "city/component/37dce7627789f3e1",
+      "source_sockets": [],
+      "classification": "Existing unresolved sockets are not enabled by this derived facade approximation"
+    }
+  ],
+  "proxy_budget": 128,
+  "unbounded_proxy_count": 32,
+  "proxy_selection": "Strongest energy proxy per emitting body, then strongest remaining; original order retained. Window emission unchanged.",
+  "gain": 4,
+  "local_building_occlusion": true,
+  "object_reflections": true,
+  "augmentation_sha256": "7a494f5f7c6b72b66d5c80282b43f390cb267ceba8735210c4793414cc41334f"
+}

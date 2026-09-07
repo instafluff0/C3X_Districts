@@ -1,0 +1,956 @@
+{
+  "classification": "Unrendered Lab layout; visual acceptance pending",
+  "pool": "city/pool/mediterranean/ancient",
+  "size": 1,
+  "anchor_tile": [
+    3,
+    2
+  ],
+  "benchmark_region": "coastal",
+  "river_exclusion": {
+    "threshold_pixels": 12.3999996,
+    "polygon_count": 0,
+    "matched_terrain_draws": 2,
+    "river_triangles": 26624,
+    "anchor_tile": [
+      3,
+      2
+    ],
+    "terrain_packet": "Renderer/terrain_lab/v2/app/.cache/geometry/2b5a04da7fc40d61ef172c0590fb84a84b50e0c353323715abb332e590d9f1f0/payload",
+    "terrain_packet_sha256": "a379ead8b0c2c5df2fce5f14f702f92be5f8d313edf9dd1a46c3e51c642f3fb3",
+    "classification": "Lab rendered distance-field adapter; generic convex city-local exclusion polygons",
+    "path": "Renderer/terrain_lab/v2/fixtures/beauty/city-scene-r87/mediterranean-ancient-s1-capital/river-exclusion.json",
+    "sha256": "8babc292aa4675edb8438bbfcee1f6de0e49496d0695e57a3cfaabd5873f9d8f"
+  },
+  "instances": [
+    {
+      "slot": 0,
+      "x": 0.42000000000000004,
+      "y": -0.49000000000000005,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/54e0844b5aaf8e4f"
+    },
+    {
+      "slot": 1,
+      "x": 0.49000000000000005,
+      "y": 0.28,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/52f1a911f55d5874"
+    },
+    {
+      "slot": 2,
+      "x": 0.49000000000000005,
+      "y": 0.0,
+      "rotation": 1.5707963267948966,
+      "scale": 4.048435163340343,
+      "asset": "city/component/a21d0b8948b3e04d"
+    },
+    {
+      "slot": 3,
+      "x": 0.28,
+      "y": -0.07,
+      "rotation": 1.5707963267948966,
+      "scale": 4.048435163340343,
+      "asset": "city/component/37dce7627789f3e1"
+    },
+    {
+      "slot": 4,
+      "x": 0.21000000000000002,
+      "y": -0.42000000000000004,
+      "rotation": 1.5707963267948966,
+      "scale": 4.048435163340343,
+      "asset": "city/component/dfcb43de34109abf"
+    },
+    {
+      "slot": 5,
+      "x": 0.0,
+      "y": 0.0,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/f9328c8bf9110e11"
+    },
+    {
+      "slot": 6,
+      "x": -0.07,
+      "y": -0.35000000000000003,
+      "rotation": 1.5707963267948966,
+      "scale": 4.048435163340343,
+      "asset": "city/component/ca31cbba31f78f34"
+    },
+    {
+      "slot": 7,
+      "x": 0.49000000000000005,
+      "y": -0.28,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/e614b2e0ed2e6276"
+    },
+    {
+      "slot": 8,
+      "x": 0.7000000000000001,
+      "y": 0.0,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/60086ac55525c719"
+    },
+    {
+      "slot": 9,
+      "x": 0.28,
+      "y": -0.7000000000000001,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/3e0c044ce5844e5d"
+    },
+    {
+      "slot": 10,
+      "x": 0.7000000000000001,
+      "y": 0.28,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/7603a8ac1e0a4c15"
+    },
+    {
+      "slot": 11,
+      "x": 0.7000000000000001,
+      "y": -0.28,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/07f1bedbab5860af"
+    },
+    {
+      "slot": 12,
+      "x": 0.6300000000000001,
+      "y": 0.49000000000000005,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/54e0844b5aaf8e4f"
+    },
+    {
+      "slot": 13,
+      "x": 0.7000000000000001,
+      "y": 0.7000000000000001,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/52f1a911f55d5874"
+    },
+    {
+      "slot": 14,
+      "x": -0.07,
+      "y": -0.6300000000000001,
+      "rotation": 0.0,
+      "scale": 4.048435163340343,
+      "asset": "city/component/a21d0b8948b3e04d"
+    },
+    {
+      "slot": 15,
+      "x": 0.6300000000000001,
+      "y": -0.56,
+      "rotation": 1.5707963267948966,
+      "scale": 4.048435163340343,
+      "asset": "city/component/37dce7627789f3e1"
+    },
+    {
+      "slot": "capital",
+      "x": 0.07,
+      "y": 0.49000000000000005,
+      "rotation": 0,
+      "scale": 17.03217235422944,
+      "asset": "city/palace/root/cbb941762b70fc8b"
+    }
+  ],
+  "search": [
+    {
+      "nodes": 29,
+      "backtracks": 29,
+      "candidate_counts": {
+        "0": 54,
+        "1": 75,
+        "2": 52,
+        "3": 30,
+        "4": 30,
+        "5": 30,
+        "6": 50,
+        "7": 54,
+        "8": 228,
+        "9": 252,
+        "10": 306,
+        "11": 228,
+        "12": 185,
+        "13": 306,
+        "14": 182,
+        "15": 116
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.22999999999999998,
+          -0.43980515194826764,
+          0.37,
+          0.1598051519482676
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 0,
+      "palace_site": [
+        -0.254,
+        -0.46380515194826766,
+        0.394,
+        0.1838051519482676
+      ]
+    },
+    {
+      "nodes": 2000,
+      "backtracks": 2000,
+      "candidate_counts": {
+        "0": 108,
+        "1": 127,
+        "2": 103,
+        "3": 79,
+        "4": 79,
+        "5": 76,
+        "6": 98,
+        "7": 108,
+        "8": 252,
+        "9": 266,
+        "10": 310,
+        "11": 252,
+        "12": 220,
+        "13": 310,
+        "14": 214,
+        "15": 161
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.22999999999999998,
+          -0.6498051519482677,
+          0.37,
+          -0.05019484805173241
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "budget_exhausted",
+      "palace_attempt": 1,
+      "palace_site": [
+        -0.254,
+        -0.6738051519482677,
+        0.394,
+        -0.02619484805173241
+      ]
+    },
+    {
+      "nodes": 12,
+      "backtracks": 12,
+      "candidate_counts": {
+        "0": 38,
+        "1": 59,
+        "2": 38,
+        "3": 16,
+        "4": 16,
+        "5": 16,
+        "6": 36,
+        "7": 40,
+        "8": 208,
+        "9": 233,
+        "10": 288,
+        "11": 208,
+        "12": 162,
+        "13": 288,
+        "14": 161,
+        "15": 97
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.15999999999999998,
+          -0.22980515194826762,
+          0.44,
+          0.36980515194826763
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 2,
+      "palace_site": [
+        -0.18399999999999997,
+        -0.25380515194826764,
+        0.464,
+        0.39380515194826765
+      ]
+    },
+    {
+      "nodes": 29,
+      "backtracks": 29,
+      "candidate_counts": {
+        "0": 54,
+        "1": 72,
+        "2": 52,
+        "3": 30,
+        "4": 30,
+        "5": 30,
+        "6": 50,
+        "7": 54,
+        "8": 163,
+        "9": 200,
+        "10": 244,
+        "11": 163,
+        "12": 133,
+        "13": 244,
+        "14": 130,
+        "15": 88
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.019999999999999962,
+          -0.43980515194826764,
+          0.5800000000000001,
+          0.1598051519482676
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 3,
+      "palace_site": [
+        -0.04399999999999996,
+        -0.46380515194826766,
+        0.6040000000000001,
+        0.1838051519482676
+      ]
+    },
+    {
+      "nodes": 2000,
+      "backtracks": 2000,
+      "candidate_counts": {
+        "0": 108,
+        "1": 127,
+        "2": 103,
+        "3": 79,
+        "4": 79,
+        "5": 76,
+        "6": 98,
+        "7": 108,
+        "8": 195,
+        "9": 221,
+        "10": 253,
+        "11": 195,
+        "12": 176,
+        "13": 253,
+        "14": 170,
+        "15": 139
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.019999999999999962,
+          -0.6498051519482677,
+          0.5800000000000001,
+          -0.05019484805173241
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "budget_exhausted",
+      "palace_attempt": 5,
+      "palace_site": [
+        -0.04399999999999996,
+        -0.6738051519482677,
+        0.6040000000000001,
+        -0.02619484805173241
+      ]
+    },
+    {
+      "nodes": 1481,
+      "backtracks": 1481,
+      "candidate_counts": {
+        "0": 95,
+        "1": 110,
+        "2": 95,
+        "3": 70,
+        "4": 70,
+        "5": 67,
+        "6": 90,
+        "7": 100,
+        "8": 224,
+        "9": 247,
+        "10": 294,
+        "11": 224,
+        "12": 185,
+        "13": 294,
+        "14": 185,
+        "15": 142
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.15999999999999998,
+          -0.019805151948267596,
+          0.44,
+          0.5798051519482676
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 6,
+      "palace_site": [
+        -0.18399999999999997,
+        -0.0438051519482676,
+        0.464,
+        0.6038051519482677
+      ]
+    },
+    {
+      "nodes": 337,
+      "backtracks": 337,
+      "candidate_counts": {
+        "0": 46,
+        "1": 85,
+        "2": 46,
+        "3": 24,
+        "4": 24,
+        "5": 16,
+        "6": 36,
+        "7": 54,
+        "8": 183,
+        "9": 205,
+        "10": 253,
+        "11": 183,
+        "12": 144,
+        "13": 253,
+        "14": 143,
+        "15": 90
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          0.050000000000000044,
+          -0.22980515194826762,
+          0.65,
+          0.36980515194826763
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "no_grid_solution",
+      "palace_attempt": 7,
+      "palace_site": [
+        0.026000000000000044,
+        -0.25380515194826764,
+        0.674,
+        0.39380515194826765
+      ]
+    },
+    {
+      "nodes": 2000,
+      "backtracks": 2000,
+      "candidate_counts": {
+        "0": 112,
+        "1": 139,
+        "2": 106,
+        "3": 71,
+        "4": 71,
+        "5": 58,
+        "6": 90,
+        "7": 120,
+        "8": 235,
+        "9": 248,
+        "10": 301,
+        "11": 235,
+        "12": 196,
+        "13": 301,
+        "14": 189,
+        "15": 136
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          0.19000000000000006,
+          -0.43980515194826764,
+          0.79,
+          0.1598051519482676
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "budget_exhausted",
+      "palace_attempt": 9,
+      "palace_site": [
+        0.16600000000000006,
+        -0.46380515194826766,
+        0.8140000000000001,
+        0.1838051519482676
+      ]
+    },
+    {
+      "nodes": 2000,
+      "backtracks": 2000,
+      "candidate_counts": {
+        "0": 100,
+        "1": 127,
+        "2": 100,
+        "3": 75,
+        "4": 75,
+        "5": 67,
+        "6": 90,
+        "7": 108,
+        "8": 195,
+        "9": 219,
+        "10": 253,
+        "11": 195,
+        "12": 166,
+        "13": 253,
+        "14": 167,
+        "15": 135
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          0.050000000000000044,
+          -0.019805151948267596,
+          0.65,
+          0.5798051519482676
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "budget_exhausted",
+      "palace_attempt": 10,
+      "palace_site": [
+        0.026000000000000044,
+        -0.0438051519482676,
+        0.674,
+        0.6038051519482677
+      ]
+    },
+    {
+      "nodes": 97,
+      "backtracks": 81,
+      "candidate_counts": {
+        "0": 153,
+        "1": 177,
+        "2": 153,
+        "3": 124,
+        "4": 124,
+        "5": 118,
+        "6": 144,
+        "7": 160,
+        "8": 309,
+        "9": 318,
+        "10": 366,
+        "11": 309,
+        "12": 267,
+        "13": 366,
+        "14": 267,
+        "15": 214
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 2000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "fixed_neighbors": [
+        [
+          -0.22999999999999998,
+          0.19019484805173242,
+          0.37,
+          0.7898051519482676
+        ]
+      ],
+      "candidate_cost": "authored projected landmark visibility preference",
+      "status": "fit",
+      "palace_attempt": 11,
+      "palace_site": [
+        -0.254,
+        0.16619484805173243,
+        0.394,
+        0.8138051519482676
+      ],
+      "planned_size": 1,
+      "planned_instances": [
+        {
+          "slot": 0,
+          "x": 0.42000000000000004,
+          "y": -0.49000000000000005,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/54e0844b5aaf8e4f"
+        },
+        {
+          "slot": 1,
+          "x": 0.49000000000000005,
+          "y": 0.28,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/52f1a911f55d5874"
+        },
+        {
+          "slot": 2,
+          "x": 0.49000000000000005,
+          "y": 0.0,
+          "rotation": 1.5707963267948966,
+          "scale": 4.048435163340343,
+          "asset": "city/component/a21d0b8948b3e04d"
+        },
+        {
+          "slot": 3,
+          "x": 0.28,
+          "y": -0.07,
+          "rotation": 1.5707963267948966,
+          "scale": 4.048435163340343,
+          "asset": "city/component/37dce7627789f3e1"
+        },
+        {
+          "slot": 4,
+          "x": 0.21000000000000002,
+          "y": -0.42000000000000004,
+          "rotation": 1.5707963267948966,
+          "scale": 4.048435163340343,
+          "asset": "city/component/dfcb43de34109abf"
+        },
+        {
+          "slot": 5,
+          "x": 0.0,
+          "y": 0.0,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/f9328c8bf9110e11"
+        },
+        {
+          "slot": 6,
+          "x": -0.07,
+          "y": -0.35000000000000003,
+          "rotation": 1.5707963267948966,
+          "scale": 4.048435163340343,
+          "asset": "city/component/ca31cbba31f78f34"
+        },
+        {
+          "slot": 7,
+          "x": 0.49000000000000005,
+          "y": -0.28,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/e614b2e0ed2e6276"
+        },
+        {
+          "slot": 8,
+          "x": 0.7000000000000001,
+          "y": 0.0,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/60086ac55525c719"
+        },
+        {
+          "slot": 9,
+          "x": 0.28,
+          "y": -0.7000000000000001,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/3e0c044ce5844e5d"
+        },
+        {
+          "slot": 10,
+          "x": 0.7000000000000001,
+          "y": 0.28,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/7603a8ac1e0a4c15"
+        },
+        {
+          "slot": 11,
+          "x": 0.7000000000000001,
+          "y": -0.28,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/07f1bedbab5860af"
+        },
+        {
+          "slot": 12,
+          "x": 0.6300000000000001,
+          "y": 0.49000000000000005,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/54e0844b5aaf8e4f"
+        },
+        {
+          "slot": 13,
+          "x": 0.7000000000000001,
+          "y": 0.7000000000000001,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/52f1a911f55d5874"
+        },
+        {
+          "slot": 14,
+          "x": -0.07,
+          "y": -0.6300000000000001,
+          "rotation": 0.0,
+          "scale": 4.048435163340343,
+          "asset": "city/component/a21d0b8948b3e04d"
+        },
+        {
+          "slot": 15,
+          "x": 0.6300000000000001,
+          "y": -0.56,
+          "rotation": 1.5707963267948966,
+          "scale": 4.048435163340343,
+          "asset": "city/component/37dce7627789f3e1"
+        }
+      ]
+    }
+  ]
+}

@@ -77,6 +77,31 @@ class UnitFamilyAssetImporterTests(unittest.TestCase):
                 loaded["units"][0]["archetype"], loaded["units"][1]["archetype"]
             )
 
+    def test_early_members_and_civilian_actions_are_explicit(self) -> None:
+        source = Path(__file__).with_name("unit_early_strategy.json")
+        strategy = load_strategy(source)
+        warrior, scout, settler, worker = strategy["units"]
+        self.assertEqual(["warrior", "scout", "settler", "worker"],
+                         [unit["slug"] for unit in strategy["units"]])
+        self.assertEqual([0, 0, 0], [unit["member_index"] for unit in (scout, settler, worker)])
+        self.assertEqual(["Tool"], worker["exclude_roles"])
+        for unit in (settler, worker):
+            self.assertEqual("civilian", unit["action_scope"])
+            self.assertEqual({"idle", "move"}, set(unit["actions"]))
+            self.assertIn("capture", unit["additional_actions"])
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)/"strategy.json"
+            for invalid in (-1, True, "0"):
+                scout["member_index"] = invalid
+                path.write_text(json.dumps(strategy))
+                with self.assertRaisesRegex(ValueError, "member index"):
+                    load_strategy(path)
+            scout["member_index"] = 0
+            worker["actions"].pop("move")
+            path.write_text(json.dumps(strategy))
+            with self.assertRaises(ValueError):
+                load_strategy(path)
+
     def test_initial_entry_requires_a_unique_package_string(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             package = Path(temporary) / "unit.blp"

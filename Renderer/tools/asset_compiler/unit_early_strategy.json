@@ -1,0 +1,198 @@
+{
+  "schema": "c3x.source_unit_family_strategy.v0",
+  "source_content": "Base",
+  "source_units_per_tile": 100.0,
+  "units": [
+    {
+      "slug": "warrior",
+      "civ3_ids": [
+        "PRTO_Warrior"
+      ],
+      "source_artdef": "UNIT_WARRIOR",
+      "domain": "land",
+      "archetype": "humanoid_melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Warrior_IdleB",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_UnitMedium_Run_SwordAndShieldA",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Warrior_AttackMeleeB",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Warrior_DeathMeleeA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fidget": {
+          "source": "ANIMATION_Warrior_IdleD",
+          "loop": false
+        },
+        "fortify": {
+          "source": "ANIMATION_Warrior_BraceA",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Warrior_BlockA",
+          "loop": false
+        },
+        "victory": {
+          "alias": "fidget",
+          "loop": false
+        }
+      }
+    },
+    {
+      "slug": "scout",
+      "civ3_ids": [
+        "PRTO_Scout"
+      ],
+      "source_artdef": "UNIT_SCOUT",
+      "domain": "land",
+      "archetype": "humanoid_melee",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Scout_IdleA",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Scout_Run",
+          "loop": true
+        },
+        "attack": {
+          "source": "ANIMATION_Scout_AttackD",
+          "loop": false
+        },
+        "death": {
+          "source": "ANIMATION_Scout_DeathA",
+          "loop": false
+        }
+      },
+      "additional_actions": {
+        "fidget": {
+          "source": "ANIMATION_Scout_IdleB",
+          "loop": false
+        },
+        "fortify": {
+          "source": "ANIMATION_Scout_FortifyA",
+          "loop": false
+        },
+        "defend": {
+          "source": "ANIMATION_Scout_DodgeBack",
+          "loop": false
+        },
+        "victory": {
+          "alias": "fidget",
+          "loop": false
+        }
+      },
+      "member_index": 0
+    },
+    {
+      "slug": "settler",
+      "civ3_ids": [
+        "PRTO_Settler"
+      ],
+      "source_artdef": "UNIT_SETTLER",
+      "domain": "land",
+      "archetype": "civilian",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Scout_BreathingB",
+          "loop": true,
+          "source_match": "compatible_staff_humanoid_rig; backpack carrier clips do not animate the leader staff socket"
+        },
+        "move": {
+          "source": "ANIMATION_Scout_Jog",
+          "loop": true,
+          "source_match": "compatible_staff_humanoid_rig; backpack carrier clips do not animate the leader staff socket"
+        }
+      },
+      "additional_actions": {
+        "fidget": {
+          "source": "ANIMATION_Scout_IdleD",
+          "loop": false,
+          "source_match": "compatible_staff_humanoid_rig; backpack carrier clips do not animate the leader staff socket"
+        },
+        "fortify": {
+          "source": "ANIMATION_Scout_FortifyB",
+          "loop": false,
+          "source_match": "compatible_staff_humanoid_rig; backpack carrier clips do not animate the leader staff socket"
+        },
+        "capture": {
+          "source": "ANIMATION_SettlerLeader_CaptureB",
+          "loop": false
+        }
+      },
+      "member_index": 0,
+      "action_scope": "civilian"
+    },
+    {
+      "slug": "worker",
+      "civ3_ids": [
+        "PRTO_Worker",
+        "PRTO_Builder"
+      ],
+      "source_artdef": "UNIT_BUILDER",
+      "domain": "land",
+      "archetype": "civilian",
+      "minimum_matching_tracks": 30,
+      "actions": {
+        "idle": {
+          "source": "ANIMATION_Builder_IdleRest01_2H",
+          "loop": true
+        },
+        "move": {
+          "source": "ANIMATION_Builder_RunFwdA",
+          "loop": true
+        }
+      },
+      "additional_actions": {
+        "fidget": {
+          "source": "ANIMATION_Builder_IdleRest06_2H",
+          "loop": false
+        },
+        "fortify": {
+          "source": "ANIMATION_Builder_RunStop1",
+          "loop": false
+        },
+        "capture": {
+          "source": "ANIMATION_Builder_Captured01",
+          "loop": false
+        }
+      },
+      "member_index": 0,
+      "action_scope": "civilian",
+      "exclude_roles": [
+        "Tool"
+      ]
+    }
+  ],
+  "deferred_archetype_probes": [],
+  "runtime": {
+    "direction_count": 8,
+    "body_ownership": "unit_body_only",
+    "retained_native_layers": [
+      "selection_cursor",
+      "health_bar",
+      "activity_marks",
+      "stack_indicators",
+      "hud"
+    ],
+    "movement_policy": "authoritative_civ3_anchor_and_segment_progress",
+    "action_timing_policy": "civ3_effective_duration_until_synchronization_hook_is_audited",
+    "owner_color_policy": "civ3_ntp_palette_with_inferred_source_mask_mapping",
+    "unsupported_policy": "complete_native_unit_body_fallback"
+  },
+  "runtime_integration": "not_enabled",
+  "selection_notes": "One human body per native sprite: Scout dog, Settler donkey and extra Builder formation members excluded explicitly. Non-work Builder poses hide tools. Worker specialty jobs retain native rendering in this checkpoint."
+}

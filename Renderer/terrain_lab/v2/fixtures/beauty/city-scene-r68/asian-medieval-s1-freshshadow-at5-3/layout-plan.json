@@ -1,0 +1,323 @@
+{
+  "classification": "Unrendered Lab layout; visual acceptance pending",
+  "pool": "city/pool/asian/medieval",
+  "size": 1,
+  "anchor_tile": [
+    5,
+    3
+  ],
+  "benchmark_region": "freshshadow",
+  "instances": [
+    {
+      "slot": 0,
+      "x": 0.56,
+      "y": -0.07,
+      "rotation": 0.0,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/45e5295deb5e85fb"
+    },
+    {
+      "slot": 1,
+      "x": -0.07,
+      "y": 0.07,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/098e4d380fe565f2"
+    },
+    {
+      "slot": 2,
+      "x": 0.14,
+      "y": 0.14,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/88675b776a2a1e7e"
+    },
+    {
+      "slot": 3,
+      "x": -0.28,
+      "y": 0.14,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/7139dac17b5b5976"
+    },
+    {
+      "slot": 4,
+      "x": 0.14,
+      "y": -0.14,
+      "rotation": 0.0,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/abc05074de5a233f"
+    },
+    {
+      "slot": 5,
+      "x": 0.35000000000000003,
+      "y": -0.14,
+      "rotation": 0.0,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/9a1ddfe378603f8a"
+    },
+    {
+      "slot": 6,
+      "x": -0.42000000000000004,
+      "y": -0.14,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/1f91717edf46efa1"
+    },
+    {
+      "slot": 7,
+      "x": -0.07,
+      "y": -0.14,
+      "rotation": 0.0,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/bf64e91d35a671ba"
+    },
+    {
+      "slot": 8,
+      "x": -0.21000000000000002,
+      "y": 0.35000000000000003,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/4ca87bcb37527f24"
+    },
+    {
+      "slot": 9,
+      "x": -0.56,
+      "y": 0.21000000000000002,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/90c40ad6be7ce751"
+    },
+    {
+      "slot": 10,
+      "x": 0.42000000000000004,
+      "y": 0.14,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/6e6554af2db81497"
+    },
+    {
+      "slot": 11,
+      "x": 0.14,
+      "y": 0.42000000000000004,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/792c9e7ecef6407a"
+    },
+    {
+      "slot": 12,
+      "x": -0.49000000000000005,
+      "y": 0.49000000000000005,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/45e5295deb5e85fb"
+    },
+    {
+      "slot": 13,
+      "x": -0.7000000000000001,
+      "y": -0.07,
+      "rotation": 0.0,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/098e4d380fe565f2"
+    },
+    {
+      "slot": 14,
+      "x": -0.7000000000000001,
+      "y": 0.49000000000000005,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/88675b776a2a1e7e"
+    },
+    {
+      "slot": 15,
+      "x": -0.14,
+      "y": 0.56,
+      "rotation": 1.5707963267948966,
+      "scale": 3.7132075471698114,
+      "asset": "city/component/7139dac17b5b5976"
+    }
+  ],
+  "search": [
+    {
+      "nodes": 16,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 333,
+        "1": 333,
+        "2": 333,
+        "3": 333,
+        "4": 308,
+        "5": 308,
+        "6": 188,
+        "7": 281,
+        "8": 419,
+        "9": 371,
+        "10": 347,
+        "11": 371,
+        "12": 518,
+        "13": 518,
+        "14": 518,
+        "15": 518
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 20000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "neighbor_gap": 0.08,
+      "connected_prefixes": [
+        8,
+        16
+      ],
+      "ranking": "compact envelope, nearby houses, center, remaining freedom",
+      "status": "fit",
+      "planned_size": 1,
+      "planned_instances": [
+        {
+          "slot": 0,
+          "x": 0.56,
+          "y": -0.07,
+          "rotation": 0.0,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/45e5295deb5e85fb"
+        },
+        {
+          "slot": 1,
+          "x": -0.07,
+          "y": 0.07,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/098e4d380fe565f2"
+        },
+        {
+          "slot": 2,
+          "x": 0.14,
+          "y": 0.14,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/88675b776a2a1e7e"
+        },
+        {
+          "slot": 3,
+          "x": -0.28,
+          "y": 0.14,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/7139dac17b5b5976"
+        },
+        {
+          "slot": 4,
+          "x": 0.14,
+          "y": -0.14,
+          "rotation": 0.0,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/abc05074de5a233f"
+        },
+        {
+          "slot": 5,
+          "x": 0.35000000000000003,
+          "y": -0.14,
+          "rotation": 0.0,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/9a1ddfe378603f8a"
+        },
+        {
+          "slot": 6,
+          "x": -0.42000000000000004,
+          "y": -0.14,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/1f91717edf46efa1"
+        },
+        {
+          "slot": 7,
+          "x": -0.07,
+          "y": -0.14,
+          "rotation": 0.0,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/bf64e91d35a671ba"
+        },
+        {
+          "slot": 8,
+          "x": -0.21000000000000002,
+          "y": 0.35000000000000003,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/4ca87bcb37527f24"
+        },
+        {
+          "slot": 9,
+          "x": -0.56,
+          "y": 0.21000000000000002,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/90c40ad6be7ce751"
+        },
+        {
+          "slot": 10,
+          "x": 0.42000000000000004,
+          "y": 0.14,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/6e6554af2db81497"
+        },
+        {
+          "slot": 11,
+          "x": 0.14,
+          "y": 0.42000000000000004,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/792c9e7ecef6407a"
+        },
+        {
+          "slot": 12,
+          "x": -0.49000000000000005,
+          "y": 0.49000000000000005,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/45e5295deb5e85fb"
+        },
+        {
+          "slot": 13,
+          "x": -0.7000000000000001,
+          "y": -0.07,
+          "rotation": 0.0,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/098e4d380fe565f2"
+        },
+        {
+          "slot": 14,
+          "x": -0.7000000000000001,
+          "y": 0.49000000000000005,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/88675b776a2a1e7e"
+        },
+        {
+          "slot": 15,
+          "x": -0.14,
+          "y": 0.56,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/7139dac17b5b5976"
+        }
+      ]
+    }
+  ]
+}

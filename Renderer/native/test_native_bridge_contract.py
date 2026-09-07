@@ -108,6 +108,46 @@ int main(int argc,char** argv) {
                         actual=json.JSONDecoder().raw_decode(text[text.index(":",pos)+1:].lstrip())[0]
                         self.assertEqual(actual,wanted,str(path))
 
+    def test_material_numbers_preserve_exponents_and_reject_truncation(self) -> None:
+        compiler = shutil.which("c++")
+        if compiler is None:
+            self.skipTest("C++ compiler unavailable")
+        source = (RENDERER_ROOT/"native/c3x_renderer.cpp").read_text()
+        member = source[source.index("std::size_t json_member_position("):source.index("class RendererState {")]
+        find = source[source.index("    static std::size_t find_text("):source.index("    static bool json_string_after(")]
+        number = source[source.index("    static bool json_number_after("):source.index("    static std::uint32_t read_u32(")]
+        harness = r'''
+#include <vector>
+#include <string>
+#include <cstdint>
+#include <cstring>
+#include <cctype>
+#include <cstdlib>
+#include <cmath>
+#include <iterator>
+#include <cassert>
+#include <algorithm>
+''' + member + find + number + r'''
+int main() {
+    auto parse=[](std::string text,float& value) {
+        std::string json="{\"offset_z\":"+text+",\"nested\":{\"offset_z\":99}}";
+        std::vector<std::uint8_t> data(json.begin(),json.end());
+        return json_number_after(data,"offset_z",0,value);
+    };
+    float value=0;
+    assert(parse("-4.223839691459184e-05",value));
+    assert(std::abs(value+0.00004223839691459184f)<1e-10f);
+    assert(parse("1E+2",value) && value==100);
+    for(auto invalid:{"1e", "1e+", "1e999", "1.5oops", "123456789012345678901234567890123456789012345678901234567890"})
+        assert(!parse(invalid,value));
+}
+'''
+        with tempfile.TemporaryDirectory() as folder:
+            cpp=Path(folder)/"numbers.cpp";cpp.write_text(harness)
+            exe=Path(folder)/"numbers"
+            subprocess.run([compiler,"-std=c++17",str(cpp),"-o",str(exe)],check=True)
+            subprocess.run([str(exe)],check=True)
+
     def test_production_ownership_validator_rejects_caster_only_claims(self) -> None:
         compiler = shutil.which("c++")
         if compiler is None:

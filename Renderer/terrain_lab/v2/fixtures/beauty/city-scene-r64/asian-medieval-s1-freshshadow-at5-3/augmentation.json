@@ -1,0 +1,1019 @@
+{
+  "classification": "source_adaptation; explicit Lab city augmentation",
+  "benchmark_region": "freshshadow",
+  "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "anchor_tile": [
+    5,
+    3
+  ],
+  "pool": "city/pool/asian/medieval",
+  "size": 1,
+  "uniform_scale_factor": 1.5,
+  "instances": [
+    {
+      "asset": "city/component/45e5295deb5e85fb",
+      "slot": 0,
+      "scale": 3.7132075471698114,
+      "rotation": 0.0,
+      "offset": [
+        0.56,
+        -0.21000000000000002
+      ],
+      "local_bounds": [
+        -0.06944132558490566,
+        -0.08274942430188678,
+        0.06944132558490566,
+        0.08274942430188678
+      ],
+      "sample_start": 0,
+      "ground_samples": {
+        "1": 5
+      },
+      "ground_height_range": [
+        2.84283972,
+        4.64744043
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 98,
+          "output_triangles": 126,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/098e4d380fe565f2",
+      "slot": 1,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        -0.14,
+        0.0
+      ],
+      "local_bounds": [
+        -0.08274942430188678,
+        -0.06944132558490566,
+        0.08274942430188678,
+        0.06944132558490566
+      ],
+      "sample_start": 299,
+      "ground_samples": {
+        "1": 304
+      },
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 98,
+          "output_triangles": 98,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/88675b776a2a1e7e",
+      "slot": 2,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        0.07,
+        0.0
+      ],
+      "local_bounds": [
+        -0.08274942430188678,
+        -0.06944132558490566,
+        0.08274942430188678,
+        0.06944132558490566
+      ],
+      "sample_start": 598,
+      "ground_samples": {
+        "1": 603
+      },
+      "ground_height_range": [
+        2.5,
+        2.50094342
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 98,
+          "output_triangles": 98,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/7139dac17b5b5976",
+      "slot": 3,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        0.28,
+        0.0
+      ],
+      "local_bounds": [
+        -0.08274942430188678,
+        -0.06944132558490566,
+        0.08274942430188678,
+        0.06944132558490566
+      ],
+      "sample_start": 897,
+      "ground_samples": {
+        "1": 902
+      },
+      "ground_height_range": [
+        2.5,
+        2.57180309
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 98,
+          "output_triangles": 98,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/abc05074de5a233f",
+      "slot": 4,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        0.0,
+        -0.56
+      ],
+      "local_bounds": [
+        -0.14366923562264153,
+        -0.06944132558490568,
+        0.14366923562264153,
+        0.06944132558490568
+      ],
+      "sample_start": 1196,
+      "ground_samples": {
+        "1": 1201
+      },
+      "ground_height_range": [
+        12.3639622,
+        14.3188362
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 200,
+          "output_triangles": 240,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/9a1ddfe378603f8a",
+      "slot": 5,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        0.28,
+        -0.21000000000000002
+      ],
+      "local_bounds": [
+        -0.14366923562264153,
+        -0.06944132558490568,
+        0.14366923562264153,
+        0.06944132558490568
+      ],
+      "sample_start": 1801,
+      "ground_samples": {
+        "1": 1806
+      },
+      "ground_height_range": [
+        2.50250626,
+        3.70504618
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 200,
+          "output_triangles": 240,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/1f91717edf46efa1",
+      "slot": 6,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        -0.42000000000000004,
+        -0.14
+      ],
+      "local_bounds": [
+        -0.1663691130566038,
+        -0.15316981132075472,
+        0.1663691130566038,
+        0.15316981132075472
+      ],
+      "sample_start": 2406,
+      "ground_samples": {
+        "1": 2411
+      },
+      "ground_height_range": [
+        2.5,
+        3.17954898
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 400,
+          "output_triangles": 480,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/bf64e91d35a671ba",
+      "slot": 7,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        -0.07,
+        -0.21000000000000002
+      ],
+      "local_bounds": [
+        -0.1252482357735849,
+        -0.11531250928301887,
+        0.1252482357735849,
+        0.11531250928301888
+      ],
+      "sample_start": 3611,
+      "ground_samples": {
+        "1": 3616
+      },
+      "ground_height_range": [
+        2.5,
+        5.24874353
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 328,
+          "output_triangles": 328,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/4ca87bcb37527f24",
+      "slot": 8,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        0.56,
+        0.21000000000000002
+      ],
+      "local_bounds": [
+        -0.15447522656603774,
+        -0.08224175456603774,
+        0.15447522656603774,
+        0.08224175456603774
+      ],
+      "sample_start": 4600,
+      "ground_samples": {
+        "1": 4605
+      },
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 200,
+          "output_triangles": 240,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/90c40ad6be7ce751",
+      "slot": 9,
+      "scale": 3.7132075471698114,
+      "rotation": 0.0,
+      "offset": [
+        0.21000000000000002,
+        0.6300000000000001
+      ],
+      "local_bounds": [
+        -0.13685200935849057,
+        -0.15316981132075472,
+        0.13685200935849057,
+        0.15316981132075472
+      ],
+      "sample_start": 5205,
+      "ground_samples": {
+        "1": 5210
+      },
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 396,
+          "output_triangles": 464,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/6e6554af2db81497",
+      "slot": 10,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        0.56,
+        0.0
+      ],
+      "local_bounds": [
+        -0.16912501856603773,
+        -0.10479659411320755,
+        0.16912501856603773,
+        0.10479659411320753
+      ],
+      "sample_start": 6398,
+      "ground_samples": {
+        "1": 6403
+      },
+      "ground_height_range": [
+        2.5,
+        2.68315697
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 200,
+          "output_triangles": 240,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/792c9e7ecef6407a",
+      "slot": 11,
+      "scale": 3.7132075471698114,
+      "rotation": 0.0,
+      "offset": [
+        0.21000000000000002,
+        0.28
+      ],
+      "local_bounds": [
+        -0.13677949041509432,
+        -0.15375,
+        0.13677949041509432,
+        0.15375
+      ],
+      "sample_start": 7003,
+      "ground_samples": {
+        "1": 7008
+      },
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 396,
+          "output_triangles": 436,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/45e5295deb5e85fb",
+      "slot": 12,
+      "scale": 3.7132075471698114,
+      "rotation": 0.0,
+      "offset": [
+        -0.28,
+        -0.7000000000000001
+      ],
+      "local_bounds": [
+        -0.06944132558490566,
+        -0.08274942430188678,
+        0.06944132558490566,
+        0.08274942430188678
+      ],
+      "sample_start": 8196,
+      "ground_samples": {
+        "1": 8201
+      },
+      "ground_height_range": [
+        12.0413761,
+        13.3701534
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 98,
+          "output_triangles": 98,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/098e4d380fe565f2",
+      "slot": 13,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        -0.56,
+        -0.56
+      ],
+      "local_bounds": [
+        -0.08274942430188678,
+        -0.06944132558490566,
+        0.08274942430188678,
+        0.06944132558490566
+      ],
+      "sample_start": 8495,
+      "ground_samples": {
+        "1": 8500
+      },
+      "ground_height_range": [
+        3.76213837,
+        5.49750566
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 98,
+          "output_triangles": 156,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/88675b776a2a1e7e",
+      "slot": 14,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        -0.7000000000000001,
+        -0.21000000000000002
+      ],
+      "local_bounds": [
+        -0.08274942430188678,
+        -0.06944132558490566,
+        0.08274942430188678,
+        0.06944132558490566
+      ],
+      "sample_start": 8794,
+      "ground_samples": {
+        "1": 8799
+      },
+      "ground_height_range": [
+        2.49999976,
+        3.254215
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 98,
+          "output_triangles": 98,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    },
+    {
+      "asset": "city/component/7139dac17b5b5976",
+      "slot": 15,
+      "scale": 3.7132075471698114,
+      "rotation": 1.5707963267948966,
+      "offset": [
+        -0.07,
+        0.21000000000000002
+      ],
+      "local_bounds": [
+        -0.08274942430188678,
+        -0.06944132558490566,
+        0.08274942430188678,
+        0.06944132558490566
+      ],
+      "sample_start": 9093,
+      "ground_samples": {
+        "1": 9098
+      },
+      "ground_height_range": [
+        2.5,
+        2.5
+      ],
+      "minimum_shore_distance": -1.0,
+      "ground_clipping": [
+        {
+          "part": 1,
+          "input_triangles": 98,
+          "output_triangles": 98,
+          "wet_input_vertices": 0,
+          "shore_boundary": -0.02,
+          "classification": "exact dry tile-cell clipping plus local linear shore approximation on tessellated source triangles"
+        }
+      ]
+    }
+  ],
+  "textures": {
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_21e3ede9be33cd93.dds": "0534ac6fbe6e0dab421bda8dbd80e9030804fa7e3101f917884f3d64ba22c164",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_a45f71a86c0c85ad.dds": "8afac46ff38f7f93ba1a73ea15fb36d69ce0e28b87217211e27cb952c795c627",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/ambient_occlusion_6e34dc7d1f62531e.dds": "b2fde7b56874100624b0ef939d203ab3cb6b4df4c3e3b2c0b05ac9b77df69f40",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_2231cc61cbec1775.dds": "88d4d76980a4cbd7c56538256eb76781f61fe76c193f08c3b95ca09135483c45",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/gloss_b8ba3f4f106347a9.dds": "52903c1c810c1c270eb51c3995add76b6dbc1d5e375828ccba51850e89a58eed",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_1674b3260ef12664.dds": "81709f230e96c5a6196eaa02c1a15baded743e945d3e2e803d57e4f90a1d159d",
+    "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_b333b8babb7742d9.dds": "aa75cad3c6352e7bba592edbe5d69e4e263458bf6b919d6ce1d8d8129899824c"
+  },
+  "material_declarations": [
+    {
+      "ambient_occlusion": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/ambient_occlusion_6e34dc7d1f62531e.dds"
+      },
+      "base_color": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_21e3ede9be33cd93.dds"
+      },
+      "emissive": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/emissive_a45f71a86c0c85ad.dds"
+      },
+      "gloss": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "srgb",
+        "format": "BC1_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/gloss_b8ba3f4f106347a9.dds"
+      },
+      "normal_0": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "linear",
+        "format": "BC5_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_0_2231cc61cbec1775.dds"
+      },
+      "normal_1": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "linear",
+        "format": "BC4_UNORM",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/normal_1_91f43d2a0c12c32c.dds"
+      }
+    },
+    {
+      "base_color": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "srgb",
+        "format": "BC3_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_1674b3260ef12664.dds"
+      }
+    },
+    {
+      "base_color": {
+        "address_u": "clamp",
+        "address_v": "clamp",
+        "color_space": "srgb",
+        "format": "BC3_UNORM_SRGB",
+        "texture": "Renderer/packs/CityStudyAuxiliaryUV/textures/compound/base_color_b333b8babb7742d9.dds"
+      }
+    }
+  ],
+  "pack": "Renderer/packs/CityStudyAuxiliaryUV",
+  "expanded_pool": true,
+  "emissive_gain": 8.0,
+  "source_surface": "lit",
+  "emissive_uv": 2,
+  "hdr_glow": true,
+  "source_addressing": true,
+  "surface_detail": false,
+  "ao_uv": 1,
+  "ao_strength": 1,
+  "extra_materials": {
+    "mapping": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/asian-medieval-extra/mapping.json",
+    "sha256": "50ad6d3f784c3415dda75f171896c21737f757ed1bf41734764a02d82f0f61cc",
+    "applied": [
+      "city/component/098e4d380fe565f2:material_00",
+      "city/component/1f91717edf46efa1:material_00",
+      "city/component/45e5295deb5e85fb:material_00",
+      "city/component/4ca87bcb37527f24:material_00",
+      "city/component/6e6554af2db81497:material_00",
+      "city/component/7139dac17b5b5976:material_00",
+      "city/component/792c9e7ecef6407a:material_00",
+      "city/component/88675b776a2a1e7e:material_00",
+      "city/component/90c40ad6be7ce751:material_00",
+      "city/component/9a1ddfe378603f8a:material_00",
+      "city/component/abc05074de5a233f:material_00",
+      "city/component/bf64e91d35a671ba:material_00"
+    ],
+    "opacity_cutouts": true,
+    "metalness": false
+  },
+  "vegetation_clearance": 0.12,
+  "preserved_layout": null,
+  "shadow_frame_report": {
+    "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-scene-r49/american-modern-s1-freshshadow-at5-3/report.json",
+    "sha256": "a40185dc7d5dd0f608de85c5ee24262027335763d8e234efab691eb4e6a3a03a"
+  },
+  "layout_attempts": [
+    {
+      "nodes": 16,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 333,
+        "1": 333,
+        "2": 333,
+        "3": 333,
+        "4": 308,
+        "5": 308,
+        "6": 188,
+        "7": 281,
+        "8": 419,
+        "9": 371,
+        "10": 347,
+        "11": 371,
+        "12": 518,
+        "13": 518,
+        "14": 518,
+        "15": 518
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 20000,
+      "slot_extents": [
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.65,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "status": "fit",
+      "planned_size": 1,
+      "planned_instances": [
+        {
+          "slot": 0,
+          "x": 0.56,
+          "y": -0.21000000000000002,
+          "rotation": 0.0,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/45e5295deb5e85fb"
+        },
+        {
+          "slot": 1,
+          "x": -0.14,
+          "y": 0.0,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/098e4d380fe565f2"
+        },
+        {
+          "slot": 2,
+          "x": 0.07,
+          "y": 0.0,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/88675b776a2a1e7e"
+        },
+        {
+          "slot": 3,
+          "x": 0.28,
+          "y": 0.0,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/7139dac17b5b5976"
+        },
+        {
+          "slot": 4,
+          "x": 0.0,
+          "y": -0.56,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/abc05074de5a233f"
+        },
+        {
+          "slot": 5,
+          "x": 0.28,
+          "y": -0.21000000000000002,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/9a1ddfe378603f8a"
+        },
+        {
+          "slot": 6,
+          "x": -0.42000000000000004,
+          "y": -0.14,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/1f91717edf46efa1"
+        },
+        {
+          "slot": 7,
+          "x": -0.07,
+          "y": -0.21000000000000002,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/bf64e91d35a671ba"
+        },
+        {
+          "slot": 8,
+          "x": 0.56,
+          "y": 0.21000000000000002,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/4ca87bcb37527f24"
+        },
+        {
+          "slot": 9,
+          "x": 0.21000000000000002,
+          "y": 0.6300000000000001,
+          "rotation": 0.0,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/90c40ad6be7ce751"
+        },
+        {
+          "slot": 10,
+          "x": 0.56,
+          "y": 0.0,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/6e6554af2db81497"
+        },
+        {
+          "slot": 11,
+          "x": 0.21000000000000002,
+          "y": 0.28,
+          "rotation": 0.0,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/792c9e7ecef6407a"
+        },
+        {
+          "slot": 12,
+          "x": -0.28,
+          "y": -0.7000000000000001,
+          "rotation": 0.0,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/45e5295deb5e85fb"
+        },
+        {
+          "slot": 13,
+          "x": -0.56,
+          "y": -0.56,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/098e4d380fe565f2"
+        },
+        {
+          "slot": 14,
+          "x": -0.7000000000000001,
+          "y": -0.21000000000000002,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/88675b776a2a1e7e"
+        },
+        {
+          "slot": 15,
+          "x": -0.07,
+          "y": 0.21000000000000002,
+          "rotation": 1.5707963267948966,
+          "scale": 3.7132075471698114,
+          "asset": "city/component/7139dac17b5b5976"
+        }
+      ]
+    }
+  ],
+  "source_normals": {
+    "mapping": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/asian-medieval-normals.json",
+    "sha256": "ce8faaa49ad54700b2bb82cee43b89142a686494471988fbfb240e7aa0aec51d",
+    "applied": [
+      "city/component/098e4d380fe565f2/geometry_00",
+      "city/component/1f91717edf46efa1/geometry_00",
+      "city/component/45e5295deb5e85fb/geometry_00",
+      "city/component/4ca87bcb37527f24/geometry_00",
+      "city/component/6e6554af2db81497/geometry_00",
+      "city/component/7139dac17b5b5976/geometry_00",
+      "city/component/792c9e7ecef6407a/geometry_00",
+      "city/component/88675b776a2a1e7e/geometry_00",
+      "city/component/90c40ad6be7ce751/geometry_00",
+      "city/component/9a1ddfe378603f8a/geometry_00",
+      "city/component/abc05074de5a233f/geometry_00",
+      "city/component/bf64e91d35a671ba/geometry_00"
+    ],
+    "unmapped": []
+  },
+  "compound_ground": {
+    "mapping": "Renderer/terrain_lab/v2/fixtures/beauty/city-culture-materials-r1/asian-medieval-ground.json",
+    "mapping_sha256": "ad181765f8ee6a872ef7f2d2b9dfc64765b2a511de58bacb5ab5fe9ee003508d",
+    "draws": [
+      {
+        "asset": "city/component/45e5295deb5e85fb",
+        "slot": 0,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/098e4d380fe565f2",
+        "slot": 1,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/88675b776a2a1e7e",
+        "slot": 2,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/7139dac17b5b5976",
+        "slot": 3,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/abc05074de5a233f",
+        "slot": 4,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/9a1ddfe378603f8a",
+        "slot": 5,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/1f91717edf46efa1",
+        "slot": 6,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/bf64e91d35a671ba",
+        "slot": 7,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/4ca87bcb37527f24",
+        "slot": 8,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/90c40ad6be7ce751",
+        "slot": 9,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/6e6554af2db81497",
+        "slot": 10,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/792c9e7ecef6407a",
+        "slot": 11,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/45e5295deb5e85fb",
+        "slot": 12,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/098e4d380fe565f2",
+        "slot": 13,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/88675b776a2a1e7e",
+        "slot": 14,
+        "parts": 1
+      },
+      {
+        "asset": "city/component/7139dac17b5b5976",
+        "slot": 15,
+        "parts": 1
+      }
+    ],
+    "classification": "explicit source-material/triangle probe; descriptor state and height response unproven"
+  },
+  "weighted_growth": false,
+  "compound_house_equivalents": 1,
+  "stage_component_counts": [
+    8,
+    16,
+    24
+  ],
+  "graduated_growth": true,
+  "generator_profile": {
+    "path": null,
+    "sha256": null,
+    "era_policy": "single_current_era_user_preference",
+    "used": [],
+    "adapter": "stable weighted choices; bounded ring preference; source engine algorithm not recovered"
+  },
+  "capital": {
+    "requested": false,
+    "drawn": false,
+    "reserved_site": null,
+    "placement_attempts": [],
+    "composition": "first_legal_layout",
+    "mapping": null,
+    "authority": "explicit Lab fixture only; production must use captured Civ III capital status",
+    "native_capital_indicator": "retained"
+  },
+  "grounding": "source_z_zero",
+  "footprint_half_extent_tiles": 0.95,
+  "cross_tile_extent_authorization": "user permits slight city overlap, especially larger cities",
+  "projection": {
+    "half_height": 32.0,
+    "half_width": 64.0,
+    "height": 800.0,
+    "origin_x": 104.0,
+    "origin_y": 380.0,
+    "vertical_scale": 0.468571424,
+    "width": 1360.0
+  },
+  "source_z_pixels_per_unit": 80.9543,
+  "scene_world_z_per_source_unit": 1.5425743290738958,
+  "material_channels_enabled": [
+    "base_color",
+    "emissive",
+    "ambient_occlusion",
+    "normal_0_authored_frame",
+    "cooked_gloss_direct_specular",
+    "opacity_coverage"
+  ],
+  "remaining": [
+    "source normal/gloss interpretation",
+    "full coast/route/vegetation envelopes",
+    "capital and wall states",
+    "all culture/era/size matrix"
+  ]
+}

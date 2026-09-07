@@ -24,14 +24,26 @@ Ten animated resource families: bananas, cattle, furs, game, horses, ivory,
 rubber, wheat, fish and whales. Source resources without an animation binding
 continue to use their static custom bodies.
 
-Five custom unit families: Archer, Swordsman, Infantry, Fighter and Galley.
-They use full clips, skinned parts and animated rigid socket attachments.
-Other families, Armies, unsupported worker actions and failed replacements
-retain their complete native bodies. Warrior clips are exported but its older
-pack still lacks a resolved owner-material contract, so Warrior stays native
-in this first prototype. Broader family coverage is subsequent work.
+Nine custom unit families: Archer, Swordsman, Infantry, Fighter, Galley,
+Warrior, Scout, Settler and Worker (also matched by PRTO_Builder).
+Combat families have basic movement/combat clips. Settler and Worker have idle,
+move, fidget, fortify/stop and capture; their combat, founding/build and Worker
+specialty jobs retain native rendering in this checkpoint. Other families,
+Armies and failed replacements also retain their complete native bodies.
+The new bodies use a separate `UnitEarlyLab` offline intake, leaving frozen
+Lab packs intact. One human member is selected explicitly for Scout/Settler;
+companion animals and extra Builder formation members are outside this test.
+Non-work Builder poses hide the mutually exclusive tools.
 
-Edge speckling remains deferred. This checkpoint does not advance unrelated
+Settler's backpack-carrier clips leave its leader's walking staff behind.
+The prototype instead binds compatible staff-humanoid Scout clips for its
+idle/movement/fidget/stop and the source Settler leader capture clip. This is
+an explicit pack mapping, not a source-specific runtime branch. Warrior/Scout
+victory temporarily reuses fidget. These are initial presentation mappings,
+not a claim of exact source-game animation-state reproduction.
+
+The user reports resources look good so far, but a little dark. That is partial
+in-game resource feedback; brightness adjustment remains separate. Edge speckling remains deferred. This checkpoint does not advance unrelated
 Lab gates or M9–M11.
 
 ## Resource rendering and calibration
@@ -80,15 +92,20 @@ completed premultiplied body bitmap to Civ III's Animator canvas. It owns no
 window, gameplay timer or terrain layer. A fixed idle-stance fit is reused for
 all actions. Planar root travel is removed consistently across each kit because
 Civ III's body coordinates own movement; joint and vertical motion remain.
-The generic full-clip exporter covers six families and 48 actions. The actual
-C++ evaluator matches 576 source poses, including 192 socket poses, within
-2.256e-7 tile units. See `verification/animation/unit-payloads-portable_cpp.json`.
+The generic full-clip exporter covers nine families and 70 actions in
+27,934,624 payload bytes. The actual C++ evaluator matches 852 source poses,
+including 270 socket poses, within 7.057e-8 tile units. See `verification/animation/unit-payloads-portable_cpp.json`.
 
 The 8 MiB / 128-entry sprite cache includes action/cursor, direction, dimensions,
 zoom, effective palette color and lighting. Unit identity and pixel position
 are excluded, allowing exact pose reuse at new native anchors. Unit jobs preserve
 the terrain worker's completed publication and queued preparation. No unit
 animation state enters the terrain cache keys.
+
+The material-number reader now preserves scientific notation and rejects
+truncated tokens. The tiny negative Scout ground offset previously parsed as
+a whole-unit negative displacement, hiding its entire body; an extracted
+actual-reader regression covers that exact value.
 
 The ground plane hides buried anatomy and spare equipment stored underground
 by death clips. The bounds check covers the visible polygon, including ground
@@ -122,9 +139,10 @@ Resource records report binding, demand, phase/timing and cache costs. Explicit
 headless verification commands may write their requested diagnostic logs.
 
 `python3 Renderer/native/verify_units.py` builds and verifies the real DLL.
-The day/night matrix covers 320 movement draws, both zooms and eight directions,
-plus 560 action draws spanning idle, move, attack variants, death, fortify,
-fidget and victory. Held endpoints, skipped cursors, immediate interruptions,
+The day/night matrix covers 576 movement draws, both zooms and eight directions,
+plus 912 action draws spanning idle, move, attack variants, death, fortify,
+fidget, victory and civilian capture. Every movement row must contain visible
+pixels and change between phases. Held endpoints, skipped cursors, immediate interruptions,
 return to identical idle pixels, config-off preservation, unsupported actions,
 RGB555/RGB565 clipped bodies and cached anchor translation all pass.
 Resource phases build/upload zero terrain geometry; scrolling/removal and
@@ -135,10 +153,13 @@ The extracted actual injected bridge also passes portable and Windows x86
 checks for argument preservation, both zooms, disabled/invisible/Army controls,
 scoped restoration, effective palette capture and underlay/HUD ordering.
 Approved injected compilation with active inleads, portable native smoke,
-85 focused production contracts and the shared install-path check pass.
+85 focused production contracts and the shared install-path check passed for
+the original bridge checkpoint. This extension passes 45 focused tests,
+including the actual number reader and all nine source-payload families;
+injected sources and the three CSV entries are unchanged.
 
 The required full workflow was run but is **not green**. Its source stage passes
-373 tests and stops at the L19A frozen tile-object pack hash: the current Lab
+374 tests and stops at the L19A frozen tile-object pack hash: the current Lab
 pack differs from the approved fixture. The production DLL does not load that
 pack. Separately, the previously documented legacy frozen-profile incremental
 boundary check still fails (1,671 changed pixels; 47,588 channel error). Its
@@ -155,3 +176,25 @@ Interrupt movement, fortify or fight, and check victory/death and return to idle
 Share the usual OutputDebugString output and the observed behavior. The optional
 config-off control should restore native unit bodies. This is the single batched
 manual checkpoint; the agent stops here and does not launch the game.
+
+
+## Rebuilding the four early unit bindings
+
+The strategy is `tools/asset_compiler/unit_early_strategy.json`. Its explicit
+member selection and action scope keep the frozen five-family Lab intake intact.
+Use the existing Windows dispatcher for `CONVERT_UNIT_EARLY_ANIMATIONS.bat`;
+that batch uses the same offline converter and scale as the established family
+pipeline. Then refresh the intake manifest and validate/bake the clips:
+
+```sh
+python3 Renderer/tools/asset_compiler/unit_family_asset_importer.py --strategy Renderer/tools/asset_compiler/unit_early_strategy.json --pack Renderer/packs/UnitEarlyLab --report Renderer/preview/out/units/early_build.json
+# Windows VM: Renderer/tools/asset_compiler/CONVERT_UNIT_EARLY_ANIMATIONS.bat
+# Repeat the importer above after conversion to refresh clip metadata.
+python3 Renderer/tools/asset_compiler/unit_family_action_validator.py --pack Renderer/packs/UnitEarlyLab --report Renderer/preview/out/units/early_actions.json
+python3 Renderer/tools/asset_compiler/unit_family_pose_cache_builder.py --pack Renderer/packs/UnitEarlyLab --report Renderer/preview/out/units/early_pose_caches.json
+python3 Renderer/tools/asset_compiler/build_unit_animation_runtime.py
+python3 Renderer/native/verify_units.py
+```
+
+The combined compiler defaults to `UnitFamilyLab` plus `UnitEarlyLab`. Source
+art, converted clips and generated previews remain ignored local assets.

@@ -239,7 +239,7 @@ def main():
     parser.add_argument("--pack", type=Path, action="append")
     parser.add_argument("--output", type=Path, default=Path("Renderer/packs/UnitAnimationRuntime"))
     args = parser.parse_args()
-    result = build(args.pack or [Path("Renderer/packs/UnitWarriorLab"), Path("Renderer/packs/UnitFamilyLab")], args.output)
+    result = build(args.pack or [Path("Renderer/packs/UnitFamilyLab"), Path("Renderer/packs/UnitEarlyLab")], args.output)
     print(json.dumps({"units": len(result["units"]), "actions": sum(len(u["actions"]) for u in result["units"].values()),
                       "unique_payloads": result["unique_payloads"], "bytes": result["payload_bytes"]}))
 

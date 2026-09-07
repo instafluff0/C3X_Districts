@@ -1,0 +1,234 @@
+{
+  "preserved_prefix_count": 4,
+  "attempts": [
+    {
+      "candidate_ranks": {},
+      "status": "no_fit",
+      "reason": "city footprint cannot fit slot 6 (city/component/1a71fb8ac25f1241); 6 prior placements"
+    },
+    {
+      "candidate_ranks": {
+        "5": 1
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit slot 6 (city/component/1a71fb8ac25f1241); 6 prior placements"
+    },
+    {
+      "candidate_ranks": {
+        "4": 1
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit slot 6 (city/component/1a71fb8ac25f1241); 6 prior placements"
+    },
+    {
+      "candidate_ranks": {
+        "5": 2
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit slot 6 (city/component/1a71fb8ac25f1241); 6 prior placements"
+    },
+    {
+      "candidate_ranks": {
+        "4": 2
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit slot 6 (city/component/1a71fb8ac25f1241); 6 prior placements"
+    },
+    {
+      "candidate_ranks": {
+        "5": 3
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit slot 6 (city/component/1a71fb8ac25f1241); 6 prior placements"
+    },
+    {
+      "candidate_ranks": {
+        "4": 3
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit slot 6 (city/component/1a71fb8ac25f1241); 6 prior placements"
+    },
+    {
+      "candidate_ranks": {
+        "5": 4
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit slot 6 (city/component/1a71fb8ac25f1241); 6 prior placements"
+    },
+    {
+      "candidate_ranks": {
+        "4": 4
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit slot 6 (city/component/1a71fb8ac25f1241); 6 prior placements"
+    },
+    {
+      "candidate_ranks": {
+        "5": 5
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 5 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 5
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit slot 6 (city/component/1a71fb8ac25f1241); 6 prior placements"
+    },
+    {
+      "candidate_ranks": {
+        "5": 6
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 6 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 6
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 6 at slot 4"
+    },
+    {
+      "candidate_ranks": {
+        "5": 7
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 7 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 7
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 7 at slot 4"
+    },
+    {
+      "candidate_ranks": {
+        "5": 8
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 8 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 8
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 8 at slot 4"
+    },
+    {
+      "candidate_ranks": {
+        "5": 9
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 9 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 9
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 9 at slot 4"
+    },
+    {
+      "candidate_ranks": {
+        "5": 10
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 10 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 10
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 10 at slot 4"
+    },
+    {
+      "candidate_ranks": {
+        "5": 11
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 11 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 11
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 11 at slot 4"
+    },
+    {
+      "candidate_ranks": {
+        "5": 12
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 12 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 12
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 12 at slot 4"
+    },
+    {
+      "candidate_ranks": {
+        "5": 13
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 13 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 13
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 13 at slot 4"
+    },
+    {
+      "candidate_ranks": {
+        "5": 14
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 14 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 14
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 14 at slot 4"
+    },
+    {
+      "candidate_ranks": {
+        "5": 15
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 15 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 15
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 15 at slot 4"
+    },
+    {
+      "candidate_ranks": {
+        "5": 16
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 16 at slot 5"
+    },
+    {
+      "candidate_ranks": {
+        "4": 16
+      },
+      "status": "no_fit",
+      "reason": "city footprint cannot fit candidate rank 16 at slot 4"
+    }
+  ]
+}

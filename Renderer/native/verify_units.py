@@ -39,12 +39,12 @@ def main():
         result = windows_command_result("Renderer/native", command)
         result.pop("cwd", None)
         text = result.get("output_tail", "")
-        required = ("UNIT body matrix drawn=160 status=pass", "UNIT cached anchor translation: pass",
+        required = ("UNIT body matrix drawn=288 status=pass", "UNIT cached anchor translation: pass",
             "UNIT repeated native cursor: pass", "UNIT retained terrain unchanged: pass",
             "UNIT post-draw terrain parity: pass", "ANIMATION temporal: pass",
             "ANIMATION scroll parity: pass", "ANIMATION removal parity: pass",
             "UNIT config-off preserves canvas: pass", "UNIT RGB555 clipped zoom=0",
-            "UNIT action interruption and held endpoint: pass draws=280",
+            "UNIT action interruption and held endpoint: pass draws=456",
             "UNIT RGB555 clipped zoom=1", "UNIT RGB565 clipped zoom=0", "UNIT RGB565 clipped zoom=1")
         if any(marker not in text for marker in required) or "FAIL" in text:
             result["status"] = "fail"

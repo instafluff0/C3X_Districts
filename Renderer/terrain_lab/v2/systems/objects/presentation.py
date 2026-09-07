@@ -43,7 +43,7 @@ def component(asset,pack=PACK):
     hi=[max(v[i] for v in points) for i in range(3)]
     return dict(id=asset,parts=parts,lo=lo,hi=hi,sockets=l.get('attachment_points',[]))
 
-def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,source_scale=None,ordering=None,footprint_limit=None,stage_counts=None,focal_instance=None,source_ground_zero=False):
+def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,source_scale=None,ordering=None,footprint_limit=None,stage_counts=None,focal_instance=None,source_ground_zero=False,candidate_ranks=None):
     """Stable slots: largest skyline body first, later growth only appends."""
     counts=stage_counts if stage_counts is not None else [4,7,11];result=[]
     if len(counts)!=3 or any(not isinstance(n,int) or n<1 or n>11 for n in counts):raise ValueError('city stage counts')
@@ -112,7 +112,9 @@ def layout(assets,size,recipe='stable',factor=1,exclusions=None,buildable=None,s
                         score+=2*overlap(pb,focal_box)/area(focal_box)
                     candidates.append((score,x,y,b,pb))
             if not candidates:raise ValueError(f"city footprint cannot fit slot {i} ({a['id']}); {len(placed)} prior placements")
-            _,x,y,b,pb=min(candidates);placed.append((b,pb))
+            rank=(candidate_ranks or {}).get(i,0)
+            if rank<0 or rank>=len(candidates):raise ValueError(f'city footprint cannot fit candidate rank {rank} at slot {i}')
+            _,x,y,b,pb=min(candidates) if rank==0 else sorted(candidates)[rank];placed.append((b,pb))
         result.append(dict(asset=a,slot=i,x=x,y=y,rotation=rotation,scale=sc))
     result=result[:counts[size]]
     return result

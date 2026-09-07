@@ -131,3 +131,32 @@ source pads outside legal building footprints. The new 47-root palace pack is
 connected through an explicit American modern mapping. The initial capital
 layout required bounded alternative palace sites; its remaining facade occlusion
 and scattered skyline prevent a new city-best claim.
+
+## Subsequent source material coordinates
+
+The [r28 AO/material pass](CITY_AO_MATERIAL_PASS.md) supplies a separate float2
+for the tested medieval AO atlas, retaining diffuse and light coordinates.
+Source repeat addressing and exact ground pieces compose with the result.
+UV1 is supported for these tested AO-bearing bodies; this is not a universal
+source-engine coordinate declaration or full material reconstruction.
+
+### Source-normal diagnostic r29/r30
+
+The source static vertex normal bytes now have an opt-in, geometry-checked Lab
+decoder. Matched coastal and inland renders show subtle roof/corner changes,
+not a new accepted best; r28 remains the preceding material candidate. Six
+Windows comparisons and ten focused tests pass. Tangent/LEAN/gloss interpretation,
+urban ground coverage and local night lighting remain open. See
+[CITY_SOURCE_NORMAL_PASS.md](CITY_SOURCE_NORMAL_PASS.md).
+
+### Source shader material restoration r31–r33
+
+Installed rigid-model shader inspection establishes octahedral tangent directions,
+reconstructed normal-map Z and cooked dual-lobe roughness parameters. The opt-in
+combined pass makes modest medieval material gains, preserves modern windows/
+reflection, and passes the inland regression witness. Four disabled images match
+r29 exactly; ten Windows comparisons pass. Source material slots 0x2c metalness
+and 0x30 opacity are omitted by the current importer and are the next concrete
+intake work, alongside variance/environment/local-light response. Full city
+quality and all gates remain open. See
+[CITY_SOURCE_SURFACE_PASS.md](CITY_SOURCE_SURFACE_PASS.md).

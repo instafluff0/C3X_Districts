@@ -1,0 +1,214 @@
+{
+  "classification": "Unrendered Lab layout; visual acceptance pending",
+  "pool": "city/pool/american/modern",
+  "size": 2,
+  "anchor_tile": [
+    7,
+    4
+  ],
+  "benchmark_region": "inland",
+  "instances": [
+    {
+      "slot": 0,
+      "x": 0.0,
+      "y": 0.0,
+      "rotation": 0.0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/e18f5ef810f915df"
+    },
+    {
+      "slot": 1,
+      "x": -0.42000000000000004,
+      "y": -0.42000000000000004,
+      "rotation": 1.5707963267948966,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/9b49d289b858afde"
+    },
+    {
+      "slot": 2,
+      "x": -0.7000000000000001,
+      "y": 0.21000000000000002,
+      "rotation": 1.5707963267948966,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/1a71fb8ac25f1241"
+    },
+    {
+      "slot": 3,
+      "x": -0.21000000000000002,
+      "y": -0.42000000000000004,
+      "rotation": 0.0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/790e2a73c14737d8"
+    },
+    {
+      "slot": 4,
+      "x": -0.42000000000000004,
+      "y": 0.21000000000000002,
+      "rotation": 0.0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/1a2cdd77f4c26999"
+    },
+    {
+      "slot": 5,
+      "x": -0.35000000000000003,
+      "y": -0.07,
+      "rotation": 0.0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/81157340c6bc8609"
+    },
+    {
+      "slot": 6,
+      "x": -0.77,
+      "y": -0.07,
+      "rotation": 0.0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/f65b0689b7acb564"
+    },
+    {
+      "slot": 7,
+      "x": -0.14,
+      "y": -0.7000000000000001,
+      "rotation": 0.0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/201c181c2d3d95c2"
+    },
+    {
+      "slot": 8,
+      "x": -0.56,
+      "y": -0.7000000000000001,
+      "rotation": 0.0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/81e6bc964c4f7c5a"
+    },
+    {
+      "slot": 9,
+      "x": -0.7000000000000001,
+      "y": -0.42000000000000004,
+      "rotation": 1.5707963267948966,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/201c181c2d3d95c2"
+    },
+    {
+      "slot": 10,
+      "x": -0.56,
+      "y": -0.07,
+      "rotation": 0.0,
+      "scale": 2.9177169657033994,
+      "asset": "city/component/f65b0689b7acb564"
+    }
+  ],
+  "search": [
+    {
+      "nodes": 11,
+      "backtracks": 0,
+      "candidate_counts": {
+        "0": 868,
+        "1": 854,
+        "2": 770,
+        "3": 868,
+        "4": 784,
+        "5": 854,
+        "6": 838,
+        "7": 784,
+        "8": 586,
+        "9": 784,
+        "10": 838
+      },
+      "grid_step": 0.07,
+      "preserved_prefix": 0,
+      "node_limit": 20000,
+      "status": "fit",
+      "planned_size": 2,
+      "planned_instances": [
+        {
+          "slot": 0,
+          "x": 0.0,
+          "y": 0.0,
+          "rotation": 0.0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/e18f5ef810f915df"
+        },
+        {
+          "slot": 1,
+          "x": -0.42000000000000004,
+          "y": -0.42000000000000004,
+          "rotation": 1.5707963267948966,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/9b49d289b858afde"
+        },
+        {
+          "slot": 2,
+          "x": -0.7000000000000001,
+          "y": 0.21000000000000002,
+          "rotation": 1.5707963267948966,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/1a71fb8ac25f1241"
+        },
+        {
+          "slot": 3,
+          "x": -0.21000000000000002,
+          "y": -0.42000000000000004,
+          "rotation": 0.0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/790e2a73c14737d8"
+        },
+        {
+          "slot": 4,
+          "x": -0.42000000000000004,
+          "y": 0.21000000000000002,
+          "rotation": 0.0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/1a2cdd77f4c26999"
+        },
+        {
+          "slot": 5,
+          "x": -0.35000000000000003,
+          "y": -0.07,
+          "rotation": 0.0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/81157340c6bc8609"
+        },
+        {
+          "slot": 6,
+          "x": -0.77,
+          "y": -0.07,
+          "rotation": 0.0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/f65b0689b7acb564"
+        },
+        {
+          "slot": 7,
+          "x": -0.14,
+          "y": -0.7000000000000001,
+          "rotation": 0.0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/201c181c2d3d95c2"
+        },
+        {
+          "slot": 8,
+          "x": -0.56,
+          "y": -0.7000000000000001,
+          "rotation": 0.0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/81e6bc964c4f7c5a"
+        },
+        {
+          "slot": 9,
+          "x": -0.7000000000000001,
+          "y": -0.42000000000000004,
+          "rotation": 1.5707963267948966,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/201c181c2d3d95c2"
+        },
+        {
+          "slot": 10,
+          "x": -0.56,
+          "y": -0.07,
+          "rotation": 0.0,
+          "scale": 2.9177169657033994,
+          "asset": "city/component/f65b0689b7acb564"
+        }
+      ]
+    }
+  ]
+}

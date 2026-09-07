@@ -1,0 +1,247 @@
+{
+  "reason": "Completed new HDR intermediates; retain all previous/candidate/rejected images, shaders and shared replay packets",
+  "removed": [
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/inland/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "a8d44816e2229f53c41f2cb1e12e83dcd5bdb8b7aed01446c71752cbf8be9fa0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/inland/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "7a231cbd86691e783eb344cf27f9b4585ea93d169f28e90f68da9f802c6be1f2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/capital/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "d7d6e1ff8cef0372d1af1b14c800da88409323aac2a77b9a7c8d34aca72447ff"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/capital/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "36a4f968ae08c21cbda570f5a4ea7c77f34467d7065ea973cfc5a864bcdf14dd"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/capital/render/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "09e6294f7406651fcfdcd0a299d6cd1f40ef1246eb7f15fcd082675d1c324acd"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/capital/render/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "3a4ee6ed819ef1de48a349f382754aed13236524987bba117b24502c84dfe3f1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/wilderness/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "aa2db99aad625de558ddf2020dcff46ea8b101e62ac0f39695f5a61e9cc73098"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/wilderness/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "bd070e9cfe31b35c62a6216f76cf6417d95867318f4b1108412767cd7757425f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/medieval/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "7bfc76789b6eefc1ec7e120c2cc240bb6b7765db3b94da33aab787bf3c3a392c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/medieval/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "c9f97224f8171e697be9c2b8580081b9f0ff1fd7ad27dc4e3897c9c615c46f4f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/medieval/render/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "c65e9cae6befa71e6137ca67c4ec0cb651b923dc673853fbdc8112e12c3bfd05"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/medieval/render/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "b901739f1f0ac9d668b514493733df65c86d79294d18a9d4f8d798345f0426ac"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/freshshadow/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "475edf09577cb74412b79ee88c3ff5052a03e409e1d32b4cc8a79ac49c1e2094"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r1/freshshadow/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "dbb724145901b29031a029579cd625237d4a6daaf81ba310bcd3ebbcdc5a7b75"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/small-binding-baseline/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "a356bff3788fd055ba0117b60851b5eea14109a2b1d36d1d09dd6228ab5b52a2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/small-binding-baseline/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "818a2d07cb218ed087fef51c00e08021b377be2622b2165421d51060aded8304"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/inland/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "6770173d847284a5f3ba7f568bf276dc7c38963d52993354c54aae30be8ee2c9"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/inland/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "3a8a27ba27157d434966868e5dc6c30dfeb4b211c70de44a634a9264a9f45e32"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/capital/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "e884ce4a2de98932cbd54fca602cf84701d58fc6eee8cd54ed39475d923f92f0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/capital/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "d450a63cf82dfc529fbd84e99a889699d24f1f337b1afcb6762295d9bbbcae32"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/capital/render/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "af9e33d0796246f811654591241abde53bcaaec5d35d53d2e89e42a5ece066a7"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/capital/render/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "621467cf105e33ba1f5ffcae25bddd8970e2e5ba90687317cd98227ecf6c0595"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-wilderness/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "95236741fcc860cebbc5eba67f8a8e4056ab16f442e6de9c143778864c9cef28"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-wilderness/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "0a3879c67d4b6ac1773dc87ec7dcfd12b5cae98dd70f065fe4133e299aa98fa8"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/wilderness/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "783885effdad93f0dce52b0013f5089b218b6325101a1d853152cc499f2edbad"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/wilderness/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "6c8b9e66246eed3891bb206b6586cd70932b22bc541a55ac69fd2d1cbf2e9911"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/small/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "710bdc217f7af40b57c1d8693351aff80aabd72bd12c82e6eceb5de473fdd021"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/small/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "6c93b368757dfc147c67e1663e3af33df977d0c084b91372732973a8086050ac"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/small-light-baseline/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "b08f1f8bdfdf5a1da6df0de496f91b6f1e44e1d85bf273915fdf7dbf8b09c864"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/small-light-baseline/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "298dfa02100ed92fc821ad5ca1780fd7715df4336ed56c5304e842550258dc72"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-capital/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "63806a30192342991d92992b2cf4132a74e016dfb2df4d83be84848b04924d6f"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-capital/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "ccdbd6dcf0df87da63c2da8c8957876cceacba59cbda48c1ebcab1043c6cd86c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-capital/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 2176000,
+      "sha256": "6040b3f948306c14132822c0b45199b72683337381bb110394ba08219150699e"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-capital/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 2176000,
+      "sha256": "91bacb199c635f16949289200805484e85e042005083ac62bfce7bb064327fb3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/medieval/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "88ce67fb1fbfac4a52912c8f7347a9bf4d9547f3bb7463873dfe858641a242f3"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/medieval/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "0b9fa5ccc54390169c88e26ccd5234eab0144b5faea479a2685382de235397da"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/medieval/render/h00-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "10338e84ddf7f4effad386e45100f73e2a9df9512fb2a56ee119064dda083097"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/medieval/render/h12-z2-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "27ed4fd6e7e583a9ed267690c48a28eb347ab6ef81a9e08de874af59dd605e3c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-inland/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "6215e929fc4e345d1fa7bc93932b9fe4f67a46179fb0732394348e14284ad2a0"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-inland/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "10daa8ff322d4809c035a91a38816ac1b55c378b9a1d99cac4e243ea50568171"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-freshshadow/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "655a3a392e10d51ddc82f5a60a972734ce5fef4a7178e45866a23f845e4cc7f2"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-freshshadow/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "4d5844c799538844d01fbc501786e05e286139fffc8f66de95168f8a9e9485c4"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/freshshadow/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "a21fc7d0e26d19aba2f74bae7b5fd37b39ba68e9ded14df8498346f34a0447cc"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/freshshadow/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "4c9887454a3956e7c6c4ddf136cbafddc9e4788fb7ababd653a9981694142012"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/disabled/render/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "529357d860280a841d28f05bc0971ba14f10d42eca5093d078ca13cc9cb0412c"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/disabled/render/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "4d8e19fd1c2f1291c71b88c9b500a9d2c03b97844e908d84cc5d85d79257d9a1"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-small/h00-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "27bba13a5539c04c785a804242983cfe415d8bda92647cfec0617ab58a137395"
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/city-settlement-ground-r2/windows-small/h12-z1-pan00.bmp.linear.rgba16f",
+      "bytes": 8704000,
+      "sha256": "45b39779109d73d955e089b715eafc399f2f03bef13cbe2d2eb2e1f0f184fe17"
+    }
+  ],
+  "removed_bytes": 404736000,
+  "free_bytes": 26834632704
+}

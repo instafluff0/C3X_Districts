@@ -1,0 +1,50 @@
+{
+  "nodes": 16,
+  "backtracks": 0,
+  "candidate_counts": {
+    "0": 287,
+    "1": 296,
+    "2": 278,
+    "3": 241,
+    "4": 241,
+    "5": 228,
+    "6": 264,
+    "7": 293,
+    "8": 451,
+    "9": 432,
+    "10": 492,
+    "11": 451,
+    "12": 411,
+    "13": 492,
+    "14": 397,
+    "15": 355
+  },
+  "grid_step": 0.07,
+  "preserved_prefix": 0,
+  "node_limit": 20000,
+  "slot_extents": [
+    0.65,
+    0.65,
+    0.65,
+    0.65,
+    0.65,
+    0.65,
+    0.65,
+    0.65,
+    0.8,
+    0.8,
+    0.8,
+    0.8,
+    0.8,
+    0.8,
+    0.8,
+    0.8
+  ],
+  "neighbor_gap": 0.08,
+  "connected_prefixes": [
+    8,
+    16
+  ],
+  "ranking": "compact envelope, nearby houses, center, remaining freedom",
+  "status": "fit"
+}

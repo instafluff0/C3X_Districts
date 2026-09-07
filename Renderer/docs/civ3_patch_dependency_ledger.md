@@ -470,3 +470,16 @@ addresses and signatures, and the approved injected smoke succeeds.
 `required_user_action: []` for patch symbols. Steam/PCGames.de equivalents remain
 unverified; this is the GOG VM prototype. The agent did not edit the CSV or run
 the game. Live unit/HUD behavior remains for the strategic user checkpoint.
+
+
+### 2026-09-07 early unit animation extension
+
+Warrior, Scout, Settler and Worker/Builder reuse the existing GOG
+`Unit_tick_anim`, `Sprite_draw_unit_body_normal` and
+`Sprite_draw_unit_body_reduced` inleads and the current DLL bridge. No injected
+source or CSV edit is needed. The dependency signatures and supported-build
+addresses are unchanged from the animation checkpoint above.
+Audit candidates: none for these added basic body bindings.
+`required_user_action: []`.
+Civilian unsupported actions and Worker specialty jobs retain native bodies;
+this extension does not claim the future worker-job capture/tool-selection gate.
