@@ -1236,6 +1236,7 @@ int main(int argc, char ** argv) {
                     auto tile = make_tile(x, y, (x-camera_x-1)*64, (y-camera_y-1)*32,
                         logical ? ground : -1, seed);
                     tile.real_terrain_type = logical ? real_type : -1;
+                    if (logical && (x == 50 || x == 62)) tile.river_code = 10u;
                     if (!logical) tile.tile_flags = C3X_RENDERER_TILE_VANILLA_BASE_CALL;
                     else if (!visible) {
                         tile.tile_flags = C3X_RENDERER_TILE_TOPOLOGY_HALO;
@@ -1278,7 +1279,8 @@ int main(int argc, char ** argv) {
                 double milliseconds = 1000.0*(end.QuadPart-begin.QuadPart)/performance_frequency.QuadPart;
                 if (result != C3X_RENDERER_RESULT_OK || approved_output.rendered_tile_count != 400 ||
                     approved_output.fallback_tile_count != 0 ||
-                    approved_output.geometry_cache_bytes > 192u*1024u*1024u)
+                    approved_output.geometry_cache_bytes > 192u*1024u*1024u ||
+                    approved_output.pixel_block_cache_bytes > 16u*1024u*1024u)
                     return fail("several-tile jump failed its rendering or memory contract");
                 if (pass == 0 && j != 0 && (approved_output.geometry_tiles_built > 80 ||
                     approved_output.geometry_tiles_reused < 320 ||
@@ -1321,8 +1323,16 @@ int main(int argc, char ** argv) {
         }
         std::printf("DIFF tile_jump: changed=%zu error=%llu bytes=%zu.\n", jump_changed,
             static_cast<unsigned long long>(jump_error), live_bytes);
-        if (jump_changed > live_bytes / 4000 || jump_error > live_bytes / 100)
+        if (jump_changed > live_bytes / 4000 || jump_error > live_bytes / 100) {
+            FILE * diagnostic = nullptr;
+            if (fopen_s(&diagnostic, "build/jump-warm.bgra", "wb") == 0 && diagnostic) {
+                fwrite(jump_witness.data(), 1, live_bytes, diagnostic); fclose(diagnostic);
+            }
+            if (fopen_s(&diagnostic, "build/jump-cold.bgra", "wb") == 0 && diagnostic) {
+                fwrite(witness_pixels, 1, live_bytes, diagnostic); fclose(diagnostic);
+            }
             return fail("several-tile jump overlap differs from its cold reconstruction");
+        }
         std::sort(jump_first.begin(),jump_first.end()); std::sort(jump_return.begin(),jump_return.end());
         std::printf("PERF repeated_tile_jump: samples=5 first_p50_ms=%.3f first_p95_ms=%.3f return_p95_ms=%.3f.\n",
             jump_first[2],jump_first.back(),jump_return.back());
@@ -1349,19 +1359,24 @@ int main(int argc, char ** argv) {
                 return fail("prepared tile-jump render failed");
             QueryPerformanceCounter(&end);
             double elapsed = 1000.0*(end.QuadPart-begin.QuadPart)/performance_frequency.QuadPart;
-            std::printf("PERF prepared_tile_jump: view=%d milliseconds=%.3f built=%u reused=%u pending=%u prefetch_bytes=%u.\n",
+            std::printf("PERF prepared_tile_jump: view=%d milliseconds=%.3f built=%u reused=%u pending=%u prefetch_bytes=%u cached_pixels=%u draw_pixels=%u geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f.\n",
                 view, elapsed, approved_output.geometry_tiles_built, approved_output.geometry_tiles_reused,
-                approved_output.prefetch_tiles_pending, approved_output.prefetch_cache_bytes);
+                approved_output.prefetch_tiles_pending, approved_output.prefetch_cache_bytes,
+                approved_output.raster_cached_pixels, approved_output.raster_draw_pixels,
+                1000.0*approved_output.geometry_ticks/performance_frequency.QuadPart,
+                1000.0*approved_output.draw_ticks/performance_frequency.QuadPart,
+                1000.0*approved_output.readback_ticks/performance_frequency.QuadPart);
             if (view != 0) {
                 prepared_jump_times.push_back(elapsed);
                 if (approved_output.geometry_tiles_built != 0 || approved_output.geometry_upload_bytes != 0 ||
                     approved_output.geometry_tiles_reused != 400)
                     return fail("prepared several-tile jump still compiled entering meshes");
+                if (approved_output.raster_cached_pixels == 0) return fail("prepared jump did not reuse any pixel blocks");
             }
             std::uint64_t stable_pixels = hash_pixels(approved_output.bgra_pixels, live_bytes);
             if (view == 1) prepared_city_view_hash = stable_pixels;
             LARGE_INTEGER preparation_begin = {}; QueryPerformanceCounter(&preparation_begin);
-            while (approved_output.prefetch_tiles_pending != 0) {
+            while (approved_output.prefetch_tiles_pending != 0 || approved_output.prefetch_blocks_pending != 0) {
                 // The returned bitmap/ownership pointers stay valid while the
                 // worker prepares the next ring. UI redraws interrupt that work.
                 auto saved_pixels = approved_output.bgra_pixels;
@@ -1374,7 +1389,10 @@ int main(int argc, char ** argv) {
                 if (blit(&approved_output, warm_dc) != C3X_RENDERER_RESULT_OK ||
                     std::memcmp(warm_bits, saved_pixels, live_bytes) != 0)
                     return fail("idle preparation interfered with the native blit");
-                prepared_records[prepared_records.size()/2].unit_direction++;
+                auto unit_record = std::find_if(prepared_records.begin(), prepared_records.end(), [](auto const & tile) {
+                    return (tile.tile_flags & C3X_RENDERER_TILE_RENDER) != 0;
+                });
+                unit_record->unit_direction++;
                 QueryPerformanceCounter(&begin);
                 approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
                 if (render(&jump_frame, &approved_output) != C3X_RENDERER_RESULT_OK)
@@ -1391,9 +1409,9 @@ int main(int argc, char ** argv) {
             }
             if (approved_output.prefetch_tiles_unavailable != 0)
                 return fail("representative scroll ring did not fit the preparation budget");
-            std::printf("PREWARM ready: view=%d built=%u cancelled=%u bytes=%u.\n", view,
+            std::printf("PREWARM ready: view=%d built=%u cancelled=%u bytes=%u blocks=%u block_bytes=%u.\n", view,
                 approved_output.prefetch_tiles_built, approved_output.prefetch_tiles_cancelled,
-                approved_output.prefetch_cache_bytes);
+                approved_output.prefetch_cache_bytes, approved_output.prefetch_blocks_built, approved_output.pixel_block_cache_bytes);
             if (view == 5) jump_witness.assign(static_cast<unsigned char const *>(approved_output.bgra_pixels),
                 static_cast<unsigned char const *>(approved_output.bgra_pixels)+live_bytes);
         }
@@ -1435,8 +1453,13 @@ int main(int argc, char ** argv) {
             }
             if (changed) ++jump_changed;
         }
-        if (jump_changed > live_bytes/4000 || jump_error > live_bytes/100)
+        std::printf("DIFF pixel_blocks: changed=%zu error=%llu bytes=%zu.\n",jump_changed,static_cast<unsigned long long>(jump_error),live_bytes);
+        if (jump_changed > live_bytes/4000 || jump_error > live_bytes/100) {
+            FILE * diagnostic=nullptr;
+            if(fopen_s(&diagnostic,"build/blocks-warm.bgra","wb")==0 && diagnostic) { fwrite(jump_witness.data(),1,live_bytes,diagnostic); fclose(diagnostic); }
+            if(fopen_s(&diagnostic,"build/blocks-cold.bgra","wb")==0 && diagnostic) { fwrite(witness_pixels,1,live_bytes,diagnostic); fclose(diagnostic); }
             return fail("prepared meshes changed the several-tile jump image");
+        }
 
         auto pending_reset_records = jump_tiles(80,80,true);
         jump_frame.tiles = pending_reset_records.data(); jump_frame.tile_count = static_cast<unsigned>(pending_reset_records.size());

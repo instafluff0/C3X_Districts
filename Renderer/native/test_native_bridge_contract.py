@@ -27,6 +27,13 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("ray_height >= 128.0f", native)
         self.assertIn("greatest_obstruction >= 10.0f", native)
 
+    def test_river_locality_bound_matches_frozen_shader_effect_ranges(self) -> None:
+        shader = (Path(__file__).parent / "terrain_rendering.hlsl").read_text(encoding="utf-8")
+        for threshold in ("smoothstep(3.0, 18.0, input.river_data.y)",
+                          "smoothstep(2.0, 24.0, input.river_data.z)",
+                          "smoothstep(3.0, 22.0, input.river_data.w)"):
+            self.assertIn(threshold, shader)
+
     def test_custom_rendering_is_default_off_and_hard_gated(self) -> None:
         config = (C3X_ROOT / "default.c3x_config.ini").read_text(encoding="utf-8")
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
@@ -520,7 +527,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("same_terrain_record", renderer)
         self.assertIn("cached_tiles", renderer)
         self.assertIn("cached_replacement_tile_flags", renderer)
-        self.assertIn("D3D11_RECT scissor = {0, 0, width, height}", renderer)
+        self.assertIn("D3D11_RECT scissor = {0, 0, projection_width, projection_height}", renderer)
         self.assertIn("fill_output(frame, output, 0, 0)", renderer)
 
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
@@ -596,7 +603,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         api = (Path(__file__).parent / "c3x_renderer_api.h").read_text(encoding="utf-8").casefold()
         self.assertIn("d3d11_bind_render_target", native)
         self.assertIn("d3d11_usage_staging", native)
-        self.assertIn("copyresource", native)
+        self.assertIn("copysubresourceregion", native)
         self.assertIn("runtime_width > 2048", native)
         for forbidden in ("createswapchain", "present(", "civ6", ".blp", ".fgx", "steamapps"):
             self.assertNotIn(forbidden, native + api)
@@ -736,7 +743,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("tile_geometry_cache_budget", native)
         self.assertNotIn("shore_vertices", native)
         self.assertNotIn("bool rugged_shore", native)
-        self.assertIn("draw_cached_geometry(geometry_water)", native)
+        self.assertIn("draw(geometry_water)", native)
         self.assertIn("cache_geometry_layer", native)
         self.assertIn("D3D11_USAGE_IMMUTABLE", native)
         self.assertNotIn("D3D11_MAP_WRITE_DISCARD", native)
@@ -787,10 +794,10 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("append_ground_layer(bed_vertices, 4.0f,", native)
 
         self.assertIn("append_ground_layer(water_vertices, 5.0f,", native)
-        self.assertIn("draw_cached_geometry(geometry_underlay)", native)
-        self.assertIn("draw_cached_geometry(geometry_land)", native)
-        self.assertIn("draw_cached_geometry(geometry_bed)", native)
-        self.assertIn("draw_cached_geometry(geometry_water)", native)
+        self.assertIn("draw(geometry_underlay)", native)
+        self.assertIn("draw(geometry_land)", native)
+        self.assertIn("draw(geometry_bed)", native)
+        self.assertIn("draw(geometry_water)", native)
         self.assertIn("beach_base_texture.Sample", shader)
         self.assertIn("float3 water_normal = normalize", shader)
         self.assertIn("float sun_glint =", shader)
@@ -799,7 +806,7 @@ class NativeBridgeContractTests(unittest.TestCase):
         self.assertIn("water_foam_texture : register(t24)", shader)
         self.assertIn("DXGI_FORMAT_R16G16B16A16_UNORM", native)
         self.assertIn("c3x_renderer_i32 clip_left", api)
-        self.assertIn("#define C3X_RENDERER_API_VERSION 12u", api)
+        self.assertIn("#define C3X_RENDERER_API_VERSION 13u", api)
         self.assertIn("DXGI_FORMAT_R16G16_UNORM", native)
         self.assertIn("float2 combined_lean =", shader)
         self.assertIn("water_foam_texture.Sample", shader)

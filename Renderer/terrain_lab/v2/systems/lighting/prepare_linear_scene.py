@@ -74,6 +74,9 @@ def generate():
 #endif
 #ifdef Q3_HYDROLOGY_DATA
     float4 hydrology_data : TEXCOORD15;
+#endif
+#ifdef Q4_RELIEF_MATERIAL_DATA
+    float4 relief_material : TEXCOORD16;
 #endif''')
     marker = '    float material_index : TEXCOORD1;'
     assert s.count(marker) == 2
@@ -92,6 +95,9 @@ def generate():
     s=s.replace(marker,marker+'''
 #ifdef Q3_HYDROLOGY_DATA
     output.hydrology_data = input.hydrology_data;
+#endif
+#ifdef Q4_RELIEF_MATERIAL_DATA
+    output.relief_material = input.relief_material;
 #endif''')
     # Seven material evaluation call sites, not the function definition.
     calls = list(re.finditer(r'frame_illumination\(', s))
@@ -213,7 +219,38 @@ Q6SceneOutput PSFeature(FeaturePixelInput input) { return q6_scene_output(q6_raw
 #define Q4_VOLCANO_FOOTPRINT .62
 #endif
             volcano_uv=.5+(float2(volcano_uv.x,1-volcano_uv.y)-.5)*Q4_VOLCANO_FOOTPRINT;
+#endif
+#ifdef Q4_RELIEF_MATERIAL_DATA
+            volcano_uv=input.relief_material.xy;
 #endif''')
+    s=s.replace('abs(input.real_terrain - 10.0) < 0.25','q4_volcano_surface(input)')
+    s=s.replace('abs(input.real_terrain - 10.0) > 0.25','!q4_volcano_surface(input)')
+    s=s.replace('smoothstep(0.02, 0.62, input.authored_relief.y)','q4_volcano_coverage(input)')
+    s=s.replace('? input.active_effect : fixture_active','? input.active_effect : q4_volcano_active(input,fixture_active)')
+    marker='float4 q6_raw_main(PixelInput input)'
+    assert s.count(marker)==1
+    s=s.replace(marker,'''bool q4_volcano_surface(PixelInput input) {
+#ifdef Q4_RELIEF_MATERIAL_DATA
+    return input.relief_material.z>.00001;
+#else
+    return abs(input.real_terrain-10)<.25;
+#endif
+}
+float q4_volcano_coverage(PixelInput input) {
+#ifdef Q4_RELIEF_MATERIAL_DATA
+    return smoothstep(.02,.62,input.relief_material.z);
+#else
+    return smoothstep(.02,.62,input.authored_relief.y);
+#endif
+}
+float q4_volcano_active(PixelInput input,float fallback) {
+#ifdef Q4_RELIEF_MATERIAL_DATA
+    return input.relief_material.w;
+#else
+    return fallback;
+#endif
+}
+'''+marker)
     marker='float4 q6_raw_feature(FeaturePixelInput input)\n{'
     assert s.count(marker)==1
     s=s.replace(marker,marker+'''

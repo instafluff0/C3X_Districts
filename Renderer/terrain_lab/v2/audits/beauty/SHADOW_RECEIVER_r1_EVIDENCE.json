@@ -1,0 +1,385 @@
+{
+  "schema": "c3x.shadow_receiver_evidence.v1",
+  "approval": null,
+  "visual_accepted": false,
+  "results": [
+    {
+      "region": "coastal",
+      "synthetic": false,
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "83f35aa945b77c33b0dbc582ce096bd328fb310714f99f88193274a3a72e7ffb",
+          "after_sha256": "78ad6a45215eb6547f9b328b96dc6aa0dd4bd6ee849f566c5bcf22be16b81aea",
+          "packet_sha256": "711341137f7c8f17a3e191c4d5edd45a77b1181c07bd6255583f593bc5623a98",
+          "source_metadata_sha256": "d515db850e1c8eba0d0460fa0df5ef21e62e81961e9448d9667fd93f85663398",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/coastal-h12-z1-comparison.png",
+          "difference": {
+            "changed_pixels": 32891,
+            "bounds": [
+              483,
+              67,
+              1077,
+              711
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "438dabd9a0a83bf11ddd9b630d56d004dd384689df2339e9abad5270af6aa831",
+          "after_sha256": "29fd990471ad4a6d6f54fd07c9bbae2852292a6ccfe0fad40ae9cdbc26e94555",
+          "packet_sha256": "6af5ba49f9cae3f0be04b28cc9d3024810055c4b771ab707df3409395266db4c",
+          "source_metadata_sha256": "d515db850e1c8eba0d0460fa0df5ef21e62e81961e9448d9667fd93f85663398",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/coastal-h12-z2-comparison.png",
+          "difference": {
+            "changed_pixels": 14114,
+            "bounds": [
+              241,
+              33,
+              539,
+              356
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "d0d9054d9ccefc8c31cfa2d65513d15f983a1f5434bca27a8e10bc313d58e23c",
+          "after_sha256": "9c8685618c2b96ccba721725a23446b226cf0b9089f1e6dbc34c7b14f2477cf8",
+          "packet_sha256": "4bb9bbb833c4e22b203d305b321998bd8e25710eaedb26b136f7e4ba55f3707f",
+          "source_metadata_sha256": "d515db850e1c8eba0d0460fa0df5ef21e62e81961e9448d9667fd93f85663398",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/coastal-h00-z1-comparison.png",
+          "difference": {
+            "changed_pixels": 23329,
+            "bounds": [
+              484,
+              67,
+              1075,
+              711
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "8392c0da06956c97107e7bb40e3ec3bfd17c39b09c85e8ad1ab882fa54348860",
+          "after_sha256": "06a8ac681addced1547d8fe96f37533a3b28a8422b42b7fb0bb4eb26e34c7219",
+          "packet_sha256": "6fba6136a561e1b4bbef7d855275603701a9be682e61b4749604a2175e345f8c",
+          "source_metadata_sha256": "d515db850e1c8eba0d0460fa0df5ef21e62e81961e9448d9667fd93f85663398",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/coastal-h00-z2-comparison.png",
+          "difference": {
+            "changed_pixels": 7336,
+            "bounds": [
+              242,
+              34,
+              535,
+              356
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "inland",
+      "synthetic": false,
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "cdbb04f236835dab83f9167b0d75ba6895ad3928ca5dcfeb7daccdf025b0392f",
+          "after_sha256": "e65086c66164bf885f9906a946ff02a0a7eeb40677e5609810200c0850bda83c",
+          "packet_sha256": "1a7712f829b1033f9f58ea7155ca11f85a6aad4edd04b23b4b30769b21fdca90",
+          "source_metadata_sha256": "6abce23c72abb722c213618d76df9081766fd53f4feae31ba123596ee3a272c1",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/inland-h12-z1-comparison.png",
+          "difference": {
+            "changed_pixels": 82484,
+            "bounds": [
+              111,
+              55,
+              1270,
+              693
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "5c737cbc366d4ae0cba55ce586eb447fe54617d24336eeceeca9e880020f180b",
+          "after_sha256": "1351ebcebfde1d1cb15975a113b2406dead084676950855aa2f080a2fa63223d",
+          "packet_sha256": "5ba4901abe9bbf6b0bf7aca8f6ffe6815ab1cce2dae1df1c464f32746e18a865",
+          "source_metadata_sha256": "6abce23c72abb722c213618d76df9081766fd53f4feae31ba123596ee3a272c1",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/inland-h12-z2-comparison.png",
+          "difference": {
+            "changed_pixels": 33233,
+            "bounds": [
+              55,
+              27,
+              635,
+              347
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "0d75ebc37bbae7a8ef11d71c5a75e053705d32b16754e58fe7009deb7629a609",
+          "after_sha256": "af2fa067253b9fa460c82cde208c6d0143e4128b3ea75c910e8e98e51b52bb71",
+          "packet_sha256": "b0798f89b1cd11169ee9afd46163ba38e025ad947582da7940a251df25a3c9a1",
+          "source_metadata_sha256": "6abce23c72abb722c213618d76df9081766fd53f4feae31ba123596ee3a272c1",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/inland-h00-z1-comparison.png",
+          "difference": {
+            "changed_pixels": 48036,
+            "bounds": [
+              111,
+              59,
+              1269,
+              696
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "cd9703436c0fde792cfd4c43710e89f0e9f3242fcccb464f332887b8370aed59",
+          "after_sha256": "6da601c642f6bf27591b10592143e8108cd1f3fafec78fb2835b0ee2ce12dbba",
+          "packet_sha256": "489b5b433282c7e9ded955f28c65bcbe6142c01e826172bbf814373d3b0c2016",
+          "source_metadata_sha256": "6abce23c72abb722c213618d76df9081766fd53f4feae31ba123596ee3a272c1",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/inland-h00-z2-comparison.png",
+          "difference": {
+            "changed_pixels": 14158,
+            "bounds": [
+              55,
+              30,
+              635,
+              348
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "region": "wilderness",
+      "synthetic": false,
+      "frames": [
+        {
+          "hour": 12,
+          "zoom": 1,
+          "before_sha256": "5687ebe3af1122e0c2684cd46ead0de913901e551ce685b6a3eeae748b1850cf",
+          "after_sha256": "1fa433c88c10ca8f97a4a198a86496e7adf0712c1bfcae67cc5b4781dd3ae234",
+          "packet_sha256": "6bc10c8d64edb0e525a208ddda0d761859ce3329a3ef9eee78a13278c8d0d43e",
+          "source_metadata_sha256": "18c1bce79d615be7774160d8a49b6ab0f1fc085ee9d13510bc019add44d23a0a",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/wilderness-h12-z1-comparison.png",
+          "difference": {
+            "changed_pixels": 37224,
+            "bounds": [
+              47,
+              21,
+              1184,
+              694
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 12,
+          "zoom": 2,
+          "before_sha256": "4d7b2b2407aa2a920d7bbf9b1ddcb2b0bc7a6959a7f64e020d6ee7a88a98aa46",
+          "after_sha256": "aeadf9eb9b978d2626af45f78c1701a40044d397254c0d72a423f1aa8b45d9e0",
+          "packet_sha256": "2a60635b3bb7a55b34a50f21f8bc68f60399a884a40675373349e8a1af470ff7",
+          "source_metadata_sha256": "18c1bce79d615be7774160d8a49b6ab0f1fc085ee9d13510bc019add44d23a0a",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/wilderness-h12-z2-comparison.png",
+          "difference": {
+            "changed_pixels": 17706,
+            "bounds": [
+              23,
+              10,
+              592,
+              347
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 1,
+          "before_sha256": "46ad31b5daa92472d50094ee434689bdb96cfc29f3b1076806c4f741679a0e97",
+          "after_sha256": "2ad5ccb6518cbf76955a213ae72b366a9d46cc5f1a9cdbc84a52ba2f4d9a1fd5",
+          "packet_sha256": "e2e4de95644284c33c0946056889a95d40535790284372eeef3cf0541feb2da1",
+          "source_metadata_sha256": "18c1bce79d615be7774160d8a49b6ab0f1fc085ee9d13510bc019add44d23a0a",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            360,
+            220,
+            1000,
+            540
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/wilderness-h00-z1-comparison.png",
+          "difference": {
+            "changed_pixels": 26664,
+            "bounds": [
+              47,
+              22,
+              1180,
+              683
+            ],
+            "output_size": [
+              1360,
+              800
+            ]
+          }
+        },
+        {
+          "hour": 0,
+          "zoom": 2,
+          "before_sha256": "078063cb8324d14504641feb496afa73c7351a4aef0ae8e3f1c87e330e103233",
+          "after_sha256": "eb1feca6647a4af7d8f301da64eac7502e7e714847c5fcbb161238a92a13dd33",
+          "packet_sha256": "fb5ee7c32ad75dffda476d457c775a95219ed21be36841271cb2e4b188862f98",
+          "source_metadata_sha256": "18c1bce79d615be7774160d8a49b6ab0f1fc085ee9d13510bc019add44d23a0a",
+          "geometry_materials_placement_shadow_field_identical": true,
+          "crop": [
+            0,
+            0,
+            680,
+            400
+          ],
+          "resampled": false,
+          "comparison": "Renderer/terrain_lab/v2/audits/beauty/out/shadow-receiver-r1/review/wilderness-h00-z2-comparison.png",
+          "difference": {
+            "changed_pixels": 9099,
+            "bounds": [
+              25,
+              11,
+              590,
+              342
+            ],
+            "output_size": [
+              680,
+              400
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

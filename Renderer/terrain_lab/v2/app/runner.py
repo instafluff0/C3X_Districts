@@ -602,6 +602,11 @@ def packet(cache, f, module, scene, phase, zoom, pack_hash, query=None):
         environment.pop('C3X_LAB_V2_OMIT_REPLACED_SHADOW',None)
         environment.pop('C3X_LAB_V2_RELIEF_SCALE',None)
         environment.pop('C3X_LAB_V2_VOLCANO_SCALE',None)
+        environment.pop('C3X_LAB_V2_RELIEF_MATERIAL',None)
+        if module.get('relief_material_data'):
+            if module['relief_material_data']!=1 or not module.get('relief_scale') or not module.get('hydrology_data'):
+                raise ValueError('Relief material data requires broad relief and the existing world/hydrology attributes')
+            environment['C3X_LAB_V2_RELIEF_MATERIAL']='1'
         if 'relief_scale' in module:
             scale=module['relief_scale']
             if type(scale) not in (int,float) or not 1<scale<=1.6:

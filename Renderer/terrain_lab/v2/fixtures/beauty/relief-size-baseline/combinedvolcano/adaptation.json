@@ -1,0 +1,10 @@
+{
+  "classification": "source_height_adaptation",
+  "uniform_body_scale": 1,
+  "maximum_neighbor_skirt_tiles": 0.25,
+  "source_height_samples_unchanged": true,
+  "physical_source_reconstruction_proven": false,
+  "synthetic": true,
+  "previous_fixture": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-foundation/combinedvolcano/fixture.json",
+  "notes": "User requested larger bodies with modest neighboring overlap. Source material and height use aligned volcano coordinates; camera and terrain are preserved."
+}

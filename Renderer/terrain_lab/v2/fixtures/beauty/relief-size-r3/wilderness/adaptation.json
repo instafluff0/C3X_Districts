@@ -1,0 +1,11 @@
+{
+  "classification": "source_height_adaptation",
+  "uniform_body_scale": 1.3,
+  "maximum_neighbor_skirt_tiles": 0.25,
+  "source_height_samples_unchanged": true,
+  "physical_source_reconstruction_proven": false,
+  "synthetic": false,
+  "previous_fixture": "Renderer/terrain_lab/v2/fixtures/beauty/coast-pass-rocks-r8/wilderness/fixture.json",
+  "notes": "User requested larger bodies with modest neighboring overlap. Source material and height use aligned volcano coordinates; camera and terrain are preserved.",
+  "uniform_volcano_scale": 1.6
+}

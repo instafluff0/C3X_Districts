@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 12u
+#define C3X_RENDERER_API_VERSION 13u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -212,6 +212,10 @@ struct c3x_renderer_output_v1 {
     c3x_renderer_u32 prefetch_tiles_cancelled;
     c3x_renderer_u32 prefetch_cache_bytes;
     c3x_renderer_i64 prefetch_ticks;
+    c3x_renderer_u32 raster_cached_pixels;
+    c3x_renderer_u32 prefetch_blocks_pending;
+    c3x_renderer_u32 prefetch_blocks_built;
+    c3x_renderer_u32 pixel_block_cache_bytes;
 };
 
 struct c3x_renderer_schedule_v1 {

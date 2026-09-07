@@ -1,0 +1,6 @@
+{
+  "source": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-r3/wilderness/combined.hlsl",
+  "replace": "blocker-=dot((sample.gb-.5)*32,sampled_uv-uv);\n     receiver=z;",
+  "with": "float caster_gap=blocker-dot((sample.gb-.5)*32,sampled_uv-uv)-z;\n     blocker=receiver+min(blocker-receiver,caster_gap);",
+  "classification": "diagnostic_only"
+}

@@ -1,52 +1,53 @@
-# Combined terrain checkpoint — selected source cliffs and water
+# Combined terrain checkpoint — larger source relief
 
 2026-09-06. Sole lead, local Metal. Retained work in progress:
-**coast-pass-rocks-r8**, with **volcano-witness-r2** as a separate synthetic
-supplement. All three fixed 100-tile test.biq regions, the 128-tile long coast,
-and a previously untuned 100-tile coast were rendered at noon/midnight and both
-fixed gameplay zooms. Native crops and full zoom-2 scenes were directly inspected.
+**relief-size-r3**, including **combinedvolcano** as a separate synthetic witness.
+The three fixed 100-tile test.biq benchmarks, 128-tile long coast, previous fresh
+coast, and a newly selected 100-tile region with four mountains were composed
+at noon/midnight and both fixed gameplay zooms. The synthetic volcano adds
+four frames to those 24 real-map frames.
 
 This is an incremental visual improvement, not Civ VI-level acceptance.
 No human approval, milestone closure or Integration promotion is recorded.
 Cities, units and improvements remain deferred.
 
-- [Long coastline before/after — unchanged gameplay pixels](out/coast-pass-rocks-r8/review/longcoast-day-comparison.png)
-- [Fixed coastal benchmark before/after](out/coast-pass-rocks-r8/review/coastal-day-comparison.png)
-- [Inland before/after](out/coast-pass-rocks-r8/review/inland-day-comparison.png)
-- [Wilderness before/after](out/coast-pass-rocks-r8/review/wilderness-day-comparison.png)
-- [Long coast at night](out/coast-pass-rocks-r8/review/longcoast-night-comparison.png)
-- [Previously untuned coast — full native zoom 2](out/coast-pass-rocks-r8/review/freshcoast-z2-day-comparison.png)
-- [Previously untuned coast at night](out/coast-pass-rocks-r8/review/freshcoast-z2-night-comparison.png)
-- [All fixed regions at native zoom 2, day](out/coast-pass-rocks-r8/review/all-regions-z2-day.png)
-- [All fixed regions at native zoom 2, night](out/coast-pass-rocks-r8/review/all-regions-z2-night.png)
-- [Canonical Civ VI and Civ III references](out/coast-pass-rocks-r8/review/canonical-shore-references.png)
-- [Full 128-tile long coastline](out/coast-pass-rocks-r8/longcoast/h12-z1-pan00.png)
-- [Supplemental volcano mapping](out/coast-pass-rocks-r8/review/synthetic-volcano-day-comparison.png)
+- [Larger inland mountains — native gameplay comparison](out/relief-size-r3/review/inland-day-z1-comparison.png)
+- [Larger volcano in the current combined scene — explicitly synthetic](out/relief-size-r3/review/combinedvolcano-day-z1-comparison.png)
+- [Combined volcano and mountains at night](out/relief-size-r3/review/combinedvolcano-night-z1-comparison.png)
+- [Inland mountains at night](out/relief-size-r3/review/inland-night-z1-comparison.png)
+- [Fixed coast — full native zoom 2](out/relief-size-r3/review/coastal-day-z2-comparison.png)
+- [Wilderness — full native zoom 2](out/relief-size-r3/review/wilderness-day-z2-comparison.png)
+- [Long coast — full native zoom 2](out/relief-size-r3/review/longcoast-day-z2-comparison.png)
+- [Previously untuned four-mountain region](out/relief-size-r3/review/freshrelief-day-z2-comparison.png)
+- [Previously untuned region at night](out/relief-size-r3/review/freshrelief-night-z2-comparison.png)
+- [Full combined inland scene](out/relief-size-r3/inland/h12-z1-pan00.png)
+- [Full combined volcano witness](out/relief-size-r3/combinedvolcano/h12-z1-pan00.png)
 
-Gray selected-source cliff materials replace the incorrectly inherited Base
-materials. A subordinate grassy shoulder supports overlapping source bodies,
-turning several rows of detached boulders into connected rocky banks. The
-source water normal/moment textures now affect shared lighting instead of
-remaining bound but unused. The retained varied shoreline itself stays fixed.
-The first buried-rock join was rejected; all attempts and previous best r4
-remain preserved. Source controls, adaptation limits, changed-pixel locations,
-and checks are recorded in [COAST_SOURCE_JOIN_PASS.md](COAST_SOURCE_JOIN_PASS.md).
+Mountains use 1.30 uniform source-body scale and volcanoes 1.60 before the
+bounded topology joins. Foothills can extend .25 tile beyond an ownership edge,
+ending before the neighboring center. Source height samples, fixed cameras and
+terrain remain unchanged. Vegetation keeps its XY placement, mesh, scale and
+yaw; grounding heights follow the changed terrain. An initial larger volcano
+exposed a tile-bound material cut. That version was rejected; the retained
+version carries source-owner coordinates and coverage across the skirt.
 
-The three largest visible gaps remain:
+The changed footprints give the terrain more presence beside forests and move
+toward canonical `mountain.png`. Detailed source/adaptation limits, actual-pixel
+locations and validation are in [RELIEF_SIZE_PASS.md](RELIEF_SIZE_PASS.md).
+The previous best `coast-pass-rocks-r8` and every intermediate render are preserved.
 
-1. Some grass/rock joins are abrupt, and pond banks still lack the reference's
-   natural exposed face and shoulder relationship.
-2. Soft shallows hide bed structure. Static water normals improve the open
-   surface, but shoreline interaction and reference-like water layering remain.
-3. Inherited analytic dunes are unapproved diagnostic proxies with seams;
-   mountain/volcano physical extent and side projection remain unresolved.
+The three largest remaining gaps are:
 
-The new coast is now a regression witness, not an untuned witness for future
-acceptance. Source terrain and cameras remain pinned in its foundation fixture.
-[COAST_rocks-r8_EVIDENCE.json](COAST_rocks-r8_EVIDENCE.json) verifies the matched
-20-frame composition and actual material bindings; it does not decide quality.
-[COAST_SOURCE_BINDING_DIAGNOSTICS.json](COAST_SOURCE_BINDING_DIAGNOSTICS.json)
-separates source material, shoulder, water and rejected geometry experiments.
-Earlier retained passes are documented in
-[COAST_VOLCANO_PASS.md](COAST_VOLCANO_PASS.md) and
-[GAMEPLAY_TERRAIN_PASS.md](GAMEPLAY_TERRAIN_PASS.md). LQ0 remains ready/unaccepted.
+1. Mountain/volcano surface projection and natural shoulder integration. The
+   volcano remains streaked; source physical reconstruction is still unproven.
+2. Shadow-receiver lines across dunes, plus the inherited unapproved analytic
+   dune body. Disabling all shadows isolates the lines, but is not a retained fix.
+3. Soft shallow-water structure and abrupt cliff/grass joins.
+
+[RELIEF_SIZE_r3_EVIDENCE.json](RELIEF_SIZE_r3_EVIDENCE.json) verifies all 28
+matched frames and preserved source/placement inputs; it does not decide quality.
+[RELIEF_SHADOW_DIAGNOSTICS.json](RELIEF_SHADOW_DIAGNOSTICS.json) records the
+unselected lighting isolation. The new four-mountain region is now a regression
+witness, not an untuned witness for later acceptance. Earlier retained coastal
+and water work is documented in [COAST_SOURCE_JOIN_PASS.md](COAST_SOURCE_JOIN_PASS.md).
+LQ0 remains ready/unaccepted.

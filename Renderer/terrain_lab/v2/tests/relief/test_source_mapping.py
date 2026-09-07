@@ -16,12 +16,14 @@ class SourceMappingTests(unittest.TestCase):
         volcano=block('void biq_volcano_sample(')
         mountain=block('void biq_mountain_sample(')
         chain=block('void biq_chain_relief_sample(')
+        material=block('if(std::getenv("C3X_LAB_V2_RELIEF_MATERIAL"))')
         hill=block('if (lab_v2_direct_hill_source)')
         source=r'''
 #include <algorithm>
 #include <cmath>
 #include <cassert>
 #include <vector>
+#include <cstdlib>
 struct BiqWindowTile {int column=0,row=0,source_x=0,source_y=0,real=10;};
 struct HeightField {bool second=false;float sample(float u,float v)const{return second?v:u;}};
 bool volcano_geometry_enabled=true,lab_v2_volcano_source_mapping=true;
@@ -37,12 +39,20 @@ std::vector<BiqWindowTile> source_tiles;
 BiqWindowTile const* biq_tile_at(int x,int y){for(auto const&t:source_tiles)if(t.column==x&&t.row==y)return &t;return nullptr;}
 float smoothstep01(float x){x=std::clamp(x,0.f,1.f);return x*x*(3-2*x);}
 struct Window {std::vector<BiqWindowTile> tiles;} biq_window;
-'''+volcano+mountain+chain+'\nfloat hill(float world_x,float world_y,HeightField const* field){'+hill+'return -1;}'+r'''
+float biq_coastal_relief_envelope(BiqWindowTile const&,float,float){return 1;}
+float biq_hill_compatibility_envelope(BiqWindowTile const&,float,float){return 1;}
+'''+volcano+mountain+chain+'\nfloat hill(float world_x,float world_y,HeightField const* field){'+hill+'return -1;}' + '''
+void material_sample(BiqWindowTile const&tile,float u,float v,float*out){
+ struct {float relief_material[4]={};} result;
+'''+material+'''
+ for(int i=0;i<4;i++)out[i]=result.relief_material[i];
+}
+'''+r'''
 int main(){
  BiqWindowTile tile{5,5,70,50,10};
  // The height sampler must use the same local-v orientation/footprint that
  // dormant, active, slope and specular material channels now share.
- for(float scale:{1.f,1.3f})for(float u:{.2f,.4f,.65f,.8f})for(float v:{.2f,.4f,.65f,.8f}){
+ for(float scale:{1.f,1.3f,1.6f})for(float u:{.2f,.4f,.65f,.8f})for(float v:{.2f,.4f,.65f,.8f}){
   lab_v2_relief_scale=scale;lab_v2_volcano_scale=scale;
   float height,blend;biq_volcano_sample(tile,u,v,height,blend);
   assert(std::abs(height-(.5f+(u-.5f)*.62f/scale))<1e-6f);
@@ -64,6 +74,18 @@ int main(){
   biq_chain_relief_sample(1.f+1e-6f,.5f,hh,bb,dd);assert(std::abs(d-dd)<.001f);
  }
  source_tiles.clear();lab_v2_relief_scale=1;
+ // Both receiving tiles carry the owning volcano's coordinates, including
+ // its rock coverage and activation. No material reset at frac(world)=0.
+ setenv("C3X_LAB_V2_RELIEF_MATERIAL","1",1);
+ source_tiles={{0,0,70,50,10}};lab_v2_volcano_scale=1.6f;
+ for(float v:{.2f,.5f,.8f}){
+  float left[4],right[4];BiqWindowTile neighbor{1,0,71,51,2};
+  material_sample(source_tiles[0],1,v,left);material_sample(neighbor,0,v,right);
+  for(int i=0;i<4;i++)assert(std::abs(left[i]-right[i])<1e-6f);
+  assert(left[2]>.02f);
+  assert(std::abs(left[0]-(.5f+.5f*.62f/1.6f))<1e-6f);
+ }
+ source_tiles.clear();lab_v2_volcano_scale=1;
  // Two crops containing one physical point must sample one source coordinate.
  biq_window.tiles={{0,0,64,38,2}};
  float a=hill(7.25f,4.125f,&hf),b=hill(7.25f,4.125f,&bf);

@@ -1,0 +1,6 @@
+{
+  "source": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-r3/wilderness/combined.hlsl",
+  "replace": "float2 ux=ddx(uv),uy=ddy(uv);float zx=ddx(z),zy=ddy(z);",
+  "with": "float2 geometry_uv=float2(dot(world,ShadowU.xyz),dot(world,ShadowV.xyz))/ShadowU.w+.5;\n float geometry_z=dot(world,ShadowL.xyz)/ShadowU.w+.5;\n float2 ux=ddx(geometry_uv),uy=ddy(geometry_uv);float zx=ddx(geometry_z),zy=ddy(geometry_z);",
+  "classification": "diagnostic_only"
+}

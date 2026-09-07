@@ -84,6 +84,7 @@ struct Vertex {
     float material_tundra = 0.0f;
     float world_x=0,world_y=0,world_z=0,world_valid=0;
     float hydrology_data[4]={};
+    float relief_material[4]={}; // Source UV, coverage, activation; optional Lab attribute.
 };
 
 struct BiqWindowTile {
@@ -2677,6 +2678,24 @@ Vertex make_biq_vertex(BiqWindowTile const & tile, float u, float v, float uv_sc
                   biq_river_mouth_distance(tile, u, v),
                   biq_river_node_distance(tile, u, v, 0u)};
     result.material_tundra = weights[4];
+    if(std::getenv("C3X_LAB_V2_RELIEF_MATERIAL")){
+        float wx=tile.column+u,wy=tile.row+1-v,best=1e9f;
+        // Keep the source owner's UV across its entire skirt. Deriving it
+        // from the receiving tile's frac(world) cut the enlarged body in half.
+        for(int y=int(std::floor(wy))-1;y<=int(std::floor(wy))+1;y++)
+        for(int x=int(std::floor(wx))-1;x<=int(std::floor(wx))+1;x++){
+            auto owner=biq_tile_at(x,y);if(!owner || owner->real!=10)continue;
+            float dx=wx-x-.5f,dy=wy-y-.5f,distance=dx*dx+dy*dy;
+            if(distance>=best)continue;best=distance;
+            float h,b;biq_volcano_sample(*owner,dx+.5f,.5f-dy,h,b);
+            float support=1-smoothstep01((std::max(std::abs(dx),std::abs(dy))-.52f)/.23f);
+            result.relief_material[0]=.5f+dx*.62f/lab_v2_volcano_scale;
+            result.relief_material[1]=.5f-dy*.62f/lab_v2_volcano_scale;
+            result.relief_material[2]=b*support*biq_coastal_relief_envelope(tile,u,v)*
+                biq_hill_compatibility_envelope(tile,u,v);
+            result.relief_material[3]=((x*17+y*31)&1)?0.f:1.f;
+        }
+    }
     result.world_x=tile.column+u;result.world_y=tile.row+(1-v);result.world_z=height/112.0f;result.world_valid=1;
     if(labv2::hydrology_hooks.shore_sample) {
         labv2::hydrology_hooks.shore_sample(result.world_x,result.world_y,result.hydrology_data);
@@ -4376,6 +4395,7 @@ bool write_bmp(char const * path, D3D11_MAPPED_SUBRESOURCE const &, unsigned dow
                 auto d=source;
                 if(std::getenv("C3X_LAB_V2_WORLD_POSITIONS"))d.attributes.push_back({4,source.feature?unsigned(offsetof(FeatureVertex,world_x)):unsigned(offsetof(Vertex,world_x))});
                 if(!source.feature && std::getenv("C3X_LAB_V2_HYDROLOGY_DATA"))d.attributes.push_back({4,unsigned(offsetof(Vertex,hydrology_data))});
+                if(!source.feature && std::getenv("C3X_LAB_V2_RELIEF_MATERIAL"))d.attributes.push_back({4,unsigned(offsetof(Vertex,relief_material))});
                 d.vertex_buffer=recorded.buffers.size();d.count=groups[group].size()/d.stride;d.clear_depth=0;d.depth_mode=group?1:2;d.blend_mode=group?1:0;
                 recorded.buffers.push_back(std::move(groups[group]));(group?transparent:opaque).push_back(d);
             }
@@ -4395,6 +4415,7 @@ bool write_bmp(char const * path, D3D11_MAPPED_SUBRESOURCE const &, unsigned dow
         unsigned stride=d.feature?unsigned(offsetof(FeatureVertex,world_x)):unsigned(offsetof(Vertex,world_x));
         if(std::getenv("C3X_LAB_V2_WORLD_POSITIONS"))stride+=16;
         if(!d.feature && std::getenv("C3X_LAB_V2_HYDROLOGY_DATA"))stride+=16;
+        if(!d.feature && std::getenv("C3X_LAB_V2_RELIEF_MATERIAL"))stride+=16;
         if(stride>d.stride)throw std::runtime_error("source optional attribute stride drift");
         if(!packed_strides.count(d.vertex_buffer)) {
             auto& old=recorded.buffers[d.vertex_buffer];std::vector<uint8_t> packed;

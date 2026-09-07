@@ -41,19 +41,40 @@ def fresh_relief():
         'selection':'Four source mountains; selected by coverage before size-pass rendering; no region-specific tuning.'})
     return out
 
+def combined_volcano():
+    out=V2/'fixtures/beauty/relief-size-foundation/combinedvolcano'
+    if (out/'fixture.json').exists():return out
+    source=V2/'fixtures/beauty/coast-pass-rocks-r8/inland'
+    witness=V2/'fixtures/beauty/volcano-witness-r2/inland'
+    f=json.loads((source/'fixture.json').read_text());f.pop('real_map')
+    synthetic=json.loads((witness/'fixture.json').read_text())
+    f['terrain']=synthetic['terrain'];f['scenarios']=synthetic['scenarios']
+    f['id']='synthetic-combined-volcano-size-foundation'
+    m=json.loads((source/'terrain.module.json').read_text());m['volcano_source_mapping']=1
+    shader='#define Q4_VOLCANO_SOURCE_MAPPING 1\n'+(source/'combined.hlsl').read_text()
+    save(out/'combined.hlsl',shader);m['shader']=(out/'combined.hlsl').relative_to(ROOT).as_posix()
+    save(out/'terrain.module.json',m);f['modules']=[(out/'terrain.module.json').relative_to(ROOT).as_posix()]
+    save(out/'fixture.json',f)
+    provenance=json.loads((witness/'provenance.json').read_text())
+    provenance['composition']='Current retained coast/water/hills, with the same single synthetic volcano replacement.'
+    save(out/'provenance.json',provenance)
+    return out
+
 def prepare(region,revision):
-    scale={'baseline':1,'r1':1.30,'r2':1.30}[revision]
-    volcano_scale=1.6 if revision=='r2' else scale
-    source=fresh_relief() if region=='freshrelief' else V2/'fixtures/beauty'/(
+    scale={'baseline':1,'r1':1.30,'r2':1.30,'r3':1.30}[revision]
+    volcano_scale=1.6 if revision in ('r2','r3') else scale
+    source=fresh_relief() if region=='freshrelief' else combined_volcano() if region=='combinedvolcano' else V2/'fixtures/beauty'/(
         'volcano-witness-r2/inland' if region=='volcano' else 'coast-pass-rocks-r8/'+region)
     f=json.loads((source/'fixture.json').read_text())
     m=json.loads((ROOT/f['modules'][0]).read_text())
     out=V2/'fixtures/beauty'/('relief-size-'+revision)/region
     shader=(ROOT/m['shader']).read_text()
     if scale>1:shader=f'#define Q4_BROAD_RELIEF 1\n#define Q4_VOLCANO_FOOTPRINT {0.62/volcano_scale:.9f}\n'+shader
+    if revision=='r3':shader='#define Q4_RELIEF_MATERIAL_DATA 1\n'+shader
     f['id']='relief-size-'+revision+'-'+region;m['id']=f['id']
     if scale>1:m['relief_scale']=scale
-    if revision=='r2':m['volcano_scale']=volcano_scale
+    if revision in ('r2','r3'):m['volcano_scale']=volcano_scale
+    if revision=='r3':m['relief_material_data']=1
     m['omit_replaced_shadow_surface']=1
     m['shader']=(out/'combined.hlsl').relative_to(ROOT).as_posix()
     f['modules']=[(out/'terrain.module.json').relative_to(ROOT).as_posix()]
@@ -61,21 +82,21 @@ def prepare(region,revision):
     adaptation={'classification':'source_height_adaptation',
         'uniform_body_scale':scale,'maximum_neighbor_skirt_tiles':.25,
         'source_height_samples_unchanged':True,'physical_source_reconstruction_proven':False,
-        'synthetic':region=='volcano','previous_fixture':(source/'fixture.json').relative_to(ROOT).as_posix(),
+        'synthetic':region in ('volcano','combinedvolcano'),'previous_fixture':(source/'fixture.json').relative_to(ROOT).as_posix(),
         'notes':'User requested larger bodies with modest neighboring overlap. Source material and height use aligned volcano coordinates; camera and terrain are preserved.'}
-    if revision=='r2':adaptation['uniform_volcano_scale']=volcano_scale
+    if revision in ('r2','r3'):adaptation['uniform_volcano_scale']=volcano_scale
     save(out/'adaptation.json',adaptation)
     return out/'fixture.json'
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--region',choices=['coastal','inland','wilderness','longcoast','freshcoast','freshrelief','volcano','all'],required=True)
-    p.add_argument('--revision',choices=['baseline','r1','r2'],default='r1')
+    p.add_argument('--region',choices=['coastal','inland','wilderness','longcoast','freshcoast','freshrelief','volcano','combinedvolcano','all'],required=True)
+    p.add_argument('--revision',choices=['baseline','r1','r2','r3'],default='r1')
     p.add_argument('--hours',nargs='+',type=int,choices=[0,6,12,18],default=[12,0])
     p.add_argument('--prepare-only',action='store_true')
     p.add_argument('--output-root',type=Path)
     a=p.parse_args()
-    for region in (['coastal','inland','wilderness','longcoast','freshcoast','volcano'] if a.region=='all' else [a.region]):
+    for region in (['coastal','inland','wilderness','longcoast','freshcoast','freshrelief','combinedvolcano'] if a.region=='all' else [a.region]):
         f=prepare(region,a.revision)
         if a.prepare_only:continue
         out=(a.output_root or V2/'audits/beauty/out'/('relief-size-'+a.revision))/region

@@ -4,6 +4,13 @@ from Renderer.tools.analyze_renderer_trace import analyze
 
 
 class TraceTests(unittest.TestCase):
+    def test_idle_work_cumulative_time_is_not_a_latency_sample(self):
+        report = analyze("""[C3X renderer] stage=prewarm cumulative_ms=800
+[C3X renderer] stage=worker-complete wait_ms=3 cumulative_prewarm_ms=900
+""")
+        self.assertEqual(["worker-complete.wait_ms"], list(report["timings"]))
+        self.assertEqual(3, report["timings"]["worker-complete.wait_ms"]["p95_ms"])
+
     def test_mixed_debugger_trace_does_not_double_count_composite_or_maxima(self):
         report = analyze("""
 unrelated process output

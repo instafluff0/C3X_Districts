@@ -1,0 +1,8 @@
+{
+  "source": "Renderer/terrain_lab/v2/fixtures/beauty/relief-size-r3/wilderness/combined.hlsl",
+  "changes": {
+    "for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++)": "for(int y=0;y<=0;y++)for(int x=0;x<=0;x++)",
+    "float soft=sum/9;": "float soft=sum;"
+  },
+  "classification": "diagnostic_only"
+}

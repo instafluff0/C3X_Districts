@@ -1,0 +1,6 @@
+{
+  "source": "Renderer/terrain_lab/v2/fixtures/beauty/shadow-plane-diagnostic-r1/wilderness.hlsl",
+  "replace": "float3 w=world+normal*.001;",
+  "with": "float3 w=world+normal*(ShadowU.w/ShadowV.w);",
+  "classification": "diagnostic_only"
+}

@@ -1,0 +1,132 @@
+diff --git a/Renderer/terrain_lab/v2/shaders/lighting/frame_shadow_v1.hlsl b/Renderer/terrain_lab/v2/shaders/lighting/frame_shadow_v1.hlsl
+index c11a439f..33b601c3 100644
+--- a/Renderer/terrain_lab/v2/shaders/lighting/frame_shadow_v1.hlsl
++++ b/Renderer/terrain_lab/v2/shaders/lighting/frame_shadow_v1.hlsl
+@@ -13,12 +13,12 @@ cbuffer Q6SharedShadow : register(b1) {
+  float4 Q6ShadowV; // xyz light up; w resolution
+  float4 Q6ShadowL;
+  float4 Q6ShadowOrigin;
+- float4 Q6ShadowFlags; // enabled, tighter contact, reserved, reserved
++ float4 Q6ShadowFlags; // enabled, tighter contact, caster-plane channels, reserved
+ };
+ float q6_world_visibility(Texture2D field,float4 world,float3 normal,bool water) {
+  if(world.w<=.5 || Q6ShadowFlags.x<=.5)return 1;
+  return q6_shadow_visibility(field,world.xyz-Q6ShadowOrigin.xyz,normal,
+   Q6ShadowU,Q6ShadowV,Q6ShadowL,Q6_CAST_SHADOWS,
+-  !water && Q6_SCENE_CONTACT && Q6ShadowFlags.y>.5);
++  !water && Q6_SCENE_CONTACT && Q6ShadowFlags.y>.5,Q6ShadowFlags.z>.5);
+ }
+ #endif
+diff --git a/Renderer/terrain_lab/v2/shaders/lighting/shadow_visibility_v1.hlsl b/Renderer/terrain_lab/v2/shaders/lighting/shadow_visibility_v1.hlsl
+index f99d5869..bdeae552 100644
+--- a/Renderer/terrain_lab/v2/shaders/lighting/shadow_visibility_v1.hlsl
++++ b/Renderer/terrain_lab/v2/shaders/lighting/shadow_visibility_v1.hlsl
+@@ -1,6 +1,6 @@
+ // Shared Q6 receiver query for shadow_field_v1.h; no private clock or material bindings.
+ float q6_shadow_visibility(Texture2D field, float3 world, float3 normal,
+- float4 ShadowU, float4 ShadowV, float4 ShadowL, bool shadows, bool contact){
++ float4 ShadowU, float4 ShadowV, float4 ShadowL, bool shadows, bool contact,bool caster_planes=false){
+  if(!shadows)return 1;
+  float3 w=world+normal*.001;
+  float2 uv=float2(dot(w,ShadowU.xyz),dot(w,ShadowV.xyz))/ShadowU.w+.5;
+@@ -12,9 +12,16 @@ float q6_shadow_visibility(Texture2D field, float3 world, float3 normal,
+  float2 gradient=abs(determinant)>1e-12?float2(zx*uy.y-zy*ux.y,zy*ux.x-zx*uy.x)/determinant:0;
+  int2 center=int2(uv*ShadowV.w);float sum=0,closest_delta=0;
+  for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
+-   float blocker=field.Load(int3(clamp(center+int2(x,y),int2(0,0),int2(ShadowV.w-1,ShadowV.w-1)),0)).r;
++   float4 sample=field.Load(int3(clamp(center+int2(x,y),int2(0,0),int2(ShadowV.w-1,ShadowV.w-1)),0));
++   float blocker=sample.r;
+    float2 sampled_uv=(float2(center+int2(x,y))+.5)/ShadowV.w;
+    float receiver=z+dot(gradient,sampled_uv-uv);
++   if(caster_planes && sample.a>.5){
++     // Reproject the actual sampled facet to this receiver ray. Extrapolating
++     // the receiver facet into a different neighboring facet causes edge acne.
++     blocker-=dot((sample.gb-.5)*32,sampled_uv-uv);
++     receiver=z;
++   }
+    // Physical bias remains fixed when a larger scene needs a wider field.
+    float bias=.00060/ShadowU.w;
+    sum+=step(blocker,receiver+bias);
+diff --git a/Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp b/Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp
+index cafe24a3..9be0cd50 100644
+--- a/Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp
++++ b/Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp
+@@ -5,6 +5,9 @@
+ #include <cstdlib>
+ #include <iostream>
+ using namespace q6;
++#ifndef Q6_CASTER_PLANES
++#define Q6_CASTER_PLANES 0
++#endif
+ struct CasterCoverage { std::array<std::array<float,2>,3> uv; unsigned binding; float cutoff=.5f; };
+ float value_at(std::vector<uint8_t> const& b,size_t offset) {
+  float value;memcpy(&value,b.data()+offset,4);return value;
+@@ -98,10 +101,10 @@ int main(int argc,char**argv) {
+  // or penumbra just because another tile enters the scene.
+  int resolution=1024;
+  while(span/resolution>6.f/1024 && resolution<4096)resolution*=2;
+- p.textures.push_back(raster_shadow_field(triangles,basis.U,basis.V,basis.L,resolution,span,alpha));
++ p.textures.push_back(raster_shadow_field(triangles,basis.U,basis.V,basis.L,resolution,span,alpha,Q6_CASTER_PLANES));
+  float constants[]={basis.U[0],basis.U[1],basis.U[2],span,
+   basis.V[0],basis.V[1],basis.V[2],float(resolution),basis.L[0],basis.L[1],basis.L[2],0,
+-  origin[0],origin[1],origin[2],0,1,1,0,0};
++  origin[0],origin[1],origin[2],0,1,1,Q6_CASTER_PLANES,0};
+  unsigned frame=unsigned(p.buffers.size());p.buffers.emplace_back(sizeof(constants));
+  memcpy(p.buffers.back().data(),constants,sizeof(constants));
+  constants[16]=0;unsigned no_receive_frame=unsigned(p.buffers.size());
+diff --git a/Renderer/terrain_lab/v2/systems/lighting/shadow_field_v1.h b/Renderer/terrain_lab/v2/systems/lighting/shadow_field_v1.h
+index ddeeacad..8f19b096 100644
+--- a/Renderer/terrain_lab/v2/systems/lighting/shadow_field_v1.h
++++ b/Renderer/terrain_lab/v2/systems/lighting/shadow_field_v1.h
+@@ -18,7 +18,7 @@ using WorldTriangle=std::array<F3,3>;
+ // Cutout geometry requires the coverage callback; opaque_shadow_field is opaque only.
+ template<class Coverage>
+ labv2::Texture raster_shadow_field(std::vector<WorldTriangle> const& triangles,
+-                                  F3 U,F3 V,F3 L,int resolution,float span,Coverage coverage) {
++                                  F3 U,F3 V,F3 L,int resolution,float span,Coverage coverage,bool caster_planes=false) {
+  if(resolution<64 || resolution>4096 || !std::isfinite(span) || span<=0)
+    throw std::runtime_error("invalid Q6 shadow field extent");
+  for(auto const& tri:triangles)for(auto const& w:tri) {
+@@ -28,6 +28,7 @@ labv2::Texture raster_shadow_field(std::vector<WorldTriangle> const& triangles,
+  }
+  const int S=resolution;
+  std::vector<float> depth(S*S,0);
++ std::vector<std::array<float,2>> planes(caster_planes?S*S:0);
+ 
+  // Rasterize actual world triangles to light depth. Cutout callbacks interpolate
+  // source UVs with these barycentric weights before accepting a depth sample.
+@@ -36,17 +37,32 @@ labv2::Texture raster_shadow_field(std::vector<WorldTriangle> const& triangles,
+    float q[3][3];
+    for(int j=0;j<3;j++){F3 w=triangle[j];q[j][0]=(dot(w,U)/span+.5f)*S;q[j][1]=(dot(w,V)/span+.5f)*S;q[j][2]=dot(w,L)/span+.5f;}
+    float denom=(q[1][1]-q[2][1])*(q[0][0]-q[2][0])+(q[2][0]-q[1][0])*(q[0][1]-q[2][1]);if(fabs(denom)<1e-8)continue;
++   float ux=q[1][0]-q[0][0],uy=q[1][1]-q[0][1],uz=q[1][2]-q[0][2];
++   float vx=q[2][0]-q[0][0],vy=q[2][1]-q[0][1],vz=q[2][2]-q[0][2];
++   std::array<float,2> plane={(uz*vy-vz*uy)/denom*S,(vz*ux-uz*vx)/denom*S};
+    int x0=std::max(0,int(floor(std::min(q[0][0],std::min(q[1][0],q[2][0]))))),x1=std::min(S-1,int(ceil(std::max(q[0][0],std::max(q[1][0],q[2][0])))));
+    int y0=std::max(0,int(floor(std::min(q[0][1],std::min(q[1][1],q[2][1]))))),y1=std::min(S-1,int(ceil(std::max(q[0][1],std::max(q[1][1],q[2][1])))));
+    for(int y=y0;y<=y1;y++)for(int x=x0;x<=x1;x++){
+      float a=((q[1][1]-q[2][1])*(x+.5f-q[2][0])+(q[2][0]-q[1][0])*(y+.5f-q[2][1]))/denom;
+      float b=((q[2][1]-q[0][1])*(x+.5f-q[2][0])+(q[0][0]-q[2][0])*(y+.5f-q[2][1]))/denom;
+-     float c=1-a-b;if(a>=0&&b>=0&&c>=0&&coverage(triangle_index,a,b,c))depth[y*S+x]=std::max(depth[y*S+x],a*q[0][2]+b*q[1][2]+c*q[2][2]);
++     float c=1-a-b;if(a>=0&&b>=0&&c>=0&&coverage(triangle_index,a,b,c)){
++      float z=a*q[0][2]+b*q[1][2]+c*q[2][2];int index=y*S+x;
++      if(z>depth[index]){depth[index]=z;if(caster_planes)planes[index]=plane;}
++     }
+    }
+  }
+  labv2::Texture shadow;shadow.width=S;shadow.height=S;shadow.format=11;
+  labv2::Mip mip;mip.pitch=S*8;mip.bytes.resize(S*S*8);
+- for(int i=0;i<S*S;i++){uint16_t z=uint16_t(std::clamp(depth[i],0.f,1.f)*65535+.5f);for(int c=0;c<4;c++)memcpy(mip.bytes.data()+i*8+c*2,&z,2);}
++ for(int i=0;i<S*S;i++){
++  uint16_t z=uint16_t(std::clamp(depth[i],0.f,1.f)*65535+.5f);
++  uint16_t channels[4]={z,z,z,z};
++  if(caster_planes){
++   channels[1]=uint16_t(std::clamp(planes[i][0]/32+.5f,0.f,1.f)*65535+.5f);
++   channels[2]=uint16_t(std::clamp(planes[i][1]/32+.5f,0.f,1.f)*65535+.5f);
++   channels[3]=depth[i]>0 && fabs(planes[i][0])<16 && fabs(planes[i][1])<16?65535:0;
++  }
++  memcpy(mip.bytes.data()+i*8,channels,8);
++ }
+  shadow.mips.push_back(std::move(mip));return shadow;
+ 
+ }

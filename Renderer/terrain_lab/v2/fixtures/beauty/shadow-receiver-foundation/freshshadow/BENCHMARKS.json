@@ -1,0 +1,65 @@
+{
+  "region": {
+    "camera": {
+      "hours": [
+        12,
+        0
+      ],
+      "viewport": [
+        1360,
+        800
+      ],
+      "zooms": [
+        1,
+        2
+      ]
+    },
+    "coordinate_basis": "raw_BIQ_xy; column=(+1,+1), row=(+1,-1)",
+    "coverage": {
+      "land_water_edges": 11,
+      "river_tiles": 28,
+      "terrain": {
+        "coast": 7,
+        "desert": 16,
+        "floodplain": 3,
+        "forest": 12,
+        "grassland": 8,
+        "hills": 11,
+        "mountain": 13,
+        "plains": 30
+      },
+      "terrain_edges": 86
+    },
+    "extent": [
+      10,
+      10
+    ],
+    "halo": 6,
+    "id": "beauty-freshshadow-100-v1",
+    "origin": [
+      54,
+      64
+    ],
+    "request_sha256": "3f432ca07d79bf5621b4ffc66e6463dd8a20936d2734f9ac113f9af59729a9b0",
+    "role": "user_evaluation",
+    "terrain_sha256": "b1dad6f61cd277c01425b6f75bc9fb3c2d2ad243ef23a400437737e4f0124930",
+    "wrap": {
+      "x": true,
+      "y": false
+    }
+  },
+  "projection": {
+    "origin": [
+      104,
+      380
+    ],
+    "half_width": 64
+  },
+  "gameplay_crop": [
+    360,
+    220,
+    1000,
+    540
+  ],
+  "selection": "Selected before viewing: 16 desert, 11 hill, 13 mountain and 12 forest tiles; largest origin distance from existing six benchmarks among qualifying regions. No region-specific tuning."
+}

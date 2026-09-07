@@ -1,6 +1,114 @@
 # Integration Cache And Renderer Worker Evidence
 
-## Current maintenance: fixed tile jumps (2026-09-06)
+## Current maintenance: bounded idle preparation (2026-09-06)
+
+Production API 12 extends the fixed-scroll cache with optional mesh preparation
+between foreground frames. The complete appearance of a tile is still keyed by
+world content and consumed dependencies; scrolling changes its native anchor.
+No Lab v2 asset, shader or promotion is consumed. The global checkpoint stays
+LQ0 and this performance goal remains **in progress**.
+
+### Capture, scheduling and resource ownership
+
+- The existing native projection callable must agree with every captured logical
+  anchor before extending the capture. A twelve-coordinate topology halo contains
+  a four-coordinate inner ring of complete appearance snapshots, including
+  cities, improvements and resources. API flag `PREFETCH` accompanies
+  `TOPOLOGY_HALO`, never `RENDER`. These records neither claim native ownership
+  nor change visible mesh density. Unsupported projections, ambiguous small
+  wrapped maps, capture bounds and allocation failures retain the original path.
+- Capture remains on Civ III's thread. One existing D3D worker owns a private,
+  immutable snapshot for idle work, separate from the next foreground job buffer.
+  It prepares one tile at a time, checks for foreground requests during ground
+  construction and vertex packing, and yields for 2 ms between jobs. Direction
+  biases the order of the nearest ring; at most 384 candidates belong to the
+  latest snapshot. There is no speculative backlog. Unit/UI redraws with unchanged
+  render content do not restart the queue. Incomplete work is never presented.
+- Unused prefetched meshes have a 64 MiB sub-budget within the existing 192 MiB
+  total GPU-buffer / 2,048-entry bounds. Foreground use adopts an entry; older
+  speculative entries can be evicted without churning the current ring. Optional
+  allocation/capacity failure stops preparation and reports unavailable work.
+  Active geometry remains pinned. The 32-view / 128 MiB bitmap budget is unchanged;
+  source assets, targets and bounded CPU metadata are additional working memory.
+- Mesh-only preparation never writes the published pixel vector, ownership or
+  fallback arrays, current-frame geometry references, bitmap LRU, or GDI surfaces.
+  GPU-buffer ownership is exception-safe; reset cancels and joins the worker.
+  Foreground calls serialize with reset and native blits. A short trace mutex
+  serializes UI/worker diagnostics.
+- Scene topology is built once per immutable snapshot and reused across its tile
+  jobs. Both signature and record-buffer identity guard the cached tile pointers.
+  River graph construction uses a coordinate index. River mesh keys and distance
+  sampling use only conservatively local nodes, sorted by raw coordinate. The
+  window covers the 24-pixel maximum approved shader response plus a full tile
+  diagonal and safety pixel, preserving interpolation as well as point samples.
+  Existing wrapped-coordinate behavior remains unchanged.
+
+API counters expose current pending/unavailable preparation, cumulative built
+and interrupted tiles/time, and unused-prefetch bytes. Timestamped traces retain
+invalidation reasons, phase timings, worker waits, memory, injected capture and
+whole-map/blit times. Cumulative preparation time is excluded from per-frame
+latency percentiles by the analyzer.
+
+### Executable evidence
+
+The six-view fixed-jump fixture renders 400 tiles with 400 companion records and
+1,008 halo records. It moves four native coordinates per step (256 horizontal or
+128 vertical pixels), includes rivers and a city with walls, a mine and resource,
+and returns through exact cached views. Every prepared jump must build/upload
+zero meshes and reuse all 400. The harness waits for each neighborhood to finish;
+these measurements do **not** represent continuous scrolling without idle time.
+
+While preparation is pending, the harness changes unit direction, repeatedly
+checks the original published pixel/ownership pointers, and compares a real GDI
+blit byte-for-byte. It requires no unavailable work, enforces both memory bounds,
+and limits foreground p95 to 16.7 ms. A city-size mutation must rebuild and change
+pixels with city ownership preserved. Reset during active preparation must join
+safely. Portable C++ tests compare full-world and locally culled river-distance
+interpolation at tile widths 64, 128 and 256, as well as disjoint scroll damage,
+removal, mutation, overhangs and ambiguous-translation rejection.
+
+The final full Windows run passed
+(`Renderer/verification/prewarm_full.json`, ignored; timings retained here):
+
+| Workload | Measured time |
+|---|---:|
+| Historical-scale cold, 400 tiles / 800 records | 1351.197 ms |
+| Unit selection, 64 samples | p95 1.083 ms |
+| Unprepared fixed jumps, 5 samples | p50 271.402 / p95 741.861 ms |
+| Exact cached return, 6 samples | p95 3.138 ms |
+| Prepared fixed jumps, 5 samples | 33.011–57.594 ms; p95 57.594 ms |
+| Foreground redraw during preparation, 471 samples | p95 2.238 / max 5.065 ms |
+
+All five prepared jumps reused 400 meshes with zero construction or upload. The
+initial ring prepared 272 meshes; the sequence built 623 optional meshes with 51
+interruptions. Peak unused-prefetch storage was 66,459,288 bytes, below 64 MiB.
+The final accumulated unprepared jump/cold witness had 178 pixels with a channel
+error above 2/255 and aggregate channel error 6,525, within unchanged parity
+bounds. The full workflow passed portable/source gates, native and licensed
+replays, both zoom previews, `TEST_INJECTED_CODE_COMPILE.bat`, and live-link checks.
+The candidate DLL is built into the linked checkout; this is not evidence that
+`INSTALL.bat` was run or that the running game's executable uses API 12.
+
+### Remaining work and limits
+
+Prepared scrolling still spends tens of milliseconds drawing and reading back
+newly exposed strips. Transfers now copy only disjoint damaged rectangles from
+GPU to staging. Prepared jumps spend 4.907–5.373 ms validating/assembling geometry,
+3.115–5.001 ms submitting draws and 22.415–44.840 ms in readback (including pending
+GPU execution). Partial transfer alone did not materially reduce latency in this
+VM run. Further cached-pixel preparation must preserve depth,
+overhangs, authoritative dependencies and published pixel lifetimes.
+
+Rapid consecutive jumps, large recentering and environment changes may outrun
+idle work and remain synchronous cold cases. Actual injected capture/whole-map
+latency and native projection-guard hit rate remain unmeasured. Earlier VM runs
+intermittently exceeded incremental/cold parity bounds, then passed on retry;
+the cause is unproven. Failure-only raw BGRA witnesses are now retained under
+`native/build/` for investigation. Keep the existing strict thresholds; do not
+attribute failures to driver noise without evidence. No CSV entry or user action
+is required for this increment.
+
+## Prior verified increment: fixed tile jumps (2026-09-06)
 
 The primary scroll workload now changes complete rows/columns in Civ III's
 staggered coordinate grid. It uses 400 rendered tiles, 400 companion calls,
@@ -70,8 +178,8 @@ the interaction budget. Existing production art and all Lab handoffs remain
 unchanged. The runtime/native shader adapter changed only caching, sampling work
 elimination, and numerically stable coordinate/depth evaluation.
 
-The current goal remains **in progress**: newly exposed meshes still build
-synchronously. The next work is bounded idle prewarming from an immutable,
+At this prior checkpoint, newly exposed meshes still built
+synchronously. The planned follow-up was bounded idle prewarming from an immutable,
 authoritative capture, with no stale presentation, no speculative backlog and
 no mutation of a bitmap while Civ III blits it. The lightweight halo is topology
 only; object-bearing prewarming needs a complete authoritative appearance

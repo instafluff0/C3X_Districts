@@ -27219,13 +27219,14 @@ composite_custom_renderer_frame ()
 		char message[640];
 		double ticks_to_ms = 1000.0 / is->custom_renderer_qpc_frequency.QuadPart;
 		snprintf (message, sizeof message,
-			"[C3X renderer] qpc=%lld frame=%u stage=composite result=%d capture_ms=%.3f render_wait_ms=%.3f blit_ms=%.3f invalidations=%u built=%u reused=%u evicted=%u cache_bytes=%u upload_bytes=%u reused_pixels=%u drawn_pixels=%u\n",
+			"[C3X renderer] qpc=%lld frame=%u stage=composite result=%d capture_ms=%.3f render_wait_ms=%.3f blit_ms=%.3f invalidations=%u built=%u reused=%u evicted=%u cache_bytes=%u upload_bytes=%u reused_pixels=%u drawn_pixels=%u prefetch_pending=%u prefetch_unavailable=%u prefetch_bytes=%u\n",
 			blit_finished.QuadPart, is->custom_renderer_presented_frames, result,
 			capture_ticks * ticks_to_ms, (blit_started.QuadPart - capture_finished.QuadPart) * ticks_to_ms,
 			blit_ticks * ticks_to_ms, output.frame_invalidation_flags,
 			output.geometry_tiles_built, output.geometry_tiles_reused, output.geometry_tiles_evicted,
 			output.geometry_cache_bytes, output.geometry_upload_bytes,
-			output.raster_reused_pixels, output.raster_draw_pixels);
+			output.raster_reused_pixels, output.raster_draw_pixels,
+			output.prefetch_tiles_pending, output.prefetch_tiles_unavailable, output.prefetch_cache_bytes);
 		message[(sizeof message) - 1] = '\0';
 		(*p_OutputDebugStringA) (message);
 	}

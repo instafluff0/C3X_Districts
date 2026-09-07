@@ -1,0 +1,79 @@
+{
+  "classification": "diagnostic_only",
+  "retained": false,
+  "finding": "Thin dune lines disappear with all shadows off; contact-only removal does not fix them, and removing the normal offset worsens them. Keep current shadows; investigate receiver-plane filtering and adjacent-facet depth error.",
+  "records": [
+    {
+      "variant": "unshadowed",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-unshadowed-v1/wilderness/report.json",
+      "source_report_sha256": "b48721d5779e0c0246222d84bf6a8fad078715e852f87383115ee2f5f0eacf31",
+      "shader_closure_sha256": "b015ff2a3834f1aa054463754a53da6d183acd72afc6bcf1736ac355f6dd32ab",
+      "outputs": [
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-unshadowed-v1/wilderness/h12-z1-pan00.bmp",
+          "sha256": "32141559fb9c703500411f25fc36bd00a3d160d551a13159bd32532c0d9822b6"
+        },
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-unshadowed-v1/wilderness/h12-z2-pan00.bmp",
+          "sha256": "3f27e71df45f0422fa9f4d92fa34ef4f2866d4fb4a885ec7fd79f3b90309a6a4"
+        },
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-unshadowed-v1/wilderness/h00-z1-pan00.bmp",
+          "sha256": "f106f266897d96ee6915590f1df4f2419f9f23fcfcaa465b5849deda4da1f49a"
+        },
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-unshadowed-v1/wilderness/h00-z2-pan00.bmp",
+          "sha256": "72a94172fc8d068a4ac4e9e9ce1b3fc1ddb3e9d3b8e02da255d5a8c92afb5449"
+        }
+      ]
+    },
+    {
+      "variant": "no-contact",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-no-contact-v1/wilderness/report.json",
+      "source_report_sha256": "b48721d5779e0c0246222d84bf6a8fad078715e852f87383115ee2f5f0eacf31",
+      "shader_closure_sha256": "058eb3e614c9a7c56d5113a5ffa2cc09c4cfbae40936c89cb9872562414ccfa6",
+      "outputs": [
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-no-contact-v1/wilderness/h12-z1-pan00.bmp",
+          "sha256": "1c20f633bc8be8dbccb96fb7d2b085a32dcee0c4e79f4cc666ba427b4b2c7fbf"
+        },
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-no-contact-v1/wilderness/h12-z2-pan00.bmp",
+          "sha256": "fb6aeddb36c3f7c445601d8e7ec787318225106e37263860451b99f584aaafe6"
+        },
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-no-contact-v1/wilderness/h00-z1-pan00.bmp",
+          "sha256": "b7574d24c72bb981fa13d12f73ef44fd7a01d27adfa1f0e096ea803b6b655972"
+        },
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-no-contact-v1/wilderness/h00-z2-pan00.bmp",
+          "sha256": "2fbcd83d963e312689443d3ac93504bc7bf20f873a645cf3d13ae7cc6b208cf0"
+        }
+      ]
+    },
+    {
+      "variant": "geometric-depth",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-geometric-depth-v1/wilderness/report.json",
+      "source_report_sha256": "b48721d5779e0c0246222d84bf6a8fad078715e852f87383115ee2f5f0eacf31",
+      "shader_closure_sha256": "53bcfe1d5589e10e2fe93ff3c409c5cbf4a88ab647bc4d2ff5d979b0eec284e3",
+      "outputs": [
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-geometric-depth-v1/wilderness/h12-z1-pan00.bmp",
+          "sha256": "f7d08d1e71ccdc036402de14c64ba07c649ca6d1d90d4b7e416fd1258e81e311"
+        },
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-geometric-depth-v1/wilderness/h12-z2-pan00.bmp",
+          "sha256": "8a9101f28893e5df027749f233a98520d778a30ae38ec5125cfb6ba0ad10d507"
+        },
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-geometric-depth-v1/wilderness/h00-z1-pan00.bmp",
+          "sha256": "3da5214622206ea62c99c44ce216c237a53ee8a4ff0a9e861360e17d7b0344ef"
+        },
+        {
+          "image": "Renderer/terrain_lab/v2/audits/beauty/out/relief-diagnostic-geometric-depth-v1/wilderness/h00-z2-pan00.bmp",
+          "sha256": "50be227f91c797815fd96f2df40fb7888253f2461903eb77e6df32ee35d189a5"
+        }
+      ]
+    }
+  ]
+}

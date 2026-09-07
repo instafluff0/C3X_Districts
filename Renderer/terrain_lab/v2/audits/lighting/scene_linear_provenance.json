@@ -2,7 +2,7 @@
   "schema": "c3x.q6.scene_linear_adapter.v1",
   "source": "shaders/common/frozen_l21.hlsl",
   "source_sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a",
-  "output_sha256": "0075248d54b3aedce90a5d167a3de907663c71b5eea531a692335a4c8a64149b",
+  "output_sha256": "a304ea4440e11f8dd821c2bbe13c464bf3e0541d48e35a03a9f5005f96693046",
   "display_conversions_removed": 12,
   "contract": "q6_scene_linear_premultiplied_v1",
   "limitations": [

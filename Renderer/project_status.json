@@ -16,11 +16,11 @@
     ],
     "audit_candidates": [],
     "required_user_action": [],
-    "verified_increment": "Fixed several-tile jump replay, checked native topology halo, changed-set bitmap damage, bounded neighborhood scratch and equivalent shadow cutoffs: full workflow and injected smoke passed.",
+    "verified_increment": "API 12: authoritative appearance prefetch ring, cancellable idle mesh preparation with a 64 MiB sub-budget, immutable published pixels, reusable scene topology and conservative river-node locality. Full Windows workflow, pointer/blit/reset/city invalidation replay and injected smoke passed.",
     "remaining_work": [
-      "Hide first-exposure mesh construction using bounded idle prewarming; fixed tile-jump first-exposure p95 is 365.848 ms while cached return p95 is 2.617 ms.",
-      "Prewarming must capture complete appearance metadata, preserve bitmap pointer lifetime and prioritize foreground jobs without stale presentation or backlog.",
-      "Audit global river-node dependency locality and measure native halo projection-guard hit rate, actual injected capture and whole-map latency before claiming game-wide parity."
+      "Reduce exposed-strip GPU drawing and readback after prepared tile jumps; latest verified six-view run reused all 400 meshes per jump, with prepared jump p95 57.594 ms and foreground redraw p95 2.238 ms during idle work.",
+      "Measure rapid consecutive jumps without waiting for neighborhood preparation and bound new-area/environment-change cold latency; no stale bitmap may be presented.",
+      "Measure native halo projection-guard hit rate, actual injected capture and whole-map latency before claiming game-wide parity. Investigate intermittent incremental/cold parity failures seen in earlier VM runs; preserve strict executable bounds and diagnostic images."
     ],
     "evidence": "evidence/integration_cache_worker/README.md"
   },
@@ -77,16 +77,16 @@
       "benchmarks": "terrain_lab/v2/fixtures/beauty/gameplay-100-v1/BENCHMARKS.json",
       "review": "terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md",
       "approval": null,
-      "retained_candidate": "coast-pass-rocks-r8",
-      "supplemental_witness": "volcano-witness-r2; explicitly synthetic because test.biq contains no volcanoes",
+      "retained_candidate": "relief-size-r3",
+      "supplemental_witness": "relief-size-r3/combinedvolcano; explicitly synthetic because test.biq contains no volcanoes",
       "additional_benchmark": "terrain_lab/v2/fixtures/beauty/coast-pass-foundation/BENCHMARKS.json",
-      "latest_evidence": "terrain_lab/v2/audits/beauty/COAST_rocks-r8_EVIDENCE.json",
+      "latest_evidence": "terrain_lab/v2/audits/beauty/RELIEF_SIZE_r3_EVIDENCE.json",
       "remaining_visible_gaps": [
-        "Abrupt grass/rock joins and insufficiently natural pond-bank composition",
-        "Soft shallows and missing shoreline water interaction",
-        "Diagnostic dune seams and unproven mountain/volcano physical reconstruction"
+        "Mountain/volcano surface projection and unproven source physical reconstruction",
+        "Shadow-receiver lines across inherited diagnostic dune bodies",
+        "Soft shallows and abrupt cliff/grass joins"
       ],
-      "untuned_region_evidence": "terrain_lab/v2/fixtures/beauty/coast-pass-foundation/freshcoast/BENCHMARKS.json"
+      "untuned_region_evidence": "terrain_lab/v2/fixtures/beauty/relief-size-foundation/freshrelief/BENCHMARKS.json"
     },
     "ordinary_backend": "macos_metal",
     "promotion_parity_backend": "windows_d3d11"

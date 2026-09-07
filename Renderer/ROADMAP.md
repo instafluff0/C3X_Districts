@@ -13,40 +13,44 @@ The end state is a one-command offline source importer plus authored mapping pro
 
 ## Current Position
 
-Lab v2's 2026-09-06 coastal continuation retains `coast-pass-rocks-r8` as
-incremental work in progress. All three fixed 100-tile test.biq regions, the
-128-tile long coast and a previously untuned 100-tile coast have matched
-noon/midnight frames at both gameplay zooms. Selected-source gray cliff materials,
-a subordinate grassy shoulder behind source rock bodies, and already-bound water
-normal channels now survive composition. A buried-rock join was rejected.
-Abrupt grass/rock joins, soft shallows and source relief reconstruction remain
-visible gaps. The separate synthetic volcano witness stays r2 because verified
-test.biq has no volcanoes. Previous best r4 and intermediate evidence are
-preserved. See `terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md` and
-`COAST_SOURCE_JOIN_PASS.md` there. This does not close LQ0, assert Civ VI quality,
-request Integration promotion or record human approval.
+Lab v2's 2026-09-06 size pass retains `relief-size-r3` as incremental work in
+progress. Mountains use larger source footprints at 1.30 uniform scale;
+volcanoes use 1.60, with bounded foothills extending into neighboring land.
+A material-ownership blocker exposed by the larger volcano is corrected with
+source-owner UV/coverage carried across the skirt. Six fixed real-map regions
+(including a newly selected 100-tile four-mountain region) and one separate
+synthetic combined volcano witness have noon/midnight frames at both gameplay
+zooms: 28 retained frames. Source terrain, cameras and vegetation XY/scale/yaw
+remain fixed. Previous best `coast-pass-rocks-r8` and rejected attempts remain
+preserved. Thin dune lines are isolated to shadow receiving; no disabling of
+shadows is retained. Surface projection, source relief reconstruction, soft
+shallows and cliff joins remain visible gaps. See
+`terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md` and `RELIEF_SIZE_PASS.md` there.
+This does not close LQ0, assert Civ VI quality, request Integration promotion
+or record human approval.
 
 Production performance maintenance was explicitly resumed on 2026-09-06,
-independently of Lab v2. It preserves the installed production system coverage
-and does not advance I19 or any visual gate. The active work replaces expanded
-viewport geometry and world-sample caches with a bounded, indexed tile-mesh
-cache, records actual neighbor dependencies (including missing neighbors),
-and reuses bitmap overlap during uniform scrolling. API 11 adds executable
-per-frame build/reuse/upload/raster counters and phase timings. Timestamped DLL
-tracing is opt-in; injected slow-frame summaries cover the entire map pass.
-The fixed-scroll increment adds an eight-coordinate native topology halo,
-validated against every captured native anchor, and dependency-validated damage
-rectangles for changed visible tile sets. Halo-only records do not change mesh
-LOD. Bounded integer-neighborhood scratch and equivalent shadow-ray cutoffs
-reduce cold construction to 1455.690 ms in the latest full run. The primary
-benchmark now crosses several tiles at once: first-exposure p95 is 365.848 ms,
-return-trip p95 is 2.617 ms. Entering horizontal strips build 80 meshes, reuse
-320, and retain about 74% of pixels. Full verification, native/production
-replays, both zoom previews and injected compilation pass. Newly exposed art
-still builds synchronously, so the goal remains incomplete. Next work is
-bounded idle prewarming with complete authoritative appearance snapshots and
-foreground priority, plus actual injected whole-map timing. See
-`evidence/integration_cache_worker/README.md`. The global Lab checkpoint stays LQ0.
+independently of Lab v2. It preserves the production system coverage and does
+not advance I19 or any visual gate. The bounded indexed tile-mesh cache retains
+world appearance independently of screen anchors, validates consumed neighbor
+dependencies, and moves unchanged bitmap overlap during fixed several-tile
+scrolls. API 12 adds optional idle preparation: a four-coordinate complete
+appearance ring inside a twelve-coordinate native topology halo, validated
+against captured native anchors. One D3D worker prepares nearby meshes from an
+immutable snapshot and yields to foreground work. Its unused prefetched meshes
+are capped at 64 MiB inside the existing 192 MiB GPU-buffer budget; published
+pixels and ownership arrays remain untouched. Scene topology is reused across
+preparation jobs and river-node dependencies are conservatively localized.
+Timestamped diagnostics include capture, rendering, blit, invalidation, worker
+wait, preparation and memory counters. Full verification, native/production
+replays, both zoom previews and injected compilation pass. The latest verified
+six-view run builds zero meshes on every prepared jump: p95 57.594 ms for jumps,
+2.238 ms for foreground redraws during preparation. Remaining exposed-strip GPU
+work and actual injected whole-map timing prevent a vanilla-speed claim; the
+goal stays in progress. Earlier intermittent incremental/cold parity failures
+also remain an audit item despite the latest full run passing the unchanged
+bounds. See `evidence/integration_cache_worker/README.md`. The global Lab
+checkpoint stays LQ0.
 
 Milestone M0 is complete. The renderer workspace, source-agnostic pack shape, isometric preview, project contract, and local tool references exist.
 

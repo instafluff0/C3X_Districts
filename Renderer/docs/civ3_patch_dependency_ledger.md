@@ -19,10 +19,15 @@ also calls the existing `Main_Screen_Form_tile_to_screen_coords` definition:
 at GOG `0x4E3B10`, Steam `0x4EC360`, PCGames `0x4E3BD0`. It is an existing callable,
 not a new patch. Every captured logical anchor must agree before adding a halo;
 on mismatch the original capture and dependency validation remain the fallback.
-Cache compilation, dependency validation, changed-set bitmap damage, diagnostics,
-and the existing single-worker handoff remain DLL responsibilities.
+The twelve-coordinate topology halo now includes a four-coordinate inner ring
+with complete authoritative appearance metadata for optional idle preparation.
+Capture stays on the game thread. The single D3D worker prepares immutable tile
+meshes from its own snapshot, prioritizes foreground requests, and never modifies
+published pixels or ownership arrays during idle work. Cache compilation,
+dependency validation, changed-set bitmap damage and diagnostics remain DLL
+responsibilities. River-node dependencies use a conservative local window.
 `audit_candidates = []` and
-`required_user_action = []` for this increment. The API 11 header is shared by
+`required_user_action = []` for this increment. The API 12 header is shared by
 the DLL and injected compilation; the approved smoke must verify both together.
 The deferred M7.5 requests below remain unchanged.
 

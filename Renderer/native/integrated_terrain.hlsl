@@ -43,7 +43,7 @@ float translated_depth(IntegratedVertexInput input, bool feature)
     float depth = clamp(0.5 - pixel_depth / 16384.0, 0.001, 0.999);
     if (feature) return depth;
     // Preserve the existing layer separation in physical pixels at each size.
-    float bias_scale = 1.0 / (c3x_inverse_viewport_size.y * 16384.0);
+    float bias_scale = c3x_viewport_reserved.x / 16384.0;
     float kind = input.surface_kind;
     if (kind > 10.5) return max(0.003, depth - 0.010 * bias_scale);
     if (kind > 9.5) return max(0.001, depth - 0.003 * bias_scale);

@@ -1,0 +1,74 @@
+{
+  "campaign": "Q1",
+  "id": "shadow-receiver-r1-combinedvolcano",
+  "isolations": [
+    "terrain",
+    "features"
+  ],
+  "modules": [
+    "Renderer/terrain_lab/v2/fixtures/beauty/shadow-receiver-r1/combinedvolcano/terrain.module.json"
+  ],
+  "packs": {
+    "bridges": "Renderer/packs/RouteDoodadsNormalized",
+    "cities": "Renderer/packs/CityComponentsNormalized",
+    "compound_units": "Renderer/packs/CompoundUnitLab",
+    "decals": "Renderer/packs/DecalsNormalized",
+    "improvements": "Renderer/packs/ImprovementsNormalized",
+    "objects": "Renderer/packs/TileObjectsNormalized",
+    "relief": "Renderer/packs/TerrainElementsNormalized",
+    "resources": "Renderer/packs/ResourceNormalized",
+    "routes": "Renderer/packs/RouteStylesNormalized",
+    "shore": "Renderer/packs/ShoreNormalized",
+    "terrain": "Renderer/packs/Civ5EnvironmentSkin",
+    "units": "Renderer/packs/UnitFamilyLab",
+    "vegetation": "Renderer/packs/Civ5EnvironmentVegetation",
+    "walls": "Renderer/packs/CityAdjunctsNormalized"
+  },
+  "references": [
+    "civ6.hills",
+    "civ6.mountain",
+    "civ6.sea_and_shore",
+    "civ6.forest"
+  ],
+  "schema": "c3x.lab_v2.fixture.v1",
+  "settings": {
+    "anisotropy": 8,
+    "camera_offsets": [
+      [
+        0,
+        0
+      ]
+    ],
+    "mip_bias": 0,
+    "postprocess": {
+      "shader": "Renderer/terrain_lab/v2/shaders/sampling/linear_reconstruct.hlsl",
+      "owner": "Q1-sampling",
+      "contract": 2
+    },
+    "render_scale": 1,
+    "samples": 4
+  },
+  "terrain": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/terrain.csv",
+  "tile_count": 100,
+  "track": "Q8-beauty",
+  "viewport": [
+    1360,
+    800
+  ],
+  "packet_postprocessor": {
+    "source": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp",
+    "owner": "Q6-lighting",
+    "contract": 1
+  },
+  "scenarios": {
+    "cities": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/cities.csv",
+    "farms": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/farms.csv",
+    "infrastructure": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/infrastructure.csv",
+    "mines": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/mines.csv",
+    "objects": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/objects.csv",
+    "railroads": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/railroads.csv",
+    "resources": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/resources.csv",
+    "roads": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/roads.csv",
+    "units": "Renderer/terrain_lab/v2/fixtures/beauty/volcano-witness-r2/inland/units.csv"
+  }
+}

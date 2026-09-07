@@ -1,0 +1,37 @@
+{
+  "classification": "synthetic_supplemental_witness",
+  "source_biq_sha256": "a6a88d7fffcc567c3500bbd5aa947398dd48170d4f412aa1e518bb45ffe8453e",
+  "source_terrain": "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/terrain.csv",
+  "source_terrain_sha256": "0bf3a68cf9b12f53ce43344e362c83123bfa74b5a5a3979fb49c25293b141841",
+  "terrain_sha256": "535e3483a1f785d6410b4ca63d8f9d4cc9624fa3e2dec128b78faa1d7005d450",
+  "changes": [
+    {
+      "before": [
+        5,
+        5,
+        70,
+        50,
+        2,
+        6,
+        0,
+        0,
+        8
+      ],
+      "after": [
+        5,
+        5,
+        70,
+        50,
+        2,
+        10,
+        0,
+        0,
+        8
+      ]
+    }
+  ],
+  "benchmark": false,
+  "geometry_classification": "source-height reconstruction with unproven physical coordinate calibration",
+  "reason": "Verified source has zero volcano tiles; one mountain is replaced only in this copy.",
+  "composition": "Current retained coast/water/hills, with the same single synthetic volcano replacement."
+}

@@ -28,6 +28,8 @@
 #include "terrain_definition_runtime.h"
 #include "renderer_trace.h"
 #include "scroll_damage.h"
+#include "river_node_locality.h"
+#include "pixel_block_cache.h"
 
 namespace {
 
@@ -233,9 +235,26 @@ struct GroundPoint {
     bool terrain_ready = false;
 };
 
+struct RiverNode {
+    int lattice_x, lattice_y;
+    unsigned degree;
+    bool touches_water;
+};
+
+struct SceneTopology {
+    std::uint64_t signature = 0;
+    c3x_renderer_tile_v1 const * records = nullptr;
+    std::unordered_map<std::uint64_t, int> ground, real, relief, surface;
+    std::unordered_map<std::uint64_t, c3x_renderer_tile_v1 const *> tiles;
+    std::unordered_map<std::uint64_t, std::uint64_t> semantic;
+    std::vector<RiverNode> rivers;
+};
+
 class RendererState {
 public:
     RendererTrace trace;
+    SceneTopology topology_cache;
+    std::uint64_t requested_signature = 0;
     char const * frame_cache_path = "cold";
     c3x_renderer_i64 frame_geometry_ticks = 0, frame_draw_ticks = 0, frame_readback_ticks = 0;
     ID3D11Device * device = nullptr;
@@ -369,6 +388,19 @@ public:
     std::vector<D3D11_RECT> raster_rects;
     c3x_renderer_u32 raster_reused_pixels = 0, raster_draw_pixels = 0;
 
+    c3x_renderer::PixelBlockCache pixel_blocks;
+    c3x_renderer::TileFootprint prepared_footprint;
+    std::vector<c3x_renderer::TileFootprint> pixel_neighborhood;
+    std::vector<c3x_renderer::PixelRect> pixel_prepare_rects;
+    std::size_t pixel_prepare_cursor = 0;
+    int pixel_phase_x = 0, pixel_phase_y = 0;
+    bool pixel_prepare_started = false, pixel_readback_pending = false;
+    c3x_renderer::PixelBlock pending_pixel_block;
+    ID3D11Texture2D * block_texture = nullptr, * block_depth_texture = nullptr, * block_readback = nullptr;
+    ID3D11RenderTargetView * block_target = nullptr;
+    ID3D11DepthStencilView * block_depth = nullptr;
+    unsigned raster_cached_pixels = 0, prepared_blocks = 0;
+
     HDC blit_dc = nullptr;
     HBITMAP blit_bitmap = nullptr;
     HGDIOBJ blit_previous_bitmap = nullptr;
@@ -402,6 +434,10 @@ public:
     }
 
     void reset_targets() {
+        cancel_pixel_preparation();
+        pixel_blocks.clear();
+        release(block_readback); release(block_depth); release(block_depth_texture);
+        release(block_target); release(block_texture);
         release(readback_texture);
         release(depth_target);
         release(depth_texture);
@@ -2247,18 +2283,19 @@ public:
         output.readback_ticks = frame_readback_ticks;
         output.raster_reused_pixels = raster_reused_pixels;
         output.raster_draw_pixels = raster_draw_pixels;
+        output.raster_cached_pixels = raster_cached_pixels;
         if (trace.level) {
             char detail[640];
             std::snprintf(detail, sizeof(detail),
                 "cache=%s invalidations=%u camera=%u scene=%u environment=%u wrap=%u content=%u ownership=%u device=%u "
                 "tiles=%u built=%u reused=%u evicted=%u gpu_bytes=%zu upload_bytes=%zu viewport_bytes=%zu "
-                "reused_pixels=%u draw_pixels=%u render_ms=%.3f geometry_ms=%.3f draw_submit_ms=%.3f readback_wait_ms=%.3f",
+                "reused_pixels=%u draw_pixels=%u block_pixels=%u block_bytes=%zu render_ms=%.3f geometry_ms=%.3f draw_submit_ms=%.3f readback_wait_ms=%.3f",
                 frame_cache_path, invalidations, (invalidations & 1u) != 0, (invalidations & 2u) != 0,
                 (invalidations & 4u) != 0, (invalidations & 8u) != 0, (invalidations & 16u) != 0,
                 (invalidations & 32u) != 0, (invalidations & 64u) != 0, frame.tile_count,
                 frame_tiles_built, frame_tiles_reused, frame_tiles_evicted,
                 tile_geometry_cache_bytes, frame_upload_bytes, viewport_cache_bytes,
-                raster_reused_pixels, raster_draw_pixels, trace.milliseconds(renderer_ticks), trace.milliseconds(frame_geometry_ticks),
+                raster_reused_pixels, raster_draw_pixels, raster_cached_pixels, pixel_blocks.bytes, trace.milliseconds(renderer_ticks), trace.milliseconds(frame_geometry_ticks),
                 trace.milliseconds(frame_draw_ticks), trace.milliseconds(frame_readback_ticks));
             trace.write("frame", detail, invalidations != 0);
         }
@@ -2300,6 +2337,9 @@ public:
     }
 
     void clear_tile_geometry_cache() {
+        topology_cache = {};
+        cancel_pixel_preparation();
+        pixel_blocks.clear();
         bitmap_footprints.clear();
         for (auto & entry : tile_geometry_cache)
             release_geometry_vertex_buffers(entry.second.buffers);
@@ -2333,7 +2373,8 @@ public:
 
     bool cache_geometry_layer(std::vector<Vertex> & vertices,
                               std::vector<CachedVertexChunk> & output,
-                              bool prefetch = false, std::size_t pending_bytes = 0) {
+                              bool prefetch = false, std::size_t pending_bytes = 0,
+                              std::atomic<bool> const * foreground_pending = nullptr) {
         if (vertices.empty()) return true;
         std::unordered_map<Vertex, UINT, VertexHash, VertexEqual> unique;
         unique.reserve(vertices.size() / 3u);
@@ -2341,6 +2382,7 @@ public:
         std::vector<UINT> indices;
         indices.reserve(vertices.size());
         for (Vertex const & vertex : vertices) {
+            if (prefetch && (indices.size() & 255u) == 0 && foreground_pending->load(std::memory_order_relaxed)) return false;
             auto inserted = unique.try_emplace(vertex, static_cast<UINT>(packed.size()));
             if (inserted.second) packed.push_back(vertex);
             indices.push_back(inserted.first->second);
@@ -2369,6 +2411,7 @@ public:
             if (cache_evictions != 0xffffffffu) ++cache_evictions;
         }
         if (!make_tile_cache_room(chunk.byte_count)) return false;
+        if (prefetch && foreground_pending->load(std::memory_order_relaxed)) return false;
         output.reserve(output.size()+1); // allocate before acquiring COM resources
         D3D11_BUFFER_DESC desc = {};
         desc.ByteWidth = static_cast<UINT>(packed.size() * sizeof(Vertex));
@@ -2391,11 +2434,8 @@ public:
         return true;
     }
 
-    void append_tile_geometry(CachedTileGeometry & tile, c3x_renderer_tile_v1 const & record) {
-        if (tile.prefetched) {
-            tile.prefetched = false;
-            prefetched_geometry_bytes -= tile.byte_count;
-        }
+    c3x_renderer::TileFootprint tile_footprint(CachedTileGeometry const & tile,
+                                             c3x_renderer_tile_v1 const & record) {
         int anchor_x = record.anchor_x, anchor_y = record.anchor_y;
         c3x_renderer::TileFootprint footprint;
         footprint.coordinate = (static_cast<std::uint64_t>(static_cast<std::uint32_t>(record.tile_x)) << 32) |
@@ -2410,9 +2450,19 @@ public:
                 footprint.bounds.right = std::max(footprint.bounds.right, static_cast<int>(chunk.bounds.right));
                 footprint.bounds.bottom = std::max(footprint.bounds.bottom, static_cast<int>(chunk.bounds.bottom));
             }
-        if (tile.byte_count != 0) geometry_footprints.push_back(footprint);
+        return footprint;
+    }
+
+    void append_tile_geometry(CachedTileGeometry & tile, c3x_renderer_tile_v1 const & record) {
+        if (tile.prefetched) {
+            tile.prefetched = false;
+            prefetched_geometry_bytes -= tile.byte_count;
+        }
+        int anchor_x = record.anchor_x, anchor_y = record.anchor_y;
+        if (tile.byte_count != 0) geometry_footprints.push_back(tile_footprint(tile, record));
         tile.last_used = tile_geometry_epoch;
-        for (std::size_t layer = 0; layer < geometry_layer_count; ++layer)
+        for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
+            geometry_vertex_buffers[layer].reserve(geometry_vertex_buffers[layer].size() + tile.buffers[layer].size());
             for (CachedVertexChunk chunk : tile.buffers[layer]) {
                 chunk.buffer->AddRef();
                 chunk.indices->AddRef();
@@ -2420,19 +2470,24 @@ public:
                 chunk.translation_y = anchor_y - tile.anchor_y;
                 geometry_vertex_buffers[layer].push_back(chunk);
             }
+        }
     }
 
-    bool draw_cached_geometry(GeometryLayer layer) {
+    bool draw_cached_geometry(GeometryLayer layer,
+            std::array<std::vector<CachedVertexChunk>, geometry_layer_count> const & buffers,
+            std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & viewport_settings,
+            std::atomic<bool> const * cancellation) {
         ViewportShaderSettings previous = {};
         bool first = true;
-        for (D3D11_RECT const & rect : raster_rects) {
+        for (D3D11_RECT const & rect : rectangles) {
         context->RSSetScissorRects(1, &rect);
-        for (CachedVertexChunk const & chunk : geometry_vertex_buffers[layer]) {
-            int dx = chunk.translation_x + static_cast<int>(geometry_viewport_settings.translation[0]);
-            int dy = chunk.translation_y + static_cast<int>(geometry_viewport_settings.translation[1]);
+        for (CachedVertexChunk const & chunk : buffers[layer]) {
+            if (cancellation && cancellation->load(std::memory_order_relaxed)) return false;
+            int dx = chunk.translation_x + static_cast<int>(viewport_settings.translation[0]);
+            int dy = chunk.translation_y + static_cast<int>(viewport_settings.translation[1]);
             if (chunk.bounds.right + dx <= rect.left || chunk.bounds.left + dx >= rect.right ||
                 chunk.bounds.bottom + dy <= rect.top || chunk.bounds.top + dy >= rect.bottom) continue;
-            ViewportShaderSettings settings = geometry_viewport_settings;
+            ViewportShaderSettings settings = viewport_settings;
             settings.translation[0] += static_cast<float>(chunk.translation_x);
             settings.translation[1] += static_cast<float>(chunk.translation_y);
             settings.depth_translation = -settings.translation[1] / height;
@@ -2447,6 +2502,307 @@ public:
             context->DrawIndexed(chunk.index_count, 0, 0);
         }
         }
+        return true;
+    }
+
+    bool submit_geometry(std::array<std::vector<CachedVertexChunk>, geometry_layer_count> const & buffers,
+                         std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & settings,
+                         ID3D11RenderTargetView * target, ID3D11DepthStencilView * depth,
+                         int projection_width, int projection_height,
+                         std::atomic<bool> const * cancellation = nullptr) {
+        auto draw = [&](GeometryLayer layer) {
+            return draw_cached_geometry(layer, buffers, rectangles, settings, cancellation);
+        };
+        float clear[4] = {0, 0, 0, 0};
+        context->ClearRenderTargetView(target, clear);
+        context->ClearDepthStencilView(depth, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+        context->OMSetRenderTargets(1, &target, depth);
+        context->OMSetDepthStencilState(depth_state, 0);
+        float blend_factor[4] = {0, 0, 0, 0};
+        context->OMSetBlendState(blend_state, blend_factor, 0xffffffffu);
+        context->RSSetState(rasterizer_state);
+        D3D11_VIEWPORT viewport = {0.0f, 0.0f, static_cast<float>(projection_width), static_cast<float>(projection_height), 0.0f, 1.0f};
+        context->RSSetViewports(1, &viewport);
+        // Always retain a complete terrain surface. The output clip is applied
+        // only by c3x_renderer_blit when Civ III composites its dirty rectangle.
+        D3D11_RECT scissor = {0, 0, projection_width, projection_height};
+        context->RSSetScissorRects(1, &scissor);
+
+        bool has_cached_geometry = false;
+        for (std::vector<CachedVertexChunk> const & layer : buffers)
+            has_cached_geometry = has_cached_geometry || !layer.empty();
+        if (has_cached_geometry) {
+            context->IASetInputLayout(input_layout);
+            context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            context->VSSetShader(vertex_shader, nullptr, 0);
+            context->PSSetShader(pixel_shader, nullptr, 0);
+            // Register-for-register match with the frozen approved terrain
+            // shader. No production-only palette remains in this binding path.
+            std::array<ID3D11ShaderResourceView *, 128> views = {};
+            TerrainTexture const & grass = terrain_textures[2];
+            TerrainTexture const & plains = terrain_textures[1];
+            TerrainTexture const & desert = terrain_textures[0];
+            TerrainTexture const & hills = terrain_textures[5];
+            TerrainTexture const & mountain = terrain_textures[6];
+            TerrainTexture const & marsh = terrain_textures[9];
+            TerrainTexture const & coast = terrain_textures[11];
+            TerrainTexture const & ocean = terrain_textures[13];
+            views[0] = grass.view; views[1] = grass.material_height_view; views[2] = grass.specular_view;
+            views[3] = mountain.material_height_view; views[4] = mountain.material_height_view;
+            views[5] = mountain.material_height_view;
+            views[6] = mountain.view; views[7] = mountain.elevated_view;
+            views[8] = mountain.relief_layer_views[0];
+            views[9] = mountain.material_height_view; views[10] = mountain.specular_view;
+            views[11] = coast.relief_layer_views[0]; views[12] = terrain_extra_views[0];
+            views[13] = terrain_extra_views[1]; views[14] = coast.relief_layer_views[1];
+            views[15] = terrain_extra_views[2]; views[16] = terrain_extra_views[3];
+            views[17] = coast.view; views[18] = ocean.view;
+            views[19] = coast.material_height_view;
+            for (std::size_t index = 0; index < coast.water_surface_views.size(); ++index)
+                views[20 + index] = coast.water_surface_views[index];
+            for (std::size_t index = 0; index < 4; ++index)
+                views[25 + index] = feature_texture_views[index];
+            views[29] = coast.specular_view; views[30] = ocean.material_height_view;
+            views[31] = ocean.specular_view;
+            for (std::size_t index = 0; index < 13; ++index)
+                views[32 + index] = terrain_extra_views[4 + index];
+            views[45] = plains.view; views[46] = plains.material_height_view;
+            views[47] = plains.specular_view;
+            views[48] = desert.view; views[49] = desert.material_height_view;
+            views[50] = desert.specular_view; views[51] = hills.material_height_view;
+            views[52] = dune_surface.view; views[53] = dune_surface.material_height_view;
+            views[54] = dune_surface.specular_view; views[55] = dune_decal_base_view;
+            views[56] = dune_decal_height_view;
+            for (std::size_t index = 1; index < mountain.relief_layer_views.size(); ++index)
+                views[56 + index] = mountain.relief_layer_views[index];
+            views[61] = terrain_extra_views[17]; views[62] = terrain_extra_views[18];
+            views[63] = marsh.view; views[64] = marsh.material_height_view;
+            views[65] = marsh.specular_view; views[66] = marsh_decal_base_view;
+            views[67] = marsh_decal_height_view; views[68] = marsh_decal_specular_view;
+            views[69] = volcano_base_view; views[70] = volcano_height_view;
+            views[71] = volcano_active_base_view; views[72] = volcano_active_specular_view;
+            views[73] = water_clutter_base_view; views[74] = water_clutter_height_view;
+            views[75] = grass_clutter_base_view; views[76] = grass_clutter_height_view;
+            views[77] = plains_clutter_base_view; views[78] = plains_clutter_height_view;
+            for (std::size_t index = 0; index < river_surface_views.size(); ++index)
+                views[79 + index] = river_surface_views[index];
+            for (std::size_t index = 0; index < river_rock_texture_views.size(); ++index)
+                views[89 + index] = river_rock_texture_views[index];
+            TerrainTexture const & tundra = terrain_textures[3];
+            views[94] = tundra.view;
+            views[95] = tundra.material_height_view;
+            views[96] = tundra.specular_view;
+            for (std::size_t index = 0; index < route_texture_views.size(); ++index)
+                views[98 + index] = route_texture_views[index];
+            for (std::size_t index = 0; index < bridge_texture_views.size(); ++index)
+                views[108 + index] = bridge_texture_views[index];
+            for (std::size_t index = 0; index < resource_texture_views.size(); ++index)
+                views[116 + index] = resource_texture_views[index];
+            for (std::size_t index = 0; index < city_base_views.size(); ++index)
+                views[124 + index] = city_base_views[index];
+            context->PSSetShaderResources(0, static_cast<UINT>(views.size()), views.data());
+            ID3D11SamplerState * samplers[] = {terrain_sampler, decal_sampler};
+            context->PSSetSamplers(0, 2, samplers);
+            context->PSSetConstantBuffers(0, 1, &terrain_settings_buffer);
+            context->VSSetConstantBuffers(1, 1, &viewport_settings_buffer);
+            // Geometry buffers are immutable until an authoritative geometry
+            // fingerprint changes. Camera-only translation therefore issues
+            // draws without regenerating or re-uploading the world vertices.
+            if (!draw(geometry_underlay) ||
+                !draw(geometry_land) ||
+                !draw(geometry_bed) ||
+                !draw(geometry_water) ||
+                !draw(geometry_river) ||
+                !draw(geometry_shadow) ||
+                !draw(geometry_route)) {
+                return false;
+            }
+            if (!buffers[geometry_feature].empty()) {
+                context->VSSetShader(feature_vertex_shader, nullptr, 0);
+                context->PSSetShader(feature_pixel_shader, nullptr, 0);
+                context->PSSetShaderResources(94, 4, feature_texture_views.data() + 4);
+                if (!draw(geometry_feature))
+                    return false;
+            }
+            if (!buffers[geometry_mine].empty()) {
+                context->VSSetShader(feature_vertex_shader, nullptr, 0);
+                context->PSSetShader(feature_pixel_shader, nullptr, 0);
+                context->PSSetShaderResources(116, 6, mine_base_views.data());
+                context->PSSetShaderResources(124, 2, mine_emissive_views.data());
+                if (!draw(geometry_mine))
+                    return false;
+            }
+            if (!buffers[geometry_farm].empty()) {
+                context->VSSetShader(feature_vertex_shader, nullptr, 0);
+                context->PSSetShader(feature_pixel_shader, nullptr, 0);
+                context->PSSetShaderResources(116, 6, farm_base_views.data());
+                context->PSSetShaderResources(124, 2, farm_emissive_views.data());
+                if (!draw(geometry_farm))
+                    return false;
+            }
+            if (!buffers[geometry_city].empty()) {
+                context->VSSetShader(feature_vertex_shader, nullptr, 0);
+                context->PSSetShader(feature_pixel_shader, nullptr, 0);
+                context->PSSetShaderResources(116, 4, city_emissive_views.data());
+                context->PSSetShaderResources(124, 4, city_base_views.data());
+                if (!draw(geometry_city))
+                    return false;
+            }
+            if (!buffers[geometry_wall].empty()) {
+                std::array<ID3D11ShaderResourceView *, 4> no_emissive = {};
+                std::array<ID3D11ShaderResourceView *, 4> wall_views = {
+                    wall_texture_view, nullptr, nullptr, nullptr};
+                context->VSSetShader(feature_vertex_shader, nullptr, 0);
+                context->PSSetShader(feature_pixel_shader, nullptr, 0);
+                context->PSSetShaderResources(116, 4, no_emissive.data());
+                context->PSSetShaderResources(124, 4, wall_views.data());
+                if (!draw(geometry_wall))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    void cancel_pixel_preparation() {
+        pixel_neighborhood.clear(); pixel_prepare_rects.clear(); pixel_prepare_cursor = 0;
+        pixel_prepare_started = false; pixel_readback_pending = false;
+        pending_pixel_block = {};
+    }
+
+    bool block_phase(std::vector<c3x_renderer::TileFootprint> const & tiles,
+                     int tile_width, int tile_height, int & x, int & y) {
+        if (tiles.empty() || height > 4096) return false;
+        auto const & first = tiles.front();
+        auto world_x = static_cast<std::int32_t>(first.coordinate >> 32);
+        auto world_y = static_cast<std::int32_t>(first.coordinate);
+        x = static_cast<int>((first.anchor_x-static_cast<std::int64_t>(world_x)*tile_width/2) % 128);
+        y = static_cast<int>((first.anchor_y-static_cast<std::int64_t>(world_y)*tile_height/2) % 128);
+        if (x < 0) x += 128; if (y < 0) y += 128;
+        // Preserve derivative-quad phase. Exact contributor keys still validate
+        // arbitrary projections and wrapped occurrences; a different grid misses.
+        return (x & 1) == 0 && (y & 1) == 0;
+    }
+
+    void begin_pixel_neighborhood(c3x_renderer_frame_v1 const & frame) {
+        cancel_pixel_preparation();
+        bool has_prefetch=false;
+        for(unsigned i=0;i<frame.tile_count;++i) has_prefetch=has_prefetch || (frame.tiles[i].tile_flags & C3X_RENDERER_TILE_PREFETCH) != 0;
+        if (!has_prefetch) return;
+        if (bitmap_footprint_signature.complete != requested_signature ||
+            !block_phase(bitmap_footprints, frame.tile_width, frame.tile_height, pixel_phase_x, pixel_phase_y)) return;
+        pixel_neighborhood = bitmap_footprints;
+    }
+
+    void start_pixel_preparation() {
+        if (pixel_prepare_started || pixel_neighborhood.empty()) return;
+        pixel_prepare_started = true;
+        std::stable_sort(pixel_neighborhood.begin(), pixel_neighborhood.end(), [](auto const & a, auto const & b) {
+            return a.anchor_y != b.anchor_y ? a.anchor_y < b.anchor_y : a.anchor_x < b.anchor_x;
+        });
+        int left=0,top=0,right=width,bottom=height;
+        for (auto const & tile : pixel_neighborhood) {
+            left=std::min(left,tile.anchor_x+tile.bounds.left); top=std::min(top,tile.anchor_y+tile.bounds.top);
+            right=std::max(right,tile.anchor_x+tile.bounds.right); bottom=std::max(bottom,tile.anchor_y+tile.bounds.bottom);
+        }
+        left=std::max(left,-512); top=std::max(top,-512);
+        right=std::min(right,width+512); bottom=std::min(bottom,height+512);
+        for(int y=c3x_renderer::block_floor(top,pixel_phase_y); y<bottom; y+=128)
+            for(int x=c3x_renderer::block_floor(left,pixel_phase_x); x<right; x+=128) {
+                if (pixel_prepare_rects.size() >= 512u) break;
+                c3x_renderer::PixelRect rect{x,y,x+128,y+128};
+                // The current bitmap already retains interior pixels. Prepare
+                // exposure and changed contributors, not a duplicate viewport.
+                if (x>=0 && y>=0 && x+128<=width && y+128<=height &&
+                    c3x_renderer::block_key(pixel_neighborhood,rect)==c3x_renderer::block_key(bitmap_footprints,rect)) continue;
+                pixel_prepare_rects.push_back(rect);
+            }
+        // The next exposed strip is close to an existing edge. Distant cells
+        // and the already-owned middle cannot starve that work.
+        auto priority = [&](c3x_renderer::PixelRect rect) {
+            return std::min({std::abs(rect.left),std::abs(rect.right-width),std::abs(rect.top),std::abs(rect.bottom-height)});
+        };
+        std::stable_sort(pixel_prepare_rects.begin(),pixel_prepare_rects.end(),[&](auto a,auto b){return priority(a)<priority(b);});
+    }
+
+    unsigned pixel_work_pending() const {
+        return static_cast<unsigned>(pixel_prepare_rects.size()-pixel_prepare_cursor);
+    }
+
+    bool ensure_block_targets() {
+        if (block_readback && block_target && block_depth) return true;
+        release(block_readback); release(block_depth); release(block_depth_texture);
+        release(block_target); release(block_texture);
+        D3D11_TEXTURE2D_DESC desc = {};
+        desc.Width=desc.Height=128; desc.MipLevels=desc.ArraySize=1;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM; desc.SampleDesc.Count=1;
+        desc.Usage=D3D11_USAGE_DEFAULT; desc.BindFlags=D3D11_BIND_RENDER_TARGET;
+        if (FAILED(device->CreateTexture2D(&desc,nullptr,&block_texture)) ||
+            FAILED(device->CreateRenderTargetView(block_texture,nullptr,&block_target))) return false;
+        desc.Format=DXGI_FORMAT_D24_UNORM_S8_UINT; desc.BindFlags=D3D11_BIND_DEPTH_STENCIL;
+        if (FAILED(device->CreateTexture2D(&desc,nullptr,&block_depth_texture)) ||
+            FAILED(device->CreateDepthStencilView(block_depth_texture,nullptr,&block_depth))) return false;
+        desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM; desc.BindFlags=0;
+        desc.Usage=D3D11_USAGE_STAGING; desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        return SUCCEEDED(device->CreateTexture2D(&desc,nullptr,&block_readback));
+    }
+
+    bool prepare_pixel_block(std::atomic<bool> const & foreground) {
+        if (foreground.load(std::memory_order_relaxed) || !pixel_work_pending()) return true;
+        if (pixel_readback_pending) {
+            D3D11_MAPPED_SUBRESOURCE mapped = {};
+            HRESULT hr = context->Map(block_readback,0,D3D11_MAP_READ,D3D11_MAP_FLAG_DO_NOT_WAIT,&mapped);
+            if (hr == DXGI_ERROR_WAS_STILL_DRAWING) return true;
+            if (FAILED(hr)) return false;
+            for (int y=0;y<128;++y)
+                std::memcpy(pending_pixel_block.pixels.data()+y*128,
+                    static_cast<unsigned char const *>(mapped.pData)+y*mapped.RowPitch,128*sizeof(std::uint32_t));
+            context->Unmap(block_readback,0);
+            pixel_readback_pending=false;
+            pixel_blocks.insert(std::move(pending_pixel_block));
+            ++prepared_blocks; ++pixel_prepare_cursor;
+            return true;
+        }
+        auto rect=pixel_prepare_rects[pixel_prepare_cursor];
+        auto key=c3x_renderer::block_key(pixel_neighborhood,rect);
+        if (pixel_blocks.find(key)>=0) { ++pixel_prepare_cursor; return true; }
+        pending_pixel_block = {};
+        pending_pixel_block.key=std::move(key);
+        pending_pixel_block.pixels.assign(128*128,0u);
+        if (pending_pixel_block.key.empty()) {
+            pixel_blocks.insert(std::move(pending_pixel_block)); ++pixel_prepare_cursor; return true;
+        }
+        if (rect.left>=0 && rect.top>=0 && rect.right<=width && rect.bottom<=height &&
+            pending_pixel_block.key==c3x_renderer::block_key(bitmap_footprints,rect)) {
+            // This exact contributor set already exists in the immutable CPU
+            // bitmap. Copy it into the block cache without any GPU work.
+            for(int y=0;y<128;++y)
+                std::memcpy(pending_pixel_block.pixels.data()+y*128,
+                    pixels.data()+(rect.top+y)*width+rect.left,128*sizeof(std::uint32_t));
+            pixel_blocks.insert(std::move(pending_pixel_block)); ++pixel_prepare_cursor; return true;
+        }
+        if (!ensure_block_targets()) return false;
+        // Borrow buffers only for this worker call. No extra retained GPU mesh
+        // references escape the cache budget; the D3D command stream owns draws.
+        std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
+        for (auto const & contributor : pending_pixel_block.key) {
+            auto found=std::find_if(tile_geometry_cache.begin(),tile_geometry_cache.end(),[&](auto const & item){
+                return item.second.version==contributor.mesh;
+            });
+            if(found==tile_geometry_cache.end()) { ++pixel_prepare_cursor; return true; }
+            for(std::size_t layer=0;layer<geometry_layer_count;++layer)
+                for(auto chunk:found->second.buffers[layer]) {
+                    chunk.translation_x=contributor.x; chunk.translation_y=contributor.y;
+                    buffers[layer].push_back(chunk);
+                }
+        }
+        ViewportShaderSettings settings={};
+        settings.inverse_size[0]=settings.inverse_size[1]=1.0f/128;
+        settings.reserved[0]=static_cast<float>(height);
+        if (!submit_geometry(buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,&foreground)) return true;
+        context->CopyResource(block_readback,block_texture);
+        context->Flush(); // submit once; later polling never waits for the GPU
+        pixel_readback_pending=true;
         return true;
     }
 
@@ -2599,8 +2955,10 @@ public:
     }
 
     bool render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output,
-                int prewarm_index = -1, std::atomic<bool> const * foreground_pending = nullptr) {
+                int prewarm_index = -1, std::atomic<bool> const * foreground_pending = nullptr,
+                std::uint64_t prewarm_signature = 0) {
         bool const prewarming = prewarm_index >= 0;
+        if (prewarming) prepared_footprint = {};
         auto cancelled = [&] { return prewarming && foreground_pending->load(std::memory_order_relaxed); };
         if (prewarming && (static_cast<unsigned>(prewarm_index) >= frame.tile_count ||
             (frame.tiles[prewarm_index].tile_flags & C3X_RENDERER_TILE_PREFETCH) == 0 ||
@@ -2630,9 +2988,10 @@ public:
         }
         frame_tiles_built = frame_tiles_reused = frame_tiles_evicted = 0;
         frame_upload_bytes = 0;
-        raster_reused_pixels = raster_draw_pixels = 0;
-        c3x_renderer::TerrainFrameSignature signature = c3x_renderer::terrain_frame_signature(
-            frame, content_revision, device_generation);
+        raster_reused_pixels = raster_draw_pixels = raster_cached_pixels = 0;
+        c3x_renderer::TerrainFrameSignature signature = prewarming ? c3x_renderer::TerrainFrameSignature{} :
+            c3x_renderer::terrain_frame_signature(frame, content_revision, device_generation);
+        if (!prewarming) requested_signature = signature.complete;
         c3x_renderer_u32 invalidations = 0;
         if (!prewarming) {
         if (cache_valid &&
@@ -2806,8 +3165,9 @@ public:
             -static_cast<float>(geometry_translation_y) / frame.target_height;
         if (!prewarming) context->UpdateSubresource(terrain_settings_buffer, 0, nullptr,
                                    &frame_settings, 0, 0);
-        viewport_settings.inverse_size[0] = 1.0f / frame.target_width;
-        viewport_settings.inverse_size[1] = 1.0f / frame.target_height;
+        viewport_settings.inverse_size[0] = 1.0f / c3x_renderer::power_of_two_extent(frame.target_width);
+        viewport_settings.inverse_size[1] = 1.0f / c3x_renderer::power_of_two_extent(frame.target_height);
+        viewport_settings.reserved[0] = static_cast<float>(frame.target_height);
         if (!prewarming) geometry_viewport_settings = viewport_settings;
         if (!reuse_geometry) {
         auto canonical_component = [](int value, int size, c3x_renderer_u32 wraps) {
@@ -2822,12 +3182,21 @@ public:
             return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(x)) << 32) |
                 static_cast<std::uint32_t>(y);
         };
-        std::unordered_map<std::uint64_t, int> ground_by_coordinate;
-        std::unordered_map<std::uint64_t, int> real_by_coordinate;
-        std::unordered_map<std::uint64_t, int> relief_by_coordinate;
-        std::unordered_map<std::uint64_t, int> surface_by_coordinate;
-        std::unordered_map<std::uint64_t, c3x_renderer_tile_v1 const *> tile_by_coordinate;
-        std::unordered_map<std::uint64_t, std::uint64_t> semantic_by_coordinate;
+        auto & ground_by_coordinate = topology_cache.ground;
+        auto & real_by_coordinate = topology_cache.real;
+        auto & relief_by_coordinate = topology_cache.relief;
+        auto & surface_by_coordinate = topology_cache.surface;
+        auto & tile_by_coordinate = topology_cache.tiles;
+        auto & semantic_by_coordinate = topology_cache.semantic;
+        auto & river_nodes = topology_cache.rivers;
+        std::uint64_t topology_signature = prewarming ? prewarm_signature : signature.complete;
+        // The pointer guard distinguishes the immutable idle snapshot from the
+        // foreground job vector, which the caller may overwrite during idle work.
+        // A full content key is still required when a vector reuses its address.
+        if (topology_cache.signature != topology_signature || topology_cache.records != frame.tiles) {
+        topology_cache.signature = 0; topology_cache.records = nullptr;
+        ground_by_coordinate.clear(); real_by_coordinate.clear(); relief_by_coordinate.clear();
+        surface_by_coordinate.clear(); tile_by_coordinate.clear(); semantic_by_coordinate.clear(); river_nodes.clear();
         semantic_by_coordinate.reserve(frame.tile_count);
         ground_by_coordinate.reserve(frame.tile_count);
         real_by_coordinate.reserve(frame.tile_count);
@@ -2835,6 +3204,7 @@ public:
         surface_by_coordinate.reserve(frame.tile_count);
         tile_by_coordinate.reserve(frame.tile_count);
         for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
+            if ((index & 63u) == 0 && cancelled()) return false;
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
             if ((tile.tile_flags & (C3X_RENDERER_TILE_RENDER |
                                     C3X_RENDERER_TILE_TOPOLOGY_HALO)) == 0)
@@ -2862,19 +3232,14 @@ public:
                  (ground >= 0 && ground < c3x_renderer::terrain_type_count &&
                   terrain_textures[ground].view != nullptr ? ground : -1));
         }
-        struct RiverNode {
-            int lattice_x;
-            int lattice_y;
-            unsigned degree;
-            bool touches_water;
+        std::unordered_map<std::uint64_t, std::size_t> river_index;
+        auto river_key = [](int x, int y) {
+            return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(x)) << 32) | static_cast<std::uint32_t>(y);
         };
-        std::vector<RiverNode> river_nodes;
-        auto river_node_at = [&river_nodes](int x, int y) -> RiverNode & {
-            for (RiverNode & node : river_nodes)
-                if (node.lattice_x == x && node.lattice_y == y)
-                    return node;
-            river_nodes.push_back(RiverNode{x, y, 0u, false});
-            return river_nodes.back();
+        auto river_node_at = [&](int x, int y) -> RiverNode & {
+            auto inserted = river_index.try_emplace(river_key(x,y),river_nodes.size());
+            if (inserted.second) river_nodes.push_back(RiverNode{x,y,0u,false});
+            return river_nodes[inserted.first->second];
         };
         auto add_river_edge = [&river_node_at](int start_x, int start_y,
                                                int endpoint_x, int endpoint_y) {
@@ -2882,6 +3247,7 @@ public:
             river_node_at(endpoint_x, endpoint_y).degree += 1u;
         };
         for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
+            if ((index & 63u) == 0 && cancelled()) return false;
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
             if ((tile.tile_flags & (C3X_RENDERER_TILE_RENDER |
                                     C3X_RENDERER_TILE_TOPOLOGY_HALO)) == 0)
@@ -2898,16 +3264,18 @@ public:
             {0, -1}, {1, 0}, {0, 1}, {-1, 0}
         };
         for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
+            if ((index & 63u) == 0 && cancelled()) return false;
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
             if ((tile.tile_flags & (C3X_RENDERER_TILE_RENDER |
                                     C3X_RENDERER_TILE_TOPOLOGY_HALO)) == 0 ||
                 ground_type(tile) < 11)
                 continue;
-            for (auto const & offset : river_corner_offsets)
-                for (RiverNode & node : river_nodes)
-                    if (node.lattice_x == tile.tile_x + offset[0] &&
-                        node.lattice_y == tile.tile_y + offset[1])
-                        node.touches_water = true;
+            for (auto const & offset : river_corner_offsets) {
+                auto found = river_index.find(river_key(tile.tile_x+offset[0],tile.tile_y+offset[1]));
+                if (found != river_index.end()) river_nodes[found->second].touches_water = true;
+            }
+        }
+        topology_cache.signature = topology_signature; topology_cache.records = frame.tiles;
         }
         c3x_renderer::FeatureGroup broadleaf_forest;
         c3x_renderer::FeatureGroup const * forest_group =
@@ -3104,13 +3472,24 @@ public:
             mix_tile(content_revision); mix_tile(device_generation);
             mix_tile(frame.hour); mix_tile(frame.season);
             mix_tile(tile_ground_grid); mix_tile(shadow_grid);
-            // The approved river shader consumes distances to every node.
-            // Preserve that global dependency only on actual river surfaces.
-            if (river_assets_ready && (tile.river_code & 170u) != 0)
-                for (RiverNode const & node : river_nodes) {
-                    mix_tile(node.lattice_x); mix_tile(node.lattice_y);
-                    mix_tile(node.degree); mix_tile(node.touches_water);
+            std::vector<RiverNode const *> local_river_nodes;
+            if (river_assets_ready && (tile.river_code & 170u) != 0) {
+                // The shader's source/junction/mouth responses vanish by 24 px.
+                // Include that radius plus the whole tile rectangle's diameter:
+                // if any point responds, its nearest node is closer than every
+                // omitted node at ALL vertices, preserving interpolation too.
+                c3x_renderer::RiverNodeWindow node_window(frame.tile_width, frame.tile_height);
+                for (RiverNode const & node : river_nodes)
+                    if (node_window.contains(node.lattice_x-tile.tile_x, node.lattice_y-tile.tile_y))
+                        local_river_nodes.push_back(&node);
+                std::sort(local_river_nodes.begin(), local_river_nodes.end(), [](auto a, auto b) {
+                    return a->lattice_y != b->lattice_y ? a->lattice_y < b->lattice_y : a->lattice_x < b->lattice_x;
+                });
+                for (auto node : local_river_nodes) {
+                    mix_tile(node->lattice_x); mix_tile(node->lattice_y);
+                    mix_tile(node->degree); mix_tile(node->touches_water);
                 }
+            }
             auto candidates = tile_geometry_cache.equal_range(tile_signature);
             bool reused_tile = false;
             for (auto cached_tile = candidates.first; cached_tile != candidates.second; ++cached_tile) {
@@ -3129,6 +3508,7 @@ public:
                 if (valid) {
                     if (prewarming) {
                         cached_tile->second.last_used = std::max(cached_tile->second.last_used, tile_geometry_epoch-1);
+                        prepared_footprint = tile_footprint(cached_tile->second, tile);
                         ++frame_tiles_reused; return true;
                     }
                     append_tile_geometry(cached_tile->second, tile);
@@ -3296,7 +3676,8 @@ public:
                 float point_x = static_cast<float>(tile.tile_x) + u - v;
                 float point_y = static_cast<float>(tile.tile_y) + u + v - 1.0f;
                 float distance = 1000.0f;
-                for (RiverNode const & node : river_nodes) {
+                for (auto node_pointer : local_river_nodes) {
+                    RiverNode const & node = *node_pointer;
                     bool selected = node_kind == 0u
                         ? node.degree == 1u && !node.touches_water
                         : (node_kind == 1u ? node.degree >= 3u
@@ -4540,7 +4921,7 @@ public:
             compiled.anchor_dependencies = std::move(anchor_dependencies);
             try {
             for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
-                if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer], prewarming, compiled.byte_count)) {
+                if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer], prewarming, compiled.byte_count, foreground_pending)) {
                     for (auto const & chunks : compiled.buffers)
                         for (auto const & chunk : chunks) tile_geometry_cache_bytes -= chunk.byte_count;
                     release_geometry_vertex_buffers(compiled.buffers);
@@ -4562,7 +4943,11 @@ public:
                 tile_geometry_cache_bytes -= compiled_bytes;
                 return false;
             }
-            if (prewarming) { prefetched_geometry_bytes += inserted->second.byte_count; return true; }
+            if (prewarming) {
+                prefetched_geometry_bytes += inserted->second.byte_count;
+                prepared_footprint = tile_footprint(inserted->second, tile);
+                return true;
+            }
             append_tile_geometry(inserted->second, tile);
         }
         if (prewarming) return true;
@@ -4611,164 +4996,53 @@ public:
             }
         }
         if (reuse_raster) frame_cache_path = "raster-scroll";
+        struct BlockCopy { D3D11_RECT rect; int cache_index, origin_x, origin_y; };
+        std::vector<BlockCopy> block_copies;
+        int block_phase_x=0,block_phase_y=0;
+        if (!pixel_blocks.blocks.empty() &&
+            block_phase(current_footprints,frame.tile_width,frame.tile_height,block_phase_x,block_phase_y)) {
+            std::vector<D3D11_RECT> misses;
+            for (auto const & dirty : raster_rects)
+                for (int y=c3x_renderer::block_floor(dirty.top,block_phase_y);y<dirty.bottom;y+=128)
+                    for(int x=c3x_renderer::block_floor(dirty.left,block_phase_x);x<dirty.right;x+=128) {
+                        D3D11_RECT part={std::max<LONG>(x,dirty.left),std::max<LONG>(y,dirty.top),
+                            std::min<LONG>(x+128,dirty.right),std::min<LONG>(y+128,dirty.bottom)};
+                        auto key=c3x_renderer::block_key(current_footprints,{x,y,x+128,y+128});
+                        int found=pixel_blocks.find(key);
+                        if(found>=0) {
+                            block_copies.push_back({part,found,x,y});
+                            raster_cached_pixels+=(part.right-part.left)*(part.bottom-part.top);
+                        } else misses.push_back(part);
+                    }
+            // Merge adjacent misses without adding pixels or overlapping draws.
+            c3x_renderer::merge_adjacent_rectangles(misses);
+            raster_rects=std::move(misses);
+            raster_draw_pixels-=raster_cached_pixels;
+            if(raster_cached_pixels) frame_cache_path="pixel-blocks";
+        }
+
         LARGE_INTEGER geometry_finished = {}, draw_finished = {}, readback_finished = {};
         QueryPerformanceCounter(&geometry_finished);
         frame_geometry_ticks = geometry_finished.QuadPart - started.QuadPart;
         trace.write("geometry-ready", frame_cache_path);
-        float clear[4] = {0, 0, 0, 0};
-        context->ClearRenderTargetView(render_target, clear);
-        context->ClearDepthStencilView(depth_target, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-        context->OMSetRenderTargets(1, &render_target, depth_target);
-        context->OMSetDepthStencilState(depth_state, 0);
-        float blend_factor[4] = {0, 0, 0, 0};
-        context->OMSetBlendState(blend_state, blend_factor, 0xffffffffu);
-        context->RSSetState(rasterizer_state);
-        D3D11_VIEWPORT viewport = {0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
-        context->RSSetViewports(1, &viewport);
-        // Always retain a complete terrain surface. The output clip is applied
-        // only by c3x_renderer_blit when Civ III composites its dirty rectangle.
-        D3D11_RECT scissor = {0, 0, width, height};
-        context->RSSetScissorRects(1, &scissor);
-
-        bool has_cached_geometry = false;
-        for (std::vector<CachedVertexChunk> const & layer : geometry_vertex_buffers)
-            has_cached_geometry = has_cached_geometry || !layer.empty();
-        if (has_cached_geometry) {
-            context->IASetInputLayout(input_layout);
-            context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            context->VSSetShader(vertex_shader, nullptr, 0);
-            context->PSSetShader(pixel_shader, nullptr, 0);
-            // Register-for-register match with the frozen approved terrain
-            // shader. No production-only palette remains in this binding path.
-            std::array<ID3D11ShaderResourceView *, 128> views = {};
-            TerrainTexture const & grass = terrain_textures[2];
-            TerrainTexture const & plains = terrain_textures[1];
-            TerrainTexture const & desert = terrain_textures[0];
-            TerrainTexture const & hills = terrain_textures[5];
-            TerrainTexture const & mountain = terrain_textures[6];
-            TerrainTexture const & marsh = terrain_textures[9];
-            TerrainTexture const & coast = terrain_textures[11];
-            TerrainTexture const & ocean = terrain_textures[13];
-            views[0] = grass.view; views[1] = grass.material_height_view; views[2] = grass.specular_view;
-            views[3] = mountain.material_height_view; views[4] = mountain.material_height_view;
-            views[5] = mountain.material_height_view;
-            views[6] = mountain.view; views[7] = mountain.elevated_view;
-            views[8] = mountain.relief_layer_views[0];
-            views[9] = mountain.material_height_view; views[10] = mountain.specular_view;
-            views[11] = coast.relief_layer_views[0]; views[12] = terrain_extra_views[0];
-            views[13] = terrain_extra_views[1]; views[14] = coast.relief_layer_views[1];
-            views[15] = terrain_extra_views[2]; views[16] = terrain_extra_views[3];
-            views[17] = coast.view; views[18] = ocean.view;
-            views[19] = coast.material_height_view;
-            for (std::size_t index = 0; index < coast.water_surface_views.size(); ++index)
-                views[20 + index] = coast.water_surface_views[index];
-            for (std::size_t index = 0; index < 4; ++index)
-                views[25 + index] = feature_texture_views[index];
-            views[29] = coast.specular_view; views[30] = ocean.material_height_view;
-            views[31] = ocean.specular_view;
-            for (std::size_t index = 0; index < 13; ++index)
-                views[32 + index] = terrain_extra_views[4 + index];
-            views[45] = plains.view; views[46] = plains.material_height_view;
-            views[47] = plains.specular_view;
-            views[48] = desert.view; views[49] = desert.material_height_view;
-            views[50] = desert.specular_view; views[51] = hills.material_height_view;
-            views[52] = dune_surface.view; views[53] = dune_surface.material_height_view;
-            views[54] = dune_surface.specular_view; views[55] = dune_decal_base_view;
-            views[56] = dune_decal_height_view;
-            for (std::size_t index = 1; index < mountain.relief_layer_views.size(); ++index)
-                views[56 + index] = mountain.relief_layer_views[index];
-            views[61] = terrain_extra_views[17]; views[62] = terrain_extra_views[18];
-            views[63] = marsh.view; views[64] = marsh.material_height_view;
-            views[65] = marsh.specular_view; views[66] = marsh_decal_base_view;
-            views[67] = marsh_decal_height_view; views[68] = marsh_decal_specular_view;
-            views[69] = volcano_base_view; views[70] = volcano_height_view;
-            views[71] = volcano_active_base_view; views[72] = volcano_active_specular_view;
-            views[73] = water_clutter_base_view; views[74] = water_clutter_height_view;
-            views[75] = grass_clutter_base_view; views[76] = grass_clutter_height_view;
-            views[77] = plains_clutter_base_view; views[78] = plains_clutter_height_view;
-            for (std::size_t index = 0; index < river_surface_views.size(); ++index)
-                views[79 + index] = river_surface_views[index];
-            for (std::size_t index = 0; index < river_rock_texture_views.size(); ++index)
-                views[89 + index] = river_rock_texture_views[index];
-            TerrainTexture const & tundra = terrain_textures[3];
-            views[94] = tundra.view;
-            views[95] = tundra.material_height_view;
-            views[96] = tundra.specular_view;
-            for (std::size_t index = 0; index < route_texture_views.size(); ++index)
-                views[98 + index] = route_texture_views[index];
-            for (std::size_t index = 0; index < bridge_texture_views.size(); ++index)
-                views[108 + index] = bridge_texture_views[index];
-            for (std::size_t index = 0; index < resource_texture_views.size(); ++index)
-                views[116 + index] = resource_texture_views[index];
-            for (std::size_t index = 0; index < city_base_views.size(); ++index)
-                views[124 + index] = city_base_views[index];
-            context->PSSetShaderResources(0, static_cast<UINT>(views.size()), views.data());
-            ID3D11SamplerState * samplers[] = {terrain_sampler, decal_sampler};
-            context->PSSetSamplers(0, 2, samplers);
-            context->PSSetConstantBuffers(0, 1, &terrain_settings_buffer);
-            context->VSSetConstantBuffers(1, 1, &viewport_settings_buffer);
-            // Geometry buffers are immutable until an authoritative geometry
-            // fingerprint changes. Camera-only translation therefore issues
-            // draws without regenerating or re-uploading the world vertices.
-            if (!draw_cached_geometry(geometry_underlay) ||
-                !draw_cached_geometry(geometry_land) ||
-                !draw_cached_geometry(geometry_bed) ||
-                !draw_cached_geometry(geometry_water) ||
-                !draw_cached_geometry(geometry_river) ||
-                !draw_cached_geometry(geometry_shadow) ||
-                !draw_cached_geometry(geometry_route)) {
-                return false;
-            }
-            if (!geometry_vertex_buffers[geometry_feature].empty()) {
-                context->VSSetShader(feature_vertex_shader, nullptr, 0);
-                context->PSSetShader(feature_pixel_shader, nullptr, 0);
-                context->PSSetShaderResources(94, 4, feature_texture_views.data() + 4);
-                if (!draw_cached_geometry(geometry_feature))
-                    return false;
-            }
-            if (!geometry_vertex_buffers[geometry_mine].empty()) {
-                context->VSSetShader(feature_vertex_shader, nullptr, 0);
-                context->PSSetShader(feature_pixel_shader, nullptr, 0);
-                context->PSSetShaderResources(116, 6, mine_base_views.data());
-                context->PSSetShaderResources(124, 2, mine_emissive_views.data());
-                if (!draw_cached_geometry(geometry_mine))
-                    return false;
-            }
-            if (!geometry_vertex_buffers[geometry_farm].empty()) {
-                context->VSSetShader(feature_vertex_shader, nullptr, 0);
-                context->PSSetShader(feature_pixel_shader, nullptr, 0);
-                context->PSSetShaderResources(116, 6, farm_base_views.data());
-                context->PSSetShaderResources(124, 2, farm_emissive_views.data());
-                if (!draw_cached_geometry(geometry_farm))
-                    return false;
-            }
-            if (!geometry_vertex_buffers[geometry_city].empty()) {
-                context->VSSetShader(feature_vertex_shader, nullptr, 0);
-                context->PSSetShader(feature_pixel_shader, nullptr, 0);
-                context->PSSetShaderResources(116, 4, city_emissive_views.data());
-                context->PSSetShaderResources(124, 4, city_base_views.data());
-                if (!draw_cached_geometry(geometry_city))
-                    return false;
-            }
-            if (!geometry_vertex_buffers[geometry_wall].empty()) {
-                std::array<ID3D11ShaderResourceView *, 4> no_emissive = {};
-                std::array<ID3D11ShaderResourceView *, 4> wall_views = {
-                    wall_texture_view, nullptr, nullptr, nullptr};
-                context->VSSetShader(feature_vertex_shader, nullptr, 0);
-                context->PSSetShader(feature_pixel_shader, nullptr, 0);
-                context->PSSetShaderResources(116, 4, no_emissive.data());
-                context->PSSetShaderResources(124, 4, wall_views.data());
-                if (!draw_cached_geometry(geometry_wall))
-                    return false;
-            }
-        }
+        if (!raster_rects.empty() && !submit_geometry(geometry_vertex_buffers, raster_rects,
+                geometry_viewport_settings, render_target, depth_target,
+                c3x_renderer::power_of_two_extent(width), c3x_renderer::power_of_two_extent(height))) return false;
 
         QueryPerformanceCounter(&draw_finished);
         frame_draw_ticks = draw_finished.QuadPart - geometry_finished.QuadPart;
         trace.write("readback-begin", "includes pending GPU execution");
-        context->CopyResource(readback_texture, render_texture);
+        // The retained CPU bitmap already owns the unchanged overlap. Transfer
+        // only freshly rasterized rectangles; the staging surface outside them
+        // may be stale and must never be read below.
+        for (D3D11_RECT const & rect : raster_rects) {
+            D3D11_BOX box = {static_cast<UINT>(rect.left), static_cast<UINT>(rect.top), 0,
+                static_cast<UINT>(rect.right), static_cast<UINT>(rect.bottom), 1};
+            context->CopySubresourceRegion(readback_texture, 0, box.left, box.top, 0,
+                render_texture, 0, &box);
+        }
         D3D11_MAPPED_SUBRESOURCE mapped = {};
-        HRESULT hr = context->Map(readback_texture, 0, D3D11_MAP_READ, 0, &mapped);
+        HRESULT hr = raster_rects.empty() ? S_OK : context->Map(readback_texture, 0, D3D11_MAP_READ, 0, &mapped);
         if (FAILED(hr)) {
             OutputDebugStringA("[C3X renderer] native-failure=readback\n");
             return false;
@@ -4784,13 +5058,18 @@ public:
                     pixels.data() + static_cast<std::size_t>(y - raster_dy) * width + overlap.left - raster_dx,
                     static_cast<std::size_t>(overlap.right - overlap.left) * sizeof(std::uint32_t));
         }
+        for (auto const & copy : block_copies)
+            for (LONG y=copy.rect.top;y<copy.rect.bottom;++y)
+                std::memcpy(pixels.data()+static_cast<std::size_t>(y)*width+copy.rect.left,
+                    pixel_blocks.blocks[copy.cache_index].pixels.data()+(y-copy.origin_y)*128+copy.rect.left-copy.origin_x,
+                    (copy.rect.right-copy.rect.left)*sizeof(std::uint32_t));
         for (D3D11_RECT const & rect : raster_rects)
             for (LONG y = rect.top; y < rect.bottom; ++y)
                 std::memcpy(pixels.data() + static_cast<std::size_t>(y) * width + rect.left,
                     static_cast<std::uint8_t const *>(mapped.pData) + static_cast<std::size_t>(y) * mapped.RowPitch +
                         static_cast<std::size_t>(rect.left) * sizeof(std::uint32_t),
                     static_cast<std::size_t>(rect.right - rect.left) * sizeof(std::uint32_t));
-        context->Unmap(readback_texture, 0);
+        if (!raster_rects.empty()) context->Unmap(readback_texture, 0);
         QueryPerformanceCounter(&readback_finished);
         frame_readback_ticks = readback_finished.QuadPart - draw_finished.QuadPart;
 
@@ -4941,21 +5220,26 @@ public:
         job_frame = frame;
         // Reuse bounded snapshot capacity; no allocation/copy on a second vector.
         job_tiles.clear();
-        if (frame.tile_count != 0)
-            job_tiles.assign(frame.tiles, frame.tiles + frame.tile_count);
+        try {
+            if (frame.tile_count != 0) job_tiles.assign(frame.tiles, frame.tiles + frame.tile_count);
+        } catch (...) {
+            foreground_pending.store(false, std::memory_order_relaxed);
+            return C3X_RENDERER_RESULT_ERROR;
+        }
         job_frame.tiles = job_tiles.empty() ? nullptr : job_tiles.data();
         LARGE_INTEGER submitted = {}, returned = {};
         QueryPerformanceCounter(&submitted);
         int result = submit_locked(lock, Command::render);
         QueryPerformanceCounter(&returned);
         if (renderer_state.trace.level) {
-            char detail[320];
+            char detail[480];
             std::snprintf(detail, sizeof(detail),
-                "result=%d wait_ms=%.3f tiles=%u prefetch_pending=%u prefetch_built=%u prefetch_unavailable=%u prefetch_cancelled=%u prefetch_bytes=%u cumulative_prewarm_ms=%.3f",
+                "result=%d wait_ms=%.3f tiles=%u prefetch_pending=%u prefetch_built=%u prefetch_unavailable=%u prefetch_cancelled=%u prefetch_bytes=%u cumulative_prewarm_ms=%.3f blocks_pending=%u blocks_built=%u block_bytes=%u",
                 result, renderer_state.trace.milliseconds(returned.QuadPart - submitted.QuadPart), frame.tile_count,
                 completed_output.prefetch_tiles_pending, completed_output.prefetch_tiles_built,
                 completed_output.prefetch_tiles_unavailable, completed_output.prefetch_tiles_cancelled,
-                completed_output.prefetch_cache_bytes, renderer_state.trace.milliseconds(completed_output.prefetch_ticks));
+                completed_output.prefetch_cache_bytes, renderer_state.trace.milliseconds(completed_output.prefetch_ticks),
+                completed_output.prefetch_blocks_pending, completed_output.prefetch_blocks_built, completed_output.pixel_block_cache_bytes);
             renderer_state.trace.write("worker-complete", detail, result != C3X_RENDERER_RESULT_OK);
         }
         output = completed_output;
@@ -5068,8 +5352,7 @@ private:
     }
 
     void prepare_neighborhood() {
-        auto signature = c3x_renderer::terrain_frame_signature(job_frame,
-            renderer_state.content_revision, renderer_state.device_generation).complete;
+        auto signature = renderer_state.requested_signature;
         // Repeated unit/UI redraws must not restart preparation at the first tile.
         if (signature == warm_signature) return;
         int direction_x = 0, direction_y = 0;
@@ -5083,6 +5366,7 @@ private:
                 }
         }
         warm_signature = signature;
+        renderer_state.begin_pixel_neighborhood(job_frame);
         warm_frame = job_frame;
         warm_tiles.assign(job_tiles.begin(), job_tiles.end());
         warm_frame.tiles = warm_tiles.data();
@@ -5110,6 +5394,7 @@ private:
             return priority(a) < priority(b);
         });
         if (warm_order.size() > 384u) warm_order.resize(384u);
+        if (warm_order.empty()) renderer_state.start_pixel_preparation();
     }
 
     void run() {
@@ -5128,7 +5413,7 @@ private:
                 c3x_renderer_output_v1 unused = {};
                 bool ok = false;
                 try {
-                    ok = renderer_state.render(warm_frame, unused, static_cast<int>(index), &foreground_pending);
+                    ok = renderer_state.render(warm_frame, unused, static_cast<int>(index), &foreground_pending, warm_signature);
                 } catch (...) {
                     // Optional idle work cannot terminate Civ III on scratch
                     // allocation failure. Published frame state was never changed.
@@ -5137,7 +5422,19 @@ private:
                 QueryPerformanceCounter(&end);
                 lock.lock();
                 preparation_ticks += end.QuadPart - begin.QuadPart;
-                if (ok) prepared_tiles += renderer_state.frame_tiles_built;
+                if (ok) {
+                    prepared_tiles += renderer_state.frame_tiles_built;
+                    try {
+                    if (!renderer_state.pixel_neighborhood.empty() &&
+                        (renderer_state.prepared_footprint.bounds.left < renderer_state.prepared_footprint.bounds.right)) {
+                        auto const & footprint = renderer_state.prepared_footprint;
+                        auto found = std::find_if(renderer_state.pixel_neighborhood.begin(),renderer_state.pixel_neighborhood.end(),
+                            [&](auto const & old){return old.coordinate==footprint.coordinate;});
+                        if(found==renderer_state.pixel_neighborhood.end()) renderer_state.pixel_neighborhood.push_back(footprint);
+                        else *found=footprint;
+                    }
+                    } catch (...) { renderer_state.cancel_pixel_preparation(); }
+                }
                 if (foreground_pending.load(std::memory_order_relaxed)) {
                     if (!ok) ++cancelled_tiles;
                 } else {
@@ -5146,6 +5443,10 @@ private:
                         unavailable_tiles = static_cast<unsigned>(warm_order.size()-warm_cursor);
                         warm_cursor = warm_order.size(); // bounded cache pressure is not a game failure
                     }
+                }
+                if (warm_cursor == warm_order.size() && unavailable_tiles == 0) {
+                    try { renderer_state.start_pixel_preparation(); }
+                    catch (...) { renderer_state.cancel_pixel_preparation(); }
                 }
                 if (warm_cursor == warm_order.size() || !ok) {
                     char detail[240];
@@ -5156,6 +5457,21 @@ private:
                         renderer_state.prefetched_geometry_bytes,
                         renderer_state.trace.milliseconds(preparation_ticks));
                     renderer_state.trace.write("prewarm", detail);
+                }
+                continue;
+            }
+            if (!has_job && !stop_requested && renderer_state.pixel_work_pending()) {
+                if (wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || stop_requested;})) continue;
+                lock.unlock();
+                bool ok=false;
+                try { ok=renderer_state.prepare_pixel_block(foreground_pending); } catch (...) { ok=false; }
+                lock.lock();
+                if (!ok) renderer_state.cancel_pixel_preparation();
+                if (!renderer_state.pixel_work_pending()) {
+                    char detail[160];
+                    std::snprintf(detail,sizeof(detail),"result=%s built=%u bytes=%zu",ok?"ready":"unavailable",
+                        renderer_state.prepared_blocks,renderer_state.pixel_blocks.bytes);
+                    renderer_state.trace.write("pixel-prewarm",detail,true);
                 }
                 continue;
             }
@@ -5208,6 +5524,7 @@ private:
                 catch (...) {
                     warm_order.clear(); warm_cursor = 0; warm_signature = 0;
                     warm_tiles.clear(); unavailable_tiles = 1;
+                    renderer_state.cancel_pixel_preparation();
                 }
                 output.prefetch_tiles_pending = static_cast<unsigned>(warm_order.size()-warm_cursor);
                 output.prefetch_tiles_built = prepared_tiles;
@@ -5215,9 +5532,13 @@ private:
                 output.prefetch_tiles_cancelled = cancelled_tiles;
                 output.prefetch_cache_bytes = static_cast<unsigned>(renderer_state.prefetched_geometry_bytes);
                 output.prefetch_ticks = preparation_ticks;
+                output.prefetch_blocks_pending = renderer_state.pixel_work_pending();
+                output.prefetch_blocks_built = renderer_state.prepared_blocks;
+                output.pixel_block_cache_bytes = static_cast<unsigned>(renderer_state.pixel_blocks.bytes);
             } else {
                 warm_order.clear(); warm_cursor = 0; warm_signature = 0;
                 warm_tiles.clear();
+                renderer_state.cancel_pixel_preparation();
             }
             completed_output = output;
             completed_result = result;
