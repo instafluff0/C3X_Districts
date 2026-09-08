@@ -317,7 +317,7 @@ def scene(category, case, destination, *, world_size=32):
     destination.write_text(f"C3X_BIQ_TERRAIN_V3,{world_size},{world_size},{len(rows)}\n" + "\n".join(rows) + "\n")
 
 
-def native_render(category, case, hour, zoom, output, *, baseline=False, behavior=None, center=(16, 16)):
+def native_render(category, case, hour, zoom, output, *, baseline=False, behavior=None, center=(16, 16), diagnostics=False):
     from Renderer.lab.platform import run_native_fixture
     if behavior not in (None, "replay", "edits", "animation", "units"):
         raise ValueError("Unknown native behavior check")
@@ -359,6 +359,9 @@ def native_render(category, case, hour, zoom, output, *, baseline=False, behavio
             env["C3X_RENDERER_PREVIEW_OBJECTS"] = ""
     def windows(path):
         return "..\\..\\" + relative(path).replace("/", "\\")
+    if diagnostics:
+        env["C3X_RENDERER_TRACE"] = "2"
+        env["C3X_RENDERER_TRACE_FILE"] = windows(output / "renderer.log")
     command = " && ".join(f'set "{key}={value}"' for key, value in env.items())
     ensure_preview_tool()
     executable = "..\\lab\\.cache\\native_preview.exe"
@@ -687,7 +690,7 @@ def run_tests(category=None, *, integration=False):
                         "Renderer.definitions.test_rule_resolver", "Renderer.scenes.test_scene_contract"))
         modules.update("Renderer.native." + name for name in (
             "test_native_bridge_contract", "test_scroll_damage", "test_unit_bridge",
-            "test_unit_input_guard", "test_unit_shadow", "test_unit_animation_runtime",
+            "test_unit_input_guard", "test_unit_shadow", "test_unit_animation_runtime", "test_asset_content_hash",
             "test_animation_runtime"))
     result = subprocess.run([sys.executable, "-m", "unittest", *sorted(modules)], cwd=ROOT)
     if result.returncode:

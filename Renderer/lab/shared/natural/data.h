@@ -99,14 +99,17 @@ struct NaturalData {
         }
         return result;
     }
+    void hill_height(Hill const& hill,float x,float y,float& h,float& support)const{
+        if(std::abs(x-hill.x)>hill.radius_x||std::abs(y-hill.y)>hill.radius_y)return;
+        float authored=composed_source_macro(fields[terrain[14]],hill,x,y);
+        float s=smooth01((hill_support(hill,x,y)+(authored-.5f)*.56f-.08f)/.88f);
+        h=std::max(h,2.5f+hill.height*s*(.20f+authored*.94f));support=std::max(support,s);
+    }
     template<class Lookup>float height(float x,float y,Lookup lookup,float*support_out=nullptr)const{
         float h=2.5f,support=0;
         for(int r=int(std::floor(y))-1;r<=int(std::floor(y))+1;r++)for(int c=int(std::floor(x))-1;c<=int(std::floor(x))+1;c++){
             Tile tile=lookup(c,r);if(tile.real!=5)continue;Hill hill=composed_hill(tile);
-            if(std::abs(x-hill.x)>hill.radius_x||std::abs(y-hill.y)>hill.radius_y)continue;
-            float authored=composed_source_macro(fields[terrain[14]],hill,x,y);
-            float s=smooth01((hill_support(hill,x,y)+(authored-.5f)*.56f-.08f)/.88f);
-            h=std::max(h,2.5f+hill.height*s*(.20f+authored*.94f));support=std::max(support,s);
+            hill_height(hill,x,y,h,support);
         }
         if(support_out)*support_out=support;return h;
     }

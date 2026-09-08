@@ -45,6 +45,7 @@ unless an intentional, explicitly approved change calls for something else.
 ## Current references
 
 - [Visual fidelity playbook](docs/visual_fidelity_playbook.md): preserved graphics breakthroughs.
+- [Source-art findings](docs/source_art_findings.md): concrete recovered data, remaining inferences and selected local studies.
 - [Natural geometry and materials](native/source_fidelity/README.md): current terrain adapters.
 - [Cities](native/city_fidelity/CITY_FIDELITY.md): composition, lighting and known limits.
 - [Units](native/environment_refresh/UNIT_FIDELITY.md): current source normals and materials.

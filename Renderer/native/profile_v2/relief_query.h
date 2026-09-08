@@ -52,6 +52,17 @@ template<class Lookup,class Source,class Shore,class River,class Dune,class Acti
 class ReliefQuery {
     World world;
     Lookup lookup; Source source; Shore shore; River river; Dune dune; Activity activity;
+    mutable bool quiet_ready=false,quiet=false;
+    mutable int quiet_c=0,quiet_r=0;
+    bool quiet_neighborhood(int c,int r) const {
+        if(quiet_ready && c==quiet_c && r==quiet_r)return quiet;
+        quiet=true;quiet_c=c;quiet_r=r;quiet_ready=true;
+        for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++){
+            Tile t=lookup(c+dx,r+dy);
+            if(t.real==5 || t.real==6 || t.real==10 || (t.present && t.base==0 && t.real==0))quiet=false;
+        }
+        return quiet;
+    }
     std::array<int,2> raw(int c,int r) const {
         int x=c+r,y=c-r;
         if(world.wrap_x) x=mod(x,world.width);
@@ -122,6 +133,10 @@ public:
             if(!neighbor.present || water(neighbor)) compatibility*=smooth01(distances[i]/.22f);
         }
         auto hydrology=shore(x,y);
+        // Beyond the cliff shoulder, a neighborhood without relief or dunes
+        // contributes exactly zero. Observe its full support once per integer
+        // cell; normal samples may differ by tiny fractions but share this fact.
+        if(hydrology.distance>1.0 && quiet_neighborhood(c,r))return result;
         float signed_shore=float(std::clamp(-hydrology.distance/.65,-1.,1.));
         float coastal=smooth01((-signed_shore-.02f)/.42f);
         float rocky=smooth01((float(hydrology.rocky)-.55f)/.40f);

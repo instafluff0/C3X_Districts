@@ -20,6 +20,11 @@ template<class ObserveWorld,class ObserveCoast> class SurfaceQueries {
     profile_v2::ShoreSample center{};
     bool center_ready=false,patch_attempted=false;
     profile_v2::WorldCoast::Patch patch;
+    // Finite-difference points almost never repeat, but their integer
+    // neighborhoods do. Keep authored hill placements for the owner and its
+    // eight adjacent sample cells; distant object queries use the ordinary path.
+    struct Hills {bool ready=false;unsigned count=0;std::array<Hill,9> bodies;};
+    std::array<Hills,9> hills;
 public:
     float const center_u,center_v;
     SurfaceQueries(profile_v2::WorldCoast const& world,
@@ -79,8 +84,22 @@ public:
     template<class Height>
     float height(NaturalData const& natural,Height pickup_height,float x,float y,float* support=nullptr) {
         auto sample=shore(x,y);
-        float h=std::max(natural.height(x,y,[&](int c,int r){return natural_tile(c,r);},support),
-                         2.5f+pickup_height(x,y));
+        int c=int(std::floor(x)),r=int(std::floor(y));
+        int local_c=c-(nearby_c+3),local_r=r-(nearby_r+3);
+        float authored=2.5f,s=0;
+        if(local_c>=0 && local_c<3 && local_r>=0 && local_r<3){
+            auto& entry=hills[std::size_t(local_r*3+local_c)];
+            if(!entry.ready){
+                for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++){
+                    auto t=natural_tile(c+dx,r+dy);
+                    if(t.real==5)entry.bodies[entry.count++]=composed_hill(t);
+                }
+                entry.ready=true;
+            }
+            for(unsigned i=0;i<entry.count;i++)natural.hill_height(entry.bodies[i],x,y,authored,s);
+            if(support)*support=s;
+        }else authored=natural.height(x,y,[&](int nc,int nr){return natural_tile(nc,nr);},support);
+        float h=std::max(authored,2.5f+pickup_height(x,y));
         return 2.5f+(h-2.5f)*coast_relief(float(sample.distance),float(sample.beach_width));
     }
 };

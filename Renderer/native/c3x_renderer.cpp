@@ -28,6 +28,7 @@
 #include "environment_runtime.h"
 #include "terrain_definition_runtime.h"
 #include "renderer_trace.h"
+#include "asset_content_hash.h"
 #include "scroll_damage.h"
 #include "river_node_locality.h"
 #include "pixel_block_cache.h"
@@ -1222,7 +1223,12 @@ public:
     void mix_content_revision(std::vector<std::uint8_t> const & data) {
         if (content_revision == 0)
             content_revision = 1469598103934665603ull;
-        for (std::uint8_t value : data) {
+        // Process full payloads in x86-sized blocks; retain the existing
+        // 64-bit aggregate key and its per-payload invalidation boundary.
+        auto digest=c3x_renderer::asset_content_hash(data.data(),data.size());
+        auto bytes=reinterpret_cast<unsigned char const*>(digest.data());
+        for (std::size_t i=0;i<sizeof(digest);++i) {
+            auto value=bytes[i];
             content_revision ^= value;
             content_revision *= 1099511628211ull;
         }
@@ -3852,6 +3858,13 @@ public:
         if (!prewarming) {
         ++trace.sequence;
         trace.write("render-begin", "", false);
+        LARGE_INTEGER load_mark={};QueryPerformanceCounter(&load_mark);
+        auto load_phase=[&](char const* stage){
+            LARGE_INTEGER now={};QueryPerformanceCounter(&now);
+            if(!cache_valid){char detail[96];sprintf_s(detail,"ms=%.3f",trace.milliseconds(now.QuadPart-load_mark.QuadPart));
+                trace.write(stage,detail,true);}
+            load_mark=now;
+        };
         if (!initialize()) {
             trace.write("native-failure","initialize",true);
             return false;
@@ -3863,29 +3876,44 @@ public:
         for (int index = 0; index < c3x_renderer::terrain_type_count; ++index)
             if (terrain_textures[index].configured && !ensure_pack_texture(index))
                 terrain_textures[index].configured = false;
-        if(fidelity_profile && !natural.load(device,fidelity_root,
-            [&](std::string const& relative,std::vector<std::uint8_t>& bytes){
+        load_phase("load-device-terrain");
+        c3x_renderer_i64 read_ticks=0,hash_ticks=0,texture_ticks=0;
+        std::size_t asset_bytes=0;
+        auto read_fidelity=[&](std::string const& relative,std::vector<std::uint8_t>& bytes){
+                LARGE_INTEGER begin={},read_end={},hash_end={};QueryPerformanceCounter(&begin);
                 char path[4*MAX_PATH];
                 bool ok=pack_path(fidelity_root.c_str(),relative.c_str(),path,std::size(path)) && read_file(path,bytes);
-                if(ok)mix_content_revision(bytes);return ok;
-            },[&](auto const& bytes,auto&view){return ensure_dds_texture(bytes,view,true,true);},city_profile?"city_fidelity":environment_profile?"environment_refresh":"source_fidelity")) {
+                QueryPerformanceCounter(&read_end);
+                if(ok){mix_content_revision(bytes);asset_bytes+=bytes.size();}
+                QueryPerformanceCounter(&hash_end);
+                read_ticks+=read_end.QuadPart-begin.QuadPart;hash_ticks+=hash_end.QuadPart-read_end.QuadPart;return ok;
+        };
+        auto upload_fidelity=[&](auto const& bytes,auto&view){
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            bool ok=ensure_dds_texture(bytes,view,true,true);
+            QueryPerformanceCounter(&end);texture_ticks+=end.QuadPart-begin.QuadPart;return ok;
+        };
+        if(fidelity_profile && !natural.load(device,fidelity_root,read_fidelity,upload_fidelity,city_profile?"city_fidelity":environment_profile?"environment_refresh":"source_fidelity")) {
             trace.write("source-fidelity-failed",natural.failure.c_str(),true);return false;
         }
+        load_phase("load-natural");
         if(environment_profile && !reflection.ensure(device,fidelity_root,city_profile?"city_fidelity":"environment_refresh",city_profile?144:136)){
             trace.write("reflection-failed","shader initialization",true);return false;
         }
-        if(city_profile && !cities.load(device,fidelity_root,
-            [&](std::string const&relative,std::vector<std::uint8_t>&bytes){
-                char path[4*MAX_PATH];bool ok=pack_path(fidelity_root.c_str(),relative.c_str(),path,std::size(path)) && read_file(path,bytes);
-                if(ok)mix_content_revision(bytes);return ok;
-            },[&](auto const&bytes,auto&view){return ensure_dds_texture(bytes,view,true,true);})){
+        load_phase("load-reflection");
+        if(city_profile && !cities.load(device,fidelity_root,read_fidelity,upload_fidelity)){
             trace.write("city-composition-failed","pack/material initialization; native fallback",true);return false;
         }
+        load_phase("load-city");
+        if(asset_bytes){char detail[192];sprintf_s(detail,"bytes=%zu read_ms=%.3f hash_ms=%.3f texture_ms=%.3f",asset_bytes,
+            trace.milliseconds(read_ticks),trace.milliseconds(hash_ticks),trace.milliseconds(texture_ticks));trace.write("load-assets",detail,true);}
         if(city_profile && !city_glow.ensure(device,fidelity_root)){trace.write("city-composition-failed","guarded glow initialization",true);return false;}
+        load_phase("load-glow");
         if (!ensure_terrain_textures()) {
             trace.write("native-failure","terrain-textures",true);
             return false;
         }
+        load_phase("load-retained-textures");
         if (pickup_profile) {
             if (!frame.world_topology_count) {
                 trace.write("profile-incomplete", "pickup requires authoritative world topology", true);

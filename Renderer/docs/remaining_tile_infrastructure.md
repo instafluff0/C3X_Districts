@@ -101,13 +101,10 @@ The smaller root-only source probe is
 `compound_landmark_importer.py`. Runtime selection is defined by the
 `infrastructure` section of `tile_object_render_strategy.json`.
 
-## L19B Acceptance Evidence
+## Current visual review and integration
 
-The frozen 192-tile alternate-skin scene renders every family across all four
-eras/owners, routes, relief, stable rotations, noon, midnight, full scale, and
-reduced scale. Family-isolation frames prove silhouettes and ground blending;
-the no-infrastructure control is byte-identical to L19A. Two unchanged Lab runs
-are byte-deterministic. See `terrain_lab/L19B_INFRASTRUCTURE_AUDIT.md` and
-`handoffs/L19B_remaining_tile_infrastructure.json`. I19B owns later capture,
-invalidation, exclusive native suppression, retained layers, and failure
-behavior; none is enabled by the Lab promotion.
+Use the [infrastructure category](../lab/categories/objects/infrastructure/README.md)
+and its focused/gameplay fixtures for current visual review. Historical
+192-tile Lab renders and handoff packages are not the approved C3X baseline.
+Source intake does not itself authorize runtime ownership: Integration retains
+capture, invalidation, native suppression, compositing and failure behavior.

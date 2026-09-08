@@ -439,7 +439,7 @@ int main() {
         ownership = ownership[:ownership.index("composite_custom_renderer_frame")]
         self.assertIn("captured->real_terrain_type != SQ_Volcano", ownership)
 
-    def test_m6_7_ports_approved_dunes_and_feature_bodies(self) -> None:
+    def test_retained_dunes_and_feature_bodies(self) -> None:
         runtime = (Path(__file__).parent / "terrain_scene_runtime.cpp").read_text(
             encoding="utf-8"
         )
@@ -447,8 +447,11 @@ int main() {
         shader = (Path(__file__).parent / "terrain_rendering.hlsl").read_text(
             encoding="utf-8"
         )
+        self.assertIn('#include "../lab/shared/natural/patterns.h"', runtime)
+        self.assertIn('return patterns::dune_height(world_x,world_y,desert_weight);', runtime)
+        patterns = (RENDERER_ROOT / "lab/shared/natural/patterns.h").read_text()
         for literal in ("0.300001f", "4.0f", "0.6f", "3.65f", "17.0f"):
-            self.assertIn(literal, runtime)
+            self.assertIn(literal, patterns)
         self.assertIn("c3x_renderer::dune_height", renderer)
         self.assertIn("dune_decal_base", renderer)
         self.assertIn("dune_decal_height", renderer)
@@ -644,7 +647,7 @@ int main() {
         self.assertIn("record->city_population", injected)
         self.assertIn("has_active_building (city, improvement_id)", injected)
 
-    def test_i19_consumes_approved_mines_farms_and_tundra(self) -> None:
+    def test_mine_farm_and_tundra_bindings(self) -> None:
         renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
             encoding="utf-8"
         ).casefold()
@@ -670,7 +673,12 @@ int main() {
         self.assertIn('"farm_" + std::to_string', renderer)
         self.assertIn("C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED", api)
         self.assertIn("irrigation_mask", api)
-        self.assertIn("material_tundra", renderer)
+        from Renderer.renderer import source_inputs
+        sources = source_inputs([RENDERER_ROOT / "native/c3x_renderer.cpp"])
+        vertex = "Renderer/lab/shared/natural/vertex.h"
+        self.assertIn(vertex, sources)
+        self.assertIn("using vertex = c3x_renderer::fidelity::mapvertex;", renderer)
+        self.assertIn("float material_tundra;", (C3X_ROOT / vertex).read_text())
         self.assertIn("feature_base_texture_4", shader)
 
     def test_live_terrain_mesh_reuses_shared_corners_and_bounds_shadow_density(self) -> None:

@@ -16,6 +16,36 @@ from Renderer.tools.asset_compiler.unit_family_asset_importer import (
 
 
 class UnitFamilyAssetImporterTests(unittest.TestCase):
+    def test_current_owner_color_authoring_is_component_local(self) -> None:
+        ROOT = Path(__file__).resolve().parents[3]
+        overrides = json.loads((
+            ROOT / "Renderer/tools/asset_compiler/unit_family_owner_color_overrides.json"
+        ).read_text(encoding="utf-8"))["overrides"]
+        self.assertEqual("none", overrides["unit/catapult_operator/hair"]["mode"])
+        self.assertEqual(0.82, overrides["unit/swordsman/shield"]["strength"])
+        self.assertNotIn("unit/tank_vehicle/teamcolor", overrides)
+        tank_component = json.loads((
+            ROOT / "Renderer/packs/CompoundUnitLab/units/components/tank_vehicle_teamcolor.json"
+        ).read_text(encoding="utf-8"))
+        self.assertEqual("TeamColor", tank_component["role"])
+        self.assertEqual("USE_CIV_COLOR", tank_component["tint"])
+        self.assertEqual("solid_color", tank_component["owner_color"]["mode"])
+        self.assertEqual("constant_one", tank_component["owner_color"]["mask_source"])
+        tank_recipe = json.loads((
+            ROOT / "Renderer/packs/CompoundUnitLab/units/tank_composition.json"
+        ).read_text(encoding="utf-8"))
+        tank_team_color = next(
+            component
+            for component in tank_recipe["nodes"]["vehicle"]["components"]
+            if component["role"] == "TeamColor"
+        )
+        self.assertEqual("tankAll", tank_team_color["attachment_bone"])
+        self.assertEqual(0.35, overrides["unit/infantry/armor"]["strength"])
+        self.assertEqual(
+            "authored_mask",
+            overrides["unit/great_general_classical_rider/armor"]["mode"],
+        )
+
     def test_dedicated_team_color_geometry_uses_a_generic_solid_mask(self) -> None:
         dedicated = default_owner_color_for_component(
             {"role": "TeamColor", "tint": "USE_CIV_COLOR"}, 0.82

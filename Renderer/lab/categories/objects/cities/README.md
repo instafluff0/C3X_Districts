@@ -24,10 +24,9 @@ phases. They do not certify every culture/era/site. Other palace styles and
 constrained-site placement retain the existing limitations in the native city
 checkpoint; accepting the current build does not erase those limits.
 
-For cleanup, distinguish selected layouts from later experiment numbers: the
-central-palace source work selected r111 inland and r112 freshcanopy. The coastal
-r113-r115 attempts failed placement; r116 is an unselected inland alternative,
-not a newer approved standard. Preserve the coastal fallback and useful local
-candidate inputs until their dependencies have been migrated. The remaining
-coastal problem is footprint/foundation placement, not an approval to change
-terrain clearance or lighting.
+The unselected alternate central-city recipe/data is retained in
+`Renderer/packs/RendererSourceStudies/city-alternate-central-inland`, separate
+from current templates and approvals. Selected inland, wooded and coastal-fallback
+source comparisons remain in `Renderer/lab/references/source-studies`.
+The coastal problem is footprint/foundation placement, not permission to change
+terrain clearance or lighting. See [source findings](../../../../docs/source_art_findings.md).

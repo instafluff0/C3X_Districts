@@ -48,6 +48,11 @@ if /i "%~1"=="unit-bridge" (
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /LD c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:build\ /Fe:build\candidate\C3XRenderer.dll /link /DEF:c3x_renderer.def /IMPLIB:build\candidate\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
 if errorlevel 1 exit /b 1
 
+cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_asset_content_hash.cpp /Fo:build\ /Fe:build\test_asset_content_hash.exe
+if errorlevel 1 exit /b 1
+build\test_asset_content_hash.exe
+if errorlevel 1 exit /b 1
+
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX native_smoke.cpp environment_runtime.cpp /Fo:build\ /Fe:build\native_smoke.exe /link gdi32.lib
 if errorlevel 1 exit /b 1
 
