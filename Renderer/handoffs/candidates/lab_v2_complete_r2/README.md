@@ -3,7 +3,7 @@
 This is the single entry point for selected Lab work. Its authoritative current
 visual layer is the [source-fidelity Lab state of the art](LAB_STATE_OF_ART.md):
 four authoritative per-system macOS Metal studies plus the accepted
-`source-fidelity-r11/inland` 100-tile natural composition. It directly invokes
+`source-fidelity-r13/inland` 100-tile natural composition. It directly invokes
 the exact terrain and mountain providers, uses opacity-aware source-mesh tree
 casters, and retains hydrology. The Warrior remains a separately retained
 source-material witness. Cities are
@@ -15,7 +15,7 @@ packet archives, native code or caches.
 **Mac Lab source-fidelity pickup prepared for Game Integration.** The selected
 fixture is
 `Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json`;
-its accepted proof is `source-fidelity-r11/inland`. The obsolete
+its accepted proof is `source-fidelity-r13/inland`. The obsolete
 `beauty-scene.fixture.json` remains non-authoritative because it predates the
 source-fidelity fixes and can place trees through city buildings. Existing
 Integration gates and M9/M10/M11 remain unchanged.
@@ -77,9 +77,12 @@ superseded by r2's committed importer pins; use r2 for pickup.
 
 The authoritative isolated studies establish full authored hill relief,
 source-derived stable rock patches, complete mountain material channels, the
-complete source forest recipe and the 4x/16x sampling path. R11's r2 fixture
+complete source forest recipe and the 4x/16x sampling path. R13's r2 fixture
 provides the selected real viewport adapters and calibrated opacity-aware
-directional cast shadows; do not substitute the older `frozen_l21` r4
+directional cast shadows. Its matched control proves that terrain, mountains
+and opacity-masked trees receive the same field; direct face lighting and cast
+projection both use Q6 `ShadowL`, and every provider uses the canonical world
+projection. Do not substitute the older `frozen_l21` r4
 approximation. Water-natural-r6 and GPU water-
 reflection-r5 remain selected historical layers for later composition. Current American
 capital selections are r111 inland and r112 freshcanopy, with corrected source

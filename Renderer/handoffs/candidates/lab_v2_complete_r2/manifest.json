@@ -24,8 +24,8 @@
         "Renderer/handoffs/L12_volcano.json"
       ],
       "native_state": "pickup_r2_ready_for_game_integration",
-      "selected": "source-fidelity-r11 composes exact beauty_terrain + beauty_mountain providers at 4x/16x sampling with retained hydrology",
-      "remaining": "Port the r2 viewport adapters and generic pack bindings; analytic dunes and tundra snow-hill decals remain unaccepted.",
+      "selected": "source-fidelity-r13 composes exact beauty_terrain + beauty_mountain providers at 4x/16x sampling with corrected shared world projection and retained hydrology",
+      "remaining": "Port the r2 viewport adapters, generic pack bindings and exact canonical world-to-screen basis; analytic dunes and tundra snow-hill decals remain unaccepted.",
       "entry_points": [
         "Renderer/terrain_lab/v2/systems/relief/beauty_terrain.module.json",
         "Renderer/terrain_lab/v2/systems/relief/beauty_terrain.cpp",
@@ -50,14 +50,16 @@
       "legacy_handoffs": [
         "Renderer/handoffs/L13A_lighting.json"
       ],
-      "native_state": "integrated_with_shadow_basis_gap",
-      "selected": "shared captured EnvironmentState; Q6 source-triangle field; scene-linear composition",
-      "remaining": "Unify posed object coordinate/normal/height bases; preserve retained UI outside exposure/glow.",
+      "native_state": "integrated_with_remaining_animated_subject_gap",
+      "selected": "one shared captured EnvironmentState; ShadowL drives face lighting and Q6 source-triangle projection; scene-linear composition",
+      "remaining": "Preserve the single light vector and canonical world basis for all static natural casters; reconcile only still-pending posed animated subjects and keep retained UI outside exposure/glow.",
       "entry_points": [
+        "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp",
         "Renderer/terrain_lab/v2/systems/lighting/shadow_field_v1.h",
         "Renderer/terrain_lab/v2/systems/lighting/alpha_coverage_v1.h",
         "Renderer/terrain_lab/v2/shaders/lighting/shadow_visibility_v1.hlsl",
-        "Renderer/terrain_lab/v2/shaders/common/hdr_glow_tiled.hlsl"
+        "Renderer/terrain_lab/v2/shaders/common/hdr_glow_tiled.hlsl",
+        "Renderer/terrain_lab/v2/tests/lighting/shadow_contract.cpp"
       ]
     },
     {
@@ -82,8 +84,8 @@
         "Renderer/handoffs/L12_volcano.json"
       ],
       "native_state": "pickup_r2_ready_for_game_integration",
-      "selected": "BeautyStudies forest path: 22 source bodies / 25 ArtDef recipes / weight 180 / authored opacity, packed normals and opacity-aware source-mesh directional shadows",
-      "remaining": "Port stable source-recipe scatter, material addressing, shared shadow casting and authoritative building/river/coastline exclusions.",
+      "selected": "BeautyStudies forest path: 22 source bodies / 25 ArtDef recipes / weight 180 / authored opacity, packed normals, readable key/fill face separation and opacity-aware source-mesh directional shadows",
+      "remaining": "Port stable source-recipe scatter, material addressing, shared ShadowL face/cast lighting and authoritative building/river/coastline exclusions.",
       "entry_points": [
         "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/forest.hlsl",
         "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/forest.module.json",
@@ -307,12 +309,14 @@
         "Renderer/handoffs/L21_complete_beauty_scene.json"
       ],
       "native_state": "formal_I21_pending_game_integration",
-      "selected": "source-fidelity-r11 is the accepted 100-tile natural-scene pickup; exact terrain/mountain providers, source-mesh tree shadows and retained hydrology coexist",
-      "remaining": "Port the selected natural-scene paths into the game renderer. Cities remain unchanged and must supply authoritative tree-exclusion footprints.",
+      "selected": "source-fidelity-r13 is the accepted 100-tile natural-scene pickup; exact terrain/mountain providers, one face/cast light vector, source-mesh tree shadows and retained hydrology coexist",
+      "remaining": "Port the selected natural-scene paths and executable shadow contract into the game renderer. Cities remain unchanged and must supply authoritative tree-exclusion footprints.",
       "entry_points": [
         "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json",
+        "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland-shadow-control/fixture.json",
         "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/base.hlsl",
-        "Renderer/terrain_lab/v2/qa/source_fidelity_pickup_evidence.py"
+        "Renderer/terrain_lab/v2/qa/source_fidelity_pickup_evidence.py",
+        "Renderer/terrain_lab/v2/qa/source_fidelity_shadow_evidence.py"
       ]
     },
     {
@@ -336,30 +340,40 @@
   "cases": [
     {
       "id": "source-fidelity-inland",
-      "selection": "accepted natural-scene pickup; exact terrain/mountain providers, opacity-aware source-mesh tree shadows and retained hydrology; cities omitted and unchanged",
+      "selection": "accepted shadow-corrected natural-scene pickup; exact terrain/mountain providers, one face/cast light vector, opacity-aware source-mesh tree shadows and retained hydrology; cities omitted and unchanged",
       "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json",
-      "report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/report.json",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/report.json",
       "frames": [
         {
-          "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/h12-z1-pan00.bmp",
-          "sha256": "b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c",
+          "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/h12-z1-pan00.bmp",
+          "sha256": "d611be1d83d440a2284ca7e91c366fc4ad14bc4833efda8293f22f7c7008ee7c",
           "bytes": 4352054
         },
         {
-          "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/h12-z2-pan00.bmp",
-          "sha256": "472292bfec436a18c48af8b9624cae0ce950a1e168169b6987041d1730490840",
+          "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/h12-z2-pan00.bmp",
+          "sha256": "2a493e9e20ef25ed054dba2657496ff13a316f7c9c3c5b5e261ce55c41453c43",
           "bytes": 1088054
         }
       ],
       "review_image": {
-        "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/h12-z1-pan00.png",
-        "sha256": "95a631ef1d18adce83328c1ba02e588c2f7e45f626ff02da776f5832337a5f6d",
-        "bytes": 848349
+        "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/h12-z1-pan00.png",
+        "sha256": "82e7f85e3788f2995e95616a7ca906a72ce976948a3e15b9e10d4ab842a38f2e",
+        "bytes": 846912
       },
       "comparison": {
-        "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/comparison.png",
-        "sha256": "00a783a992bf1c0bcbb4fd81de5dee23a130a5a286f73933786203e197f53e08",
-        "bytes": 1444944
+        "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/comparison.png",
+        "sha256": "621b98dad020c3a8dcf032bc46d569a4c9e885d8e1f0b8bc5b29d868eff5df50",
+        "bytes": 1558836
+      },
+      "shadow_evidence": {
+        "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.png",
+        "sha256": "d00046ade5ae15efbbed33132a5b97775907a56d4e11fe99e5cb2db7bd1124b4",
+        "bytes": 983597
+      },
+      "shadow_detail": {
+        "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-detail.png",
+        "sha256": "5e75837ac9ba4d139a15f396c28f6f51cd277b3dab2b8bfae4a660f773c011f9",
+        "bytes": 936661
       },
       "runner_command": "compose"
     },
@@ -2359,28 +2373,28 @@
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/CHECKPOINT.md",
-      "sha256": "845ca3a4a4b1b34a444cdbdb8aa224eb63a29f66f87d440674206b58c11830b1",
+      "sha256": "73ffa6c6d1493ba770598f4afeddea98d829c2554ef1b849489c94a7e692a6c3",
       "bytes": 8470
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/IMPLEMENTATION.md",
-      "sha256": "3c29329f633a87e6d116491c9613cbdf4ae4aade2ed78e0aa1f651eb067aa186",
-      "bytes": 15636
+      "sha256": "f4ce07fc5814e83c5649d7b83cc9d9d5c1ac4d4eb9ee3edefc7abd991d997967",
+      "bytes": 17022
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.json",
-      "sha256": "aab7e44c9e0246ee9cb88f76ced8ec176d2e04416e5ee30259a62096e457b444",
-      "bytes": 17144
+      "sha256": "d06f10b0152be643680738b243278c741eaaf8e7adaee3306d27772cce2e797a",
+      "bytes": 19058
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.md",
-      "sha256": "022a3de98fa271767744fb92db39f96474b2d5c092245f9217d5e724624bf5b9",
-      "bytes": 3795
+      "sha256": "84185dce524182efcead6db883b6fec4a98375e21580f1fd45656c30540abda8",
+      "bytes": 4164
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/README.md",
-      "sha256": "7f00614a6c7e67a5dde0b2ae2ffe33cb046f2ac4131bf70c79f467f5295676a0",
-      "bytes": 6036
+      "sha256": "5c5691dad5c5faddb9eeeb0af542953903bd208b739e5b8298c9e282d8e42ab3",
+      "bytes": 6256
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/SHADOWS.md",
@@ -2389,13 +2403,13 @@
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/VALIDATION.json",
-      "sha256": "a117e5dfbc71d0cba039d2f0a4e8fd4faded0a2942f9310ec22b15ccc971fc53",
-      "bytes": 6532
+      "sha256": "1c55312af8836a90e5d5cee6dad6d1336890cc1c1b09bdfb01701c68f6ab8a45",
+      "bytes": 6826
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/catalog.py",
-      "sha256": "12b8250b848dde36049f01aca1bd94efa624e039b26e6f8ff796e3704b2ea75e",
-      "bytes": 17132
+      "sha256": "08a4163f5955169c618f1a87e0304141be41e501468918448edb3e096a1fb022",
+      "bytes": 18235
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/directional_shadow_contract.h",
@@ -2404,8 +2418,8 @@
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/package.py",
-      "sha256": "cb23e779f810b4656108dd54b74b9aa7d4c0f0a33908c263ecf94f7a553d7bf0",
-      "bytes": 28338
+      "sha256": "940cd96417cd1099d07030d9b46bbb3700a4f1b304ed81044d3a2c6e0661b604",
+      "bytes": 29879
     },
     {
       "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/shadow_probe.cpp",
@@ -2949,8 +2963,8 @@
     },
     {
       "path": "Renderer/terrain_lab/v2/audits/beauty/CURRENT_VISUAL.md",
-      "sha256": "be5f947fbfdf1871c1ec7f79e06b53d57052c5f6f50e1c9f9738f393f23544b3",
-      "bytes": 23897
+      "sha256": "64a23f7732bae75c26d2ede4e2b69262134b7d3eecb841afc09eb72d784c0ef6",
+      "bytes": 24271
     },
     {
       "path": "Renderer/terrain_lab/v2/audits/beauty/GROUND_LAYER_FINDINGS.md",
@@ -2994,8 +3008,8 @@
     },
     {
       "path": "Renderer/terrain_lab/v2/audits/beauty/SOURCE_FIDELITY_PICKUP.md",
-      "sha256": "d9248e7eda164bbef425eb00f33819984659da45309bfcb6d17b2f3f62411231",
-      "bytes": 3893
+      "sha256": "a1909a2d22e2251b6abfcb38d4796e46539f8e001edda870bb86f7101f23cbf4",
+      "bytes": 5066
     },
     {
       "path": "Renderer/terrain_lab/v2/audits/beauty/SURFACE_RICHNESS_CAMPAIGN.md",
@@ -5163,6 +5177,11 @@
       "bytes": 1880
     },
     {
+      "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland-shadow-control/fixture.json",
+      "sha256": "f5b44ac34ba8fd19c3c8420aa40c90983414720974107feae3c0a8f87b8f9a88",
+      "bytes": 4119
+    },
+    {
       "path": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/base.hlsl",
       "sha256": "b7c06e28eaf5d8cd954647768b3e2e2addd1ac28de21308a4b59f640ae0af23a",
       "bytes": 129
@@ -5813,6 +5832,11 @@
       "bytes": 2599
     },
     {
+      "path": "Renderer/terrain_lab/v2/qa/source_fidelity_shadow_evidence.py",
+      "sha256": "0005e7c45981efaa2f47d0de9673e3c086ebf5af32f5909d1c815c7f68713574",
+      "bytes": 5103
+    },
+    {
       "path": "Renderer/terrain_lab/v2/qa/test_city_exclusion.py",
       "sha256": "a9938dc922cd2481e274d0e1a53bfe54f7678f3621d689a70a9a863444862d0e",
       "bytes": 1149
@@ -6169,8 +6193,8 @@
     },
     {
       "path": "Renderer/terrain_lab/v2/shaders/objects/beauty_objects.hlsl",
-      "sha256": "71f08a0103108d9a688ba8f839895c59129b410f770365ccb1cbe0023582d6f1",
-      "bytes": 8545
+      "sha256": "2d4e1dcf6d0f88457a21b7cb35ca4dad277f2fafa19f7afb670b49c2d6b7c0a3",
+      "bytes": 9067
     },
     {
       "path": "Renderer/terrain_lab/v2/shaders/objects/city_scene_material.hlsl",
@@ -6199,13 +6223,13 @@
     },
     {
       "path": "Renderer/terrain_lab/v2/shaders/relief/beauty_mountain.hlsl",
-      "sha256": "b60af8ffab2f314f0838981a5670ca3934028c04c9b8925cc3e3d7f73287125f",
-      "bytes": 9639
+      "sha256": "877adbefde22e3e037822c37cb3394c038c5da6790ccdac68c4dc851dcf70e0f",
+      "bytes": 9906
     },
     {
       "path": "Renderer/terrain_lab/v2/shaders/relief/beauty_terrain.hlsl",
-      "sha256": "8d5f786fd8df84240ed549a62c0eb35ce54583368d9dc4d102f70c7b36ef5572",
-      "bytes": 10086
+      "sha256": "8b1be2156fddf87c9348f8ed4b4dcdd6f14262c8449f40bfa3600aa63c1db9f9",
+      "bytes": 10386
     },
     {
       "path": "Renderer/terrain_lab/v2/shaders/relief/coast_rocks.hlsl",
@@ -6714,8 +6738,8 @@
     },
     {
       "path": "Renderer/terrain_lab/v2/systems/lighting/scene_shadow.cpp",
-      "sha256": "911c6fb6a44d88a3e1e2f2ec14821b2d2db5d4bcdc2b27abbd51cf00bd62187e",
-      "bytes": 7984
+      "sha256": "abebec1e58c0f2e17655a586c54bb61a3591335b8458b4e327414fda6a6811a5",
+      "bytes": 8275
     },
     {
       "path": "Renderer/terrain_lab/v2/systems/lighting/shadow_field_v1.h",
@@ -6924,8 +6948,8 @@
     },
     {
       "path": "Renderer/terrain_lab/v2/systems/relief/beauty_mountain.cpp",
-      "sha256": "d617f9a80b1a0ca36f1e36aea4c00a893f751b63dcadafec456c9d5e2238a97f",
-      "bytes": 19288
+      "sha256": "b64aa53d8bdce274026115342a6396ee792dec7329580b4f23fda9920582e775",
+      "bytes": 19588
     },
     {
       "path": "Renderer/terrain_lab/v2/systems/relief/beauty_mountain.module.json",
@@ -7639,8 +7663,8 @@
     },
     {
       "path": "Renderer/terrain_lab/v2/tests/test_lab_state_of_art_pickup.py",
-      "sha256": "eccb3c0170b97c1f47f8027248179831d2d3a13477fb33e4d0892702ffa0f290",
-      "bytes": 4604
+      "sha256": "33856097887069a787d3834c48aa0ac4320eb88eb4db65754b77fe6717160d8c",
+      "bytes": 6133
     },
     {
       "path": "Renderer/tools/asset_compiler/BUILD_CIV6_ANIMATION_CONVERTER.bat",
@@ -10564,6 +10588,66 @@
       "bytes": 16465
     },
     {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/comparison.json",
+      "sha256": "2f4029d793d9b5e45dd8d1feea23dfc658769aeb1638a3c6eaa7c0557b80fa12",
+      "bytes": 827
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/comparison.png",
+      "sha256": "621b98dad020c3a8dcf032bc46d569a4c9e885d8e1f0b8bc5b29d868eff5df50",
+      "bytes": 1558836
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/h12-z1-pan00.bmp",
+      "sha256": "d611be1d83d440a2284ca7e91c366fc4ad14bc4833efda8293f22f7c7008ee7c",
+      "bytes": 4352054
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/h12-z1-pan00.png",
+      "sha256": "82e7f85e3788f2995e95616a7ca906a72ce976948a3e15b9e10d4ab842a38f2e",
+      "bytes": 846912
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/h12-z2-pan00.bmp",
+      "sha256": "2a493e9e20ef25ed054dba2657496ff13a316f7c9c3c5b5e261ce55c41453c43",
+      "bytes": 1088054
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/report.json",
+      "sha256": "86a1af0920196a412a129eb4221aa027448bf5ac04fbc8a554abcd9ef765f80a",
+      "bytes": 16475
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-detail.png",
+      "sha256": "5e75837ac9ba4d139a15f396c28f6f51cd277b3dab2b8bfae4a660f773c011f9",
+      "bytes": 936661
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.json",
+      "sha256": "5af3f3d3101aa12947d17c0a19c6badcb6d7f411cde12695cb258a3984fafb15",
+      "bytes": 1408
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.png",
+      "sha256": "d00046ade5ae15efbbed33132a5b97775907a56d4e11fe99e5cb2db7bd1124b4",
+      "bytes": 983597
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r14/inland/h12-z1-pan00.bmp",
+      "sha256": "d611be1d83d440a2284ca7e91c366fc4ad14bc4833efda8293f22f7c7008ee7c",
+      "bytes": 4352054
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r14/inland/h12-z2-pan00.bmp",
+      "sha256": "2a493e9e20ef25ed054dba2657496ff13a316f7c9c3c5b5e261ce55c41453c43",
+      "bytes": 1088054
+    },
+    {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r14/inland/report.json",
+      "sha256": "88a244ff8942bf22662d2316ce65012bf95657ce48447160bd1182bb93e8b049",
+      "bytes": 16465
+    },
+    {
       "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r4/inland/comparison.json",
       "sha256": "e52c86c4ba5fe71484c6274d6e2f83f2ef436ff1d8bee1f2cc3f73b0929a9140",
       "bytes": 831
@@ -11327,7 +11411,7 @@
   },
   "state_of_art": {
     "path": "Renderer/handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.json",
-    "sha256": "aab7e44c9e0246ee9cb88f76ced8ec176d2e04416e5ee30259a62096e457b444",
-    "bytes": 17144
+    "sha256": "d06f10b0152be643680738b243278c741eaaf8e7adaee3306d27772cce2e797a",
+    "bytes": 19058
   }
 }

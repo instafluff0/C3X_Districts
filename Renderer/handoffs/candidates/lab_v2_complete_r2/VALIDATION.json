@@ -15,10 +15,13 @@
     "combined_scene_used": true,
     "combined_scene": {
       "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json",
-      "report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/report.json",
-      "repeat_report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r12/inland/report.json",
-      "noon_zoom1_sha256": "b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c",
-      "comparison_sha256": "00a783a992bf1c0bcbb4fd81de5dee23a130a5a286f73933786203e197f53e08",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/report.json",
+      "repeat_report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r14/inland/report.json",
+      "noon_zoom1_sha256": "d611be1d83d440a2284ca7e91c366fc4ad14bc4833efda8293f22f7c7008ee7c",
+      "comparison_sha256": "621b98dad020c3a8dcf032bc46d569a4c9e885d8e1f0b8bc5b29d868eff5df50",
+      "shadow_evidence": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.json",
+      "shared_face_and_cast_direction": true,
+      "canonical_world_projection_shared": true,
       "tile_count": 100,
       "cities_rendered": false,
       "cities_changed": false,
@@ -193,6 +196,6 @@
     "recipient": "Integration agent",
     "sent": false,
     "prior_consolidation_sent": true,
-    "request": "Port the r11 r2-fixture natural composition: exact terrain/mountain providers, opacity-aware source-mesh tree shadows and retained hydrology. Keep cities unchanged and use their footprints only for tree exclusion."
+    "request": "Port the r13 r2-fixture natural composition: exact terrain/mountain providers, the canonical world basis, one Q6 ShadowL for face lighting and cast projection, opacity-aware source-mesh tree shadows and retained hydrology. Keep cities unchanged and use their footprints only for tree exclusion."
   }
 }

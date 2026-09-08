@@ -103,11 +103,14 @@ close LQ0, establish D3D parity, or change Game Integration.
 
 The current [source-fidelity Lab state of the art](handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.md)
 consolidates the authoritative isolated mountain, grassland/plains/tundra/hills,
-forest and Warrior studies plus the accepted `source-fidelity-r11/inland`
-100-tile natural composition. R11 directly invokes `beauty_terrain` and
+forest and Warrior studies plus the accepted `source-fidelity-r13/inland`
+100-tile natural composition. R13 directly invokes `beauty_terrain` and
 `beauty_mountain`, registers opacity-tested source forest bodies in the shared
 directional shadow field, and redraws retained hydrology after suppressing the
-superseded low-detail relief. A separate r12 replay matches both raw zoom hashes.
+superseded low-detail relief. It also makes one Q6 `ShadowL` authoritative for
+terrain/mountain/tree face lighting and cast projection, fixes the mountain
+world-to-screen origin, and supplies a matched shadow-off proof. A separate r14
+replay matches both raw zoom hashes.
 Cities are omitted and unchanged; Integration must use authoritative building
 footprints for tree exclusion. No Windows, Civ III, Integration, or LQ0 gate is
 advanced by this Mac Lab work.

@@ -199,8 +199,15 @@ Output shade(P input) {
         albedo *= lerp(0.90, 1.08, broad);
     }
 
-    float ndl = saturate(dot(geometric, Sun.xyz));
-    float wrap = saturate((dot(geometric, Sun.xyz) + 0.20) / 1.20);
+#ifdef BEAUTY_COMPOSED_SHADOWS
+    // Q6ShadowL is also the projection direction used to build the shared
+    // shadow field. One vector must drive both face light and cast shadows.
+    float3 light_direction = ShadowL.xyz;
+#else
+    float3 light_direction = Sun.xyz;
+#endif
+    float ndl = saturate(dot(geometric, light_direction));
+    float wrap = saturate((dot(geometric, light_direction) + 0.20) / 1.20);
     float sky = saturate(geometric.z * 0.5 + 0.5);
     float cavity = lerp(0.79, 1.0, smoothstep(0.02, 0.30, input.material.x));
     float3 ambient = Ambient.rgb * Ambient.a * lerp(0.56, 1.0, sky) * cavity;
@@ -213,7 +220,7 @@ Output shade(P input) {
     float3 diffuse = albedo * (ambient + SunColorExposure.rgb * Sun.w *
                                (0.07 + 0.93 * wrap) * shadow);
     float roughness = lerp(0.92, 0.48, saturate(specular_map));
-    float specular = ggx(geometric, Sun.xyz, normalize(View.xyz), roughness, 0.035);
+    float specular = ggx(geometric, light_direction, normalize(View.xyz), roughness, 0.035);
     float3 radiance = diffuse + SunColorExposure.rgb * Sun.w * specular * shadow;
     output.color = float4(max(radiance, 0) * alpha, alpha);
     output.validity = alpha;

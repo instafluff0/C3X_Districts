@@ -4,10 +4,10 @@ BEAUTY = V2+'audits/beauty/'
 
 # id, legacy gates, native disposition, selected implementation, remaining work
 SYSTEMS = [
- ('terrain', ['L9','L10','L11','L12'], 'pickup_r2_ready_for_game_integration', 'source-fidelity-r11 composes exact beauty_terrain + beauty_mountain providers at 4x/16x sampling with retained hydrology', 'Port the r2 viewport adapters and generic pack bindings; analytic dunes and tundra snow-hill decals remain unaccepted.'),
- ('environment', ['L13A'], 'integrated_with_shadow_basis_gap', 'shared captured EnvironmentState; Q6 source-triangle field; scene-linear composition', 'Unify posed object coordinate/normal/height bases; preserve retained UI outside exposure/glow.'),
+ ('terrain', ['L9','L10','L11','L12'], 'pickup_r2_ready_for_game_integration', 'source-fidelity-r13 composes exact beauty_terrain + beauty_mountain providers at 4x/16x sampling with corrected shared world projection and retained hydrology', 'Port the r2 viewport adapters, generic pack bindings and exact canonical world-to-screen basis; analytic dunes and tundra snow-hill decals remain unaccepted.'),
+ ('environment', ['L13A'], 'integrated_with_remaining_animated_subject_gap', 'one shared captured EnvironmentState; ShadowL drives face lighting and Q6 source-triangle projection; scene-linear composition', 'Preserve the single light vector and canonical world basis for all static natural casters; reconcile only still-pending posed animated subjects and keep retained UI outside exposure/glow.'),
  ('rivers', ['L13'], 'older_rivers_integrated', 'river-corridor-r3 over r2', 'Port corridor, headwater and bank-rock recipe together; pool/bank fidelity and multi-height water remain open.'),
- ('forest_jungle', ['L9','L12'], 'pickup_r2_ready_for_game_integration', 'BeautyStudies forest path: 22 source bodies / 25 ArtDef recipes / weight 180 / authored opacity, packed normals and opacity-aware source-mesh directional shadows', 'Port stable source-recipe scatter, material addressing, shared shadow casting and authoritative building/river/coastline exclusions.'),
+ ('forest_jungle', ['L9','L12'], 'pickup_r2_ready_for_game_integration', 'BeautyStudies forest path: 22 source bodies / 25 ArtDef recipes / weight 180 / authored opacity, packed normals, readable key/fill face separation and opacity-aware source-mesh directional shadows', 'Port stable source-recipe scatter, material addressing, shared ShadowL face/cast lighting and authoritative building/river/coastline exclusions.'),
  ('water', ['L9','L13A'], 'older_water_integrated', 'water-natural-r6 + GPU water-reflection-r5', 'Port linear reflection prepass, offscreen halo and material bindings; animation/surf deferred by user.'),
  ('roads', ['L14'], 'integrated', 'preserve L14 and current native implementation', 'No new road design in this pickup; adapt corridor/bridge clearance when composing hydrology.'),
  ('railroads', ['L15'], 'integrated', 'preserve L15 and current native implementation', 'Preserve worked/pillaged bridges and exact shared edges.'),
@@ -26,13 +26,13 @@ SYSTEMS = [
  ('units', ['L20'], 'animation_maintenance_staged_formal_I20_pending', 'current native animation plus Warrior source-material correction from beauty_objects', 'Keep action cursor, dirty bounds and native background. Port packed normals and per-material repeat/clamp addressing; retain uniform XYZ scale and reconcile shadows.'),
  ('effects', ['L20'], 'partial_preparation_not_global_visual_coverage', 'generic effect graphs, owner-color/action/compound contracts', 'Preserve legacy L20 and offline sources; no claim of complete compound units, combat VFX or attached particle transport in current 9-family runtime.'),
  ('barbarian_camps', [], 'offline_only_not_promoted', 'VIL_BAR_01/VIL_BAR_IND converted offline to generic IDs', 'Dedicated Lab promotion required; not a goody hut or an implied L19A extension.'),
- ('combined_scene', ['L21'], 'formal_I21_pending_game_integration', 'source-fidelity-r11 is the accepted 100-tile natural-scene pickup; exact terrain/mountain providers, source-mesh tree shadows and retained hydrology coexist', 'Port the selected natural-scene paths into the game renderer. Cities remain unchanged and must supply authoritative tree-exclusion footprints.'),
+ ('combined_scene', ['L21'], 'formal_I21_pending_game_integration', 'source-fidelity-r13 is the accepted 100-tile natural-scene pickup; exact terrain/mountain providers, one face/cast light vector, source-mesh tree shadows and retained hydrology coexist', 'Port the selected natural-scene paths and executable shadow contract into the game renderer. Cities remain unchanged and must supply authoritative tree-exclusion footprints.'),
  ('wonders_districts', [], 'deferred_M9_M10_M11', 'existing future contracts only', 'Do not implement early.'),
 ]
 
 ENTRIES = {
  'terrain': ['systems/relief/beauty_terrain.module.json','systems/relief/beauty_terrain.cpp','shaders/relief/beauty_terrain.hlsl','systems/relief/beauty_mountain.module.json','systems/relief/beauty_mountain.cpp','shaders/relief/beauty_mountain.hlsl','fixtures/beauty/source-fidelity-r2/inland/terrain.hlsl','fixtures/beauty/source-fidelity-r2/inland/mountain.hlsl','fixtures/beauty/source-fidelity-r2/inland/terrain.module.json','fixtures/beauty/source-fidelity-r2/inland/mountain.module.json','fixtures/beauty/source-fidelity-r2/inland/hydrology.module.json','shaders/common/frozen_l21.hlsl','shared/frozen_scene.cpp','shared/recording_adapter.h','systems/terrain/surface.h','systems/terrain/scene_adapter.h'],
- 'environment': ['systems/lighting/shadow_field_v1.h','systems/lighting/alpha_coverage_v1.h','shaders/lighting/shadow_visibility_v1.hlsl','shaders/common/hdr_glow_tiled.hlsl'],
+ 'environment': ['systems/lighting/scene_shadow.cpp','systems/lighting/shadow_field_v1.h','systems/lighting/alpha_coverage_v1.h','shaders/lighting/shadow_visibility_v1.hlsl','shaders/common/hdr_glow_tiled.hlsl','tests/lighting/shadow_contract.cpp'],
  'rivers': ['systems/hydrology/river_corridor.h','systems/hydrology/field.h','systems/hydrology/scene_adapter.h','qa/river_corridor_pass.py'],
  'forest_jungle': ['fixtures/beauty/source-fidelity-r2/inland/forest.hlsl','fixtures/beauty/source-fidelity-r2/inland/forest.module.json','systems/objects/beauty_objects.cpp','shaders/objects/beauty_objects.hlsl','systems/objects/canopy_layout.h','systems/lighting/alpha_coverage_v1.h','qa/canopy_variation_pass.py'],
  'water': ['shaders/hydrology/water_natural.hlsl','shaders/hydrology/planar_reflection_pass.hlsl','qa/water_reflection_pass.py'],
@@ -40,7 +40,7 @@ ENTRIES = {
  'palaces': ['systems/objects/capital_styles.json'],
  'territory_borders': ['shared/frozen_scene.cpp','shaders/common/frozen_l21.hlsl'],
  'units': ['systems/objects/beauty_objects.cpp','shaders/objects/beauty_objects.hlsl'],
- 'combined_scene': ['fixtures/beauty/source-fidelity-r2/inland/fixture.json','fixtures/beauty/source-fidelity-r2/inland/base.hlsl','qa/source_fidelity_pickup_evidence.py'],
+ 'combined_scene': ['fixtures/beauty/source-fidelity-r2/inland/fixture.json','fixtures/beauty/source-fidelity-r2/inland-shadow-control/fixture.json','fixtures/beauty/source-fidelity-r2/inland/base.hlsl','qa/source_fidelity_pickup_evidence.py','qa/source_fidelity_shadow_evidence.py'],
 }
 
 AUDITS = ['CURRENT_VISUAL.md','SHADOW_RECEIVER_PASS.md','SHADOW_RECEIVER_r1_EVIDENCE.json',
@@ -159,13 +159,19 @@ COMPOSED_STATE_OF_ART = {
     'forest_source': V2+'systems/objects/beauty_objects.cpp',
     'forest_shader': V2+'fixtures/beauty/source-fidelity-r2/inland/forest.hlsl',
     'audit': V2+'audits/beauty/SOURCE_FIDELITY_PICKUP.md',
-    'report': V2+'audits/beauty/out/source-fidelity-r11/inland/report.json',
-    'repeat_report': V2+'audits/beauty/out/source-fidelity-r12/inland/report.json',
-    'raw_image': V2+'audits/beauty/out/source-fidelity-r11/inland/h12-z1-pan00.bmp',
-    'raw_sha256': 'b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c',
-    'review_image': V2+'audits/beauty/out/source-fidelity-r11/inland/h12-z1-pan00.png',
-    'review_sha256': '95a631ef1d18adce83328c1ba02e588c2f7e45f626ff02da776f5832337a5f6d',
-    'comparison': V2+'audits/beauty/out/source-fidelity-r11/inland/comparison.png',
-    'comparison_sha256': '00a783a992bf1c0bcbb4fd81de5dee23a130a5a286f73933786203e197f53e08',
+    'report': V2+'audits/beauty/out/source-fidelity-r13/inland/report.json',
+    'repeat_report': V2+'audits/beauty/out/source-fidelity-r14/inland/report.json',
+    'raw_image': V2+'audits/beauty/out/source-fidelity-r13/inland/h12-z1-pan00.bmp',
+    'raw_sha256': 'd611be1d83d440a2284ca7e91c366fc4ad14bc4833efda8293f22f7c7008ee7c',
+    'review_image': V2+'audits/beauty/out/source-fidelity-r13/inland/h12-z1-pan00.png',
+    'review_sha256': '82e7f85e3788f2995e95616a7ca906a72ce976948a3e15b9e10d4ab842a38f2e',
+    'comparison': V2+'audits/beauty/out/source-fidelity-r13/inland/comparison.png',
+    'comparison_sha256': '621b98dad020c3a8dcf032bc46d569a4c9e885d8e1f0b8bc5b29d868eff5df50',
+    'shadow_control_fixture': V2+'fixtures/beauty/source-fidelity-r2/inland-shadow-control/fixture.json',
+    'shadow_evidence': V2+'audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.png',
+    'shadow_evidence_sha256': 'd00046ade5ae15efbbed33132a5b97775907a56d4e11fe99e5cb2db7bd1124b4',
+    'shadow_detail': V2+'audits/beauty/out/source-fidelity-r13/inland/shadow-detail.png',
+    'shadow_detail_sha256': '5e75837ac9ba4d139a15f396c28f6f51cd277b3dab2b8bfae4a660f773c011f9',
+    'shadow_evidence_record': V2+'audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.json',
     'disposition': 'agent_visual_qa_pass_ready_for_game_integration',
 }

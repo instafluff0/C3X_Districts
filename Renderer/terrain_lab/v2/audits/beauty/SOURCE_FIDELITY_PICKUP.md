@@ -2,14 +2,16 @@
 
 ## Result: accepted Mac Lab composition
 
-`source-fidelity-r11/inland` is the current 100-tile natural-scene appearance
+`source-fidelity-r13/inland` is the current 100-tile natural-scene appearance
 target. It renders on macOS Metal with the exact accepted terrain, mountain and
 forest providers, shared opacity-aware directional shadows, and retained river
 and water geometry. It replaces the rejected r4 diagnostic for Integration
 pickup; it is not itself a Civ III or Windows integration result.
 
-- [Current native-size frame](out/source-fidelity-r11/inland/h12-z1-pan00.png)
-- [Lossless r4-to-r11 comparison](out/source-fidelity-r11/inland/comparison.png)
+- [Current native-size frame](out/source-fidelity-r13/inland/h12-z1-pan00.png)
+- [Lossless r11-to-r13 comparison](out/source-fidelity-r13/inland/comparison.png)
+- [Matched shadow-on/off proof](out/source-fidelity-r13/inland/shadow-evidence.png)
+- [Native-pixel shadow detail](out/source-fidelity-r13/inland/shadow-detail.png)
 
 Cities are deliberately absent and no city source, selection or appearance was
 changed. Integration must use authoritative building footprints to enforce the
@@ -34,6 +36,14 @@ confirmed `ClipBuildings=true` forest rule before emitting trees.
 - Forest geometry now registers as caster + receiver + alpha cutout in the Q6
   shared shadow field. The r4 circular contact-disk substitute is removed;
   visible shadows are projected from the actual opacity-tested tree triangles.
+- Terrain, mountains and forest use the same `ShadowL` vector for direct face
+  lighting and shadow projection. Tree fill is reduced only enough for canopy
+  faces to remain legible; it does not replace authored normals or opacity.
+- All three providers share the canonical composed basis. Before common vertical
+  displacement, `screen_x = 40 + (world_x + world_y) * 64` and
+  `screen_y = 380 + (world_x - world_y) * 32`. The r11 mountain path incorrectly
+  used an x origin of 104 for already-normalized world coordinates, offsetting
+  visible mountains from their Q6 caster positions by 64 pixels; r13 fixes it.
 - `hydrology.module.json` redraws the retained river/water layer after replacement
   relief while explicitly suppressing its old hill and mountain classifications.
   This restores the river network without bringing back low-detail plateaus.
@@ -49,18 +59,24 @@ per-material repeat/clamp modes and uniform XYZ scale.
 ```sh
 python3 Renderer/terrain_lab/v2/app/runner.py compose \
   --fixture Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json \
-  --candidate source-fidelity-r11-inland \
-  --output Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland \
+  --candidate source-fidelity-r13-inland \
+  --output Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland \
   --hours 12
 ```
 
 The retained noon zoom-1 BMP SHA-256 is
-`b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c`.
+`d611be1d83d440a2284ca7e91c366fc4ad14bc4833efda8293f22f7c7008ee7c`.
 The PNG SHA-256 is
-`95a631ef1d18adce83328c1ba02e588c2f7e45f626ff02da776f5832337a5f6d`.
+`82e7f85e3788f2995e95616a7ca906a72ce976948a3e15b9e10d4ab842a38f2e`.
 The lossless comparison SHA-256 is
-`00a783a992bf1c0bcbb4fd81de5dee23a130a5a286f73933786203e197f53e08`.
-A separate r12 replay reproduced both r11 raw zoom hashes exactly.
+`621b98dad020c3a8dcf032bc46d569a4c9e885d8e1f0b8bc5b29d868eff5df50`.
+A separate r14 replay reproduced both r13 raw zoom hashes exactly.
+
+The matched control fixture changes only Q6 shadow receiving. Its evidence
+records 24,386 native pixels darkened by more than six luminance levels and a
+maximum darkening of 92. At noon, all static natural casters project up-right
+in the shared screen basis. This proves the contribution and direction contract;
+it is not a claim that every remaining animated production subject is unified.
 
 ## Honest boundaries
 

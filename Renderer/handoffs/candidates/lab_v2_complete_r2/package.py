@@ -76,8 +76,13 @@ def state_document():
     if composed_raw['sha256'] != COMPOSED_STATE_OF_ART['raw_sha256']:
         raise ValueError('Recorded composed raw hash drift')
     composed={**COMPOSED_STATE_OF_ART}
-    composed_hash_keys={'review_image':'review_sha256','comparison':'comparison_sha256'}
-    for name in ('review_image','comparison'):
+    composed_hash_keys={
+        'review_image':'review_sha256',
+        'comparison':'comparison_sha256',
+        'shadow_evidence':'shadow_evidence_sha256',
+        'shadow_detail':'shadow_detail_sha256',
+    }
+    for name in ('review_image','comparison','shadow_evidence','shadow_detail'):
         row=pin(local(COMPOSED_STATE_OF_ART[name]))
         if row['sha256'] != COMPOSED_STATE_OF_ART[composed_hash_keys[name]]:
             raise ValueError('Recorded composed '+name+' hash drift')
@@ -98,7 +103,7 @@ def state_document():
         'schema':'c3x.lab_state_of_art.v2',
         'id':'lab-v2-source-fidelity-state-of-art-r2',
         'status':'natural_scene_visual_qa_pass_ready_for_game_integration',
-        'scope':'four authoritative isolated macOS Metal studies plus one accepted 100-tile natural-scene composition; no Civ III/Windows integration',
+        'scope':'four authoritative isolated macOS Metal studies plus the accepted shadow-corrected 100-tile natural-scene composition; no Civ III/Windows integration',
         'visual_target':'Civ VI rendering quality using the Civ V Environment Skin workshop assets',
         'quality_contract':{
             'upstream_assets_are_authority':True,
@@ -116,8 +121,11 @@ def state_document():
             'city_excludes_trees':True,
             'cities_rendered':False,
             'cities_changed':False,
+            'one_face_and_cast_light_vector':True,
+            'canonical_world_projection_shared':True,
+            'matched_shadow_control':COMPOSED_STATE_OF_ART['shadow_control_fixture'],
             'blockers':[],
-            'basis':'Exact beauty_terrain and beauty_mountain providers plus opacity-aware BeautyStudies forest casters share the Q6 scene field; hydrology is retained after replacement relief. Clutter.artdef ClipBuildings=true still requires authoritative city footprints before game tree emission.',
+            'basis':'Exact beauty_terrain and beauty_mountain providers plus opacity-aware BeautyStudies forest casters share one canonical world basis and Q6 ShadowL for both face lighting and cast projection; hydrology is retained after replacement relief. Clutter.artdef ClipBuildings=true still requires authoritative city footprints before game tree emission.',
         },
         'visual_qa':{
             'date':'2026-09-07',
@@ -136,6 +144,8 @@ def state_document():
                 'The selected composition visibly uses the exact source-heightfield mountain provider and distinct source-textured terrain provider at full scene scale.',
                 'Hills are continuous, independently seeded, and carry irregular source-rock patches without repeated per-tile layouts.',
                 'Forest bodies cast readable opacity-aware directional shadows into the shared terrain receiver field; the former circular contact-disk substitute is removed.',
+                'Terrain, mountain and tree shaders use the same Q6 ShadowL that builds the cast field, so face light and every noon cast agree; matched on/off evidence isolates 24,386 visibly darkened pixels.',
+                'Mountain visible geometry now uses the same world-to-screen origin as terrain and forest, removing the 64-pixel caster/receiver projection mismatch.',
                 'Retained rivers and water render after replacement relief without restoring the superseded low-detail hill or mountain geometry.',
             ],
         },
@@ -149,6 +159,8 @@ def state_document():
             'Warrior skin requires authored packed normals and per-material repeat/clamp addressing. Guessed LEAN decoding is disabled.',
             'Warrior placement uses uniform XYZ scale. Source vertices, UVs and proportions are not stretched or shortened.',
             'Grassland, plains and tundra retain distinct source material families. Hills use authored relief plus stable per-hill variation; rock-patch composition is an explicitly labeled Lab inference.',
+            'The composed natural scene uses one authoritative Q6 ShadowL for direct face lighting and shadow projection across terrain, mountains and forests.',
+            'The canonical composed projection is screen_x = 40 + (world_x + world_y) * 64 and screen_y = 380 + (world_x - world_y) * 32 before the shared vertical displacement.',
         ],
         'known_inferences_and_pending':[
             'Exact Firaxis forest scatter order, opacity coverage, LEAN BRDF, ambient SH and temporal postprocessing are not recovered.',
@@ -188,6 +200,7 @@ def refresh_state():
     source_paths.add(V2+'tests/test_lab_state_of_art_pickup.py')
     source_paths.add(V2+'tests/lighting/shadow_contract.cpp')
     source_paths.add(V2+'qa/source_fidelity_pickup_evidence.py')
+    source_paths.add(V2+'qa/source_fidelity_shadow_evidence.py')
     source_paths.add(V2+'app/runner.py')
     for paths in ENTRIES.values():
         source_paths.update(V2+path for path in paths)
@@ -200,15 +213,17 @@ def refresh_state():
     composed=COMPOSED_STATE_OF_ART
     for key in ('fixture','terrain_module','mountain_module','forest_module',
                 'hydrology_module','terrain_shader','mountain_source',
-                'mountain_shader','forest_source','forest_shader','audit'):
+                'mountain_shader','forest_source','forest_shader','audit',
+                'shadow_control_fixture'):
         source_paths.add(composed[key])
     for report_name in ('report','repeat_report'):
         replace_pin(d['evidence_files'],composed[report_name])
         for output in read(local(composed[report_name]))['outputs']:
             replace_pin(d['evidence_files'],output['image'])
-    for key in ('review_image','comparison'):
+    for key in ('review_image','comparison','shadow_evidence','shadow_detail'):
         replace_pin(d['evidence_files'],composed[key])
     replace_pin(d['evidence_files'],str(Path(composed['comparison']).with_name('comparison.json')))
+    replace_pin(d['evidence_files'],composed['shadow_evidence_record'])
     d['systems']=[dict(
         id=i,
         legacy_handoffs=next(row['legacy_handoffs'] for row in d['systems'] if row['id']==i),
@@ -221,12 +236,14 @@ def refresh_state():
     composed_outputs=[pin(local(row['image'])) for row in read(local(composed['report']))['outputs']]
     d['cases'].insert(0,{
         'id':'source-fidelity-inland',
-        'selection':'accepted natural-scene pickup; exact terrain/mountain providers, opacity-aware source-mesh tree shadows and retained hydrology; cities omitted and unchanged',
+        'selection':'accepted shadow-corrected natural-scene pickup; exact terrain/mountain providers, one face/cast light vector, opacity-aware source-mesh tree shadows and retained hydrology; cities omitted and unchanged',
         'fixture':composed['fixture'],
         'report':composed['report'],
         'frames':composed_outputs,
         'review_image':pin(local(composed['review_image'])),
         'comparison':pin(local(composed['comparison'])),
+        'shadow_evidence':pin(local(composed['shadow_evidence'])),
+        'shadow_detail':pin(local(composed['shadow_detail'])),
         'runner_command':'compose',
     })
     for path in source_paths:replace_pin(d['source_files'],path)

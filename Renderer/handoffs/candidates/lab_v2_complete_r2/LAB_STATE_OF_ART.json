@@ -2,7 +2,7 @@
   "schema": "c3x.lab_state_of_art.v2",
   "id": "lab-v2-source-fidelity-state-of-art-r2",
   "status": "natural_scene_visual_qa_pass_ready_for_game_integration",
-  "scope": "four authoritative isolated macOS Metal studies plus one accepted 100-tile natural-scene composition; no Civ III/Windows integration",
+  "scope": "four authoritative isolated macOS Metal studies plus the accepted shadow-corrected 100-tile natural-scene composition; no Civ III/Windows integration",
   "visual_target": "Civ VI rendering quality using the Civ V Environment Skin workshop assets",
   "quality_contract": {
     "upstream_assets_are_authority": true,
@@ -15,13 +15,16 @@
   "composition_contract": {
     "combined_scene_authoritative": true,
     "selected_fixture": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json",
-    "selected_report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/report.json",
+    "selected_report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/report.json",
     "superseded_fixture": "Renderer/terrain_lab/v2/fixtures/objects/beauty-scene.fixture.json",
     "city_excludes_trees": true,
     "cities_rendered": false,
     "cities_changed": false,
+    "one_face_and_cast_light_vector": true,
+    "canonical_world_projection_shared": true,
+    "matched_shadow_control": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland-shadow-control/fixture.json",
     "blockers": [],
-    "basis": "Exact beauty_terrain and beauty_mountain providers plus opacity-aware BeautyStudies forest casters share the Q6 scene field; hydrology is retained after replacement relief. Clutter.artdef ClipBuildings=true still requires authoritative city footprints before game tree emission."
+    "basis": "Exact beauty_terrain and beauty_mountain providers plus opacity-aware BeautyStudies forest casters share one canonical world basis and Q6 ShadowL for both face lighting and cast projection; hydrology is retained after replacement relief. Clutter.artdef ClipBuildings=true still requires authoritative city footprints before game tree emission."
   },
   "visual_qa": {
     "date": "2026-09-07",
@@ -40,6 +43,8 @@
       "The selected composition visibly uses the exact source-heightfield mountain provider and distinct source-textured terrain provider at full scene scale.",
       "Hills are continuous, independently seeded, and carry irregular source-rock patches without repeated per-tile layouts.",
       "Forest bodies cast readable opacity-aware directional shadows into the shared terrain receiver field; the former circular contact-disk substitute is removed.",
+      "Terrain, mountain and tree shaders use the same Q6 ShadowL that builds the cast field, so face light and every noon cast agree; matched on/off evidence isolates 24,386 visibly darkened pixels.",
+      "Mountain visible geometry now uses the same world-to-screen origin as terrain and forest, removing the 64-pixel caster/receiver projection mismatch.",
       "Retained rivers and water render after replacement relief without restoring the superseded low-detail hill or mountain geometry."
     ]
   },
@@ -52,7 +57,9 @@
     "Forest bodies and compound clumps are authored meshes. ArtDef recipes drive variants and counts; placement order remains inferred and deterministic.",
     "Warrior skin requires authored packed normals and per-material repeat/clamp addressing. Guessed LEAN decoding is disabled.",
     "Warrior placement uses uniform XYZ scale. Source vertices, UVs and proportions are not stretched or shortened.",
-    "Grassland, plains and tundra retain distinct source material families. Hills use authored relief plus stable per-hill variation; rock-patch composition is an explicitly labeled Lab inference."
+    "Grassland, plains and tundra retain distinct source material families. Hills use authored relief plus stable per-hill variation; rock-patch composition is an explicitly labeled Lab inference.",
+    "The composed natural scene uses one authoritative Q6 ShadowL for direct face lighting and shadow projection across terrain, mountains and forests.",
+    "The canonical composed projection is screen_x = 40 + (world_x + world_y) * 64 and screen_y = 380 + (world_x - world_y) * 32 before the shared vertical displacement."
   ],
   "known_inferences_and_pending": [
     "Exact Firaxis forest scatter order, opacity coverage, LEAN BRDF, ambient SH and temporal postprocessing are not recovered.",
@@ -244,26 +251,40 @@
     "forest_source": "Renderer/terrain_lab/v2/systems/objects/beauty_objects.cpp",
     "forest_shader": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/forest.hlsl",
     "audit": "Renderer/terrain_lab/v2/audits/beauty/SOURCE_FIDELITY_PICKUP.md",
-    "report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/report.json",
-    "repeat_report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r12/inland/report.json",
+    "report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/report.json",
+    "repeat_report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r14/inland/report.json",
     "raw_image": {
-      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/h12-z1-pan00.bmp",
-      "sha256": "b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c",
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/h12-z1-pan00.bmp",
+      "sha256": "d611be1d83d440a2284ca7e91c366fc4ad14bc4833efda8293f22f7c7008ee7c",
       "bytes": 4352054
     },
-    "raw_sha256": "b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c",
+    "raw_sha256": "d611be1d83d440a2284ca7e91c366fc4ad14bc4833efda8293f22f7c7008ee7c",
     "review_image": {
-      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/h12-z1-pan00.png",
-      "sha256": "95a631ef1d18adce83328c1ba02e588c2f7e45f626ff02da776f5832337a5f6d",
-      "bytes": 848349
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/h12-z1-pan00.png",
+      "sha256": "82e7f85e3788f2995e95616a7ca906a72ce976948a3e15b9e10d4ab842a38f2e",
+      "bytes": 846912
     },
-    "review_sha256": "95a631ef1d18adce83328c1ba02e588c2f7e45f626ff02da776f5832337a5f6d",
+    "review_sha256": "82e7f85e3788f2995e95616a7ca906a72ce976948a3e15b9e10d4ab842a38f2e",
     "comparison": {
-      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/comparison.png",
-      "sha256": "00a783a992bf1c0bcbb4fd81de5dee23a130a5a286f73933786203e197f53e08",
-      "bytes": 1444944
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/comparison.png",
+      "sha256": "621b98dad020c3a8dcf032bc46d569a4c9e885d8e1f0b8bc5b29d868eff5df50",
+      "bytes": 1558836
     },
-    "comparison_sha256": "00a783a992bf1c0bcbb4fd81de5dee23a130a5a286f73933786203e197f53e08",
+    "comparison_sha256": "621b98dad020c3a8dcf032bc46d569a4c9e885d8e1f0b8bc5b29d868eff5df50",
+    "shadow_control_fixture": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland-shadow-control/fixture.json",
+    "shadow_evidence": {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.png",
+      "sha256": "d00046ade5ae15efbbed33132a5b97775907a56d4e11fe99e5cb2db7bd1124b4",
+      "bytes": 983597
+    },
+    "shadow_evidence_sha256": "d00046ade5ae15efbbed33132a5b97775907a56d4e11fe99e5cb2db7bd1124b4",
+    "shadow_detail": {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-detail.png",
+      "sha256": "5e75837ac9ba4d139a15f396c28f6f51cd277b3dab2b8bfae4a660f773c011f9",
+      "bytes": 936661
+    },
+    "shadow_detail_sha256": "5e75837ac9ba4d139a15f396c28f6f51cd277b3dab2b8bfae4a660f773c011f9",
+    "shadow_evidence_record": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.json",
     "disposition": "agent_visual_qa_pass_ready_for_game_integration",
     "settings": {
       "anisotropy": 16,
@@ -284,16 +305,16 @@
     },
     "source_pack_hash": "c07ddf49e9cac948d519517d8e3757c99593f37d1a8fea09dfbeaa0cbb682556",
     "shader_hashes": {
-      "m0/PSFeature": "8168f3c1866f868cd06354ca0f603cb76df252c3963cc4a22c9aa1153144fa12",
-      "m0/PSMain": "3b54f3d3ebc0512d5a737d378c63e51eef00c432dc8c2cfdd079c15e486cf284",
+      "m0/PSFeature": "4af8833afbc7a05f901e6b105a6ab6b521e1e26dd9693bc38712009d7b35ceb4",
+      "m0/PSMain": "e98e6d4ce30920ea45089b543c297cf32a1cb5d338c7caa052cfbba59d85556e",
       "m0/VSFeature": "d29e2bb29fff10c0ffe8405de86ddfb185493381ff34c57898063a679031b58e",
       "m0/VSMain": "f08a346051a2b9affa0512a0bab8a0a0d4e587acad555eadf6c5e6909f0a65c2",
-      "m1/PSFeature": "9225a382fb95d54a51f3349472324eee4a285d9449f5515008d81409140c6959",
-      "m1/PSMain": "eeb35d5b7b7da2f56385daeb9713f725c25ec08a2347eec949caff4968ba300e",
+      "m1/PSFeature": "7383c260f811c20b35488644051d168b1ba3d54d1fdc8d5530fd642b948068de",
+      "m1/PSMain": "c3e3ba3a77a5ee9bf500030eb2de28d024a08f4c1641999c5f3cdf1d81d690ab",
       "m1/VSFeature": "363d12fea035eef7f0e14011000b83d65b352ee3b416dcbe3259bd6fb1734d5e",
       "m1/VSMain": "197871d0de472797009a5c83decbd03a81a6258c93223e9e98f8d60233889389",
-      "m2/PSFeature": "92b53c633a18638729b1e43e18605f292b7b3b55c7ad5dbf0c0ee274c130d041",
-      "m2/PSMain": "8f1c44d0b23ab8fff6b8e61fc47dfebbf6c25c758b8c72e9bc4d054d0692b201",
+      "m2/PSFeature": "e79a9b1d5b81b0809ac2f8ed08ec8923ab3bb27267ca36b0d1d154696c511746",
+      "m2/PSMain": "b7c7b79cdc9f82c3e450df4c0620bd62e74e96eb84b44026900d5a1a075cb21a",
       "m2/VSFeature": "44068f43988caf372c27b77d18ee0e30fa1f560feb67ad7a7d71b029e9cfd800",
       "m2/VSMain": "c4857bafd4f9cdefff96a2130e1a4c36d89ce20fb5ef3b03e7ab29fbc4fad2b7",
       "m3/PSFeature": "bbbb2ebea321fe061176ac26e0ead5a21b23bb39c3bf1fc4a2227075ce32421b",

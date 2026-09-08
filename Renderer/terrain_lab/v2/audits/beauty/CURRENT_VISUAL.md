@@ -1,16 +1,17 @@
 # Current pickup: accepted source-faithful natural composition
 
 The current visual authority is the four isolated studies and the accepted
-`source-fidelity-r11/inland` 100-tile composition in the
+`source-fidelity-r13/inland` 100-tile composition in the
 [Lab state-of-the-art pickup](../../../../handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.md):
-mountain, grassland/plains/tundra/hills, forest and Warrior. R11 directly
+mountain, grassland/plains/tundra/hills, forest and Warrior. R13 directly
 composes the exact `beauty_terrain` and `beauty_mountain` providers, uses actual
 opacity-tested forest meshes as shared directional-shadow casters, and restores
 retained hydrology without the superseded low-detail relief. Cities are excluded
 from this update and preserve their existing r2 selection unchanged. These are
 macOS Metal witnesses using upstream art and metadata; they do not claim Windows
-or Civ III integration. [Current frame](out/source-fidelity-r11/inland/h12-z1-pan00.png)
-and [lossless r4 comparison](out/source-fidelity-r11/inland/comparison.png).
+or Civ III integration. [Current frame](out/source-fidelity-r13/inland/h12-z1-pan00.png),
+[lossless r11 comparison](out/source-fidelity-r13/inland/comparison.png), and
+[matched shadow proof](out/source-fidelity-r13/inland/shadow-evidence.png).
 
 The old `beauty-scene.fixture.json` is superseded as current evidence. It
 predates the source-fidelity corrections and can place trees through buildings.
@@ -20,6 +21,11 @@ rivers and coastlines without flattening or shortening source objects. The
 broader historical pickup catalog remains available for later Integration, but
 does not override the current per-system selections. See
 [the selected composition and exact boundaries](SOURCE_FIDELITY_PICKUP.md).
+
+R13 makes the shared Q6 `ShadowL` authoritative for both direct face lighting
+and cast projection in terrain, mountain and forest shaders. It also places
+mountains on the same `x=40+(world_x+world_y)*64` basis as terrain and trees,
+removing r11's 64-pixel mountain caster/visible-body mismatch.
 
 # Preserved history: city quality (unchanged by current pickup)
 

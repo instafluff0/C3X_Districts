@@ -231,7 +231,7 @@
       "requested_by_user": true,
       "path": "handoffs/candidates/lab_v2_complete_r2/README.md",
       "manifest": "handoffs/candidates/lab_v2_complete_r2/manifest.json",
-      "scope": "Historical implementation catalog preserved; current visual authority is four source-faithful isolated macOS Metal studies plus the accepted 100-tile r11 natural composition using exact terrain/mountain providers, opacity-aware tree shadows and retained hydrology. Cities are unchanged and omitted; no native edits or formal gate advancement.",
+      "scope": "Historical implementation catalog preserved; current visual authority is four source-faithful isolated macOS Metal studies plus the accepted 100-tile r13 natural composition using exact terrain/mountain providers, one shared face/cast light vector, opacity-aware tree shadows and retained hydrology. Cities are unchanged and omitted; no native edits or formal gate advancement.",
       "baseline_commit": "a0683e0d2a5cb0694961d1993b4c56a8aa1d1323",
       "approval": null,
       "required_user_action": [],
@@ -247,8 +247,9 @@
         "prior_full_lab_v2_tests_passed": 97,
         "combined_scene_authoritative": true,
         "combined_fixture": "terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json",
-        "combined_report": "terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/report.json",
-        "combined_noon_zoom1_sha256": "b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c",
+        "combined_report": "terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/report.json",
+        "combined_noon_zoom1_sha256": "d611be1d83d440a2284ca7e91c366fc4ad14bc4833efda8293f22f7c7008ee7c",
+        "shadow_evidence": "terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.json",
         "cities_changed": false,
         "windows_or_civ3_used": false
       },
@@ -262,7 +263,7 @@
       "gates_advanced": [],
       "delivery": {
         "recipient": "Integration agent",
-        "status": "r11 source-fidelity natural composition selected and ready for Integration pickup; cities remain unchanged",
+        "status": "r13 shadow-corrected source-fidelity natural composition selected and ready for Integration pickup; cities remain unchanged",
         "validation": "handoffs/candidates/lab_v2_complete_r2/VALIDATION.json"
       }
     }

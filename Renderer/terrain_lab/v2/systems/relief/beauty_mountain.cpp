@@ -136,7 +136,11 @@ ComposedMountainVertex project_composed_mountain(BiqWindowTile const &tile,
     constexpr float vertical_scale = 0.82f * half_width / 112.0f;
     float world_x = float(tile.column) + 0.5f + (u - 0.5f) * 1.85f;
     float world_y = float(tile.row) + 0.5f + (0.5f - v) * 1.55f;
-    float center_x = 104.0f + (world_x + world_y) * half_width;
+    // The composed terrain and forest providers use the same authoritative
+    // world-to-screen basis: screen_x = 40 + (world_x + world_y) * 64.
+    // Keeping the mountain visible projection on that basis is required for
+    // its world-space silhouette and Q6 cast shadow to meet on the ground.
+    float center_x = 40.0f + (world_x + world_y) * half_width;
     float base_y = 380.0f + (world_x - world_y) * half_height;
     float screen_y = base_y - authoring_height * vertical_scale;
     ComposedMountainVertex out = {};

@@ -26,6 +26,8 @@ class LabStateOfArtPickupTests(unittest.TestCase):
         self.assertTrue(composition["city_excludes_trees"])
         self.assertFalse(composition["cities_rendered"])
         self.assertFalse(composition["cities_changed"])
+        self.assertTrue(composition["one_face_and_cast_light_vector"])
+        self.assertTrue(composition["canonical_world_projection_shared"])
         self.assertEqual(
             "Renderer/terrain_lab/v2/fixtures/objects/beauty-scene.fixture.json",
             composition["superseded_fixture"],
@@ -58,6 +60,31 @@ class LabStateOfArtPickupTests(unittest.TestCase):
         hydrology = json.loads((ROOT / composed["hydrology_module"]).read_text())
         self.assertEqual(1, hydrology["suppress_relief"])
         self.assertEqual(1, hydrology["river_corridor"])
+        self.assertEqual(
+            "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland-shadow-control/fixture.json",
+            composed["shadow_control_fixture"],
+        )
+
+    def test_composed_shadow_direction_and_projection_are_single_source(self):
+        terrain = (V2 / "shaders/relief/beauty_terrain.hlsl").read_text()
+        mountain = (V2 / "shaders/relief/beauty_mountain.hlsl").read_text()
+        forest = (V2 / "shaders/objects/beauty_objects.hlsl").read_text()
+        for shader in (terrain, mountain, forest):
+            self.assertIn("float3 light_direction = ShadowL.xyz;", shader)
+            self.assertIn("q6_shadow_visibility", shader)
+        mountain_source = (V2 / "systems/relief/beauty_mountain.cpp").read_text()
+        self.assertIn(
+            "float center_x = 40.0f + (world_x + world_y) * half_width;",
+            mountain_source,
+        )
+        evidence = json.loads(
+            (V2 / "audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.json").read_text()
+        )
+        self.assertEqual("Q6 shadow receive flag only", evidence["control_difference"])
+        self.assertEqual("up-right", evidence["noon_screen_cast_direction"])
+        self.assertGreater(evidence["changed_pixels_delta_gt_6"], 20000)
+        self.assertFalse(evidence["cities_rendered"])
+        self.assertFalse(evidence["cities_changed"])
 
     def test_manifest_exposes_composed_case_and_updated_system_entries(self):
         manifest = json.loads((PICKUP / "manifest.json").read_text())

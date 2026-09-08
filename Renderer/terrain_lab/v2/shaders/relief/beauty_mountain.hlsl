@@ -200,13 +200,17 @@ Output shade(P input) {
     }
     float3 normal = Quality.x > 0.5 ? detail_normal(geometric, input.world, height_detail) : geometric;
 #ifdef BEAUTY_COMPOSED_SHADOWS
+    // The shared shadow-frame light is authoritative for both the BRDF and
+    // projection, so every mountain face and cast shadow agrees in direction.
+    float3 light_direction = ShadowL.xyz;
     float shadow = q6_shadow_visibility(ShadowField, input.world, normal,
         ShadowU, ShadowV, ShadowL, ShadowFlags.x > 0.5, true);
 #else
+    float3 light_direction = Sun.xyz;
     float shadow = horizon_visibility(input.world);
 #endif
-    float ndl = saturate(dot(normal, Sun.xyz));
-    float wrap = saturate((dot(normal, Sun.xyz) + 0.18) / 1.18);
+    float ndl = saturate(dot(normal, light_direction));
+    float wrap = saturate((dot(normal, light_direction) + 0.18) / 1.18);
     float altitude = input.material.y > 1.5 ? input.material.x : 0;
     float cavity = lerp(0.76, 1.0, smoothstep(0.03, 0.48, altitude));
     float sky = saturate(normal.z * 0.5 + 0.5);
@@ -214,9 +218,9 @@ Output shade(P input) {
     float3 diffuse = albedo * (ambient + SunColorExposure.rgb * Sun.w *
                                (0.055 + 0.945 * wrap) * shadow);
     float roughness = lerp(0.88, 0.38, saturate(specular_map));
-    float specular = Quality.x > 0.5 ? ggx(normal, Sun.xyz, normalize(View.xyz), roughness, 0.045) : 0;
+    float specular = Quality.x > 0.5 ? ggx(normal, light_direction, normalize(View.xyz), roughness, 0.045) : 0;
     float rim = Quality.x > 0.5 ? pow(1 - saturate(dot(normal, normalize(View.xyz))), 3) *
-        saturate(dot(normal, -Sun.xyz) * 0.5 + 0.5) : 0;
+        saturate(dot(normal, -light_direction) * 0.5 + 0.5) : 0;
     float3 radiance = diffuse + SunColorExposure.rgb * Sun.w * specular * shadow +
                       Ambient.rgb * rim * 0.13;
     output.color = float4(max(radiance, 0), 1);

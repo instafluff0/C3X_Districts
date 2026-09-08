@@ -2,7 +2,7 @@
 
 This is the authoritative visual pickup for the current investigation. It
 contains four retained per-system macOS Metal witnesses and the accepted
-`source-fidelity-r11/inland` 100-tile natural-scene composition. It is not a
+`source-fidelity-r13/inland` 100-tile natural-scene composition. It is not a
 Civ III or Windows integration claim. Cities are explicitly excluded and keep
 their pre-existing r2 disposition. The machine-readable authority is
 [LAB_STATE_OF_ART.json](LAB_STATE_OF_ART.json).
@@ -13,11 +13,12 @@ their pre-existing r2 disposition. The machine-readable authority is
 | Grassland, plains, tundra and hills | `beauty-land-types-r1` | Distinct source material families, authored standard-hill relief and deterministic 3/2/2 source rock-patch recipes. |
 | Forest | `beauty-trees-r18` | All 22 source bodies, 25 placement records and count weight 180; packed normals and `Generic_OPAC` masks. |
 | Warrior | `beauty-warrior-r4` | Complete posed components, packed normals and source repeat/clamp addressing; no guessed LEAN decode. |
-| Composed natural scene | `source-fidelity-r11/inland` | Exact terrain and mountain providers, source-body forests, opacity-aware directional cast shadows and retained hydrology coexist in one 100-tile viewport. |
+| Composed natural scene | `source-fidelity-r13/inland` | Exact terrain and mountain providers, source-body forests, one face/cast `ShadowL`, opacity-aware directional cast shadows and retained hydrology coexist in one 100-tile viewport. |
 
-The [native-size composed frame](../../../terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/h12-z1-pan00.png)
-and [lossless r4 comparison](../../../terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/comparison.png)
-are pinned. A separate r12 replay reproduced both raw zoom hashes exactly.
+The [native-size composed frame](../../../terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/h12-z1-pan00.png),
+[lossless r11 comparison](../../../terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/comparison.png),
+and [matched shadow proof](../../../terrain_lab/v2/audits/beauty/out/source-fidelity-r13/inland/shadow-evidence.png)
+are pinned. A separate r14 replay reproduced both raw zoom hashes exactly.
 
 The visual-quality contract is strict:
 
@@ -36,6 +37,9 @@ Integration must use the r2 composition fixture and modules, not the rejected
 caster + receiver + alpha-cutout metadata. The shared Q6 field supplies actual
 source-triangle tree shadows. A final hydrology module preserves rivers and
 water while suppressing the superseded low-detail hill/mountain geometry.
+R13 additionally makes the Q6 `ShadowL` used to build that field authoritative
+for terrain, mountain and tree face lighting, and fixes mountain projection to
+the same canonical world-to-screen origin used by terrain and forest.
 
 The older `beauty-scene.fixture.json` remains superseded because it can place
 vegetation through buildings. The accepted natural witness renders no cities
@@ -57,5 +61,5 @@ python3 Renderer/handoffs/candidates/lab_v2_complete_r2/package.py verify --evid
 ```
 
 These checks prove inputs, contracts, retained pixels and determinism. Visual
-inspection remains the authority for appearance; r11 passed the agent visual
+inspection remains the authority for appearance; r13 passed the agent visual
 review requested before handing the work to Integration.

@@ -4,7 +4,7 @@
 
 The authoritative current checkpoint is `LAB_STATE_OF_ART.json`. It records the
 retained mountain, land-type/hill, forest and Warrior images plus the accepted
-100-tile r11 natural composition and every source/module/shader entry point
+100-tile r13 natural composition and every source/module/shader entry point
 that produced them. The required fast gate is:
 
 ```sh
@@ -21,7 +21,7 @@ Cities are excluded from this update and retain the pre-existing r2 selection.
 
 The prior combined beauty scene is not current evidence: it permits trees
 inside buildings. The rejected r4 diagnostic is superseded by
-`source-fidelity-r11/inland`, which directly uses the exact terrain/mountain
+`source-fidelity-r13/inland`, which directly uses the exact terrain/mountain
 providers, source-mesh forest shadows and retained hydrology. It contains no city
 rendering. Integration owns the confirmed
 `ClipBuildings`, `ClipRiver` and `ClipCoastline` rules and must preserve complete
@@ -29,16 +29,16 @@ source proportions.
 
 The broader deliverable remains an implementation-preparation catalog with
 executable pin, replay and shadow-coordinate checks. Its historical combined
-cases do not override the current per-system selections; r11 is the authoritative
+cases do not override the current per-system selections; r13 is the authoritative
 natural-scene coexistence witness.
 Images remain the acceptance evidence; tests and hashes support reproducibility
 only.
 
-R11 ran at both configured zooms; a separate r12 repeat reproduced both raw
+R13 ran at both configured zooms; a separate r14 repeat reproduced both raw
 hashes exactly. Fresh forest r19 and Warrior r5 quick runs reproduced
 the accepted raw hashes exactly after the shared object source and vertex
 contract changed. The composed noon zoom-1 BMP is pinned at
-`b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c`;
+`d611be1d83d440a2284ca7e91c366fc4ad14bc4833efda8293f22f7c7008ee7c`;
 the lossless comparison is pinned in the state manifest.
 
 ## Verification at preparation

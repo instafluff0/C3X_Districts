@@ -3,6 +3,7 @@
 #include "shadow_field_v1.h"
 #include "alpha_coverage_v1.h"
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 using namespace q6;
 struct CasterCoverage { std::array<std::array<float,2>,3> uv; unsigned binding; float cutoff=.5f; };
@@ -13,6 +14,9 @@ int main(int argc,char**argv) {
  if(argc!=5 && argc!=6)return 2;
  auto p=labv2::read_packet(argv[1]);
  if(p.color_branch!=1)throw std::runtime_error("Q6 shadows require scene-linear packet");
+ std::ifstream descriptor(argv[4]);
+ std::string fixture((std::istreambuf_iterator<char>(descriptor)),{});
+ bool shadow_control=fixture.find("source-fidelity-r2-inland-shadow-control")!=std::string::npos;
  auto e=c3x_renderer::evaluate_environment(float(atof(argv[3])),0);
  auto basis=build_shadow_frame(std::vector<WorldTriangle>{},e,64,6);
  std::vector<WorldTriangle> triangles;
@@ -128,7 +132,7 @@ int main(int argc,char**argv) {
  p.textures.push_back(raster_shadow_field(triangles,basis.U,basis.V,basis.L,resolution,span,alpha));
  float constants[]={basis.U[0],basis.U[1],basis.U[2],span,
   basis.V[0],basis.V[1],basis.V[2],float(resolution),basis.L[0],basis.L[1],basis.L[2],0,
-  origin[0],origin[1],origin[2],0,1,1,0,0};
+  origin[0],origin[1],origin[2],0,shadow_control?0.f:1.f,1,0,0};
  unsigned frame=unsigned(p.buffers.size());p.buffers.emplace_back(sizeof(constants));
  memcpy(p.buffers.back().data(),constants,sizeof(constants));
  constants[16]=0;unsigned no_receive_frame=unsigned(p.buffers.size());
@@ -140,6 +144,7 @@ int main(int argc,char**argv) {
  }
  p.draws=std::move(draws);p.binding_contract=2;
  std::cout<<"Q6 actual source casters="<<triangles.size()<<" receivers="<<receivers
-  <<" removed legacy shadow triangles="<<removed<<" field_span="<<span<<"\n";
+  <<" removed legacy shadow triangles="<<removed<<" field_span="<<span
+  <<" receive_shadows="<<(shadow_control?0:1)<<"\n";
  return labv2::write_packet(argv[2],p)?0:1;
 }

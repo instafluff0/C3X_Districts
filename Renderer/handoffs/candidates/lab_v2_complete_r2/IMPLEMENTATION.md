@@ -5,7 +5,7 @@
 Before using the older composed-system catalog below, read
 [LAB_STATE_OF_ART.md](LAB_STATE_OF_ART.md) and consume
 [LAB_STATE_OF_ART.json](LAB_STATE_OF_ART.json). The four per-system Metal
-witnesses remain the detailed source-of-truth; `source-fidelity-r11/inland` is
+witnesses remain the detailed source-of-truth; `source-fidelity-r13/inland` is
 the accepted coexistence proof using their exact terrain, mountain and forest
 paths with shared source-mesh shadows and retained hydrology. Cities are excluded from this
 update: preserve the pre-existing r2 city catalog and implementation without
@@ -25,6 +25,22 @@ building/river/coastline exclusions and the selected opacity-aware directional
 cast shadows. Do not port the rejected r4 `frozen_l21` approximation or contact disks. The
 superseded scene that allows trees inside buildings is not a fallback or an
 acceptance witness.
+
+The r13 shadow correction is mandatory, not an optional polish pass:
+
+1. Build one Q6 light-space frame from the captured `EnvironmentState`.
+2. Bind its normalized `ShadowL` to terrain, mountain and forest shaders and
+   use that exact vector for diffuse/specular face lighting as well as the
+   source-triangle shadow projection. Do not retain provider-local sun vectors.
+3. Convert every static natural vertex to the same world basis before either
+   projection or shadow submission. At the Lab viewport, the check equation is
+   `screen_x = 40 + (world_x + world_y) * 64` and
+   `screen_y = 380 + (world_x - world_y) * 32 - world_z * 52.48`.
+4. Preserve forest caster + receiver + alpha-cutout metadata and sample the
+   authored opacity mask; do not substitute circular contact disks.
+5. Run the matched shadow control. It must change only the Q6 receive flag and
+   must leave city rendering absent/unchanged. The pinned r13 proof shows one
+   common noon up-right cast direction and 24,386 meaningfully darkened pixels.
 
 All paths below are repository-relative. Native ownership is based on the
 Integration agent’s read-only report at commit
@@ -56,12 +72,12 @@ actions. These prevent split bodies, stale pixels and magenta edge artifacts.
 
 | System | Selected entry points under `Renderer/terrain_lab/v2/` | Native landing point / constraint |
 | --- | --- | --- |
-| Terrain, shore, hills, mountains, volcano | `fixtures/beauty/source-fidelity-r2/inland/{terrain,mountain,hydrology}.module.json`, `systems/relief/{beauty_terrain,beauty_mountain}.cpp`, `shaders/relief/{beauty_terrain,beauty_mountain}.hlsl` | Retain `native/profile_v2` capture/cache and optimized world queries. Port the exact selected providers: distinct terrain families, independently seeded authored hills/rock footprints, five authored mountain macro variants and complete 2K material channels. Retain hydrology after replacement relief and suppress the old hill/mountain geometry. |
-| Forest / canopy | `fixtures/beauty/source-fidelity-r2/inland/forest.module.json`, `systems/objects/beauty_objects.cpp`, `shaders/objects/beauty_objects.hlsl`, `systems/objects/canopy_layout.h`, `systems/lighting/alpha_coverage_v1.h` | Use the BeautyStudies inventory: 22 bodies, 25 recipes, total source count 180, opacity masks, packed normals and source address modes. Preserve caster + receiver + cutout metadata and authoritative exclusions. |
+| Terrain, shore, hills, mountains, volcano | `fixtures/beauty/source-fidelity-r2/inland/{terrain,mountain,hydrology}.module.json`, `systems/relief/{beauty_terrain,beauty_mountain}.cpp`, `shaders/relief/{beauty_terrain,beauty_mountain}.hlsl` | Retain `native/profile_v2` capture/cache and optimized world queries. Port the exact selected providers: distinct terrain families, independently seeded authored hills/rock footprints, five authored mountain macro variants and complete 2K material channels. Use the canonical world projection and shared `ShadowL`; the old mountain x-origin of 104 after world normalization is forbidden. Retain hydrology after replacement relief and suppress the old hill/mountain geometry. |
+| Forest / canopy | `fixtures/beauty/source-fidelity-r2/inland/forest.module.json`, `systems/objects/beauty_objects.cpp`, `shaders/objects/beauty_objects.hlsl`, `systems/objects/canopy_layout.h`, `systems/lighting/alpha_coverage_v1.h` | Use the BeautyStudies inventory: 22 bodies, 25 recipes, total source count 180, opacity masks, packed normals and source address modes. Preserve readable key/fill face separation, caster + receiver + cutout metadata, the shared `ShadowL`, and authoritative exclusions. |
 | Sampling / final reconstruction | `fixtures/beauty/source-fidelity-r2/inland/fixture.json`, `shaders/sampling/linear_reconstruct.hlsl`, `app/runner.py` | Preserve scene-linear output and one final reconstruction at 4x MSAA, 16x anisotropy, 2x render scale and -1 mip bias. Do not downsample or precompress source materials before the renderer owns the final gameplay-size image. |
 | River shape and bank placement | `systems/hydrology/{river_corridor,field,scene_adapter}.h`, `qa/river_corridor_pass.py` | Preserve canonical Civ III river edges/topology. Share corridor/exclusion data with terrain, trees, rocks, objects and bridges. Headwater pool, mouth and terrain relief must use the same field. |
 | Natural water and reflections | `shaders/hydrology/{water_natural,planar_reflection_pass}.hlsl`, `qa/water_reflection_pass.py` | GPU reflected geometry prepass → water sampling in scene-linear radiance → single final exposure/transfer. Reflection provider halo includes offscreen casters. No pre-tonemapped reflection texture or new presenter. |
-| Source shadow receiver correction | `systems/lighting/{shadow_field_v1,alpha_coverage_v1}.h`, `shaders/lighting/shadow_visibility_v1.hlsl` | Keep production source pages/alpha support and texel-derived normal offset; retain world-space receiver plane from unshifted geometry. |
+| Source shadow receiver correction | `systems/lighting/scene_shadow.cpp`, `systems/lighting/{shadow_field_v1,alpha_coverage_v1}.h`, `shaders/lighting/shadow_visibility_v1.hlsl`, `qa/source_fidelity_shadow_evidence.py` | Keep production source pages/alpha support and texel-derived normal offset; retain the world-space receiver plane from unshifted geometry. Require the matched on/off proof and one face/cast light vector before visual sign-off. |
 
 The natural water pass inherits the newer river/canopy stack in the three main
 regions; longcoast and freshwater have explicitly different foundation fixtures.

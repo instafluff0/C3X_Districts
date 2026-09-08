@@ -176,7 +176,14 @@ Output shade(P input) {
                                       Gloss.Sample(Clamp, input.uv).r);
     }
 
-    float ndl = saturate(dot(normal, Sun.xyz));
+#ifdef BEAUTY_COMPOSED_SHADOWS
+    // Use the exact vector that projects the Q6 field. This makes canopy face
+    // shading and every tree/mountain cast shadow share one sun direction.
+    float3 light_direction = ShadowL.xyz;
+#else
+    float3 light_direction = Sun.xyz;
+#endif
+    float ndl = saturate(dot(normal, light_direction));
     float diffuse = ndl;
 #ifdef BEAUTY_COMPOSED_SHADOWS
     float shadow = q6_shadow_visibility(ShadowField, input.world, normal,
@@ -185,14 +192,17 @@ Output shade(P input) {
     float shadow = 1.0;
 #endif
     float sky = saturate(normal.z * 0.5 + 0.5);
-    float3 ambient = Ambient.rgb * Ambient.a * lerp(0.48, 1.0, sky) * ao;
+    // Foliage needs readable key/fill separation at map scale; preserve a soft
+    // skylight, but do not let it erase the canopy's shaded faces.
+    float foliage_fill = kind > 0.5 && kind < 1.5 ? 0.72 : 1.0;
+    float3 ambient = Ambient.rgb * Ambient.a * lerp(0.48, 1.0, sky) * ao * foliage_fill;
     float3 radiance = albedo * (ambient + SunColorExposure.rgb * Sun.w *
                                 (0.035 + 0.965 * diffuse) * shadow);
     float roughness = lerp(0.91, 0.31, saturate(gloss));
     if (kind > 0.5 && kind < 1.5) roughness = max(roughness, 0.72);
     float specular_scale = kind > 0.5 && kind < 1.5 ? 0.10 : 0.52;
     radiance += SunColorExposure.rgb * Sun.w * specular_scale *
-                ggx(normal, Sun.xyz, normalize(View.xyz), roughness,
+                ggx(normal, light_direction, normalize(View.xyz), roughness,
                     kind > 0.5 && kind < 1.5 ? 0.020 : 0.045) * shadow;
     if (!(kind > 0.5 && kind < 1.5) && input.secondary.y > 0.5)
         radiance += Emissive.Sample(Clamp, input.uv).rgb * 0.035;
