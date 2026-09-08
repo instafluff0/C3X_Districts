@@ -5,7 +5,7 @@ struct Glow {
     ID3D11Texture2D*color=nullptr,*validity=nullptr,*native=nullptr;
     ID3D11ShaderResourceView*view=nullptr;ID3D11UnorderedAccessView*output=nullptr,*output_validity=nullptr;
     ID3D11RenderTargetView*target=nullptr;
-    profile_v2::LinearTarget linear;
+    render_core::LinearTarget linear;
     float gain=6;
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
     void reset(){linear.reset();drop(target);drop(native);drop(output_validity);drop(output);drop(view);drop(validity);drop(color);drop(settings);drop(shader);}
@@ -14,7 +14,7 @@ struct Glow {
         if(shader)return true;
         std::wstring path(root.begin(),root.end());path+=L"/Renderer/native/city_fidelity/hdr_glow.hlsl";
         ID3DBlob*blob=nullptr,*errors=nullptr;
-        HRESULT hr=profile_v2::compile_cached(path.c_str(),"CSPost","cs_5_0",&blob,&errors);
+        HRESULT hr=render_core::compile_cached(path.c_str(),"CSPost","cs_5_0",&blob,&errors);
         if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
         if(SUCCEEDED(hr))hr=device->CreateComputeShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&shader);drop(blob);
         D3D11_BUFFER_DESC b={};b.ByteWidth=48;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;

@@ -29,7 +29,7 @@
   "tests": [
     "Renderer.tools.asset_compiler.test_resource_animation_runtime",
     "Renderer.native.source_fidelity.test_contract",
-    "Renderer.native.test_profile_v2"
+    "Renderer.native.test_render_core"
   ],
   "references": {
     "d3d11": [

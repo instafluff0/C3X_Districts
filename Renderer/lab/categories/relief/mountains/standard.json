@@ -9,6 +9,7 @@
   "implementation": [
     "Renderer/lab/shared/shaders/relief/beauty_mountain.hlsl",
     "Renderer/native/source_fidelity/geometry.h",
+    "Renderer/lab/shared/natural/relief_mesh_body.h",
     "Renderer/native/source_fidelity/runtime.h",
     "Renderer/native/source_fidelity/kernels.h",
     "Renderer/native/city_fidelity/mountain.hlsl",
@@ -26,12 +27,14 @@
     ],
     "cases": [
       "detail",
-      "gameplay"
+      "gameplay",
+      "coastal"
     ]
   },
   "tests": [
+    "Renderer.lab.test_natural",
     "Renderer.native.source_fidelity.test_contract",
-    "Renderer.native.test_profile_v2"
+    "Renderer.native.test_render_core"
   ],
   "references": {
     "d3d11": [

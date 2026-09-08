@@ -1,16 +1,16 @@
-#include "profile_v2/terrain_query.h"
-#include "profile_v2/coast_index.h"
-#include "profile_v2/world_topology.h"
-#include "profile_v2/world_coast.h"
-#include "profile_v2/relief_query.h"
-#include "profile_v2/exact_point_cache.h"
-#include "profile_v2/reference/systems/terrain/surface.h"
-#include "profile_v2/reference/systems/hydrology/field.h"
-#include "profile_v2/reference/systems/relief/continuous_normal.h"
+#include "render_core/terrain_query.h"
+#include "render_core/coast_index.h"
+#include "render_core/world_topology.h"
+#include "render_core/world_coast.h"
+#include "render_core/relief_query.h"
+#include "render_core/exact_point_cache.h"
+#include "render_core/source/systems/terrain/surface.h"
+#include "render_core/source/systems/hydrology/field.h"
+#include "render_core/source/systems/relief/continuous_normal.h"
 #include <cassert>
 #include <iostream>
 
-namespace port = c3x_renderer::profile_v2;
+namespace port = c3x_renderer::render_core;
 void near(double a,double b,double tolerance=1e-10) {
     if(std::abs(a-b)>tolerance) { std::cerr<<a<<" != "<<b<<"\n"; std::abort(); }
 }
@@ -266,5 +266,5 @@ int main() {
             assert(height_only.authored_blend==0 && height_only.owner[3]==0);
         }
     }
-    std::cout<<"profile_v2: pinned material/shore/normal parity, wrap and relief support passed\n";
+    std::cout<<"render_core: material/shore/normal parity, wrap and relief support passed\n";
 }

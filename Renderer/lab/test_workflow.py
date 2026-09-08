@@ -234,6 +234,71 @@ class FixtureTests(unittest.TestCase):
         rows = self.capture("resources", "water-gameplay").splitlines()[1:]
         self.assertTrue({2, 11, 12, 13}.issubset({int(row.split(",")[2]) for row in rows}))
 
+    def test_river_fixture_is_a_complete_landscape_and_connected_watershed(self):
+        rows = [tuple(map(int, row.split(",")))
+                for row in self.capture("rivers", "gameplay").splitlines()[1:]]
+        tiles = {(x, y): (base, real, river)
+                 for x, y, base, real, _, _, river in rows}
+        real_terrains = {real for base, real, river in tiles.values()}
+        base_terrains = {base for base, real, river in tiles.values()}
+        self.assertTrue({5, 6, 7, 8}.issubset(real_terrains))
+        self.assertTrue({0, 1, 2, 11, 12, 13}.issubset(base_terrains))
+
+        edges = set()
+        for (x, y), (_, _, mask) in tiles.items():
+            c, r = (x + y) // 2, (x - y) // 2
+            candidates = ((2, (c, r + 1), (c + 1, r + 1)),
+                          (8, (c + 1, r), (c + 1, r + 1)),
+                          (32, (c, r), (c + 1, r)),
+                          (128, (c, r), (c, r + 1)))
+            for bit, a, b in candidates:
+                if mask & bit:
+                    edges.add(tuple(sorted((a, b))))
+        degree = {}
+        for a, b in edges:
+            degree[a] = degree.get(a, 0) + 1
+            degree[b] = degree.get(b, 0) + 1
+        endpoints = [node for node, count in degree.items() if count == 1]
+        self.assertEqual(len(endpoints), 2)
+        self.assertTrue(any(a[0] != b[0] for a, b in edges))
+        self.assertTrue(any(a[1] != b[1] for a, b in edges))
+
+        def endpoint_touches_water(node):
+            c, r = node
+            neighbors = ((c - 1, r - 1), (c - 1, r), (c, r - 1), (c, r))
+            return any(tiles.get((i + j, i - j), (2, 2, 0))[0] >= 11
+                       for i, j in neighbors)
+
+        self.assertEqual(sorted(endpoint_touches_water(node) for node in endpoints),
+                         [False, True])
+        self.assertGreaterEqual(sum(real == 6 for _, real, _ in tiles.values()), 12)
+        self.assertGreaterEqual(sum(real == 7 for _, real, _ in tiles.values()), 10)
+        self.assertGreaterEqual(sum(real == 8 for _, real, _ in tiles.values()), 6)
+
+        def natural_real(c, r):
+            return tiles.get((c + r, c - r), (2, 2, 0))[1]
+
+        incident_tiles = set()
+        incident_mountain_counts = []
+        for a, b in edges:
+            c, r = min(a, b)
+            incident = (((c, r), (c, r - 1)) if a[1] == b[1]
+                        else ((c, r), (c - 1, r)))
+            incident_tiles.update(incident)
+            incident_mountain_counts.append(sum(natural_real(i, j) == 6
+                                                  for i, j in incident))
+        self.assertGreaterEqual(sum(natural_real(c, r) == 6
+                                    for c, r in incident_tiles), 6)
+        self.assertLessEqual(max(incident_mountain_counts), 1)
+        forest_rows = {r for (x, y), (_, real, _) in tiles.items() if real == 7
+                       for r in ((x - y) // 2,)}
+        jungle_rows = {r for (x, y), (_, real, _) in tiles.items() if real == 8
+                       for r in ((x - y) // 2,)}
+        self.assertLessEqual(min(forest_rows), -5)
+        self.assertGreaterEqual(max(forest_rows), -1)
+        self.assertLessEqual(min(jungle_rows), -1)
+        self.assertGreaterEqual(max(jungle_rows), 3)
+
     def test_unknown_fixture_fails_before_a_build_or_render(self):
         with patch.object(renderer, "ensure_candidate") as build:
             with self.assertRaisesRegex(ValueError, "Unknown fixture"):

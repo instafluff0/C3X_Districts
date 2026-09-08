@@ -22,7 +22,7 @@ struct Fixture {
     Fixture(){
         for(unsigned count:{1,1,22,25})append(pack,count);
         append(pack,5u);for(char c:std::string("a.dds"))pack.push_back(std::uint8_t(c));
-        bindings=pack.size();for(unsigned i=0;i<45;i++)append(pack,0u);
+        bindings=pack.size();for(unsigned i=0;i<49;i++)append(pack,0u);
         material=pack.size();append(pack,Material{});
         body=pack.size();
         for(unsigned i=0;i<22;i++){

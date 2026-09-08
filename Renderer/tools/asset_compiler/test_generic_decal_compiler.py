@@ -30,6 +30,8 @@ class GenericDecalCompilerTests(unittest.TestCase):
             "terrain/grassland/surface": 11,
             "terrain/plains/surface": 8,
             "terrain/grassland_hills/surface": 3,
+            "terrain/forest/floor": 2,
+            "terrain/jungle/floor": 2,
         }
         for group_id, count in expected_counts.items():
             self.assertIn(group_id, groups)

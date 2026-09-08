@@ -805,7 +805,7 @@ int main() {
         )
         generated = (
             Path(__file__).parent
-            / "profile_v2/generated/shaders/lighting/generated/scene_linear_v1.hlsl"
+            / "render_core/generated/shaders/lighting/generated/scene_linear_v1.hlsl"
         ).read_text(encoding="utf-8")
         self.assertIn("shadow_chunk.animation_texture=animation.view", native)
         self.assertIn(
@@ -1096,6 +1096,7 @@ int main() {
     def test_frame_scheduler_is_dirty_driven_and_timer_safe(self) -> None:
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
         scheduler = (Path(__file__).parent / "frame_scheduler.cpp").read_text(encoding="utf-8")
+        wrapper = (Path(__file__).parent / "c3x_renderer.cpp").read_text(encoding="utf-8")
         api = (Path(__file__).parent / "c3x_renderer_api.h").read_text(encoding="utf-8")
         tick = injected[injected.index("custom_renderer_scheduler_tick ()"):]
         tick = tick[:tick.index("void __stdcall\npatch_on_timer_0x9F6500")]
@@ -1110,18 +1111,28 @@ int main() {
         self.assertNotIn("Sleep", tick)
         self.assertNotIn("p_debug_mode_bits", tick)
 
-        self.assertIn("custom_renderer_scheduler_tick ();\n\ton_timer_0x9F6500 ();", injected)
+        self.assertLess(injected.index("custom_renderer_scheduler_tick ();"),
+                        injected.index("on_timer_0x9F6500 ();", injected.index("patch_on_timer_0x9F6500")))
+        self.assertIn("stage=timer-return", injected)
+        self.assertIn("requested_delta=%u presented_delta=%u", injected)
         self.assertIn("custom_renderer_max_capture_ticks", injected)
         self.assertIn("custom_renderer_max_render_ticks", injected)
         self.assertIn("custom_renderer_max_blit_ticks", injected)
         self.assertIn("custom_renderer_max_map_pass_ticks", injected)
         self.assertIn("custom_renderer_redraw_pending = true", injected)
         self.assertIn("custom_renderer_requested_frames != 0xFFFFFFFFu", injected)
+        self.assertIn("input.cadence_ms = 0x32", tick)
+        self.assertIn("stage=scheduler-callback", wrapper)
+        self.assertIn("base_request=%u base_rebase=%u", wrapper)
+        self.assertIn("pathfinder=%u", wrapper)
+        self.assertIn("requested=%u presented=%u pending=%d", injected)
         self.assertIn("presentation_time_ticks", api)
         self.assertIn("custom_renderer_animation_timestamp", injected)
         self.assertIn("elapsed <= is->custom_renderer_qpc_frequency.QuadPart / 4", injected)
         self.assertIn("visible_animation_count", api)
         self.assertIn("C3X_RENDERER_SCHEDULER_REDRAW_PENDING", api)
+        self.assertIn("C3X_RENDERER_SCHEDULER_PATHFINDER_HOLD", api)
+        self.assertIn("p_main_screen_form->field_4DC0 + 0x61", tick)
         self.assertIn("input->visible_animation_count == 0", scheduler)
         self.assertIn("input.now_ticks - input.event_start_ticks", scheduler)
         self.assertIn("output->request_redraw = 1", scheduler)

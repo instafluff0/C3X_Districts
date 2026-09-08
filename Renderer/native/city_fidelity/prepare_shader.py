@@ -146,7 +146,7 @@ float4 PSNativeCityReflectionEmission(FeaturePixelInput p):SV_Target {
     glow=glow.replace('int4 valid_rect;','int4 valid_rect;float4 NativeGlow;').replace('#define Q8_GLOW_GAIN 6.0','#define Q8_GLOW_GAIN NativeGlow.x')
     (HERE/'hdr_glow.hlsl').write_text(glow)
     (HERE/'local_lights.hlsl').write_text(field)
-    caster=read(HERE.parent/'profile_v2/source_caster.hlsl')
+    caster=read(HERE.parent/'render_core/source_caster.hlsl')
     caster=caster.replace('float PSCutout(Pixel i):SV_TARGET {','''Texture2D city_opacity:register(t34);
 float PSCutout(Pixel i):SV_TARGET {
  if(i.material>=99.5) {

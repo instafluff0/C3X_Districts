@@ -4,9 +4,10 @@
 #include "data.h"
 #include "ground.h"
 namespace c3x_renderer { namespace fidelity {
-template<class Height,class Shore,class Cancelled>
+template<class Lookup,class Height,class Shore,class River,class Weights,class Cancelled>
 bool emit_relief_meshes(NaturalData const&natural,int real,Tile owner,GroundProjection project_natural,
-                       Height height_natural,Shore shore_sample_at,Cancelled cancelled,
+                       Lookup lookup_natural,Height height_natural,Shore shore_sample_at,
+                       River river_at,Weights material_weights_for,Cancelled cancelled,
                        std::vector<MapVertex>&decals,std::vector<MapVertex>&mountains) {
     using Vertex=MapVertex;
     int nc=project_natural.column,nr=project_natural.row;

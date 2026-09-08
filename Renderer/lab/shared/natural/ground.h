@@ -39,6 +39,9 @@ MapVertex ground_surface(GroundProjection const&project,float u,float v,
     out.material_grass=std::max(0.f,(h-2.5f)/112);out.material_plains=1;out.material_desert=support;
     auto shore=shore_at(x,y);
     float coverage=coast_coverage(float(shore.distance),float(shore.beach_width));
+    // Preserve a broader inland coordinate for softening only the transition
+    // receiver. The visible coverage ramp remains unchanged.
+    out.world_valid=1+coast_ramp((float(shore.distance)-float(shore.beach_width)-.10f)/.90f);
     auto weights=weights_at(x,y);
     // Keep native marsh below the selected source families at their boundary.
     float source_weight=std::clamp(1-weights[3],0.f,1.f);

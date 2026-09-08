@@ -9,7 +9,7 @@ from .preparation import ROOT, digest, local
 
 def jobs():
     from Renderer.native.source_fidelity import prepare as natural
-    from Renderer.native.profile_v2 import prepare_assets as cliffs
+    from Renderer.native.render_core import prepare_assets as cliffs
 
     def natural_sources():
         return json.loads((natural.HERE / "provenance.json").read_text())["source_sha256"]
@@ -97,7 +97,7 @@ def jobs():
 
     return (
         ("natural", natural_sources, build_natural, "Renderer/native/source_fidelity/prepare.py"),
-        ("hill-cliff", cliff_sources, build_cliffs, "Renderer/native/profile_v2/prepare_assets.py"),
+        ("hill-cliff", cliff_sources, build_cliffs, "Renderer/native/render_core/prepare_assets.py"),
         ("cities", city_sources, build_cities, "Renderer/native/city_fidelity/prepare_pack.py"),
         ("units", unit_sources, build_units, "Renderer/native/environment_refresh/prepare_units.py"),
         ("resources", lambda: resource_sources("resources"), build_resources,

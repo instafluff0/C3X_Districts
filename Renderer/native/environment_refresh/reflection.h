@@ -2,7 +2,7 @@
 // One guarded off-screen reflection scratch target; no presenter or readback.
 namespace c3x_renderer { namespace environment_refresh {
 struct Reflection {
-    profile_v2::LinearTarget linear;
+    render_core::LinearTarget linear;
     ID3D11VertexShader*vs[5]={};ID3D11PixelShader*ps[5]={};
     ID3D11Buffer*frame=nullptr;
     float height_pixels=0,depth_metric=0;
@@ -18,9 +18,9 @@ struct Reflection {
         for(unsigned i=0;i<5;i++){
             std::string path=root+"/Renderer/native/"+directory+"/"+names[i]+".hlsl";
             std::wstring wide(path.begin(),path.end());ID3DBlob*v=nullptr,*p=nullptr,*errors=nullptr;
-            HRESULT hr=profile_v2::compile_cached(wide.c_str(),"VSReflection","vs_5_0",&v,&errors);
+            HRESULT hr=render_core::compile_cached(wide.c_str(),"VSReflection","vs_5_0",&v,&errors);
             if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
-            if(SUCCEEDED(hr))hr=profile_v2::compile_cached(wide.c_str(),"PSReflection","ps_5_0",&p,&errors);
+            if(SUCCEEDED(hr))hr=render_core::compile_cached(wide.c_str(),"PSReflection","ps_5_0",&p,&errors);
             if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
             if(SUCCEEDED(hr))hr=device->CreateVertexShader(v->GetBufferPointer(),v->GetBufferSize(),nullptr,&vs[i]);
             if(SUCCEEDED(hr))hr=device->CreatePixelShader(p->GetBufferPointer(),p->GetBufferSize(),nullptr,&ps[i]);

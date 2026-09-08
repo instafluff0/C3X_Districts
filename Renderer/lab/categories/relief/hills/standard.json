@@ -8,9 +8,12 @@
   ],
   "implementation": [
     "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
+    "Renderer/lab/shared/natural/data.h",
     "Renderer/native/source_fidelity/geometry.h",
     "Renderer/native/source_fidelity/runtime.h",
     "Renderer/native/source_fidelity/kernels.h",
+    "Renderer/native/source_fidelity/prepare.py",
+    "Renderer/tools/asset_compiler/hill_height_import.py",
     "Renderer/native/city_fidelity/mountain.hlsl",
     "Renderer/native/city_fidelity/terrain.hlsl"
   ],
@@ -31,7 +34,8 @@
   },
   "tests": [
     "Renderer.native.source_fidelity.test_contract",
-    "Renderer.native.test_profile_v2"
+    "Renderer.native.test_render_core",
+    "Renderer.tools.asset_compiler.test_hill_height_import"
   ],
   "references": {
     "d3d11": [

@@ -8,7 +8,7 @@ LAB=ROOT/'Renderer/lab/shared'
 def main():
     import sys
     sys.path.insert(0,str(ROOT))
-    from Renderer.native.profile_v2.generate_shaders import generate
+    from Renderer.native.render_core.generate_shaders import generate
     generate(LAB,HERE,'hydrology.hlsl',complete_rock_channels=True)
     for name in ['field.h','river_corridor.h']:
         source=(LAB/'hydrology'/name).read_text()

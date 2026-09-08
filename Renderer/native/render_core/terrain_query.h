@@ -1,5 +1,5 @@
 #pragma once
-// Production queries adapted from the pinned terrain/shoreline profile 2.
+// Production terrain and shoreline queries retained by the render core.
 // Callers supply authoritative tile access with dependency tracking. No fixture
 // origin, camera, file IO or mutable scene state belongs in these kernels.
 #include <algorithm>
@@ -9,8 +9,8 @@
 #include <map>
 #include <vector>
 
-namespace c3x_renderer { namespace profile_v2 {
-constexpr unsigned visual_profile_revision = 1;
+namespace c3x_renderer { namespace render_core {
+constexpr unsigned render_core_revision = 1;
 constexpr double mountain_scale = 1.30;
 constexpr double volcano_scale = 1.60;
 constexpr double volcano_footprint = .62 / volcano_scale;
@@ -197,4 +197,4 @@ public:
             .46*(1-std::exp(-std::max(0.,-distance)/.85))};
     }
 };
-} } // namespace c3x_renderer::profile_v2
+} } // namespace c3x_renderer::render_core

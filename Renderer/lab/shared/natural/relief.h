@@ -1,7 +1,7 @@
 #pragma once
 // Production relief inputs and query-cache policy, independent of GPU resources.
-#include "../../../native/profile_v2/relief_query.h"
-#include "../../../native/profile_v2/exact_point_cache.h"
+#include "../../../native/render_core/relief_query.h"
+#include "../../../native/render_core/exact_point_cache.h"
 namespace c3x_renderer { namespace fidelity {
 struct ReliefFields {
     std::vector<std::uint8_t> height_pixels;
@@ -74,19 +74,19 @@ float relief_source(Assets const& terrain_textures,bool fidelity_profile,
 // Height-only normal samples intentionally bypass the ground/material cache.
 template<class Lookup,class Source,class Shore,class River,class Dune,class Activity>
 class ReliefSurface {
-    profile_v2::ReliefQuery<Lookup,Source,Shore,River,Dune,Activity> query;
-    profile_v2::FlatGroundRegion flat;
-    profile_v2::ExactPointCache<profile_v2::GroundSample>& scratch;
+    render_core::ReliefQuery<Lookup,Source,Shore,River,Dune,Activity> query;
+    render_core::FlatGroundRegion flat;
+    render_core::ExactPointCache<render_core::GroundSample>& scratch;
     std::size_t& height_queries;
 public:
-    ReliefSurface(profile_v2::World world,int c,int r,double center_distance,
+    ReliefSurface(render_core::World world,int c,int r,double center_distance,
                   Lookup lookup,Source source,Shore shore,River river,Dune dune,Activity activity,
-                  profile_v2::ExactPointCache<profile_v2::GroundSample>& samples,std::size_t& counter)
+                  render_core::ExactPointCache<render_core::GroundSample>& samples,std::size_t& counter)
         :query(world,lookup,source,shore,river,dune,activity),
          flat(c,r,center_distance,lookup),
          scratch(samples),height_queries(counter) {}
-    profile_v2::GroundSample sample(float u,float v) {
-        if(flat.contains(u,v))return profile_v2::GroundSample{};
+    render_core::GroundSample sample(float u,float v) {
+        if(flat.contains(u,v))return render_core::GroundSample{};
         return scratch.get(u,v,[&](){return query.sample(u,v);});
     }
     float height(float u,float v) {

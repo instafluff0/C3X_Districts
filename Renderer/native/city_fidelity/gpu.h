@@ -28,7 +28,7 @@ struct Gpu {
         char const*entries[]={"VSNativeCity","VSNativeCityReflection","PSNativeCity","PSNativeCityEmission","PSNativeCityReflection","PSNativeCityReflectionEmission"};
         for(unsigned i=0;i<6;i++){
             ID3DBlob*blob=nullptr,*errors=nullptr;
-            HRESULT hr=profile_v2::compile_cached(path.c_str(),entries[i],i<2?"vs_5_0":"ps_5_0",&blob,&errors);
+            HRESULT hr=render_core::compile_cached(path.c_str(),entries[i],i<2?"vs_5_0":"ps_5_0",&blob,&errors);
             if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
             if(SUCCEEDED(hr))hr=i<2?device->CreateVertexShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&vs[i]):
                 device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&ps[i-2]);

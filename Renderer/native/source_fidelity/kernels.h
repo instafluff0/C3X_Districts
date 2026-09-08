@@ -50,9 +50,12 @@ std::uint32_t composed_seed(BiqWindowTile const &tile) {
 Hill composed_hill(BiqWindowTile const &tile) {
     std::uint32_t state = composed_seed(tile);
     float angle = random01(state) * 6.283185307f;
-    float radius_x = 0.43f + random01(state) * 0.05f;
-    float radius_y = 0.37f + random01(state) * 0.05f;
-    float height = 29.0f + random01(state) * 8.0f;
+    // Hills must read as terrain, not small decals: broad neighboring bodies
+    // overlap into rolling chains while remaining far below the 165-unit
+    // authored mountain silhouettes.
+    float radius_x = 0.74f + random01(state) * 0.12f;
+    float radius_y = 0.62f + random01(state) * 0.10f;
+    float height = 48.0f + random01(state) * 12.0f;
     float source_u = random01(state);
     float source_v = random01(state);
     float rockiness = 0.62f + random01(state) * 0.34f;

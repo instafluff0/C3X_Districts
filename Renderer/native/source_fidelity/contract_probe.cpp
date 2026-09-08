@@ -11,7 +11,7 @@
 #undef hydro
 #undef river
 #include "river_corridor.h"
-#include "../profile_v2/terrain_query.h"
+#include "../render_core/terrain_query.h"
 int main(int argc,char**argv){
     if(argc!=2)return 2;
     reference_hydro::Field reference(argv[1]);
@@ -49,7 +49,7 @@ int main(int argc,char**argv){
     }
     // The live boundary adapter consumes the retained continuous field,
     // including four-way intersections and wrapped source coordinates.
-    using namespace c3x_renderer::profile_v2;
+    using namespace c3x_renderer::render_core;
     World world{100,100,true,false};
     auto biome=[](int c,int r){return Tile{r<2?(c<2?2:1):(c<2?0:3),c==2&&r==2?9:2,true};};
     for(double y=-1;y<5;y+=.03125)for(double x=-1;x<5;x+=.03125){

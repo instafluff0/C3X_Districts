@@ -13,11 +13,11 @@
 
 bool compile(char const* entry,char const* target) {
     ID3DBlob *code=nullptr,*errors=nullptr;
-    HRESULT hr=c3x_renderer::profile_v2::compile_cached(L"integrated_v2.hlsl",
+    HRESULT hr=c3x_renderer::render_core::compile_cached(L"terrain_scene.hlsl",
         entry,target,&code,&errors);
     if(errors) { std::fprintf(stderr,"%s",static_cast<char*>(errors->GetBufferPointer())); errors->Release(); }
     if(code) code->Release();
-    std::printf("pickup shader %s: %s\n",entry,SUCCEEDED(hr)?"pass":"FAIL");
+    std::printf("render-core shader %s: %s\n",entry,SUCCEEDED(hr)?"pass":"FAIL");
     return SUCCEEDED(hr);
 }
 int main() {
@@ -30,8 +30,8 @@ int main() {
     if(FAILED(hr)) return 2;
     bool passed=test_source_shadow(device,context);
     {
-        c3x_renderer::profile_v2::LinearTarget linear;
-        c3x_renderer::profile_v2::LinearOutput output;
+        c3x_renderer::render_core::LinearTarget linear;
+        c3x_renderer::render_core::LinearOutput output;
         if(!linear.ensure(device,128,128) || !output.ensure(device)) return 3;
         ID3D11Texture2D *target=nullptr,*readback=nullptr;
         ID3D11RenderTargetView* view=nullptr;
@@ -67,6 +67,6 @@ int main() {
         readback->Release(); view->Release(); target->Release();
     }
     context->ClearState(); context->Release(); device->Release();
-    std::printf("pickup MSAA4 linear/premultiplied/transfer: %s\n",passed?"pass":"FAIL");
+    std::printf("render-core MSAA4 linear/premultiplied/transfer: %s\n",passed?"pass":"FAIL");
     return passed?0:6;
 }

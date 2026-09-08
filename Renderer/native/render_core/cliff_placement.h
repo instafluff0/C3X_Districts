@@ -4,7 +4,7 @@
 #include <tuple>
 #include <stdexcept>
 
-namespace c3x_renderer { namespace profile_v2 {
+namespace c3x_renderer { namespace render_core {
 struct CliffPlacement {
     Point position;
     double z=0,scale=0,yaw=0;

@@ -9,6 +9,9 @@
   "implementation": [
     "Renderer/lab/shared/shaders/objects/beauty_objects.hlsl",
     "Renderer/native/source_fidelity/geometry.h",
+    "Renderer/lab/shared/natural/vegetation_floor_mesh_body.h",
+    "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
+    "Renderer/tools/asset_compiler/decal_sets.json",
     "Renderer/native/source_fidelity/runtime.h",
     "Renderer/native/city_fidelity/objects.hlsl",
     "Renderer/native/terrain_scene_runtime.cpp"
@@ -30,7 +33,7 @@
   },
   "tests": [
     "Renderer.native.source_fidelity.test_contract",
-    "Renderer.native.test_profile_v2"
+    "Renderer.native.test_render_core"
   ],
   "references": {
     "d3d11": [

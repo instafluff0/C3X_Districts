@@ -25,7 +25,8 @@ int main() {
             expected.y=base-(h-2.5f)*project.relief_scale;
             expected.z=base+(h-2.5f)*.0016f*target;
             expected.u=x;expected.v=y;expected.world_x=x;expected.world_y=y;
-            expected.world_z=h/112;expected.world_valid=1;
+            expected.world_z=h/112;
+            expected.world_valid=1+coast_ramp((.36f-.2f-.10f)/.90f);
             constexpr float e=.006f;
             float nx=-(height(x+e,y,nullptr)-height(x-e,y,nullptr))/(2*e*128);
             float ny=-(height(x,y+e,nullptr)-height(x,y-e,nullptr))/(2*e*128);

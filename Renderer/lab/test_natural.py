@@ -14,7 +14,7 @@ class NaturalInputs(unittest.TestCase):
         self.shared_probe("patterns", "200000 hashes/random values, 132612 exact dune samples")
 
     def test_mesh_emission_and_exclusion_queries(self):
-        self.shared_probe("mesh", "326 scopes")
+        self.shared_probe("mesh", "328 scopes")
 
     def test_relief_inputs_and_query_policy(self):
         self.shared_probe("relief", "1440 exact field samples, 16 scopes")
@@ -68,7 +68,7 @@ class NaturalInputs(unittest.TestCase):
                 self.assertEqual(path.stat().st_nlink, 1)
 
     def test_cliff_path_table_and_source_protection(self):
-        from Renderer.native.profile_v2 import prepare_assets as assets
+        from Renderer.native.render_core import prepare_assets as assets
         header = b"C3XVEG1\0" + struct.pack("<4I", 1, 24, 6, 1)
         with self.assertRaisesRegex(ValueError, "Truncated"):
             assets.bundle_paths(header)
@@ -80,7 +80,7 @@ class NaturalInputs(unittest.TestCase):
             assets.local(assets.SOURCE / "../outside.dds", assets.SOURCE)
 
     def test_current_cliff_rebuild_preserves_payloads(self):
-        from Renderer.native.profile_v2 import prepare_assets as assets
+        from Renderer.native.render_core import prepare_assets as assets
         if not (assets.SOURCE / "cliffs.bin").exists():
             self.skipTest("Preserved local hill/cliff inputs are unavailable")
         with tempfile.TemporaryDirectory(dir=ROOT / "Renderer/lab/.cache") as directory:

@@ -36,6 +36,10 @@ cbuffer ShadowFrame : register(b1) {
 #else
 Texture2D TundraSpecular : register(t17);
 #endif
+Texture2D ForestFloorColor : register(t22);
+Texture2D ForestFloorHeight : register(t23);
+Texture2D JungleFloorColor : register(t24);
+Texture2D JungleFloorHeight : register(t25);
 SamplerState Wrap : register(s0);
 SamplerState Clamp : register(s1);
 
@@ -128,7 +132,26 @@ Output shade(P input) {
     float specular_map;
     float alpha = 1;
 
-    if (input.material.y > 1.5) {
+    if (input.material.y > 2.5) {
+        bool jungle_floor = input.material.y > 3.5;
+        float4 floor_sample = jungle_floor ? JungleFloorColor.Sample(Clamp, input.uv) :
+                                             ForestFloorColor.Sample(Clamp, input.uv);
+        float2 floor_normal = jungle_floor ? JungleFloorHeight.Sample(Clamp, input.uv).rg :
+                                             ForestFloorHeight.Sample(Clamp, input.uv).rg;
+        clip(floor_sample.a - 0.06);
+        // The decoded decal is the confirmed source albedo. Civ VI's final
+        // vegetation-floor response is much darker beneath the canopy than a
+        // normally lit terrain decal; the exact engine AO equation is not in
+        // the package, so retain the source hue while reconstructing that
+        // canopy attenuation explicitly.
+        float3 canopy_tint = float3(0.58, 0.58, 0.58);
+        if (jungle_floor) canopy_tint = float3(0.30, 0.28, 0.52);
+        albedo = floor_sample.rgb * canopy_tint;
+        geometric = decal_normal(input, floor_normal);
+        height_detail = floor_normal.r;
+        specular_map = 0.04;
+        alpha *= floor_sample.a;
+    } else if (input.material.y > 1.5) {
         float4 decal = HillDecalColor.Sample(Clamp, input.uv);
         clip(decal.a - 0.015);
         // The decal defines the irregular authored patch footprint. Its paired

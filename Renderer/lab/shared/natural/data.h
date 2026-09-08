@@ -32,7 +32,7 @@ struct NaturalData {
     std::vector<Material> materials;
     std::vector<Body> bodies;
     std::vector<Recipe> recipes;
-    unsigned terrain[22]={},mountain[13]={},macro[5][2]={};
+    unsigned terrain[26]={},mountain[13]={},macro[5][2]={};
     std::string failure;
     template<class Texture,class Read,class Upload>
     bool load_data(std::vector<Texture>&textures,Read read,Upload upload){
@@ -102,8 +102,11 @@ struct NaturalData {
     void hill_height(Hill const& hill,float x,float y,float& h,float& support)const{
         if(std::abs(x-hill.x)>hill.radius_x||std::abs(y-hill.y)>hill.radius_y)return;
         float authored=composed_source_macro(fields[terrain[14]],hill,x,y);
-        float s=smooth01((hill_support(hill,x,y)+(authored-.5f)*.56f-.08f)/.88f);
-        h=std::max(h,2.5f+hill.height*s*(.20f+authored*.94f));support=std::max(support,s);
+        // The authored field supplies crest and valley character, while the
+        // broad topology envelope keeps hills legible as rolling landforms.
+        // Compressing source contrast avoids miniature mountain spikes.
+        float s=smooth01((hill_support(hill,x,y)+(authored-.5f)*.30f-.06f)/.90f);
+        h=std::max(h,2.5f+hill.height*s*(.40f+authored*.56f));support=std::max(support,s);
     }
     template<class Lookup>float height(float x,float y,Lookup lookup,float*support_out=nullptr)const{
         float h=2.5f,support=0;

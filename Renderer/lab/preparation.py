@@ -31,10 +31,10 @@ def digest(path):
 def input_paths(root):
     paths = {step[0] for step in STEPS}
     paths.update(("Renderer/lab/preparation.py",
-        "Renderer/native/profile_v2/generate_shaders.py",
-        "Renderer/native/profile_v2/shadow_receiver.hlsl",
-        "Renderer/native/profile_v2/integrated_v2.hlsl",
-        "Renderer/native/profile_v2/source_caster.hlsl",
+        "Renderer/native/render_core/generate_shaders.py",
+        "Renderer/native/render_core/shadow_receiver.hlsl",
+        "Renderer/native/render_core/terrain_scene.hlsl",
+        "Renderer/native/render_core/source_caster.hlsl",
         "Renderer/native/source_fidelity/shadow_adapter.hlsl",
         "Renderer/native/terrain_rendering.hlsl",
         "Renderer/native/integrated_terrain.hlsl",

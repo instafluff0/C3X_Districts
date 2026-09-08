@@ -63,10 +63,10 @@ template<class Surface>void exercise(Surface&surface,Report&out) {
     }
 }
 template<class Query>struct OriginalSurface {
-    Query&query;profile_v2::FlatGroundRegion&flat;
-    profile_v2::ExactPointCache<profile_v2::GroundSample>&scratch;std::size_t&counter;
-    profile_v2::GroundSample sample(float u,float v) {
-        if(flat.contains(u,v))return profile_v2::GroundSample{};
+    Query&query;render_core::FlatGroundRegion&flat;
+    render_core::ExactPointCache<render_core::GroundSample>&scratch;std::size_t&counter;
+    render_core::GroundSample sample(float u,float v) {
+        if(flat.contains(u,v))return render_core::GroundSample{};
         return scratch.get(u,v,[&](){return query.sample(u,v);});
     }
     float height(float u,float v) {
@@ -75,14 +75,14 @@ template<class Query>struct OriginalSurface {
     }
 };
 template<bool Shared>Report run(unsigned scene,bool fidelity,std::array<ReliefFields,11>const&assets) {
-    Report out;profile_v2::ExactPointCache<profile_v2::GroundSample> scratch;
+    Report out;render_core::ExactPointCache<render_core::GroundSample> scratch;
     auto lookup=[&](int c,int r) {
         out.events.insert(out.events.end(),{1.,double(c),double(r)});
         int real=2;
         if(scene==1)real=c==0 && r==0?10:c==1?6:c==-1?5:0;
         if(scene==2)real=c<0?12:5;
-        if(scene==3 && c==0 && r==0)return profile_v2::Tile{};
-        return profile_v2::Tile{real==5 || real==6 || real==10?2:real,real,true};
+        if(scene==3 && c==0 && r==0)return render_core::Tile{};
+        return render_core::Tile{real==5 || real==6 || real==10?2:real,real,true};
     };
     auto source=[&](int kind,unsigned variant,int channel,float u,float v) {
         out.events.insert(out.events.end(),{2.,double(kind),double(variant),double(channel),u,v});
@@ -91,22 +91,22 @@ template<bool Shared>Report run(unsigned scene,bool fidelity,std::array<ReliefFi
     };
     auto shore=[&](float u,float v) {
         out.events.insert(out.events.end(),{3.,u,v});
-        return profile_v2::ShoreSample{scene==2?double(u)*.4:3.,.06,.9,0};
+        return render_core::ShoreSample{scene==2?double(u)*.4:3.,.06,.9,0};
     };
     auto river=[&](int c,int r,float u,float v) {
         out.events.insert(out.events.end(),{4.,double(c),double(r),u,v});return scene==1?8.f:1000.f;
     };
     auto dune=[&](float u,float v){out.events.insert(out.events.end(),{5.,u,v});return 2.f+u+v;};
     auto activity=[&](int c,int r){out.events.insert(out.events.end(),{6.,double(c),double(r)});return 1.f;};
-    profile_v2::World world{64,64,true,true};
+    render_core::World world{64,64,true,true};
     for(unsigned owner=0;owner<2;owner++) {
         scratch.clear();double center=owner?0:shore(.5f,.5f).distance;
         if constexpr(Shared) {
             ReliefSurface surface(world,0,0,center,lookup,source,shore,river,dune,activity,scratch,out.heights);
             exercise(surface,out);
         } else {
-            profile_v2::ReliefQuery query(world,lookup,source,shore,river,dune,activity);
-            profile_v2::FlatGroundRegion flat(0,0,center,lookup);
+            render_core::ReliefQuery query(world,lookup,source,shore,river,dune,activity);
+            render_core::FlatGroundRegion flat(0,0,center,lookup);
             OriginalSurface<decltype(query)> surface{query,flat,scratch,out.heights};exercise(surface,out);
         }
     }

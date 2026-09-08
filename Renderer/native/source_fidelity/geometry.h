@@ -10,6 +10,12 @@ if(fidelity_profile) {
     auto height_natural=[&](float x,float y,float*support=nullptr){
         return queries.height(natural,pickup_height_at,x,y,support);
     };
+    // The page includes the authoritative halo needed by this complete tile
+    // and its finite-difference collar. Bind it once: mountain tessellation
+    // performs thousands of distance samples and must not re-enter the LRU for
+    // every vertex and normal tap.
+    auto const& river_field=natural.river_page(float(nc)+.5,float(nr)+.5);
+    auto river_at=[&](float x,float y){return river_field.sample({x,y}).distance;};
     GroundProjection project_natural{nc,nr,half_w,half_h,relief_projection_scale,float(frame.target_height)};
     auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
     auto surface=[&](float u,float v){
@@ -19,6 +25,7 @@ if(fidelity_profile) {
         if(!emit_ground_grid(natural_vertices[0],surface,cancelled))return false;
     }
     #include "../../lab/shared/natural/relief_mesh_body.h"
+    #include "../../lab/shared/natural/vegetation_floor_mesh_body.h"
     #include "../city_fidelity/geometry.h"
     if(tile.real_terrain_type==7){
         // Exact current production building meshes/placement, used only as
@@ -54,7 +61,6 @@ if(fidelity_profile) {
         }
         auto&hash=c3x_renderer::stable_hash;
         auto&random=c3x_renderer::stable_random;
-        auto river_at=[&](float x,float y){return natural.river_sample({x,y}).distance;};
         #include "../../lab/shared/natural/forest_mesh_body.h"
     }
 }

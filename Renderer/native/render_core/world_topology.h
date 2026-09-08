@@ -2,7 +2,7 @@
 #include "terrain_query.h"
 #include <stdexcept>
 
-namespace c3x_renderer { namespace profile_v2 {
+namespace c3x_renderer { namespace render_core {
 // A compact copy owned by the rendering worker. The game thread never lends
 // mutable Tile pointers to asynchronous geometry, coast or shadow preparation.
 class WorldTopology {

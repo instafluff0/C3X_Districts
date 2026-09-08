@@ -4,10 +4,10 @@
 #include <cassert>
 #include <iostream>
 #include <map>
-using c3x_renderer::profile_v2::WorldCoast;
-using c3x_renderer::profile_v2::World;
-using c3x_renderer::profile_v2::ExactPointCache;
-using c3x_renderer::profile_v2::ShoreSample;
+using c3x_renderer::render_core::WorldCoast;
+using c3x_renderer::render_core::World;
+using c3x_renderer::render_core::ExactPointCache;
+using c3x_renderer::render_core::ShoreSample;
 using c3x_renderer::fidelity::NaturalData;
 using c3x_renderer::fidelity::SurfaceQueries;
 struct Report {
@@ -40,9 +40,9 @@ Report original(WorldCoast const& world_coast,ExactPointCache<ShoreSample>& shor
     Report result;
     auto& world_dependencies=result.world;auto& coast_dependencies=result.coast;
     struct {int tile_x,tile_y;} tile{tx,ty};
-            std::unordered_map<std::uint64_t,c3x_renderer::profile_v2::Tile> world_lookup_cache;
+            std::unordered_map<std::uint64_t,c3x_renderer::render_core::Tile> world_lookup_cache;
             auto observe_world = [&](std::size_t i, std::uint32_t value) { world_dependencies.emplace(i,value); };
-            std::array<c3x_renderer::profile_v2::Tile,81> nearby_world_tiles{};
+            std::array<c3x_renderer::render_core::Tile,81> nearby_world_tiles{};
             std::array<bool,81> nearby_world_ready{};
             int nearby_c=(tile.tile_x+tile.tile_y)/2-4,nearby_r=(tile.tile_x-tile.tile_y)/2-4;
             auto world_lookup = [&](int c, int r) {
@@ -65,9 +65,9 @@ Report original(WorldCoast const& world_coast,ExactPointCache<ShoreSample>& shor
             };
             float shore_center_u=float(tile.tile_x+tile.tile_y)*.5f+.5f;
             float shore_center_v=float(tile.tile_x-tile.tile_y)*.5f+.5f;
-            c3x_renderer::profile_v2::ShoreSample shore_center{};bool shore_center_ready=false;
+            c3x_renderer::render_core::ShoreSample shore_center{};bool shore_center_ready=false;
             shore_samples.clear();
-            c3x_renderer::profile_v2::WorldCoast::Patch shore_patch;
+            c3x_renderer::render_core::WorldCoast::Patch shore_patch;
             bool shore_patch_attempted=false;
             auto shore_sample_at = [&](float u,float v) {
                 // Distance to a closed contour is 1-Lipschitz. Once the
@@ -75,7 +75,7 @@ Report original(WorldCoast const& world_coast,ExactPointCache<ShoreSample>& shor
                 // response collar, its saturated values are exact. The same
                 // certificate detects any newly closer coast on terrain edits.
                 if(shore_center_ready && shore_center.distance>1.5+std::hypot(u-shore_center_u,v-shore_center_v))
-                    return c3x_renderer::profile_v2::ShoreSample{2,0,0,0};
+                    return c3x_renderer::render_core::ShoreSample{2,0,0,0};
                 return shore_samples.get(u,v,[&]() {
                     if(shore_center_ready && !shore_patch_attempted) {
                         shore_patch=world_coast.prepare({shore_center_u,shore_center_v},.73,std::abs(shore_center.distance),
@@ -90,7 +90,7 @@ Report original(WorldCoast const& world_coast,ExactPointCache<ShoreSample>& shor
             };
     auto world=world_coast.world().dimensions();
     auto weights=[&](float u,float v) {
-        auto values=c3x_renderer::profile_v2::material_weights({u,v},world,world_lookup);
+        auto values=c3x_renderer::render_core::material_weights({u,v},world,world_lookup);
         std::array<float,5> r;for(int i=0;i<5;i++)r[i]=static_cast<float>(values[i]);return r;
     };
     auto lookup_natural=[&](int c,int r) {

@@ -137,6 +137,24 @@
       ]
     },
     {
+      "group_id": "terrain/forest/floor",
+      "artdef_set": "CLUTTER_FOREST",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "Tree_Dirt_Decal01", "asset_id": "terrain/forest/floor_01"},
+        {"source_asset": "Tree_Dirt_Decal02", "asset_id": "terrain/forest/floor_02"}
+      ]
+    },
+    {
+      "group_id": "terrain/jungle/floor",
+      "artdef_set": "CLUTTER_JUNGLE",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "Jungle_Decal_01", "asset_id": "terrain/jungle/floor_01"},
+        {"source_asset": "Jungle_Decal_02", "asset_id": "terrain/jungle/floor_02"}
+      ]
+    },
+    {
       "group_id": "resource/iron/decals",
       "artdef_set": "CLUTTER_IRON",
       "collection": "Plants",

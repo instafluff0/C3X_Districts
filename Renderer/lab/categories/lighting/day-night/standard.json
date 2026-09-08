@@ -7,7 +7,7 @@
     "Renderer/lab/shared/shaders/common/hdr_glow_tiled.hlsl",
     "Renderer/native/environment_runtime.cpp",
     "Renderer/native/source_fidelity/light_frame.h",
-    "Renderer/native/profile_v2/source_shadow.h",
+    "Renderer/native/render_core/source_shadow.h",
     "Renderer/native/city_fidelity/source_caster.hlsl"
   ],
   "recipe": {
@@ -30,7 +30,7 @@
   },
   "tests": [
     "Renderer.native.source_fidelity.test_contract",
-    "Renderer.native.test_profile_v2"
+    "Renderer.native.test_render_core"
   ],
   "references": {
     "d3d11": [

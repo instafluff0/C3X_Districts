@@ -1,8 +1,9 @@
 # Production terrain helpers
 
-The current C3X checkout is authoritative. This directory contains reusable
-terrain, coastline, relief, shadow and compositing helpers; its older pickup
-name is not a separate development workflow. Use `Renderer/renderer.py`.
+The current C3X checkout is authoritative. This directory contains the reusable
+terrain, coastline, relief, shadow and compositing implementation shared by the
+production renderer. It is one component, not a versioned visual profile. Use
+`Renderer/renderer.py`.
 
 ## Current implementation map
 
@@ -24,6 +25,11 @@ name is not a separate development workflow. Use `Renderer/renderer.py`.
 Current natural-pack decoding, height sampling and lighting-frame calculations
 are shared in `lab/shared/natural/data.h`. Shader source preparation uses
 `lab/shared/shaders`. These are shared implementations, not category copies.
+The preserved shader inputs and numerical test oracles live under `source/`;
+derived shader modules live under `generated/`. `terrain_scene.hlsl` and
+`shader_manifest.json` are the flattened runtime shader and its content record.
+`source_provenance.json` records the retained inputs' historical origin without
+making that old workflow current authority.
 
 ## Findings and invariants worth preserving
 
@@ -79,10 +85,9 @@ python3 Renderer/renderer.py integration grassland
 
 These commands do not install, stage or launch Civ III. Build writes the
 candidate, not the production binary. Technical passes are not visual approval.
-`verify_d3d11.cpp` retains focused hardware checks for source cutouts, shadow-page
-reuse/invalidation, MSAA and linear transfer. The older `verify_native.py`
-contains optional standalone minimap/default-logging diagnostics; its explicit
-`pickup-r1` runs are not current-profile proof or category-workflow gates.
+`VERIFY.bat` retains focused hardware checks for source cutouts, shadow-page
+reuse/invalidation, MSAA and linear transfer. It is a diagnostic supplement to
+the category workflow, not a separate profile or integration gate.
 
 The current edit-reuse witness rebuilds all visible tiles and fails
 its reuse assertion; do not replace that finding with earlier-profile passes.

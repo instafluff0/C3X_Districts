@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Generate the native binding adapter from immutable pickup shader modules.
+"""Generate the native binding adapter from the preserved shader sources.
 
-The reference tree is never edited. Binding, gameplay state and world-wrap
+The source tree is never edited. Binding, gameplay state and world-wrap
 adaptations are explicit here; source material/lighting equations stay pinned.
 """
 from pathlib import Path
@@ -12,9 +12,9 @@ import re
 ROOT = Path(__file__).resolve().parent
 
 
-def generate(source_root=None, output_root=None, output_name='integrated_v2.hlsl', *, complete_rock_channels=False):
-    source_root = Path(source_root) if source_root else ROOT / 'reference'
-    output_root = Path(output_root) if output_root else ROOT
+def generate(source_root=None, output_root=None, output_name='terrain_scene.hlsl', *, complete_rock_channels=False):
+    source_root = (Path(source_root) if source_root else ROOT / 'source').resolve()
+    output_root = (Path(output_root) if output_root else ROOT).resolve()
     native = ROOT.parent
     production = (native / 'terrain_rendering.hlsl').read_text()
     start = production.index('#ifdef C3X_GAME_RENDERER')
@@ -175,8 +175,9 @@ FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)
     (output_root / output_name).write_text(adapter)
     records.append({'path': output_name,
                     'sha256': hashlib.sha256(adapter.encode()).hexdigest()})
-    (output_root / 'generated.json').write_text(json.dumps({'schema': 'c3x.native.shader_adapter.v1',
-        'candidate': 'lab_v2_terrain_lighting_r1' if output_name == 'integrated_v2.hlsl' else 'source-fidelity-r13-retained-hydrology',
+    manifest_name = 'shader_manifest.json' if output_name == 'terrain_scene.hlsl' else 'generated.json'
+    (output_root / manifest_name).write_text(json.dumps({'schema': 'c3x.native.shader_adapter.v1',
+        'component': 'render_core' if output_name == 'terrain_scene.hlsl' else 'source-fidelity-retained-hydrology',
         'files': records}, indent=2)+'\n')
 
 

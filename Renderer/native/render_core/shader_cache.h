@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <cstring>
 
-namespace c3x_renderer { namespace profile_v2 {
-// The pickup shaders are flattened offline: their complete dependency closure
+namespace c3x_renderer { namespace render_core {
+// The production shaders are flattened offline: their complete dependency closure
 // is in this file. One bounded atomic cache file per entry avoids shader
 // compilation on every game launch or device reset. Corruption/drift recompiles.
 inline HRESULT compile_cached(wchar_t const* path,char const* entry,char const* target,

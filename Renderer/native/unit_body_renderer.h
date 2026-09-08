@@ -309,7 +309,7 @@ private:
     ID3D11Buffer *settings=nullptr,*beauty_frame=nullptr,*vertices=nullptr;UINT capacity=0;
     ID3D11SamplerState *samplers[4]={};ID3D11RasterizerState *raster=nullptr;
     ID3D11Texture2D* shadow_texture=nullptr;ID3D11ShaderResourceView* shadow_view=nullptr;
-    profile_v2::LinearTarget linear;profile_v2::LinearOutput transfer;
+    render_core::LinearTarget linear;render_core::LinearOutput transfer;
     ID3D11Texture2D *output=nullptr,*readback=nullptr;ID3D11RenderTargetView *target=nullptr;
     int target_width=0,target_height=0;
     HDC dc=nullptr;HBITMAP bitmap=nullptr;HGDIOBJ previous=nullptr;void* bits=nullptr;

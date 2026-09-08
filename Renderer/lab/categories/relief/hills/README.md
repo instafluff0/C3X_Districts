@@ -1,6 +1,9 @@
 # Hills
 
-Authored hill relief, stable world-seeded form, irregular rock decals and the production coastline join.
+Authored high-resolution hill relief, stable world-seeded rolling chains,
+irregular rock decals and the production coastline join. A locally imported
+generic R8 height field may replace the normalized baseline without creating a
+runtime dependency on its source game or mod.
 
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.

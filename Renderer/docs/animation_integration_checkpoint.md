@@ -76,8 +76,9 @@ the current 78-entry unit pack.
 - Successful body replacement expands the existing native display-owner bounds;
   fallback leaves them unchanged. Do not resize each pose or silently clip
   visible anatomy to manufacture a pass.
-- Keep the input guard: defer ambient redraw requests while a mouse button is
-  held and through the existing release interval. Do not consume input messages
+- Keep the bounded input guard for ordinary UI clicks and the existing release
+  interval. Bypass its click-decision delay immediately when Civ III's own
+  selected-unit map/pathfinder-hold byte is set. Do not consume input messages
   or change native click/pathfinder/gameplay handlers.
 
 Unit shadows currently use the bounded directional whole-kit field and a flat

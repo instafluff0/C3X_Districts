@@ -1,7 +1,7 @@
 #pragma once
 #include "terrain_query.h"
 
-namespace c3x_renderer { namespace profile_v2 {
+namespace c3x_renderer { namespace render_core {
 struct ReliefSample { float height=0,blend=0,displacement=0; };
 struct GroundSample {
     float height=0,authored_height=0,authored_blend=0;

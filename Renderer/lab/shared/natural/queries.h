@@ -5,21 +5,21 @@
 #include <unordered_map>
 #include "data.h"
 #include "../../../native/source_fidelity/coast_join.h"
-#include "../../../native/profile_v2/world_coast.h"
-#include "../../../native/profile_v2/exact_point_cache.h"
+#include "../../../native/render_core/world_coast.h"
+#include "../../../native/render_core/exact_point_cache.h"
 namespace c3x_renderer { namespace fidelity {
 template<class ObserveWorld,class ObserveCoast> class SurfaceQueries {
-    profile_v2::WorldCoast const& coast;
-    profile_v2::ExactPointCache<profile_v2::ShoreSample>& samples;
+    render_core::WorldCoast const& coast;
+    render_core::ExactPointCache<render_core::ShoreSample>& samples;
     ObserveWorld observe_world;
     ObserveCoast observe_coast;
-    std::unordered_map<std::uint64_t,profile_v2::Tile> far_tiles;
-    std::array<profile_v2::Tile,81> nearby_tiles{};
+    std::unordered_map<std::uint64_t,render_core::Tile> far_tiles;
+    std::array<render_core::Tile,81> nearby_tiles{};
     std::array<bool,81> nearby_ready{};
     int nearby_c,nearby_r;
-    profile_v2::ShoreSample center{};
+    render_core::ShoreSample center{};
     bool center_ready=false,patch_attempted=false;
-    profile_v2::WorldCoast::Patch patch;
+    render_core::WorldCoast::Patch patch;
     // Finite-difference points almost never repeat, but their integer
     // neighborhoods do. Keep authored hill placements for the owner and its
     // eight adjacent sample cells; distant object queries use the ordinary path.
@@ -27,15 +27,15 @@ template<class ObserveWorld,class ObserveCoast> class SurfaceQueries {
     std::array<Hills,9> hills;
 public:
     float const center_u,center_v;
-    SurfaceQueries(profile_v2::WorldCoast const& world,
-                   profile_v2::ExactPointCache<profile_v2::ShoreSample>& scratch,
+    SurfaceQueries(render_core::WorldCoast const& world,
+                   render_core::ExactPointCache<render_core::ShoreSample>& scratch,
                    int tile_x,int tile_y,ObserveWorld observe,ObserveCoast nodes)
         :coast(world),samples(scratch),observe_world(observe),observe_coast(nodes),
          nearby_c((tile_x+tile_y)/2-4),nearby_r((tile_x-tile_y)/2-4),
          center_u(float(tile_x+tile_y)*.5f+.5f),center_v(float(tile_x-tile_y)*.5f+.5f) {
         samples.clear();
     }
-    profile_v2::Tile tile(int c,int r) {
+    render_core::Tile tile(int c,int r) {
         int x=c-nearby_c,y=r-nearby_r;
         if(x>=0 && x<9 && y>=0 && y<9) {
             auto n=std::size_t(y*9+x);
@@ -52,10 +52,10 @@ public:
         if(i!=std::size_t(-1))observe_world(i,topology.at(i));
         auto value=topology.tile(c,r);far_tiles.emplace(key,value);return value;
     }
-    profile_v2::ShoreSample shore(float u,float v) {
+    render_core::ShoreSample shore(float u,float v) {
         // Preserve the production center certificate and exact query cache.
         if(center_ready && center.distance>1.5+std::hypot(u-center_u,v-center_v))
-            return profile_v2::ShoreSample{2,0,0,0};
+            return render_core::ShoreSample{2,0,0,0};
         return samples.get(u,v,[&]() {
             if(center_ready && !patch_attempted) {
                 patch=coast.prepare({center_u,center_v},.73,std::abs(center.distance),observe_coast);
@@ -68,7 +68,7 @@ public:
         });
     }
     std::array<float,5> weights(float u,float v) {
-        auto w=profile_v2::material_weights({u,v},coast.world().dimensions(),
+        auto w=render_core::material_weights({u,v},coast.world().dimensions(),
             [&](int c,int r){return tile(c,r);});
         std::array<float,5> result;
         for(int i=0;i<5;i++)result[i]=static_cast<float>(w[i]);
@@ -77,8 +77,8 @@ public:
     Tile natural_tile(int c,int r) {
         auto value=tile(c,r);auto world=coast.world().dimensions();
         int x=c+r,y=c-r;
-        if(world.wrap_x && world.width>0)x=profile_v2::mod(x,world.width);
-        if(world.wrap_y && world.height>0)y=profile_v2::mod(y,world.height);
+        if(world.wrap_x && world.width>0)x=render_core::mod(x,world.width);
+        if(world.wrap_y && world.height>0)y=render_core::mod(y,world.height);
         return Tile{x,y,c,r,value.real};
     }
     template<class Height>

@@ -1,6 +1,6 @@
 {
   "schema": "c3x.native.shader_adapter.v1",
-  "candidate": "lab_v2_terrain_lighting_r1",
+  "component": "render_core",
   "files": [
     {
       "path": "generated/shaders/hydrology/scene_linear.hlsl",
@@ -39,7 +39,7 @@
       "sha256": "1a441cf913acdffb108f9f7565489fcf23904da34ab925ba12f9fdb8ee600d74"
     },
     {
-      "path": "integrated_v2.hlsl",
+      "path": "terrain_scene.hlsl",
       "sha256": "2a5f7e8550f3964b255d34e54f8f6bd4daaff1907715ea44f11a38591ec90067"
     }
   ]

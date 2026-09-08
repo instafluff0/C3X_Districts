@@ -1,17 +1,17 @@
 #pragma once
 // Production river pages and natural CPU inputs; no graphics API ownership.
 #include "data.h"
-#include "../../../native/profile_v2/world_topology.h"
+#include "../../../native/render_core/world_topology.h"
 #include "../../../native/source_fidelity/river_corridor.h"
 namespace c3x_renderer { namespace fidelity {
 struct NaturalWorld : NaturalData {
     struct RiverPage {int c=0,r=0;std::uint64_t used=0;river::Corridor field;};
     std::vector<RiverPage> river_pages;
-    profile_v2::WorldTopology const*river_world=nullptr;
+    render_core::WorldTopology const*river_world=nullptr;
     std::uint64_t river_epoch=0;
     std::int64_t river_revision=-1;
     void reset_world(){river_pages.clear();river_world=nullptr;river_revision=-1;}
-    void update_rivers(profile_v2::WorldTopology const&w,std::int64_t revision){
+    void update_rivers(render_core::WorldTopology const&w,std::int64_t revision){
         river_world=&w;
         if(river_revision!=revision){river_pages.clear();river_revision=revision;}
     }
@@ -26,11 +26,11 @@ struct NaturalWorld : NaturalData {
         field.map_width=dims.width;field.map_height=dims.height;field.wraps=dims.wrap_x;
         for(int r=pr*8-4;r<pr*8+12;r++)for(int c=pc*8-4;c<pc*8+12;c++){
             auto bits=w.at(w.index(c,r));if(bits==0xffffffffu)continue;
-            int rx=c+r,ry=c-r;if(dims.wrap_x)rx=profile_v2::mod(rx,dims.width);if(dims.wrap_y)ry=profile_v2::mod(ry,dims.height);
+            int rx=c+r,ry=c-r;if(dims.wrap_x)rx=render_core::mod(rx,dims.width);if(dims.wrap_y)ry=render_core::mod(ry,dims.height);
             field.tiles[{c,r}]={c,r,rx,ry,int(bits&255),int((bits>>8)&255),unsigned((bits>>16)&255)};
         }
         auto lookup=[&](int c,int r){auto t=w.tile(c,r);int rx=c+r,ry=c-r;
-            if(dims.wrap_x)rx=profile_v2::mod(rx,dims.width);if(dims.wrap_y)ry=profile_v2::mod(ry,dims.height);
+            if(dims.wrap_x)rx=render_core::mod(rx,dims.width);if(dims.wrap_y)ry=render_core::mod(ry,dims.height);
             return Tile{rx,ry,c,r,t.present?t.real:-1};};
         page.field.build(field,[&](double u,double v){return height(float(u),float(v),lookup);});
         river_pages.push_back(std::move(page));return river_pages.back().field;

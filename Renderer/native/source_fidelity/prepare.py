@@ -8,6 +8,7 @@ ROOT=Path(__file__).resolve().parents[3]
 HERE=Path(__file__).resolve().parent
 LAB=ROOT/'Renderer/lab/shared'
 PACK=ROOT/'Renderer/packs/NaturalFidelityRuntime'
+LOCAL_HILL_HEIGHT=ROOT/'Renderer/packs/HillierHillsSource/height.dds'
 
 def function(s,name):
     start=s.rfind('\n',0,s.index(name+'('))+1
@@ -25,8 +26,14 @@ def terrain_boundaries(s):
     """
     s=s.replace('    float4 material : TEXCOORD2;',
         '    float4 material : TEXCOORD2;\n    float2 biome : TEXCOORD3;\n    float coast_coverage : TEXCOORD4;')
+    s=s.replace('    float3 world : TEXCOORD0;',
+        '    float4 world : TEXCOORD0;',1)
+    s=s.replace('    float coast_coverage : TEXCOORD4;\n};\nstruct Output',
+        '    float coast_coverage : TEXCOORD4;\n    float coast_inland : TEXCOORD5;\n};\nstruct Output')
+    s=s.replace('    output.world = input.world;',
+        '    output.world = input.world.xyz;')
     s=s.replace('    output.material = input.material;',
-        '    output.material = input.material;\n    output.biome = input.biome;\n    output.coast_coverage = input.coast_coverage;')
+        '    output.material = input.material;\n    output.biome = input.biome;\n    output.coast_coverage = input.coast_coverage;\n    output.coast_inland = max(0, input.world.w - 1);')
     s=s.replace('    float alpha = 1;', '''    // Retain the selected beach/water composition beneath this replacement.
     // The same coverage also clips its source-shadow caster triangles.
     float alpha = saturate(input.coast_coverage+10);
@@ -46,6 +53,13 @@ SamplerState Wrap : register(s0);''')
         base = lerp(base, DesertColor.Sample(Wrap, uv0).rgb, desert_weight);
         base_h = lerp(base_h, DesertHeight.Sample(Wrap, uv0).r, desert_weight);
         base_s = lerp(base_s, DesertSpecular.Sample(Wrap, uv0).r, desert_weight);''')
+    key='''    float shadow = q6_shadow_visibility(ShadowField, input.world, geometric,
+        ShadowU, ShadowV, ShadowL, ShadowFlags.x > 0.5, true);'''
+    assert s.count(key)==1
+    s=s.replace(key,key+'''
+    // Retain full inland shadows, but let broad coastal sky fill soften the
+    // receiver through the same continuous shoreline field as its geometry.
+    shadow = lerp(lerp(1.0, shadow, 0.48), shadow, input.coast_inland);''')
     return s
 
 def shaders():
@@ -59,6 +73,7 @@ def shaders():
         s=s.replace('Texture2D ShadowField : register(t17);','Texture2DArray ShadowField : register(t17);')
         s=s.replace('cbuffer ShadowFrame : register(b1)', 'cbuffer ShadowFrame : register(b2)')
         s=s.replace('#include "../lighting/shadow_visibility_v1.hlsl"',(HERE/'shadow_adapter.hlsl').read_text())
+        if name=='mountain':s='#define BEAUTY_TERRAIN_TRANSITIONS 1\n'+s
         s='#define BEAUTY_COMPOSED_SHADOWS 1\n'+s
         s+='''\ncbuffer NativeViewport : register(b1) {
  float2 translation; float depth_translation; float padding;
@@ -114,14 +129,27 @@ def build_pack(output=PACK):
         if dst.name not in assets:assets.append(dst.name)
         return assets.index(dst.name)
     def source(path):return asset('Renderer/packs/Civ5EnvironmentSkin/'+path)
+    decal_pack=ROOT/'Renderer/packs/DecalsNormalized'
+    decal_manifest=json.loads((decal_pack/'manifest.json').read_text())
+    def decal_channel(asset_id,role):
+        entry=decal_manifest['assets'][asset_id]
+        document=json.loads((decal_pack/entry['decal']).read_text())
+        return asset((decal_pack/document['channels'][role]['texture']).relative_to(ROOT).as_posix())
     terrain=[]
     for family in ['grassland','grasshill_top','plains','plainshill_top']:
         terrain += [source(f'textures/{family}_{c}.dds') for c in ['base_color','height','specular']]
     terrain += [asset('Renderer/packs/DecalsNormalized/textures/decals/'+p) for p in ['base_color_c996c6a9d015eebe.dds','height_31eb0f0117ea3beb.dds']]
-    terrain += [source('textures/relief/hills/standard/height_lod0.dds')]
+    # A loose authored hill field may be imported locally through the generic
+    # R8 adapter. Runtime payloads remain source-independent; absent that local
+    # experiment, retain the normalized baseline field exactly.
+    hill_height = LOCAL_HILL_HEIGHT if LOCAL_HILL_HEIGHT.is_file() else (
+        ROOT/'Renderer/packs/Civ5EnvironmentSkin/textures/relief/hills/standard/height_lod0.dds')
+    terrain += [asset(hill_height.relative_to(ROOT).as_posix())]
     terrain += [source(f'textures/tundra_blend_{c}.dds') for c in ['base_color','height','specular']]
     terrain += [terrain[-1]]
     terrain += [source(f'textures/desert_{c}.dds') for c in ['base_color','height','specular']]
+    terrain += [decal_channel('terrain/forest/floor_01',c) for c in ['base_color','height']]
+    terrain += [decal_channel('terrain/jungle/floor_01',c) for c in ['base_color','height']]
     mountain=terrain[:3]
     for family in ['mtn_base','mtn_top','mtn_snow']:
         mountain += [source(f'textures/{family}_{c}.dds') for c in ['base_color','height','specular']]
@@ -141,7 +169,9 @@ def build_pack(output=PACK):
         _,_,mat,n,v=objs[i];out+=struct.pack('<2I',materials.index(mat),n)+v
     for r in recipes:out+=struct.pack('<IffIIIIff',trees.index(r[0]),*r[1:])
     (output/'natural.bin').write_bytes(out)
-    record={'schema':1,'authority':'source-fidelity-r13/inland','source_sha256':pins,'trees':22,'recipes':25,'count_weight':180,'texture_count':len(assets),'pack_sha256':hashlib.sha256(out).hexdigest(),'sampling':{'samples':4,'anisotropy':16,'render_scale':2,'mip_bias':-1,'reconstruction':'one scene-linear equal-area box'}}
+    record={'schema':1,'authority':'source-fidelity-r13/inland','source_sha256':pins,
+        'hill_height_source':'local-authored-overlay' if hill_height==LOCAL_HILL_HEIGHT else 'normalized-baseline',
+        'trees':22,'recipes':25,'count_weight':180,'texture_count':len(assets),'pack_sha256':hashlib.sha256(out).hexdigest(),'sampling':{'samples':4,'anisotropy':16,'render_scale':2,'mip_bias':-1,'reconstruction':'one scene-linear equal-area box'}}
     return record
 
 def main():

@@ -259,6 +259,79 @@ def ensure_preview_tool(*, force=False):
 def scene(category, case, destination, *, world_size=32):
     """Small complete synthetic world with no implied live-game provenance."""
     recipe = standard(category)["recipe"]
+    watershed_river = {}
+    coastal_mountains = {
+        # A range arriving perpendicular to the upper coast.
+        (15, -4), (16, -4), (17, -4), (18, -4), (19, -4), (20, -4),
+        # A shorter range following the center shoreline.
+        (18, -1), (19, -1), (19, 0), (19, 1), (19, 2),
+        # An isolated headland peak against the lower coast.
+        (18, 4),
+    }
+    if category == "rivers":
+        # A complete, deterministic watershed is more useful than a bare
+        # diagonal line: one inland headwater crosses a mountain pass, meanders
+        # through forested lowlands and reaches a real coast/sea/ocean shelf.
+        # Civ III records each shared edge on both incident raw-coordinate tiles.
+        river_nodes = (
+            (10, -4), (11, -4), (11, -3), (12, -3), (13, -3),
+            (13, -2), (13, -1), (13, 0), (14, 0), (15, 0),
+            (16, 0), (17, 0), (17, 1), (18, 1), (19, 1),
+            (20, 1), (20, 2), (21, 2), (22, 2),
+        )
+
+        def add_river_bit(c, r, bit):
+            raw = (c + r, c - r)
+            if 0 <= raw[0] < world_size and 0 <= raw[1] < world_size:
+                watershed_river[raw] = watershed_river.get(raw, 0) | bit
+
+        river_incident_tiles = set()
+        for a, b in zip(river_nodes, river_nodes[1:]):
+            c, r = min(a, b)
+            if a[1] == b[1]:
+                add_river_bit(c, r, 32)
+                add_river_bit(c, r - 1, 2)
+                river_incident_tiles.update(((c, r), (c, r - 1)))
+            else:
+                add_river_bit(c, r, 128)
+                add_river_bit(c - 1, r, 8)
+                river_incident_tiles.update(((c, r), (c - 1, r)))
+
+        mountain_chain = {
+            # The near ridge follows one bank. Every adjacent river edge keeps
+            # its opposite incident tile open, giving the relief-aware spline
+            # somewhere to bend instead of trapping it beneath two peaks.
+            (11, -4), (12, -4), (13, -3), (13, -2), (13, -1),
+            (14, -1), (15, -1), (16, -1),
+            # The remainder extends that ridge and supplies a second, wider
+            # valley wall without pinching the navigable channel.
+            (13, -5), (14, -5), (14, -4), (15, -4), (15, -3),
+            (16, -3), (16, -2), (17, -2), (18, -2),
+            (12, 2), (13, 2), (14, 2), (15, 2), (16, 2), (17, 2),
+        }
+        foothills = {
+            (11, -5), (12, -5), (13, -4), (14, -3), (15, -2),
+            (17, -3), (18, -3), (18, -1),
+            (11, -2), (12, -2), (12, -1), (12, 0), (13, 1),
+            (14, 1), (15, 1), (16, 1), (17, 1), (18, 2), (19, 2),
+        }
+        forests = {
+            # Upper-course forest lies on both incident sides of the source
+            # edges; production clearance must leave the water body exposed.
+            (8, -6), (9, -6), (10, -6), (8, -5), (9, -5), (10, -5),
+            (8, -4), (9, -4), (10, -4), (8, -3), (9, -3), (10, -3),
+            (9, -2), (10, -2), (11, -2), (10, -1), (11, -1), (12, -1),
+            # A smaller riparian belt bridges the mountain and jungle zones.
+            (17, 2), (18, 2), (19, 2), (17, 3), (18, 3), (19, 3),
+        }
+        jungles = {
+            # Lower-course jungle occupies both banks without using a river
+            # edge tile, keeping the legacy jungle bodies out of the channel.
+            (18, -1), (19, -1), (20, -1), (21, -1),
+            (18, 3), (19, 3), (20, 3), (21, 3),
+            (17, 4), (18, 4), (19, 4), (20, 4), (21, 4),
+            (18, 5), (19, 5), (20, 5),
+        }
     rows = []
     for y in range(world_size):
         for x in range(y % 2, world_size, 2):
@@ -266,8 +339,38 @@ def scene(category, case, destination, *, world_size=32):
             river = 0
             if recipe["feature"] in (5, 6, 7, 8):
                 base, real = 2, 2
-                if (x, y) in ((16, 16), (18, 16), (16, 18)):
+                # Mountain review must exercise true edge adjacency.  The raw
+                # Civ III lattice advances an edge neighbor on both axes; the
+                # older three points were separated by a tile and could only
+                # demonstrate isolated peaks.
+                feature_points = ((15, 15), (16, 16), (17, 17), (18, 18),
+                                  (17, 15)) if recipe["feature"] == 6 else (
+                                      (16, 16), (18, 16), (16, 18))
+                if (x, y) in feature_points:
                     real = recipe["feature"]
+            if category == "mountains":
+                c, r = (x + y) // 2, (x - y) // 2
+                if case == "coastal":
+                    # Three coastal arrangements in one stable review scene:
+                    # a range ending at shore, one running alongside it, and
+                    # an isolated coastal peak. The stepped coast prevents a
+                    # single orientation from hiding transition artifacts.
+                    shore = 21 if r <= -3 else 20 if r <= 2 else 19
+                    if c >= shore:
+                        base = real = 11 if c == shore else 12 if c <= shore + 2 else 13
+                    else:
+                        base = real = 0 if r <= -3 else 2 if r <= 2 else 3
+                        if (c, r) in coastal_mountains:
+                            real = recipe["feature"]
+                else:
+                    # One compact witness exercises every requested perimeter:
+                    # plains, grass, tundra and desert under the same connected
+                    # range, with its eastern shoulder descending into a coast.
+                    if c >= 19:
+                        base = real = 11 if c == 19 else 12 if c <= 21 else 13
+                    else:
+                        base = 1 if c <= 15 else 3 if r >= 1 else 0 if c >= 17 else 2
+                        real = recipe["feature"] if (x, y) in feature_points else base
             if "gameplay" in case.split("-"):
                 if x < 12:
                     base = real = 1
@@ -283,7 +386,25 @@ def scene(category, case, destination, *, world_size=32):
                 base = real = 2 if x < 13 else 11 if x < 17 else 12 if x < 23 else 13
                 if category == "seas-oceans" and case == "detail":
                     base = real = 12 if x < 16 else 13
-            if category in ("rivers", "floodplains"):
+            if category == "rivers":
+                c, r = (x + y) // 2, (x - y) // 2
+                shore = 22 + (1 if r <= -2 else 0) + (1 if r >= 4 else 0)
+                if c >= shore:
+                    base = real = 11 if c == shore else 12 if c <= shore + 2 else 13
+                else:
+                    base = real = 1 if r <= -3 else 2
+                    if r >= 5 and c < 17:
+                        base = real = 0
+                    if (c, r) in foothills:
+                        real = 5
+                    if (c, r) in mountain_chain:
+                        real = 6
+                    if (c, r) in forests:
+                        base, real = 2, 7
+                    if (c, r) in jungles:
+                        base, real = 2, 8
+                river = watershed_river.get((x, y), 0)
+            if category == "floodplains":
                 # Opposite edge bits agree on the diagonal raw-coordinate chain.
                 river = 2 if x == y else 32 if x == y + 2 else 0
             if category == "resources" and case.startswith("water-"):
@@ -298,6 +419,12 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
     from Renderer.lab.platform import run_native_fixture
     if behavior not in (None, "replay", "edits", "animation", "units"):
         raise ValueError("Unknown native behavior check")
+    if category == "rivers" and center == (16, 16):
+        # The paired views inspect opposite ends of the same watershed instead
+        # of wasting both captures on its middle reach.
+        center = (8, 14) if case == "detail" else (21, 19)
+    if category == "mountains" and case == "coastal" and center == (16, 16):
+        center = (18, 18)
     output.mkdir(parents=True, exist_ok=True)
     csv = output / "scene.csv"
     scene(category, case, csv, world_size=100 if behavior else 32)

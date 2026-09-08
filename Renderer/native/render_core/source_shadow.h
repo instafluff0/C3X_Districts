@@ -8,7 +8,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace c3x_renderer { namespace profile_v2 {
+namespace c3x_renderer { namespace render_core {
 // One bounded worker-owned atlas: 32 * 1024^2 * R32 = 128 MiB. Immutable
 // geometry is drawn directly; there is no CPU triangle copy or readback.
 class SourceShadow {

@@ -1,7 +1,7 @@
 // Headless hardware checks for real source rasterization and page dependencies.
 #include "source_shadow.h"
 inline bool test_source_shadow(ID3D11Device* device,ID3D11DeviceContext* context) {
- using Shadow=c3x_renderer::profile_v2::SourceShadow;
+ using Shadow=c3x_renderer::render_core::SourceShadow;
  Shadow shadow;if(!shadow.ensure(device,L"source_caster.hlsl"))return false;
  struct V {float prefix[30];float world[4];float remaining[8];};
  V vertices[4]={};float xy[4][2]={{1,1},{3,1},{3,3},{1,3}};
@@ -56,6 +56,6 @@ inline bool test_source_shadow(ID3D11Device* device,ID3D11DeviceContext* context
  }
  context->ClearState();if(readback)readback->Release();if(alpha_view)alpha_view->Release();if(alpha)alpha->Release();
  vb->Release();ib->Release();
- std::printf("pickup source shadows: %s (warm pages, distant edits, source edit, cutout hole)\n",ok?"pass":"FAIL");
+ std::printf("render-core source shadows: %s (warm pages, distant edits, source edit, cutout hole)\n",ok?"pass":"FAIL");
  return ok;
 }

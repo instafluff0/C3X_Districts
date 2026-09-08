@@ -29197,11 +29197,14 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 		char message[512];
 		double ticks_to_ms = 1000.0 / is->custom_renderer_qpc_frequency.QuadPart;
 		snprintf (message, sizeof message,
-			"[C3X renderer] qpc=%lld frame=%u stage=map-complete total_ms=%.3f max_capture_ms=%.3f max_render_ms=%.3f max_blit_ms=%.3f invalidations=%u cache_hits=%u cache_misses=%u\n",
+			"[C3X renderer] qpc=%lld frame=%u stage=map-complete total_ms=%.3f max_capture_ms=%.3f max_render_ms=%.3f max_blit_ms=%.3f invalidations=%u cache_hits=%u cache_misses=%u requested=%u presented=%u pending=%d visible=%u animation_ms=%.3f\n",
 			map_pass_finished.QuadPart, is->custom_renderer_presented_frames,
 			map_pass_ticks * ticks_to_ms, is->custom_renderer_max_capture_ticks * ticks_to_ms,
 			is->custom_renderer_max_render_ticks * ticks_to_ms, is->custom_renderer_max_blit_ticks * ticks_to_ms,
-			is->custom_renderer_last_invalidation_flags, is->custom_renderer_cache_hits, is->custom_renderer_cache_misses);
+			is->custom_renderer_last_invalidation_flags, is->custom_renderer_cache_hits, is->custom_renderer_cache_misses,
+			is->custom_renderer_requested_frames, is->custom_renderer_presented_frames,
+			is->custom_renderer_redraw_pending ? 1 : 0, is->custom_renderer_visible_animation_count,
+			is->custom_renderer_animation_timestamp.QuadPart * ticks_to_ms);
 		message[(sizeof message) - 1] = '\0';
 		(*p_OutputDebugStringA) (message);
 	}
@@ -44939,7 +44942,10 @@ custom_renderer_scheduler_tick ()
 	input.event_start_ticks = is->custom_renderer_last_presented_at.QuadPart;
 	input.event_duration_ticks = is->custom_renderer_qpc_frequency.QuadPart;
 	input.visible_animation_count = is->custom_renderer_visible_animation_count;
-	input.cadence_ms = 0x42;
+	// This runs from Civ III's existing 0x42 ms timer. Use a slightly lower
+	// eligibility threshold so ordinary timer/render jitter does not make idle
+	// animation fall to every other callback; this cannot create extra callbacks.
+	input.cadence_ms = 0x32;
 	bool map_visible = (*p_player_bits != 0) && ! p_main_screen_form->is_now_loading_game &&
 		(is->saved_tile_count < 0);
 	if (map_visible)
@@ -44953,6 +44959,11 @@ custom_renderer_scheduler_tick ()
 		input.state_flags |= C3X_RENDERER_SCHEDULER_DRAWING;
 	if (is->custom_renderer_redraw_pending)
 		input.state_flags |= C3X_RENDERER_SCHEDULER_REDRAW_PENDING;
+	// Civ III sets this byte when a selected unit starts a left-button map hold
+	// and clears it on release. It is the authoritative pathfinder interaction
+	// state, unlike a process-wide mouse-button test that also includes UI clicks.
+	if (*((byte *)p_main_screen_form->field_4DC0 + 0x61) != 0)
+		input.state_flags |= C3X_RENDERER_SCHEDULER_PATHFINDER_HOLD;
 
 	struct c3x_renderer_schedule_result_v1 decision = {0};
 	decision.api_version = C3X_RENDERER_API_VERSION;
@@ -45043,6 +45054,16 @@ clear_active_custom_tile_animation_effects ()
 void __stdcall
 patch_on_timer_0x9F6500 (void)
 {
+	bool trace_custom_timer = is->current_config.enable_custom_rendering &&
+		(is->custom_renderer_init_state == IS_OK) &&
+		(is->custom_renderer_visible_animation_count > 0) &&
+		(is->custom_renderer_qpc_frequency.QuadPart > 0);
+	LARGE_INTEGER timer_started = {0}, scheduler_finished = {0}, timer_finished = {0};
+	unsigned int requested_before = is->custom_renderer_requested_frames;
+	unsigned int presented_before = is->custom_renderer_presented_frames;
+	bool pending_before = is->custom_renderer_redraw_pending;
+	if (trace_custom_timer)
+		QueryPerformanceCounter (&timer_started);
 	if (is->current_config.enable_custom_animations && ! is->current_config.enable_custom_rendering) {
 		if ((*p_debug_mode_bits & 0xC) != 0)
 			clear_active_custom_tile_animation_effects ();
@@ -45050,7 +45071,26 @@ patch_on_timer_0x9F6500 (void)
 			tile_animation_scheduler_tick ();
 	}
 	custom_renderer_scheduler_tick ();
+	if (trace_custom_timer)
+		QueryPerformanceCounter (&scheduler_finished);
 	on_timer_0x9F6500 ();
+	if (trace_custom_timer && QueryPerformanceCounter (&timer_finished)) {
+		char message[512];
+		double ticks_to_ms = 1000.0 / is->custom_renderer_qpc_frequency.QuadPart;
+		snprintf (message, sizeof message,
+			"[C3X renderer] qpc=%lld stage=timer-return total_ms=%.3f scheduler_ms=%.3f native_ms=%.3f requested_delta=%u presented_delta=%u pending_before=%d pending_after=%d drawing=%d visible=%u\n",
+			timer_finished.QuadPart,
+			(timer_finished.QuadPart - timer_started.QuadPart) * ticks_to_ms,
+			(scheduler_finished.QuadPart - timer_started.QuadPart) * ticks_to_ms,
+			(timer_finished.QuadPart - scheduler_finished.QuadPart) * ticks_to_ms,
+			is->custom_renderer_requested_frames - requested_before,
+			is->custom_renderer_presented_frames - presented_before,
+			pending_before ? 1 : 0, is->custom_renderer_redraw_pending ? 1 : 0,
+			is->custom_renderer_draw_in_progress ? 1 : 0,
+			is->custom_renderer_visible_animation_count);
+		message[(sizeof message) - 1] = '\0';
+		(*p_OutputDebugStringA) (message);
+	}
 }
 
 void __fastcall

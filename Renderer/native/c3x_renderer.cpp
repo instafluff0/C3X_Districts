@@ -33,13 +33,13 @@
 #include "river_node_locality.h"
 #include "pixel_block_cache.h"
 #include "color_quantization.h"
-#include "profile_v2/terrain_query.h"
-#include "profile_v2/world_coast.h"
-#include "profile_v2/relief_query.h"
-#include "profile_v2/exact_point_cache.h"
-#include "profile_v2/cliff_placement.h"
-#include "profile_v2/source_shadow.h"
-#include "profile_v2/linear_target.h"
+#include "render_core/terrain_query.h"
+#include "render_core/world_coast.h"
+#include "render_core/relief_query.h"
+#include "render_core/exact_point_cache.h"
+#include "render_core/cliff_placement.h"
+#include "render_core/source_shadow.h"
+#include "render_core/linear_target.h"
 #include "source_fidelity/runtime.h"
 #include "source_fidelity/light_frame.h"
 #include "environment_refresh/reflection.h"
@@ -152,7 +152,7 @@ struct CachedVertexChunk {
     std::size_t byte_count = 0;
     int translation_x = 0, translation_y = 0;
     D3D11_RECT bounds = {};
-    c3x_renderer::profile_v2::SourceShadow::Bounds world_bounds;
+    c3x_renderer::render_core::SourceShadow::Bounds world_bounds;
     std::uint64_t version = 0;
     ID3D11ShaderResourceView * animation_texture = nullptr; // borrowed, dynamic pass only
     unsigned city_material=0xffffffffu;
@@ -272,7 +272,7 @@ struct GroundPoint {
     float material_u = 0.0f, material_v = 0.0f;
     float material_weights[5] = {};
     float signed_shore = 0.0f;
-    c3x_renderer::profile_v2::ShoreSample shore;
+    c3x_renderer::render_core::ShoreSample shore;
     float surface_coordinate = 0.0f;
     float relief[3] = {};
     float normal[3] = {0.0f, 0.0f, 1.0f};
@@ -360,14 +360,14 @@ public:
     ID3D11Buffer * world_settings_buffer = nullptr;
     ID3D11Buffer * shadow_settings_buffer = nullptr;
     bool pickup_profile = false;
-    c3x_renderer::profile_v2::SourceShadow source_shadow;
+    c3x_renderer::render_core::SourceShadow source_shadow;
     std::array<float,12> shadow_basis{};
     int shadow_tile_width=128,shadow_tile_height=64;
-    c3x_renderer::profile_v2::WorldCoast world_coast;
+    c3x_renderer::render_core::WorldCoast world_coast;
     c3x_renderer_i64 geometry_world_revision = -1;
     float display_exposure = 1.0f;
-    c3x_renderer::profile_v2::LinearTarget linear_frame, linear_block;
-    c3x_renderer::profile_v2::LinearOutput linear_output;
+    c3x_renderer::render_core::LinearTarget linear_frame, linear_block;
+    c3x_renderer::render_core::LinearOutput linear_output;
     ID3D11BlendState * blend_state = nullptr;
     ID3D11DepthStencilState * depth_state = nullptr;
     ID3D11RasterizerState * rasterizer_state = nullptr;
@@ -733,7 +733,7 @@ public:
         auto compile_terrain_shader = [this](char const * entry, char const * target,
                                              ID3DBlob ** blob) {
             std::string selected_shader=integrated_shader_path;
-            if(fidelity_profile && std::strstr(entry,"Feature"))selected_shader=fidelity_root+(city_profile?"/Renderer/native/city_fidelity/feature.hlsl":environment_profile?"/Renderer/native/environment_refresh/feature.hlsl":"/Renderer/native/profile_v2/integrated_v2.hlsl");
+            if(fidelity_profile && std::strstr(entry,"Feature"))selected_shader=fidelity_root+(city_profile?"/Renderer/native/city_fidelity/feature.hlsl":environment_profile?"/Renderer/native/environment_refresh/feature.hlsl":"/Renderer/native/render_core/terrain_scene.hlsl");
             int count = MultiByteToWideChar(CP_UTF8, 0, selected_shader.c_str(),
                                             -1, nullptr, 0);
             if (count <= 0)
@@ -742,7 +742,7 @@ public:
             MultiByteToWideChar(CP_UTF8, 0, selected_shader.c_str(), -1,
                                 wide_path.data(), count);
             ID3DBlob * errors = nullptr;
-            HRESULT result = pickup_profile ? c3x_renderer::profile_v2::compile_cached(
+            HRESULT result = pickup_profile ? c3x_renderer::render_core::compile_cached(
                 wide_path.c_str(),entry,target,blob,&errors) : D3DCompileFromFile(
                 wide_path.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
                 entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, blob, &errors);
@@ -875,7 +875,7 @@ public:
             desc.ByteWidth = 80;
             if (SUCCEEDED(hr)) hr = device->CreateBuffer(&desc, nullptr, &shadow_settings_buffer);
             if (SUCCEEDED(hr) && !linear_output.ensure(device)) hr = E_FAIL;
-            std::string source_path=fidelity_profile ? fidelity_root+(city_profile?"/Renderer/native/city_fidelity/source_caster.hlsl":environment_profile?"/Renderer/native/environment_refresh/source_caster.hlsl":"/Renderer/native/profile_v2/source_caster.hlsl") : integrated_shader_path.substr(0,integrated_shader_path.find_last_of("\\/"))+"/source_caster.hlsl";
+            std::string source_path=fidelity_profile ? fidelity_root+(city_profile?"/Renderer/native/city_fidelity/source_caster.hlsl":environment_profile?"/Renderer/native/environment_refresh/source_caster.hlsl":"/Renderer/native/render_core/source_caster.hlsl") : integrated_shader_path.substr(0,integrated_shader_path.find_last_of("\\/"))+"/source_caster.hlsl";
             int count=MultiByteToWideChar(CP_UTF8,0,source_path.c_str(),-1,nullptr,0);
             std::wstring wide(static_cast<std::size_t>(count),L'\0');
             MultiByteToWideChar(CP_UTF8,0,source_path.c_str(),-1,wide.data(),count);
@@ -2010,7 +2010,7 @@ public:
         pickup_profile = use_pickup;
         char shader_path[4 * MAX_PATH];
         if (mod_root != nullptr &&
-            pack_path(mod_root, city_profile ? "Renderer\\native\\city_fidelity\\hydrology.hlsl" : environment_profile ? "Renderer\\native\\environment_refresh\\hydrology.hlsl" : fidelity_profile ? "Renderer\\native\\source_fidelity\\hydrology.hlsl" : pickup_profile ? "Renderer\\native\\profile_v2\\integrated_v2.hlsl" :
+            pack_path(mod_root, city_profile ? "Renderer\\native\\city_fidelity\\hydrology.hlsl" : environment_profile ? "Renderer\\native\\environment_refresh\\hydrology.hlsl" : fidelity_profile ? "Renderer\\native\\source_fidelity\\hydrology.hlsl" : pickup_profile ? "Renderer\\native\\render_core\\terrain_scene.hlsl" :
                       "Renderer\\native\\integrated_terrain.hlsl",
                       shader_path, std::size(shader_path)) &&
             GetFileAttributesA(shader_path) != INVALID_FILE_ATTRIBUTES)
@@ -3109,7 +3109,7 @@ public:
         if(natural_vertex) {
             frozen_vertices.resize(packed.size()*76);
             for(std::size_t i=0;i<packed.size();++i){auto const&v=packed[i];
-                float data[]={v.x,v.y,v.z,v.world_x,v.world_y,v.world_z,1,
+                float data[]={v.x,v.y,v.z,v.world_x,v.world_y,v.world_z,v.world_valid,
                     v.normal_x,v.normal_y,v.normal_z,v.u,v.v,
                     v.material_grass,v.material_plains,v.material_desert,v.material_marsh,
                     v.authored_relief_height,v.authored_relief_blend,v.base_terrain};
@@ -3335,7 +3335,7 @@ public:
             return draw_cached_geometry(layer, buffers, rectangles, settings, cancellation,reflection_pass);
         };
         ID3D11RenderTargetView * destination = target;
-        c3x_renderer::profile_v2::LinearTarget * linear = nullptr;
+        c3x_renderer::render_core::LinearTarget * linear = nullptr;
         if (pickup_profile) {
             ID3D11Resource * resource = nullptr;
             target->GetResource(&resource);
@@ -3359,7 +3359,7 @@ public:
                 cancellation,false,true,shadow_buffers_ptr,true))return false;
         }
         if (pickup_profile) {
-            using Shadow=c3x_renderer::profile_v2::SourceShadow;
+            using Shadow=c3x_renderer::render_core::SourceShadow;
             std::vector<Shadow::Bounds> receivers;std::vector<Shadow::Caster> casters;
             auto dims=world_coast.world().dimensions();
             auto const & shadow_buffers=shadow_buffers_ptr ? *shadow_buffers_ptr : buffers;
@@ -4125,8 +4125,8 @@ public:
         int const base_ground_grid = frame.tile_width >= 96 ?
             (draw_record_count <= 768 ? 16 : 12) : 8;
         c3x_renderer_i64 ground_ticks=0,feature_ticks=0,cliff_ticks=0,upload_ticks=0;
-        c3x_renderer::profile_v2::ExactPointCache<c3x_renderer::profile_v2::ShoreSample> shore_samples;
-        c3x_renderer::profile_v2::ExactPointCache<c3x_renderer::profile_v2::GroundSample> pickup_ground_samples;
+        c3x_renderer::render_core::ExactPointCache<c3x_renderer::render_core::ShoreSample> shore_samples;
+        c3x_renderer::render_core::ExactPointCache<c3x_renderer::render_core::GroundSample> pickup_ground_samples;
         std::size_t pickup_height_queries=0;
         LARGE_INTEGER phase_time={},phase_end={};
         std::vector<Vertex> underlay_vertices;
@@ -4560,7 +4560,7 @@ public:
             mix_tile(frame.world_wrap_x); mix_tile(frame.world_wrap_y);
             mix_tile(content_revision); mix_tile(device_generation);
             if (pickup_profile) {
-                mix_tile(c3x_renderer::profile_v2::visual_profile_revision);
+                mix_tile(c3x_renderer::render_core::render_core_revision);
                 mix_tile(frame.world_width_tiles); mix_tile(frame.world_height_tiles);
             }
             if (!pickup_profile) { mix_tile(frame.hour); mix_tile(frame.season); }
@@ -6133,7 +6133,7 @@ public:
             if (pickup_profile && cliff_assets_ready && coast_detail) {
                 float cu=float(tile.tile_x+tile.tile_y)*.5f;
                 float cr=float(tile.tile_x-tile.tile_y)*.5f;
-                auto placements=c3x_renderer::profile_v2::cliff_placements(
+                auto placements=c3x_renderer::render_core::cliff_placements(
                     world_coast.world().dimensions(),int(cu),int(cr),world_lookup,
                     [&](int c,int r){ return world_coast.world().index(c,r); },
                     [&](double u,double v){ return pickup_ground_at(float(u),float(v)).height; },
@@ -7128,23 +7128,59 @@ extern "C" __declspec(dllexport) int c3x_renderer_set_unit_rendering(int enabled
     return get_renderer_worker().set_unit_rendering(enabled);
 }
 
-// Ambient redraws are optional. Leave native mouse press/hold/release processing
-// an uninterrupted interval. GetKeyState reads the processed button state;
-// avoid GetQueueStatus/GetAsyncKeyState, whose change bits are consumable.
+// Ambient redraws are optional. Civ III tells us when the left button belongs to
+// a selected-unit map/pathfinder interaction; allow that interaction immediately.
+// Keep a bounded guard for other clicks and the first release interval.
+// GetKeyState reads processed button state; avoid GetQueueStatus/GetAsyncKeyState,
+// whose change bits are consumable.
 extern "C" int c3x_renderer_schedule(c3x_renderer_schedule_v1 const*,c3x_renderer_schedule_result_v1*);
 extern "C" __declspec(dllexport) int c3x_renderer_schedule_idle(
     c3x_renderer_schedule_v1 const* input,c3x_renderer_schedule_result_v1* output) {
     int result=c3x_renderer_schedule(input,output);
     if(result!=C3X_RENDERER_RESULT_OK)return result;
-    bool busy=(GetKeyState(VK_LBUTTON)&0x8000) || (GetKeyState(VK_RBUTTON)&0x8000) ||
-        (GetKeyState(VK_MBUTTON)&0x8000);
+    unsigned buttons=((GetKeyState(VK_LBUTTON)&0x8000)?1u:0u) |
+        ((GetKeyState(VK_RBUTTON)&0x8000)?2u:0u) |
+        ((GetKeyState(VK_MBUTTON)&0x8000)?4u:0u);
+    bool busy=buttons!=0;
     static bool previous_busy=false;
-    bool defer=busy || previous_busy; // one quiet timer tick after release
-    if(busy!=previous_busy) {
-        OutputDebugStringA(busy?"[C3X renderer] ambient-input paused for native mouse processing\n":
-                               "[C3X renderer] ambient-input resumed after native mouse processing\n");
-        previous_busy=busy;
-    }
+    static c3x_renderer_i64 busy_started_ticks=0;
+    static c3x_renderer_i64 previous_call_ticks=0;
+    bool just_pressed=busy && !previous_busy;
+    bool just_released=!busy && previous_busy;
+    if(just_pressed)busy_started_ticks=input->now_ticks;
+    c3x_renderer_i64 held_ticks=input->now_ticks-busy_started_ticks;
+    bool pathfinder_hold=(input->state_flags&C3X_RENDERER_SCHEDULER_PATHFINDER_HOLD)!=0;
+    bool deciding_click=busy && !pathfinder_hold &&
+        (held_ticks<0 || held_ticks<=input->frequency/4);
+    bool defer=deciding_click || just_released;
+    c3x_renderer_u32 base_request=output->request_redraw;
+    c3x_renderer_u32 base_rebase=output->rebase_clock;
+    if(!busy)busy_started_ticks=0;
     if(defer){output->request_redraw=0;output->dirty_flags=0;output->skipped_frame_count=0;output->rebase_clock=1;}
+    char const* reason="cadence-wait";
+    if(defer)reason=just_released?"release-guard":"click-decision-guard";
+    else if((input->state_flags&C3X_RENDERER_SCHEDULER_MAP_VISIBLE)==0)reason="map-hidden";
+    else if((input->state_flags&C3X_RENDERER_SCHEDULER_FOCUSED)==0)reason="unfocused";
+    else if((input->state_flags&C3X_RENDERER_SCHEDULER_MODAL)!=0)reason="modal";
+    else if((input->state_flags&C3X_RENDERER_SCHEDULER_DRAWING)!=0)reason="drawing";
+    else if((input->state_flags&C3X_RENDERER_SCHEDULER_REDRAW_PENDING)!=0)reason="redraw-pending";
+    else if(output->rebase_clock)reason="clock-rebase";
+    else if(output->request_redraw)reason="redraw-request";
+    double ticks_to_ms=1000.0/double(input->frequency);
+    double callback_gap_ms=previous_call_ticks>0?
+        double(input->now_ticks-previous_call_ticks)*ticks_to_ms:-1.0;
+    double present_age_ms=input->last_presented_ticks>0?
+        double(input->now_ticks-input->last_presented_ticks)*ticks_to_ms:-1.0;
+    double held_ms=busy?double(held_ticks)*ticks_to_ms:0.0;
+    char detail[640];
+    std::snprintf(detail,sizeof(detail),
+        "[C3X renderer] qpc=%lld stage=scheduler-callback gap_ms=%.3f present_age_ms=%.3f buttons=%u held_ms=%.3f pathfinder=%u state=0x%08x visible=%u base_request=%u base_rebase=%u final_request=%u final_rebase=%u skipped=%u reason=%s\n",
+        static_cast<long long>(input->now_ticks),callback_gap_ms,present_age_ms,buttons,held_ms,pathfinder_hold?1u:0u,
+        input->state_flags,input->visible_animation_count,base_request,base_rebase,
+        output->request_redraw,output->rebase_clock,output->skipped_frame_count,reason);
+    detail[sizeof(detail)-1]='\0';
+    OutputDebugStringA(detail);
+    previous_busy=busy;
+    previous_call_ticks=input->now_ticks;
     return result;
 }

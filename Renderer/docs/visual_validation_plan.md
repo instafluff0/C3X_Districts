@@ -28,7 +28,10 @@ gameplay-context comparison to the user. Automated checks may continue while
 review is pending, but do not describe or hand off the appearance as accepted,
 ready, promoted or integrated, and do not ordinarily stage its DLL, until the
 user explicitly accepts what was shown. Fixed-reference replacement is optional
-and requires its own explicit direction.
+and requires its own explicit direction. Explicit acceptance authorizes the agent
+to stage the exact tested candidate DLL into `Renderer/bin/` for the user's game
+check; stage it and verify matching hashes without requesting separate permission
+unless the user said not to stage it.
 
 ## Automated delivery checks
 

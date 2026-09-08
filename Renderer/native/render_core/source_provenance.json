@@ -1,77 +1,77 @@
 {
-  "schema": "c3x.native.profile_source.v1",
-  "candidate": "lab_v2_terrain_lighting_r1",
-  "status": "integration_in_progress",
+  "schema": "c3x.native.render_core_source.v1",
+  "component": "render_core",
+  "status": "current",
   "files": [
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/shaders/common/frozen_l21.hlsl",
-      "target": "Renderer/native/profile_v2/reference/shaders/common/frozen_l21.hlsl",
+      "target": "Renderer/native/render_core/source/shaders/common/frozen_l21.hlsl",
       "sha256": "0308204065eb87bbf305a75ca9c3eb51a2c4cee1cdeecab5bbbec2c4bea0c62a"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/shaders/hydrology/scene_linear.hlsl",
-      "target": "Renderer/native/profile_v2/reference/shaders/hydrology/scene_linear.hlsl",
+      "target": "Renderer/native/render_core/source/shaders/hydrology/scene_linear.hlsl",
       "sha256": "a98ae01f56dbbc4e64c342118e7715110e06bcd6b777507317ef141f9b98a45d"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/shaders/hydrology/scene_material_v1.hlsl",
-      "target": "Renderer/native/profile_v2/reference/shaders/hydrology/scene_material_v1.hlsl",
+      "target": "Renderer/native/render_core/source/shaders/hydrology/scene_material_v1.hlsl",
       "sha256": "e04850b79f3d8edee6cf412e3ba7fd11c1b07e96cc008d15f9a2942363348cee"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/shaders/lighting/frame_shadow_v1.hlsl",
-      "target": "Renderer/native/profile_v2/reference/shaders/lighting/frame_shadow_v1.hlsl",
+      "target": "Renderer/native/render_core/source/shaders/lighting/frame_shadow_v1.hlsl",
       "sha256": "9408a62b9ffe4210c13aaf3ca46b7c1d3ff4b634f0dce382649351c04915a424"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/shaders/lighting/generated/scene_linear_v1.hlsl",
-      "target": "Renderer/native/profile_v2/reference/shaders/lighting/generated/scene_linear_v1.hlsl",
+      "target": "Renderer/native/render_core/source/shaders/lighting/generated/scene_linear_v1.hlsl",
       "sha256": "a304ea4440e11f8dd821c2bbe13c464bf3e0541d48e35a03a9f5005f96693046"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/shaders/lighting/scene_shadow_v1.hlsl",
-      "target": "Renderer/native/profile_v2/reference/shaders/lighting/scene_shadow_v1.hlsl",
+      "target": "Renderer/native/render_core/source/shaders/lighting/scene_shadow_v1.hlsl",
       "sha256": "982b41cb5f98ae52c1c1533b874fd847b6fbe87f6c47520c782320648c0774c0"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/shaders/lighting/shadow_visibility_v1.hlsl",
-      "target": "Renderer/native/profile_v2/reference/shaders/lighting/shadow_visibility_v1.hlsl",
+      "target": "Renderer/native/render_core/source/shaders/lighting/shadow_visibility_v1.hlsl",
       "sha256": "28e26fbac28780d60ae54d586420456104f0a3916a0546a25d7d9537e0d8b7c4"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/shaders/relief/coast_rocks.hlsl",
-      "target": "Renderer/native/profile_v2/reference/shaders/relief/coast_rocks.hlsl",
+      "target": "Renderer/native/render_core/source/shaders/relief/coast_rocks.hlsl",
       "sha256": "959d3de0a7efe2283a5dde0b3db1c9c9d741ef1d989d30c41469723d24e7d03f"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/shaders/relief/combined_material.hlsl",
-      "target": "Renderer/native/profile_v2/reference/shaders/relief/combined_material.hlsl",
+      "target": "Renderer/native/render_core/source/shaders/relief/combined_material.hlsl",
       "sha256": "91e5ed43ae09b5e40e14c00d260db41761a741a5e6c71a7a098b9887c1daf5c2"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/shaders/terrain/scene_material_v1.hlsl",
-      "target": "Renderer/native/profile_v2/reference/shaders/terrain/scene_material_v1.hlsl",
+      "target": "Renderer/native/render_core/source/shaders/terrain/scene_material_v1.hlsl",
       "sha256": "1a441cf913acdffb108f9f7565489fcf23904da34ab925ba12f9fdb8ee600d74"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/systems/terrain/surface.h",
-      "target": "Renderer/native/profile_v2/reference/systems/terrain/surface.h",
+      "target": "Renderer/native/render_core/source/systems/terrain/surface.h",
       "sha256": "82530048c79209345d4b49267db1cf16a3781231bc26344dc8d50284ffbabfe1"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/systems/hydrology/field.h",
-      "target": "Renderer/native/profile_v2/reference/systems/hydrology/field.h",
+      "target": "Renderer/native/render_core/source/systems/hydrology/field.h",
       "sha256": "19a1b02a0fa3960fad4d12b919f750d53a652826726c4740c7e7db54d8ef7f26"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/systems/relief/continuous_normal.h",
-      "target": "Renderer/native/profile_v2/reference/systems/relief/continuous_normal.h",
+      "target": "Renderer/native/render_core/source/systems/relief/continuous_normal.h",
       "sha256": "d3050ab3448d0a46162ca95edb2a0801e19e1414b674b5a756931a5e87464c75"
     },
     {
       "source": "git:daf8b808:Renderer/terrain_lab/v2/systems/lighting/prepare_linear_scene.py",
-      "target": "Renderer/native/profile_v2/reference/systems/lighting/prepare_linear_scene.py",
-      "sha256": "f9bebb181f44c897c626d199d57db5409da4c3ca6208a370b9f56f919266dc6a"
+      "target": "Renderer/native/render_core/source/systems/lighting/prepare_linear_scene.py",
+      "sha256": "1a10a7183e8e96aed3eb107e15b8cfc05168af3bb55b5b9e0c095f5a5fb04de2"
     }
   ]
 }

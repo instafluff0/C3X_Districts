@@ -39,7 +39,7 @@ float4 PSReflection(PixelInput input):SV_Target {
 }
 '''
     (HERE/'hydrology.hlsl').write_text(hydro+terrain_reflect)
-    feature=read(HERE.parent/'profile_v2/integrated_v2.hlsl')+FRAME+'''
+    feature=read(HERE.parent/'render_core/terrain_scene.hlsl')+FRAME+'''
 FeaturePixelInput VSReflection(PackedFeatureInput input) {
  FeaturePixelInput o=VSIntegratedFeature(input);
  float h=max(0,input.world.z-NativeReflection.z);
@@ -70,6 +70,6 @@ float4 PSReflection(P input):SV_Target {
 }
 '''
         (HERE/(name+'.hlsl')).write_text(source)
-    (HERE/'source_caster.hlsl').write_text(read(HERE.parent/'profile_v2/source_caster.hlsl'))
+    (HERE/'source_caster.hlsl').write_text(read(HERE.parent/'render_core/source_caster.hlsl'))
     (HERE/'provenance.json').write_text(json.dumps({'water':'water-natural-r6','reflection':'water-reflection-r5','source_sha256':pins},indent=2)+'\n')
 if __name__=='__main__':main()

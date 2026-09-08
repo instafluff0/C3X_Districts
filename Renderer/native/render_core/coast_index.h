@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <stdexcept>
 
-namespace c3x_renderer { namespace profile_v2 {
+namespace c3x_renderer { namespace render_core {
 // Sparse fixed-domain quadtree. The domain depends on world dimensions, never
 // the viewport. Empty-subtree certificates detect a newly created closer coast;
 // observing a root/global revision would invalidate every shaded tile instead.

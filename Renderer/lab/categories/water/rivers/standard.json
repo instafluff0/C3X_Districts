@@ -12,7 +12,9 @@
     "Renderer/native/city_fidelity/hydrology.hlsl",
     "Renderer/native/environment_refresh/reflection.h",
     "Renderer/native/source_fidelity/river_corridor.h",
-    "Renderer/native/profile_v2/terrain_query.h"
+    "Renderer/native/source_fidelity/geometry.h",
+    "Renderer/lab/shared/natural/relief_mesh_body.h",
+    "Renderer/native/render_core/terrain_query.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -30,8 +32,9 @@
     ]
   },
   "tests": [
+    "Renderer.lab.test_natural",
     "Renderer.native.source_fidelity.test_contract",
-    "Renderer.native.test_profile_v2"
+    "Renderer.native.test_render_core"
   ],
   "references": {
     "d3d11": [

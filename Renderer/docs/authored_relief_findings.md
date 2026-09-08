@@ -44,7 +44,11 @@ The old combined nine-cell mountain atlas is compatibility-only. M6.7c2 replaces
 
 ## Implemented Runtime Composition
 
-- Hills now sample the 512x512 authored field as the macro surface. The surrounding topology weights blend flat and hill control points, while high-elevation color is selected from the underlying Civ III biome rather than a universal green hill material.
+- Hills sample an authored field as the macro surface. The surrounding topology weights blend flat and hill control points, while high-elevation color is selected from the underlying Civ III biome rather than a universal green hill material.
+- The loose-height adapter can preserve a higher-resolution authored R8 hill
+  field without resampling. The local Hillier Hills study uses its 1024x1024
+  field, broader overlapping hill envelopes and taller—but still clearly
+  sub-mountain—relief. Derived source bytes remain ignored and local-only.
 - Mountains now preserve the standard five-piece and desert four-piece groups. Underlying desert/flood-plain ground selects the desert group; deterministic orientation, footprint scaling, and connection-directed overlap compose neighboring pieces into ranges.
 - The former radial skirt, procedural secondary/tertiary peaks, radial cone mask, and sine edge noise no longer participate in mountain geometry.
 - Standard mountains use authored base, upper-rock, and snow materials. Snow follows the confirmed 24/26 thresholds normalized by the declared height of 32. Desert mountains use their authored base and three stripe materials at the declared 10, 18, and 23 height bands normalized by the declared height of 24.

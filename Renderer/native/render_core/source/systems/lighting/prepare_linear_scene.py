@@ -9,10 +9,10 @@ import json
 import re
 from pathlib import Path
 
-V2 = Path(__file__).resolve().parents[2]
+SOURCE_ROOT = Path(__file__).resolve().parents[2]
 
 def generate():
-    source = V2 / 'shaders/common/frozen_l21.hlsl'
+    source = SOURCE_ROOT / 'shaders/common/frozen_l21.hlsl'
     s = source.read_text()
     edits = []
     for m in re.finditer(r'\bpow\(', s):

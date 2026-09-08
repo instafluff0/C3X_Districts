@@ -1,7 +1,7 @@
 #pragma once
 // Worker-owned D3D11 scratch targets. Pixels enter production caches only after
 // the common scene-linear MSAA resolve and display transfer have completed.
-namespace c3x_renderer { namespace profile_v2 {
+namespace c3x_renderer { namespace render_core {
 struct LinearTarget {
     ID3D11Texture2D *color=nullptr,*resolved=nullptr,*depth_texture=nullptr;
     ID3D11RenderTargetView *target=nullptr;
@@ -69,7 +69,7 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
 })";
         auto compile=[&](char const* entry,char const* target,ID3DBlob** blob) {
             ID3DBlob* errors=nullptr;
-            HRESULT hr=D3DCompile(source,std::strlen(source),"profile_v2_output",nullptr,nullptr,
+            HRESULT hr=D3DCompile(source,std::strlen(source),"render_core_output",nullptr,nullptr,
                 entry,target,D3DCOMPILE_OPTIMIZATION_LEVEL3,0,blob,&errors);
             if(errors) { OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer())); errors->Release(); }
             return SUCCEEDED(hr);

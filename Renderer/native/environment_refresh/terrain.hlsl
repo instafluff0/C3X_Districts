@@ -86,6 +86,10 @@ float q6_shadow_visibility(Texture2DArray field,float3 world,float3 normal,float
 #else
 Texture2D TundraSpecular : register(t17);
 #endif
+Texture2D ForestFloorColor : register(t22);
+Texture2D ForestFloorHeight : register(t23);
+Texture2D JungleFloorColor : register(t24);
+Texture2D JungleFloorHeight : register(t25);
 Texture2D DesertColor : register(t19);
 Texture2D DesertHeight : register(t20);
 Texture2D DesertSpecular : register(t21);
@@ -94,7 +98,7 @@ SamplerState Clamp : register(s1);
 
 struct V {
     float3 position : POSITION;
-    float3 world : TEXCOORD0;
+    float4 world : TEXCOORD0;
     float3 normal : NORMAL;
     float2 uv : TEXCOORD1;
     float4 material : TEXCOORD2;
@@ -109,18 +113,20 @@ struct P {
     float4 material : TEXCOORD2;
     float2 biome : TEXCOORD3;
     float coast_coverage : TEXCOORD4;
+    float coast_inland : TEXCOORD5;
 };
 struct Output { float4 color : SV_Target0; float validity : SV_Target1; };
 
 P VSMain(V input) {
     P output;
     output.position = float4(input.position, 1);
-    output.world = input.world;
+    output.world = input.world.xyz;
     output.normal = input.normal;
     output.uv = input.uv;
     output.material = input.material;
     output.biome = input.biome;
     output.coast_coverage = input.coast_coverage;
+    output.coast_inland = max(0, input.world.w - 1);
     return output;
 }
 P VSFeature(V input) { return VSMain(input); }
@@ -190,7 +196,26 @@ Output shade(P input) {
     float alpha = saturate(input.coast_coverage+10);
     clip(alpha-.001);
 
-    if (input.material.y > 1.5) {
+    if (input.material.y > 2.5) {
+        bool jungle_floor = input.material.y > 3.5;
+        float4 floor_sample = jungle_floor ? JungleFloorColor.Sample(Clamp, input.uv) :
+                                             ForestFloorColor.Sample(Clamp, input.uv);
+        float2 floor_normal = jungle_floor ? JungleFloorHeight.Sample(Clamp, input.uv).rg :
+                                             ForestFloorHeight.Sample(Clamp, input.uv).rg;
+        clip(floor_sample.a - 0.06);
+        // The decoded decal is the confirmed source albedo. Civ VI's final
+        // vegetation-floor response is much darker beneath the canopy than a
+        // normally lit terrain decal; the exact engine AO equation is not in
+        // the package, so retain the source hue while reconstructing that
+        // canopy attenuation explicitly.
+        float3 canopy_tint = float3(0.58, 0.58, 0.58);
+        if (jungle_floor) canopy_tint = float3(0.30, 0.28, 0.52);
+        albedo = floor_sample.rgb * canopy_tint;
+        geometric = decal_normal(input, floor_normal);
+        height_detail = floor_normal.r;
+        specular_map = 0.04;
+        alpha *= floor_sample.a;
+    } else if (input.material.y > 1.5) {
         float4 decal = HillDecalColor.Sample(Clamp, input.uv);
         clip(decal.a - 0.015);
         // The decal defines the irregular authored patch footprint. Its paired
@@ -280,6 +305,9 @@ Output shade(P input) {
 #ifdef BEAUTY_COMPOSED_SHADOWS
     float shadow = q6_shadow_visibility(ShadowField, input.world, geometric,
         ShadowU, ShadowV, ShadowL, ShadowFlags.x > 0.5, true);
+    // Retain full inland shadows, but let broad coastal sky fill soften the
+    // receiver through the same continuous shoreline field as its geometry.
+    shadow = lerp(lerp(1.0, shadow, 0.48), shadow, input.coast_inland);
 #else
     float shadow = 1.0;
 #endif

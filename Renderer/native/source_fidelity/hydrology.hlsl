@@ -2998,11 +2998,19 @@ float4 q3_water_material(PixelInput input) {
   float2 uv=world*q3_source_repeat(.75);
   float noise=river_bank_noise_texture.Sample(material_sampler,
    world*float2(q3_source_repeat(.31),q3_source_repeat(.47))+float2(.19,.37)).r-.5;
+  float sediment_noise=river_bank_noise_texture.Sample(material_sampler,
+   world*float2(q3_source_repeat(.43),q3_source_repeat(.61))+float2(.61,.11)).r;
+  float gravel_noise=river_bank_noise_texture.Sample(material_sampler,
+   world*float2(q3_source_repeat(6.71),q3_source_repeat(8.93))+float2(.07,.73)).r;
   float grain=river_height_texture.Sample(material_sampler,uv).r;
   float water_width=5.8+noise*.8;
   float water=1-smoothstep(water_width-1.2,water_width,distance_pixels);
-  float bank_width=9.8+noise*4+(grain-.5)*1.2;
-  float bank=1-smoothstep(bank_width-2.5,bank_width,distance_pixels);
+  float bank_width=12.2+noise*4.8+(sediment_noise-.5)*2.4+(grain-.5)*1.2;
+  // Feather only the bank coverage: the sand retains its high-frequency
+  // material detail while the underlying grassland/plains resolves gradually.
+  float bank_feather=4.2+sediment_noise*.8;
+  float bank_edge_distance=distance_pixels+(gravel_noise-.5)*.7;
+  float bank=1-smoothstep(bank_width-bank_feather,bank_width+.6,bank_edge_distance);
   // Banks end at the optical shore; the water itself overlaps and dissolves
   // into the existing sea surface instead of ending in an offshore capsule.
   float land_bank=smoothstep(-.025,.065,sd);
@@ -3011,11 +3019,27 @@ float4 q3_water_material(PixelInput input) {
   water=lerp(1,water,land_bank);
   float3 bed=river_base_texture.Sample(material_sampler,uv).rgb;
   float3 sand=beach_base_texture.Sample(material_sampler,uv).rgb;
+  float3 fine_sand=beach_base_texture.Sample(material_sampler,
+   world*float2(q3_source_repeat(2.17),q3_source_repeat(2.63))+float2(.37,.59)).rgb;
   float4 clutter=river_clutter_base_texture.Sample(decal_sampler,frac(world*.5+float2(.23,.41)));
-  float3 dry=lerp(bed,sand,.32)*(0.64+(grain-.5)*.30);
-  dry=lerp(dry,clutter.rgb*.66,clutter.a*.30);
+  float bank_position=saturate((distance_pixels-water_width)/max(1,bank_width-water_width));
+  float sediment=smoothstep(.30,.70,sediment_noise*.52+(noise+.5)*.32+grain*.16);
+  float3 textured_sand=lerp(sand,fine_sand,.46);
+  float3 dry_sand=lerp(bed,lerp(textured_sand,float3(.50,.39,.20),.12),.76)
+   *(0.82+(grain-.5)*.26);
+  float3 bank_soil=lerp(bed,float3(.22,.15,.07),.42)*(0.60+(grain-.5)*.18);
+  float sand_patch=saturate(sediment*.86+smoothstep(.48,.94,bank_position)*.24);
+  float3 dry=lerp(bank_soil,dry_sand,sand_patch)*lerp(.90,1.08,sediment);
+  float gravel=smoothstep(.49,.76,gravel_noise)*clutter.a
+   *smoothstep(.10,.58,bank_position);
+  dry=lerp(dry,clutter.rgb*.82,gravel*.60);
+  float pebble=smoothstep(.68,.84,gravel_noise)*smoothstep(.12,.68,bank_position);
+  float3 pebble_color=lerp(float3(.16,.12,.07),textured_sand*1.18,sediment);
+  dry=lerp(dry,pebble_color,pebble*.34);
+  dry*=.91+gravel_noise*.16;
   float wet=1-smoothstep(water_width,bank_width-1.0,distance_pixels);
-  float3 shore=lerp(dry,dry*.50,wet);
+  float damp_breakup=saturate(.72+noise*.38+(gravel_noise-.5)*.20);
+  float3 shore=lerp(dry,dry*lerp(.43,.58,damp_breakup),wet);
   float optical_depth=.10+.32*(1-smoothstep(0,5.5,max(0,distance_pixels)));
   float3 transmitted=bed*exp(-optical_depth*float3(8,4,2));
   float3 river=lerp(transmitted,float3(.018,.044,.052),1-exp(-optical_depth*5));

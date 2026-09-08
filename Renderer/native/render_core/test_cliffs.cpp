@@ -1,7 +1,7 @@
 #include "cliff_placement.h"
 #include "world_topology.h"
 #include <cassert>
-int main(){using namespace c3x_renderer::profile_v2;
+int main(){using namespace c3x_renderer::render_core;
  World w{32,24,true,true};WorldTopology t;std::vector<uint32_t> v(384,5|(5<<8));
  t.update(w,v.data(),v.size());auto lookup=[&](int c,int r){return t.tile(c,r);};
  ShoreField field(w,lookup);auto contour=[&](int c,int r){return field.cell(c,r);};

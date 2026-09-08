@@ -3,7 +3,7 @@
 #include <cstring>
 #include <vector>
 
-namespace c3x_renderer { namespace profile_v2 {
+namespace c3x_renderer { namespace render_core {
 // Exact float coordinates, with no rounding/interpolation. Compilation-local
 // scratch is recycled between tiles; clearing also prevents dependency reuse
 // across owners. Capacity is capped at 16,384 slots per table (half occupied).

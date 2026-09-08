@@ -2,7 +2,7 @@
 #include "coast_index.h"
 #include "world_topology.h"
 
-namespace c3x_renderer { namespace profile_v2 {
+namespace c3x_renderer { namespace render_core {
 class WorldCoast {
     WorldTopology topology;
     CoastIndex coast{-4096,-4096,8192};

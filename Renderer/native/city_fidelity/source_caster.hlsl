@@ -83,8 +83,15 @@ float PSCutout(Pixel i):SV_TARGET {
  }
 
  if(i.material<0) {clip(i.boundary+10-.001);return i.depth;}
- // Match the visible mountain silhouette, including its interpolated mask.
- if(i.material==42) {clip(smoothstep(.08,.72,i.coverage)-.015);return i.depth;}
+ // The visible pass cross-fades its terminal collar into authoritative ground.
+ // Keep that almost-flat collar out of the shadow field as well, or it draws
+ // a dark contact ring even after its color has become transparent.
+ if(i.material>=42 && i.material<=43.001) {
+  // Mountain vertices retain their caster discriminator while carrying the
+  // same coast/source-family coverage as the visible premultiplied pass.
+  clip(i.material-42-.001);
+  clip(smoothstep(.08,.72,i.coverage)-.32);return i.depth;
+ }
  if(i.material>=40) {
   uint w,h;natural_opacity.GetDimensions(w,h);
   bool repeat=i.material>=41;
