@@ -7,7 +7,7 @@
 #include "coast_join.h"
 #define hydro reference_hydro
 #define river reference_river
-#include "../../terrain_lab/v2/systems/hydrology/river_corridor.h"
+#include "../../lab/shared/hydrology/river_corridor.h"
 #undef hydro
 #undef river
 #include "river_corridor.h"

@@ -9,6 +9,7 @@
     "shadows"
   ],
   "implementation": [
+    "Renderer/lab/shared/shaders/objects/beauty_objects.hlsl",
     "Renderer/native/c3x_renderer.cpp",
     "Renderer/native/terrain_scene_runtime.cpp",
     "Renderer/native/animation_runtime.h"
@@ -29,12 +30,44 @@
     ]
   },
   "tests": [
+    "Renderer.lab.test_unit_preparation",
     "Renderer.native.test_animation_runtime",
     "Renderer.native.test_unit_animation_runtime"
   ],
-  "references": {},
-  "candidate": null,
+  "references": {
+    "d3d11": [
+      {
+        "image": "Renderer/lab/references/units/r1/detail/detail-h12-z128.bmp",
+        "sha256": "a2b6d2ece9d82c00f25cdfb0738ab7087e764d4d1d7a1dc0366a3b79dca85a75",
+        "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
+        "case": "detail",
+        "hour": 12,
+        "zoom": 128,
+        "backend": "d3d11",
+        "fixture": "synthetic"
+      },
+      {
+        "image": "Renderer/lab/references/units/r1/gameplay/gameplay-h12-z128.bmp",
+        "sha256": "74682f2f41e2cd644d61f8d9c09fcccc3d3706473dab06afe7647bdafa266131",
+        "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
+        "case": "gameplay",
+        "hour": 12,
+        "zoom": 128,
+        "backend": "d3d11",
+        "fixture": "synthetic"
+      }
+    ]
+  },
+  "candidate": {
+    "render": "Renderer/lab/out/units/render.json",
+    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
+  },
   "limitations": [
     "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ]
+  ],
+  "reviewed_inputs": {
+    "revision": 1,
+    "signature": "eea099101a022a1e1bc6381879976bcb4c4912971ad22be1898ab525a2e7e86f",
+    "basis": "exact_approved_reference_comparison"
+  }
 }

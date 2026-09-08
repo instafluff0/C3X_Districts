@@ -10,6 +10,7 @@
     "transitions"
   ],
   "implementation": [
+    "Renderer/lab/shared/shaders/objects/beauty_objects.hlsl",
     "Renderer/native/source_fidelity/geometry.h",
     "Renderer/native/source_fidelity/runtime.h",
     "Renderer/native/city_fidelity/objects.hlsl",
@@ -58,8 +59,16 @@
       }
     ]
   },
-  "candidate": null,
+  "candidate": {
+    "render": "Renderer/lab/out/forests/render.json",
+    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
+  },
   "limitations": [
     "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ]
+  ],
+  "reviewed_inputs": {
+    "revision": 1,
+    "signature": "b6118342ca818a0e8f1e533bc5d47b673cbb0bfc54ceb32fb0131ed1f1ef799c",
+    "basis": "exact_approved_reference_comparison"
+  }
 }

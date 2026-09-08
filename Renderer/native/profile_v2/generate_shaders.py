@@ -12,14 +12,16 @@ import re
 ROOT = Path(__file__).resolve().parent
 
 
-def generate():
+def generate(source_root=None, output_root=None, output_name='integrated_v2.hlsl', *, complete_rock_channels=False):
+    source_root = Path(source_root) if source_root else ROOT / 'reference'
+    output_root = Path(output_root) if output_root else ROOT
     native = ROOT.parent
     production = (native / 'terrain_rendering.hlsl').read_text()
     start = production.index('#ifdef C3X_GAME_RENDERER')
     end = production.index('#else', start)
     settings = production[start:end]
     records = []
-    for source in sorted((ROOT / 'reference/shaders').rglob('*.hlsl')):
+    for source in sorted((source_root / 'shaders').rglob('*.hlsl')):
         if source.name == 'frozen_l21.hlsl':
             continue
         text = source.read_text()
@@ -61,10 +63,10 @@ float q3_source_repeat(float requested) {
  return period>0?round(requested*period)/period:requested;
 }
 ''' + text[finish:]
-        target = ROOT / 'generated' / source.relative_to(ROOT / 'reference')
+        target = output_root / 'generated' / source.relative_to(source_root)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)
-        records.append({'path': target.relative_to(ROOT).as_posix(),
+        records.append({'path': target.relative_to(output_root).as_posix(),
                         'sha256': hashlib.sha256(target.read_bytes()).hexdigest()})
     adapter = (native / 'integrated_terrain.hlsl').read_text()
     adapter = adapter.replace('#include "terrain_rendering.hlsl"', '''#define Q6_TEXEL_RECEIVER_OFFSET 1
@@ -81,6 +83,9 @@ float q3_source_repeat(float requested) {
 #define Q3_STATIC_OPTICS_V2 1
 #define Q6_WORLD_SHADOWS 1
 #include "generated/shaders/hydrology/scene_linear.hlsl"''')
+    if complete_rock_channels:
+        adapter = adapter.replace('#define Q6_TEXEL_RECEIVER_OFFSET 1',
+            '#define Q4_COMPLETE_ROCK_CHANNELS 1\n#define Q4_COHERENT_ROCK_CHANNELS 1\n#define Q6_TEXEL_RECEIVER_OFFSET 1')
     adapter = adapter.replace('    float material_tundra : TEXCOORD13;', '''    float material_tundra : TEXCOORD13;
     float4 q6_world : TEXCOORD14;
     float4 hydrology_data : TEXCOORD15;
@@ -114,15 +119,16 @@ FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)
     def expand(text, directory):
         def include(match):
             path = (directory / match.group(1)).resolve()
-            path.relative_to(ROOT)
+            path.relative_to(output_root)
             return expand(path.read_text(), path.parent)
         return re.sub(r'^#include "([^"]+)"\s*$', include, text, flags=re.MULTILINE)
-    adapter = expand(adapter, ROOT)
-    (ROOT / 'integrated_v2.hlsl').write_text(adapter)
-    records.append({'path': 'integrated_v2.hlsl',
+    adapter = expand(adapter, output_root)
+    (output_root / output_name).write_text(adapter)
+    records.append({'path': output_name,
                     'sha256': hashlib.sha256(adapter.encode()).hexdigest()})
-    (ROOT / 'generated.json').write_text(json.dumps({'schema': 'c3x.native.shader_adapter.v1',
-        'candidate': 'lab_v2_terrain_lighting_r1', 'files': records}, indent=2)+'\n')
+    (output_root / 'generated.json').write_text(json.dumps({'schema': 'c3x.native.shader_adapter.v1',
+        'candidate': 'lab_v2_terrain_lighting_r1' if output_name == 'integrated_v2.hlsl' else 'source-fidelity-r13-retained-hydrology',
+        'files': records}, indent=2)+'\n')
 
 
 if __name__ == '__main__':

@@ -3,10 +3,10 @@
 No image resizing, texture transcoding, or changes to the live unit/city packs.
 """
 from pathlib import Path
-import hashlib, json, os, re, struct
+import hashlib, json, re, struct
 ROOT=Path(__file__).resolve().parents[3]
 HERE=Path(__file__).resolve().parent
-LAB=ROOT/'Renderer/terrain_lab/v2'
+LAB=ROOT/'Renderer/lab/shared'
 PACK=ROOT/'Renderer/packs/NaturalFidelityRuntime'
 
 def function(s,name):
@@ -48,12 +48,11 @@ SamplerState Wrap : register(s0);''')
         base_s = lerp(base_s, DesertSpecular.Sample(Wrap, uv0).r, desert_weight);''')
     return s
 
-def main():
-    PACK.mkdir(exist_ok=True)
-    pins={}
+def shaders():
+    """Prepare native bindings without rebuilding the unchanged texture pack."""
     for name,category in [('terrain','relief'),('mountain','relief'),('objects','objects')]:
         p=LAB/f'shaders/{category}/beauty_{name}.hlsl'
-        s=p.read_text();pins[str(p.relative_to(ROOT))]=hashlib.sha256(p.read_bytes()).hexdigest()
+        s=p.read_text()
         if name=='terrain':s=terrain_boundaries(s)
         # Pixel equations remain selected source text. Only native register and
         # receiver storage ABI are adapted; never overwrite the Lab provider.
@@ -73,20 +72,19 @@ P VSNative(V input) {
 }
 '''
         (HERE/f'{name}.hlsl').write_text(s)
-    s=(LAB/'systems/relief/beauty_terrain.cpp').read_text()
-    kernels='// Generated selected r13 numerical kernels; see prepare.py and provenance.json.\n#pragma once\nnamespace c3x_renderer { namespace fidelity {\n'
-    kernels+='struct Tile { int source_x,source_y,column,row,real; };\nusing BiqWindowTile=Tile;\n'
-    kernels+=s[s.index('struct Hill {'):s.index('constexpr std::array<Hill')]
-    for f in ['clamp01','smooth01','normalize3','random_u32','random01','hill_support','composed_seed','composed_hill','composed_source_macro']:
-        t=function(s,f)
-        if f=='composed_source_macro': t='template<class HeightField>\n'+t
-        kernels+=t+'\n'
-    m=(LAB/'systems/relief/beauty_mountain.cpp').read_text()
-    kernels+=function(m,'mountain_seed')
-    kernels+='} }\n'; (HERE/'kernels.h').write_text(kernels)
+
+def build_pack(output=PACK):
+    """Compile local source art into a separate output directory."""
+    output=Path(output)
+    output.mkdir(parents=True,exist_ok=True)
+    # Shader freshness is checked by the workbench preparation cache; CPU code
+    # by the candidate build. This record describes only inputs to the pack.
+    pins={}
     # Generic binary payload: complete source tree vertices/recipes and channel
     # identities, with only tree material/body records retained.
-    data=(ROOT/'Renderer/packs/BeautyStudies/beauty_objects.bin').read_bytes();pos=8
+    source_pack=ROOT/'Renderer/packs/BeautyStudies/beauty_objects.bin'
+    data=source_pack.read_bytes();pos=8
+    pins[str(source_pack.relative_to(ROOT))]=hashlib.sha256(data).hexdigest()
     def unpack(fmt):
         nonlocal pos
         value=struct.unpack_from('<'+fmt,data,pos);pos+=struct.calcsize('<'+fmt);return value
@@ -104,10 +102,14 @@ P VSNative(V input) {
     materials=sorted({objs[i][2] for i in trees})
     assets=[]
     def asset(path):
-        p=ROOT/path;raw=p.read_bytes();h=hashlib.sha256(raw).hexdigest();dst=PACK/(h+p.suffix)
+        p=(ROOT/path).resolve();p.relative_to(ROOT)
+        if p==output.resolve() or output.resolve() in p.parents:
+            raise ValueError('Natural source must not overlap generated output')
+        raw=p.read_bytes();h=hashlib.sha256(raw).hexdigest();dst=output/(h+p.suffix)
         if not dst.exists():
-            try: os.link(p,dst)
-            except OSError: dst.write_bytes(raw)
+            dst.write_bytes(raw)
+        elif dst.read_bytes()!=raw:
+            raise ValueError('Preserving modified natural payload: '+dst.name)
         pins[str(p.relative_to(ROOT))]=h
         if dst.name not in assets:assets.append(dst.name)
         return assets.index(dst.name)
@@ -138,10 +140,18 @@ P VSNative(V input) {
     for i in trees:
         _,_,mat,n,v=objs[i];out+=struct.pack('<2I',materials.index(mat),n)+v
     for r in recipes:out+=struct.pack('<IffIIIIff',trees.index(r[0]),*r[1:])
-    (PACK/'natural.bin').write_bytes(out)
-    for p in [LAB/'systems/relief/beauty_terrain.cpp',LAB/'systems/relief/beauty_mountain.cpp',LAB/'systems/objects/beauty_objects.cpp']:
-        pins[str(p.relative_to(ROOT))]=hashlib.sha256(p.read_bytes()).hexdigest()
+    (output/'natural.bin').write_bytes(out)
     record={'schema':1,'authority':'source-fidelity-r13/inland','source_sha256':pins,'trees':22,'recipes':25,'count_weight':180,'texture_count':len(assets),'pack_sha256':hashlib.sha256(out).hexdigest(),'sampling':{'samples':4,'anisotropy':16,'render_scale':2,'mip_bias':-1,'reconstruction':'one scene-linear equal-area box'}}
+    return record
+
+def main():
+    shaders()
+    record=build_pack()
     (HERE/'provenance.json').write_text(json.dumps(record,indent=2)+'\n')
-    print(f'PASS generic natural pack: {len(assets)} unchanged DDS payloads, 22 bodies, 25 recipes, weight 180')
-if __name__=='__main__':main()
+    print(f"PASS generic natural pack: {record['texture_count']} unchanged DDS payloads, 22 bodies, 25 recipes, weight 180")
+if __name__=='__main__':
+    import argparse
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--shaders-only',action='store_true')
+    args=parser.parse_args()
+    shaders() if args.shaders_only else main()

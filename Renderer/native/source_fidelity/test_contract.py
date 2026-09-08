@@ -2,6 +2,7 @@
 from pathlib import Path
 import hashlib,json,subprocess,tempfile,unittest
 from .prepare import ROOT,HERE,LAB,function,terrain_boundaries
+from Renderer.lab.test_natural import NaturalInputs
 class Contract(unittest.TestCase):
     def test_selected_provider_equations(self):
         for name,category in [('terrain','relief'),('mountain','relief'),('objects','objects')]:
@@ -21,7 +22,7 @@ class Contract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             out=Path(d)/'probe'
             subprocess.run(['c++','-std=c++17','-O2',str(HERE/'contract_probe.cpp'),str(HERE.parent/'environment_runtime.cpp'),'-o',str(out)],check=True,capture_output=True)
-            r=subprocess.run([str(out),str(LAB/'fixtures/beauty/gameplay-100-v1/inland/terrain.csv')],check=True,capture_output=True,text=True)
+            r=subprocess.run([str(out),str(LAB/'hydrology/contract-terrain.csv')],check=True,capture_output=True,text=True)
             self.assertIn('samples=9216 exact equality',r.stdout)
             self.assertIn('phases=24 noon up-right',r.stdout)
 if __name__=='__main__':unittest.main()

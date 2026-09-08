@@ -13,9 +13,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from Renderer.tools.asset_compiler import normalized_animation, normalized_pose_cache, normalized_skin
-from Renderer.tools.asset_compiler.resource_animation_converter import load_extract_report
 from Renderer.tools.asset_compiler.school_orientation import align_school_payload
 from Renderer.tools.asset_compiler.unit_model_extractor import SOURCE_UNITS_PER_TILE
+
+ROOT = Path(__file__).resolve().parents[3]
+CLIP_UNITS = ROOT / "Renderer/lab/shared/resources/clip_units.json"
 
 
 def pack_path(root: Path, relative: str) -> Path:
@@ -88,16 +90,48 @@ def calibrated_resource_poses(skeleton: dict, clip, group: int, translation_rati
         [bone["name"] for bone in skeleton["bones"]], frames)
 
 
-def build(animated: Path, landmarks: Path, output: Path) -> dict:
+def clip_translation_scales(landmarks, calibration=CLIP_UNITS, *, read_bytes=lambda p: p.read_bytes()):
+    recipe = json.loads(read_bytes(calibration))
+    if recipe.get("schema") != "c3x.resource_clip_units.v1" or not recipe.get("clips"):
+        raise ValueError("Missing current resource clip-unit recipe")
+    scales = {}
+    for entry in recipe["clips"]:
+        scale = entry["translation_scale"]
+        if type(scale) not in (int, float) or not math.isfinite(scale) or not 0 < scale <= 1:
+            raise ValueError("Invalid resource clip translation scale")
+        key = hashlib.sha256(read_bytes(pack_path(landmarks, entry["path"]))).hexdigest()
+        if key in scales and scales[key] != scale:
+            raise ValueError("Conflicting units for the same resource clip")
+        scales[key] = scale
+    return scales
+
+
+def build(animated: Path, landmarks: Path, output: Path, *, consumed=None) -> dict:
+    animated, landmarks, output = (Path(p).resolve() for p in (animated, landmarks, output))
+    for source in (animated, landmarks):
+        if source == output or source in output.parents or output in source.parents:
+            raise ValueError("Resource output must not overlap normalized source packs")
+    def read_bytes(path):
+        path = Path(path).resolve()
+        data = path.read_bytes()
+        if consumed is not None:
+            key = path.relative_to(ROOT).as_posix()
+            value = hashlib.sha256(data).hexdigest()
+            if key in consumed and consumed[key] != value:
+                raise ValueError("Resource input changed during build: " + key)
+            consumed[key] = value
+        return data
+    def read(path):return json.loads(read_bytes(path))
+    def tracked(root, relative):
+        path = pack_path(root, relative)
+        read_bytes(path)
+        return path
     result = {"schema": "c3x.resource_animation_runtime.v1", "resources": {},
-              "presentation": {"facing": "SE", "phase": "absolute_time_plus_stable_instance_seed"},
-              "runtime_enabled": False, "calibration": "pending_dynamic_layer_visual_verification"}
+              "presentation": {"facing": "SE", "phase": "absolute_time_plus_stable_instance_seed"}}
     (output / "clips").mkdir(parents=True, exist_ok=True)
     (output / "textures").mkdir(exist_ok=True)
     total = 0
-    extraction = load_extract_report(Path(__file__).resolve().parents[2] / "preview/out/resources/resource_animation_extract.json")
-    clip_scales = {hashlib.sha256(pack_path(landmarks, entry["normalized_clip"]).read_bytes()).hexdigest():
-                   entry["translation_scale"] for entry in extraction["unique_clips"]}
+    clip_scales = clip_translation_scales(landmarks, read_bytes=read_bytes)
     (output / "poses").mkdir(exist_ok=True)
 
     def compile_subject(root: Path, subject: str, meshes: list[str], materials: list[str],
@@ -106,15 +140,15 @@ def build(animated: Path, landmarks: Path, output: Path) -> dict:
         status = animation.get("binding_status", animation.get("pose_status"))
         if status != "validated_model_aware_pose_cache":
             raise ValueError(f"{subject}: unvalidated model-aware animation")
-        skeleton = normalized_skin.load_skeleton(pack_path(root, skeleton_path))
-        pose_path = pack_path(root, animation["pose_cache"])
-        if animation.get("pose_cache_sha256") and hashlib.sha256(pose_path.read_bytes()).hexdigest() != animation["pose_cache_sha256"]:
+        skeleton = normalized_skin.load_skeleton(tracked(root, skeleton_path))
+        pose_path = tracked(root, animation["pose_cache"])
+        if animation.get("pose_cache_sha256") and hashlib.sha256(read_bytes(pose_path)).hexdigest() != animation["pose_cache_sha256"]:
             raise ValueError(f"{subject}: stale pose-cache hash")
         cache = normalized_pose_cache.load_pose_cache(pose_path)
         calibration = None
         if root == animated:
-            clip_path = pack_path(root, animation["clip"])
-            clip_hash = hashlib.sha256(clip_path.read_bytes()).hexdigest()
+            clip_path = tracked(root, animation["clip"])
+            clip_hash = hashlib.sha256(read_bytes(clip_path)).hexdigest()
             ratio = (1.0/SOURCE_UNITS_PER_TILE)/clip_scales[clip_hash]
             clip = normalized_animation.load_clip(clip_path)
             pose_relative = f"poses/{subject}.c3pose"
@@ -125,11 +159,11 @@ def build(animated: Path, landmarks: Path, output: Path) -> dict:
         for ordinal, binding in enumerate(bindings):
             if binding.get("binding_mode", "vertex_skin") != "vertex_skin":
                 raise ValueError(f"{subject}: unsupported resource binding")
-            mesh = normalized_skin.load_mesh(pack_path(root, meshes[binding["mesh"]]), len(skeleton["bones"]))
-            material = json.loads(pack_path(root, materials[binding["material"]]).read_text())
+            mesh = normalized_skin.load_mesh(tracked(root, meshes[binding["mesh"]]), len(skeleton["bones"]))
+            material = read(pack_path(root, materials[binding["material"]]))
             channel = material.get("base_color", material.get("channels", {}).get("base_color"))
             texture = pack_path(root, channel["texture"])
-            texture_name = "textures/" + hashlib.sha256(texture.read_bytes()).hexdigest() + ".dds"
+            texture_name = "textures/" + hashlib.sha256(read_bytes(texture)).hexdigest() + ".dds"
             if not (output / texture_name).exists():
                 shutil.copyfile(texture, output / texture_name)
             payload = encode(mesh, skeleton, cache)
@@ -148,17 +182,17 @@ def build(animated: Path, landmarks: Path, output: Path) -> dict:
                           "facing": facing})
         return {"parts": parts, "duration": cache.duration, "frames": cache.frame_count, "calibration": calibration}
 
-    manifest = json.loads((animated / "manifest.json").read_text())
+    manifest = read(animated / "manifest.json")
     for resource, record in manifest["resources"].items():
         subjects = []
         for ordinal, candidate in enumerate(record["subject_candidates"]):
-            component = json.loads(pack_path(animated, manifest["assets"][candidate["asset"]]["component"]).read_text())
+            component = read(pack_path(animated, manifest["assets"][candidate["asset"]]["component"]))
             subjects.append(compile_subject(animated, resource.split("/")[-1]+f"_{ordinal}",
                 component.get("meshes", [component["mesh"]]),
                 component.get("materials", [component["material"]]), component["skeleton"],
                 manifest["animations"][candidate["animation"]], component["draw_bindings"]))
         result["resources"][resource] = subjects
-    manifest = json.loads((landmarks / "manifest.json").read_text())
+    manifest = read(landmarks / "manifest.json")
     for resource in ("resource/fish", "resource/whales"):
         asset = manifest["assets"][manifest["resources"][resource]["landmark_asset"]]
         animation = dict(manifest["animations"][resource])
@@ -166,11 +200,11 @@ def build(animated: Path, landmarks: Path, output: Path) -> dict:
         result["resources"][resource] = [compile_subject(landmarks, resource.split("/")[-1],
             [asset["mesh"]], [asset["material"]], asset["skeleton"], animation,
             [{"mesh": 0, "material": 0}])]
-    # One primary subject per resource for the initial runtime checkpoint.
+    # One current primary subject per resource.
     # Source pose coordinates stay unchanged; presentation calibration is generic data.
     from Renderer.tools.asset_compiler.build_resource_runtime import SELECTIONS
     static_selections = {name: (asset, scale, count) for name, asset, scale, count in SELECTIONS}
-    original = json.loads((landmarks / "manifest.json").read_text())
+    original = read(landmarks / "manifest.json")
     bindings = {}
     forward_y = {"horses": -1, "cattle": 1, "game": -1, "furs": -1, "ivory": -1,
                  "whales": 0, "fish": 0, "wheat": -1, "bananas": -1, "rubber": -1}
@@ -179,7 +213,7 @@ def build(animated: Path, landmarks: Path, output: Path) -> dict:
         selected = 2 if name == "cattle" else 0
         subject = subjects[selected]
         if len(subject["parts"]) != 1:
-            raise ValueError("initial primary resource requires one material part")
+            raise ValueError("primary resource requires one material part")
         part = subject["parts"][0]
         data = (output / part["mesh"]).read_bytes()
         count = struct.unpack_from("<I", data, 12)[0]
@@ -191,7 +225,7 @@ def build(animated: Path, landmarks: Path, output: Path) -> dict:
         instances = 1
         if name in static_selections:
             asset_id, old_scale, instances = static_selections[name]
-            old = json.loads((landmarks / original["assets"][asset_id]["mesh"]).read_text())
+            old = read(pack_path(landmarks, original["assets"][asset_id]["mesh"]))
             old_height = max(v["position"][2] for v in old["vertices"])-min(v["position"][2] for v in old["vertices"])
             scale = old_scale*.78*old_height/span[2]
         else:

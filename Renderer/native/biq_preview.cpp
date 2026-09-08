@@ -218,7 +218,11 @@ int main(int argc, char ** argv) {
     auto set_units=reinterpret_cast<c3x_renderer_set_unit_rendering_fn>(
         GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
     char unit_preview[8]={};
-    if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_UNITS",unit_preview,sizeof(unit_preview)) &&
+    bool enable_unit_preview=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_UNITS",unit_preview,sizeof(unit_preview))!=0;
+#ifdef C3X_LAB_PREVIEW
+    enable_unit_preview=enable_unit_preview || GetEnvironmentVariableA("C3X_LAB_UNIT_STUDY",unit_preview,sizeof(unit_preview))!=0;
+#endif
+    if(enable_unit_preview &&
        (!set_units || set_units(1)!=C3X_RENDERER_RESULT_OK))return 1;
     if (set_definitions == nullptr || render == nullptr || reset == nullptr ||
         set_definitions(argv[2], argv[3], nullptr, custom_path) != C3X_RENDERER_RESULT_OK)
@@ -331,6 +335,9 @@ int main(int argc, char ** argv) {
                 tile.resource_id=int(100+i);strcpy_s(tile.resource_name,names[i]);
             }
     }
+#ifdef C3X_LAB_PREVIEW
+    lab_place_objects(tiles,center_x,center_y,map_width);
+#endif
     return tiles;
     };
     auto tiles=capture_view();
@@ -368,6 +375,9 @@ int main(int argc, char ** argv) {
     bool ok = result == C3X_RENDERER_RESULT_OK &&
               (pickup ? output.rendered_tile_count >= expected_rendered : output.rendered_tile_count == expected_rendered) &&
               output.fallback_tile_count == 0 && write_bmp(argv[5], output);
+#ifdef C3X_LAB_PREVIEW
+    if(ok)ok=lab_verify_objects(frame,output);
+#endif
     if(ok && animate) {
         std::vector<unsigned char> previous;
         unsigned changes=0;
@@ -568,6 +578,9 @@ int main(int argc, char ** argv) {
             }
         }
     }
+#ifdef C3X_LAB_PREVIEW
+    if(ok)ok=lab_compose_units(module,argv[5],frame.hour,tile_width,output);
+#endif
     reset();
     FreeLibrary(module);
     return ok ? 0 : 1;

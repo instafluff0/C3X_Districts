@@ -10,6 +10,7 @@
     "transitions"
   ],
   "implementation": [
+    "Renderer/lab/shared/shaders/relief/beauty_mountain.hlsl",
     "Renderer/native/source_fidelity/geometry.h",
     "Renderer/native/source_fidelity/runtime.h",
     "Renderer/native/source_fidelity/kernels.h",
@@ -59,8 +60,16 @@
       }
     ]
   },
-  "candidate": null,
+  "candidate": {
+    "render": "Renderer/lab/out/mountains/render.json",
+    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
+  },
   "limitations": [
     "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ]
+  ],
+  "reviewed_inputs": {
+    "revision": 1,
+    "signature": "352f6aa7bbea84ec1f9fdf3e0ebf16c7efae42cf8512ae61ce0bf563e5f3edfe",
+    "basis": "exact_approved_reference_comparison"
+  }
 }

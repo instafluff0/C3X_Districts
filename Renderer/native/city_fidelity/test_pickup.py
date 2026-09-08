@@ -2,13 +2,16 @@
 from pathlib import Path
 import hashlib,json,math,unittest
 ROOT=Path(__file__).resolve().parents[3]
-LAB=ROOT/'Renderer/terrain_lab/v2'
+INPUT=ROOT/'Renderer/packs/CityFidelitySources/current'
 PACK=ROOT/'Renderer/packs/CityCompositionRuntime'
 def read(p):return json.loads(p.read_text())
 
 class Pickup(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):cls.pack=read(PACK/'manifest.json')
+    def setUpClass(cls):
+        cls.pack=read(PACK/'manifest.json')
+        cls.selected={int(i['runtime_authority'].removeprefix('selected-r')):i
+                      for i in read(INPUT/'recipes.json')['selected']}
 
     def test_source_files_have_not_changed(self):
         for path,digest in self.pack['source_sha256'].items():
@@ -28,8 +31,7 @@ class Pickup(unittest.TestCase):
 
     def test_selected_body_transforms_are_exact(self):
         for revision in [60,61,64,101,111,112]:
-            path=next((LAB/f'fixtures/beauty/city-scene-r{revision}').glob('*/augmentation.json'))
-            source=read(path)
+            source=self.selected[revision]['recipe']
             template=next(t for t in self.pack['templates'] if t['authority']==f'selected-r{revision}' and t['size']==1)
             self.assertEqual(len(template['instances']),len(source['instances']))
             self.assertEqual(template['clearance'],[.05,2.5,source.get('vegetation_clearance') or 0,
@@ -41,9 +43,9 @@ class Pickup(unittest.TestCase):
 
     def test_central_facade_lights_match_preserved_combined_evidence(self):
         for revision,site in [(111,'inland'),(112,'holdout')]:
-            path=next((LAB/f'fixtures/beauty/city-scene-r{revision}').glob('*/augmentation.json'))
-            augmentation=read(path);surface=read(path.parent/'surface.json')
-            expected=read(LAB/f'audits/beauty/out/city-central-capital-r2/{site}/lights.json')['lights']
+            evidence=self.selected[revision]
+            augmentation=evidence['recipe'];surface=evidence['surface']
+            expected=evidence['lights']
             template=next(t for t in self.pack['templates'] if t['authority']==f'selected-r{revision}' and t['size']==1)
             actual=[]
             for owner,(instance,source_instance) in enumerate(zip(template['instances'],augmentation['instances'])):
@@ -61,7 +63,7 @@ class Pickup(unittest.TestCase):
     def test_selected_paving_uses_palace_hull_and_source_density(self):
         for revision,site in [(111,'inland'),(112,'holdout')]:
             t=next(t for t in self.pack['templates'] if t['authority']==f'selected-r{revision}' and t['size']==1)
-            paving=t['paving'];e=read(LAB/f'audits/beauty/out/city-central-capital-r2/{site}/ground/settlement.json')
+            paving=t['paving'];e=self.selected[revision]['ground']
             self.assertEqual(paving['period'],e['tile_period']);self.assertEqual(paving['atlas_uv'],e['atlas_uv'])
             self.assertEqual(len(paving['coverage_polygons']),1);self.assertEqual(len(paving['coverage_boxes']),7)
             # Translation-independent polygon area compares the real selected

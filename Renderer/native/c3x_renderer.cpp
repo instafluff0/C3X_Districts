@@ -45,6 +45,10 @@
 #include "unit_body_renderer.h"
 #include "city_fidelity/gpu.h"
 #include "city_fidelity/glow.h"
+#include "../lab/shared/natural/ground.h"
+#include "../lab/shared/natural/queries.h"
+#include "../lab/shared/natural/relief.h"
+#include "../lab/shared/natural/mesh.h"
 
 namespace {
 
@@ -54,27 +58,7 @@ constexpr std::size_t viewport_cache_budget = 128u * 1024u * 1024u;
 constexpr std::size_t tile_geometry_cache_budget = 192u * 1024u * 1024u;
 constexpr std::size_t tile_geometry_cache_capacity = 2048u;
 
-struct Vertex {
-    float x, y, z;
-    float u, v;
-    float panel;
-    float normal_x, normal_y, normal_z;
-    float shadow_visibility, ambient_visibility;
-    float macro_u, macro_v;
-    float surface_kind;
-    float surface_coordinate;
-    float base_terrain;
-    float real_terrain;
-    float material_grass, material_plains, material_desert, material_marsh;
-    float authored_relief_height, authored_relief_blend;
-    float shore_distance;
-    float river_distance, river_branch_count, river_mouth_distance, river_padding;
-    float active_effect;
-    float material_tundra;
-    float world_x, world_y, world_z, world_valid;
-    float shore_true_distance, shore_beach_width, shore_rockiness, shore_depth;
-    float relief_owner_u, relief_owner_v, relief_owner_coverage, relief_owner_state;
-};
+using Vertex = c3x_renderer::fidelity::MapVertex;
 
 // The production shader exposes only settings that are meaningful to the game.
 // Standalone fixture and promotion switches are compile-time concerns outside
@@ -107,7 +91,7 @@ struct ViewportShaderSettings {
     float reserved[2];
 };
 
-struct TerrainTexture {
+struct TerrainTexture : c3x_renderer::fidelity::ReliefFields {
     ID3D11ShaderResourceView * view = nullptr;
     ID3D11ShaderResourceView * material_height_view = nullptr;
     ID3D11ShaderResourceView * specular_view = nullptr;
@@ -124,22 +108,6 @@ struct TerrainTexture {
     std::vector<std::uint8_t> elevated_specular_dds;
     std::array<std::vector<std::uint8_t>, 5> relief_layer_dds;
     std::array<std::vector<std::uint8_t>, 5> water_surface_dds;
-    std::vector<std::uint8_t> height_pixels;
-    std::vector<std::uint8_t> blend_pixels;
-    std::array<std::vector<std::uint8_t>, 5> relief_height_variants;
-    std::array<std::vector<std::uint8_t>, 5> relief_blend_variants;
-    std::array<std::uint32_t, 5> relief_variant_widths = {};
-    std::array<std::uint32_t, 5> relief_variant_heights = {};
-    std::array<float, 5> relief_height_minimum = {};
-    std::array<float, 5> relief_height_maximum = {};
-    std::array<float, 5> relief_blend_minimum = {};
-    std::array<float, 5> relief_blend_maximum = {};
-    std::uint32_t height_width = 0;
-    std::uint32_t height_height = 0;
-    float height_minimum = 0.0f;
-    float height_maximum = 1.0f;
-    float blend_minimum = 0.0f;
-    float blend_maximum = 1.0f;
     float height_scale_px = 0.0f;
     int relief_profile = 0;
     bool configured = false;
@@ -2425,30 +2393,7 @@ public:
                                          std::uint32_t width, std::uint32_t height,
                                          float minimum, float maximum,
                                          float u, float v) {
-        // This is the Lab HeightField::sample implementation. Authored relief
-        // fields are normalized to their own observed range and sampled with
-        // wrapped bilinear coordinates, including at the source border.
-        if (pixels.empty() || width == 0 || height == 0)
-            return 0.0f;
-        u -= std::floor(u);
-        v -= std::floor(v);
-        float px = u * static_cast<float>(width);
-        float py = v * static_cast<float>(height);
-        std::uint32_t x0 = static_cast<std::uint32_t>(std::floor(px)) % width;
-        std::uint32_t y0 = static_cast<std::uint32_t>(std::floor(py)) % height;
-        std::uint32_t x1 = (x0 + 1) % width;
-        std::uint32_t y1 = (y0 + 1) % height;
-        float tx = px - std::floor(px);
-        float ty = py - std::floor(py);
-        auto value = [&pixels, width, minimum, maximum](std::uint32_t x,
-                                                        std::uint32_t y) {
-            float raw = static_cast<float>(
-                pixels[static_cast<std::size_t>(y) * width + x]) / 255.0f;
-            return (raw - minimum) / std::max(0.0001f, maximum - minimum);
-        };
-        float top = value(x0, y0) * (1.0f - tx) + value(x1, y0) * tx;
-        float bottom = value(x0, y1) * (1.0f - tx) + value(x1, y1) * tx;
-        return top * (1.0f - ty) + bottom * ty;
+        return c3x_renderer::fidelity::sample_normalized_field(pixels,width,height,minimum,maximum,u,v);
     }
 
     static float smooth_edge(float distance) {
@@ -4427,54 +4372,14 @@ public:
             std::unordered_map<std::uint64_t, std::uint64_t> dependencies;
             std::unordered_map<std::uint64_t, std::uint64_t> coast_dependencies;
             std::unordered_map<std::size_t, std::uint32_t> world_dependencies;
-            std::unordered_map<std::uint64_t,c3x_renderer::profile_v2::Tile> world_lookup_cache;
             auto observe_world = [&](std::size_t i, std::uint32_t value) { world_dependencies.emplace(i,value); };
-            std::array<c3x_renderer::profile_v2::Tile,81> nearby_world_tiles{};
-            std::array<bool,81> nearby_world_ready{};
-            int nearby_c=(tile.tile_x+tile.tile_y)/2-4,nearby_r=(tile.tile_x-tile.tile_y)/2-4;
-            auto world_lookup = [&](int c, int r) {
-                int x=c-nearby_c,y=r-nearby_r;
-                if(x>=0 && x<9 && y>=0 && y<9) {
-                    auto n=std::size_t(y*9+x);
-                    if(!nearby_world_ready[n]) {
-                        auto const& topology=world_coast.world();auto i=topology.index(c,r);
-                        if(i!=std::size_t(-1))observe_world(i,topology.at(i));
-                        nearby_world_tiles[n]=topology.tile(c,r);nearby_world_ready[n]=true;
-                    }
-                    return nearby_world_tiles[n];
-                }
-                std::uint64_t key=(std::uint64_t(std::uint32_t(c))<<32)|std::uint32_t(r);
-                auto found=world_lookup_cache.find(key);if(found!=world_lookup_cache.end())return found->second;
-                auto const & topology = world_coast.world();
-                auto i = topology.index(c,r);
-                if (i != std::size_t(-1)) observe_world(i, topology.at(i));
-                auto value=topology.tile(c,r);world_lookup_cache.emplace(key,value);return value;
-            };
-            float shore_center_u=float(tile.tile_x+tile.tile_y)*.5f+.5f;
-            float shore_center_v=float(tile.tile_x-tile.tile_y)*.5f+.5f;
-            c3x_renderer::profile_v2::ShoreSample shore_center{};bool shore_center_ready=false;
-            shore_samples.clear();pickup_ground_samples.clear();
-            c3x_renderer::profile_v2::WorldCoast::Patch shore_patch;
-            bool shore_patch_attempted=false;
-            auto shore_sample_at = [&](float u,float v) {
-                // Distance to a closed contour is 1-Lipschitz. Once the
-                // center certificate proves this query beyond every land
-                // response collar, its saturated values are exact. The same
-                // certificate detects any newly closer coast on terrain edits.
-                if(shore_center_ready && shore_center.distance>1.5+std::hypot(u-shore_center_u,v-shore_center_v))
-                    return c3x_renderer::profile_v2::ShoreSample{2,0,0,0};
-                return shore_samples.get(u,v,[&]() {
-                    if(shore_center_ready && !shore_patch_attempted) {
-                        shore_patch=world_coast.prepare({shore_center_u,shore_center_v},.73,std::abs(shore_center.distance),
-                            [&](auto id,auto revision){coast_dependencies.emplace(id,revision);});
-                        shore_patch_attempted=true;
-                    }
-                    auto sample = world_coast.sample_with_lookup({u,v},
-                        [&](auto id,auto revision) { coast_dependencies.emplace(id,revision); }, world_lookup, &shore_patch);
-                    if(u==shore_center_u && v==shore_center_v){shore_center=sample;shore_center_ready=true;}
-                    return sample;
-                });
-            };
+            auto observe_coast = [&](auto id,auto revision) { coast_dependencies.emplace(id,revision); };
+            c3x_renderer::fidelity::SurfaceQueries queries(world_coast,shore_samples,
+                tile.tile_x,tile.tile_y,observe_world,observe_coast);
+            auto world_lookup = [&](int c,int r) { return queries.tile(c,r); };
+            float shore_center_u=queries.center_u,shore_center_v=queries.center_v;
+            pickup_ground_samples.clear();
+            auto shore_sample_at = [&](float u,float v) { return queries.shore(u,v); };
             std::vector<std::pair<std::uint64_t, std::array<int, 2>>> anchor_dependencies;
             auto observed_coordinate_key = [&](int x, int y) {
                 auto key = coordinate_key(x, y);
@@ -4826,11 +4731,7 @@ public:
             };
             auto material_weights_for = [&](float world_u, float world_v) {
                 if (pickup_profile) {
-                    auto weights = c3x_renderer::profile_v2::material_weights({world_u, world_v},
-                        world_coast.world().dimensions(), world_lookup);
-                    std::array<float,5> result;
-                    for (int i=0;i<5;i++) result[i]=static_cast<float>(weights[i]);
-                    return result;
+                    return queries.weights(world_u,world_v);
                 }
                 float source_x = world_u + world_v - 1.0f;
                 float source_y = world_u - world_v;
@@ -5083,19 +4984,7 @@ public:
                 }
             };
             auto pickup_source = [&](int kind, unsigned variant, int channel, float u, float v) {
-                if(fidelity_profile && (kind==5 || kind==6))return 0.f; // replaced exact natural providers
-
-                TerrainTexture const & asset = terrain_textures[kind];
-                if (kind == 6) {
-                    auto const & pixels = channel == 0 ? asset.relief_height_variants[variant] : asset.relief_blend_variants[variant];
-                    return sample_normalized_field(pixels, asset.relief_variant_widths[variant],
-                        asset.relief_variant_heights[variant], channel == 0 ? asset.relief_height_minimum[variant] : asset.relief_blend_minimum[variant],
-                        channel == 0 ? asset.relief_height_maximum[variant] : asset.relief_blend_maximum[variant], u, v);
-                }
-                return sample_normalized_field(channel == 0 ? asset.height_pixels : asset.blend_pixels,
-                    asset.height_width, asset.height_height,
-                    channel == 0 ? asset.height_minimum : asset.blend_minimum,
-                    channel == 0 ? asset.height_maximum : asset.blend_maximum, u, v);
+                return c3x_renderer::fidelity::relief_source(terrain_textures,fidelity_profile,kind,variant,channel,u,v);
             };
             auto pickup_river = [&](int c, int r, float u, float v) {
                 auto const & world = world_coast.world();
@@ -5114,23 +5003,13 @@ public:
                 if (i != std::size_t(-1)) observe_world(i,value);
                 return value != 0xffffffffu && (value >> 24) != 0 ? 1.0f : 0.0f;
             };
-            c3x_renderer::profile_v2::ReliefQuery pickup_relief(world_coast.world().dimensions(),
-                world_lookup, pickup_source, shore_sample_at, pickup_river, pickup_dune, pickup_activity);
-            c3x_renderer::profile_v2::FlatGroundRegion flat_ground(
+            c3x_renderer::fidelity::ReliefSurface pickup_surface(world_coast.world().dimensions(),
                 (tile.tile_x+tile.tile_y)/2, (tile.tile_x-tile.tile_y)/2,
                 pickup_profile ? shore_sample_at(shore_center_u,shore_center_v).distance : 0,
-                world_lookup);
-            auto pickup_ground_at = [&](float u,float v) {
-                if (flat_ground.contains(u,v)) return c3x_renderer::profile_v2::GroundSample{};
-                return pickup_ground_samples.get(u,v,[&]() {return pickup_relief.sample(u,v);});
-            };
-            auto pickup_height_at = [&](float u,float v) {
-                if(flat_ground.contains(u,v))return 0.f;
-                // Finite-difference coordinates are unique in the compiled grid.
-                // Measured zero cache hits: avoid storing a million one-use values.
-                ++pickup_height_queries;
-                return pickup_relief.sample(u,v,false).height;
-            };
+                world_lookup, pickup_source, shore_sample_at, pickup_river, pickup_dune, pickup_activity,
+                pickup_ground_samples, pickup_height_queries);
+            auto pickup_ground_at = [&](float u,float v) {return pickup_surface.sample(u,v);};
+            auto pickup_height_at = [&](float u,float v) {return pickup_surface.height(u,v);};
             auto relief_at_world = [&](float world_u, float world_v) {
                 if (pickup_profile) {
                     auto sample = pickup_ground_at(world_u,world_v);

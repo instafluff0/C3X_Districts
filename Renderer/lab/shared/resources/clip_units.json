@@ -1,0 +1,101 @@
+{
+  "schema": "c3x.resource_clip_units.v1",
+  "clips": [
+    {
+      "path": "animations/resources/environment_clutter/0000_horseresource_grazinga.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0005_res_banana01_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0006_res_banana02_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0007_res_banana03_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0008_res_cattle_bull01_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0009_res_cattle_bull02_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0010_res_cattle_cow01_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0011_res_cattle_cow02_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0012_res_cocoa_tree01_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0013_res_cocoa_tree02_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0017_res_deer_buck_idel_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0018_res_deer_doe01_idle_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0019_res_deer_doe_idle_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0020_res_elephant_anim_01.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0021_res_elephant_anim_02.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0022_res_fox01_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0023_res_fox02_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0024_res_fox03_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0032_res_wheat_tuft01_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0033_res_wheat_tuft02_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0034_res_wheat_tuft03_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/environment_clutter/0035_res_wheat_tuft04_anim.c3anim",
+      "translation_scale": 0.08333333333333333
+    },
+    {
+      "path": "animations/resources/landmarks_tilebases/0062_res_fish_anim.c3anim",
+      "translation_scale": 0.01
+    },
+    {
+      "path": "animations/resources/landmarks_tilebases/0069_whale_idle.c3anim",
+      "translation_scale": 0.01
+    }
+  ]
+}

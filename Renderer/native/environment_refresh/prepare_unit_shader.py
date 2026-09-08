@@ -7,7 +7,7 @@ The unresolved LEAN decode is deliberately absent from the unit entry point.
 from pathlib import Path
 import hashlib,json
 ROOT=Path(__file__).resolve().parents[3];HERE=Path(__file__).resolve().parent
-SOURCE=ROOT/'Renderer/terrain_lab/v2/shaders/objects/beauty_objects.hlsl'
+SOURCE=ROOT/'Renderer/lab/shared/shaders/objects/beauty_objects.hlsl'
 def main():
     source=SOURCE.read_text()
     ggx=source[source.index('float ggx('):source.index('Output shade(')]

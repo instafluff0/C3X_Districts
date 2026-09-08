@@ -2,9 +2,7 @@
   "schema": 1,
   "authority": "source-fidelity-r13/inland",
   "source_sha256": {
-    "Renderer/terrain_lab/v2/shaders/relief/beauty_terrain.hlsl": "8b1be2156fddf87c9348f8ed4b4dcdd6f14262c8449f40bfa3600aa63c1db9f9",
-    "Renderer/terrain_lab/v2/shaders/relief/beauty_mountain.hlsl": "877adbefde22e3e037822c37cb3394c038c5da6790ccdac68c4dc851dcf70e0f",
-    "Renderer/terrain_lab/v2/shaders/objects/beauty_objects.hlsl": "2d4e1dcf6d0f88457a21b7cb35ca4dad277f2fafa19f7afb670b49c2d6b7c0a3",
+    "Renderer/packs/BeautyStudies/beauty_objects.bin": "5976ad880320a53ba55fab3b5e5c5864958c3a6e53cd7436d638f9b13085f6c5",
     "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_base_color.dds": "af0daadfbb60bb7e47b2a1f6dae76138a8b3a998c628ae465457d9eb7c0a04f9",
     "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_height.dds": "7ced53bf19f07a083aa66403fb6f4831f7410d63a4243ad4c65266e3cc4bc2d0",
     "Renderer/packs/Civ5EnvironmentSkin/textures/grassland_specular.dds": "ff3d5e0d6994edcf4b5116abfd8abcbe42eda97a40b37a4850a84c79e3c8806e",
@@ -147,10 +145,7 @@
     "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_clump_03_normal_0.dds": "0e8568c1da5b606affa68f0e319b6da704629aa9de267821c03cd4562c4d8255",
     "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_clump_03_normal_1.dds": "53b11a66ce0856309848de66e588744a59c70a632395925d9c882737d24be0e7",
     "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_clump_03_gloss.dds": "e199e0d226d62b500396aa240d64f329a2e81198b4e48214cca4231cd63b0e1e",
-    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_clump_03_opacity.dds": "abb356073e132da97bbbec94a129b59c0fed4d18852c7e2bdf65ad92ba3801e6",
-    "Renderer/terrain_lab/v2/systems/relief/beauty_terrain.cpp": "ea524e7b91499978fe5bf0a7bd93878d137667c5310a0d8f0156a66663fba8bd",
-    "Renderer/terrain_lab/v2/systems/relief/beauty_mountain.cpp": "b64aa53d8bdce274026115342a6396ee792dec7329580b4f23fda9920582e775",
-    "Renderer/terrain_lab/v2/systems/objects/beauty_objects.cpp": "d254f01fc4879a21150f155b274608af80652828615458c722b701762982fca0"
+    "Renderer/packs/Civ5EnvironmentVegetation/textures/features/forest_leafy_clump_03_opacity.dds": "abb356073e132da97bbbec94a129b59c0fed4d18852c7e2bdf65ad92ba3801e6"
   },
   "trees": 22,
   "recipes": 25,

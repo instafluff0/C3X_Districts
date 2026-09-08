@@ -5,34 +5,53 @@ placements, transformed facade lights and footprint metadata, never source names
 """
 from pathlib import Path
 from collections import defaultdict
-import hashlib,json,math,struct,sys
-ROOT=Path(__file__).resolve().parents[3];LAB=ROOT/'Renderer/terrain_lab/v2';OUT=ROOT/'Renderer/packs/CityCompositionRuntime'
-sys.path[:0]=[str(LAB/'qa'),str(LAB/'systems/objects')]
-import presentation as city
-from city_growth_layout import solve,bounds,expanded,overlaps
-from settlement_ground import footprint_alignment,convex_hull,grid,coverage
-from mesh_fingerprint import geometry_digest
-from city_facade_light_probe import derive
+import argparse,hashlib,json,math,struct,sys
+ROOT=Path(__file__).resolve().parents[3];OUT=ROOT/'Renderer/packs/CityCompositionRuntime'
+INPUT=ROOT/'Renderer/packs/CityFidelitySources/current'
+sys.path.insert(0,str(ROOT))
+from Renderer.lab.shared.cities import assets as city
+from Renderer.lab.shared.cities.growth import solve,bounds,expanded,overlaps
+from Renderer.lab.shared.cities.ground import footprint_alignment,convex_hull,grid,coverage
+from Renderer.lab.shared.cities.fingerprint import geometry_digest
+from Renderer.lab.shared.cities.facades import derive
 
-def read(p):return json.loads((ROOT/p).read_text())
-def sha(p):return hashlib.sha256((ROOT/p).read_bytes()).hexdigest()
-def main():
+def read(p):return city.read(p)
+def sha(p):return hashlib.sha256(city.input_bytes(p)).hexdigest()
+def build_pack(output=OUT):
+    output=Path(output).resolve()
+    output.relative_to(ROOT/'Renderer')
+    for source in (INPUT.parent,ROOT/city.PACK,ROOT/'Renderer/packs/CityStudyAuxiliaryUV',
+                   ROOT/'Renderer/packs/CityPalacesNormalized'):
+        source=source.resolve()
+        if output==source or output in source.parents or source in output.parents:
+            raise ValueError('City output must not overlap preserved source inputs')
+    # Cached parsed meshes must not hide source edits or omit dependencies when
+    # multiple category builds run in the same Python process.
+    city.component.cache_clear()
+    with city.track_inputs(generated=(output/'frames.json',)) as consumed:
+        meta=_build(output)
+    return meta,consumed
+
+def _build(OUT):
     OUT.mkdir(parents=True,exist_ok=True)
     source=read('Renderer/packs/CityFidelitySources/manifest.json');catalog=read('Renderer/packs/CityStudyAuxiliaryUV/city_catalog.json')
     styles=['american','european','mediterranean','middle_eastern','asian'];eras=['ancient','medieval','industrial','modern']
     materials=[];material_ids={};models=[];model_ids={};templates=[];pins={};gaps=[]
     frames={};extra={}
+    current=read(INPUT/'recipes.json')
+    pins[str((INPUT/'recipes.json').relative_to(ROOT))]=sha(INPUT/'recipes.json')
     for record in source['pools']:
         for key in ['normals','materials']:pins[record[key]]=sha(record[key])
         frames.update(read(record['normals'])['meshes']);extra.update(read(record['materials'])['materials'])
     # The selected palace is already fingerprinted by the pickup gates.
-    for name in ['combined-normals.json','combined-extra.json']:
-        p='Renderer/terrain_lab/v2/fixtures/beauty/city-capital-materials-r1/'+name;pins[p]=sha(p)
+    for name in ['palace-normals.json','palace-materials.json']:
+        p=str((INPUT/name).relative_to(ROOT));pins[p]=sha(p)
         if 'normals' in name:frames.update(read(p)['meshes'])
         else:extra.update(read(p)['materials'])
-    ground_parts=read('Renderer/terrain_lab/v2/fixtures/beauty/city-ground-binding-r1/modern-ground-parts.json')['parts']
-    ground_binding=read('Renderer/terrain_lab/v2/fixtures/beauty/city-ground-binding-r1/modern.json')
-    ground_reference=read('Renderer/terrain_lab/v2/audits/beauty/out/city-central-capital-r2/inland/ground/settlement.json')
+    ground_parts=read(INPUT/'ground-parts.json')['parts']
+    pins[str((INPUT/'ground-parts.json').relative_to(ROOT))]=sha(INPUT/'ground-parts.json')
+    ground_binding=current['ground_binding']
+    ground_reference=current['ground_reference']
     body_cache={}
     def body(asset,pack=Path('Renderer/packs/CityStudyAuxiliaryUV')):
         key=str(pack)+'/'+asset
@@ -78,9 +97,8 @@ def main():
         models.append({'asset':asset,'pack':str(pack),'low':b['lo'],'high':b['hi'],'hull':hull,'parts':parts})
         return mid
     selected={}
-    for r in [60,61,64,111,112,101]:
-        p=next((LAB/f'fixtures/beauty/city-scene-r{r}').glob('*/augmentation.json'));a=read(p);pins[str(p.relative_to(ROOT))]=sha(p)
-        selected[r]=a
+    for item in current['selected']:
+        selected[int(item['runtime_authority'].removeprefix('selected-r'))]=item['recipe']
     # Use the actual selected placements first. The coastal capital retains its
     # preceding legal composition instead of inventing a central placement.
     light_cache={}
@@ -144,13 +162,11 @@ def main():
         culture,era=pool.removeprefix('city/pool/').split('/')
         assets=[body(a) for a in record['components']]
         reference=[city.component(a) for a in read(city.PACK/'city_catalog.json')['pools'][pool]['components']]
-        scale=city.layout(reference,0,factor=1.5)[0]['scale']
+        scale=city.source_scale(reference,1.5)
         for a in assets:a['grid_rotation']=footprint_alignment([v['position'][:2] for mesh,m in a['parts'] if m['alpha_mode']!='blend' for v in mesh['vertices']])
         # Source neighborhoods use the smaller body budget; individual houses
         # use the selected dense growth budget. This is offline pack policy.
-        report=read('Renderer/terrain_lab/v2/audits/beauty/out/city-source-expanded-r1/build.json')
-        entries=next(x['selected'] for x in report['pools'] if x['pool']==pool)
-        blocks={x['asset_id'] for x in entries if '_Block_' in x['entry']}
+        blocks=set(current['blocks_by_pool'][pool])
         order=sorted([a for a in assets if a['id'] not in blocks],key=lambda a:(a['hi'][2]-a['lo'][2],a['id']))
         if not order:order=assets
         counts=[4,7,11] if blocks else [8,16,24]
@@ -198,4 +214,16 @@ def main():
             for i in p['indices']:u(i)
     (OUT/'city.bin').write_bytes(wire)
     print('PASS',len(models),'models',len(materials),'materials',len(templates),'growth templates; bytes',len(wire),'gaps',len(gaps))
-if __name__=='__main__':main()
+    return meta
+
+def main():
+    return build_pack(OUT)[0]
+if __name__=='__main__':
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output',type=Path,help='Build a disposable candidate without changing the runtime pack')
+    args=parser.parse_args()
+    if args.output:
+        OUT=(ROOT/args.output).resolve()
+        if not OUT.is_relative_to(ROOT/'Renderer'):
+            parser.error('output must stay within Renderer')
+    main()

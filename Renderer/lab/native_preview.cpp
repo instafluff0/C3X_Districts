@@ -1,0 +1,135 @@
+// Standalone category witness using the actual production terrain and unit APIs.
+// Reuse the existing capture/ownership harness; never launch or patch the game.
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <vector>
+#include "../native/c3x_renderer_api.h"
+void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, int center_y, int map_width);
+bool lab_verify_objects(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_v1 const& output);
+bool lab_compose_units(HMODULE module, char const* image_path, int hour, int tile_width,
+                       c3x_renderer_output_v1 const& terrain);
+#define C3X_LAB_PREVIEW 1
+#define main terrain_preview_main
+#include "../native/biq_preview.cpp"
+#undef main
+
+void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, int center_y, int map_width) {
+    char category[32]={}, water[8]={};
+    GetEnvironmentVariableA("C3X_LAB_OBJECT_STUDY",category,sizeof(category));
+    GetEnvironmentVariableA("C3X_LAB_WATER_STUDY",water,sizeof(water));
+    bool resources=std::strcmp(category,"resources")==0;
+    bool infrastructure=std::strcmp(category,"infrastructure")==0;
+    if(!resources && !infrastructure)return;
+    char const*land[]={"Iron","Cattle","Horses","Wheat","Gold","Dyes"};
+    char const*sea[]={"Fish","Whales"};
+    for(auto& tile:tiles) {
+        int x=((tile.tile_x%map_width)+map_width)%map_width-center_x, y=tile.tile_y-center_y;
+        if(resources) {
+            unsigned count=water[0]?2u:6u;
+            for(unsigned i=0;i<count;++i) {
+                int sx=water[0]?(int(i)*4-2):(int(i%3)*2-2);
+                int sy=water[0]?0:(int(i/3)*4-2);
+                if(x==sx && y==sy){
+                    tile.resource_id=100+int(i);tile.resource_class=0;
+                    strcpy_s(tile.resource_name,water[0]?sea[i]:land[i]);
+                }
+            }
+        } else {
+            // Actual connected nodes: two horizontal runs joined by a branch.
+            if((std::abs(y)==2 && x>=-6 && x<=6) || (x==0 && y>=-6 && y<=6)) {
+                tile.road_mask=15;tile.route_style=2;
+                if(y==2)tile.railroad_mask=15;
+            }
+            if(x==-2 && y==-4)tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;
+            if(x==2 && y==-4){tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;tile.irrigation_mask=15;}
+        }
+    }
+}
+
+bool lab_verify_objects(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_v1 const& output) {
+    char category[32]={},water[8]={};
+    GetEnvironmentVariableA("C3X_LAB_OBJECT_STUDY",category,sizeof(category));
+    GetEnvironmentVariableA("C3X_LAB_WATER_STUDY",water,sizeof(water));
+    bool resources=std::strcmp(category,"resources")==0;
+    bool infrastructure=std::strcmp(category,"infrastructure")==0;
+    if(!resources && !infrastructure)return true;
+    bool ok=output.replacement_tile_count==frame.tile_count && output.replacement_tile_flags;
+    unsigned count=0,ownership=0;
+    for(unsigned i=0;i<frame.tile_count && ok;++i) {
+        auto const& tile=frame.tiles[i];
+        if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
+        auto flags=output.replacement_tile_flags[i];ownership|=flags;
+        if(resources && tile.resource_id>=0){
+            ++count;ok=(flags&C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED)!=0;
+            if(!ok)std::printf("FAIL missing custom resource: %s\n",tile.resource_name);
+        }
+    }
+    if(resources)ok=ok && count==(water[0]?2u:6u);
+    if(infrastructure){
+        unsigned expected=C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED|C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED|
+            C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED|C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
+        ok=ok && (ownership&expected)==expected;
+    }
+    std::printf("%s category object study: %s resources=%u ownership=%u\n",ok?"PASS":"FAIL",category,count,ownership);
+    return ok;
+}
+
+bool lab_compose_units(HMODULE module, char const* image_path, int hour, int tile_width,
+                       c3x_renderer_output_v1 const& terrain) {
+    char enabled[8] = {};
+    if (!GetEnvironmentVariableA("C3X_LAB_UNIT_STUDY", enabled, sizeof(enabled))) return true;
+    auto draw = reinterpret_cast<c3x_renderer_unit_draw_background_fn>(GetProcAddress(module, "c3x_renderer_unit_draw_background"));
+    bool ok = draw != nullptr;
+    HDC dc = CreateCompatibleDC(nullptr);
+    BITMAPINFO info = {};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = terrain.width;
+    info.bmiHeader.biHeight = -terrain.height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    void* pixels = nullptr;
+    HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &pixels, nullptr, 0);
+    ok = bitmap && dc && pixels && terrain.bgra_pixels && ok;
+    if (ok) for (int row=0; row<terrain.height; ++row)
+        std::memcpy(static_cast<unsigned char*>(pixels)+std::size_t(row)*terrain.width*4,
+                    static_cast<unsigned char const*>(terrain.bgra_pixels)+std::size_t(row)*terrain.stride_bytes,
+                    std::size_t(terrain.width)*4);
+    HGDIOBJ previous = bitmap && dc ? SelectObject(dc, bitmap) : nullptr;
+    char cursor[16] = {};
+    GetEnvironmentVariableA("C3X_LAB_ACTION_CURSOR", cursor, sizeof(cursor));
+    char const* keys[] = {"Warrior", "Settler", "Worker", "Horseman", "Tank", "Fighter"};
+    for (int index = 0; index < 6 && ok; ++index) {
+        c3x_renderer_unit_v1 unit = {};
+        unit.struct_size = sizeof(unit);
+        unit.unit_id = index;
+        sprintf_s(unit.unit_key, "PRTO_%s", keys[index]);
+        unit.action = 2;
+        unit.action_cursor = cursor[0] ? std::atoi(cursor) : 7;
+        unit.frame_count = 16;
+        unit.direction = 3;
+        unit.hour = hour;
+        unit.sprite_width = unit.sprite_height = 191;
+        unit.reduced = tile_width == 64;
+        unit.display_color_rgb = 0x205bdd;
+        unit.body_x = 150 + (index % 3) * 160 - 191 / (unit.reduced ? 4 : 2);
+        unit.body_y = 215 + (index / 3) * 150 - 191 / (unit.reduced ? 4 : 2);
+        ok = draw(&unit, dc, dc) == C3X_RENDERER_RESULT_OK;
+        if (!ok) std::printf("FAIL category unit %s\n", unit.unit_key);
+    }
+    GdiFlush();
+    if (ok) {
+        c3x_renderer_output_v1 output = {};
+        output.width = terrain.width;
+        output.height = terrain.height;
+        output.stride_bytes = terrain.width*4;
+        output.bgra_pixels = pixels;
+        ok = write_bmp(image_path, output);
+    }
+    if (previous) SelectObject(dc, previous);
+    if (bitmap) DeleteObject(bitmap);
+    if (dc) DeleteDC(dc);
+    std::printf("%s category unit study: 6 current production families, native body API\n", ok ? "PASS" : "FAIL");
+    return ok;
+}
+
+int main(int argc, char** argv) { return terrain_preview_main(argc, argv); }

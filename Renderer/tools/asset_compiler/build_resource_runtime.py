@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build the source-independent L16 Terrain Lab resource-body bundle."""
+"""Build the current generic resource-body bundle from normalized inputs."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import struct
 from pathlib import Path
@@ -36,17 +37,34 @@ def material_texture(material: dict) -> str:
     return channel["texture"]
 
 
-def build(pack: Path) -> Path:
-    manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
+def build(pack: Path, target: Path | None = None, *, consumed=None) -> Path:
+    pack = pack.resolve()
+    target = (target or pack / "resource_runtime.bin").resolve()
+    inputs = set()
+    def read_bytes(relative):
+        path = (pack / relative).resolve()
+        if not path.is_relative_to(pack):raise ValueError("Resource input escapes its pack")
+        inputs.add(path)
+        data = path.read_bytes()
+        if consumed is not None:
+            root = Path(__file__).resolve().parents[3]
+            key = path.relative_to(root).as_posix()
+            value = hashlib.sha256(data).hexdigest()
+            if key in consumed and consumed[key] != value:raise ValueError("Resource input changed during build")
+            consumed[key] = value
+        return data
+    def read(relative):return json.loads(read_bytes(relative))
+    manifest = read("manifest.json")
     textures: list[str] = []
     assets: list[bytes] = []
     groups: list[bytes] = []
     for name, asset_id, scale, count in SELECTIONS:
         record = manifest["assets"][asset_id]
-        mesh = json.loads((pack / record["mesh"]).read_text(encoding="utf-8"))
-        material = json.loads((pack / record["material"]).read_text(encoding="utf-8"))
+        mesh = read(record["mesh"])
+        material = read(record["material"])
         texture_index = len(textures)
         textures.append(material_texture(material))
+        read_bytes(textures[-1])
         vertices = mesh["vertices"]
         indices = mesh["topology"]["indices"]
         payload = bytearray(bundle_string(asset_id))
@@ -78,7 +96,8 @@ def build(pack: Path) -> Path:
         output.extend(asset)
     for group in groups:
         output.extend(group)
-    target = pack / "resource_runtime.bin"
+    if target in inputs:raise ValueError("Resource output must not overwrite source inputs")
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(output)
     return target
 
@@ -86,8 +105,9 @@ def build(pack: Path) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pack", type=Path, default=Path("Renderer/packs/ResourceNormalized"))
+    parser.add_argument("--output", type=Path, help="Write a disposable bundle outside the source pack")
     args = parser.parse_args()
-    target = build(args.pack.resolve())
+    target = build(args.pack.resolve(), args.output)
     print(f"wrote {target} ({target.stat().st_size} bytes)")
     return 0
 

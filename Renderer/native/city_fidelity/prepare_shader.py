@@ -2,7 +2,7 @@
 from pathlib import Path
 import hashlib,json
 HERE=Path(__file__).resolve().parent
-ROOT=HERE.parents[2];LAB=ROOT/'Renderer/terrain_lab/v2'
+ROOT=HERE.parents[2];LAB=ROOT/'Renderer/lab/shared'
 
 def main():
     pins={}

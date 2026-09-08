@@ -65,7 +65,7 @@ Units are not drawn by the terrain traversal. After any necessary map refresh,
 5. Civ III presents the unioned unit/effect region without rebuilding the
    static map when the camera and map remain unchanged.
 
-Consequences for M7.4:
+Consequences for unit rendering:
 
 - Unit records captured while traversing terrain are descriptive preview/export
   data only. They lack the visible-list order, authoritative interpolated pixel
@@ -73,17 +73,17 @@ Consequences for M7.4:
 - Custom unit capture and composition must occur in the Animator unit plane.
   It must use the same wrapped origin and dirty rectangle Civ III chose for that
   update.
-- The eventual suppression hook must omit only the FLC body call. The native
+- The suppression hook must omit only the FLC body call. The native
   cursor, health/activity/status work, dirty-region accounting, gameplay waits,
   and unit lifecycle remain intact.
-- M7.4 must first prove an exact body-only boundary. `Animator_update` is
-  currently callable but not entry-patchable; `Unit::tick_anim` and its direct
-  body blits remain audit candidates. No new CSV request is justified until that
-  spike selects the smallest stable hook across supported executables.
+- `Animator_update` remains callable but not entry-patchable. The current GOG
+  bridge uses the supplied `Unit_tick_anim` context and two guarded body-Sprite
+  inleads. Steam/PCGames addresses remain unverified; GOG evidence does not
+  establish those builds' support.
 
-The source-backed state mapping, movement/combat director behavior, existing
-hook inventory, prioritized body-only patch spike, and required I20 fixtures are
-frozen in [`i20_native_unit_animation_handoff.md`](i20_native_unit_animation_handoff.md).
+The current state mapping, native director behavior, body-hook evidence and
+verification scope are in the
+[native unit contract](i20_native_unit_animation_handoff.md).
 
 ## Scroll, Wrap, Clip, And Refresh Invariants
 

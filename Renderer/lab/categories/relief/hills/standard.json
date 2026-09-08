@@ -10,6 +10,7 @@
     "transitions"
   ],
   "implementation": [
+    "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
     "Renderer/native/source_fidelity/geometry.h",
     "Renderer/native/source_fidelity/runtime.h",
     "Renderer/native/source_fidelity/kernels.h",
@@ -59,8 +60,16 @@
       }
     ]
   },
-  "candidate": null,
+  "candidate": {
+    "render": "Renderer/lab/out/hills/render.json",
+    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
+  },
   "limitations": [
     "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ]
+  ],
+  "reviewed_inputs": {
+    "revision": 1,
+    "signature": "37277b5032c78d69ec18c600fe37ba3d0d5e5107806049db0055cfb891a36975",
+    "basis": "exact_approved_reference_comparison"
+  }
 }

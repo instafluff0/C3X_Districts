@@ -1,5 +1,5 @@
 {
-  "authority": "Renderer/terrain_lab/v2/shaders/objects/beauty_objects.hlsl",
+  "authority": "Renderer/lab/shared/shaders/objects/beauty_objects.hlsl",
   "source_sha256": "2d4e1dcf6d0f88457a21b7cb35ca4dad277f2fafa19f7afb670b49c2d6b7c0a3",
   "generated_sha256": "018144eedbb1659f825927efd115cf16778b05edbd21c7838647104f9f2c61b2",
   "ported": [

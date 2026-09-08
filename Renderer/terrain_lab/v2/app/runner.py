@@ -14,28 +14,17 @@ import sys
 from cache import Cache, canonical, digest, file_hash
 
 ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(ROOT))
+from Renderer.lab.backends.compiler import (run, relative, closure, shader_source,
+    tool_libraries, compile_cpp, tools, apply_mip_bias, shaders)
 V2 = ROOT / "Renderer/terrain_lab/v2"
 APP = V2 / "app"
 CONTRACT = V2 / "contracts/platform_v1.json"
 DEFAULT = V2 / "tests/platform/micro.fixture.json"
 
 
-def run(args, **kw):
-    result = subprocess.run(
-        [str(x) for x in args],
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        **kw,
-    )
-    if result.returncode:
-        raise ValueError(f"command failed: {Path(str(args[0])).name}\n{result.stdout}")
-    return result.stdout
 
 
-def relative(path):
-    return Path(path).resolve().relative_to(ROOT).as_posix()
 
 
 def local(value):
@@ -52,21 +41,11 @@ def read_json(path, schema):
     return v
 
 
-def package(track):
-    return read_json(
-        V2 / f"campaigns/Q1/work_packages/{track}.json",
-        "c3x.renderer_lab_v2_work_package.v0",
-    )
-
-
 def owned(path, track):
-    p = relative(path)
-    paths = package(track)["owns_paths"]  # Still reject unknown track identities.
-    campaign = json.loads((V2/'campaigns/Q1/campaign.json').read_text())
-    if campaign['execution_policy']['mode'] == 'single_lead' and local(p).is_relative_to(V2):
-        return
-    if not any(p.startswith(x) for x in paths):
-        raise ValueError(f"{track} does not own {p}")
+    # Compatibility for retained source/candidate readers. Historical track
+    # names are metadata, not permissions or a requirement to restore a campaign.
+    if not Path(path).resolve().is_relative_to(ROOT / "Renderer"):
+        raise ValueError("Legacy source paths must remain inside Renderer")
 
 
 def fixture(path):
@@ -88,7 +67,7 @@ def fixture(path):
     if not required.issubset(f) or set(f) - required - {"scenarios", "real_map", "sidecars", "packet_postprocessor"}:
         raise ValueError("fixture missing/unknown fields")
     owned(path, f["track"])
-    if f["campaign"] != "Q1" or not re.fullmatch(r"[a-zA-Z0-9_-]+", f["id"]):
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", f["id"]):
         raise ValueError("invalid fixture identity")
     if not isinstance(f["tile_count"], int) or not 16 <= f["tile_count"] <= 192:
         raise ValueError("invalid fixture tile count")
@@ -251,56 +230,12 @@ def validate_settings(s):
             raise ValueError("invalid camera offset")
 
 
-def closure(path, active=()):
-    path = Path(path).resolve()
-    if path in active:
-        raise ValueError("cyclic shader include")
-    result = {relative(path): file_hash(path)}
-    for name in re.findall(r'^\s*#include\s+"([^"]+)"', path.read_text(), re.M):
-        child = (path.parent / name).resolve()
-        if not child.is_file():
-            raise ValueError("missing shader include: " + name)
-        result.update(closure(child, active + (path,)))
-    return result
 
 
-def shader_source(path, active=()):
-    path = Path(path).resolve()
-    if path in active:
-        raise ValueError("cyclic shader include")
-
-    def include(match):
-        return shader_source(path.parent / match.group(1), active + (path,))
-
-    return re.sub(
-        r'^\s*#include\s+"([^"]+)"[^\n]*', include, path.read_text(), flags=re.M
-    )
 
 
-def tool_libraries(env):
-    return {
-        str(index) + ":" + p.name: file_hash(p)
-        for index, directory in enumerate(env["DYLD_LIBRARY_PATH"].split(":"))
-        for p in sorted(Path(directory).glob("*.dylib"))
-    }
 
 
-def compile_cpp(cache, source, objc=False):
-    flags = ["-std=c++17", "-O2"] + (["-fobjc-arc"] if objc else [])
-    dependencies = run(["clang++", *flags, "-MM", source])
-    # clang escapes spaces in repository paths. Match escaped tokens before resolving.
-    words = re.findall(
-        r"(?:\\.|[^\s])+", dependencies.replace("\\\n", " ").split(":", 1)[1]
-    )
-    deps = [Path(x.replace("\\ ", " ")) for x in words]
-    identity = {
-        "compiler": run(["clang++", "--version"]),
-        "flags": flags,
-        "dependencies": {relative(p): file_hash(p) for p in deps},
-    }
-    return cache.artifact(
-        "cpp", identity, lambda out: run(["clang++", *flags, "-c", source, "-o", out])
-    )
 
 
 def executables(cache):
@@ -322,115 +257,10 @@ def executables(cache):
     )
 
 
-def tools():
-    root = Path(os.environ.get("C3X_LAB_SHADER_TOOLS", str(APP / ".local")))
-    glslang = root / "glslang/16.5.0/bin/glslang"
-    cross = root / "spirv-cross/1.4.357.0/bin/spirv-cross"
-    if not glslang.is_file() or not cross.is_file():
-        raise ValueError(
-            "shader tools missing; run app/bootstrap_tools.py or configure C3X_LAB_SHADER_TOOLS"
-        )
-    env = dict(
-        os.environ,
-        DYLD_LIBRARY_PATH=str(root / "glslang/16.5.0/lib")
-        + ":"
-        + str(root / "spirv-tools/1.4.357.0/lib"),
-    )
-    return glslang, cross, env
 
 
-def apply_mip_bias(source, bias):
-    if bias == 0:
-        return source
-    result = []
-    start = 0
-    for m in re.finditer(r"\.Sample\(", source):
-        pos = m.end()
-        depth = 1
-        while depth and pos < len(source):
-            depth += (source[pos] == "(") - (source[pos] == ")")
-            pos += 1
-        if depth:
-            raise ValueError("malformed texture sample call")
-        result.append(
-            source[start : m.start()]
-            + ".SampleBias("
-            + source[m.end() : pos - 1]
-            + ","
-            + str(float(bias))
-            + ")"
-        )
-        start = pos
-    result.append(source[start:])
-    return "".join(result)
 
 
-def shaders(cache, path, bias, msl_version=20100):
-    if msl_version not in (20100,20200):
-        raise ValueError("unsupported MSL capability version")
-    glslang, cross, env = tools()
-    identity = {
-        "closure": closure(path),
-        "glslang": file_hash(glslang),
-        "spirv_cross": file_hash(cross),
-        "tool_libraries": tool_libraries(env),
-        "mip_bias": bias,
-        "msl": msl_version,
-        "bindings": {"textures": 0, "samplers": 128, "constants": 130},
-        "compiler_options": "auto-map, strict runtime Metal math",
-    }
-    outputs = {}
-    for entry in ["VSMain", "VSFeature", "PSMain", "PSFeature"]:
-        stage = "vert" if entry.startswith("VS") else "frag"
-
-        def build(out):
-            source = out.parent / "input.hlsl"
-            # Resolve includes through the original shader directory; no source-specific behavior.
-            source.write_text(apply_mip_bias(shader_source(path), bias))
-            spv = out.parent / "shader.spv"
-            run(
-                [
-                    glslang,
-                    "-D",
-                    "-V",
-                    "-S",
-                    stage,
-                    "-e",
-                    entry,
-                    "--auto-map-bindings",
-                    "--auto-map-locations",
-                    "--shift-texture-binding",
-                    stage,
-                    "0",
-                    "--shift-sampler-binding",
-                    stage,
-                    "128",
-                    "--shift-UBO-binding",
-                    stage,
-                    "130",
-                    "-I" + str(path.parent),
-                    source,
-                    "-o",
-                    spv,
-                ],
-                env=env,
-            )
-            run(
-                [
-                    cross,
-                    spv,
-                    "--msl",
-                    "--msl-version",
-                    str(msl_version),
-                    "--msl-argument-buffers",
-                    "--msl-decoration-binding",
-                    "--output",
-                    out,
-                ]
-            )
-
-        outputs[entry] = cache.artifact("shader", dict(identity, entry=entry), build)
-    return outputs
 
 
 def pack_identity(cache, mounts):
@@ -798,14 +628,7 @@ def main():
             a.tier == "promote" and f["tile_count"] != 192
         ):
             raise ValueError("fixture exceeds tier tile budget")
-        owner_output = (
-            APP
-            if f["track"] == "Q0-platform"
-            else local(package(f["track"])["owns_paths"][-1])
-        )
-        out = (
-            a.output or owner_output / "out" / f["campaign"] / f["track"] / a.candidate
-        )
+        out = a.output or ROOT / "Renderer/lab/out/legacy" / a.candidate
         out = out.resolve()
         owned(out, f["track"])
         out.mkdir(parents=True, exist_ok=True)

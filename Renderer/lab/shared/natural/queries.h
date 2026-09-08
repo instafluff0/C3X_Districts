@@ -1,0 +1,87 @@
+#pragma once
+// Per-tile production queries shared with the local scene compiler. World data
+// and scratch storage belong to the caller; observations retain native cache
+// invalidation authority. Construct a fresh query scope for each owner tile.
+#include <unordered_map>
+#include "data.h"
+#include "../../../native/source_fidelity/coast_join.h"
+#include "../../../native/profile_v2/world_coast.h"
+#include "../../../native/profile_v2/exact_point_cache.h"
+namespace c3x_renderer { namespace fidelity {
+template<class ObserveWorld,class ObserveCoast> class SurfaceQueries {
+    profile_v2::WorldCoast const& coast;
+    profile_v2::ExactPointCache<profile_v2::ShoreSample>& samples;
+    ObserveWorld observe_world;
+    ObserveCoast observe_coast;
+    std::unordered_map<std::uint64_t,profile_v2::Tile> far_tiles;
+    std::array<profile_v2::Tile,81> nearby_tiles{};
+    std::array<bool,81> nearby_ready{};
+    int nearby_c,nearby_r;
+    profile_v2::ShoreSample center{};
+    bool center_ready=false,patch_attempted=false;
+    profile_v2::WorldCoast::Patch patch;
+public:
+    float const center_u,center_v;
+    SurfaceQueries(profile_v2::WorldCoast const& world,
+                   profile_v2::ExactPointCache<profile_v2::ShoreSample>& scratch,
+                   int tile_x,int tile_y,ObserveWorld observe,ObserveCoast nodes)
+        :coast(world),samples(scratch),observe_world(observe),observe_coast(nodes),
+         nearby_c((tile_x+tile_y)/2-4),nearby_r((tile_x-tile_y)/2-4),
+         center_u(float(tile_x+tile_y)*.5f+.5f),center_v(float(tile_x-tile_y)*.5f+.5f) {
+        samples.clear();
+    }
+    profile_v2::Tile tile(int c,int r) {
+        int x=c-nearby_c,y=r-nearby_r;
+        if(x>=0 && x<9 && y>=0 && y<9) {
+            auto n=std::size_t(y*9+x);
+            if(!nearby_ready[n]) {
+                auto const& topology=coast.world();auto i=topology.index(c,r);
+                if(i!=std::size_t(-1))observe_world(i,topology.at(i));
+                nearby_tiles[n]=topology.tile(c,r);nearby_ready[n]=true;
+            }
+            return nearby_tiles[n];
+        }
+        std::uint64_t key=(std::uint64_t(std::uint32_t(c))<<32)|std::uint32_t(r);
+        auto found=far_tiles.find(key);if(found!=far_tiles.end())return found->second;
+        auto const& topology=coast.world();auto i=topology.index(c,r);
+        if(i!=std::size_t(-1))observe_world(i,topology.at(i));
+        auto value=topology.tile(c,r);far_tiles.emplace(key,value);return value;
+    }
+    profile_v2::ShoreSample shore(float u,float v) {
+        // Preserve the production center certificate and exact query cache.
+        if(center_ready && center.distance>1.5+std::hypot(u-center_u,v-center_v))
+            return profile_v2::ShoreSample{2,0,0,0};
+        return samples.get(u,v,[&]() {
+            if(center_ready && !patch_attempted) {
+                patch=coast.prepare({center_u,center_v},.73,std::abs(center.distance),observe_coast);
+                patch_attempted=true;
+            }
+            auto sample=coast.sample_with_lookup({u,v},observe_coast,
+                [&](int c,int r){return tile(c,r);},&patch);
+            if(u==center_u && v==center_v){center=sample;center_ready=true;}
+            return sample;
+        });
+    }
+    std::array<float,5> weights(float u,float v) {
+        auto w=profile_v2::material_weights({u,v},coast.world().dimensions(),
+            [&](int c,int r){return tile(c,r);});
+        std::array<float,5> result;
+        for(int i=0;i<5;i++)result[i]=static_cast<float>(w[i]);
+        return result;
+    }
+    Tile natural_tile(int c,int r) {
+        auto value=tile(c,r);auto world=coast.world().dimensions();
+        int x=c+r,y=c-r;
+        if(world.wrap_x && world.width>0)x=profile_v2::mod(x,world.width);
+        if(world.wrap_y && world.height>0)y=profile_v2::mod(y,world.height);
+        return Tile{x,y,c,r,value.real};
+    }
+    template<class Height>
+    float height(NaturalData const& natural,Height pickup_height,float x,float y,float* support=nullptr) {
+        auto sample=shore(x,y);
+        float h=std::max(natural.height(x,y,[&](int c,int r){return natural_tile(c,r);},support),
+                         2.5f+pickup_height(x,y));
+        return 2.5f+(h-2.5f)*coast_relief(float(sample.distance),float(sample.beach_width));
+    }
+};
+}}

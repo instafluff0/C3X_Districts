@@ -4,7 +4,7 @@
 
 The custom renderer is a guest in Civilization III's existing UI, simulation, animation, and map-render loop. It must improve presentation without creating a second game loop, advancing gameplay state, blocking Civ III, or rendering from an unsafe callback.
 
-This contract governs animated units, effects, environmental motion, selected-unit indicators, frame scheduling, and performance. It applies before M7.4/M7.5 and is implemented as M5.3 after the live scene-export bridge is proven.
+This contract governs animated units, effects, environmental motion, selected-unit indicators, frame scheduling, and performance. It describes ownership requirements, not a milestone ladder or permission to implement deferred effects.
 
 ## Loop Ownership
 
@@ -29,7 +29,7 @@ has a capacity-one, no-backlog handoff, never reads Civ III pointers, and never
 presents. The current synchronous ABI waits for the exact submitted sequence;
 Civ III's UI thread remains authoritative for capture, redraw decisions, and the
 final serialized GDI copy into Civ III-owned surfaces. Renderer work may enter
-through the retained map plane or, after M7.4 proves its hook, the Animator-owned
+through the retained map plane or the current GOG Animator-owned
 dynamic unit plane; both remain ordinary Civ III-driven updates rather than a
 second game loop.
 
@@ -43,14 +43,14 @@ The default path is redraw-driven:
 4. Static frames schedule no further work.
 5. When visible continuous renderer-owned animation is active, C3X uses Civ III's existing timer/redraw mechanism only to request ordinary Animator work. The callback marks work dirty; it does not invoke D3D, capture the map, blit, wait, or recurse into drawing.
 
-Civ III updates native unit bodies on `Units_Control` after the retained map work. M7.4 must capture and composite renderer-owned unit bodies in that dynamic plane, using Civ III's visible-unit order, wrap-aware animation anchor, and dirty rectangle. It must not force every unit tick through the terrain capture or bake moving units into the static map cache. See `docs/civ3_render_loop_viability.md`.
+Civ III updates native unit bodies on `Units_Control` after the retained map work. The current GOG bridge captures and composites eligible bodies in that dynamic plane, using the native body call's anchor and dirty rectangle. It must not force every unit tick through terrain capture or bake moving units into the static map cache. See `civ3_render_loop_viability.md`.
 
-The I20 implementation handoff is `docs/i20_native_unit_animation_handoff.md`.
+The current native boundary is documented in `i20_native_unit_animation_handoff.md`.
 It requires the native FLC state machine to keep advancing invisibly while only
 the body pixels are replaced, so Civ III continues to own movement targets,
 combat approach, action transitions, waits, outcomes, and removal.
 
-The existing `on_timer_0x9F6500` cadence is approximately 66 ms, or about 15 updates per second, and is already patched for C3X tile-animation scheduling. M5.3 must audit whether this is the safest redraw request source. The first implementation should match Civ III's native cadence. Optional 30/60 FPS modes may be considered only after profiling proves a safe higher-frequency UI-thread invalidation path; they are not release assumptions.
+The existing `on_timer_0x9F6500` cadence is approximately 66 ms, or about 15 updates per second, and is already patched for C3X tile-animation scheduling. Preserve the native cadence and input-aware idle guard. Optional 30/60 FPS modes require profiling and a safe higher-frequency UI-thread invalidation path; they are not release assumptions.
 
 There is no `Sleep`, busy wait, render-until-caught-up loop, or fixed simulation step inside a Civ III draw call. Missed presentation frames are skipped rather than queued.
 

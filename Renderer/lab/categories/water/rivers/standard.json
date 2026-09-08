@@ -10,6 +10,8 @@
     "transitions"
   ],
   "implementation": [
+    "Renderer/lab/shared/shaders/hydrology/scene_material_v1.hlsl",
+    "Renderer/lab/shared/shaders/hydrology/water_natural.hlsl",
     "Renderer/native/city_fidelity/hydrology.hlsl",
     "Renderer/native/environment_refresh/reflection.h",
     "Renderer/native/source_fidelity/river_corridor.h",
@@ -58,8 +60,16 @@
       }
     ]
   },
-  "candidate": null,
+  "candidate": {
+    "render": "Renderer/lab/out/rivers/render.json",
+    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
+  },
   "limitations": [
     "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ]
+  ],
+  "reviewed_inputs": {
+    "revision": 1,
+    "signature": "aa167c93fbd984d9be4edb34c8534b7589cc114d6a5a48b23cd0b6429471ecd3",
+    "basis": "exact_approved_reference_comparison"
+  }
 }

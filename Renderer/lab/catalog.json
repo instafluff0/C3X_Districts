@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "categories": {
-"grassland": "terrain/grassland",
+    "grassland": "terrain/grassland",
     "plains": "terrain/plains",
     "desert": "terrain/desert",
     "tundra": "terrain/tundra",

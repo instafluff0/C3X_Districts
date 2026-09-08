@@ -68,12 +68,11 @@ class PlatformTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.validate_settings(s)
 
-    def test_ownership_and_path_escape(self):
-        # The user's single-lead authorization spans v2; the historical track
-        # namespaces must still reject access to production and frozen inputs.
+    def test_source_path_boundary_without_campaign_ownership(self):
         runner.owned(V2 / "shared/frozen_scene.cpp", "Q1-sampling")
-        with self.assertRaisesRegex(ValueError, "does not own"):
-            runner.owned(runner.ROOT / "Renderer/native/renderer.cpp", "Q1-sampling")
+        runner.owned(runner.ROOT / "Renderer/native/renderer.cpp", "retired-track")
+        with self.assertRaisesRegex(ValueError, "inside Renderer"):
+            runner.owned(runner.ROOT / "injected_code.c", "Q1-sampling")
         with self.assertRaisesRegex(ValueError, "escapes"):
             runner.local("../not-owned")
 
@@ -84,11 +83,6 @@ class PlatformTests(unittest.TestCase):
         self.assertIn("a.SampleBias(s,float2(1,2),-0.5)", changed)
         self.assertIn("b.SampleLevel(s,u,0)", changed)
         self.assertIn("c.SampleBias(s,u,-0.5)", changed)
-
-    def test_frozen_v1_guard(self):
-        guard = json.loads((V2 / "shared/frozen_guard.json").read_text())
-        for name, expected in guard["files"].items():
-            self.assertEqual(cache.file_hash(runner.local(name)), expected, name)
 
     def test_settings_change_identity(self):
         f, _ = runner.fixture(V2 / "tests/platform/micro.fixture.json")

@@ -10,6 +10,7 @@
     "transitions"
   ],
   "implementation": [
+    "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
     "Renderer/native/city_fidelity/terrain.hlsl",
     "Renderer/native/source_fidelity/geometry.h",
     "Renderer/native/source_fidelity/runtime.h",
@@ -58,9 +59,17 @@
       }
     ]
   },
-  "candidate": null,
+  "candidate": {
+    "render": "Renderer/lab/out/grassland/render.json",
+    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
+  },
   "limitations": [
     "The accepted baseline is the current production profile, including continuous native biome weights and coast joins.",
-    "Migration is in progress: native references must be captured before Metal parity can establish the fast Lab path."
-  ]
+    "Mac production-scene parity remains unverified; the current category preview uses D3D11."
+  ],
+  "reviewed_inputs": {
+    "revision": 1,
+    "signature": "aa167c93fbd984d9be4edb34c8534b7589cc114d6a5a48b23cd0b6429471ecd3",
+    "basis": "exact_approved_reference_comparison"
+  }
 }

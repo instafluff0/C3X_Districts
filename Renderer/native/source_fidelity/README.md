@@ -1,10 +1,11 @@
-# Native source-fidelity r13 adapter
+# Natural geometry and material adapter
 
-The selected authority is `source-fidelity-r13/inland`, with the isolated
-terrain, mountain, forest and Warrior witnesses providing detailed contracts.
-This directory adapts the selected providers to the existing authoritative Civ III
-anchors, immutable tile buffers and paged Q6 shadows. It does not replace the
-capture path or import newer city experiments.
+The current `city-fidelity` production profile builds on this natural adapter
+with the current environment and city response. The accepted appearance is
+recorded in the category catalog, not an old experiment label. This directory
+adapts the selected terrain, mountain and forest providers to authoritative
+Civ III anchors, immutable tile buffers and world-paged shadows. It does not
+replace the capture path or automatically select newer source experiments.
 
 ## Selected paths
 
@@ -22,12 +23,23 @@ capture path or import newer city experiments.
 - Retained production city, resource and unit feature shaders and runtime packs.
 
 `prepare.py` builds a generic local payload from the selected source channels.
-Its DDS files are unchanged and hardlinked when supported, not resized or
-transcoded. `provenance.json` records exact hashes. `prepare_hydrology.py` applies
+Its DDS payloads are unchanged, not resized or transcoded. Current preparation
+keeps independent runtime copies rather than editable-source hard links.
+`provenance.json` records the consumed inputs. `prepare_hydrology.py` applies
 the existing native binding adapter to the selected hydrology closure. Neither
 script modifies Lab source or the live unit pack.
 
 ## Explicit native adapters
+
+Shared CPU providers live under `Renderer/lab/shared/natural`: pack decoding and
+lighting frames, river pages, relief queries, terrain grids, deterministic
+placement/dunes, and relief/forest mesh emission. Native retains world/coast
+invalidation observations, city exclusion collection, caches and GPU ownership.
+The portable mesh adapters and native compiler include the same statement bodies.
+Keep the native bodies at their existing call site: introducing a separate x86
+mesh-function boundary was observed to change final channel rounding despite
+numerically identical standalone tests. D3D image comparisons protect that
+boundary; do not silently accept or replace a reference after a refactor.
 
 `light_frame.h` supplies one normalized Q6 frame from EnvironmentState. All three
 natural providers use exactly its ShadowL for face lighting and cast projection.
@@ -79,23 +91,17 @@ emission. Full body footprint bounds are tested, not just tree centers.
 ## Reproduction
 
 ```sh
-python3 Renderer/native/source_fidelity/prepare.py
-python3 Renderer/native/source_fidelity/prepare_hydrology.py
-python3 -m unittest Renderer.native.source_fidelity.test_contract -v
-python3 Renderer/native/source_fidelity/verify.py first
-python3 Renderer/native/source_fidelity/verify.py control
-python3 Renderer/native/source_fidelity/verify.py matrix
-python3 Renderer/native/source_fidelity/verify.py replay
-python3 Renderer/native/source_fidelity/verify.py edits
-python3 Renderer/native/source_fidelity/verify.py minimap
-python3 Renderer/tools/renderer_dev.py integration
+python3 Renderer/renderer.py prepare
+python3 Renderer/renderer.py lab grassland
+python3 Renderer/renderer.py compare grassland
+python3 Renderer/renderer.py test grassland
+python3 Renderer/renderer.py integration verify grassland
 ```
 
 Verification uses the Windows off-screen DLL and never starts Civ III or runs
-INSTALL.bat. Results are recorded in `Renderer/verification/source_fidelity/`.
+INSTALL.bat. Current category results live under `Renderer/lab/out/`.
 Runtime logging uses the established OutputDebugStringA path; file traces are
 explicitly enabled only by these headless verification commands.
 
-The normal profile selects this adapter; `pickup-r1` and `frozen` remain explicit
-historical regression selections. Production staging and remaining limitations
-are recorded in the verification checkpoint, not inferred from compilation.
+Explicit `source-fidelity-r13`, `pickup-r1` and `frozen` select earlier diagnostic paths;
+they do not supersede current production appearance. See `Renderer/lab/README.md`.

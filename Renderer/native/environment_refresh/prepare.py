@@ -2,7 +2,7 @@
 from pathlib import Path
 import hashlib,json
 HERE=Path(__file__).resolve().parent
-ROOT=HERE.parents[2];BASE=HERE.parent/'source_fidelity';LAB=ROOT/'Renderer/terrain_lab/v2'
+ROOT=HERE.parents[2];BASE=HERE.parent/'source_fidelity';LAB=ROOT/'Renderer/lab/shared'
 FRAME='''
 cbuffer NativeReflectionFrame : register(b5) {
  float4 NativeReflection; // world-height to native pixels, depth metric, plane Z, enabled

@@ -1,13 +1,5 @@
-"""Fingerprint geometry and coordinate sets independently of shading normals."""
-import hashlib
-import json
-
-
-def material_digest(material):
-    return hashlib.sha256(json.dumps(material,sort_keys=True,separators=(',',':')).encode()).hexdigest()
-
-
-def geometry_digest(mesh):
-    data={'vertices':[{k:v[k] for k in ('position','uv0','uv1','uv2') if k in v} for v in mesh['vertices']],
-          'topology':mesh['topology']}
-    return hashlib.sha256(json.dumps(data,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+"""Migration import; current reusable city code lives in Renderer/lab/shared."""
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
+from Renderer.lab.shared.cities.fingerprint import *
