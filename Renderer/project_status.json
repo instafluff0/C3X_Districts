@@ -2600,5 +2600,47 @@
     ],
     "user_feedback": "Mouse clicks now work; units mostly normal, shadows as expected. Remaining report concerned civilian actions, fortify snaps, and intermittent split bodies.",
     "unit_roster_evidence": "docs/conquests_unit_roster.md"
+  },
+  "integration_source_fidelity_refresh": {
+    "authorization": "User explicitly requested the current source-fidelity-r13/inland pickup, then corrections for mountain shadow rings, material boundaries and shoreline blending. Do not launch Civ III.",
+    "status": "ready_for_user_run_checkpoint",
+    "iteration_command": "python3 Renderer/tools/renderer_dev.py integration",
+    "authority": "handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.json",
+    "implementation": "native/source_fidelity/README.md",
+    "evidence": "verification/source_fidelity/checkpoint.json",
+    "existing_symbols": [
+      "Map_Renderer_m71_Draw_Tiles",
+      "Map_Renderer_m19_Draw_Tile_by_XY_and_Flags",
+      "Main_Screen_Form_tile_to_screen_coords",
+      "OutputDebugStringA",
+      "Unit_tick_anim",
+      "Sprite_draw_unit_body_normal",
+      "Sprite_draw_unit_body_reduced"
+    ],
+    "audit_candidates": [],
+    "required_user_action": [],
+    "remaining_work": [
+      "Live Civ III remains a user-run checkpoint. Cold/new-area rendering remains measured in seconds; no vanilla-speed claim.",
+      "Known unrelated L19A fixture hash failure remains visible; no gate threshold or frozen witness changed."
+    ],
+    "staged_dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6"
+  },
+  "integration_water_city_refresh": {
+    "authorization": "User explicitly requested finishing the natural-coverage build first, then integrating latest Lab water/reflection and city/palace lighting updates. This supersedes the prior city exclusion for the follow-up candidate only.",
+    "status": "selected_source_audit",
+    "iteration_command": "python3 Renderer/tools/renderer_dev.py integration --candidate-only",
+    "scope": "Selected water-natural-r6 / water-reflection-r5 and latest selected buffered city/palace night lighting, with natural geometry, caches, unit behavior and fallback preserved. No animated surf or speculative city layout promotion.",
+    "existing_symbols": [
+      "Map_Renderer_m71_Draw_Tiles",
+      "Map_Renderer_m19_Draw_Tile_by_XY_and_Flags",
+      "OutputDebugStringA"
+    ],
+    "audit_candidates": [],
+    "required_user_action": [],
+    "selected_paths_pending_audit": [
+      "terrain_lab/v2/audits/beauty/WATER_OBJECT_REFLECTIONS.md",
+      "terrain_lab/v2/audits/beauty/CITY_CENTRAL_CAPITAL_PASS.md",
+      "terrain_lab/v2/audits/beauty/CITY_LIGHT_BUFFER_PASS.md"
+    ]
   }
 }

@@ -12,6 +12,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--hour',type=int,choices=range(24),default=12)
     parser.add_argument('--unit',help='Verify only this existing unit key after an isolated data correction.')
+    parser.add_argument('--profile',choices=['pickup-r1','source-fidelity-r13'],default='pickup-r1')
     args=parser.parse_args()
     if args.unit and not re.fullmatch(r'PRTO_[A-Za-z0-9_-]+',args.unit):raise ValueError('unsafe unit key')
     pack=Path('Renderer/packs/UnitRosterRuntimeCandidate')
@@ -28,19 +29,21 @@ def main():
             if not args.unit or u[f'key{key}']==args.unit:rows.append(f"{u[f'key{key}']} {mask}")
     if not rows:raise ValueError('requested key is absent from candidate bindings')
     out=Path('Renderer/verification/animation/roster');out.mkdir(parents=True,exist_ok=True)
+    if args.profile=='source-fidelity-r13':
+        out=Path('Renderer/verification/source_fidelity/units');out.mkdir(parents=True,exist_ok=True)
     cases=f'cases-{args.unit}.txt' if args.unit else 'cases.txt'
     (out/cases).write_text('\n'.join(rows)+'\n')
     hour=args.hour;name=f'roster-{args.unit}-h{hour}' if args.unit else f'roster-h{hour}'
     settings={'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':'..\\..\\Renderer\\custom.custom_rendering.txt',
-        'C3X_RENDERER_VISUAL_PROFILE':'pickup-r1','C3X_RENDERER_PREVIEW_ANIMATION':'1',
+        'C3X_RENDERER_VISUAL_PROFILE':args.profile,'C3X_RENDERER_PREVIEW_ANIMATION':'1',
         'C3X_RENDERER_PREVIEW_UNITS':'1','C3X_RENDERER_TRACE':'2',
         'C3X_RENDERER_UNIT_PACK':'UnitRosterRuntimeCandidate',
-        'C3X_RENDERER_UNIT_CASES':f'..\\verification\\animation\\roster\\{cases}',
-        'C3X_RENDERER_TRACE_FILE':f'..\\verification\\animation\\roster\\{name}.log'}
+        'C3X_RENDERER_UNIT_CASES':'..\\'+str(out.relative_to('Renderer')).replace('/','\\')+'\\'+cases,
+        'C3X_RENDERER_TRACE_FILE':'..\\'+str(out.relative_to('Renderer')).replace('/','\\')+'\\'+name+'.log'}
     command=' && '.join(f'set "{k}={v}"' for k,v in settings.items())
     command+=' && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\..\\Renderer\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv '
-    command+=f'..\\verification\\animation\\roster\\{name}.bmp 960 640 75 39 128 {hour}'
-    result=windows_command_result('Renderer/native',command);result.pop('cwd',None)
+    command+='..\\'+str(out.relative_to('Renderer')).replace('/','\\')+f'\\{name}.bmp 960 640 75 39 128 {hour}'
+    result=windows_command_result('Renderer/native',command);result.pop('cwd',None);result.pop('host',None)
     text=result.get('output_tail','')
     if 'ROSTER complete' not in text or 'failures=0 status=pass' not in text or 'UNIT post-draw terrain parity: pass' not in text or 'FAIL' in text:
         result['status']='fail'

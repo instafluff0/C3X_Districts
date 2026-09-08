@@ -1,0 +1,242 @@
+[
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-inland-z128-h12.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-inland-z128-h12.bmp 960 640 69 50 128 12",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:05:54.973905+00:00",
+    "output_tail": "BIQ 100x100 viewport: 388 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-inland-z128-h12.bmp",
+    "name": "matrix-inland-z128-h12",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "e98f4304033568ffb8b19e508b686538d1c2c1ff44edcf02f1d1973eabe975ea"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-inland-z128-h18.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-inland-z128-h18.bmp 960 640 69 50 128 18",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:06:03.789074+00:00",
+    "output_tail": "BIQ 100x100 viewport: 388 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-inland-z128-h18.bmp",
+    "name": "matrix-inland-z128-h18",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "b1d672b9ebe4b8de39fcd7c3890da5e1d7bdde012fbf46724f89e849184ef3bb"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-inland-z128-h0.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-inland-z128-h0.bmp 960 640 69 50 128 0",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:06:13.123759+00:00",
+    "output_tail": "BIQ 100x100 viewport: 388 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-inland-z128-h0.bmp",
+    "name": "matrix-inland-z128-h0",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "bd1dd115e16f9e6477291c33d88ee3b19a47ef9cf2b8bc9d1942afe707170ea6"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-inland-z128-h6.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-inland-z128-h6.bmp 960 640 69 50 128 6",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:06:21.601901+00:00",
+    "output_tail": "BIQ 100x100 viewport: 388 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-inland-z128-h6.bmp",
+    "name": "matrix-inland-z128-h6",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "e45c45e7bdae771f05c4882b340fc74d228fd217e91a76adcf58abc4888c6fb4"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-inland-z64-h12.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-inland-z64-h12.bmp 960 640 69 50 64 12",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:06:29.994059+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1046 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-inland-z64-h12.bmp",
+    "name": "matrix-inland-z64-h12",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "f4c3fb170ba3cfb2af79ee62d8e1498559eeb17698bdbef9e9fba0e2e351da44"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-inland-z64-h18.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-inland-z64-h18.bmp 960 640 69 50 64 18",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:06:40.721344+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1046 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-inland-z64-h18.bmp",
+    "name": "matrix-inland-z64-h18",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "719aede9cff4a927e18334584c23f7285aa6a478c0bf915c1ca79cf445cc98fb"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-inland-z64-h0.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-inland-z64-h0.bmp 960 640 69 50 64 0",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:07:38.137864+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1046 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-inland-z64-h0.bmp",
+    "name": "matrix-inland-z64-h0",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "0cfafa487fab331d0fc8a68c638255ca3abddf12afd6a4adfb4f13bba029e453"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-inland-z64-h6.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-inland-z64-h6.bmp 960 640 69 50 64 6",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:07:48.598424+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1046 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-inland-z64-h6.bmp",
+    "name": "matrix-inland-z64-h6",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "75ad3a45b98046809a026052d4019813179f2fcb386be5399095b77ac1df863f"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-coast-z128-h12.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-coast-z128-h12.bmp 960 640 85 38 128 12",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:07:59.704636+00:00",
+    "output_tail": "BIQ 100x100 viewport: 388 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-coast-z128-h12.bmp",
+    "name": "matrix-coast-z128-h12",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "cd35c422f152c2bb430e480d6e87acf3f93306af9e869a9f43f90fc002d7a024"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-coast-z128-h18.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-coast-z128-h18.bmp 960 640 85 38 128 18",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:08:07.477025+00:00",
+    "output_tail": "BIQ 100x100 viewport: 388 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-coast-z128-h18.bmp",
+    "name": "matrix-coast-z128-h18",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "038343a7b25731c0d9874c8bd108e44f66e907fa954c74f68d025a355698139a"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-coast-z128-h0.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-coast-z128-h0.bmp 960 640 85 38 128 0",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:08:15.070274+00:00",
+    "output_tail": "BIQ 100x100 viewport: 388 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-coast-z128-h0.bmp",
+    "name": "matrix-coast-z128-h0",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "58648c5d1be893edd534d3f43de2d4506c35696432baa9a038681da9cbf571fa"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-coast-z128-h6.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-coast-z128-h6.bmp 960 640 85 38 128 6",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:08:22.702545+00:00",
+    "output_tail": "BIQ 100x100 viewport: 388 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-coast-z128-h6.bmp",
+    "name": "matrix-coast-z128-h6",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "f52b2d0e0add8d5dd6b40f758f9dc6de40e93150d81c1108b9e6d1de2ec4deb1"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-coast-z64-h12.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-coast-z64-h12.bmp 960 640 85 38 64 12",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:08:30.297999+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1046 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-coast-z64-h12.bmp",
+    "name": "matrix-coast-z64-h12",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "ccf2daafef27506a303edb90f3db37799eb85709551762501579faa28b7ca5be"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-coast-z64-h18.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-coast-z64-h18.bmp 960 640 85 38 64 18",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:08:39.685633+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1046 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-coast-z64-h18.bmp",
+    "name": "matrix-coast-z64-h18",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "69a10edee045dfd93b01e1a36168aa49d402cabf0ec451d44ffb9d3be1596d37"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-coast-z64-h0.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-coast-z64-h0.bmp 960 640 85 38 64 0",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:08:49.125022+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1046 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-coast-z64-h0.bmp",
+    "name": "matrix-coast-z64-h0",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "37f5d24e0a76287dc8f37878b5a7afa0ccf1fe745135c21110f1155392d20cf4"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-coast-z64-h6.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-coast-z64-h6.bmp 960 640 85 38 64 6",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:08:58.555405+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1046 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-coast-z64-h6.bmp",
+    "name": "matrix-coast-z64-h6",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "e77c5f0eeebc71430c20c273d2c010d9bddf5d1e25b84f5f8d25f80fb3e7b9bf"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-wrap-z128-h12.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-wrap-z128-h12.bmp 960 640 0 50 128 12",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:09:07.990075+00:00",
+    "output_tail": "BIQ 100x100 viewport: 387 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-wrap-z128-h12.bmp",
+    "name": "matrix-wrap-z128-h12",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "08e185ff68f62474f93900f5b2b3e06a372ea34087b2faae10709ef543a443f6"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-wrap-z128-h18.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-wrap-z128-h18.bmp 960 640 0 50 128 18",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:09:13.007747+00:00",
+    "output_tail": "BIQ 100x100 viewport: 387 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-wrap-z128-h18.bmp",
+    "name": "matrix-wrap-z128-h18",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "35b306f4b063b467c138af9e26ef85bf8f6dcc7ab7472e2fbc69ded61feab304"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-wrap-z128-h0.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-wrap-z128-h0.bmp 960 640 0 50 128 0",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:09:18.058477+00:00",
+    "output_tail": "BIQ 100x100 viewport: 387 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-wrap-z128-h0.bmp",
+    "name": "matrix-wrap-z128-h0",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "9050bc343587601b44097d2bd22aa4397a8c1d876b31b29a905809a31e9deae5"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-wrap-z128-h6.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-wrap-z128-h6.bmp 960 640 0 50 128 6",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:09:23.434038+00:00",
+    "output_tail": "BIQ 100x100 viewport: 387 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-wrap-z128-h6.bmp",
+    "name": "matrix-wrap-z128-h6",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "767973639903fa879aa0fe18c3daaf15bf945587120a871fe8ffcf259ace4c4f"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-wrap-z64-h12.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-wrap-z64-h12.bmp 960 640 0 50 64 12",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:09:28.431599+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1045 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-wrap-z64-h12.bmp",
+    "name": "matrix-wrap-z64-h12",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "35286367c9bc3fd764d549651bbe25b32dcd4819cfb4df403f4ae9b8f823e28a"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-wrap-z64-h18.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-wrap-z64-h18.bmp 960 640 0 50 64 18",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:09:36.296224+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1045 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-wrap-z64-h18.bmp",
+    "name": "matrix-wrap-z64-h18",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "e83b59a8509c645d144c981879f9553966638d5ffc4ca106bbc228d339d8290b"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-wrap-z64-h0.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-wrap-z64-h0.bmp 960 640 0 50 64 0",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:09:44.124535+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1045 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-wrap-z64-h0.bmp",
+    "name": "matrix-wrap-z64-h0",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "52d172529a7cc5917a6f7c9f3a11bdc1c7cd22f2e02af19a56444774535037ff"
+  },
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=source-fidelity-r13\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\matrix-wrap-z64-h6.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\matrix-wrap-z64-h6.bmp 960 640 0 50 64 6",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:09:52.007663+00:00",
+    "output_tail": "BIQ 100x100 viewport: 1045 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\matrix-wrap-z64-h6.bmp",
+    "name": "matrix-wrap-z64-h6",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "79cbfa81c923f21c660c57cddebce3f53125f18bfea0a3cd5cb66a6a756bcc4c"
+  }
+]

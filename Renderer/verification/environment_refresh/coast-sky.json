@@ -1,0 +1,12 @@
+[
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=environment-refresh\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\environment_refresh\\coast-sky-coast-z128-h12.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_REFLECTION_CONTROL=1\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\environment_refresh\\coast-sky-coast-z128-h12.bmp 960 640 85 38 128 12",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:28:55.129321+00:00",
+    "output_tail": "BIQ 100x100 viewport: 388 visible tiles, 0 fallback, output=..\\verification\\environment_refresh\\coast-sky-coast-z128-h12.bmp",
+    "name": "coast-sky-coast-z128-h12",
+    "dll_sha256": "b3eee4d249ba0a16cda6311c4a06199f7c9d71af66a364248e4e9bee50ccd9e8",
+    "raw_sha256": "bdd21bd925c3fb585947d2a2d93e354b31f034c292b9368742f720021baa4d36"
+  }
+]

@@ -1,0 +1,45 @@
+{
+  "workflow": "integration",
+  "results": [
+    {
+      "name": "project_state",
+      "status": "pass",
+      "returncode": null
+    },
+    {
+      "name": "portable tests",
+      "status": "pass",
+      "returncode": 0
+    },
+    {
+      "name": "Windows workflow command",
+      "status": "pass",
+      "returncode": 0
+    },
+    {
+      "name": "approved_terrain_integration",
+      "status": "pass",
+      "returncode": 0
+    },
+    {
+      "name": "integrated_terrain_preview_near",
+      "status": "pass",
+      "returncode": 0
+    },
+    {
+      "name": "integrated_terrain_preview_far",
+      "status": "pass",
+      "returncode": 0
+    },
+    {
+      "name": "injected_compile",
+      "status": "skip",
+      "returncode": null
+    },
+    {
+      "name": "live_checkout_link",
+      "status": "pass",
+      "returncode": 0
+    }
+  ]
+}

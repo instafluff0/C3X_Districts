@@ -1,0 +1,382 @@
+{
+  "schema": "c3x.native.shader_adapter.v1",
+  "candidate": "source-fidelity-r13-retained-hydrology",
+  "files": [
+    {
+      "path": "generated/shaders/common/frame_witness.hlsl",
+      "sha256": "c8cecec1ae31f8a7078fc43382355e267bd714c728c08316b7da453f17eabc26"
+    },
+    {
+      "path": "generated/shaders/common/hdr_glow.hlsl",
+      "sha256": "09c5b87ddfdd33f3f9e3c654436d95dfa07417c41b2d3aa43305bf069926de25"
+    },
+    {
+      "path": "generated/shaders/common/hdr_glow_tiled.hlsl",
+      "sha256": "8b796afcf2648797533eeb278b76ca0b5babfe352d522e7e80a35147bde54be7"
+    },
+    {
+      "path": "generated/shaders/common/linear_post_witness.hlsl",
+      "sha256": "4ea064922043f7122f329014d30cfd800ec222cc10b4b3a4c96cd0c0424f49fd"
+    },
+    {
+      "path": "generated/shaders/common/linear_witness.hlsl",
+      "sha256": "0ba4204c049bd0d48b6775679d853c011fc5feadc31460c713134bc54026f732"
+    },
+    {
+      "path": "generated/shaders/common/postprocess_contract.hlsl",
+      "sha256": "0443cf6e9b0f42f446334296750e1f329af6891018fa2fb8ca457a520635ba9c"
+    },
+    {
+      "path": "generated/shaders/hydrology/planar_reflection_pass.hlsl",
+      "sha256": "bccdd3e0e5185070d5bc95b3553cacfdf694f3d9c85ce9ae3366cf962e88569b"
+    },
+    {
+      "path": "generated/shaders/hydrology/q3-source-bed-only_anchored.hlsl",
+      "sha256": "098829f5dcc21b53732630822d0b1b2bc44c7c7847d93b24cd64be7acc8a45b1"
+    },
+    {
+      "path": "generated/shaders/hydrology/q3-source-island_anchored.hlsl",
+      "sha256": "23ff87a7d26efde391997cb07c4287e1728bfbfc67dcfe68ed9614388448a4cf"
+    },
+    {
+      "path": "generated/shaders/hydrology/q3-source-mixed_anchored.hlsl",
+      "sha256": "68319e6bdb176ccdf5ae046ce9325baab03563f521e2fbe5c765bd85f07b8b09"
+    },
+    {
+      "path": "generated/shaders/hydrology/q3-source-shadowed_anchored.hlsl",
+      "sha256": "973cf1aef538cc51c17b189836db2f6234c26bb978f36635cfc749ae1dc39e83"
+    },
+    {
+      "path": "generated/shaders/hydrology/scene_bed_only.hlsl",
+      "sha256": "0b01c35016e1ad76924e9c4b3c2b0808a7c4bf45f7ff0a564c07945a65da4b06"
+    },
+    {
+      "path": "generated/shaders/hydrology/scene_linear.hlsl",
+      "sha256": "a98ae01f56dbbc4e64c342118e7715110e06bcd6b777507317ef141f9b98a45d"
+    },
+    {
+      "path": "generated/shaders/hydrology/scene_material_v1.hlsl",
+      "sha256": "d59b8e967540df118d72c77bde72eeb8e0082125b5b3161803d3e12607bdfe9d"
+    },
+    {
+      "path": "generated/shaders/hydrology/static.hlsl",
+      "sha256": "b222d7bdaf35cdb214e2711efc29911ebb8d5c99846344895897bb65496b5dd0"
+    },
+    {
+      "path": "generated/shaders/hydrology/static_linear.hlsl",
+      "sha256": "ccb1acb2fba362a0e6f6b83a773a480519c2c4ac936da9fca30e92d745ee77cd"
+    },
+    {
+      "path": "generated/shaders/hydrology/water_effects.hlsl",
+      "sha256": "54a457d90dc0f0a36f733c58d2c5cecc3a5804fd76eb99bded1d8675f0bf90e7"
+    },
+    {
+      "path": "generated/shaders/hydrology/water_natural.hlsl",
+      "sha256": "c4c06202ff609c3f473cd35faaff7f3250bc727c8849ef51b60e82488e572dc0"
+    },
+    {
+      "path": "generated/shaders/lighting/city.hlsl",
+      "sha256": "8f017bf41241335db9a153e76ef3639814930d99b083530a3b3a53200fdbf1c5"
+    },
+    {
+      "path": "generated/shaders/lighting/city_contact_off.hlsl",
+      "sha256": "317ab71488fc85365ea3125f688d15d1df0d2c0ae413ea09694f3d40a441e182"
+    },
+    {
+      "path": "generated/shaders/lighting/city_emissive_only.hlsl",
+      "sha256": "cb9e979af7405874a7c1719d663783e79a3810cb0b3cd4b42d6c360ce2562ee7"
+    },
+    {
+      "path": "generated/shaders/lighting/city_environment.hlsl",
+      "sha256": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9"
+    },
+    {
+      "path": "generated/shaders/lighting/city_legacy.hlsl",
+      "sha256": "2c46fb00a5aa259faeaf3594beb2b994b942d1a2b9c859c66704f6be65d918a2"
+    },
+    {
+      "path": "generated/shaders/lighting/city_linear.hlsl",
+      "sha256": "9b84143b66c612de4d9596d7d350fa64b5002a6fe0e71f4675a21816f053d0ae"
+    },
+    {
+      "path": "generated/shaders/lighting/city_shadows_off.hlsl",
+      "sha256": "34c32b9cb4b70694e9f416e93fc8921e329bf57da8da7571bee16944247ec131"
+    },
+    {
+      "path": "generated/shaders/lighting/frame_shadow_v1.hlsl",
+      "sha256": "af461bae3e374db26e9e5df20b2eccd40fb58c61a7a0e46a08e61093388773cc"
+    },
+    {
+      "path": "generated/shaders/lighting/generated/response_adapter.hlsl",
+      "sha256": "c168f9c544d2a64460fd994d05ad210d42d864fc5201a15d96a2e96feeeeebe2"
+    },
+    {
+      "path": "generated/shaders/lighting/generated/scene_linear_v1.hlsl",
+      "sha256": "66915ce7b58ce1c2ad1d075b6112fcb6e5c00c0dfb64518a689c6cc062a0c631"
+    },
+    {
+      "path": "generated/shaders/lighting/linear_contact_off.hlsl",
+      "sha256": "b155ca74f8495cff9c93f6d6795a3020cd34f4d61ae59e7a329404ec678afafd"
+    },
+    {
+      "path": "generated/shaders/lighting/linear_shadows_off.hlsl",
+      "sha256": "b7c7f79248c1262084dafece063190ce0b6e51a7f62c75795c2f46c156599952"
+    },
+    {
+      "path": "generated/shaders/lighting/local_facade_lights.hlsl",
+      "sha256": "264bd350d639f897924489c2773434b2f9e0af5cf37e8f3c7034764ae47bb2c3"
+    },
+    {
+      "path": "generated/shaders/lighting/proxy.hlsl",
+      "sha256": "a91e5f77908de15a901c375e6a892cdd9ead12892afb3db2a5dad2d3c44e37eb"
+    },
+    {
+      "path": "generated/shaders/lighting/proxy_contact_off.hlsl",
+      "sha256": "8603627c09a94b806266614872da474777f526510de172389060faed3161b6c3"
+    },
+    {
+      "path": "generated/shaders/lighting/proxy_emissive_only.hlsl",
+      "sha256": "dd575e3a175ac6b9a37e4b6934ee876d1bdeb9eae8d8acb7140cd957e0990ae7"
+    },
+    {
+      "path": "generated/shaders/lighting/proxy_legacy.hlsl",
+      "sha256": "e39b9923b279f1e2d5c5f3661c03979a4af25461663cfc6988564d3edd015e28"
+    },
+    {
+      "path": "generated/shaders/lighting/proxy_shadows_off.hlsl",
+      "sha256": "06afa456bc04dc779952dd657c056ab69206b992f56c249b1cdad9b7ed45ea51"
+    },
+    {
+      "path": "generated/shaders/lighting/q7_city_contact_off.hlsl",
+      "sha256": "b155ca74f8495cff9c93f6d6795a3020cd34f4d61ae59e7a329404ec678afafd"
+    },
+    {
+      "path": "generated/shaders/lighting/q7_city_emissive_only.hlsl",
+      "sha256": "b62801a8f5eafc60535b333fd764059120c9796f37a31ab251936cf744733e1a"
+    },
+    {
+      "path": "generated/shaders/lighting/q7_city_shadows_off.hlsl",
+      "sha256": "b7c7f79248c1262084dafece063190ce0b6e51a7f62c75795c2f46c156599952"
+    },
+    {
+      "path": "generated/shaders/lighting/q7_contact_off.hlsl",
+      "sha256": "57f4f13fb2102456e1b253f84c20b5cfe8c92cb6b69dbe4526186f7e8df6f334"
+    },
+    {
+      "path": "generated/shaders/lighting/q7_emissive_only.hlsl",
+      "sha256": "9ecc293cd338738f7f28f0cdf88b138b20d370f11beb488f3868d38d0f19a5bc"
+    },
+    {
+      "path": "generated/shaders/lighting/q7_shadows_off.hlsl",
+      "sha256": "4ca55446a5bf0bb11d101067c47729a5d6e97d30a01fd58518a80bc1831f499f"
+    },
+    {
+      "path": "generated/shaders/lighting/response_v1.hlsl",
+      "sha256": "be03629b1760618cc99d3d3eca0821aff102aa98f952e1c34751d8d1c5485407"
+    },
+    {
+      "path": "generated/shaders/lighting/scene_q2_v1.hlsl",
+      "sha256": "32ab8922fc30d8251a849d391c7772f9d932fc9d6bc1904c0af6c35ba7914c0a"
+    },
+    {
+      "path": "generated/shaders/lighting/scene_shadow_v1.hlsl",
+      "sha256": "bdb07dce1be952c994fbdba07cbcc8bd5fd3f373314df90edc7eecf4f4878c17"
+    },
+    {
+      "path": "generated/shaders/lighting/scene_world_contact_off.hlsl",
+      "sha256": "5992764bf295dd4a67bd021db6a709b6fd21cc23c6c3ed090924e59d63ca1a04"
+    },
+    {
+      "path": "generated/shaders/lighting/scene_world_shadows_off.hlsl",
+      "sha256": "1c753a5499917139fe466b260bb4aa90657e60647386448703a51b1fbaa1ab74"
+    },
+    {
+      "path": "generated/shaders/lighting/scene_world_v1.hlsl",
+      "sha256": "b4bb64b9a4f371b19ae8ce9c9dda367eb42c9f17db2489feca48709616af2d41"
+    },
+    {
+      "path": "generated/shaders/lighting/shadow_visibility_v1.hlsl",
+      "sha256": "28e26fbac28780d60ae54d586420456104f0a3916a0546a25d7d9537e0d8b7c4"
+    },
+    {
+      "path": "generated/shaders/networks/coastal.hlsl",
+      "sha256": "95fc306ac592ba115e8a10f7d125a2d1ac4ae426f3a212a36e3bba0cb0e6bc51"
+    },
+    {
+      "path": "generated/shaders/networks/coastal_base.hlsl",
+      "sha256": "c316e2832a395727cc6fc5b835aaa610e4254010021c1e4f687140e001c0b295"
+    },
+    {
+      "path": "generated/shaders/networks/linear.hlsl",
+      "sha256": "c1530ea35a57c03ccf07065e02554c60413ea1dbc79e54a71e84d3fac11c1961"
+    },
+    {
+      "path": "generated/shaders/networks/routes.hlsl",
+      "sha256": "7d1a8585ce01c38e430bf81fd23614357a61b524717905eed488bbe8cb492518"
+    },
+    {
+      "path": "generated/shaders/objects/beauty_objects.hlsl",
+      "sha256": "2d4e1dcf6d0f88457a21b7cb35ca4dad277f2fafa19f7afb670b49c2d6b7c0a3"
+    },
+    {
+      "path": "generated/shaders/objects/city_scene_material.hlsl",
+      "sha256": "75923e050f689869868b2eaebd21a7f71ea951e6e8091b9fbdc9610b36c24eaa"
+    },
+    {
+      "path": "generated/shaders/objects/linear_v1.hlsl",
+      "sha256": "b75808734fd6d280218c09b37fe9f17f894a489e8881339f2f17976070cbf9c3"
+    },
+    {
+      "path": "generated/shaders/objects/presentation.hlsl",
+      "sha256": "3b3074154b334fd79ec31ced147102638ac44b94840702f20e291d18c1f30924"
+    },
+    {
+      "path": "generated/shaders/objects/settlement_ground.hlsl",
+      "sha256": "a21447d01e7b1b9738cfbb766b5173778c0bea8d2a7e87a3cec3c02f94ceca31"
+    },
+    {
+      "path": "generated/shaders/objects/terrain_linear_v1.hlsl",
+      "sha256": "6215b5e53ac377e0aa0454257973f77d2e757dbd8f7a575ba6698cb0fde579aa"
+    },
+    {
+      "path": "generated/shaders/relief/beauty_mountain.hlsl",
+      "sha256": "877adbefde22e3e037822c37cb3394c038c5da6790ccdac68c4dc851dcf70e0f"
+    },
+    {
+      "path": "generated/shaders/relief/beauty_terrain.hlsl",
+      "sha256": "8b1be2156fddf87c9348f8ed4b4dcdd6f14262c8449f40bfa3600aa63c1db9f9"
+    },
+    {
+      "path": "generated/shaders/relief/coast_rocks.hlsl",
+      "sha256": "959d3de0a7efe2283a5dde0b3db1c9c9d741ef1d989d30c41469723d24e7d03f"
+    },
+    {
+      "path": "generated/shaders/relief/combined_material.hlsl",
+      "sha256": "8b34697690ebf237484b657a17926b8155e3961ff45e05c16aa0c53b2fcdbf08"
+    },
+    {
+      "path": "generated/shaders/relief/relief_v1.hlsl",
+      "sha256": "21db662734019759af5f56af36e65b1e43925bb07d71a6dc00b6b0769c5d6841"
+    },
+    {
+      "path": "generated/shaders/sampling/bounded.hlsl",
+      "sha256": "3cbee9515d592f8012c7f35a2fab5596a447044011714a4e717ea5384d67c862"
+    },
+    {
+      "path": "generated/shaders/sampling/ground_lod.hlsl",
+      "sha256": "a63ed49970f6b7cd587cf6f43f98e1f7f531f9e56cbc40811ffad9fd76d998ee"
+    },
+    {
+      "path": "generated/shaders/sampling/hardware_lod.hlsl",
+      "sha256": "d128ce65bb37028087841c8fb96f3e04b6d2a4f6c7aa48c5eaebf25e5a2c141a"
+    },
+    {
+      "path": "generated/shaders/sampling/legacy_post.hlsl",
+      "sha256": "e0d2296501f8a9ba68dcba2fe0e660ebfef37ca5283d655620968e1b9249ed93"
+    },
+    {
+      "path": "generated/shaders/sampling/linear_box.hlsl",
+      "sha256": "2665da15737e93ba3374a48dc7341653352bbadacf1ea7d2fd275e510312196e"
+    },
+    {
+      "path": "generated/shaders/sampling/linear_reconstruct.hlsl",
+      "sha256": "dac3fa455dce8ab2ee20dd813f8e47ecb6b23baf54dedda596b0c3340e75ccba"
+    },
+    {
+      "path": "generated/shaders/sampling/mitchell.hlsl",
+      "sha256": "0e0099960e1fd115cdba45c253adb16d15ecafc00cb446e87481ebe6694cf5e3"
+    },
+    {
+      "path": "generated/shaders/sampling/reconstruction_v1.hlsl",
+      "sha256": "00eb9245631bc22c04072622e577192cc0cb01ae83863cedaf1e86a5a75d8460"
+    },
+    {
+      "path": "generated/shaders/sampling/sharpen.hlsl",
+      "sha256": "52336b5743a6f30c76bff58f5d84e32202a47a3cfb84b406c62ab247d5aed48c"
+    },
+    {
+      "path": "generated/shaders/sampling/witness.hlsl",
+      "sha256": "9e4028c4ece6172b7469f0a6dc63c2864071c514661977cb6574be852f5bd20c"
+    },
+    {
+      "path": "generated/shaders/terrain/albedo.hlsl",
+      "sha256": "24b8aeb81123f01f4fad6ae76a36e7ea9f317a71196ad148cd4606b57a907d03"
+    },
+    {
+      "path": "generated/shaders/terrain/base.hlsl",
+      "sha256": "28e408ac803d75676c634b6307cc433edfc6e18a9094362f04d2d0a1518456a2"
+    },
+    {
+      "path": "generated/shaders/terrain/baseline.hlsl",
+      "sha256": "d0f52a7212fe2fabec5cad1726b21312d964fdb4aa74fdf3c0f7eb026381ff18"
+    },
+    {
+      "path": "generated/shaders/terrain/cached_normal.hlsl",
+      "sha256": "4e62f034c32dd70341774e46af5974a283ed4ec58270733e8cf43a45ac492303"
+    },
+    {
+      "path": "generated/shaders/terrain/continental_material.hlsl",
+      "sha256": "fe0c3bd2271a0dbc17344983834b4e03069c41e5235778519523658d95617300"
+    },
+    {
+      "path": "generated/shaders/terrain/detail.hlsl",
+      "sha256": "e80fcd4523263d0209d8b90d30dcebe2f3cac55d84259831753fa61262daeb0c"
+    },
+    {
+      "path": "generated/shaders/terrain/ground_decals.hlsl",
+      "sha256": "2a4162b11c0b71f0dcee1e41c3b206d99d768bdde81bb372b2703ea3b0c85a16"
+    },
+    {
+      "path": "generated/shaders/terrain/height.hlsl",
+      "sha256": "f7dce305640c584c90c1883456b2181f3d4f4ce46169cab6811fa5d1b4fd0225"
+    },
+    {
+      "path": "generated/shaders/terrain/material_response_v1.hlsl",
+      "sha256": "ea2448a7364730414ffc3fd7e900426deb1f0bac147e13ce4e5879dff64a245b"
+    },
+    {
+      "path": "generated/shaders/terrain/normal.hlsl",
+      "sha256": "a5cad249a1c7cc41036fb0e4d6be9574138b3c2305002c52a577735190605d7f"
+    },
+    {
+      "path": "generated/shaders/terrain/off.hlsl",
+      "sha256": "d0f52a7212fe2fabec5cad1726b21312d964fdb4aa74fdf3c0f7eb026381ff18"
+    },
+    {
+      "path": "generated/shaders/terrain/roughness.hlsl",
+      "sha256": "fb56ac685d4b22b4cbbf951aa2e6271e77e4e2570f647956f66b449d3a8d3c70"
+    },
+    {
+      "path": "generated/shaders/terrain/scene-linear-off.hlsl",
+      "sha256": "3f8f17de90415fd0b7c2ab1bc167b0d45e4a5d83584bec465e3b169e060b5a05"
+    },
+    {
+      "path": "generated/shaders/terrain/scene-linear-on.hlsl",
+      "sha256": "a3ef03fd29e7850cfc26362265f8d5e4b3362e90b94fb3346c5db957f6ba1310"
+    },
+    {
+      "path": "generated/shaders/terrain/scene_material_v1.hlsl",
+      "sha256": "1f0676aca47be63570550dd7d65aeb19ad22055e1a60e0b33b73e2a5ab3aea12"
+    },
+    {
+      "path": "generated/shaders/terrain/scene_weights_debug.hlsl",
+      "sha256": "a5a9565fca9b5976c1828e5bb8af52c06431395e40f8bd939e654110d3cb6906"
+    },
+    {
+      "path": "generated/shaders/terrain/source_blend.hlsl",
+      "sha256": "b0504b75dd4b0fa1cb977111f6c70d1c36b10e467d24cfdaa691f1767e1a113c"
+    },
+    {
+      "path": "generated/shaders/terrain/surface_kind_debug.hlsl",
+      "sha256": "fedd86ef22b4e5d7a00bc6d04f884cdb6c921b4a85a50480b6a59a05b1d8af13"
+    },
+    {
+      "path": "generated/shaders/terrain/weights.hlsl",
+      "sha256": "18dad03dc0bd6f37a1eebc4bc108094e9e835c78a778dd2135b389dd7c748b30"
+    },
+    {
+      "path": "hydrology.hlsl",
+      "sha256": "6a76946e47acea91c4bec291793887b429b356a41a3851b37c303870c1c02dea"
+    }
+  ]
+}

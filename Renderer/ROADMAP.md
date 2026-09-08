@@ -13,6 +13,24 @@ The end state is a one-command offline source importer plus authored mapping pro
 
 ## Current Position
 
+The source-fidelity-r13 natural refresh is staged for normal `INSTALL.bat`.
+The [port record](native/source_fidelity/README.md) and
+[checkpoint](verification/source_fidelity/checkpoint.json) record the exact
+selected terrain, five mountain variants, 22 forest bodies/25 recipes, retained
+hydrology, shared Q6 frame and bounded MSAA4/2x linear composition. The follow-up
+boundary corrections align mountain caster cutoffs, continuous biome/coast
+coverage and the dune-to-flat-beach height join. Twenty-four Windows scene cases,
+shadow controls, animation, object ownership, authoritative edits and cache replay
+pass; normal Integration passes. Minimap revisits measure 3.1–3.4 ms, while newly
+exposed areas still take roughly 0.9–3 seconds. Full verification passes 381
+prerequisite tests but retains the pre-existing L19A fixture-hash failure; frozen
+witnesses and tolerances are unchanged. No injected code, patch rows, installer
+logic or unit behavior changed, and the agent did not launch Civ III. The user
+subsequently authorized the selected static-water/reflection and city/palace
+night-lighting refresh after this build; that follow-up is a separate candidate.
+
+The following entries retain the preceding production history.
+
 The user-authorized production refresh from the pinned [C3X implementation pickup package](handoffs/candidates/lab_v2_terrain_lighting_r1/README.md) is ready for the user-run gameplay checkpoint. The [native port record](native/profile_v2/README.md) and [checkpoint](native/profile_v2/checkpoint.json) record passing cache/image/hardware gates, 18 combined scene cases, authoritative edit/reset checks, the full workflow and approved injected compile. The API 14 DLL is staged; the usual `INSTALL.bat` installs matching code, and normal game launches select pickup-r1 with detailed diagnostics by default. Latest cold and minimap measurements are recorded below; first exposure remains noticeable. Civ III was not launched; visual approval and LQ gates remain unchanged. The reported logging execute fault was mapped to a direct injected OutputDebugStringA import retaining an invalid installer address; it now uses the established game import pointer. Normal gameplay logs only through OutputDebugStringA, without automatic file output. The next user log proceeds past that logging call; no recurrence of that execute fault is reported.
 
 The next in-game report isolated a black-map ownership failure: rendering succeeded,

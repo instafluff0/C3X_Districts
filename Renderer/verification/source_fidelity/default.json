@@ -1,0 +1,12 @@
+[
+  {
+    "command": "set \"C3X_RENDERER_VISUAL_PROFILE=\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\source_fidelity\\default-inland-z128-h12.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\source_fidelity\\default-inland-z128-h12.bmp 960 640 69 50 128 12",
+    "status": "pass",
+    "returncode": 0,
+    "started_utc": "2026-09-08T03:13:37.396481+00:00",
+    "output_tail": "BIQ 100x100 viewport: 388 visible tiles, 0 fallback, output=..\\verification\\source_fidelity\\default-inland-z128-h12.bmp",
+    "name": "default-inland-z128-h12",
+    "dll_sha256": "23ba4ce30a512859dc8c3bb730a6cab94f91b45d7a63644595fa8570976d60e6",
+    "raw_sha256": "e98f4304033568ffb8b19e508b686538d1c2c1ff44edcf02f1d1973eabe975ea"
+  }
+]

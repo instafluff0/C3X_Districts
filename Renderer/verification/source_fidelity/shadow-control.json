@@ -1,0 +1,20 @@
+{
+  "inland": {
+    "shadow_on": "default-inland-z128-h12.bmp",
+    "shadow_off": "control-inland-z128-h12.bmp",
+    "darkened_over_6": 108471,
+    "maximum_darkening": 108.2436,
+    "brightened_over_6": 0,
+    "on_sha256": "e98f4304033568ffb8b19e508b686538d1c2c1ff44edcf02f1d1973eabe975ea",
+    "off_sha256": "327e7c5f79f951028175db70c75155c1421ad2caadb6cb013b77ce38f6705f16"
+  },
+  "coast": {
+    "shadow_on": "matrix-coast-z128-h12.bmp",
+    "shadow_off": "coast-control-coast-z128-h12.bmp",
+    "darkened_over_6": 53139,
+    "maximum_darkening": 98.595,
+    "brightened_over_6": 0,
+    "on_sha256": "cd35c422f152c2bb430e480d6e87acf3f93306af9e869a9f43f90fc002d7a024",
+    "off_sha256": "8f45a555485936b8e7d9ea98632464cb58cc8454c8477b6a28b4f56212aa7cd1"
+  }
+}

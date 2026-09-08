@@ -278,8 +278,9 @@ def validate_state() -> dict[str, Any]:
     return {"name": "project_state", "status": "pass", "next_step": step["id"]}
 
 
-def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
+def run_workflow(name: str, with_injected: bool, report_path: Path, candidate_only: bool = False) -> int:
     results: list[dict[str, Any]] = [validate_state()]
+    native_build = "call BUILD.bat portable" + (" no-stage" if candidate_only else "")
     if results[-1]["status"] == "fail":
         return write_report(name, results, report_path)
 
@@ -311,7 +312,7 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
                 "Renderer.native.test_profile_v2", "Renderer.tools.test_renderer_dev",
             ]))
         if results[-1]["status"] == "pass":
-            results.append(native_command_result("Renderer/native", "call BUILD.bat portable"))
+            results.append(native_command_result("Renderer/native", native_build))
         if results[-1]["status"] == "pass":
             results.append(approved_terrain_smoke_result())
         if results[-1]["status"] == "pass":
@@ -433,7 +434,7 @@ def run_workflow(name: str, with_injected: bool, report_path: Path) -> int:
         "Renderer.native.test_profile_v2",
     ]))
     if results[-1]["status"] == "pass":
-        results.append(native_command_result("Renderer/native", "call BUILD.bat portable"))
+        results.append(native_command_result("Renderer/native", native_build))
     if results[-1]["status"] == "pass":
         results.append(approved_terrain_smoke_result())
     if results[-1]["status"] == "pass":
@@ -472,9 +473,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run one C3X renderer development workflow")
     parser.add_argument("workflow", choices=("state", "lab", "integration", "full"))
     parser.add_argument("--with-injected", action="store_true")
+    parser.add_argument("--candidate-only", action="store_true", help="Run all gates without staging the candidate DLL.")
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     args = parser.parse_args()
-    return run_workflow(args.workflow, args.with_injected, args.report)
+    return run_workflow(args.workflow, args.with_injected, args.report, args.candidate_only)
 
 
 if __name__ == "__main__":

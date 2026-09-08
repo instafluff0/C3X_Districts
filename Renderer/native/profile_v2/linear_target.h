@@ -50,12 +50,15 @@ struct LinearOutput {
         // straight for the existing Civ III surface-copy contract.
         char const* source=R"(
 Texture2D<float4> scene : register(t0);
-cbuffer OutputSettings : register(b0) { float exposure; float3 padding; };
+cbuffer OutputSettings : register(b0) { float exposure; int render_scale; float2 padding; };
 float4 VSOutput(uint id : SV_VertexID) : SV_Position {
  float2 p=float2((id<<1)&2,id&2); return float4(p*float2(2,-2)+float2(-1,1),0,1);
 }
 float4 PSOutput(float4 position : SV_Position) : SV_Target {
- float4 c=scene.Load(int3(int2(position.xy),0));
+ float4 c=0;int2 start=int2(position.xy)*render_scale;
+ for(int y=0;y<render_scale;y++)for(int x=0;x<render_scale;x++)
+  c+=scene.Load(int3(start+int2(x,y),0));
+ c/=render_scale*render_scale;
  if(c.a<=.000001) return 0;
  float3 rgb=max(0,c.rgb/c.a*exposure);
  rgb/=1+max(rgb.r,max(rgb.g,rgb.b));
@@ -83,20 +86,20 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
         if(FAILED(hr)) { reset(); return false; } return true;
     }
     void draw(ID3D11DeviceContext* context,LinearTarget const& linear,
-              ID3D11RenderTargetView* destination,float exposure) {
+              ID3D11RenderTargetView* destination,float exposure,int render_scale=1) {
         context->OMSetRenderTargets(0,nullptr,nullptr);
         context->ResolveSubresource(linear.resolved,0,linear.color,0,DXGI_FORMAT_R16G16B16A16_FLOAT);
         context->OMSetRenderTargets(1,&destination,nullptr);
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->OMSetDepthStencilState(nullptr,0);
-        D3D11_VIEWPORT viewport={0,0,float(linear.width),float(linear.height),0,1};
-        D3D11_RECT rect={0,0,LONG(linear.width),LONG(linear.height)};
+        D3D11_VIEWPORT viewport={0,0,float(linear.width/render_scale),float(linear.height/render_scale),0,1};
+        D3D11_RECT rect={0,0,LONG(linear.width/render_scale),LONG(linear.height/render_scale)};
         context->RSSetViewports(1,&viewport); context->RSSetScissorRects(1,&rect);
         context->IASetInputLayout(nullptr);
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex,nullptr,0); context->PSSetShader(pixel,nullptr,0);
-        float values[]={exposure,0,0,0};
-        context->UpdateSubresource(settings,0,nullptr,values,0,0);
+        struct {float exposure;int scale;float padding[2];}values={exposure,render_scale,{0,0}};
+        context->UpdateSubresource(settings,0,nullptr,&values,0,0);
         context->PSSetConstantBuffers(0,1,&settings);
         context->PSSetShaderResources(0,1,&linear.view);
         context->Draw(3,0);

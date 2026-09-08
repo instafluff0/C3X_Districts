@@ -39,6 +39,9 @@
 #include "profile_v2/cliff_placement.h"
 #include "profile_v2/source_shadow.h"
 #include "profile_v2/linear_target.h"
+#include "source_fidelity/runtime.h"
+#include "source_fidelity/light_frame.h"
+#include "environment_refresh/reflection.h"
 #include "unit_body_renderer.h"
 
 namespace {
@@ -220,7 +223,9 @@ enum GeometryLayer : std::size_t {
     geometry_mine,
     geometry_farm,
     geometry_cliff0, geometry_cliff1, geometry_cliff2, geometry_cliff3,
-    geometry_layer_count
+    geometry_natural_terrain, geometry_natural_decal, geometry_natural_mountain,
+    geometry_natural_forest0,
+    geometry_layer_count = geometry_natural_forest0 + 22
 };
 
 struct CachedTileGeometry {
@@ -347,6 +352,11 @@ class RendererState {
 public:
     c3x_renderer::UnitBodyRenderer unit_bodies;
     bool unit_rendering_enabled=false;
+    bool fidelity_profile = false, fidelity_shadow_control = false;
+    bool environment_profile = false;
+    c3x_renderer::environment_refresh::Reflection reflection;
+    std::string fidelity_root;
+    c3x_renderer::fidelity::Natural natural;
     RendererTrace trace;
     SceneTopology topology_cache;
     std::uint64_t requested_signature = 0;
@@ -376,6 +386,7 @@ public:
     ID3D11BlendState * blend_state = nullptr;
     ID3D11DepthStencilState * depth_state = nullptr;
     ID3D11RasterizerState * rasterizer_state = nullptr;
+    ID3D11SamplerState * natural_wrap = nullptr, *natural_clamp = nullptr;
     ID3D11SamplerState * terrain_sampler = nullptr;
     ID3D11SamplerState * decal_sampler = nullptr;
     ID3D11Texture2D * render_texture = nullptr;
@@ -560,7 +571,7 @@ public:
 
     void reset_targets() {
         cancel_pixel_preparation();
-        linear_frame.reset(); linear_block.reset();
+        linear_frame.reset(); linear_block.reset(); reflection.linear.reset();
         pixel_blocks.clear();
         release(block_readback); release(block_depth); release(block_depth_texture);
         release(block_target); release(block_texture);
@@ -609,7 +620,7 @@ public:
         if (context != nullptr)
             context->ClearState();
         reset_targets();
-        world_coast.clear(); geometry_world_revision = -1; source_shadow.clear();
+        world_coast.clear(); geometry_world_revision = -1; source_shadow.clear(); natural.reset(); reflection.reset();
         for (TerrainTexture & texture : terrain_textures)
         {
             release(texture.view);
@@ -669,6 +680,7 @@ public:
             release(view);
         for (ID3D11ShaderResourceView *& view : farm_emissive_views)
             release(view);
+        release(natural_wrap);release(natural_clamp);
         release(decal_sampler);
         release(terrain_sampler);
         release(rasterizer_state);
@@ -732,12 +744,14 @@ public:
         // from the approved Lab handoff, isolated from in-progress Lab edits.
         auto compile_terrain_shader = [this](char const * entry, char const * target,
                                              ID3DBlob ** blob) {
-            int count = MultiByteToWideChar(CP_UTF8, 0, integrated_shader_path.c_str(),
+            std::string selected_shader=integrated_shader_path;
+            if(fidelity_profile && std::strstr(entry,"Feature"))selected_shader=fidelity_root+(environment_profile?"/Renderer/native/environment_refresh/feature.hlsl":"/Renderer/native/profile_v2/integrated_v2.hlsl");
+            int count = MultiByteToWideChar(CP_UTF8, 0, selected_shader.c_str(),
                                             -1, nullptr, 0);
             if (count <= 0)
                 return false;
             std::wstring wide_path(static_cast<std::size_t>(count), L'\0');
-            MultiByteToWideChar(CP_UTF8, 0, integrated_shader_path.c_str(), -1,
+            MultiByteToWideChar(CP_UTF8, 0, selected_shader.c_str(), -1,
                                 wide_path.data(), count);
             ID3DBlob * errors = nullptr;
             HRESULT result = pickup_profile ? c3x_renderer::profile_v2::compile_cached(
@@ -745,9 +759,10 @@ public:
                 wide_path.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
                 entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, blob, &errors);
             if (errors != nullptr) {
-                OutputDebugStringA(static_cast<char const *>(errors->GetBufferPointer()));
+                trace.write("shader-compile",static_cast<char const *>(errors->GetBufferPointer()),true);
                 errors->Release();
             }
+            if(FAILED(result))trace.write("shader-entry-failed",entry,true);
             return SUCCEEDED(result);
         };
         ID3DBlob * vertex_blob = nullptr;
@@ -872,7 +887,7 @@ public:
             desc.ByteWidth = 80;
             if (SUCCEEDED(hr)) hr = device->CreateBuffer(&desc, nullptr, &shadow_settings_buffer);
             if (SUCCEEDED(hr) && !linear_output.ensure(device)) hr = E_FAIL;
-            std::string source_path=integrated_shader_path.substr(0,integrated_shader_path.find_last_of("\\/"))+"/source_caster.hlsl";
+            std::string source_path=fidelity_profile ? fidelity_root+(environment_profile?"/Renderer/native/environment_refresh/source_caster.hlsl":"/Renderer/native/profile_v2/source_caster.hlsl") : integrated_shader_path.substr(0,integrated_shader_path.find_last_of("\\/"))+"/source_caster.hlsl";
             int count=MultiByteToWideChar(CP_UTF8,0,source_path.c_str(),-1,nullptr,0);
             std::wstring wide(static_cast<std::size_t>(count),L'\0');
             MultiByteToWideChar(CP_UTF8,0,source_path.c_str(),-1,wide.data(),count);
@@ -920,6 +935,12 @@ public:
         sampler.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
         if (SUCCEEDED(hr))
             hr = device->CreateSamplerState(&sampler, &decal_sampler);
+        if(SUCCEEDED(hr) && fidelity_profile){
+            sampler.MaxAnisotropy=16;sampler.MipLODBias=-1;
+            hr=device->CreateSamplerState(&sampler,&natural_clamp);
+            sampler.AddressU=sampler.AddressV=sampler.AddressW=D3D11_TEXTURE_ADDRESS_WRAP;
+            if(SUCCEEDED(hr))hr=device->CreateSamplerState(&sampler,&natural_wrap);
+        }
         if (FAILED(hr)) {
             reset();
             return false;
@@ -1980,12 +2001,21 @@ public:
                                char const * scenario_path, char const * custom_path) {
         char requested_profile[32] = {};
         GetEnvironmentVariableA("C3X_RENDERER_VISUAL_PROFILE", requested_profile, sizeof(requested_profile));
+        bool use_environment=std::strcmp(requested_profile,"environment-refresh")==0;
+        bool use_fidelity = use_environment || requested_profile[0] == 0 || std::strcmp(requested_profile, "source-fidelity-r13") == 0;
+        if(fidelity_profile != use_fidelity || environment_profile!=use_environment) reset();
+        environment_profile=use_environment;
+        fidelity_profile = use_fidelity;
+        char control[8]={};
+        reflection.enabled=!(GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+        fidelity_shadow_control=GetEnvironmentVariableA("C3X_RENDERER_FIDELITY_SHADOW_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        fidelity_root = mod_root ? mod_root : "";
         bool use_pickup = std::strcmp(requested_profile, "frozen") != 0;
         if (pickup_profile != use_pickup) reset();
         pickup_profile = use_pickup;
         char shader_path[4 * MAX_PATH];
         if (mod_root != nullptr &&
-            pack_path(mod_root, pickup_profile ? "Renderer\\native\\profile_v2\\integrated_v2.hlsl" :
+            pack_path(mod_root, environment_profile ? "Renderer\\native\\environment_refresh\\hydrology.hlsl" : fidelity_profile ? "Renderer\\native\\source_fidelity\\hydrology.hlsl" : pickup_profile ? "Renderer\\native\\profile_v2\\integrated_v2.hlsl" :
                       "Renderer\\native\\integrated_terrain.hlsl",
                       shader_path, std::size(shader_path)) &&
             GetFileAttributesA(shader_path) != INVALID_FILE_ATTRIBUTES)
@@ -2059,7 +2089,7 @@ public:
     }
 
     bool ensure_dds_texture(std::vector<std::uint8_t> const & dds,
-                            ID3D11ShaderResourceView *& view, bool required) {
+                            ID3D11ShaderResourceView *& view, bool required, bool full_resolution = false) {
         if (view != nullptr)
             return true;
         if (dds.empty())
@@ -2120,7 +2150,7 @@ public:
         // cannot contribute at the in-game projection scale.
         std::uint32_t first_mip = 0;
         std::uint32_t runtime_width = width_px, runtime_height = height_px;
-        while (first_mip + 1 < mip_count &&
+        while (!full_resolution && first_mip + 1 < mip_count &&
                (runtime_width > 2048 || runtime_height > 2048)) {
             ++first_mip;
             runtime_width = std::max(1u, runtime_width / 2);
@@ -2751,7 +2781,7 @@ public:
         if(resource_backdrop_signature!=cached_signature.complete) {
             clear_resource_backdrops();resource_backdrop_signature=cached_signature.complete;
         }
-        if(!ensure_block_targets() || !linear_block.ensure(device,128,128))return false;
+        if(!ensure_block_targets() || !linear_block.ensure(device,fidelity_profile?256:128,fidelity_profile?256:128))return false;
         unsigned backdrop_hits=0,backdrop_misses=0;
         for(auto const & rect:rectangles) {
             auto found=std::find_if(resource_backdrops.begin(),resource_backdrops.end(),[&](auto const& block){
@@ -2769,7 +2799,7 @@ public:
                 ++backdrop_misses;
                 // 32 exact MSAA4 color/depth blocks = 24 MiB, independent of screen size.
                 // At capacity, uncached blocks render normally instead of losing bodies.
-                if(resource_backdrops.size()<32) {
+                if(resource_backdrops.size()<(fidelity_profile?8u:32u)) {
                     ResourceBackdrop block;block.x=rect.left;block.y=rect.top;
                     D3D11_TEXTURE2D_DESC desc={};linear_block.color->GetDesc(&desc);
                     if(FAILED(device->CreateTexture2D(&desc,nullptr,&block.color)))return false;
@@ -2951,9 +2981,9 @@ public:
     bool cache_geometry_layer(std::vector<Vertex> & vertices,
                               std::vector<CachedVertexChunk> & output,
                               bool prefetch = false, std::size_t pending_bytes = 0,
-                              std::atomic<bool> const * foreground_pending = nullptr, bool compact_feature = false) {
+                              std::atomic<bool> const * foreground_pending = nullptr, bool compact_feature = false, bool natural_vertex = false) {
         if (vertices.empty()) return true;
-        std::size_t vertex_stride = pickup_profile ? (compact_feature?48u:sizeof(Vertex)) : 120u;
+        std::size_t vertex_stride = pickup_profile ? (natural_vertex?76u:compact_feature?48u:sizeof(Vertex)) : 120u;
         std::size_t hash_stride = pickup_profile ? sizeof(Vertex) : 120u;
         std::unordered_map<Vertex, UINT, VertexHash, VertexEqual> unique(
             0, VertexHash{hash_stride,pickup_profile && compact_feature}, VertexEqual{hash_stride,pickup_profile && compact_feature});
@@ -3006,7 +3036,17 @@ public:
         D3D11_SUBRESOURCE_DATA initial = {};
         std::vector<std::uint8_t> frozen_vertices;
         initial.pSysMem = packed.data();
-        if(pickup_profile && compact_feature) {
+        if(natural_vertex) {
+            frozen_vertices.resize(packed.size()*76);
+            for(std::size_t i=0;i<packed.size();++i){auto const&v=packed[i];
+                float data[]={v.x,v.y,v.z,v.world_x,v.world_y,v.world_z,1,
+                    v.normal_x,v.normal_y,v.normal_z,v.u,v.v,
+                    v.material_grass,v.material_plains,v.material_desert,v.material_marsh,
+                    v.authored_relief_height,v.authored_relief_blend,v.base_terrain};
+                std::memcpy(frozen_vertices.data()+i*76,data,76);
+            }
+            initial.pSysMem=frozen_vertices.data();
+        } else if(pickup_profile && compact_feature) {
             frozen_vertices.resize(packed.size()*48);
             for(std::size_t i=0;i<packed.size();++i){auto const& v=packed[i];
                 float data[]={v.x,v.y,v.z,v.u,v.v,v.normal_x,v.normal_y,v.normal_z,v.base_terrain,
@@ -3050,6 +3090,12 @@ public:
                 footprint.bounds.top = std::min(footprint.bounds.top, static_cast<int>(chunk.bounds.top));
                 footprint.bounds.right = std::max(footprint.bounds.right, static_cast<int>(chunk.bounds.right));
                 footprint.bounds.bottom = std::max(footprint.bounds.bottom, static_cast<int>(chunk.bounds.bottom));
+                if(environment_profile){
+                    int shift=int(std::ceil(2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f)))+4;
+                    footprint.bounds.bottom=std::max(footprint.bounds.bottom,int(chunk.bounds.bottom)+shift);
+                    footprint.bounds.left=std::min(footprint.bounds.left,int(chunk.bounds.left)-4);
+                    footprint.bounds.right=std::max(footprint.bounds.right,int(chunk.bounds.right)+4);
+                }
                 if(pickup_profile) {
                     float z=std::max(0.f,chunk.world_bounds.high[2]);
                     float u=-shadow_basis[8]/shadow_basis[10]*z,v=-shadow_basis[9]/shadow_basis[10]*z;
@@ -3092,18 +3138,23 @@ public:
     bool draw_cached_geometry(GeometryLayer layer,
             std::array<std::vector<CachedVertexChunk>, geometry_layer_count> const & buffers,
             std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & viewport_settings,
-            std::atomic<bool> const * cancellation) {
-        if(pickup_profile)context->IASetInputLayout(layer>=geometry_feature?feature_input_layout:input_layout);
+            std::atomic<bool> const * cancellation, bool reflection_pass=false) {
+        if(pickup_profile && layer<geometry_natural_terrain)context->IASetInputLayout(layer>=geometry_feature?feature_input_layout:input_layout);
         ViewportShaderSettings previous = {};
         bool first = true;
         for (D3D11_RECT const & rect : rectangles) {
-        context->RSSetScissorRects(1, &rect);
+        D3D11_RECT scaled=rect;
+        if(fidelity_profile){scaled.left*=2;scaled.top*=2;scaled.right*=2;scaled.bottom*=2;}
+        context->RSSetScissorRects(1, &scaled);
         for (CachedVertexChunk const & chunk : buffers[layer]) {
             if (cancellation && cancellation->load(std::memory_order_relaxed)) return false;
+            if(reflection_pass && chunk.animation_texture)continue;
             int dx = chunk.translation_x + static_cast<int>(viewport_settings.translation[0]);
             int dy = chunk.translation_y + static_cast<int>(viewport_settings.translation[1]);
+            float low_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.low[2]-2.5f/112.f):0;
+            float high_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f):0;
             if (chunk.bounds.right + dx <= rect.left || chunk.bounds.left + dx >= rect.right ||
-                chunk.bounds.bottom + dy <= rect.top || chunk.bounds.top + dy >= rect.bottom) continue;
+                chunk.bounds.bottom + dy + high_shift <= rect.top || chunk.bounds.top + dy + low_shift >= rect.bottom) continue;
             ViewportShaderSettings settings = viewport_settings;
             if(pickup_profile)settings.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
             settings.translation[0] += static_cast<float>(chunk.translation_x);
@@ -3131,7 +3182,37 @@ public:
                          int projection_width, int projection_height,
                          std::atomic<bool> const * cancellation = nullptr,
                          bool accumulate = false, bool finish = true,
-                         std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const * shadow_buffers_ptr = nullptr) {
+                         std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const * shadow_buffers_ptr = nullptr,
+                         bool reflection_pass=false) {
+        if(fidelity_profile && !reflection_pass) {
+            ID3D11Resource* destination_resource=nullptr;target->GetResource(&destination_resource);
+            ID3D11Texture2D* destination_texture=nullptr;
+            HRESULT hr=destination_resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(&destination_texture));
+            destination_resource->Release();if(FAILED(hr))return false;
+            D3D11_TEXTURE2D_DESC desc={};destination_texture->GetDesc(&desc);
+            if(desc.Width>128 || desc.Height>128){
+                if(!ensure_block_targets()){destination_texture->Release();return false;}
+                // Bound RGBA16F MSAA4+resolve+depth scratch to 256x256.
+                // Each native output pixel is reconstructed once from its own
+                // 2x2 linear samples. Integer block origins preserve coverage.
+                for(auto const&rect:rectangles)for(int y=(rect.top/128)*128;y<rect.bottom;y+=128)
+                    for(int x=(rect.left/128)*128;x<rect.right;x+=128){
+                        ViewportShaderSettings local=settings;
+                        local.translation[0]-=float(x);local.translation[1]-=float(y);
+                        local.inverse_size[0]=local.inverse_size[1]=1.f/128;
+                        if(!submit_geometry(buffers,{{0,0,128,128}},local,block_target,block_depth,128,128,cancellation,false,true,shadow_buffers_ptr)){
+                            destination_texture->Release();return false;
+                        }
+                        int l=std::max(x,int(rect.left)),t=std::max(y,int(rect.top));
+                        int r=std::min(x+128,int(rect.right)),b=std::min(y+128,int(rect.bottom));
+                        D3D11_BOX box={UINT(l-x),UINT(t-y),0,UINT(r-x),UINT(b-y),1};
+                        context->OMSetRenderTargets(0,nullptr,nullptr);
+                        context->CopySubresourceRegion(destination_texture,0,UINT(l),UINT(t),0,block_texture,0,&box);
+                    }
+                destination_texture->Release();return true;
+            }
+            destination_texture->Release();
+        }
         if(pickup_profile) {
             std::vector<D3D11_RECT> pieces;
             for(auto const& rect:rectangles)
@@ -3145,7 +3226,15 @@ public:
             }
         }
         auto draw = [&](GeometryLayer layer) {
-            return draw_cached_geometry(layer, buffers, rectangles, settings, cancellation);
+            if(reflection_pass){
+                if(layer==geometry_underlay || layer==geometry_bed || layer==geometry_water ||
+                    layer==geometry_river || layer==geometry_route || layer==geometry_shadow)return true;
+                unsigned provider=layer<geometry_feature?0:layer<geometry_natural_terrain?1:
+                    layer<=geometry_natural_decal?2:layer==geometry_natural_mountain?3:4;
+                context->VSSetShader(reflection.vs[provider],nullptr,0);
+                context->PSSetShader(reflection.ps[provider],nullptr,0);
+            }
+            return draw_cached_geometry(layer, buffers, rectangles, settings, cancellation,reflection_pass);
         };
         ID3D11RenderTargetView * destination = target;
         c3x_renderer::profile_v2::LinearTarget * linear = nullptr;
@@ -3157,11 +3246,18 @@ public:
             resource->Release();
             if (FAILED(hr)) return false;
             D3D11_TEXTURE2D_DESC desc = {}; texture->GetDesc(&desc); texture->Release();
-            linear = desc.Width == 128 && desc.Height == 128 ? &linear_block : &linear_frame;
-            if (!linear->ensure(device, desc.Width, desc.Height)) {
+            linear = reflection_pass?&reflection.linear:desc.Width == 128 && desc.Height == 128 ? &linear_block : &linear_frame;
+            if (!linear->ensure(device, reflection_pass?272:desc.Width*(fidelity_profile?2:1), reflection_pass?272:desc.Height*(fidelity_profile?2:1))) {
                 trace.write("linear-target-failed", "pickup MSAA4 allocation", true); return false;
             }
             target = linear->target; depth = linear->depth;
+        }
+        if(environment_profile && !reflection_pass && reflection.enabled){
+            ViewportShaderSettings reflected=settings;
+            reflected.translation[0]+=4;reflected.translation[1]+=4;
+            reflected.inverse_size[0]=reflected.inverse_size[1]=1.f/136;
+            if(!submit_geometry(buffers,{{0,0,136,136}},reflected,destination,depth,136,136,
+                cancellation,false,true,shadow_buffers_ptr,true))return false;
         }
         if (pickup_profile) {
             using Shadow=c3x_renderer::profile_v2::SourceShadow;
@@ -3171,10 +3267,12 @@ public:
             for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:shadow_buffers[layer]) {
                 bool visible=false;
                 int dx=chunk.translation_x+int(settings.translation[0]),dy=chunk.translation_y+int(settings.translation[1]);
+                float low_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.low[2]-2.5f/112.f):0;
+                float high_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f):0;
                 for(auto const& rect:rectangles)visible=visible || !(chunk.bounds.right+dx<=rect.left ||
-                    chunk.bounds.left+dx>=rect.right || chunk.bounds.bottom+dy<=rect.top || chunk.bounds.top+dy>=rect.bottom);
+                    chunk.bounds.left+dx>=rect.right || chunk.bounds.bottom+dy+high_shift<=rect.top || chunk.bounds.top+dy+low_shift>=rect.bottom);
                 if(visible && layer!=geometry_shadow)receivers.push_back(chunk.world_bounds);
-                bool caster=layer==geometry_land || layer>=geometry_feature;
+                bool caster=layer==geometry_land || (layer>=geometry_feature && layer!=geometry_natural_decal);
                 if(!caster || chunk.animation_texture)continue;
                 for(int wy=dims.wrap_y?-1:0;wy<=(dims.wrap_y?1:0);++wy)
                     for(int wx=dims.wrap_x?-1:0;wx<=(dims.wrap_x?1:0);++wx) {
@@ -3192,12 +3290,18 @@ public:
             std::copy(city_base_views.begin(),city_base_views.end(),alpha.begin()+29);
             auto bind=[&](unsigned layer) {
                 if(layer==geometry_land)return false;
+                if(layer==geometry_natural_terrain || layer==geometry_natural_mountain)return true;
+                if(layer>=geometry_natural_forest0){
+                    auto const&m=natural.materials[natural.bodies[layer-geometry_natural_forest0].material];
+                    ID3D11ShaderResourceView*mask=m.channels[6]==0xffffffffu?nullptr:natural.textures[m.channels[6]];
+                    context->PSSetShaderResources(33,1,&mask);return mask!=nullptr;
+                }
                 auto views=alpha;
                 if(layer==geometry_city)std::copy(city_base_views.begin(),city_base_views.end(),views.begin()+29);
                 if(layer==geometry_wall)views[29]=views[30]=views[31]=views[32]=wall_texture_view;
                 if(layer==geometry_mine)std::copy(mine_base_views.begin(),mine_base_views.end(),views.begin()+21);
                 if(layer==geometry_farm)std::copy(farm_base_views.begin(),farm_base_views.end(),views.begin()+21);
-                if(layer>=geometry_cliff0)views[0]=cliff_views[(layer-geometry_cliff0)*4];
+                if(layer>=geometry_cliff0 && layer<geometry_natural_terrain)views[0]=cliff_views[(layer-geometry_cliff0)*4];
                 context->PSSetShaderResources(0,33,views.data());return true;
             };
             LARGE_INTEGER start={},end={};QueryPerformanceCounter(&start);
@@ -3219,12 +3323,13 @@ public:
         float blend_factor[4] = {0, 0, 0, 0};
         context->OMSetBlendState(blend_state, blend_factor, 0xffffffffu);
         context->RSSetState(rasterizer_state);
-        D3D11_VIEWPORT viewport = {0.0f, 0.0f, static_cast<float>(projection_width), static_cast<float>(projection_height), 0.0f, 1.0f};
+        D3D11_VIEWPORT viewport = {0.0f, 0.0f, static_cast<float>(projection_width*(fidelity_profile?2:1)), static_cast<float>(projection_height*(fidelity_profile?2:1)), 0.0f, 1.0f};
         context->RSSetViewports(1, &viewport);
         // Always retain a complete terrain surface. The output clip is applied
         // only by c3x_renderer_blit when Civ III composites its dirty rectangle.
         D3D11_RECT scissor = {0, 0, projection_width, projection_height};
         context->RSSetScissorRects(1, &scissor);
+        if(environment_profile)reflection.bind(context);
 
         bool has_cached_geometry = false;
         for (std::vector<CachedVertexChunk> const & layer : buffers)
@@ -3299,7 +3404,7 @@ public:
             for (std::size_t index = 0; index < city_base_views.size(); ++index)
                 views[124 + index] = city_base_views[index];
             context->PSSetShaderResources(0, static_cast<UINT>(views.size()), views.data());
-            ID3D11SamplerState * samplers[] = {terrain_sampler, decal_sampler};
+            ID3D11SamplerState * samplers[] = {fidelity_profile?natural_wrap:terrain_sampler, fidelity_profile?natural_clamp:decal_sampler};
             context->PSSetSamplers(0, 2, samplers);
             context->PSSetConstantBuffers(0, 1, &terrain_settings_buffer);
             context->VSSetConstantBuffers(1, 1, &viewport_settings_buffer);
@@ -3312,15 +3417,34 @@ public:
             // Geometry buffers are immutable until an authoritative geometry
             // fingerprint changes. Camera-only translation therefore issues
             // draws without regenerating or re-uploading the world vertices.
-            if (!draw(geometry_underlay) ||
-                !draw(geometry_land) ||
-                !draw(geometry_bed) ||
+            if (!draw(geometry_underlay) || !draw(geometry_land))return false;
+            if(fidelity_profile){
+                context->PSSetShaderResources(17,1,&source_shadow.view);
+                for(unsigned layer=geometry_natural_terrain;layer<geometry_layer_count;layer++){
+                    unsigned provider=layer<=geometry_natural_decal?0:layer==geometry_natural_mountain?1:2;
+                    context->OMSetDepthStencilState(layer==geometry_natural_decal?natural.decal_depth:depth_state,0);
+                    natural.bind(context,provider,provider==2?layer-geometry_natural_forest0:0);
+                    if(!draw(static_cast<GeometryLayer>(layer)))return false;
+                }
+                context->OMSetDepthStencilState(depth_state,0);
+                context->PSSetShaderResources(0,UINT(views.size()),views.data());
+                context->PSSetShaderResources(25,1,&source_shadow.view);
+                context->PSSetConstantBuffers(0,1,&terrain_settings_buffer);
+                context->VSSetShader(vertex_shader,nullptr,0);context->PSSetShader(pixel_shader,nullptr,0);
+            }
+            if(environment_profile && !reflection_pass){
+                ID3D11ShaderResourceView*view=reflection.enabled?reflection.linear.view:nullptr;
+                context->PSSetShaderResources(121,1,&view);
+            }
+            if (!draw(geometry_bed) ||
                 !draw(geometry_water) ||
                 !draw(geometry_river) ||
                 !draw(geometry_shadow) ||
                 !draw(geometry_route)) {
                 return false;
             }
+            if(environment_profile)context->PSSetShaderResources(121,1,views.data()+121);
+            if(fidelity_profile){ID3D11SamplerState*retained[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,retained);}
             if (pickup_profile) {
                 context->PSSetShaderResources(17,1,&source_shadow.view);
                 context->VSSetShader(feature_vertex_shader, nullptr, 0);
@@ -3375,7 +3499,8 @@ public:
             }
         }
 
-        if (linear && finish) linear_output.draw(context, *linear, destination, display_exposure);
+        if(reflection_pass){reflection.resolve(context);return true;}
+        if (linear && finish) linear_output.draw(context, *linear, destination, display_exposure, fidelity_profile?2:1);
         return true;
     }
 
@@ -3697,6 +3822,17 @@ public:
         for (int index = 0; index < c3x_renderer::terrain_type_count; ++index)
             if (terrain_textures[index].configured && !ensure_pack_texture(index))
                 terrain_textures[index].configured = false;
+        if(fidelity_profile && !natural.load(device,fidelity_root,
+            [&](std::string const& relative,std::vector<std::uint8_t>& bytes){
+                char path[4*MAX_PATH];
+                bool ok=pack_path(fidelity_root.c_str(),relative.c_str(),path,std::size(path)) && read_file(path,bytes);
+                if(ok)mix_content_revision(bytes);return ok;
+            },[&](auto const& bytes,auto&view){return ensure_dds_texture(bytes,view,true,true);},environment_profile?"environment_refresh":"source_fidelity")) {
+            trace.write("source-fidelity-failed",natural.failure.c_str(),true);return false;
+        }
+        if(environment_profile && !reflection.ensure(device,fidelity_root)){
+            trace.write("reflection-failed","shader initialization",true);return false;
+        }
         if (!ensure_terrain_textures()) {
             trace.write("native-failure","terrain-textures",true);
             return false;
@@ -3710,6 +3846,7 @@ public:
             auto updated = world_coast.update({frame.world_width_tiles, frame.world_height_tiles,
                 frame.world_wrap_x != 0, frame.world_wrap_y != 0}, frame.world_topology,
                 frame.world_topology_count, frame.world_topology_revision);
+            if(fidelity_profile)natural.update_rivers(world_coast.world(),frame.world_topology_revision);
             QueryPerformanceCounter(&end);
             if (updated.cells_built) {
                 char detail[256];
@@ -3853,11 +3990,13 @@ public:
         std::vector<Vertex> mine_vertices;
         std::vector<Vertex> farm_vertices;
         std::array<std::vector<Vertex>,4> cliff_vertices;
+        std::array<std::vector<Vertex>,25> natural_vertices;
         std::array<std::vector<Vertex> *, geometry_layer_count> tile_layers = {
             &underlay_vertices, &land_vertices, &bed_vertices, &water_vertices,
             &river_vertices, &route_vertices, &shadow_vertices, &feature_vertices,
             &city_vertices, &wall_vertices, &mine_vertices, &farm_vertices,
             &cliff_vertices[0], &cliff_vertices[1], &cliff_vertices[2], &cliff_vertices[3]};
+        for(unsigned i=0;i<25;i++)tile_layers[geometry_natural_terrain+i]=&natural_vertices[i];
         float half_w = static_cast<float>(frame.tile_width) * 0.5f;
         float half_h = static_cast<float>(frame.tile_height) * 0.5f;
         auto ndc_x = [](float x) { return x; };
@@ -3894,6 +4033,8 @@ public:
         frame_settings.water_specular = environment.water_specular;
         frame_settings.emissive_scale = environment.emissive_scale;
         frame_settings.hour = static_cast<float>(frame.hour);
+        reflection.height_pixels=112.f*.82f*float(frame.tile_width)/224.f;
+        reflection.depth_metric=112.f*.0016f*float(frame.target_height);
         ViewportShaderSettings viewport_settings = {};
         viewport_settings.translation[0] =
             static_cast<float>(geometry_translation_x);
@@ -3914,14 +4055,12 @@ public:
                 float world[] = {float(frame.world_width_tiles), float(frame.world_height_tiles),
                     float(frame.world_wrap_x), float(frame.world_wrap_y), float(period)*.5f, 0, 0, 0};
                 context->UpdateSubresource(world_settings_buffer, 0, nullptr, world, 0, 0);
-                float x=environment.sun_direction[0]*environment.sun_intensity+environment.moon_direction[0]*environment.moon_intensity;
-                float y=environment.sun_direction[1]*environment.sun_intensity+environment.moon_direction[1]*environment.moon_intensity;
-                float h=std::hypot(x,y);if(h>1e-6f){x/=h;y/=h;}else{x=-1;y=0;}
-                float n=std::sqrt(1+1.35f*1.35f);
-                shadow_basis={-y,x,0,6, -1.35f*x/n,-1.35f*y/n,1/n,1024, x/n,y/n,1.35f/n,0};
+                shadow_basis=c3x_renderer::fidelity::light_frame(environment);
                 float shadow[20]={};std::copy(shadow_basis.begin(),shadow_basis.end(),shadow);
-                shadow[16]=shadow[17]=1;
+                shadow[16]=fidelity_profile && fidelity_shadow_control?0.f:1.f;shadow[17]=1;
+                if(fidelity_profile){char detail[384];sprintf_s(detail,"authority=r13 adapter=natural-coverage-r3 mountain_mask=1 biome_field=1 coast_coverage=1 coast_height=1 trees=22 recipes=25 weight=180 msaa=4 anisotropy=16 scale=2 mip_bias=-1 scratch_max=3670016 river_pages_max=16 L=%.6f,%.6f,%.6f receive=%.0f",shadow_basis[8],shadow_basis[9],shadow_basis[10],shadow[16]);trace.write("source-fidelity",detail,true);}
                 context->UpdateSubresource(shadow_settings_buffer, 0, nullptr, shadow, 0, 0);
+                if(fidelity_profile)natural.update(context,environment,shadow_basis.data()+8);
                 shadow_tile_width=frame.tile_width;shadow_tile_height=frame.tile_height;
             }
         }
@@ -4496,8 +4635,14 @@ public:
                 }
                 return distance;
             };
+            if(fidelity_profile)for(int r=(tile.tile_x-tile.tile_y)/2-4;r<=(tile.tile_x-tile.tile_y)/2+4;r++)
+                for(int c=(tile.tile_x+tile.tile_y)/2-4;c<=(tile.tile_x+tile.tile_y)/2+4;c++)world_lookup(c,r);
             auto river_distance = [&](c3x_renderer_tile_v1 const & river_tile,
                                       float u, float v) {
+                if(fidelity_profile){
+                    float x=float(river_tile.tile_x+river_tile.tile_y)*.5f+u,y=float(river_tile.tile_x-river_tile.tile_y)*.5f+1-v;
+                    return float(natural.river_sample({x,y}).distance);
+                }
                 float distance = 1000.0f;
                 unsigned mask = river_tile.river_code & 170u;
                 if ((mask & 2u) != 0)
@@ -4515,6 +4660,7 @@ public:
                 return distance;
             };
             auto river_node_distance = [&](float u, float v, unsigned node_kind) {
+                if(fidelity_profile && node_kind!=1){auto sample=natural.river_sample({(tile.tile_x+tile.tile_y)*.5+u,(tile.tile_x-tile.tile_y)*.5+1-v});return float(node_kind==0?sample.source:sample.mouth);}
                 float point_x = static_cast<float>(tile.tile_x) + u - v;
                 float point_y = static_cast<float>(tile.tile_y) + u + v - 1.0f;
                 float distance = 1000.0f;
@@ -4826,6 +4972,8 @@ public:
                 }
             };
             auto pickup_source = [&](int kind, unsigned variant, int channel, float u, float v) {
+                if(fidelity_profile && (kind==5 || kind==6))return 0.f; // replaced exact natural providers
+
                 TerrainTexture const & asset = terrain_textures[kind];
                 if (kind == 6) {
                     auto const & pixels = channel == 0 ? asset.relief_height_variants[variant] : asset.relief_blend_variants[variant];
@@ -5392,13 +5540,13 @@ public:
             // from overwriting an earlier neighbor's continuous shoreline.
             QueryPerformanceCounter(&phase_time);
             append_ground_layer(underlay_vertices, 0.5f, flat_grid);
-            if (ground < 11)
+            if (ground < 11 && (!fidelity_profile || draw_marsh))
                 append_ground_layer(land_vertices, 1.0f, tile_ground_grid);
             if(!pickup_profile) {
                 append_ground_layer(bed_vertices, 4.0f, flat_grid);
                 append_ground_layer(water_vertices, 5.0f, flat_grid);
             }
-            if (river_assets_ready && (tile.river_code & 170u) != 0)
+            if (river_assets_ready && ((tile.river_code & 170u) != 0 || (fidelity_profile && natural.river_affects((tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2))))
                 append_ground_layer(river_vertices, 9.0f,
                                     frame.tile_width >= 96 ? 32 : 16);
             if (!pickup_profile && ground < 11) {
@@ -5461,7 +5609,8 @@ public:
                 }
             }
             if (feature_assets_ready &&
-                (tile.real_terrain_type == 7 || tile.real_terrain_type == 8)) {
+                (tile.real_terrain_type == 7 || tile.real_terrain_type == 8) &&
+                !(fidelity_profile && tile.real_terrain_type == 7)) {
                 char const * group_name = tile.real_terrain_type == 7 ? "forest" : "jungle";
                 c3x_renderer::FeatureGroup const * group =
                     tile.real_terrain_type == 7 ? forest_group :
@@ -5625,6 +5774,27 @@ public:
                         6.28318530718f;
                     float cosine = std::cos(rotation);
                     float sine = std::sin(rotation);
+                    if(fidelity_profile){
+                        river::P query_point{(owner->tile_x+owner->tile_y)*.5+local_u,(owner->tile_x-owner->tile_y)*.5+1-local_v};
+                        bool placed=false;
+                        for(unsigned attempt=0;attempt<4 && !placed;attempt++){
+                            river::P point;double side=((seed&1u)?1.:-1.)*((attempt&1u)?-1.:1.);
+                            double margin=11.+c3x_renderer::stable_random(seed^0x2c07u)*1.5+(attempt/2u)*3.;
+                            if(!natural.river_page(query_point.x,query_point.y).bank_point(query_point,margin,side,point))continue;
+                            int c=int(std::floor(point.x)),r=int(std::floor(point.y));
+                            auto receiving=tile_by_coordinate.find(observed_coordinate_key(c+r,c-r));
+                            if(receiving==tile_by_coordinate.end() || ground_type(*receiving->second)>=11)continue;
+                            float u=std::clamp(float(point.x-c),.00001f,.99999f),v=std::clamp(float(r+1-point.y),.00001f,.99999f);
+                            if(shore_sample_at(float(point.x),float(point.y)).distance<.065)continue;
+                            bool clear=relief_at_world(float(point.x),float(point.y))[0]+2.5f<18;
+                            for(auto const&vertex:asset.vertices){river::P q{point.x+(vertex.position[0]*cosine-vertex.position[1]*sine)*scale,
+                                point.y-(vertex.position[0]*sine+vertex.position[1]*cosine)*scale};
+                                if(natural.river_sample(q).distance<5.5){clear=false;break;}}
+                            if(!clear)continue;
+                            owner=receiving->second;local_u=u;local_v=v;placed=true;
+                        }
+                        if(!placed)continue;
+                    }
                     float owner_world_u =
                         static_cast<float>(owner->tile_x + owner->tile_y) * 0.5f;
                     float owner_world_v =
@@ -5904,6 +6074,7 @@ public:
                     for(auto i:asset.indices)cliff_vertices[instance.asset].push_back(transformed[i]);
                 }
             }
+            #include "source_fidelity/geometry.h"
             QueryPerformanceCounter(&phase_end);cliff_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
             if (cancelled()) return false;
             CachedTileGeometry compiled;
@@ -5937,7 +6108,7 @@ public:
                     }
                     continue;
                 }
-                if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer], prewarming, compiled.byte_count, foreground_pending, layer>=geometry_feature)) {
+                if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer], prewarming, compiled.byte_count, foreground_pending, layer>=geometry_feature && layer<geometry_natural_terrain, layer>=geometry_natural_terrain)) {
                     char detail[256];sprintf_s(detail,"tile=%d,%d layer=%u vertices=%u bytes=%llu cap=%llu built=%u reused=%u prewarming=%u",
                         tile.tile_x,tile.tile_y,unsigned(layer),unsigned(tile_layers[layer]->size()),
                         static_cast<unsigned long long>(tile_geometry_cache_bytes),static_cast<unsigned long long>(tile_geometry_cache_budget),

@@ -1,0 +1,15 @@
+{
+  "workflow": "full",
+  "results": [
+    {
+      "name": "project_state",
+      "status": "pass",
+      "returncode": null
+    },
+    {
+      "name": "portable tests",
+      "status": "fail",
+      "returncode": 1
+    }
+  ]
+}

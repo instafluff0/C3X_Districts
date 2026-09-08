@@ -525,3 +525,19 @@ The extracted bridge and approved injected compilation pass. All catalog,
 loading, pose caching and action/art changes remain under `Renderer/`.
 Audit candidates: no new symbols; other-build equivalents remain unverified.
 `required_user_action: []`. The user-run expanded-roster checkpoint is pending.
+
+### 2026-09-08 source-fidelity r13 natural scene and boundary corrections
+
+Existing symbols: `Map_Renderer_m71_Draw_Tiles`,
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`,
+`Main_Screen_Form_tile_to_screen_coords`, and `OutputDebugStringA` retain their
+existing signatures, addresses and capture/copy responsibilities. The existing
+`Unit_tick_anim`, `Sprite_draw_unit_body_normal` and
+`Sprite_draw_unit_body_reduced` bridge is unchanged. This port only changes the
+DLL's natural providers, source materials, bounded rendering and compositing.
+The mountain footprint caster cutoff, continuous biome weights and coastline
+coverage and dune-to-beach height taper require no new game access or hook. City appearance, mouse input,
+unit behavior and capture remain unchanged. Audit candidates: none required.
+`required_user_action: []`. No injected source, CSV or reference header changes.
+The user-run game checkpoint remains pending; the agent does not run INSTALL.bat
+or launch Civ III.

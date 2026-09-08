@@ -91,6 +91,11 @@ if "%C3X_APPROVED_PAYLOAD%"=="1" (
 
 :approved_terrain_done
 
+if /i "%~2"=="no-stage" (
+  popd
+  exit /b %C3X_BUILD_RESULT%
+)
+
 if /i "%~1"=="candidate-only" (
   popd
   exit /b %C3X_BUILD_RESULT%
