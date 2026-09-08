@@ -1436,21 +1436,21 @@ float4 q6_raw_feature(FeaturePixelInput input)
     else if (input.material_index < 20.5)
         albedo = road_bridge_base_texture_7.Sample(material_sampler, input.uv).rgb;
     else if (input.material_index < 21.5)
-        albedo = resource_base_texture_0.Sample(material_sampler, input.uv).rgb;
+        albedo = resource_base_texture_0.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else if (input.material_index < 22.5)
-        albedo = resource_base_texture_1.Sample(material_sampler, input.uv).rgb;
+        albedo = resource_base_texture_1.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else if (input.material_index < 23.5)
-        albedo = resource_base_texture_2.Sample(material_sampler, input.uv).rgb;
+        albedo = resource_base_texture_2.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else if (input.material_index < 24.5)
-        albedo = resource_base_texture_3.Sample(material_sampler, input.uv).rgb;
+        albedo = resource_base_texture_3.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else if (input.material_index < 25.5)
-        albedo = resource_base_texture_4.Sample(material_sampler, input.uv).rgb;
+        albedo = resource_base_texture_4.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else if (input.material_index < 26.5)
-        albedo = resource_base_texture_5.Sample(material_sampler, input.uv).rgb;
+        albedo = resource_base_texture_5.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else if (input.material_index < 27.5)
-        albedo = resource_base_texture_6.Sample(material_sampler, input.uv).rgb;
+        albedo = resource_base_texture_6.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else if (input.material_index < 28.5)
-        albedo = resource_base_texture_7.Sample(material_sampler, input.uv).rgb;
+        albedo = resource_base_texture_7.SampleBias(material_sampler, input.uv, resource_weight * -0.45).rgb;
     else if (input.material_index < 29.5)
     {
         albedo = city_base_texture_0.Sample(material_sampler, input.uv).rgb;
@@ -1597,7 +1597,13 @@ float4 q6_raw_feature(FeaturePixelInput input)
         // shared environment color while opening lit crowns and deepening the
         // unlit sides of renderer-owned bodies.
         float feature_form = raised_form_response(signed_diffuse);
-        light *= feature_form;
+        // Small resource bodies need more ambient-facing readability than
+        // relief while keeping the shared sun direction and authored normals.
+        // Open the opposing face without flattening lit crowns or lifting the
+        // rest of the scene.
+        float resource_form = lerp(0.70, 1.14,
+            smoothstep(0.08, 0.84, signed_diffuse));
+        light *= lerp(feature_form, resource_form, resource_weight);
     }
     float3 lit_color = albedo * light + emissive *
         saturate(city_weight + mine_weight + raised_infrastructure_weight) *
@@ -1791,6 +1797,15 @@ float4 q6_raw_main(PixelInput input)
         float alpha = frame_cast_shadow_strength() * 0.46;
         clip(alpha - 0.004);
         return float4(0.010, 0.014, 0.019, alpha);
+    }
+    if (input.panel > 0.5 && input.surface_kind > 14.5 && input.surface_kind < 15.5)
+    {
+        // Animated resources project their current posed source triangles.
+        // One restrained sample anchors the body without a generic blob or a
+        // full static-scene rerender on every animation tick.
+        float alpha = frame_cast_shadow_strength() * 0.22;
+        clip(alpha - 0.004);
+        return float4(0.008, 0.011, 0.016, alpha);
     }
     if (input.panel > 0.5 && input.surface_kind > 7.5 && input.surface_kind < 8.5)
         return float4(0.09, 0.13, 0.30, biq_layout > 0.5 ? 0.20 : 0.58);

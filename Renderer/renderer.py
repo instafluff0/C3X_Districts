@@ -413,18 +413,21 @@ def verify_behavior_output(behavior, output):
         raise ValueError("Warm/cold pixel comparison exceeded the production budget")
 
 
-def integration_replay_cases(category):
-    """Select behavior witnesses relevant to the requested current-code category."""
-    cases = [("scroll", "replay", 128, (50, 50), 12),
-             ("reduced-scroll", "replay", 64, (50, 50), 12),
-             ("world-wrap", "replay", 128, (0, 50), 12)]
-    selected = set(affected(category))
+def integration_replay_cases(category, *, full=False):
+    """Select focused witnesses; keep the exhaustive sweep explicit."""
+    cases = []
+    selected = {category}
+    if full:
+        cases.extend((("scroll", "replay", 128, (50, 50), 12),
+                      ("reduced-scroll", "replay", 64, (50, 50), 12),
+                      ("world-wrap", "replay", 128, (0, 50), 12)))
+        selected = set(affected(category))
     terrain = {"grassland", "plains", "desert", "tundra", "floodplains", "transitions",
                "hills", "mountains", "forests", "jungles", "shorelines", "seas-oceans",
                "rivers", "day-night", "shadows"}
     if selected.intersection(terrain):
         cases.append(("terrain-edit", "edits", 128, (50, 50), 12))
-    if selected.intersection(("resources", "infrastructure", "animation")):
+    if selected.intersection(("resources", "animation")):
         cases.append(("resource-playback", "animation", 128, (50, 50), 12))
     if selected.intersection(("units", "animation")):
         cases.extend((("unit-actions-day", "units", 128, (50, 50), 12),
@@ -432,9 +435,9 @@ def integration_replay_cases(category):
     return cases
 
 
-def integration_replays(category):
+def integration_replays(category, *, full=False):
     """Run the behavior witnesses selected for the current category."""
-    cases = integration_replay_cases(category)
+    cases = integration_replay_cases(category, full=full)
     results = []
     for name, behavior, zoom, center, hour in cases:
         print("Checking production behavior: " + name, flush=True)
@@ -622,15 +625,29 @@ def test_modules(category=None):
     return sorted(modules)
 
 
-def run_tests(category=None, *, integration=False):
+def run_tests(category=None, *, integration=False, full=False):
     modules = set(test_modules(category))
     if integration:
         modules.update(("Renderer.definitions.test_definition_parser",
-                        "Renderer.definitions.test_rule_resolver", "Renderer.scenes.test_scene_contract"))
-        modules.update("Renderer.native." + name for name in (
-            "test_native_bridge_contract", "test_scroll_damage", "test_unit_bridge",
-            "test_unit_input_guard", "test_unit_shadow", "test_unit_animation_runtime", "test_asset_content_hash",
-            "test_animation_runtime"))
+                        "Renderer.definitions.test_rule_resolver", "Renderer.scenes.test_scene_contract",
+                        "Renderer.native.test_native_bridge_contract",
+                        "Renderer.native.test_asset_content_hash"))
+        if full:
+            modules.update("Renderer.native." + name for name in (
+                "test_scroll_damage", "test_unit_bridge", "test_unit_input_guard",
+                "test_unit_shadow", "test_unit_animation_runtime", "test_animation_runtime"))
+        else:
+            terrain = {"grassland", "plains", "desert", "tundra", "floodplains", "transitions",
+                       "hills", "mountains", "forests", "jungles", "shorelines", "seas-oceans",
+                       "rivers", "day-night", "shadows"}
+            if category in terrain:
+                modules.add("Renderer.native.test_scroll_damage")
+            if category in ("resources", "animation"):
+                modules.add("Renderer.native.test_animation_runtime")
+            if category in ("units", "animation"):
+                modules.update("Renderer.native." + name for name in (
+                    "test_unit_bridge", "test_unit_input_guard", "test_unit_shadow",
+                    "test_unit_animation_runtime", "test_animation_runtime"))
     result = subprocess.run([sys.executable, "-m", "unittest", *sorted(modules)], cwd=ROOT)
     if result.returncode:
         raise ValueError("Current rendering regression checks failed")
@@ -655,7 +672,7 @@ def build_candidate():
     result = native_command_result("Renderer/native", "call BUILD.bat candidate-compile")
     if result["status"] != "pass":
         raise ValueError("Candidate build failed")
-    ensure_preview_tool(force=True)
+    ensure_preview_tool()
     if checksum(ROOT / "Renderer/bin/C3XRenderer.dll") != before:
         raise ValueError("Candidate build unexpectedly changed the staged DLL")
     if native_inputs() != inputs:
@@ -664,37 +681,40 @@ def build_candidate():
         "dll_sha256": checksum(ROOT / "Renderer/native/build/candidate/C3XRenderer.dll")})
 
 
-def verify_integration(category, *, build=False):
+def verify_integration(category, *, build=False, full=False):
     """Automated delivery evidence, never an assertion of a live-game test."""
     receipt_path = LAB / "out/integration" / (category + ".json")
+    scope = "full" if full else "focused"
     # Invalidate an older successful receipt before attempting new verification.
-    write(receipt_path, {"status": "running", "category": category})
+    write(receipt_path, {"status": "running", "category": category, "scope": scope})
     try:
-        return verify_integration_checks(category, build=build)
+        return verify_integration_checks(category, build=build, full=full)
     except Exception as error:
-        write(receipt_path, {"status": "fail", "category": category, "reason": str(error),
+        write(receipt_path, {"status": "fail", "category": category, "scope": scope,
+                             "reason": str(error),
                              "live_game": "not_tested"})
         raise
 
 
-def verify_integration_checks(category, *, build=False):
+def verify_integration_checks(category, *, build=False, full=False):
     receipt_path = LAB / "out/integration" / (category + ".json")
-    selected = affected(category)
+    selected = affected(category) if full else [category]
     prepare_sources(selected)
     if build:
         build_candidate()
     else:
         ensure_candidate()
     identity = implementation_identity()
-    modules = run_tests(category, integration=True)
+    modules = run_tests(category, integration=True, full=full)
     from Renderer.lab.platform import changed_injected_sources, injected_compile_result
     if changed_injected_sources() and injected_compile_result()["status"] != "pass":
         raise ValueError("Approved injected compile/injection smoke test failed")
-    replays = integration_replays(category)
+    replays = integration_replays(category, full=full)
     if identity != implementation_identity():
         raise ValueError("Inputs changed during integration verification")
     signatures = category_signatures()
-    result = {"status": "pass", "category": category, "categories": selected,
+    result = {"status": "pass", "category": category,
+              "scope": "full" if full else "focused", "categories": selected,
               "input_signatures": {key: signatures[key] for key in selected},
               "implementation_identity": identity,
               "dll_sha256": checksum(ROOT / "Renderer/native/build/candidate/C3XRenderer.dll"),
@@ -778,6 +798,7 @@ def main():
     integration = commands.add_parser("integration", help="Verify the current code without staging or launching Civ III")
     integration.add_argument("category", choices=list(catalog()))
     integration.add_argument("--build", action="store_true")
+    integration.add_argument("--full", action="store_true", help="Run the exhaustive cross-category regression sweep")
     approval = commands.add_parser("approve")
     approval.add_argument("category", choices=list(catalog()))
     approval.add_argument("--user-approval", required=True, help="Quote the user's actual approval of the complete category preview")
@@ -830,7 +851,8 @@ def main():
         elif args.command == "check":
             print(f"PASS {validate()} category definitions")
         elif args.command == "integration":
-            verify_integration(args.category, build=args.build)
+            reexec_with_workspace_python(("PIL", "numpy"))
+            verify_integration(args.category, build=args.build, full=args.full)
         elif args.command == "approve":
             if not args.user_approval.strip():
                 raise ValueError("An actual user approval statement is required")

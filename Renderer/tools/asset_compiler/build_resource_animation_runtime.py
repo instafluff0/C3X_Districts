@@ -227,9 +227,11 @@ def build(animated: Path, landmarks: Path, output: Path, *, consumed=None) -> di
             asset_id, old_scale, instances = static_selections[name]
             old = read(pack_path(landmarks, original["assets"][asset_id]["mesh"]))
             old_height = max(v["position"][2] for v in old["vertices"])-min(v["position"][2] for v in old["vertices"])
-            scale = old_scale*.78*old_height/span[2]
+            # Match the restrained gameplay footprint used by static resource
+            # bodies while preserving uniform XYZ scale and source proportions.
+            scale = old_scale*.72*old_height/span[2]
         else:
-            scale = min(.65/max(span[0],span[1]), .65/span[2])
+            scale = min(.65/max(span[0],span[1]), .65/span[2])*(.72/.78)
         if name == "fish":
             offset = [0, 0, .060]  # Preserve the approved school surface offset.
         bindings[name] = {"mesh": part["mesh"], "texture": part["texture"],

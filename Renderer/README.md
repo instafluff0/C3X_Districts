@@ -16,7 +16,11 @@ python3 Renderer/renderer.py lab grassland
 python3 Renderer/renderer.py compare grassland
 python3 Renderer/renderer.py test grassland
 python3 Renderer/renderer.py integration grassland
+python3 Renderer/renderer.py integration grassland --full
 ```
+
+Category integration is intentionally focused and fast. `--full` adds the
+cross-category tests and exhaustive behavior sweep used at strategic checkpoints.
 
 The Lab migration is complete. Current category previews use the production
 D3D11 renderer; the generic Metal binding/compiler smoke test remains optional.

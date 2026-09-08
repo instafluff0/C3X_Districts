@@ -174,6 +174,7 @@ class ApprovalTests(unittest.TestCase):
              patch("Renderer.lab.platform.changed_injected_sources", return_value=False):
             result = renderer.verify_integration_checks("grassland")
         self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["scope"], "focused")
         self.assertEqual(result["categories"], ["grassland"])
         self.assertEqual(result["input_signatures"], {"grassland": "current"})
         self.assertNotIn("comparisons", result)
@@ -185,6 +186,23 @@ class ApprovalTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "regression"):
                 renderer.verify_integration("grassland")
         self.assertEqual(renderer.read(self.lab / "out/integration/grassland.json")["status"], "fail")
+
+    def test_focused_resource_tests_exclude_unit_proofs(self):
+        with patch.object(renderer, "test_modules", return_value=[]), \
+             patch.object(renderer.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            modules = renderer.run_tests("resources", integration=True)
+        self.assertIn("Renderer.native.test_animation_runtime", modules)
+        self.assertNotIn("Renderer.native.test_unit_animation_runtime", modules)
+        self.assertNotIn("Renderer.native.test_unit_bridge", modules)
+
+    def test_full_resource_tests_preserve_unit_proofs(self):
+        with patch.object(renderer, "test_modules", return_value=[]), \
+             patch.object(renderer.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            modules = renderer.run_tests("resources", integration=True, full=True)
+        self.assertIn("Renderer.native.test_unit_animation_runtime", modules)
+        self.assertIn("Renderer.native.test_unit_bridge", modules)
 
 
 class FixtureTests(unittest.TestCase):
@@ -239,29 +257,33 @@ class BehaviorWitnessTests(unittest.TestCase):
              patch.object(renderer, "native_render", side_effect=[ValueError("failed"), {}, {}, {}, {}, {}]) as render, \
              patch("builtins.print"):
             with self.assertRaisesRegex(ValueError, "scroll"):
-                renderer.integration_replays("animation")
+                renderer.integration_replays("animation", full=True)
             self.assertEqual(render.call_count, 6)
             results = renderer.read(Path(directory) / "out/integration/replays/results.json")
             self.assertEqual([r["status"] for r in results], ["fail"] + ["pass"] * 5)
 
-    def test_replay_selection_keeps_unrelated_known_failures_out_of_resource_checks(self):
+    def test_focused_resource_check_runs_only_its_playback_witness(self):
         with patch.object(renderer, "affected", return_value=["animation", "resources"]):
             names = [case[0] for case in renderer.integration_replay_cases("resources")]
-        self.assertEqual(names, ["scroll", "reduced-scroll", "world-wrap", "resource-playback",
-                                 "unit-actions-day", "unit-actions-night"])
+        self.assertEqual(names, ["resource-playback"])
         with patch.object(renderer, "affected", return_value=["grassland"]):
             self.assertIn("terrain-edit", [case[0] for case in renderer.integration_replay_cases("grassland")])
 
-    def test_integration_skips_unrelated_object_witnesses(self):
+    def test_full_resource_check_preserves_the_exhaustive_sweep(self):
+        with patch.object(renderer, "affected", return_value=["animation", "resources"]):
+            names = [case[0] for case in renderer.integration_replay_cases("resources", full=True)]
+        self.assertEqual(names, ["scroll", "reduced-scroll", "world-wrap", "resource-playback",
+                                 "unit-actions-day", "unit-actions-night"])
+
+    def test_focused_terrain_integration_skips_generic_scroll_sweep(self):
         with tempfile.TemporaryDirectory() as directory, \
              patch.object(renderer, "LAB", Path(directory)), \
              patch.object(renderer, "affected", return_value=["grassland"]), \
              patch.object(renderer, "native_render", return_value={}) as render, \
              patch("builtins.print"):
             results = renderer.integration_replays("grassland")
-        self.assertEqual([result["name"] for result in results],
-                         ["scroll", "reduced-scroll", "world-wrap", "terrain-edit"])
-        self.assertEqual(render.call_count, 4)
+        self.assertEqual([result["name"] for result in results], ["terrain-edit"])
+        self.assertEqual(render.call_count, 1)
 
     def test_replay_requires_all_jumps_and_original_pixel_budget(self):
         prefix = "PICKUP selection p95_ms=0\n" + "PICKUP jump=0,0\n" * 5

@@ -187,7 +187,8 @@ struct ResourceBackdrop {
 };
 struct ResourceBuffer {
     ID3D11Buffer * vertices = nullptr;
-    unsigned capacity = 0;
+    ID3D11Buffer * shadow_vertices = nullptr;
+    unsigned capacity = 0, shadow_capacity = 0;
 };
 
 enum GeometryLayer : std::size_t {
@@ -590,7 +591,10 @@ public:
     }
     void reset_resource_buffers() {
         clear_resource_backdrops();
-        for (auto & buffer : resource_buffers) release(buffer.vertices);
+        for (auto & buffer : resource_buffers) {
+            release(buffer.vertices);
+            release(buffer.shadow_vertices);
+        }
         resource_buffers.clear(); resource_pixels.clear();
         resource_pixel_signature = 0; resource_pixel_clock = -1; visible_resource_animations = 0;
         for (auto & animation : resource_animations) {
@@ -2694,8 +2698,10 @@ public:
         std::vector<unsigned char> dirty_blocks(std::size_t((width+127)/128)*((height+127)/128),0);
         std::vector<c3x_renderer::FeatureSourceVertex> posed;
         std::vector<std::array<float,12>> vertices;
+        std::vector<Vertex> shadow_vertices;
         std::size_t uploaded=0,pool_bytes=0;
-        for (auto const & pool:resource_buffers) pool_bytes+=pool.capacity;
+        for (auto const & pool:resource_buffers)
+            pool_bytes+=pool.capacity+pool.shadow_capacity;
         float half_w=frame.tile_width*.5f,half_h=frame.tile_height*.5f;
         float projection=frame.tile_width/224.f,relief=projection*.82f;
         int dx=int(geometry_viewport_settings.translation[0]),dy=int(geometry_viewport_settings.translation[1]);
@@ -2709,10 +2715,12 @@ public:
                 trace.write("animation-pose-failed",animation.name.c_str(),true);return false;
             }
             vertices.resize(posed.size());
+            shadow_vertices.resize(posed.size());
             float cosine=std::cos(animation.yaw),sine=std::sin(animation.yaw);
             float center_x=anchor.anchor_x+half_w+(anchor.u-anchor.v)*half_w;
             float center_y=anchor.anchor_y+(anchor.u+anchor.v)*half_h-anchor.ground*relief;
             CachedVertexChunk chunk; chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
+            CachedVertexChunk shadow_chunk; shadow_chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
             for (unsigned axis=0;axis<3;++axis){chunk.world_bounds.low[axis]=1e9f;chunk.world_bounds.high[axis]=-1e9f;}
             for (std::size_t i=0;i<posed.size();++i) {
                 auto const & source=posed[i];
@@ -2735,7 +2743,36 @@ public:
                 chunk.bounds.bottom=std::max(chunk.bounds.bottom,LONG(std::ceil(sy))+2);
                 for (unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=std::min(chunk.world_bounds.low[a],v[9+a]);
                     chunk.world_bounds.high[a]=std::max(chunk.world_bounds.high[a],v[9+a]);}
+
+                // Animated resource bodies are composed over a cached static
+                // scene, so entering them into the immutable world-shadow
+                // atlas would force a complete terrain redraw at 15 fps.
+                // Project the actual posed source triangles onto the local
+                // ground instead. This preserves silhouette and the shared
+                // frame-light basis while keeping redraws bounded.
+                float height_world=feature_height/112.f;
+                float shadow_u=std::abs(shadow_basis[10])>.0001f
+                    ? -shadow_basis[8]/shadow_basis[10]*height_world : 0.f;
+                float shadow_v=std::abs(shadow_basis[10])>.0001f
+                    ? -shadow_basis[9]/shadow_basis[10]*height_world : 0.f;
+                float shadow_x=center_x+(lx-ly)*half_w+(shadow_u+shadow_v)*half_w;
+                float shadow_y=center_y+(lx+ly)*half_h+(shadow_u-shadow_v)*half_h;
+                Vertex projected={};
+                projected.x=shadow_x;projected.y=shadow_y;
+                projected.z=shadow_y+anchor.ground*relief*1.75f;
+                projected.u=source.uv[0];projected.v=source.uv[1];projected.panel=1.f;
+                projected.normal_z=1.f;projected.shadow_visibility=1.f;
+                projected.ambient_visibility=1.f;projected.surface_kind=15.f;
+                shadow_vertices[i]=projected;
+                shadow_chunk.bounds.left=std::min(shadow_chunk.bounds.left,LONG(std::floor(shadow_x))-2);
+                shadow_chunk.bounds.top=std::min(shadow_chunk.bounds.top,LONG(std::floor(shadow_y))-2);
+                shadow_chunk.bounds.right=std::max(shadow_chunk.bounds.right,LONG(std::ceil(shadow_x))+2);
+                shadow_chunk.bounds.bottom=std::max(shadow_chunk.bounds.bottom,LONG(std::ceil(shadow_y))+2);
             }
+            chunk.bounds.left=std::min(chunk.bounds.left,shadow_chunk.bounds.left);
+            chunk.bounds.top=std::min(chunk.bounds.top,shadow_chunk.bounds.top);
+            chunk.bounds.right=std::max(chunk.bounds.right,shadow_chunk.bounds.right);
+            chunk.bounds.bottom=std::max(chunk.bounds.bottom,shadow_chunk.bounds.bottom);
             D3D11_RECT visible={std::max<LONG>(0,chunk.bounds.left+dx),std::max<LONG>(0,chunk.bounds.top+dy),
                 std::min<LONG>(width,chunk.bounds.right+dx),std::min<LONG>(height,chunk.bounds.bottom+dy)};
             if (visible.left>=visible.right || visible.top>=visible.bottom) continue;
@@ -2758,6 +2795,20 @@ public:
             D3D11_MAPPED_SUBRESOURCE mapped={};
             if (FAILED(context->Map(pool.vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped))) return false;
             std::memcpy(mapped.pData,vertices.data(),bytes);context->Unmap(pool.vertices,0);uploaded+=bytes;
+            unsigned shadow_bytes=unsigned(shadow_vertices.size()*sizeof(shadow_vertices[0]));
+            if (shadow_bytes>pool.shadow_capacity) {
+                if (pool_bytes-pool.shadow_capacity+shadow_bytes>32u*1024u*1024u) {
+                    trace.write("animation-budget-failed","vertex buffer pool cap=33554432",true);return false;
+                }
+                pool_bytes-=pool.shadow_capacity;release(pool.shadow_vertices);pool.shadow_capacity=0;
+                D3D11_BUFFER_DESC desc={};desc.ByteWidth=shadow_bytes;desc.Usage=D3D11_USAGE_DYNAMIC;
+                desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;desc.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;
+                if(FAILED(device->CreateBuffer(&desc,nullptr,&pool.shadow_vertices)))return false;
+                pool.shadow_capacity=shadow_bytes;pool_bytes+=shadow_bytes;
+            }
+            if(FAILED(context->Map(pool.shadow_vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
+            std::memcpy(mapped.pData,shadow_vertices.data(),shadow_bytes);
+            context->Unmap(pool.shadow_vertices,0);uploaded+=shadow_bytes;
             if (!animation.indices) {
                 D3D11_BUFFER_DESC desc={};desc.ByteWidth=unsigned(animation.mesh.indices.size()*sizeof(unsigned));
                 desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_INDEX_BUFFER;
@@ -2767,6 +2818,9 @@ public:
             chunk.buffer=pool.vertices;chunk.indices=animation.indices;
             chunk.vertex_stride=48;chunk.index_count=unsigned(animation.mesh.indices.size());
             chunk.animation_texture=animation.view;
+            shadow_chunk.buffer=pool.shadow_vertices;shadow_chunk.indices=animation.indices;
+            shadow_chunk.vertex_stride=sizeof(Vertex);shadow_chunk.index_count=chunk.index_count;
+            buffers[geometry_shadow].push_back(shadow_chunk);
             buffers[geometry_feature].push_back(chunk);++visible_resource_animations;
         }
         if (!visible_resource_animations) {resource_pixel_signature=0;return true;}
@@ -5923,7 +5977,7 @@ public:
                         float variation =
                             (c3x_renderer::stable_random(tile.variant_seed * 59u + body * 71u + 13u) *
                              2.0f - 1.0f) * placement.scale_variation;
-                        float scale = placement.scale * (1.0f + variation) * 0.78f;
+                        float scale = placement.scale * (1.0f + variation) * 0.72f;
                         float rotation = c3x_renderer::stable_random(
                             tile.variant_seed * 83u + body * 97u + 29u) * 6.28318530718f;
                         bool fish = std::strcmp(group_name, "fish") == 0;

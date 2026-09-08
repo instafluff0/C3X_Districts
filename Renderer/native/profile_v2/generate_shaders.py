@@ -32,6 +32,47 @@ def generate(source_root=None, output_root=None, output_name='integrated_v2.hlsl
             # The captured source OWNER supplies activity on neighboring land.
             text = text.replace('? input.active_effect : q4_volcano_active(input,fixture_active)',
                                 '? input.relief_material.w : q4_volcano_active(input,fixture_active)')
+            # Resource bodies retain their full source texture and mip chain.
+            # Apply a restrained gameplay-scale detail bias only to true
+            # resource materials; shared mine/city slot reuse remains neutral.
+            for slot in range(8):
+                old = (f'albedo = resource_base_texture_{slot}.Sample('
+                       'material_sampler, input.uv).rgb;')
+                new = (f'albedo = resource_base_texture_{slot}.SampleBias('
+                       'material_sampler, input.uv, resource_weight * -0.45).rgb;')
+                assert text.count(old) == 1
+                text = text.replace(old, new)
+            old = '''        float feature_form = raised_form_response(signed_diffuse);
+        light *= feature_form;'''
+            assert text.count(old) == 1
+            text = text.replace(old, '''        float feature_form = raised_form_response(signed_diffuse);
+        // Small resource bodies need more ambient-facing readability than
+        // relief while keeping the shared sun direction and authored normals.
+        // Open the opposing face without flattening lit crowns or lifting the
+        // rest of the scene.
+        float resource_form = lerp(0.70, 1.14,
+            smoothstep(0.08, 0.84, signed_diffuse));
+        light *= lerp(feature_form, resource_form, resource_weight);''')
+            marker = '''    if (input.panel > 0.5 && input.surface_kind > 13.5 && input.surface_kind < 14.5)
+    {'''
+            assert text.count(marker) == 1
+            start = text.index(marker)
+            brace = text.index('{', start)
+            finish = brace + 1
+            depth = 1
+            while depth:
+                depth += (text[finish] == '{') - (text[finish] == '}')
+                finish += 1
+            text = text[:finish] + '''
+    if (input.panel > 0.5 && input.surface_kind > 14.5 && input.surface_kind < 15.5)
+    {
+        // Animated resources project their current posed source triangles.
+        // One restrained sample anchors the body without a generic blob or a
+        // full static-scene rerender on every animation tick.
+        float alpha = frame_cast_shadow_strength() * 0.22;
+        clip(alpha - 0.004);
+        return float4(0.008, 0.011, 0.016, alpha);
+    }''' + text[finish:]
         if source.name == 'frame_shadow_v1.hlsl':
             text = text.replace('register(b1)', 'register(b2)')
             begin = text.index('float q6_world_visibility(')
