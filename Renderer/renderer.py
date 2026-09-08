@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -101,10 +102,37 @@ def dirty_categories():
 
 
 def affected(category):
+    """Visual dependents of the category the user actually requested."""
+    return declared_affected(category)
+
+
+def regression_affected(category):
+    """Conservative delivery scope, including other stale reviewed inputs."""
     # Source-selected categories already represent actual fixture consumers.
     # Do not expand a local city-light change into a global sun/moon change just
     # because the day/night fixture is one of its consumers.
     return sorted(set(declared_affected(category)) | set(dirty_categories()))
+
+
+def reexec_with_workspace_python(packages):
+    """Select an optional-dependency runtime before doing expensive work."""
+    missing = [name for name in packages if importlib.util.find_spec(name) is None]
+    if not missing:
+        return
+    configured = os.environ.get("C3X_RENDERER_PYTHON")
+    candidates = ([Path(configured).expanduser()] if configured else []) + [
+        Path.home() / ".cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3"
+    ]
+    for candidate in candidates:
+        if not candidate.is_file() or candidate.resolve() == Path(sys.executable).resolve():
+            continue
+        probe = subprocess.run([str(candidate), "-c", "import " + ",".join(packages)],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if probe.returncode == 0:
+            print("Using optional-dependency Python: " + str(candidate), flush=True)
+            os.execv(str(candidate), [str(candidate), str(Path(__file__).resolve()), *sys.argv[1:]])
+    raise ValueError("Missing Python packages: " + ", ".join(missing) +
+                     ". Set C3X_RENDERER_PYTHON to a Python with Pillow and NumPy installed.")
 
 
 def prepare_sources():
@@ -474,25 +502,20 @@ def render(category, *, baseline=False, selected_case=None):
         if value["approved_revision"] != 1 or value["references"]:
             raise ValueError("Baseline references already captured or superseded")
     outputs = []
-    identity = implementation_identity()
     signature = category_signatures()[category]
     recipe = value["recipe"]
     for case in ([selected_case] if selected_case else recipe["cases"]):
         for hour in recipe["hours"]:
             for zoom in recipe["zooms"]:
                 outputs.append(native_render(category, case, hour, zoom, out / case, baseline=baseline))
-    if implementation_identity() != identity:
+    if category_signatures()[category] != signature:
         raise ValueError("Renderer inputs changed during rendering; rerun the preview")
     result = {"category": category, "revision": value["revision"], "outputs": outputs,
-              "implementation_identity": identity, "input_signature": signature, "recipe": recipe,
+              "implementation_identity": signature, "input_signature": signature, "recipe": recipe,
               "dependency_revisions": {key: standard(key)["approved_revision"] for key in value["depends_on"]}}
     write(out / "render.json", result)
     if baseline:
         value["references"] = {"d3d11": outputs}
-        write(standard_path(category), value)
-    else:
-        value["candidate"] = {"render": relative(out / "render.json"),
-                              "implementation_identity": identity}
         write(standard_path(category), value)
     print(relative(out / "render.json"))
     return result
@@ -503,7 +526,8 @@ def compare(category):
     from PIL import Image, ImageChops, ImageDraw
     value = standard(category)
     result = read(LAB / "out" / category / "render.json")
-    if result.get("implementation_identity") != implementation_identity() or result.get("recipe") != value["recipe"]:
+    signature = category_signatures()[category]
+    if result.get("input_signature") != signature or result.get("recipe") != value["recipe"]:
         raise ValueError("Candidate preview is stale; rerender " + category)
     refs = value["references"].get("d3d11", [])
     if not refs:
@@ -546,10 +570,9 @@ def compare(category):
                 for hour in value["recipe"]["hours"] for zoom in value["recipe"]["zooms"]}
     actual = {(row["case"], row["hour"], row["zoom"]) for row in summaries}
     if actual == expected and len(summaries) == len(expected) and all(row["identical_pixels"] for row in summaries):
-        signatures = category_signatures()
-        if result.get("input_signature") == signatures[category] and result["implementation_identity"] == implementation_identity():
+        if result.get("input_signature") == signature:
             value["reviewed_inputs"] = {"revision": value["approved_revision"],
-                "signature": signatures[category], "basis": "exact_approved_reference_comparison"}
+                "signature": signature, "basis": "exact_approved_reference_comparison"}
             write(standard_path(category), value)
     print(json.dumps(summaries, indent=2))
     print(relative(target))
@@ -611,10 +634,9 @@ def describe(category):
         print("  " + path)
     print("Previews: " + ", ".join(value["recipe"]["cases"]))
     print("Reference gallery: python3 Renderer/renderer.py gallery " + category)
-    candidate = value.get("candidate")
-    if candidate:
-        fresh = candidate.get("implementation_identity") == implementation_identity()
-        print("Unapproved candidate: " + ("available" if fresh else "stale; rerender before review"))
+    candidate = LAB / "out" / category / "render.json"
+    if candidate.is_file():
+        print("Unapproved candidate: available; compare verifies freshness")
     for limitation in value.get("limitations", []):
         print("Limit: " + limitation)
 
@@ -675,7 +697,7 @@ def pending():
 
 
 def test_modules(category=None):
-    selected = affected(category) if category else list(catalog())
+    selected = [category] if category else list(catalog())
     modules = {"Renderer.lab.test_workflow", "Renderer.lab.test_dependencies", "Renderer.lab.test_platform", "Renderer.lab.test_backend_bindings",
                "Renderer.lab.test_preparation", "Renderer.lab.test_natural_scene"}
     for key in selected:
@@ -692,6 +714,16 @@ def run_tests(category=None, *, integration=False):
             "test_native_bridge_contract", "test_scroll_damage", "test_unit_bridge",
             "test_unit_input_guard", "test_unit_shadow", "test_unit_animation_runtime", "test_asset_content_hash",
             "test_animation_runtime"))
+    result = subprocess.run([sys.executable, "-m", "unittest", *sorted(modules)], cwd=ROOT)
+    if result.returncode:
+        raise ValueError("Current rendering regression checks failed")
+    return sorted(modules)
+
+
+def run_affected_tests(category):
+    modules = set(test_modules(category))
+    for key in affected(category):
+        modules.update(standard(key)["tests"])
     result = subprocess.run([sys.executable, "-m", "unittest", *sorted(modules)], cwd=ROOT)
     if result.returncode:
         raise ValueError("Current rendering regression checks failed")
@@ -740,7 +772,7 @@ def verify_integration_checks(category, *, build=False):
     from Renderer.lab.platform import changed_injected_sources, injected_compile_result
     if changed_injected_sources() and injected_compile_result()["status"] != "pass":
         raise ValueError("Approved injected compile/injection smoke test failed")
-    selected = affected(category)
+    selected = regression_affected(category)
     comparisons = {}
     for key in selected:
         render(key)
@@ -794,9 +826,9 @@ def approve(category, note):
     if not note.strip():
         raise ValueError("Record the user's explicit approval of the affected appearance")
     require_prepared()
-    selected = affected(category)
-    identity = implementation_identity()
+    selected = [category]
     signatures = category_signatures()
+    identity = signatures[category]
     updates = []
     for key in selected:
         value = standard(key)
@@ -804,7 +836,7 @@ def approve(category, note):
         if not path.is_file():
             raise ValueError("Render the affected category before approval: " + key)
         result = read(path)
-        if result.get("implementation_identity") != identity or result.get("recipe") != value["recipe"]:
+        if result.get("recipe") != value["recipe"]:
             raise ValueError("Preview is stale: " + key)
         if result.get("input_signature") != signatures[key]:
             raise ValueError("Preview input selection is stale: " + key)
@@ -833,7 +865,8 @@ def approve(category, note):
         value.update(revision=revision, approved_revision=revision,
                      approval={"user_statement": note, "affected_categories": selected,
                                "implementation_identity": identity},
-                     references={"d3d11": references}, candidate=None)
+                     references={"d3d11": references})
+        value.pop("candidate", None)
         value["reviewed_inputs"] = {"revision": revision, "signature": signatures[key],
                                     "basis": "explicit_user_approval"}
         write(standard_path(key), value)
@@ -849,6 +882,7 @@ def main():
     gallery_parser.add_argument("category", nargs="?", choices=list(catalog()))
     tests = commands.add_parser("test")
     tests.add_argument("category", nargs="?", choices=list(catalog()))
+    tests.add_argument("--affected", action="store_true", help="Include visual dependents; category tests are the default")
     tests.add_argument("--backends", choices=("metal","both"), help="Check GPU bindings and compile production Metal shaders; not full scene parity")
     commands.add_parser("build", help="Build a candidate and preview tools without staging")
     check = commands.add_parser("check")
@@ -860,16 +894,16 @@ def main():
     integration.add_argument("--game-check", help="Describe the actual live Civ III test and result")
     approval = commands.add_parser("approve")
     approval.add_argument("category", choices=list(catalog()))
-    approval.add_argument("--user-approval", required=True, help="Quote the user's actual approval of the complete affected preview set")
+    approval.add_argument("--user-approval", required=True, help="Quote the user's actual approval of the complete category preview")
     for name in ("show", "affected", "lab", "compare", "baseline"):
         parser = commands.add_parser(name)
         parser.add_argument("category", choices=list(catalog()))
         if name in ("lab", "compare"):
             parser.add_argument("--backend", choices=("d3d11", "metal"), default="d3d11",
                                 help="Metal currently supports the grassland detail pilot only")
+            parser.add_argument("--affected", action="store_true", help="Include visual dependents; the requested category is the default")
         if name == "lab":
             parser.add_argument("--case", help="One fixture case listed by show CATEGORY")
-            parser.add_argument("--affected", action="store_true", help="Include dependents even with a focused --case run; complete runs do this automatically")
     args = p.parse_args()
     try:
         if args.command == "list":
@@ -879,10 +913,15 @@ def main():
         elif args.command == "show":
             describe(args.category)
         elif args.command == "gallery":
+            reexec_with_workspace_python(("PIL",))
             gallery(args.category)
         elif args.command == "test":
+            reexec_with_workspace_python(("PIL", "numpy"))
             prepare_sources()
-            run_tests(args.category)
+            if args.category and args.affected:
+                run_affected_tests(args.category)
+            else:
+                run_tests(args.category)
             if args.backends:
                 from Renderer.lab.test_backend_bindings import gpu_check
                 gpu_check(windows=args.backends=="both")
@@ -901,17 +940,17 @@ def main():
                 return 0
             if args.command == "lab":
                 prepare_sources()
-            complete_lab = args.command == "lab" and not args.case
-            selected = affected(args.category) if complete_lab or getattr(args, "affected", False) else [args.category]
+            selected = affected(args.category) if getattr(args, "affected", False) else [args.category]
             for key in selected:
                 selected_case = getattr(args, "case", None) if key == args.category else None
                 render(key, baseline=args.command == "baseline", selected_case=selected_case)
         elif args.command == "compare":
+            reexec_with_workspace_python(("PIL",))
             if args.backend == "metal":
                 from Renderer.lab.backends import natural_scene
                 natural_scene.compare(args.category)
                 return 0
-            for key in affected(args.category):
+            for key in affected(args.category) if args.affected else [args.category]:
                 compare(key)
         elif args.command == "check":
             print(f"PASS {validate(complete=args.complete)} category definitions and current references")

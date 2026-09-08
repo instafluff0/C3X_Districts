@@ -49,18 +49,22 @@ cleanup retired milestone dispatch/status machinery and about 1.1 GiB of caches.
 The old deployment and integration narrative has been replaced by the current
 integration contract; historical source findings still need consolidation.
 
-A deeper asset audit found seven *consumed* city DDS paths still embedded in
-pack metadata under the legacy tree. Nine referenced DDS inputs (including two
+A deeper asset audit found seven *consumed* city DDS paths embedded in pack
+metadata under the legacy tree. Nine referenced DDS inputs (including two
 currently unused channels) were copied byte-for-byte into
 `packs/CityFidelitySources/current/textures`; the curated palace-material
 mapping received only mechanical path replacements. The common preparation
-command is rebuilding the city pack. Before proceeding, verify that its binary
-diff consists solely of length-prefixed texture-path replacements and that every
-DDS byte matches. The one-time verifier is
-`/private/tmp/c3x_relocate_city_textures.py verify`; its temporary pre-migration
-binary is outside the repository. Do not delete old textures until this passes
-and the refreshed city input receipt has no legacy paths. Remove the temporary
-verifier and backup after verification is recorded.
+receipt now has no legacy read paths. The one-time verifier passed: all 11
+embedded path records changed mechanically and every copied DDS byte matches.
+Its temporary verifier and pre-migration binary are outside the repository and
+may be removed after this recorded result.
+
+The remaining ignored `terrain_lab/v2` working-tree copy is the byte-identical
+source of the staged legacy deletion. `tools/delete_retired_renderer_files.sh`
+audits every candidate against commit `daf8b808` before deletion. Its default
+dry run found 8,968 JSON files, 133 Python files and two third-party license
+Markdown files (327.25 MiB logical); no locally modified candidate was found.
+The optional full-tree mode applies the same byte check to every historical blob.
 
 ## Current verification
 
@@ -78,11 +82,15 @@ verifier and backup after verification is recorded.
   current without checking. Reference images and approval revisions are unchanged.
 - The candidate DLL is separate from the unchanged staged DLL. No injected source
   changed during cleanup, so no injected compile was run.
+- Category Lab commands now remain category-local by default. Dependent previews
+  are explicit, the conservative stale-input sweep belongs to Integration, and
+  disposable render freshness no longer rewrites tracked category definitions.
 - Source-payload comparisons cover 26 resources/104 poses/7,215 marine frames,
   and 55 source-reference units/449 actions/4,622 body poses/1,611 attachments.
   The other 23 composed/original units require separate evidence.
-- Known baseline limitations remain: resource backdrop rectangles, route gaps,
-  unmapped Silks, and terrain-edit reuse failing with 387 built/zero reused.
+- Known baseline limitations remain: the approved resource references retain
+  backdrop rectangles (fixed in the current unapproved Lab candidate), route
+  gaps, unmapped Silks, and terrain-edit reuse failing with 387 built/zero reused.
   The earlier native behavior suite passed six of seven cases. Do not weaken
   that failure or infer a live-game pass from screenshots.
 

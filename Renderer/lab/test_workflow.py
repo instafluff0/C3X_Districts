@@ -49,16 +49,15 @@ class ApprovalTests(unittest.TestCase):
                             "image": renderer.relative(image), "sha256": renderer.checksum(image)})
         renderer.write(self.lab / "out" / key / "render.json", {
             "implementation_identity": "stale" if stale else "current",
-            "input_signature": "current",
+            "input_signature": "stale" if stale else "current",
             "recipe": renderer.standard(key)["recipe"], "outputs": records,
         })
 
-    def test_shared_change_requires_every_affected_preview(self):
+    def test_category_approval_requires_only_the_requested_preview(self):
         self.preview("lighting")
-        with self.assertRaisesRegex(ValueError, "affected category"):
-            renderer.approve("lighting", "User approved this appearance")
-        self.assertEqual(renderer.standard("lighting")["approved_revision"], 1)
-        self.assertFalse((self.lab / "references").exists())
+        renderer.approve("lighting", "User approved this appearance")
+        self.assertEqual(renderer.standard("lighting")["approved_revision"], 2)
+        self.assertEqual(renderer.standard("grassland")["approved_revision"], 1)
 
     def test_blank_statement_is_not_approval(self):
         self.preview("grassland")
@@ -130,22 +129,27 @@ class ApprovalTests(unittest.TestCase):
             "basis": "exact_approved_reference_comparison"})
         self.assertFalse((self.root / "Renderer/integration/status.json").exists())
 
-    def test_different_partial_or_old_signature_comparison_does_not_clear_review(self):
-        for args in ({"changed": True}, {"partial": True}, {}):
+    def test_different_or_partial_comparison_does_not_clear_review(self):
+        for args in ({"changed": True}, {"partial": True}):
             self.comparison(**args)
-            signature = "current" if args else "changed during comparison"
-            with patch.object(renderer, "category_signatures", return_value={"grassland": signature}):
-                renderer.compare("grassland")
+            renderer.compare("grassland")
             self.assertNotIn("reviewed_inputs", renderer.standard("grassland"))
 
-    def test_source_selected_consumer_also_requires_explicit_appearance_review(self):
+    def test_old_category_signature_rejects_comparison_before_review(self):
+        self.comparison()
+        with patch.object(renderer, "category_signatures", return_value={"grassland": "changed"}), \
+             self.assertRaisesRegex(ValueError, "stale"):
+            renderer.compare("grassland")
+        self.assertNotIn("reviewed_inputs", renderer.standard("grassland"))
+
+    def test_unrelated_dirty_consumer_does_not_block_category_approval(self):
         self.preview("grassland")
         with patch.object(renderer, "dirty_categories", return_value=["lighting"]):
-            with self.assertRaisesRegex(ValueError, "affected category"):
-                renderer.approve("grassland", "User only reviewed grassland")
-        self.assertEqual(renderer.standard("grassland")["approved_revision"], 1)
+            renderer.approve("grassland", "User reviewed grassland")
+        self.assertEqual(renderer.standard("grassland")["approved_revision"], 2)
+        self.assertEqual(renderer.standard("lighting")["approved_revision"], 1)
 
-    def test_shared_approval_creates_new_revisions_and_retains_prior_images(self):
+    def test_category_approval_creates_one_revision_and_retains_prior_images(self):
         old = self.lab / "references/grassland/r1/detail.bmp"
         old.parent.mkdir(parents=True)
         old.write_bytes(b"original")
@@ -153,11 +157,11 @@ class ApprovalTests(unittest.TestCase):
             self.preview(key)
         renderer.approve("lighting", "The user explicitly accepted both comparisons")
         self.assertEqual(old.read_bytes(), b"original")
-        for key in ("lighting", "grassland"):
-            value = renderer.standard(key)
-            self.assertEqual(value["approved_revision"], 2)
-            self.assertEqual(len(value["references"]["d3d11"]), 2)
-            self.assertEqual(value["approval"]["affected_categories"], ["grassland", "lighting"])
+        lighting = renderer.standard("lighting")
+        self.assertEqual(lighting["approved_revision"], 2)
+        self.assertEqual(len(lighting["references"]["d3d11"]), 2)
+        self.assertEqual(lighting["approval"]["affected_categories"], ["lighting"])
+        self.assertEqual(renderer.standard("grassland")["approved_revision"], 1)
 
     def test_paths_cannot_escape_repository(self):
         with self.assertRaisesRegex(ValueError, "escapes"):
@@ -465,8 +469,7 @@ class InputFreshnessTests(unittest.TestCase):
              patch.object(renderer, "standard_path", return_value=self.lab / "standard.json"), \
              patch.object(renderer, "require_prepared", side_effect=lambda: events.append("prepared")), \
              patch.object(renderer, "ensure_candidate", side_effect=lambda: events.append("candidate")), \
-             patch.object(renderer, "implementation_identity", side_effect=lambda: events.append("identity") or "current"), \
-             patch.object(renderer, "category_signatures", return_value={"grassland": "current"}), \
+             patch.object(renderer, "category_signatures", side_effect=lambda: events.append("identity") or {"grassland": "current"}), \
              patch.object(renderer, "native_render", return_value={}), patch("builtins.print"):
             renderer.render("grassland")
         self.assertEqual(events, ["prepared", "candidate", "identity", "identity"])

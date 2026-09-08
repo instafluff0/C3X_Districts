@@ -2776,7 +2776,13 @@ public:
         if(resource_backdrop_signature!=cached_signature.complete) {
             clear_resource_backdrops();resource_backdrop_signature=cached_signature.complete;
         }
-        if(!ensure_block_targets() || !linear_block.ensure(device,fidelity_profile?256:128,fidelity_profile?256:128))return false;
+        if(!ensure_block_targets())return false;
+        // City fidelity renders each native 128-pixel block through a guarded
+        // 136-pixel target. Preserve that actual scene-linear target so the
+        // animated pass accumulates over terrain instead of a cleared block.
+        auto & backdrop=city_profile?city_glow.linear:linear_block;
+        int backdrop_extent=city_profile?272:fidelity_profile?256:128;
+        if(!backdrop.ensure(device,backdrop_extent,backdrop_extent))return false;
         unsigned backdrop_hits=0,backdrop_misses=0;
         for(auto const & rect:rectangles) {
             auto found=std::find_if(resource_backdrops.begin(),resource_backdrops.end(),[&](auto const& block){
@@ -2787,21 +2793,22 @@ public:
             settings.inverse_size[0]=settings.inverse_size[1]=1.f/128;
             context->OMSetRenderTargets(0,nullptr,nullptr);
             if(found!=resource_backdrops.end()) {
-                context->CopyResource(linear_block.color,found->color);
-                context->CopyResource(linear_block.depth_texture,found->depth);++backdrop_hits;
+                context->CopyResource(backdrop.color,found->color);
+                context->CopyResource(backdrop.depth_texture,found->depth);++backdrop_hits;
             } else {
                 if(!submit_geometry(geometry_vertex_buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128))return false;
                 ++backdrop_misses;
-                // 32 exact MSAA4 color/depth blocks = 24 MiB, independent of screen size.
+                // Bound cached MSAA4 color/depth independently of screen size:
+                // 24 MiB normally, or about 28 MiB with eight guarded city blocks.
                 // At capacity, uncached blocks render normally instead of losing bodies.
                 if(resource_backdrops.size()<(fidelity_profile?8u:32u)) {
                     ResourceBackdrop block;block.x=rect.left;block.y=rect.top;
-                    D3D11_TEXTURE2D_DESC desc={};linear_block.color->GetDesc(&desc);
+                    D3D11_TEXTURE2D_DESC desc={};backdrop.color->GetDesc(&desc);
                     if(FAILED(device->CreateTexture2D(&desc,nullptr,&block.color)))return false;
-                    linear_block.depth_texture->GetDesc(&desc);
+                    backdrop.depth_texture->GetDesc(&desc);
                     if(FAILED(device->CreateTexture2D(&desc,nullptr,&block.depth))){release(block.color);return false;}
-                    context->CopyResource(block.color,linear_block.color);
-                    context->CopyResource(block.depth,linear_block.depth_texture);
+                    context->CopyResource(block.color,backdrop.color);
+                    context->CopyResource(block.depth,backdrop.depth_texture);
                     resource_backdrops.push_back(block);
                 }
             }
@@ -2831,7 +2838,7 @@ public:
         QueryPerformanceCounter(&finished);resource_composite_ticks=finished.QuadPart-started.QuadPart;
         char detail[320];sprintf_s(detail,"visible=%u facing=SE clock=%lld rects=%zu pixels=%u upload_bytes=%zu pool_bytes=%zu backdrop_hits=%u backdrop_misses=%u backdrop_bytes=%zu terrain_built=%u ms=%.3f",
             visible_resource_animations,clock,rectangles.size(),dirty_pixels,uploaded,pool_bytes,backdrop_hits,backdrop_misses,
-            resource_backdrops.size()*128*128*48,frame_tiles_built,
+            resource_backdrops.size()*backdrop_extent*backdrop_extent*48,frame_tiles_built,
             trace.milliseconds(resource_composite_ticks));trace.write("animation-frame",detail);
         return true;
     }
@@ -3223,7 +3230,7 @@ public:
                         int guard=city_profile?4:0,extent=128+guard*2;
                         local.translation[0]+=float(guard-x);local.translation[1]+=float(guard-y);
                         local.inverse_size[0]=local.inverse_size[1]=1.f/float(extent);
-                        if(!submit_geometry(buffers,{{0,0,extent,extent}},local,city_profile?city_glow.target:block_target,block_depth,extent,extent,cancellation,false,true,shadow_buffers_ptr)){
+                        if(!submit_geometry(buffers,{{0,0,extent,extent}},local,city_profile?city_glow.target:block_target,block_depth,extent,extent,cancellation,accumulate,true,shadow_buffers_ptr)){
                             destination_texture->Release();return false;
                         }
                         int l=std::max(x,int(rect.left)),t=std::max(y,int(rect.top));

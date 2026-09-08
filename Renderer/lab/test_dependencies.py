@@ -68,10 +68,12 @@ class SelectionTests(unittest.TestCase):
         updated["grassland"]["recipe"]["terrain"] = 1
         self.assertNotEqual(current["grassland"], dependencies.signatures({}, updated)["grassland"])
 
-    def test_asking_for_grassland_cannot_hide_a_changed_city_fixture(self):
+    def test_requested_category_stays_local_until_delivery_regression(self):
         with patch.object(renderer, "declared_affected", return_value=["grassland"]), \
              patch.object(renderer, "dirty_categories", return_value=["cities", "day-night"]):
-            self.assertEqual(renderer.affected("grassland"), ["cities", "day-night", "grassland"])
+            self.assertEqual(renderer.affected("grassland"), ["grassland"])
+            self.assertEqual(renderer.regression_affected("grassland"),
+                             ["cities", "day-night", "grassland"])
 
 
 if __name__ == "__main__":

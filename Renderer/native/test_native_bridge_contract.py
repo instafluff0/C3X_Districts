@@ -647,6 +647,15 @@ int main() {
         self.assertIn("record->city_population", injected)
         self.assertIn("has_active_building (city, improvement_id)", injected)
 
+    def test_animated_resources_preserve_guarded_scene_linear_backdrops(self) -> None:
+        renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("auto & backdrop=city_profile?city_glow.linear:linear_block", renderer)
+        self.assertIn("context->CopyResource(backdrop.color,found->color)", renderer)
+        self.assertIn("context->CopyResource(block.color,backdrop.color)", renderer)
+        self.assertIn("cancellation,accumulate,true,shadow_buffers_ptr", renderer)
+
     def test_mine_farm_and_tundra_bindings(self) -> None:
         renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
             encoding="utf-8"

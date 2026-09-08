@@ -14,31 +14,32 @@ python3 Renderer/renderer.py gallery grassland
 python3 Renderer/renderer.py lab grassland
 python3 Renderer/renderer.py compare grassland
 python3 Renderer/renderer.py test grassland
+python3 Renderer/renderer.py lab grassland --affected
+python3 Renderer/renderer.py compare grassland --affected
+python3 Renderer/renderer.py test grassland --affected
 python3 Renderer/renderer.py test grassland --backends both
 python3 Renderer/renderer.py affected shadows
-python3 Renderer/renderer.py lab shadows --affected
 python3 Renderer/renderer.py integration pending
 python3 Renderer/renderer.py integration verify grassland
 python3 Renderer/renderer.py check
 ```
 
-`compare` and `gallery` use Pillow; city source lighting tests also need NumPy.
-Use a Python environment with those installed. `gallery` produces one compact overview of the
-captured baseline. Each category normally renders a detail view and a gameplay
-context; shared environment and city recipes additionally select day phases.
+`compare` and `gallery` use Pillow; tests also use Pillow and NumPy. When the
+invoking Python lacks them, the command uses `C3X_RENDERER_PYTHON` or the bundled
+Codex workspace runtime before preparation begins. `gallery` produces one compact
+overview of the captured baseline. Each category normally renders a detail view
+and a gameplay context; shared environment and city recipes additionally select day phases.
 `gallery CATEGORY` shows all that category's reference phases and contexts;
 plain `gallery` is the small catalog overview. `show` hides internal hash metadata.
 `--case detail` is a focused preview, insufficient for approval by itself.
-With `--affected`, that case applies only to the requested category; dependent
-categories use their complete recipes, including differently named animation cases.
-Complete `lab` and `compare` runs automatically include dependent categories.
-They also include categories affected by changed source bytes, even if the
-command names another category. `affected CATEGORY` shows the combined set;
-the same selection supplies regression tests and required approval previews.
-City and resource edits include fixtures containing those objects; unit edits
-include animation. Global lighting, shadows, transitions and unclassified shared
-inputs conservatively select every consumer. Generated shader copies do not
-broaden a change beyond their prepared source inputs.
+The normal `lab`, `compare`, `test`, and `approve` commands stay within the
+category the user requested. This is the short edit → preview → compare → test →
+approval loop. `--affected` explicitly adds visual dependents; with a focused
+`--case`, dependents still use their complete recipes. `affected CATEGORY` shows
+that bounded dependent set. Integration verification is the conservative gate:
+it also includes other categories whose reviewed inputs are stale. Thus unrelated
+work cannot turn an ordinary Lab review into an unrequested full-catalog render,
+while delivery still catches cross-category regressions before staging.
 
 Each category keeps only one reviewed-input signature for its approved revision.
 Missing records require fresh complete comparisons. An exact pixel match to all
@@ -78,9 +79,9 @@ intended edit into its source/adapter and restore the corresponding generated
 file from the matching version before retrying. After cache loss, preparation
 must reproduce the existing generated files before accepting new source edits.
 
-Only after the user explicitly accepts the displayed affected set, record the
+Only after the user explicitly accepts the displayed category, record the
 decision with `approve CATEGORY --user-approval "actual user statement"`.
-Approval rejects missing affected previews, stale inputs, incomplete case sets
+Approval rejects a missing preview, stale inputs, incomplete case sets
 and modified images. It creates new references and leaves integration revisions
 unchanged. It must never be invoked merely because tests pass.
 
@@ -108,9 +109,10 @@ D3D11 candidate nor certify approval or integration. A warm measured run took
 12.3 seconds including input preparation, with 2.1 seconds in cached scene/render
 work. Reducing the remaining preparation overhead is part of migration.
 
-Generated candidates belong in `out/`, approved local images in `references/`,
-and build caches in `.cache/`. These are ignored: source-derived art remains local.
-Git preserves source history. The category pages describe current choices.
+Generated candidates and their freshness records belong in `out/`, approved local
+images in `references/`, and build caches in `.cache/`. These are ignored:
+ordinary renders do not rewrite tracked category definitions. Source-derived art
+remains local. Git preserves source history. The category pages describe current choices.
 
 `build` compiles the candidate DLL and standalone preview tools without staging.
 `integration verify CATEGORY` reuses a current candidate or builds one when needed;
@@ -139,7 +141,7 @@ before the catalog is considered fully migrated. See `MIGRATION.md` for the
 remaining implementation work and `Renderer/docs/visual_fidelity_playbook.md`
 for the preserved graphics guidance.
 
-Current exposed limitations: resource studies show black background patches
-around animated bodies, connected route fixtures show segment gaps, and the
-production edit-reuse witness fails because all visible tiles are rebuilt.
-These are not silently repaired or treated as passed integration checks.
+Current exposed limitations: approved resource references still show the black
+background patches fixed by an unapproved Lab candidate, connected route
+fixtures show segment gaps, and the production edit-reuse witness fails because
+all visible tiles are rebuilt. These are not treated as passed integration checks.

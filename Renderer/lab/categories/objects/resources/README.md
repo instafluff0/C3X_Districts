@@ -7,10 +7,10 @@ Fish and Whales. Both have detail and surrounding-terrain cases. This is a small
 go-to sample, not a claim that every source resource is replaced in C3X. In
 particular the current production mapping does not replace Silks.
 
-Known baseline witness issue: animated resources produce black rectangular
-background patches in the current headless output. Keep this evidence visible;
-do not repair the reference image or claim verified in-game equivalence until
-the capture/compositing behavior has been investigated.
+The approved revision-1 references preserve a black-backdrop defect around
+animated resources. The current unapproved candidate fixes guarded scene-linear
+backdrop accumulation; keep the old references intact until the candidate is
+explicitly accepted, then verify the approved revision through Integration.
 
 The current build is the approved revision 1. `standard.json` identifies the
 shared implementation, dependencies, fixture recipe and focused regression tests.
