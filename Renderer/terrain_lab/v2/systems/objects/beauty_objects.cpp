@@ -12,7 +12,7 @@ namespace {
 
 struct BeautyVertex {
     float position[3];
-    float world[3];
+    float world[4];
     float normal[3];
     float uv[2];
     float material[4]; // kind, has normal, has AO, has gloss
@@ -58,7 +58,7 @@ struct Placement {
     float x, y, scale, rotation;
 };
 
-static_assert(sizeof(BeautyVertex) == 68, "beauty object vertex wire drift");
+static_assert(sizeof(BeautyVertex) == 72, "beauty object vertex wire drift");
 static_assert(sizeof(BeautyFrame) == 80, "beauty object frame wire drift");
 
 float clamp01(float value) {
@@ -151,7 +151,35 @@ BeautyVertex project(float x, float y, float z, float view_x, float view_y,
     out.position[1] = (x * up[0] + y * up[1] + z * up[2] - center_y) / view_y;
     float distance = 8.0f + x * forward[0] + y * forward[1] + z * forward[2];
     out.position[2] = clamp01((distance - 4.0f) / 8.0f);
-    out.world[0] = x; out.world[1] = y; out.world[2] = z;
+    out.world[0] = x; out.world[1] = y; out.world[2] = z; out.world[3] = 1.0f;
+    out.material[0] = kind;
+    return out;
+}
+
+BeautyVertex project_composed(float world_x, float world_y, float local_z,
+                              float ground_height, float kind,
+                              int column, int row) {
+    // Keep every vertex in an object on its placement tile's projection basis.
+    // Recomputing the tile from each expanded vertex introduces a one-tile
+    // discontinuity whenever foliage or a contact-shadow disk crosses an edge.
+    float u = world_x - float(column), v = world_y - float(row);
+    float half_width = 64.0f, half_height = 32.0f;
+    float vertical_scale = 0.82f * half_width / 112.0f;
+    float base_y = 380.0f + float(column - row) * half_height +
+                   (u + v - 1.0f) * half_height;
+    float screen_x = 104.0f + float(column + row) * half_width +
+                     (u - v) * half_width;
+    float screen_y = base_y - ground_height * vertical_scale - local_z * 150.0f;
+    float height_tiles = local_z * 150.0f / vertical_scale;
+    BeautyVertex out = {};
+    out.position[0] = screen_x / float(output_width) * 2.0f - 1.0f;
+    out.position[1] = 1.0f - screen_y / float(output_height) * 2.0f;
+    out.position[2] = clamp01(0.94f - base_y / float(output_height) * 0.75f -
+                              (ground_height + height_tiles) * 0.0012f);
+    out.world[0] = world_x;
+    out.world[1] = float(row) + 1.0f - (world_y - float(row));
+    out.world[2] = (ground_height + height_tiles) / 112.0f;
+    out.world[3] = 1.0f;
     out.material[0] = kind;
     return out;
 }
@@ -176,7 +204,7 @@ void add_draw(std::vector<BeautyVertex> const &vertices, unsigned constants,
     draw.feature = 1;
     draw.depth_mode = depth_mode;
     draw.blend_mode = blend_mode;
-    draw.attributes = {{3, 0}, {3, 12}, {3, 24}, {2, 36}, {4, 44}, {2, 60}};
+    draw.attributes = {{3, 0}, {4, 12}, {3, 28}, {2, 40}, {4, 48}, {2, 64}};
     for (unsigned index = 0; index < textures.size(); ++index)
         draw.textures[index] = textures[index];
     recorded.draws.push_back(draw);
@@ -196,8 +224,11 @@ int main(int argc, char **argv) {
         bool city_mode = fixture.find("beauty-city") != std::string::npos;
         bool warrior_mode = fixture.find("beauty-warrior") != std::string::npos;
         bool scene_mode = fixture.find("beauty-scene") != std::string::npos;
+        bool composed_forest_mode =
+            fixture.find("source-fidelity-r1-inland") != std::string::npos ||
+            fixture.find("source-fidelity-r2-inland") != std::string::npos;
         if (unsigned(trees_mode) + unsigned(city_mode) + unsigned(warrior_mode) +
-                unsigned(scene_mode) != 1)
+                unsigned(scene_mode) + unsigned(composed_forest_mode) != 1)
             throw std::runtime_error("beauty object fixture mode missing or ambiguous");
 
         std::vector<BeautyMaterial> materials;
@@ -206,6 +237,21 @@ int main(int argc, char **argv) {
         if (!load_beauty_objects("Renderer/packs/BeautyStudies/beauty_objects.bin",
                                  materials, objects, tree_recipes))
             throw std::runtime_error("beauty object bundle load failed");
+
+        if (composed_forest_mode) {
+            promotion_scene_enabled = true;
+            biq_scene_enabled = true;
+            output_width = width;
+            output_height = height;
+            if (!load_biq_window(
+                    "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/terrain.csv",
+                    biq_window) ||
+                !load_city_scenario(
+                    "Renderer/terrain_lab/v2/fixtures/beauty/gameplay-100-v1/inland/cities.csv",
+                    city_scenario))
+                throw std::runtime_error("composed forest scene input failed");
+            build_river_graph();
+        }
 
         ID3D11Device device;
         std::map<std::string, unsigned> loaded;
@@ -272,7 +318,8 @@ int main(int argc, char **argv) {
         // In the combined fixture the relief module already owns the identical
         // full-frame ground. Drawing it again would resolve equal-depth pixels
         // over the mountain's feathered foothills.
-        if (!scene_mode) add_draw(ground, constants, common, 2, 0);
+        if (!scene_mode && !composed_forest_mode)
+            add_draw(ground, constants, common, 2, 0);
 
         if (scene_mode) {
             auto river_ribbon = [&](float half_width, float z, float kind) {
@@ -311,7 +358,58 @@ int main(int argc, char **argv) {
         }
 
         std::vector<Placement> placements;
-        if (scene_mode) {
+        if (composed_forest_mode) {
+            unsigned recipe_weight = 0;
+            for (BeautyRecipe const &recipe : tree_recipes)
+                recipe_weight += recipe.count;
+            if (recipe_weight != 180u || tree_recipes.size() != 25u)
+                throw std::runtime_error("composed forest recipe metadata drift");
+            constexpr float golden = 2.39996323f;
+            for (BiqWindowTile const &tile : biq_window.tiles) {
+                if (tile.real != 7) continue;
+                std::uint32_t seed = std::uint32_t(tile.source_x * 0x193u) ^
+                                     std::uint32_t(tile.source_y * 0x217u);
+                unsigned density = 31u + feature_hash(seed ^ 0xa53du) % 11u;
+                for (unsigned index = 0; index < density; ++index) {
+                    unsigned selected = feature_hash(seed + index * 31u) % recipe_weight;
+                    BeautyRecipe const *recipe = nullptr;
+                    for (BeautyRecipe const &candidate : tree_recipes) {
+                        if (selected < candidate.count) { recipe = &candidate; break; }
+                        selected -= candidate.count;
+                    }
+                    if (!recipe) throw std::runtime_error("composed forest recipe selection failed");
+                    float ring = std::sqrt((float(index) + 0.5f) / float(density));
+                    float angle = golden * float(index) +
+                                  feature_random(seed ^ 0x71b3u) * 6.283185307f;
+                    float world_x = float(tile.column) + 0.5f +
+                                    std::cos(angle) * ring * 0.43f;
+                    float world_y = float(tile.row) + 0.5f +
+                                    std::sin(angle) * ring * 0.43f;
+                    if (biq_river_distance(tile, world_x - float(tile.column),
+                                           world_y - float(tile.row)) < 9.0f)
+                        continue;
+                    bool clipped = false;
+                    for (CityInstance const &city : city_scenario.instances) {
+                        if (!city.visible) continue;
+                        float dx = world_x - (float(city.column) + 0.5f);
+                        float dy = world_y - (float(city.row) + 0.5f);
+                        float radius = city.size == 0u ? 0.42f :
+                            (city.size == 1u ? 0.54f : 0.66f);
+                        if (dx * dx + dy * dy < radius * radius) {
+                            clipped = true;
+                            break;
+                        }
+                    }
+                    if (clipped) continue;
+                    float signed_jitter =
+                        feature_random(seed + index * 71u + 23u) * 2.0f - 1.0f;
+                    float scale = recipe->scale *
+                        (1.0f + recipe->scale_variation * signed_jitter) * 0.46f;
+                    placements.push_back({recipe->object, world_x, world_y, scale,
+                        feature_random(seed + index * 97u + 47u) * 6.283185307f});
+                }
+            }
+        } else if (scene_mode) {
             unsigned city_indices[4] = {};
             unsigned warrior_indices[5] = {};
             unsigned city_count = 0, warrior_count = 0;
@@ -440,15 +538,29 @@ int main(int argc, char **argv) {
             BeautyObject const &object = objects[placement.object];
             BeautyMaterial const &material = materials[object.material];
             float cosine = std::cos(placement.rotation), sine = std::sin(placement.rotation);
+            float placement_ground = 0.0f;
+            int placement_column = 0, placement_row = 0;
+            if (composed_forest_mode) {
+                placement_column = int(std::floor(placement.x));
+                placement_row = int(std::floor(placement.y));
+                BiqWindowTile const *tile = biq_tile_at(placement.x, placement.y);
+                if (!tile) throw std::runtime_error("composed forest tile lookup failed");
+                placement_ground = biq_tile_height(*tile,
+                    placement.x - std::floor(placement.x),
+                    placement.y - std::floor(placement.y), nullptr, nullptr);
+            }
             std::vector<BeautyVertex> transformed;
             transformed.reserve(object.vertices.size());
             for (FeatureSourceVertex const &source : object.vertices) {
                 float local_x = (source.position[0] * cosine - source.position[1] * sine) * placement.scale;
                 float local_y = (source.position[0] * sine + source.position[1] * cosine) * placement.scale;
                 float local_z = source.position[2] * placement.scale;
-                BeautyVertex vertex = project(placement.x + local_x, placement.y + local_y,
-                                              local_z, view_x, view_y, center_y,
-                                              float(object.kind));
+                BeautyVertex vertex = composed_forest_mode
+                    ? project_composed(placement.x + local_x, placement.y + local_y,
+                                       local_z, placement_ground, float(object.kind),
+                                       placement_column, placement_row)
+                    : project(placement.x + local_x, placement.y + local_y,
+                              local_z, view_x, view_y, center_y, float(object.kind));
                 vertex.normal[0] = source.normal[0] * cosine - source.normal[1] * sine;
                 vertex.normal[1] = source.normal[0] * sine + source.normal[1] * cosine;
                 vertex.normal[2] = source.normal[2];
@@ -472,6 +584,11 @@ int main(int argc, char **argv) {
             batches[placement.object].insert(batches[placement.object].end(),
                                              transformed.begin(), transformed.end());
 
+            if (composed_forest_mode) {
+                // The shared scene field now owns source-geometry shadows.
+                // Do not add the old faint circular approximation beneath it.
+                continue;
+            }
             // Three lightly offset projections of light-facing source triangles
             // give each object a soft, shape-preserving ground shadow.
             for (std::size_t index = 0; index + 2 < transformed.size(); index += 3) {
@@ -510,6 +627,12 @@ int main(int argc, char **argv) {
             for (unsigned channel = 0; channel < material.textures.size(); ++channel)
                 bindings[3 + channel] = material.textures[channel];
             add_draw(shadow_batches[index], constants, bindings, 1, 1);
+            if (composed_forest_mode) {
+                labv2::Draw &draw = recorded.draws.back();
+                draw.world_attribute = 1;
+                draw.normal_attribute = 2;
+                draw.uv_attribute = 3;
+            }
         }
 
         for (unsigned index = 0; index < objects.size(); ++index) {
@@ -519,13 +642,26 @@ int main(int argc, char **argv) {
             for (unsigned channel = 0; channel < material.textures.size(); ++channel)
                 bindings[3 + channel] = material.textures[channel];
             add_draw(batches[index], constants, bindings, 2, 0);
+            if (composed_forest_mode) {
+                // Tell the shared shadow pass exactly where this provider's
+                // world/UV attributes and authored opacity mask live.
+                labv2::Draw &draw = recorded.draws.back();
+                draw.world_attribute = 1;
+                draw.normal_attribute = 2;
+                draw.uv_attribute = 3;
+                draw.geometry_flags = material.paths[6].empty() ? 3u : 7u;
+                draw.alpha_texture_slot = material.paths[6].empty() ? 0u : 9u;
+                draw.alpha_cutoff = 0.5f;
+            }
         }
 
         recorded.width = width;
         recorded.height = height;
-        recorded.downsample = 1;
+        recorded.downsample = composed_forest_mode && std::atoi(argv[5]) == 2 ? 2u : 1u;
         recorded.color_branch = 1;
-        recorded.valid_rect = {0, 0, width, height};
+        recorded.geometry_contract = composed_forest_mode ? 1u : 0u;
+        recorded.valid_rect = {0, 0, width / recorded.downsample,
+                               height / recorded.downsample};
         recorded.exposure = 1.0f;
         return labv2::write_packet(argv[1], recorded) ? 0 : 1;
     } catch (std::exception const &error) {

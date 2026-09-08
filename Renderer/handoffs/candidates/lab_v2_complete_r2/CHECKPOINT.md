@@ -2,31 +2,44 @@
 
 ## Current Mac Lab checkpoint
 
-The authoritative current checkpoint is the four-study manifest in
-`LAB_STATE_OF_ART.json`. It records the retained mountain, land-type/hill,
-forest and Warrior images and the exact source/module/shader
-entry points that produced them. The required fast gate is:
+The authoritative current checkpoint is `LAB_STATE_OF_ART.json`. It records the
+retained mountain, land-type/hill, forest and Warrior images plus the accepted
+100-tile r11 natural composition and every source/module/shader entry point
+that produced them. The required fast gate is:
 
 ```sh
 python3 Renderer/handoffs/candidates/lab_v2_complete_r2/validate_state_of_art.py
 ```
 
-Fresh macOS Metal renders must reproduce each report's raw-image hash, after
-which the exact Civ V Environment Skin noon LUT review images are inspected.
-This checkpoint requires no Windows VM, Civ III launch, combined scene or
-integration change. The top-level package remains unpromoted because those are
-separate future responsibilities, not because the isolated Lab is incomplete.
+Fresh macOS Metal renders must reproduce each per-system report's raw-image
+hash and the composed witness's raw image. The exact Civ V Environment
+Skin noon LUT images and the lossless same-viewport comparison are then
+inspected. This checkpoint requires no Windows VM, Civ III launch or integration
+change. The top-level package remains unpromoted because native porting is a
+separate future responsibility, not because the Lab pickup is incomplete.
 Cities are excluded from this update and retain the pre-existing r2 selection.
 
-The prior combined beauty scene is not current evidence and must not be used to
-evaluate city/forest composition: it permits trees inside buildings. Future
-composition owns the confirmed `ClipBuildings`, `ClipRiver` and
-`ClipCoastline` rules and must preserve complete source proportions.
+The prior combined beauty scene is not current evidence: it permits trees
+inside buildings. The rejected r4 diagnostic is superseded by
+`source-fidelity-r11/inland`, which directly uses the exact terrain/mountain
+providers, source-mesh forest shadows and retained hydrology. It contains no city
+rendering. Integration owns the confirmed
+`ClipBuildings`, `ClipRiver` and `ClipCoastline` rules and must preserve complete
+source proportions.
 
 The broader deliverable remains an implementation-preparation catalog with
 executable pin, replay and shadow-coordinate checks. Its historical combined
-cases do not override the isolated visual selections above. Images remain the
-acceptance evidence; tests and hashes support reproducibility only.
+cases do not override the current per-system selections; r11 is the authoritative
+natural-scene coexistence witness.
+Images remain the acceptance evidence; tests and hashes support reproducibility
+only.
+
+R11 ran at both configured zooms; a separate r12 repeat reproduced both raw
+hashes exactly. Fresh forest r19 and Warrior r5 quick runs reproduced
+the accepted raw hashes exactly after the shared object source and vertex
+contract changed. The composed noon zoom-1 BMP is pinned at
+`b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c`;
+the lossless comparison is pinned in the state manifest.
 
 ## Verification at preparation
 

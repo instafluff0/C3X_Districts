@@ -19,17 +19,56 @@ class LabStateOfArtPickupTests(unittest.TestCase):
         spec.loader.exec_module(module)
         self.assertEqual(0, module.main())
 
-    def test_combined_scene_is_explicitly_superseded(self):
+    def test_source_fidelity_composition_is_selected_without_weakening_city_contract(self):
         state = json.loads((PICKUP / "LAB_STATE_OF_ART.json").read_text())
         composition = state["composition_contract"]
-        self.assertFalse(composition["combined_scene_authoritative"])
+        self.assertTrue(composition["combined_scene_authoritative"])
         self.assertTrue(composition["city_excludes_trees"])
+        self.assertFalse(composition["cities_rendered"])
+        self.assertFalse(composition["cities_changed"])
         self.assertEqual(
             "Renderer/terrain_lab/v2/fixtures/objects/beauty-scene.fixture.json",
             composition["superseded_fixture"],
         )
+        self.assertEqual(
+            "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json",
+            composition["selected_fixture"],
+        )
         self.assertIn("cities", state["excluded_from_current_update"])
         self.assertNotIn("medieval_city", {row["id"] for row in state["studies"]})
+
+    def test_composed_witness_routes_selected_high_definition_paths(self):
+        state = json.loads((PICKUP / "LAB_STATE_OF_ART.json").read_text())
+        composed = state["composed_witness"]
+        fixture = json.loads((ROOT / composed["fixture"]).read_text())
+        self.assertEqual(100, fixture["tile_count"])
+        self.assertEqual(4, fixture["settings"]["samples"])
+        self.assertEqual(16, fixture["settings"]["anisotropy"])
+        self.assertEqual(2, fixture["settings"]["render_scale"])
+        terrain = json.loads((ROOT / composed["terrain_module"]).read_text())
+        self.assertEqual(
+            "Renderer/terrain_lab/v2/systems/relief/beauty_terrain.cpp",
+            terrain["source"],
+        )
+        mountain = json.loads((ROOT / composed["mountain_module"]).read_text())
+        self.assertEqual(composed["mountain_source"], mountain["source"])
+        forest = json.loads((ROOT / composed["forest_module"]).read_text())
+        self.assertEqual(composed["forest_source"], forest["source"])
+        self.assertEqual(composed["forest_shader"], forest["shader"])
+        hydrology = json.loads((ROOT / composed["hydrology_module"]).read_text())
+        self.assertEqual(1, hydrology["suppress_relief"])
+        self.assertEqual(1, hydrology["river_corridor"])
+
+    def test_manifest_exposes_composed_case_and_updated_system_entries(self):
+        manifest = json.loads((PICKUP / "manifest.json").read_text())
+        cases = {row["id"]: row for row in manifest["cases"]}
+        self.assertIn("source-fidelity-inland", cases)
+        systems = {row["id"]: row for row in manifest["systems"]}
+        self.assertIn("beauty_terrain", systems["terrain"]["selected"])
+        self.assertIn("beauty_mountain", systems["terrain"]["selected"])
+        self.assertIn("22 source bodies", systems["forest_jungle"]["selected"])
+        self.assertIn("accepted 100-tile", systems["combined_scene"]["selected"])
+        self.assertIn("unchanged", systems["cities"]["native_state"])
 
     def test_object_transform_preserves_proportions(self):
         source = (V2 / "systems/objects/beauty_objects.cpp").read_text()

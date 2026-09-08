@@ -657,6 +657,40 @@ float sample_masked_land_clutter_height(Texture2D height_atlas, Texture2D base_a
     return height * coverage;
 }
 
+#ifdef Q8_SOURCE_FIDELITY_TERRAIN
+float4 q8_hill_patch(float2 world_position, float2 offset, float scale,
+                     float variant_offset)
+{
+    float2 tile = floor(world_position);
+    float seed = macro_decal_hash(tile + offset * 19.0);
+    float2 jitter = float2(macro_decal_hash(tile + offset * 31.0 + 7.0),
+                           macro_decal_hash(tile + offset * 47.0 + 13.0));
+    float2 projected = (world_position - tile - 0.5) / scale + 0.5 +
+                       (jitter - 0.5) * 0.38;
+    float variant = floor(frac(seed + variant_offset) * 4.0);
+    float2 uv = coast_clutter_atlas_uv(frac(projected), variant);
+    float4 source = grassland_decal_base_texture.Sample(decal_sampler, uv);
+    float inside = projected_decal_edge_fade(frac(projected));
+    float bounds = step(0.0, projected.x) * step(projected.x, 1.0) *
+                   step(0.0, projected.y) * step(projected.y, 1.0);
+    source.a *= inside * bounds;
+    return source;
+}
+
+float4 q8_hill_patch_field(float2 world_position)
+{
+    float4 a = q8_hill_patch(world_position, float2(0.17, 0.43), 0.78, 0.07);
+    float4 b = q8_hill_patch(world_position, float2(0.61, 0.23), 0.62, 0.39);
+    float4 c = q8_hill_patch(world_position, float2(0.37, 0.79), 0.48, 0.73);
+    float4 result = a.a > b.a ? a : b;
+    result = result.a > c.a ? result : c;
+    float rockiness = lerp(0.34, 0.96,
+        macro_decal_hash(floor(world_position) + float2(29.0, 71.0)));
+    result.a *= rockiness;
+    return result;
+}
+#endif
+
 float4 sample_reused_resource_slot(float slot, float2 uv)
 {
     float4 sampled = resource_base_texture_7.Sample(material_sampler, uv);
@@ -1498,6 +1532,26 @@ float4 PSMain(PixelInput input) : SV_TARGET
         float plains_clutter_weight = weights.y * plains_clutter.a * 0.42;
         albedo = lerp(albedo, grass_clutter.rgb, grass_clutter_weight);
         albedo = lerp(albedo, plains_clutter.rgb, plains_clutter_weight);
+#ifdef Q8_SOURCE_FIDELITY_TERRAIN
+        if (abs(input.real_terrain - 5.0) < 0.25)
+        {
+            float4 patch = q8_hill_patch_field(world_position);
+            float3 source_rock = q4_relief_color(mountain_base_texture, input);
+            float source_luma = dot(source_rock, float3(0.2126, 0.7152, 0.0722));
+            source_rock = lerp(source_luma.xxx, source_rock, 0.18) *
+                          float3(0.91, 0.97, 1.10) * 1.08;
+            float decal_luma = dot(patch.rgb, float3(0.2126, 0.7152, 0.0722));
+            float source_stone = smoothstep(0.80, 1.05,
+                patch.r / max(patch.g, 0.025)) +
+                smoothstep(0.28, 0.62, patch.b / max(patch.g, 0.025));
+            float3 patch_color = lerp(patch.rgb,
+                lerp(decal_luma.xxx, source_rock, 0.82), saturate(source_stone));
+            float slope = 1.0 - saturate(normalize(input.geometry_normal).z);
+            float support = saturate(0.48 + slope * 2.20);
+            albedo = lerp(albedo, patch_color,
+                          saturate(patch.a * support) * 0.86);
+        }
+#endif
         if (weights.w > 0.001 && marsh_enabled > 0.5)
         {
             float4 marsh_decal = combined_marsh_decal(world_position);

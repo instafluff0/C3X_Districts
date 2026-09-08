@@ -3,14 +3,28 @@
   "package": "lab_v2_complete_r2",
   "approval": null,
   "gates_advanced": [],
-  "isolated_lab_state_of_art": {
-    "status": "agent_visual_qa_pass",
+  "source_fidelity_lab_state_of_art": {
+    "status": "natural_scene_visual_qa_pass_ready_for_game_integration",
     "backend": "macOS Metal",
     "fresh_quick_raw_hash_matches": 4,
     "fresh_review_conversion_hash_matches": 4,
+    "fresh_composed_metal_variants_passed": 2,
+    "fresh_composed_exact_repeat_matches": 2,
     "deterministic_check_variants_passed": 32,
-    "direct_visual_inspection": "pass",
-    "combined_scene_used": false,
+    "direct_visual_inspection": "pass_composed_natural_scene",
+    "combined_scene_used": true,
+    "combined_scene": {
+      "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json",
+      "report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/report.json",
+      "repeat_report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r12/inland/report.json",
+      "noon_zoom1_sha256": "b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c",
+      "comparison_sha256": "00a783a992bf1c0bcbb4fd81de5dee23a130a5a286f73933786203e197f53e08",
+      "tile_count": 100,
+      "cities_rendered": false,
+      "cities_changed": false,
+      "authoritative": true,
+      "blockers": []
+    },
     "windows_or_civ3_used": false,
     "cities": "excluded from this update; pre-existing r2 selection unchanged"
   },
@@ -19,7 +33,7 @@
     "evidence": true,
     "local_assets": true,
     "packets": true,
-    "total_pins": 1698,
+    "total_pins": 1735,
     "advisory_working_importer_drift": "Pinned committed Git blobs verified; concurrent importer changes are not selected"
   },
   "source_extraction": "Pinned unit_family_asset_importer.py extracted, SHA-256 verified, temporary copy removed",
@@ -129,10 +143,11 @@
   },
   "lab_v2_contract": "pass",
   "lab_v2_python_tests": {
-    "passed": 97,
+    "passed": 6,
     "failed": 0,
-    "batches": [91, 6],
-    "note": "test_relief.py runs in a separate process to avoid the legacy duplicate clearance module name used by the networks and relief suites"
+    "scope": "current focused source-fidelity, object, sampling, lighting, terrain and relief pickup tests",
+    "prior_full_suite_passed": 97,
+    "note": "The focused run covers the refreshed pickup validator, exact provider routing, opacity-aware caster metadata, retained hydrology and city exclusion. The prior 97-test Lab-v2 suite remains recorded; full project workflow still has the unrelated historical L19A blocker below."
   },
   "project_state": "pass; LQ0 remains next",
   "focused_city_tests": 33,
@@ -176,7 +191,8 @@
   "game_launched": false,
   "delivery": {
     "recipient": "Integration agent",
-    "sent": true,
-    "request": "acknowledge validation and concrete pickup conflicts; preserve current native work and gates"
+    "sent": false,
+    "prior_consolidation_sent": true,
+    "request": "Port the r11 r2-fixture natural composition: exact terrain/mountain providers, opacity-aware source-mesh tree shadows and retained hydrology. Keep cities unchanged and use their footprints only for tree exclusion."
   }
 }

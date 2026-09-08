@@ -1,14 +1,15 @@
 # Implementation map and pickup order
 
-## 0. Begin with the current isolated Lab state of the art
+## 0. Begin with the current source-fidelity state of the art
 
 Before using the older composed-system catalog below, read
 [LAB_STATE_OF_ART.md](LAB_STATE_OF_ART.md) and consume
-[LAB_STATE_OF_ART.json](LAB_STATE_OF_ART.json). Those four Metal witnesses are
-the current appearance and source-fidelity authority. They supersede the old
-combined beauty-scene as visual evidence without deleting its historical files.
-Cities are excluded from this update: preserve the pre-existing r2 city catalog
-and implementation without treating the isolated city experiment as a pickup.
+[LAB_STATE_OF_ART.json](LAB_STATE_OF_ART.json). The four per-system Metal
+witnesses remain the detailed source-of-truth; `source-fidelity-r11/inland` is
+the accepted coexistence proof using their exact terrain, mountain and forest
+paths with shared source-mesh shadows and retained hydrology. Cities are excluded from this
+update: preserve the pre-existing r2 city catalog and implementation without
+treating any city experiment as part of this pickup.
 
 Carry each system independently. Preserve the authored mountain relief, tree
 bodies/recipe/masks/normals, Warrior geometry/UVs/proportions, Warrior
@@ -18,9 +19,12 @@ objects unless a later visual audit proves a different need. Missing source
 behavior stays explicitly pending; do not substitute procedural crowns, fake
 snow decals, guessed LEAN normals or flattened geometry.
 
-When composition resumes elsewhere, apply the forest source exclusions before
-placement: buildings, rivers and coastlines exclude trees. The superseded scene
-that allows trees inside buildings is not a fallback or an acceptance witness.
+Port the r2 viewport adapters around the exact `beauty_terrain` and
+`beauty_mountain` providers. Then add the source-body forest recipe, materials,
+building/river/coastline exclusions and the selected opacity-aware directional
+cast shadows. Do not port the rejected r4 `frozen_l21` approximation or contact disks. The
+superseded scene that allows trees inside buildings is not a fallback or an
+acceptance witness.
 
 All paths below are repository-relative. Native ownership is based on the
 Integration agent’s read-only report at commit
@@ -52,8 +56,9 @@ actions. These prevent split bodies, stale pixels and magenta edge artifacts.
 
 | System | Selected entry points under `Renderer/terrain_lab/v2/` | Native landing point / constraint |
 | --- | --- | --- |
-| Terrain, shore, hills, mountains, volcano | `systems/terrain/{surface,scene_adapter}.h`, selected `shadow-receiver-r1` fixture modules and their include closure, `shared/frozen_scene.cpp` | Retain `native/profile_v2` pickup implementation and its optimized world queries. Diff against the pinned terrain-only package before porting any later change. Mountains use 1.30 and volcanoes 1.60 uniform source-body scale, with bounded foothill overlap. |
-| Canopy variation | `systems/objects/canopy_layout.h`, `qa/canopy_variation_pass.py` | Stable world/tile/instance seed, source transform and exclusions; never randomize on scroll or animation tick. |
+| Terrain, shore, hills, mountains, volcano | `fixtures/beauty/source-fidelity-r2/inland/{terrain,mountain,hydrology}.module.json`, `systems/relief/{beauty_terrain,beauty_mountain}.cpp`, `shaders/relief/{beauty_terrain,beauty_mountain}.hlsl` | Retain `native/profile_v2` capture/cache and optimized world queries. Port the exact selected providers: distinct terrain families, independently seeded authored hills/rock footprints, five authored mountain macro variants and complete 2K material channels. Retain hydrology after replacement relief and suppress the old hill/mountain geometry. |
+| Forest / canopy | `fixtures/beauty/source-fidelity-r2/inland/forest.module.json`, `systems/objects/beauty_objects.cpp`, `shaders/objects/beauty_objects.hlsl`, `systems/objects/canopy_layout.h`, `systems/lighting/alpha_coverage_v1.h` | Use the BeautyStudies inventory: 22 bodies, 25 recipes, total source count 180, opacity masks, packed normals and source address modes. Preserve caster + receiver + cutout metadata and authoritative exclusions. |
+| Sampling / final reconstruction | `fixtures/beauty/source-fidelity-r2/inland/fixture.json`, `shaders/sampling/linear_reconstruct.hlsl`, `app/runner.py` | Preserve scene-linear output and one final reconstruction at 4x MSAA, 16x anisotropy, 2x render scale and -1 mip bias. Do not downsample or precompress source materials before the renderer owns the final gameplay-size image. |
 | River shape and bank placement | `systems/hydrology/{river_corridor,field,scene_adapter}.h`, `qa/river_corridor_pass.py` | Preserve canonical Civ III river edges/topology. Share corridor/exclusion data with terrain, trees, rocks, objects and bridges. Headwater pool, mouth and terrain relief must use the same field. |
 | Natural water and reflections | `shaders/hydrology/{water_natural,planar_reflection_pass}.hlsl`, `qa/water_reflection_pass.py` | GPU reflected geometry prepass → water sampling in scene-linear radiance → single final exposure/transfer. Reflection provider halo includes offscreen casters. No pre-tonemapped reflection texture or new presenter. |
 | Source shadow receiver correction | `systems/lighting/{shadow_field_v1,alpha_coverage_v1}.h`, `shaders/lighting/shadow_visibility_v1.hlsl` | Keep production source pages/alpha support and texel-derived normal offset; retain world-space receiver plane from unshifted geometry. |
@@ -71,7 +76,15 @@ newer. Complete source-ground layering, mountain height/normal reconstruction,
 LEAN variance/environment calibration and unapproved analytic dunes remain
 explicit gaps. The current water choice does not authorize surf/animation.
 
-## 3. Port cities as one composed pipeline
+## 3. Preserve cities unchanged in this pickup
+
+Do not port, replace or retune cities as part of the source-fidelity work. The
+existing r2 selections and limitations below remain historical Integration
+context only. The new natural witness renders no cities. The only new cross-
+system requirement is to expose authoritative city/building footprints to the
+forest placement stage so `ClipBuildings=true` prevents trees inside buildings.
+
+When city work is separately resumed, retain the existing composed pipeline:
 
 The reference orchestration is `qa/city_central_capital_probe.py` (r111/r112),
 with the following dependency order:

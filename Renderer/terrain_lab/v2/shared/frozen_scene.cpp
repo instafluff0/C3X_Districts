@@ -4788,6 +4788,7 @@ int main(int argc, char ** argv) {
     bool beauty_mode = std::strcmp(argv[4], "beauty") == 0 || beauty_no_relief_mode ||
         beauty_no_water_mode || beauty_thumbnail_mode || l94_mode || l95_mode || promotion_mode;
     bool beauty_relief_enabled = beauty_mode && !beauty_no_relief_mode;
+    if (std::getenv("C3X_LAB_V2_SUPPRESS_RELIEF")) beauty_relief_enabled = false;
     bool beauty_water_enabled = beauty_mode && !beauty_no_water_mode &&
         !beauty_shore_no_water_mode && !beauty_promotion_no_water_mode &&
         !beauty_dunes_only_mode && !beauty_marsh_only_mode && !beauty_volcano_only_mode &&
@@ -4810,6 +4811,8 @@ int main(int argc, char ** argv) {
          !beauty_cities_only_mode && !beauty_mines_only_mode && !beauty_farms_only_mode &&
          !beauty_tile_objects_only_mode && !infrastructure_isolation_mode &&
          !unit_isolation_mode);
+    if (std::getenv("C3X_LAB_V2_SUPPRESS_VEGETATION") != nullptr)
+        beauty_vegetation_enabled = false;
     bool beauty_shore_enabled = l95_mode || promotion_mode;
     bool beauty_terrain_enabled = !beauty_vegetation_only_mode &&
         !beauty_resources_only_mode && !beauty_cities_only_mode;
@@ -5011,6 +5014,14 @@ int main(int argc, char ** argv) {
     }
     if (l11_scene_enabled && !load_biq_window(argv[12], biq_window))
         return 1;
+    if (l11_scene_enabled && std::getenv("C3X_LAB_V2_SUPPRESS_RELIEF")) {
+        auto flatten_replaced_relief = [](std::vector<BiqWindowTile> &tiles) {
+            for (BiqWindowTile &tile : tiles)
+                if (tile.real == 5 || tile.real == 6) tile.real = tile.base;
+        };
+        flatten_replaced_relief(biq_window.tiles);
+        flatten_replaced_relief(biq_window.halo_tiles);
+    }
     if(l11_scene_enabled && labv2::placement_hooks.initialize)
         labv2::placement_hooks.initialize(argv[12],std::getenv("C3X_LAB_V2_FIXTURE_JSON"));
     if (l11_scene_enabled && labv2::hydrology_hooks.initialize)

@@ -1,0 +1,11 @@
+{
+  "schema": "c3x.lab_v2.module.v1",
+  "id": "source-fidelity-forest-r2-inland",
+  "owner": "Q7-presentation",
+  "provider": "cpp_packet",
+  "contract": 1,
+  "source": "Renderer/terrain_lab/v2/systems/objects/beauty_objects.cpp",
+  "shader": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/forest.hlsl",
+  "color_branch": "q6_scene_linear_premultiplied_v1",
+  "after": ["source-fidelity-mountain-r2-inland"]
+}

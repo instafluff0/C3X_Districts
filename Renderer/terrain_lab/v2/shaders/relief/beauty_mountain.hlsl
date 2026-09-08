@@ -20,12 +20,27 @@ Texture2D SnowColor : register(t9);
 Texture2D SnowHeight : register(t10);
 Texture2D SnowSpecular : register(t11);
 Texture2D MacroHeight : register(t12);
+#ifdef BEAUTY_COMPOSED_SHADOWS
+Texture2D ShadowField : register(t17);
+cbuffer ShadowFrame : register(b1) {
+    float4 ShadowU;
+    float4 ShadowV;
+    float4 ShadowL;
+    float4 ShadowOrigin;
+    float4 ShadowFlags;
+};
+#include "../lighting/shadow_visibility_v1.hlsl"
+#endif
 SamplerState Wrap : register(s0);
 SamplerState Clamp : register(s1);
 
 struct V {
     float3 position : POSITION;
+#ifdef BEAUTY_COMPOSED_SHADOWS
+    float4 world : TEXCOORD0;
+#else
     float3 world : TEXCOORD0;
+#endif
     float3 normal : NORMAL;
     float2 uv : TEXCOORD1;
     float3 material : TEXCOORD2;
@@ -42,7 +57,7 @@ struct Output { float4 color : SV_Target0; float validity : SV_Target1; };
 P VSMain(V input) {
     P output;
     output.position = float4(input.position, 1);
-    output.world = input.world;
+    output.world = input.world.xyz;
     output.normal = input.normal;
     output.uv = input.uv;
     output.material = input.material;
@@ -184,7 +199,12 @@ Output shade(P input) {
         albedo = lerp(albedo, rock_luma.xxx, 0.28) * float3(0.96, 1.0, 1.07);
     }
     float3 normal = Quality.x > 0.5 ? detail_normal(geometric, input.world, height_detail) : geometric;
+#ifdef BEAUTY_COMPOSED_SHADOWS
+    float shadow = q6_shadow_visibility(ShadowField, input.world, normal,
+        ShadowU, ShadowV, ShadowL, ShadowFlags.x > 0.5, true);
+#else
     float shadow = horizon_visibility(input.world);
+#endif
     float ndl = saturate(dot(normal, Sun.xyz));
     float wrap = saturate((dot(normal, Sun.xyz) + 0.18) / 1.18);
     float altitude = input.material.y > 1.5 ? input.material.x : 0;

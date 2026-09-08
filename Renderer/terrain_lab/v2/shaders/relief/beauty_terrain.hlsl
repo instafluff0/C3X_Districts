@@ -22,7 +22,20 @@ Texture2D HillDecalNormal : register(t13);
 Texture2D AuthoredHillHeight : register(t14);
 Texture2D TundraColor : register(t15);
 Texture2D TundraHeight : register(t16);
+#ifdef BEAUTY_COMPOSED_SHADOWS
+Texture2D ShadowField : register(t17);
+Texture2D TundraSpecular : register(t18);
+cbuffer ShadowFrame : register(b1) {
+    float4 ShadowU;
+    float4 ShadowV;
+    float4 ShadowL;
+    float4 ShadowOrigin;
+    float4 ShadowFlags;
+};
+#include "../lighting/shadow_visibility_v1.hlsl"
+#else
 Texture2D TundraSpecular : register(t17);
+#endif
 SamplerState Wrap : register(s0);
 SamplerState Clamp : register(s1);
 
@@ -191,11 +204,17 @@ Output shade(P input) {
     float sky = saturate(geometric.z * 0.5 + 0.5);
     float cavity = lerp(0.79, 1.0, smoothstep(0.02, 0.30, input.material.x));
     float3 ambient = Ambient.rgb * Ambient.a * lerp(0.56, 1.0, sky) * cavity;
+#ifdef BEAUTY_COMPOSED_SHADOWS
+    float shadow = q6_shadow_visibility(ShadowField, input.world, geometric,
+        ShadowU, ShadowV, ShadowL, ShadowFlags.x > 0.5, true);
+#else
+    float shadow = 1.0;
+#endif
     float3 diffuse = albedo * (ambient + SunColorExposure.rgb * Sun.w *
-                               (0.07 + 0.93 * wrap));
+                               (0.07 + 0.93 * wrap) * shadow);
     float roughness = lerp(0.92, 0.48, saturate(specular_map));
     float specular = ggx(geometric, Sun.xyz, normalize(View.xyz), roughness, 0.035);
-    float3 radiance = diffuse + SunColorExposure.rgb * Sun.w * specular;
+    float3 radiance = diffuse + SunColorExposure.rgb * Sun.w * specular * shadow;
     output.color = float4(max(radiance, 0) * alpha, alpha);
     output.validity = alpha;
     return output;

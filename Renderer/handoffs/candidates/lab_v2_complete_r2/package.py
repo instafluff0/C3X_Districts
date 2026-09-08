@@ -10,7 +10,8 @@ import sys
 import tempfile
 
 from catalog import (
-    AUDITS, BEAUTY, CASES, ENTRIES, EXCLUDED, STATE_OF_ART_STUDIES, SYSTEMS, V2,
+    AUDITS, BEAUTY, CASES, COMPOSED_STATE_OF_ART, ENTRIES, EXCLUDED,
+    STATE_OF_ART_STUDIES, SYSTEMS, V2,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -69,11 +70,35 @@ def state_document():
             'source_pack_hash': report['effective']['pack_hash'],
             'shader_hashes': report['effective']['shader_hashes'],
         })
+    composed_report=read(local(COMPOSED_STATE_OF_ART['report']))
+    composed_raw=next(row for row in composed_report['outputs']
+                      if row['image']==COMPOSED_STATE_OF_ART['raw_image'])
+    if composed_raw['sha256'] != COMPOSED_STATE_OF_ART['raw_sha256']:
+        raise ValueError('Recorded composed raw hash drift')
+    composed={**COMPOSED_STATE_OF_ART}
+    composed_hash_keys={'review_image':'review_sha256','comparison':'comparison_sha256'}
+    for name in ('review_image','comparison'):
+        row=pin(local(COMPOSED_STATE_OF_ART[name]))
+        if row['sha256'] != COMPOSED_STATE_OF_ART[composed_hash_keys[name]]:
+            raise ValueError('Recorded composed '+name+' hash drift')
+        composed[name]=row
+    composed['raw_image']={
+        'path':composed_raw['image'], 'sha256':composed_raw['sha256'],
+        'bytes':local(composed_raw['image']).stat().st_size,
+    }
+    composed['settings']=composed_report['effective']['settings']
+    composed['source_pack_hash']=composed_report['effective']['pack_hash']
+    composed['shader_hashes']=composed_report['effective']['shader_hashes']
+    repeat_report=read(local(COMPOSED_STATE_OF_ART['repeat_report']))
+    if [row['sha256'] for row in repeat_report['outputs']] != [
+            row['sha256'] for row in composed_report['outputs']]:
+        raise ValueError('Composed determinism repeat drift')
+    composed['exact_repeat_variants']=len(repeat_report['outputs'])
     return {
-        'schema':'c3x.lab_state_of_art.v1',
-        'id':'lab-v2-isolated-state-of-art-r1',
-        'status':'agent_visual_qa_pass',
-        'scope':'isolated macOS Metal studies; no combined scene and no Civ III/Windows integration',
+        'schema':'c3x.lab_state_of_art.v2',
+        'id':'lab-v2-source-fidelity-state-of-art-r2',
+        'status':'natural_scene_visual_qa_pass_ready_for_game_integration',
+        'scope':'four authoritative isolated macOS Metal studies plus one accepted 100-tile natural-scene composition; no Civ III/Windows integration',
         'visual_target':'Civ VI rendering quality using the Civ V Environment Skin workshop assets',
         'quality_contract':{
             'upstream_assets_are_authority':True,
@@ -84,23 +109,34 @@ def state_document():
             'review_pipeline':'scene-linear Metal, 4x MSAA, 16x anisotropy, exact source noon LUT where recorded',
         },
         'composition_contract':{
-            'combined_scene_authoritative':False,
+            'combined_scene_authoritative':True,
+            'selected_fixture':COMPOSED_STATE_OF_ART['fixture'],
+            'selected_report':COMPOSED_STATE_OF_ART['report'],
             'superseded_fixture':V2+'fixtures/objects/beauty-scene.fixture.json',
             'city_excludes_trees':True,
-            'basis':'Clutter.artdef ClipBuildings=true; final placement is an Integration responsibility',
+            'cities_rendered':False,
+            'cities_changed':False,
+            'blockers':[],
+            'basis':'Exact beauty_terrain and beauty_mountain providers plus opacity-aware BeautyStudies forest casters share the Q6 scene field; hydrology is retained after replacement relief. Clutter.artdef ClipBuildings=true still requires authoritative city footprints before game tree emission.',
         },
         'visual_qa':{
             'date':'2026-09-07',
             'backend':'macOS Metal',
             'fresh_quick_raw_hash_matches':4,
             'fresh_review_conversion_hash_matches':4,
+            'fresh_composed_metal_variants_passed':2,
+            'fresh_composed_exact_repeat_matches':2,
             'deterministic_check_variants_passed':32,
-            'direct_inspection':'pass',
+            'direct_inspection':'pass_composed_natural_scene',
             'observations':[
                 'Mountain silhouette is intact with readable ridges, strata, snow and face separation.',
                 'Grassland, plains and tundra are distinct; hill footprints and rock patches vary across all six hills.',
                 'Forest crowns retain irregular opacity-masked silhouettes and mixed full-height source forms.',
                 'Warrior viewer-right arm and eye are free of the prior clamped-UV metallic smear.',
+                'The selected composition visibly uses the exact source-heightfield mountain provider and distinct source-textured terrain provider at full scene scale.',
+                'Hills are continuous, independently seeded, and carry irregular source-rock patches without repeated per-tile layouts.',
+                'Forest bodies cast readable opacity-aware directional shadows into the shared terrain receiver field; the former circular contact-disk substitute is removed.',
+                'Retained rivers and water render after replacement relief without restoring the superseded low-detail hill or mountain geometry.',
             ],
         },
         'excluded_from_current_update':{
@@ -119,16 +155,17 @@ def state_document():
             'Hill rock-patch alpha combined with hill-top material is an inferred readability treatment, not a recovered Firaxis shader equation.',
             'The two source tundra snow-hill decal families are identified but not yet imported; the Lab does not fabricate replacements.',
             'Cities are deliberately excluded from this update and retain their pre-existing r2 disposition.',
-            'No combined scene is current evidence. Future composition must apply building, river and coastline vegetation exclusion before visual review.',
+            'The composed natural witness deliberately omits city rendering. Integration must use authoritative city building footprints to exclude trees; no city appearance change is selected.',
         ],
         'studies':studies,
+        'composed_witness':composed,
     }
 
 def refresh_state():
     state_path=HERE/'LAB_STATE_OF_ART.json'
     write(state_path,state_document())
     d=read(HERE/'manifest.json')
-    d['status']='prepared_mac_lab_state_of_art_not_promoted'
+    d['status']='prepared_source_fidelity_natural_scene_visual_qa_pass'
     d['state_of_art']=pin(state_path)
     excluded_city_pins={
         V2+'fixtures/objects/beauty-city.fixture.json',
@@ -147,13 +184,51 @@ def refresh_state():
         ]
     }
     source_paths.add(V2+'audits/beauty/CURRENT_VISUAL.md')
+    source_paths.add(V2+'audits/beauty/SOURCE_FIDELITY_PICKUP.md')
     source_paths.add(V2+'tests/test_lab_state_of_art_pickup.py')
+    source_paths.add(V2+'tests/lighting/shadow_contract.cpp')
+    source_paths.add(V2+'qa/source_fidelity_pickup_evidence.py')
+    source_paths.add(V2+'app/runner.py')
+    for paths in ENTRIES.values():
+        source_paths.update(V2+path for path in paths)
     for spec in STATE_OF_ART_STUDIES:
         source_paths.update(spec[key] for key in ('fixture','module','source','shader','audit'))
         replace_pin(d['evidence_files'],spec['report'])
         replace_pin(d['evidence_files'],spec['review_image'])
         raw=read(local(spec['report']))['outputs'][0]['image']
         replace_pin(d['evidence_files'],raw)
+    composed=COMPOSED_STATE_OF_ART
+    for key in ('fixture','terrain_module','mountain_module','forest_module',
+                'hydrology_module','terrain_shader','mountain_source',
+                'mountain_shader','forest_source','forest_shader','audit'):
+        source_paths.add(composed[key])
+    for report_name in ('report','repeat_report'):
+        replace_pin(d['evidence_files'],composed[report_name])
+        for output in read(local(composed[report_name]))['outputs']:
+            replace_pin(d['evidence_files'],output['image'])
+    for key in ('review_image','comparison'):
+        replace_pin(d['evidence_files'],composed[key])
+    replace_pin(d['evidence_files'],str(Path(composed['comparison']).with_name('comparison.json')))
+    d['systems']=[dict(
+        id=i,
+        legacy_handoffs=next(row['legacy_handoffs'] for row in d['systems'] if row['id']==i),
+        native_state=n,
+        selected=s,
+        remaining=r,
+        entry_points=[V2+x for x in ENTRIES.get(i,[])],
+    ) for i,gs,n,s,r in SYSTEMS]
+    d['cases']=[row for row in d['cases'] if row['id']!='source-fidelity-inland']
+    composed_outputs=[pin(local(row['image'])) for row in read(local(composed['report']))['outputs']]
+    d['cases'].insert(0,{
+        'id':'source-fidelity-inland',
+        'selection':'accepted natural-scene pickup; exact terrain/mountain providers, opacity-aware source-mesh tree shadows and retained hydrology; cities omitted and unchanged',
+        'fixture':composed['fixture'],
+        'report':composed['report'],
+        'frames':composed_outputs,
+        'review_image':pin(local(composed['review_image'])),
+        'comparison':pin(local(composed['comparison'])),
+        'runner_command':'compose',
+    })
     for path in source_paths:replace_pin(d['source_files'],path)
     for path in (
         'Renderer/packs/BeautyStudies/manifest.json',
@@ -164,7 +239,7 @@ def refresh_state():
     ):
         if local(path).is_file():replace_pin(d['local_assets'],path)
     write(HERE/'manifest.json',d)
-    print('Refreshed isolated Lab state of the art and package pins')
+    print('Refreshed source-fidelity Lab state of the art, composed witness and package pins')
 
 def shadow_probe():
     compiler = shutil.which('c++')
@@ -299,7 +374,10 @@ def freeze():
 def verify(with_evidence=False, with_assets=False, with_packets=False):
     d=read(HERE/'manifest.json');errors=[]
     if (d['approval'] is not None or d['visual_acceptance'] or
-            d['status'] not in {'prepared_not_promoted','prepared_mac_lab_state_of_art_not_promoted'}):
+            d['status'] not in {'prepared_not_promoted','prepared_mac_lab_state_of_art_not_promoted',
+                                'prepared_mac_lab_source_fidelity_not_promoted',
+                                'prepared_isolated_source_fidelity_composition_blocked',
+                                'prepared_source_fidelity_natural_scene_visual_qa_pass'}):
         errors.append('Preparation/approval contract changed')
     actual={relative(p) for p in (ROOT/'Renderer/handoffs').glob('L*.json')}
     if actual!={r['path'] for r in d['historical_handoffs']}:errors.append('Historical handoff inventory changed')
@@ -333,6 +411,22 @@ def replay(case_id, output):
     out=output.resolve();out.relative_to(ROOT/'Renderer/terrain_lab/v2/audits/beauty/out')
     if out.exists():raise ValueError('Replay output must be new; preserve previous best')
     if shutil.disk_usage(out.parent).free<8*1024**3:raise ValueError('8 GiB storage floor')
+    if case.get('runner_command') == 'compose':
+        subprocess.run([
+            sys.executable, str(ROOT/V2/'app/runner.py'), 'compose',
+            '--fixture', str(local(case['fixture'])),
+            '--candidate', 'consolidated-source-fidelity-replay',
+            '--output', str(out), '--hours', '12',
+        ], check=True, cwd=ROOT)
+        report=read(out/'report.json')
+        actual=[pin(local(row['image'])) for row in report['outputs']]
+        write(out/'replay.json',{
+            'case':case_id, 'outputs':actual, 'approval':None,
+            'reference_hashes_match':[a['sha256']==b['sha256']
+                                      for a,b in zip(actual,case['frames'])],
+        })
+        print('Replayed',case_id,'into',relative(out),'; inspect before claiming visual acceptance')
+        return
     expected={r['path']:r['sha256'] for r in d['packet_files']+d['source_files']}
     jobs=[]
     for job in case['portable_batch']:
@@ -373,6 +467,8 @@ def main():
         d=read(HERE/'LAB_STATE_OF_ART.json')
         for row in d['studies']:
             print(row['id']+': '+row['disposition']+' | '+row['review_image']['path'])
+        row=d['composed_witness']
+        print(row['id']+': '+row['disposition']+' | '+row['review_image']['path'])
     elif a.command=='verify':verify(a.evidence,a.assets,a.packets)
     elif a.command=='shadows':print(json.dumps(shadow_probe(),indent=2))
     elif a.command=='extract-source':

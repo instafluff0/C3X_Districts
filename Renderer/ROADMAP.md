@@ -101,18 +101,16 @@ control uses the same geometry and shader but recreates the planar, incomplete-
 material failure. This is an unoptimized standalone finding only; it does not
 close LQ0, establish D3D parity, or change Game Integration.
 
-The current [isolated Lab state of the art](handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.md)
-consolidates that mountain with the source-faithful grassland/plains/tundra and
-variable rocky-hill study, the full Civ V Environment Skin forest recipe, and
-the corrected Warrior. Fresh macOS Metal runs reproduce all four raw and review
-hashes exactly; 32 deterministic render variants and 97 Lab-v2 Python tests
-pass. Direct visual inspection retains all four. The pickup makes upstream
-assets/metadata authoritative, forbids arbitrary height shortening and
-nonuniform object scaling, and labels shader/placement inference explicitly.
-Cities are excluded from this update and keep the pre-existing r2 disposition.
-The old combined beauty scene is non-authoritative because it predates these
-fixes and may place vegetation through buildings. No Windows, Civ III,
-Integration, or LQ0 gate is advanced.
+The current [source-fidelity Lab state of the art](handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.md)
+consolidates the authoritative isolated mountain, grassland/plains/tundra/hills,
+forest and Warrior studies plus the accepted `source-fidelity-r11/inland`
+100-tile natural composition. R11 directly invokes `beauty_terrain` and
+`beauty_mountain`, registers opacity-tested source forest bodies in the shared
+directional shadow field, and redraws retained hydrology after suppressing the
+superseded low-detail relief. A separate r12 replay matches both raw zoom hashes.
+Cities are omitted and unchanged; Integration must use authoritative building
+footprints for tree exclusion. No Windows, Civ III, Integration, or LQ0 gate is
+advanced by this Mac Lab work.
 
 The [continental/source-baking pass](terrain_lab/v2/audits/beauty/CONTINENTAL_GROUND_PASS.md)
 recovers continental height fields and rejects a broad pale high-material mask.

@@ -15,12 +15,23 @@ Texture2D AmbientOcclusion : register(t6);
 Texture2D Gloss : register(t7);
 Texture2D Emissive : register(t8);
 Texture2D Opacity : register(t9);
+#ifdef BEAUTY_COMPOSED_SHADOWS
+Texture2D ShadowField : register(t17);
+cbuffer ShadowFrame : register(b1) {
+    float4 ShadowU;
+    float4 ShadowV;
+    float4 ShadowL;
+    float4 ShadowOrigin;
+    float4 ShadowFlags;
+};
+#include "../lighting/shadow_visibility_v1.hlsl"
+#endif
 SamplerState Wrap : register(s0);
 SamplerState Clamp : register(s1);
 
 struct V {
     float3 position : POSITION;
-    float3 world : TEXCOORD0;
+    float4 world : TEXCOORD0;
     float3 normal : NORMAL;
     float2 uv : TEXCOORD1;
     float4 material : TEXCOORD2;
@@ -39,7 +50,7 @@ struct Output { float4 color : SV_Target0; float validity : SV_Target1; };
 P VSMain(V input) {
     P output;
     output.position = float4(input.position, 1);
-    output.world = input.world;
+    output.world = input.world.xyz;
     output.normal = input.normal;
     output.uv = input.uv;
     output.material = input.material;
@@ -167,16 +178,22 @@ Output shade(P input) {
 
     float ndl = saturate(dot(normal, Sun.xyz));
     float diffuse = ndl;
+#ifdef BEAUTY_COMPOSED_SHADOWS
+    float shadow = q6_shadow_visibility(ShadowField, input.world, normal,
+        ShadowU, ShadowV, ShadowL, ShadowFlags.x > 0.5, true);
+#else
+    float shadow = 1.0;
+#endif
     float sky = saturate(normal.z * 0.5 + 0.5);
     float3 ambient = Ambient.rgb * Ambient.a * lerp(0.48, 1.0, sky) * ao;
     float3 radiance = albedo * (ambient + SunColorExposure.rgb * Sun.w *
-                                (0.035 + 0.965 * diffuse));
+                                (0.035 + 0.965 * diffuse) * shadow);
     float roughness = lerp(0.91, 0.31, saturate(gloss));
     if (kind > 0.5 && kind < 1.5) roughness = max(roughness, 0.72);
     float specular_scale = kind > 0.5 && kind < 1.5 ? 0.10 : 0.52;
     radiance += SunColorExposure.rgb * Sun.w * specular_scale *
                 ggx(normal, Sun.xyz, normalize(View.xyz), roughness,
-                    kind > 0.5 && kind < 1.5 ? 0.020 : 0.045);
+                    kind > 0.5 && kind < 1.5 ? 0.020 : 0.045) * shadow;
     if (!(kind > 0.5 && kind < 1.5) && input.secondary.y > 0.5)
         radiance += Emissive.Sample(Clamp, input.uv).rgb * 0.035;
     float rim = pow(1 - saturate(dot(normal, normalize(View.xyz))), 3);

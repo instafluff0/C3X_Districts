@@ -1,22 +1,27 @@
-# Current pickup: isolated source-faithful Lab state of the art
+# Current pickup: accepted source-faithful natural composition
 
-The current visual authority is the four-study
+The current visual authority is the four isolated studies and the accepted
+`source-fidelity-r11/inland` 100-tile composition in the
 [Lab state-of-the-art pickup](../../../../handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.md):
-mountain, grassland/plains/tundra/hills, forest and Warrior. Cities are excluded
-from this update and preserve their existing r2 selection unchanged.
-These are isolated macOS Metal witnesses using upstream art and metadata; they
-do not wait on a combined scene, Windows or Civ III integration. The retained
-images are machine-pinned in `LAB_STATE_OF_ART.json` and are revalidated by the
-pickup's focused validator.
+mountain, grassland/plains/tundra/hills, forest and Warrior. R11 directly
+composes the exact `beauty_terrain` and `beauty_mountain` providers, uses actual
+opacity-tested forest meshes as shared directional-shadow casters, and restores
+retained hydrology without the superseded low-detail relief. Cities are excluded
+from this update and preserve their existing r2 selection unchanged. These are
+macOS Metal witnesses using upstream art and metadata; they do not claim Windows
+or Civ III integration. [Current frame](out/source-fidelity-r11/inland/h12-z1-pan00.png)
+and [lossless r4 comparison](out/source-fidelity-r11/inland/comparison.png).
 
 The old `beauty-scene.fixture.json` is superseded as current evidence. It
 predates the source-fidelity corrections and can place trees through buildings.
-Future composition must enforce the source forest exclusions for buildings,
+The accepted composed witness omits cities and changes no city code or visual
+selection. Integration must enforce the source forest exclusions for buildings,
 rivers and coastlines without flattening or shortening source objects. The
 broader historical pickup catalog remains available for later Integration, but
-does not override these four current visual selections.
+does not override the current per-system selections. See
+[the selected composition and exact boundaries](SOURCE_FIDELITY_PICKUP.md).
 
-# Preserved focus: city quality
+# Preserved history: city quality (unchanged by current pickup)
 
 The user redirected the Lab to city sizes, eras and cultures, including night
 lights reflected in water, and permits modest cross-tile city footprints.

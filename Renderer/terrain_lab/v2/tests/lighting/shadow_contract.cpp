@@ -31,6 +31,9 @@ int main(){
  assert(alpha_nearest(t,.1,.1)==0);
  t.format=78;t.mips[0]={16,std::vector<uint8_t>(16,0)};t.mips[0].bytes[0]=255;
  assert(alpha_nearest(t,.1,.1)==1);t.mips[0].bytes[2]=1;assert(alpha_nearest(t,.1,.1)==0);
+ t.format=80;t.mips[0]={8,std::vector<uint8_t>(8,0)};t.mips[0].bytes[1]=255;
+ t.mips[0].bytes[2]=6;assert(alpha_nearest(t,.1,.1)==0);
+ t.mips[0].bytes[2]=7;assert(alpha_nearest(t,.1,.1)==1);
  bool rejected=false;try{build_shadow_frame(tris,c3x_renderer::evaluate_environment(12,0),128,.1f);}catch(std::runtime_error const&){rejected=true;}assert(rejected);
  std::cout<<"PASS four-phase shadow direction, receiver intersection, permutation, extent and static-idle contract\n";
 }

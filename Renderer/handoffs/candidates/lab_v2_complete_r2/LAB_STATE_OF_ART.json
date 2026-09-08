@@ -1,8 +1,8 @@
 {
-  "schema": "c3x.lab_state_of_art.v1",
-  "id": "lab-v2-isolated-state-of-art-r1",
-  "status": "agent_visual_qa_pass",
-  "scope": "isolated macOS Metal studies; no combined scene and no Civ III/Windows integration",
+  "schema": "c3x.lab_state_of_art.v2",
+  "id": "lab-v2-source-fidelity-state-of-art-r2",
+  "status": "natural_scene_visual_qa_pass_ready_for_game_integration",
+  "scope": "four authoritative isolated macOS Metal studies plus one accepted 100-tile natural-scene composition; no Civ III/Windows integration",
   "visual_target": "Civ VI rendering quality using the Civ V Environment Skin workshop assets",
   "quality_contract": {
     "upstream_assets_are_authority": true,
@@ -13,23 +13,34 @@
     "review_pipeline": "scene-linear Metal, 4x MSAA, 16x anisotropy, exact source noon LUT where recorded"
   },
   "composition_contract": {
-    "combined_scene_authoritative": false,
+    "combined_scene_authoritative": true,
+    "selected_fixture": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json",
+    "selected_report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/report.json",
     "superseded_fixture": "Renderer/terrain_lab/v2/fixtures/objects/beauty-scene.fixture.json",
     "city_excludes_trees": true,
-    "basis": "Clutter.artdef ClipBuildings=true; final placement is an Integration responsibility"
+    "cities_rendered": false,
+    "cities_changed": false,
+    "blockers": [],
+    "basis": "Exact beauty_terrain and beauty_mountain providers plus opacity-aware BeautyStudies forest casters share the Q6 scene field; hydrology is retained after replacement relief. Clutter.artdef ClipBuildings=true still requires authoritative city footprints before game tree emission."
   },
   "visual_qa": {
     "date": "2026-09-07",
     "backend": "macOS Metal",
     "fresh_quick_raw_hash_matches": 4,
     "fresh_review_conversion_hash_matches": 4,
+    "fresh_composed_metal_variants_passed": 2,
+    "fresh_composed_exact_repeat_matches": 2,
     "deterministic_check_variants_passed": 32,
-    "direct_inspection": "pass",
+    "direct_inspection": "pass_composed_natural_scene",
     "observations": [
       "Mountain silhouette is intact with readable ridges, strata, snow and face separation.",
       "Grassland, plains and tundra are distinct; hill footprints and rock patches vary across all six hills.",
       "Forest crowns retain irregular opacity-masked silhouettes and mixed full-height source forms.",
-      "Warrior viewer-right arm and eye are free of the prior clamped-UV metallic smear."
+      "Warrior viewer-right arm and eye are free of the prior clamped-UV metallic smear.",
+      "The selected composition visibly uses the exact source-heightfield mountain provider and distinct source-textured terrain provider at full scene scale.",
+      "Hills are continuous, independently seeded, and carry irregular source-rock patches without repeated per-tile layouts.",
+      "Forest bodies cast readable opacity-aware directional shadows into the shared terrain receiver field; the former circular contact-disk substitute is removed.",
+      "Retained rivers and water render after replacement relief without restoring the superseded low-detail hill or mountain geometry."
     ]
   },
   "excluded_from_current_update": {
@@ -48,7 +59,7 @@
     "Hill rock-patch alpha combined with hill-top material is an inferred readability treatment, not a recovered Firaxis shader equation.",
     "The two source tundra snow-hill decal families are identified but not yet imported; the Lab does not fabricate replacements.",
     "Cities are deliberately excluded from this update and retain their pre-existing r2 disposition.",
-    "No combined scene is current evidence. Future composition must apply building, river and coastline vegetation exclusion before visual review."
+    "The composed natural witness deliberately omits city rendering. Integration must use authoritative city building footprints to exclude trees; no city appearance change is selected."
   ],
   "studies": [
     {
@@ -142,7 +153,7 @@
       "source": "Renderer/terrain_lab/v2/systems/objects/beauty_objects.cpp",
       "shader": "Renderer/terrain_lab/v2/shaders/objects/beauty_objects.hlsl",
       "audit": "Renderer/terrain_lab/v2/audits/objects/CIV5_TREE_SOURCE_PASS.md",
-      "report": "Renderer/terrain_lab/v2/audits/objects/out/beauty-trees-r18/report.json",
+      "report": "Renderer/terrain_lab/v2/audits/objects/out/beauty-trees-r19/report.json",
       "review_image": {
         "path": "Renderer/terrain_lab/v2/audits/objects/out/beauty-trees-r18/h12-z1-pan00-civ5-lut.png",
         "sha256": "fbd3c494d19d16c7becf7729db7d0c4e993eb788262ec6ad10ad1131ecf32bc4",
@@ -152,7 +163,7 @@
       "raw_sha256": "36365a40cdb66430d624cb8af188f0bd04ff285f8c87c974570e14d276ddc209",
       "disposition": "user_good_for_now",
       "raw_image": {
-        "path": "Renderer/terrain_lab/v2/audits/objects/out/beauty-trees-r18/h12-z1-pan00.bmp",
+        "path": "Renderer/terrain_lab/v2/audits/objects/out/beauty-trees-r19/h12-z1-pan00.bmp",
         "sha256": "36365a40cdb66430d624cb8af188f0bd04ff285f8c87c974570e14d276ddc209",
         "bytes": 6291510
       },
@@ -169,12 +180,12 @@
         "render_scale": 1,
         "samples": 4
       },
-      "source_pack_hash": "50acf3d362e96ab7b962438d611c75192d54905ea40709ed5d5e07b76e67f3d5",
+      "source_pack_hash": "d209cab44875e3ca7b06fa2a76391453b71f4a707bdf17bced920a02ff538e78",
       "shader_hashes": {
-        "PSFeature": "f743b70e91fbbd93e02fcdd2053c787b01ee72d16c6b483a387e89bf84c357c7",
-        "PSMain": "38e2996d6492150086224a99c73fd188f36feca764ab55a9bc1d670c5499f597",
-        "VSFeature": "28340cdda42834f6e2f5523cc78d6d3578c710eecf79db5fb41c12da4de648b3",
-        "VSMain": "117324f8a2eb1191c7fb9ee732a94f46d643aa9569d78d6f2530ca67f7e0a6bb"
+        "PSFeature": "fc16e3799a2801aa1ee6c865986476aa1c746a0038fee5935eb3fe5e764a3159",
+        "PSMain": "d9188ef7a6d20ca34bd37600e8a961fd9435c2629806b0fb46b37c32eea798b8",
+        "VSFeature": "44068f43988caf372c27b77d18ee0e30fa1f560feb67ad7a7d71b029e9cfd800",
+        "VSMain": "c4857bafd4f9cdefff96a2130e1a4c36d89ce20fb5ef3b03e7ab29fbc4fad2b7"
       }
     },
     {
@@ -184,7 +195,7 @@
       "source": "Renderer/terrain_lab/v2/systems/objects/beauty_objects.cpp",
       "shader": "Renderer/terrain_lab/v2/shaders/objects/beauty_objects.hlsl",
       "audit": "Renderer/terrain_lab/v2/audits/objects/WARRIOR_SOURCE_PASS.md",
-      "report": "Renderer/terrain_lab/v2/audits/objects/out/beauty-warrior-r4/report.json",
+      "report": "Renderer/terrain_lab/v2/audits/objects/out/beauty-warrior-r5/report.json",
       "review_image": {
         "path": "Renderer/terrain_lab/v2/audits/objects/out/beauty-warrior-r4/h12-z1-pan00-civ5-lut.png",
         "sha256": "e90022920d1317fc113051475280d51fc4222ca37324acca898a58f4e8111d1a",
@@ -194,7 +205,7 @@
       "raw_sha256": "35e3930cfa63fdbbc442a92644f254c5986e2e1627541e4ba38e835bdc82736d",
       "disposition": "user_good_for_now",
       "raw_image": {
-        "path": "Renderer/terrain_lab/v2/audits/objects/out/beauty-warrior-r4/h12-z1-pan00.bmp",
+        "path": "Renderer/terrain_lab/v2/audits/objects/out/beauty-warrior-r5/h12-z1-pan00.bmp",
         "sha256": "35e3930cfa63fdbbc442a92644f254c5986e2e1627541e4ba38e835bdc82736d",
         "bytes": 6291510
       },
@@ -215,9 +226,81 @@
       "shader_hashes": {
         "PSFeature": "fc16e3799a2801aa1ee6c865986476aa1c746a0038fee5935eb3fe5e764a3159",
         "PSMain": "d9188ef7a6d20ca34bd37600e8a961fd9435c2629806b0fb46b37c32eea798b8",
-        "VSFeature": "28340cdda42834f6e2f5523cc78d6d3578c710eecf79db5fb41c12da4de648b3",
-        "VSMain": "117324f8a2eb1191c7fb9ee732a94f46d643aa9569d78d6f2530ca67f7e0a6bb"
+        "VSFeature": "44068f43988caf372c27b77d18ee0e30fa1f560feb67ad7a7d71b029e9cfd800",
+        "VSMain": "c4857bafd4f9cdefff96a2130e1a4c36d89ce20fb5ef3b03e7ab29fbc4fad2b7"
       }
     }
-  ]
+  ],
+  "composed_witness": {
+    "id": "natural_scene_100_tile",
+    "fixture": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json",
+    "terrain_module": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/terrain.module.json",
+    "mountain_module": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/mountain.module.json",
+    "forest_module": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/forest.module.json",
+    "hydrology_module": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/hydrology.module.json",
+    "terrain_shader": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/terrain.hlsl",
+    "mountain_source": "Renderer/terrain_lab/v2/systems/relief/beauty_mountain.cpp",
+    "mountain_shader": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/mountain.hlsl",
+    "forest_source": "Renderer/terrain_lab/v2/systems/objects/beauty_objects.cpp",
+    "forest_shader": "Renderer/terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/forest.hlsl",
+    "audit": "Renderer/terrain_lab/v2/audits/beauty/SOURCE_FIDELITY_PICKUP.md",
+    "report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/report.json",
+    "repeat_report": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r12/inland/report.json",
+    "raw_image": {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/h12-z1-pan00.bmp",
+      "sha256": "b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c",
+      "bytes": 4352054
+    },
+    "raw_sha256": "b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c",
+    "review_image": {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/h12-z1-pan00.png",
+      "sha256": "95a631ef1d18adce83328c1ba02e588c2f7e45f626ff02da776f5832337a5f6d",
+      "bytes": 848349
+    },
+    "review_sha256": "95a631ef1d18adce83328c1ba02e588c2f7e45f626ff02da776f5832337a5f6d",
+    "comparison": {
+      "path": "Renderer/terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/comparison.png",
+      "sha256": "00a783a992bf1c0bcbb4fd81de5dee23a130a5a286f73933786203e197f53e08",
+      "bytes": 1444944
+    },
+    "comparison_sha256": "00a783a992bf1c0bcbb4fd81de5dee23a130a5a286f73933786203e197f53e08",
+    "disposition": "agent_visual_qa_pass_ready_for_game_integration",
+    "settings": {
+      "anisotropy": 16,
+      "camera_offsets": [
+        [
+          0,
+          0
+        ]
+      ],
+      "mip_bias": -1.0,
+      "postprocess": {
+        "contract": 2,
+        "owner": "Q1-sampling",
+        "shader": "Renderer/terrain_lab/v2/shaders/sampling/linear_reconstruct.hlsl"
+      },
+      "render_scale": 2,
+      "samples": 4
+    },
+    "source_pack_hash": "c07ddf49e9cac948d519517d8e3757c99593f37d1a8fea09dfbeaa0cbb682556",
+    "shader_hashes": {
+      "m0/PSFeature": "8168f3c1866f868cd06354ca0f603cb76df252c3963cc4a22c9aa1153144fa12",
+      "m0/PSMain": "3b54f3d3ebc0512d5a737d378c63e51eef00c432dc8c2cfdd079c15e486cf284",
+      "m0/VSFeature": "d29e2bb29fff10c0ffe8405de86ddfb185493381ff34c57898063a679031b58e",
+      "m0/VSMain": "f08a346051a2b9affa0512a0bab8a0a0d4e587acad555eadf6c5e6909f0a65c2",
+      "m1/PSFeature": "9225a382fb95d54a51f3349472324eee4a285d9449f5515008d81409140c6959",
+      "m1/PSMain": "eeb35d5b7b7da2f56385daeb9713f725c25ec08a2347eec949caff4968ba300e",
+      "m1/VSFeature": "363d12fea035eef7f0e14011000b83d65b352ee3b416dcbe3259bd6fb1734d5e",
+      "m1/VSMain": "197871d0de472797009a5c83decbd03a81a6258c93223e9e98f8d60233889389",
+      "m2/PSFeature": "92b53c633a18638729b1e43e18605f292b7b3b55c7ad5dbf0c0ee274c130d041",
+      "m2/PSMain": "8f1c44d0b23ab8fff6b8e61fc47dfebbf6c25c758b8c72e9bc4d054d0692b201",
+      "m2/VSFeature": "44068f43988caf372c27b77d18ee0e30fa1f560feb67ad7a7d71b029e9cfd800",
+      "m2/VSMain": "c4857bafd4f9cdefff96a2130e1a4c36d89ce20fb5ef3b03e7ab29fbc4fad2b7",
+      "m3/PSFeature": "bbbb2ebea321fe061176ac26e0ead5a21b23bb39c3bf1fc4a2227075ce32421b",
+      "m3/PSMain": "b45abb9f6199c0a5069c13d75b18d05b743e3c458ef5bb51c139a033bd551e52",
+      "m3/VSFeature": "d0446b78e6052c3ebd4e5cc7e61ab51a2f1e54c7c159242b2a8c8cdef65b7d3d",
+      "m3/VSMain": "dc0323e6d5f5dd02ba59678c2295376cea66fd25297af33e7dd00fd06ef1c2e4"
+    },
+    "exact_repeat_variants": 2
+  }
 }

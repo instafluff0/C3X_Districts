@@ -607,6 +607,19 @@ def packet(cache, f, module, scene, phase, zoom, pack_hash, query=None):
         environment.pop('C3X_LAB_V2_RIVER_CORRIDOR',None)
         environment.pop('C3X_LAB_V2_RIVER_BANK_ROCKS',None)
         environment.pop('C3X_LAB_V2_RIVER_POOL_PROFILES',None)
+        environment.pop('C3X_LAB_V2_SUPPRESS_VEGETATION',None)
+        environment.pop('C3X_LAB_V2_SUPPRESS_RELIEF',None)
+        if module.get('source_fidelity'):
+            if module['source_fidelity'] != 1:
+                raise ValueError('Unsupported composed source-fidelity version')
+        if module.get('suppress_vegetation'):
+            if module['suppress_vegetation'] != 1:
+                raise ValueError('Unsupported vegetation suppression version')
+            environment['C3X_LAB_V2_SUPPRESS_VEGETATION']='1'
+        if module.get('suppress_relief'):
+            if module['suppress_relief'] != 1:
+                raise ValueError('Unsupported relief suppression version')
+            environment['C3X_LAB_V2_SUPPRESS_RELIEF']='1'
         if 'river_pool_profiles' in module:
             resource=module['river_pool_profiles']
             if (module.get('river_corridor') != 1 or set(resource) != {'path','sha256'} or

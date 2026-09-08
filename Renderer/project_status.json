@@ -231,18 +231,24 @@
       "requested_by_user": true,
       "path": "handoffs/candidates/lab_v2_complete_r2/README.md",
       "manifest": "handoffs/candidates/lab_v2_complete_r2/manifest.json",
-      "scope": "Historical implementation catalog preserved; current visual authority is four isolated source-faithful macOS Metal studies for mountain, grassland/plains/tundra/hills, forest and Warrior. Cities are unchanged and excluded from this update; no native edits or formal gate advancement.",
+      "scope": "Historical implementation catalog preserved; current visual authority is four source-faithful isolated macOS Metal studies plus the accepted 100-tile r11 natural composition using exact terrain/mountain providers, opacity-aware tree shadows and retained hydrology. Cities are unchanged and omitted; no native edits or formal gate advancement.",
       "baseline_commit": "a0683e0d2a5cb0694961d1993b4c56a8aa1d1323",
       "approval": null,
       "required_user_action": [],
       "lab_state_of_art": {
         "path": "handoffs/candidates/lab_v2_complete_r2/LAB_STATE_OF_ART.json",
-        "status": "agent_visual_qa_pass",
+        "status": "natural_scene_visual_qa_pass_ready_for_game_integration",
         "fresh_raw_hash_matches": 4,
         "fresh_review_hash_matches": 4,
+        "fresh_composed_metal_variants_passed": 2,
+        "fresh_composed_exact_repeat_matches": 2,
         "deterministic_metal_variants_passed": 32,
-        "lab_v2_python_tests_passed": 97,
-        "combined_scene_authoritative": false,
+        "lab_v2_python_tests_passed": 34,
+        "prior_full_lab_v2_tests_passed": 97,
+        "combined_scene_authoritative": true,
+        "combined_fixture": "terrain_lab/v2/fixtures/beauty/source-fidelity-r2/inland/fixture.json",
+        "combined_report": "terrain_lab/v2/audits/beauty/out/source-fidelity-r11/inland/report.json",
+        "combined_noon_zoom1_sha256": "b646fe09eb6ff7dc2653a5cc25a6cdce2fe1fe543cc65dbc1dae0eb8ce8be98c",
         "cities_changed": false,
         "windows_or_civ3_used": false
       },
@@ -250,13 +256,13 @@
       "known_blockers": [
         "Frozen L19A tile_object_runtime.bin hash mismatch; full prerequisites fail after 379 unit tests pass",
         "Older frozen-profile incremental boundary parity failure remains open",
-        "No all-new-system combined production visual checkpoint yet"
+        "Accepted source-fidelity natural composition remains Lab-only until Game Integration ports it; no all-new-system production checkpoint yet"
       ],
       "historical_package": "handoffs/candidates/lab_v2_terrain_lighting_r1/README.md",
       "gates_advanced": [],
       "delivery": {
         "recipient": "Integration agent",
-        "status": "concrete package and validation sent directly",
+        "status": "r11 source-fidelity natural composition selected and ready for Integration pickup; cities remain unchanged",
         "validation": "handoffs/candidates/lab_v2_complete_r2/VALIDATION.json"
       }
     }
