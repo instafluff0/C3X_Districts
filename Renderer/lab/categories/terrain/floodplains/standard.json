@@ -1,0 +1,65 @@
+{
+  "id": "floodplains",
+  "title": "Floodplains",
+  "revision": 1,
+  "approved_revision": 1,
+  "approval": "Renderer/lab/baseline.json",
+  "depends_on": [
+    "day-night",
+    "shadows",
+    "transitions"
+  ],
+  "implementation": [
+    "Renderer/native/city_fidelity/terrain.hlsl",
+    "Renderer/native/source_fidelity/geometry.h",
+    "Renderer/native/source_fidelity/runtime.h",
+    "Renderer/native/profile_v2/terrain_query.h"
+  ],
+  "recipe": {
+    "terrain": 4,
+    "feature": 4,
+    "objects": false,
+    "hours": [
+      12
+    ],
+    "zooms": [
+      128
+    ],
+    "cases": [
+      "detail",
+      "gameplay"
+    ]
+  },
+  "tests": [
+    "Renderer.native.source_fidelity.test_contract",
+    "Renderer.native.test_profile_v2"
+  ],
+  "references": {
+    "d3d11": [
+      {
+        "image": "Renderer/lab/references/floodplains/r1/detail/detail-h12-z128.bmp",
+        "sha256": "e1920fed5802433b2126784f84b1c2cbea367e371b77cab8237b91f195e47b17",
+        "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
+        "case": "detail",
+        "hour": 12,
+        "zoom": 128,
+        "backend": "d3d11",
+        "fixture": "synthetic"
+      },
+      {
+        "image": "Renderer/lab/references/floodplains/r1/gameplay/gameplay-h12-z128.bmp",
+        "sha256": "2d089db9f5963de960c9f625d66c8bba8d81832dcfc32c6fcb1d842f06289d35",
+        "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
+        "case": "gameplay",
+        "hour": 12,
+        "zoom": 128,
+        "backend": "d3d11",
+        "fixture": "synthetic"
+      }
+    ]
+  },
+  "candidate": null,
+  "limitations": [
+    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
+  ]
+}

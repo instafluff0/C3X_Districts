@@ -1,0 +1,66 @@
+{
+  "id": "hills",
+  "title": "Hills",
+  "revision": 1,
+  "approved_revision": 1,
+  "approval": "Renderer/lab/baseline.json",
+  "depends_on": [
+    "day-night",
+    "shadows",
+    "transitions"
+  ],
+  "implementation": [
+    "Renderer/native/source_fidelity/geometry.h",
+    "Renderer/native/source_fidelity/runtime.h",
+    "Renderer/native/source_fidelity/kernels.h",
+    "Renderer/native/city_fidelity/mountain.hlsl",
+    "Renderer/native/city_fidelity/terrain.hlsl"
+  ],
+  "recipe": {
+    "terrain": 2,
+    "feature": 5,
+    "objects": false,
+    "hours": [
+      12
+    ],
+    "zooms": [
+      128
+    ],
+    "cases": [
+      "detail",
+      "gameplay"
+    ]
+  },
+  "tests": [
+    "Renderer.native.source_fidelity.test_contract",
+    "Renderer.native.test_profile_v2"
+  ],
+  "references": {
+    "d3d11": [
+      {
+        "image": "Renderer/lab/references/hills/r1/detail/detail-h12-z128.bmp",
+        "sha256": "1b274311053409ee31d8997c029d1eb9e9f7c10d3e524e71e27c2590dc36d2aa",
+        "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
+        "case": "detail",
+        "hour": 12,
+        "zoom": 128,
+        "backend": "d3d11",
+        "fixture": "synthetic"
+      },
+      {
+        "image": "Renderer/lab/references/hills/r1/gameplay/gameplay-h12-z128.bmp",
+        "sha256": "57d5b59c58158d9bf8f886c7f781d694955474b9823fc6b12c6c1ca393f8e440",
+        "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
+        "case": "gameplay",
+        "hour": 12,
+        "zoom": 128,
+        "backend": "d3d11",
+        "fixture": "synthetic"
+      }
+    ]
+  },
+  "candidate": null,
+  "limitations": [
+    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
+  ]
+}

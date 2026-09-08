@@ -1,0 +1,40 @@
+{
+  "id": "units",
+  "title": "Units",
+  "revision": 1,
+  "approved_revision": 1,
+  "approval": "Renderer/lab/baseline.json",
+  "depends_on": [
+    "day-night",
+    "shadows"
+  ],
+  "implementation": [
+    "Renderer/native/c3x_renderer.cpp",
+    "Renderer/native/terrain_scene_runtime.cpp",
+    "Renderer/native/animation_runtime.h"
+  ],
+  "recipe": {
+    "terrain": 2,
+    "feature": 2,
+    "objects": false,
+    "hours": [
+      12
+    ],
+    "zooms": [
+      128
+    ],
+    "cases": [
+      "detail",
+      "gameplay"
+    ]
+  },
+  "tests": [
+    "Renderer.native.test_animation_runtime",
+    "Renderer.native.test_unit_animation_runtime"
+  ],
+  "references": {},
+  "candidate": null,
+  "limitations": [
+    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
+  ]
+}

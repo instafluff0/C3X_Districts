@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "categories": {
+"grassland": "terrain/grassland",
+    "plains": "terrain/plains",
+    "desert": "terrain/desert",
+    "tundra": "terrain/tundra",
+    "floodplains": "terrain/floodplains",
+    "transitions": "terrain/transitions",
+    "hills": "relief/hills",
+    "mountains": "relief/mountains",
+    "forests": "vegetation/forests",
+    "jungles": "vegetation/jungles",
+    "shorelines": "water/shorelines",
+    "seas-oceans": "water/seas-oceans",
+    "rivers": "water/rivers",
+    "resources": "objects/resources",
+    "cities": "objects/cities",
+    "units": "objects/units",
+    "infrastructure": "objects/infrastructure",
+    "day-night": "lighting/day-night",
+    "shadows": "lighting/shadows",
+    "animation": "animation"
+  }
+}

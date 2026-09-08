@@ -1,0 +1,65 @@
+{
+  "id": "jungles",
+  "title": "Jungles",
+  "revision": 1,
+  "approved_revision": 1,
+  "approval": "Renderer/lab/baseline.json",
+  "depends_on": [
+    "day-night",
+    "shadows",
+    "transitions"
+  ],
+  "implementation": [
+    "Renderer/native/source_fidelity/geometry.h",
+    "Renderer/native/source_fidelity/runtime.h",
+    "Renderer/native/city_fidelity/objects.hlsl",
+    "Renderer/native/terrain_scene_runtime.cpp"
+  ],
+  "recipe": {
+    "terrain": 2,
+    "feature": 8,
+    "objects": false,
+    "hours": [
+      12
+    ],
+    "zooms": [
+      128
+    ],
+    "cases": [
+      "detail",
+      "gameplay"
+    ]
+  },
+  "tests": [
+    "Renderer.native.source_fidelity.test_contract",
+    "Renderer.native.test_profile_v2"
+  ],
+  "references": {
+    "d3d11": [
+      {
+        "image": "Renderer/lab/references/jungles/r1/detail/detail-h12-z128.bmp",
+        "sha256": "6ff57725eabd357d5d3ac66392cacb409ae45aa8aef151e896b0078c713a4d92",
+        "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
+        "case": "detail",
+        "hour": 12,
+        "zoom": 128,
+        "backend": "d3d11",
+        "fixture": "synthetic"
+      },
+      {
+        "image": "Renderer/lab/references/jungles/r1/gameplay/gameplay-h12-z128.bmp",
+        "sha256": "b410e6b9b59432f12f083c35f5784463b5868f86dfd94ec9093795e806934e84",
+        "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
+        "case": "gameplay",
+        "hour": 12,
+        "zoom": 128,
+        "backend": "d3d11",
+        "fixture": "synthetic"
+      }
+    ]
+  },
+  "candidate": null,
+  "limitations": [
+    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
+  ]
+}

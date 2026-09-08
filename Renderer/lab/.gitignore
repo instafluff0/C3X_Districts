@@ -1,0 +1,5 @@
+/out/
+/references/
+/.cache/
+/.local/
+__pycache__/

@@ -1,0 +1,39 @@
+{
+  "id": "infrastructure",
+  "title": "Infrastructure",
+  "revision": 1,
+  "approved_revision": 1,
+  "approval": "Renderer/lab/baseline.json",
+  "depends_on": [
+    "day-night",
+    "shadows"
+  ],
+  "implementation": [
+    "Renderer/native/c3x_renderer.cpp",
+    "Renderer/native/terrain_scene_runtime.cpp"
+  ],
+  "recipe": {
+    "terrain": 2,
+    "feature": 2,
+    "objects": true,
+    "hours": [
+      12
+    ],
+    "zooms": [
+      128
+    ],
+    "cases": [
+      "detail",
+      "gameplay"
+    ]
+  },
+  "tests": [
+    "Renderer.native.source_fidelity.test_contract",
+    "Renderer.native.test_profile_v2"
+  ],
+  "references": {},
+  "candidate": null,
+  "limitations": [
+    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
+  ]
+}
