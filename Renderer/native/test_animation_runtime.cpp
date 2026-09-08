@@ -79,6 +79,9 @@ int main(int argc, char ** argv) {
     double late = ambient_animation_time(9000000123ll, 1000, 2.0, 17);
     assert(late == ambient_animation_time(9000002123ll, 1000, 2.0, 17));
     assert(ambient_animation_time(1, 0, 2, 0) == 0);
+    // Ambient source timing is independent of a shorter Civ III cursor span.
+    assert(ambient_animation_frame(1500,1000,4.0,121,0)==45);
+    assert(ambient_animation_frame(5500,1000,4.0,121,0)==45);
     // Repeated draws and skipped draws sample exactly the same absolute phase.
     assert(sample_animation_mesh(mesh, late, true, vertices));
     auto snapshot = vertices;

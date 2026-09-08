@@ -24,6 +24,9 @@ SOURCE_TINTS = {"BaseMale_SkinColor_Caucasian": (.878, .765, .647),
     "Horse_Secondary": (.404, .345, .239), "Infantry_European": (.651, .514, .239),
     "Vehicle_Woodland": (.431, .596, .290), "Wood": (.784, .580, .302),
     None: (1., 1., 1.), "USE_CIV_COLOR": (1., 1., 1.)}
+AMBIENT_SOURCE_ACTIONS = {
+    "idle", "fortress", "road", "mine", "irrigate", "jungle", "forest", "plant",
+}
 
 
 def document(root: Path, relative: str) -> dict:
@@ -120,7 +123,7 @@ def build(packs: list[Path], output: Path, standard_roster: bool = False, reuse_
                         for action in unit["actions"].values() for part in action["parts"]}
     result = {"schema": "c3x.unit_animation_runtime.v1", "units": {},
               "runtime_enabled": False,
-              "clock": "native_action_cursor; no independent gameplay clock",
+              "clock": "native action cursor for gameplay; pause-filtered source time for ambient loops",
               "placement": "native_body_anchor; whole-kit planar root travel removed; joint and vertical motion retained"}
     for name in ("clips", "textures"):
         (output/name).mkdir(parents=True, exist_ok=True)
@@ -314,7 +317,11 @@ def build(packs: list[Path], output: Path, standard_roster: bool = False, reuse_
                   **{f"key{i}": key for i, key in enumerate(keys)}}
         complete = bool(keys)
         for action, data in unit["actions"].items():
-            target = {"part_count": len(data["parts"]), "loop": int(data["loop"])}
+            ambient = bool(data["loop"] and action in AMBIENT_SOURCE_ACTIONS)
+            target = {"part_count": len(data["parts"]), "loop": int(data["loop"]),
+                      "ambient": int(ambient)}
+            if ambient:
+                target.update(duration=data["duration"], frames=data["frames"])
             if data.get('allow_exit_clip'):target['allow_exit_clip']=1
             for i, part in enumerate(data["parts"]):
                 material = part["material"]

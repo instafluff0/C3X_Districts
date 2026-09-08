@@ -1525,7 +1525,7 @@
       "hud"
     ],
     "movement_policy": "authoritative_civ3_anchor_and_segment_progress",
-    "action_timing_policy": "civ3_effective_duration_until_synchronization_hook_is_audited",
+    "action_timing_policy": "native_cursor_for_gameplay_actions; pause_filtered_authored_duration_for_idle_loops",
     "owner_color_policy": "civ3_ntp_palette_with_inferred_source_mask_mapping",
     "unsupported_policy": "complete_native_unit_body_fallback"
   },

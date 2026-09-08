@@ -2684,6 +2684,8 @@ struct district_button_image_set {
 	unsigned int custom_renderer_device_recoveries;
 	LARGE_INTEGER custom_renderer_qpc_frequency;
 	LARGE_INTEGER custom_renderer_frame_timestamp;
+	LARGE_INTEGER custom_renderer_animation_timestamp;
+	LARGE_INTEGER custom_renderer_animation_sample_at;
 	LARGE_INTEGER custom_renderer_last_presented_at;
 	LARGE_INTEGER custom_renderer_frame_started_at;
 	long long custom_renderer_max_capture_ticks;

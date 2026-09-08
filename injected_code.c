@@ -26735,6 +26735,8 @@ unload_custom_renderer ()
 	is->custom_renderer_device_recoveries = 0;
 	is->custom_renderer_qpc_frequency.QuadPart = 0;
 	is->custom_renderer_frame_timestamp.QuadPart = 0;
+	is->custom_renderer_animation_timestamp.QuadPart = 0;
+	is->custom_renderer_animation_sample_at.QuadPart = 0;
 	is->custom_renderer_last_presented_at.QuadPart = 0;
 	is->custom_renderer_frame_started_at.QuadPart = 0;
 	is->custom_renderer_max_capture_ticks = 0;
@@ -26779,6 +26781,19 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 		clamp (0, 23, is->current_day_night_cycle) : 12;
 	draw.season = (is->current_config.seasonal_cycle_mode != SCM_OFF && ! is->seasonal_cycle_unstarted) ?
 		clamp (CS_SUMMER, CS_SPRING, is->current_seasonal_cycle) : CS_SUMMER;
+	LARGE_INTEGER now;
+	if (! QueryPerformanceCounter (&now) || is->custom_renderer_qpc_frequency.QuadPart <= 0)
+		return false;
+	if (is->custom_renderer_animation_sample_at.QuadPart > 0) {
+		long long elapsed = now.QuadPart - is->custom_renderer_animation_sample_at.QuadPart;
+		// The UI thread stops during Civ III's ordinary interturn pauses. Do not
+		// let that blocked wall time become a visible ambient-animation jump.
+		if (elapsed >= 0 && elapsed <= is->custom_renderer_qpc_frequency.QuadPart / 4)
+			is->custom_renderer_animation_timestamp.QuadPart += elapsed;
+	}
+	is->custom_renderer_animation_sample_at = now;
+	draw.presentation_time_ticks = is->custom_renderer_animation_timestamp.QuadPart;
+	draw.presentation_frequency = is->custom_renderer_qpc_frequency.QuadPart;
 	memcpy (draw.unit_key, p_bic_data->UnitTypes[type].Civilipedia_Entry, 32);
 	draw.unit_key[32] = '\0';
 	// Read the palette already chosen by the native body call, including hidden nationality.
@@ -27332,7 +27347,7 @@ composite_custom_renderer_frame ()
 		clamp (CS_SUMMER, CS_SPRING, is->current_seasonal_cycle) : CS_SUMMER;
 	frame.tile_count = is->custom_renderer_tile_count;
 	frame.tiles = is->custom_renderer_tiles;
-	frame.presentation_time_ticks = is->custom_renderer_frame_timestamp.QuadPart;
+	frame.presentation_time_ticks = is->custom_renderer_animation_timestamp.QuadPart;
 	frame.presentation_frequency = is->custom_renderer_qpc_frequency.QuadPart;
 	frame.dirty_flags = is->custom_renderer_dirty_flags;
 	// M5.3 wires the scheduler without claiming any animated category. M7 enables this
@@ -29142,6 +29157,13 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 		unload_custom_renderer ();
 		return;
 	}
+	if (is->custom_renderer_animation_sample_at.QuadPart > 0) {
+		long long elapsed = is->custom_renderer_frame_timestamp.QuadPart -
+			is->custom_renderer_animation_sample_at.QuadPart;
+		if (elapsed >= 0 && elapsed <= is->custom_renderer_qpc_frequency.QuadPart / 4)
+			is->custom_renderer_animation_timestamp.QuadPart += elapsed;
+	}
+	is->custom_renderer_animation_sample_at = is->custom_renderer_frame_timestamp;
 
 	is->custom_renderer_draw_in_progress = true;
 	if (! is->custom_renderer_redraw_pending)
@@ -44919,7 +44941,7 @@ custom_renderer_scheduler_tick ()
 	input.visible_animation_count = is->custom_renderer_visible_animation_count;
 	input.cadence_ms = 0x42;
 	bool map_visible = (*p_player_bits != 0) && ! p_main_screen_form->is_now_loading_game &&
-		(is->saved_tile_count < 0) && ((*p_debug_mode_bits & 0xC) == 0);
+		(is->saved_tile_count < 0);
 	if (map_visible)
 		input.state_flags |= C3X_RENDERER_SCHEDULER_MAP_VISIBLE;
 	HWND focused_window = (GetFocus != NULL) ? GetFocus () : NULL;
@@ -44937,8 +44959,12 @@ custom_renderer_scheduler_tick ()
 	decision.struct_size = sizeof decision;
 	if (is->custom_renderer_schedule (&input, &decision) != C3X_RENDERER_RESULT_OK)
 		return;
-	if (decision.rebase_clock)
+	if (decision.rebase_clock) {
 		is->custom_renderer_last_presented_at = now;
+		// Hidden/modal/input pauses and detected UI stalls are excluded from the
+		// logical clock shared by resources and ambient unit loops.
+		is->custom_renderer_animation_sample_at = now;
+	}
 	if (decision.skipped_frame_count > 0) {
 		if (decision.skipped_frame_count > 0xFFFFFFFFu - is->custom_renderer_skipped_frames)
 			is->custom_renderer_skipped_frames = 0xFFFFFFFFu;

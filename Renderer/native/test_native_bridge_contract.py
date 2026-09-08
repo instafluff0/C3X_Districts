@@ -799,6 +799,21 @@ int main() {
         ):
             self.assertIn(f'"{stage}"', injected)
 
+    def test_animated_resource_shadows_preserve_source_alpha_cutouts(self) -> None:
+        native = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
+            encoding="utf-8"
+        )
+        generated = (
+            Path(__file__).parent
+            / "profile_v2/generated/shaders/lighting/generated/scene_linear_v1.hlsl"
+        ).read_text(encoding="utf-8")
+        self.assertIn("shadow_chunk.animation_texture=animation.view", native)
+        self.assertIn(
+            "resource_base_texture_0.Sample(\n            material_sampler, input.uv).a",
+            generated,
+        )
+        self.assertIn("clip(coverage - 0.08)", generated)
+
     def test_native_renderer_is_offscreen_and_source_independent(self) -> None:
         native = (Path(__file__).parent / "c3x_renderer.cpp").read_text(encoding="utf-8").casefold()
         api = (Path(__file__).parent / "c3x_renderer_api.h").read_text(encoding="utf-8").casefold()
@@ -1013,7 +1028,7 @@ int main() {
         self.assertIn("water_foam_texture : register(t24)", shader)
         self.assertIn("DXGI_FORMAT_R16G16B16A16_UNORM", native)
         self.assertIn("c3x_renderer_i32 clip_left", api)
-        self.assertIn("#define C3X_RENDERER_API_VERSION 14u", api)
+        self.assertIn("#define C3X_RENDERER_API_VERSION 15u", api)
         self.assertIn("DXGI_FORMAT_R16G16_UNORM", native)
         self.assertIn("float2 combined_lean =", shader)
         self.assertIn("water_foam_texture.Sample", shader)
@@ -1093,6 +1108,7 @@ int main() {
         self.assertNotIn("composite_custom_renderer_frame", tick)
         self.assertNotIn("m73_call_m22_Draw", tick)
         self.assertNotIn("Sleep", tick)
+        self.assertNotIn("p_debug_mode_bits", tick)
 
         self.assertIn("custom_renderer_scheduler_tick ();\n\ton_timer_0x9F6500 ();", injected)
         self.assertIn("custom_renderer_max_capture_ticks", injected)
@@ -1102,6 +1118,8 @@ int main() {
         self.assertIn("custom_renderer_redraw_pending = true", injected)
         self.assertIn("custom_renderer_requested_frames != 0xFFFFFFFFu", injected)
         self.assertIn("presentation_time_ticks", api)
+        self.assertIn("custom_renderer_animation_timestamp", injected)
+        self.assertIn("elapsed <= is->custom_renderer_qpc_frequency.QuadPart / 4", injected)
         self.assertIn("visible_animation_count", api)
         self.assertIn("C3X_RENDERER_SCHEDULER_REDRAW_PENDING", api)
         self.assertIn("input->visible_animation_count == 0", scheduler)

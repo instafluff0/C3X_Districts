@@ -1686,6 +1686,13 @@ int main(int argc, char ** argv) {
     }
 
     schedule_input.state_flags = C3X_RENDERER_SCHEDULER_MAP_VISIBLE | C3X_RENDERER_SCHEDULER_FOCUSED;
+    schedule_input.last_presented_ticks = 1000000;
+    schedule_input.now_ticks = 2000000;
+    repeated = {C3X_RENDERER_API_VERSION, sizeof(repeated)};
+    if (schedule(&schedule_input, &repeated) != C3X_RENDERER_RESULT_OK ||
+        repeated.request_redraw != 0 || repeated.rebase_clock != 1)
+        return fail("one-second interturn pause was not rebased without catch-up");
+
     schedule_input.last_presented_ticks = 1;
     schedule_input.now_ticks = 3000002;
     repeated = {C3X_RENDERER_API_VERSION, sizeof(repeated)};

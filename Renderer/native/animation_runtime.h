@@ -86,6 +86,17 @@ inline double ambient_animation_time(std::int64_t ticks, std::int64_t frequency,
     return std::fmod(std::fmod(seconds, duration) + offset, duration);
 }
 
+// Quantize source-time ambient playback to its authored pose-cache frames.
+// The duration remains the source duration; Civ III cursor counts are irrelevant.
+inline std::uint32_t ambient_animation_frame(std::int64_t ticks, std::int64_t frequency,
+                                             double duration, std::uint32_t frames,
+                                             std::uint32_t seed) {
+    if (frames < 2) return 0;
+    double time = ambient_animation_time(ticks, frequency, duration, seed);
+    return std::min(frames - 1, static_cast<std::uint32_t>(
+        time / duration * static_cast<double>(frames - 1)));
+}
+
 inline bool sample_animation_mesh(AnimationMesh const & mesh, double seconds, bool loop,
                                    std::vector<FeatureSourceVertex> & output) {
     if (!std::isfinite(seconds) || mesh.frames < 2 || !mesh.bones || mesh.bones > 256 ||

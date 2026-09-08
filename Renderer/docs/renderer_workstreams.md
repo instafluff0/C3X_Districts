@@ -19,8 +19,14 @@ The normal sequence is edit, render/compare/test the requested category, then ru
 category and its declared dependents; unrelated work does not silently expand a
 category task into a full-catalog render. A fixed reference may be replaced after
 explicit user acceptance, but reference differences do not block Integration.
-Neither comparison nor Integration installs code. A replay pass is not a
-live-game pass, and agents must not invent one.
+Automated Integration may run before visual acceptance, but it does not promote
+the appearance. For any material visual change, show the relevant comparison and
+obtain explicit user acceptance before calling it accepted, ready, promoted or
+integrated, or ordinarily staging its DLL. An explicit user request to stage a
+tested DLL for in-game evaluation authorizes test staging before acceptance; it
+does not approve the visuals or authorize reference replacement, `INSTALL.bat`,
+or launching Civ III. Neither comparison nor Integration installs code. A replay
+pass is not a live-game pass, and agents must not invent one.
 
 Use Git for source history. Keep candidate output disposable and fixed local
 reference images intact until superseded by an explicit decision. Ignored licensed

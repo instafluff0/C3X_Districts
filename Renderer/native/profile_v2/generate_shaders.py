@@ -52,7 +52,8 @@ def generate(source_root=None, output_root=None, output_name='integrated_v2.hlsl
         // rest of the scene.
         float resource_form = lerp(0.70, 1.14,
             smoothstep(0.08, 0.84, signed_diffuse));
-        light *= lerp(feature_form, resource_form, resource_weight);''')
+        light *= lerp(feature_form, resource_form, resource_weight);
+        light += resource_weight * environment_ambient_color * 0.16;''')
             marker = '''    if (input.panel > 0.5 && input.surface_kind > 13.5 && input.surface_kind < 14.5)
     {'''
             assert text.count(marker) == 1
@@ -67,9 +68,16 @@ def generate(source_root=None, output_root=None, output_name='integrated_v2.hlsl
     if (input.panel > 0.5 && input.surface_kind > 14.5 && input.surface_kind < 15.5)
     {
         // Animated resources project their current posed source triangles.
+        // Preserve the source alpha-cutout cards instead of shadowing their
+        // complete rectangular geometry.  This is the same coverage channel
+        // and cutoff used by the resource body pass.
+        float coverage = resource_base_texture_0.Sample(
+            material_sampler, input.uv).a;
+        clip(coverage - 0.08);
         // One restrained sample anchors the body without a generic blob or a
         // full static-scene rerender on every animation tick.
-        float alpha = frame_cast_shadow_strength() * 0.22;
+        float alpha = frame_cast_shadow_strength() * 0.22 *
+            smoothstep(0.08, 0.35, coverage);
         clip(alpha - 0.004);
         return float4(0.008, 0.011, 0.016, alpha);
     }''' + text[finish:]

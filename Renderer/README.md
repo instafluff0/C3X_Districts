@@ -21,6 +21,12 @@ python3 Renderer/renderer.py integration grassland --full
 
 Category integration is intentionally focused and fast. `--full` adds the
 cross-category tests and exhaustive behavior sweep used at strategic checkpoints.
+Running these automated checks does not visually promote a changed category.
+Before an agent describes a visual change as accepted, ready, promoted or
+integrated, or ordinarily stages its DLL for game use, the agent must show the
+user the relevant comparison and receive explicit visual acceptance. An explicit
+request to stage a tested DLL for an in-game evaluation authorizes that test
+staging only; it does not itself approve the visuals or replace fixed references.
 
 The Lab migration is complete. Current category previews use the production
 D3D11 renderer; the generic Metal binding/compiler smoke test remains optional.

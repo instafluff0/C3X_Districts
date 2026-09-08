@@ -180,8 +180,8 @@
     "rule": "pack metadata selects an attachment by logical action; runtime code must not branch on Builder or source asset names"
   },
   "timing": {
-    "authority": "civ3_worker_job_and_native_animation_progress",
-    "loop": "repeat_pose_only_while_authoritative_job_remains_active",
+    "authority": "civ3_worker_job_with_pause_filtered_source_clip_time",
+    "loop": "play_at_authored_source_duration_only_while_authoritative_job_remains_active",
     "default_slot_jobs": "use_a_stable_job_event_clock_without_changing_gameplay_duration",
     "completion": "tile_change_and_unit_transition_are_owned_by_civ3"
   },

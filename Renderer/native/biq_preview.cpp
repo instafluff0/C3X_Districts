@@ -637,6 +637,7 @@ bool preview_units(HMODULE module,char const* path,int hour) {
         std::fill_n(static_cast<std::uint32_t*>(bits),1024*1152,0xff565b62u);
         c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Archer");
         unit.unit_id=41;unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=8;
+        unit.presentation_frequency=1000000;unit.presentation_time_ticks=500000;
         unit.sprite_width=unit.sprite_height=191;unit.body_x=100;unit.body_y=100;unit.hour=hour;unit.display_color_rgb=0x205bdd;
         ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK;
         std::vector<std::uint32_t> original(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*1152);
@@ -732,12 +733,14 @@ bool preview_units(HMODULE module,char const* path,int hour) {
     for(int row=0;row<9 && ok;++row)for(int zoom=0;zoom<2 && ok;++zoom) {
         c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);unit.unit_id=80+row;
         sprintf_s(unit.unit_key,"PRTO_%s",names[row]);unit.direction=3;unit.frame_count=16;
+        unit.presentation_frequency=1000000;
         unit.sprite_width=unit.sprite_height=191;unit.body_x=100;unit.body_y=100;
         unit.hour=hour;unit.reduced=zoom;unit.display_color_rgb=0x205bdd;
         std::vector<std::uint32_t> idle;
         auto pose=[&](int action,int cursor,int queued) {
             std::fill_n(static_cast<std::uint32_t*>(bits),1024*1152,0xff565b62u);
             unit.action=action;unit.action_cursor=cursor;unit.queued_action=queued;
+            unit.presentation_time_ticks=cursor*100000;
             int result=draw(&unit,dc);GdiFlush();
             if(result!=C3X_RENDERER_RESULT_OK) {
                 std::printf("FAIL unit action key=%s action=%d cursor=%d zoom=%d result=%d\n",unit.unit_key,action,cursor,zoom,result);

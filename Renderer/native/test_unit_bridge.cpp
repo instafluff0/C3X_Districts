@@ -9,6 +9,7 @@
 #endif
 #define __ 0
 using HDC=void*;
+struct LARGE_INTEGER {long long QuadPart=0;};
 struct Unit;struct PCX_Image;struct JGL_Color_Table;
 struct JGLV {std::uintptr_t m04_Get_Palette_Colors;};
 struct JGL_Color_Table {JGLV* vtable;};
@@ -28,11 +29,14 @@ struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;};
 struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;int custom_renderer_init_state=1;
  struct {bool enable_custom_rendering=true,enable_custom_rendered_units=true;int day_night_cycle_mode=0,seasonal_cycle_mode=0;} current_config;
- bool day_night_cycle_unstarted=false,seasonal_cycle_unstarted=false;int current_day_night_cycle=12,current_seasonal_cycle=0;};
+ bool day_night_cycle_unstarted=false,seasonal_cycle_unstarted=false;int current_day_night_cycle=12,current_seasonal_cycle=0;
+ LARGE_INTEGER custom_renderer_qpc_frequency={1000000},custom_renderer_animation_timestamp={},custom_renderer_animation_sample_at={};};
 constexpr int AT_DEFAULT=1,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
 State state;State* is=&state;Bic bic;Bic* p_bic_data=&bic;PCX_Color_Table fixture_palette;
 std::vector<int> calls;c3x_renderer_unit_v1 captured;bool success=true,fixture_reduced=false;int dc_count=0;PCX_Image* fixture_background=nullptr;JGL_Image* denied_dc=nullptr;
 int clamp(int a,int b,int v){return v<a?a:(v>b?b:v);}
+long long qpc=1000000;
+bool QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=qpc;qpc+=66000;return true;}
 bool Unit_has_ability(Unit* u,int,int){return u->army;}
 Unit* army_member=nullptr;Unit* get_unit_ptr(int id){return army_member && army_member->Body.ID==id?army_member:nullptr;}
 HDC __fastcall acquire(JGL_Image* p){if(p==denied_dc)return nullptr;++dc_count;return p;}
@@ -67,12 +71,16 @@ int main(){
  JGL_Image background_image={&canvas_v};PCX_Image background={{&background_image}};fixture_background=&background;
  state.custom_renderer_unit_draw=capture;
  auto invoke=[&](){calls.clear();patch_Unit_tick_anim(&unit,0,&canvas,101,202,true);assert(dc_count==0 && !state.custom_renderer_unit_context && !state.custom_renderer_unit_canvas);};
+ success=true;invoke();assert(captured.presentation_time_ticks==0);
+ invoke();assert(captured.presentation_time_ticks==66000);
+ qpc+=1000000;invoke();assert(captured.presentation_time_ticks==66000); // interturn wall time is frozen
  for(int zoom=0;zoom<2;++zoom){
   fixture_reduced=zoom!=0;success=true;invoke();assert((calls==std::vector<int>{10,20,40}));
   assert(unit.Body.Rect.left==11 && unit.Body.Rect.top==23);
   assert(unit.Body.Rect.right==11+191/(zoom?2:1) && unit.Body.Rect.bottom==23+191/(zoom?2:1));
   assert(captured.unit_id==42 && captured.action==2 && captured.action_cursor==7 && captured.frame_count==16);
   assert(captured.body_x==11 && captured.body_y==23 && captured.direction==3 && captured.reduced==zoom);
+  assert(captured.presentation_frequency==1000000 && captured.presentation_time_ticks>=0);
   assert(captured.display_color_rgb==0x0c2238 && !std::strcmp(captured.unit_key,"PRTO_Archer"));
   success=false;invoke();assert(unit.Body.Rect.left==20 && unit.Body.Rect.right==45);assert((calls==std::vector<int>{10,20,30,40}));
   denied_dc=&background_image;invoke();assert((calls==std::vector<int>{10,30,40}));denied_dc=nullptr;

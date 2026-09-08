@@ -2531,6 +2531,16 @@ public:
                 if(!json_number_after(data,"part_count",action_location,parts) || parts<1 || parts>32 || parts!=int(parts) ||
                    !json_number_after(data,"loop",action_location,loop) || (loop!=0 && loop!=1))return false;
                 c3x_renderer::UnitBodyRenderer::Action action;action.name=name;action.loop=loop!=0;
+                float ambient=0;
+                if(json_number_after(data,"ambient",action_location,ambient)) {
+                    if((ambient!=0 && ambient!=1) || (ambient==1 && !action.loop))return false;
+                    action.ambient=ambient==1;
+                }
+                float ambient_frames=0;
+                if(action.ambient &&
+                   (!json_number_after(data,"duration",action_location,action.duration) || action.duration<=0 || action.duration>3600 ||
+                    !json_number_after(data,"frames",action_location,ambient_frames) || ambient_frames<2 || ambient_frames>4096 || ambient_frames!=int(ambient_frames)))return false;
+                if(action.ambient)action.frames=unsigned(ambient_frames);
                 float exit_clip=0;
                 if(json_number_after(data,"allow_exit_clip",action_location,exit_clip) &&
                    (exit_clip!=0 && (exit_clip!=1 || action.name!="death")))return false;
@@ -2820,6 +2830,10 @@ public:
             chunk.animation_texture=animation.view;
             shadow_chunk.buffer=pool.shadow_vertices;shadow_chunk.indices=animation.indices;
             shadow_chunk.vertex_stride=sizeof(Vertex);shadow_chunk.index_count=chunk.index_count;
+            // The animated source mesh includes alpha-cutout cards.  The
+            // shadow pass must see the same authored coverage as the body or
+            // it projects each complete card as an opaque black rectangle.
+            shadow_chunk.animation_texture=animation.view;
             buffers[geometry_shadow].push_back(shadow_chunk);
             buffers[geometry_feature].push_back(chunk);++visible_resource_animations;
         }

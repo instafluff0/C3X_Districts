@@ -48,6 +48,25 @@ Integration does not read or compare reference images. Visual comparison is an
 explicit Lab action, so a stale or intentionally different snapshot cannot block
 the current code.
 
+## Visual acceptance and promotion
+
+Automated `test` and `integration` checks may run before visual acceptance so
+technical problems are found early. They do not grant visual approval. When a
+change materially alters rendered output, the agent must present the relevant
+focused and gameplay-context comparison to the user and receive explicit visual
+acceptance before it:
+
+- calls the visual change accepted, ready, promoted or integrated;
+- ordinarily stages the candidate DLL into `Renderer/bin/`; or
+- replaces a fixed reference image.
+
+User acceptance applies to the shown result; replacing the optional fixed
+reference remains a separate explicit choice. If the user explicitly asks to
+stage a tested DLL so they can evaluate it in Civ III, stage that exact tested
+candidate without waiting for visual acceptance, clearly treat it as a test
+candidate, and leave reference images unchanged. Staging never implies permission
+to run `INSTALL.bat` or launch Civ III unless the user also requests that action.
+
 The disposable receipt under `lab/out/integration/` is tied to the exact current
 input signatures and candidate DLL hash. Integration does not stage the DLL,
 run `INSTALL.bat`, launch Civ III, claim a live-game pass or update a separate

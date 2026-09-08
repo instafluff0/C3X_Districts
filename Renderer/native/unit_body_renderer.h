@@ -14,7 +14,8 @@ public:
     struct Mesh { AnimationMesh animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Part { unsigned mesh=0,texture=0,address=0; unsigned material_textures[3]={UINT32_MAX,UINT32_MAX,UINT32_MAX}; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
-    struct Action { std::string name; bool loop=false,allow_exit_clip=false; std::vector<Part> parts; };
+    struct Action { std::string name; bool loop=false,ambient=false,allow_exit_clip=false;
+        float duration=0;unsigned frames=0;std::vector<Part> parts; };
     struct Unit { std::vector<std::string> keys; float scale=1,yaw_offset=0,offset_z=0; std::vector<Action> actions; };
     std::vector<Mesh> meshes;
     std::vector<Texture> textures;
@@ -63,13 +64,24 @@ public:
         UnitAnimationPose pose;
         failure_reason="invalid-native-pose";
         if(!prepare_native_unit_pose(draw,action->loop,pose))return false;
+        int pose_cursor=action->loop?request.action_cursor%request.frame_count:
+            std::min(request.action_cursor,request.frame_count-1);
+        int pose_frames=request.frame_count;
+        if(action->ambient) {
+            if(request.presentation_time_ticks<0 || request.presentation_frequency<=0 ||
+               action->duration<=0 || action->frames<2)return false;
+            pose_cursor=int(ambient_animation_frame(request.presentation_time_ticks,
+                request.presentation_frequency,action->duration,action->frames,
+                0));
+            pose_frames=int(action->frames);
+            pose.phase=double(pose_cursor)/(action->frames-1);
+        }
         int w=request.sprite_width/(draw.reduced?2:1),h=request.sprite_height/(draw.reduced?2:1);
         if(w<1 || h<1 || w>512 || h>512)return false;
         // Placement and identity are deliberately absent: the same posed body
         // can be reused at a different native anchor or wrapped occurrence.
         Key key={unsigned(found-units.begin()),int(action-found->actions.begin()),request.direction,
-            action->loop?request.action_cursor%request.frame_count:std::min(request.action_cursor,request.frame_count-1),
-            request.frame_count,w,h,request.reduced,request.hour,request.season,request.display_color_rgb};
+            pose_cursor,pose_frames,w,h,request.reduced,request.hour,request.season,request.display_color_rgb};
         for(auto & saved:cache)if(saved.key==key) {
             saved.used=++serial; pixels=saved.pixels;image_width=w;image_height=h;cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";return true;
         }

@@ -51,19 +51,20 @@ extern "C" __declspec(dllexport) int c3x_renderer_schedule(
         C3X_RENDERER_SCHEDULER_REDRAW_PENDING)) != 0)
         return C3X_RENDERER_RESULT_OK;
 
+    c3x_renderer_i64 cadence_ticks = (input->frequency / 1000) * input->cadence_ms +
+        ((input->frequency % 1000) * input->cadence_ms) / 1000;
+    if (cadence_ticks <= 0)
+        cadence_ticks = 1;
     bool discontinuity = input->last_presented_ticks <= 0 || input->now_ticks < input->last_presented_ticks;
     c3x_renderer_i64 elapsed = discontinuity ? 0 : input->now_ticks - input->last_presented_ticks;
-    if (!discontinuity && elapsed > input->frequency && elapsed - input->frequency > input->frequency)
+    // Four missed 15 fps opportunities is a UI-thread stall, not animation
+    // progress to catch up. Typical Civ III interturn pauses are about a second.
+    if (!discontinuity && elapsed / cadence_ticks > 4)
         discontinuity = true;
     if (discontinuity) {
         output->rebase_clock = 1;
         return C3X_RENDERER_RESULT_OK;
     }
-
-    c3x_renderer_i64 cadence_ticks = (input->frequency / 1000) * input->cadence_ms +
-        ((input->frequency % 1000) * input->cadence_ms) / 1000;
-    if (cadence_ticks <= 0)
-        cadence_ticks = 1;
     if (elapsed < cadence_ticks)
         return C3X_RENDERER_RESULT_OK;
 

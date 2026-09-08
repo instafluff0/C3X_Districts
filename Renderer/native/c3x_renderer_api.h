@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 14u
+#define C3X_RENDERER_API_VERSION 15u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -99,6 +99,7 @@ struct c3x_renderer_unit_v1 {
     c3x_renderer_i32 body_x, body_y, sprite_width, sprite_height, reduced;
     c3x_renderer_i32 hour, season;
     c3x_renderer_u32 display_color_rgb;
+    c3x_renderer_i64 presentation_time_ticks, presentation_frequency;
     char unit_key[64];
 };
 

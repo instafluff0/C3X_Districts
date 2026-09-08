@@ -1,6 +1,8 @@
 # Animation
 
-Current unit and resource playback follows native cursors, timestamps, paused state and bounded caches.
+Gameplay unit playback follows native cursors. Idle/work loops and resources use
+their authored source duration on a shared pause-filtered presentation clock, so
+Civ III interturn stalls resume without a catch-up jump.
 
 The detail and gameplay studies each have matching `start` and `mid` views:
 six production unit families, the same surroundings, native action cursors 0

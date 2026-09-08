@@ -15,10 +15,12 @@ bool preview_unit_roster(HMODULE module,char const* picture_path,int hour) {
     while(fscanf_s(file,"%63s %u",key,unsigned(sizeof(key)),&mask)==2) {
         c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,key);unit.unit_id=int(rows);
         unit.sprite_width=unit.sprite_height=191;unit.frame_count=16;unit.hour=hour;unit.display_color_rgb=0x20a6b0;
+        unit.presentation_frequency=1000000;
         for(int zoom=0;zoom<2;++zoom)for(int action=1;action<=18;++action)if(mask&(1u<<action))
             for(int direction=1;direction<=8;direction+=2)for(int cursor:{0,7,15}) {
                 std::fill_n(static_cast<std::uint32_t*>(bits),1024*1152,0xff565b62u);
                 unit.reduced=zoom;unit.action=action;unit.direction=direction;unit.action_cursor=cursor;
+                unit.presentation_time_ticks=cursor*100000;
                 unit.body_x=unit.body_y=100;
                 int result=draw(&unit,dc);GdiFlush();++draws;
                 if(result!=C3X_RENDERER_RESULT_OK) {

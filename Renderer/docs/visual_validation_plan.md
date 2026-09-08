@@ -23,12 +23,23 @@ overlap, inconsistent materials and unreadable lighting. Automated metrics may
 flag these problems but cannot approve a stylistic change. Preserve the guidance
 in `visual_fidelity_playbook.md`.
 
+For every material change to rendered output, present the relevant focused and
+gameplay-context comparison to the user. Automated checks may continue while
+review is pending, but do not describe or hand off the appearance as accepted,
+ready, promoted or integrated, and do not ordinarily stage its DLL, until the
+user explicitly accepts what was shown. Fixed-reference replacement is optional
+and requires its own explicit direction.
+
 ## Automated delivery checks
 
 `python3 Renderer/renderer.py integration CATEGORY` runs the relevant portable
 contracts and selected headless production replays for the current code. It does
 not read reference images; render/compare remains an explicit Lab review action.
 The command does not install a DLL, launch Civ III or certify a live-game test.
+If the user explicitly requests an in-game evaluation, the exact tested candidate
+may be staged before visual acceptance. Treat that DLL as an evaluation build;
+staging is not visual approval and does not authorize `INSTALL.bat`, launching the
+game or changing a fixed reference unless those actions are separately requested.
 
 Keep checks for authoritative capture/anchors, replacement ownership, config-off
 and fallback behavior, clipping/compositing, animation timing and interruption,
