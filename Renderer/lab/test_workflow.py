@@ -224,6 +224,11 @@ class FixtureTests(unittest.TestCase):
 
 
 class BehaviorWitnessTests(unittest.TestCase):
+    def test_fixture_batch_cleans_up_preview_children_after_recording_exit(self):
+        import inspect
+        source = inspect.getsource(renderer.native_render)
+        self.assertLess(source.index('echo {run_id}'), source.index('taskkill /F /IM native_preview.exe'))
+
     def test_unit_check_cannot_pass_without_the_executed_matrix(self):
         with self.assertRaisesRegex(ValueError, "Incomplete native unit"):
             renderer.verify_behavior_output("units", "BIQ viewport: 0 fallback")
@@ -231,13 +236,21 @@ class BehaviorWitnessTests(unittest.TestCase):
     def test_a_failed_replay_does_not_hide_independent_results(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(renderer, "LAB", Path(directory)), \
              patch.object(renderer, "affected", return_value=["animation"]), \
-             patch.object(renderer, "native_render", side_effect=[ValueError("failed"), {}, {}, {}, {}, {}, {}]) as render, \
+             patch.object(renderer, "native_render", side_effect=[ValueError("failed"), {}, {}, {}, {}, {}]) as render, \
              patch("builtins.print"):
             with self.assertRaisesRegex(ValueError, "scroll"):
                 renderer.integration_replays("animation")
-            self.assertEqual(render.call_count, 7)
+            self.assertEqual(render.call_count, 6)
             results = renderer.read(Path(directory) / "out/integration/replays/results.json")
-            self.assertEqual([r["status"] for r in results], ["fail"] + ["pass"] * 6)
+            self.assertEqual([r["status"] for r in results], ["fail"] + ["pass"] * 5)
+
+    def test_replay_selection_keeps_unrelated_known_failures_out_of_resource_checks(self):
+        with patch.object(renderer, "affected", return_value=["animation", "resources"]):
+            names = [case[0] for case in renderer.integration_replay_cases("resources")]
+        self.assertEqual(names, ["scroll", "reduced-scroll", "world-wrap", "resource-playback",
+                                 "unit-actions-day", "unit-actions-night"])
+        with patch.object(renderer, "affected", return_value=["grassland"]):
+            self.assertIn("terrain-edit", [case[0] for case in renderer.integration_replay_cases("grassland")])
 
     def test_integration_skips_unrelated_object_witnesses(self):
         with tempfile.TemporaryDirectory() as directory, \

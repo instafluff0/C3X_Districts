@@ -356,6 +356,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
     batch.write_text("@echo off\nsetlocal\n" + command.replace(" && ", "\n") +
         f' > "{log}" 2>&1\nset "C3X_LAB_EXIT=%errorlevel%"\n' +
         f'> "{receipt}" echo {run_id} %C3X_LAB_EXIT%\n' +
+        'taskkill /F /IM native_preview.exe >nul 2>nul\n' +
         f'type "{log}"\nexit /b %C3X_LAB_EXIT%\n')
     result = run_native_fixture(output, f'call "{windows(batch)}"', run_id)
     if behavior:
@@ -412,18 +413,28 @@ def verify_behavior_output(behavior, output):
         raise ValueError("Warm/cold pixel comparison exceeded the production budget")
 
 
-def integration_replays(category):
-    """Run core redraw checks plus object checks selected by visual consumers."""
+def integration_replay_cases(category):
+    """Select behavior witnesses relevant to the requested current-code category."""
     cases = [("scroll", "replay", 128, (50, 50), 12),
              ("reduced-scroll", "replay", 64, (50, 50), 12),
-             ("world-wrap", "replay", 128, (0, 50), 12),
-             ("terrain-edit", "edits", 128, (50, 50), 12)]
+             ("world-wrap", "replay", 128, (0, 50), 12)]
     selected = set(affected(category))
+    terrain = {"grassland", "plains", "desert", "tundra", "floodplains", "transitions",
+               "hills", "mountains", "forests", "jungles", "shorelines", "seas-oceans",
+               "rivers", "day-night", "shadows"}
+    if selected.intersection(terrain):
+        cases.append(("terrain-edit", "edits", 128, (50, 50), 12))
     if selected.intersection(("resources", "infrastructure", "animation")):
         cases.append(("resource-playback", "animation", 128, (50, 50), 12))
     if selected.intersection(("units", "animation")):
         cases.extend((("unit-actions-day", "units", 128, (50, 50), 12),
                       ("unit-actions-night", "units", 128, (50, 50), 0)))
+    return cases
+
+
+def integration_replays(category):
+    """Run the behavior witnesses selected for the current category."""
+    cases = integration_replay_cases(category)
     results = []
     for name, behavior, zoom, center, hour in cases:
         print("Checking production behavior: " + name, flush=True)
