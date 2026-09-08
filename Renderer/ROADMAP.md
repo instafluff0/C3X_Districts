@@ -13,6 +13,20 @@ The end state is a one-command offline source importer plus authored mapping pro
 
 ## Current Position
 
+The generic unit source-fidelity refresh is staged for normal `INSTALL.bat`. The
+[unit port record](native/environment_refresh/UNIT_FIDELITY.md) explains the
+previously stale compiled normals and older material shader, the source-wide
+recovery across 375 imported components, per-primitive samplers and full-resolution
+AO/gloss material path. Native timing, palette bytes, attachments, dirty bounds
+and cache contracts are preserved. Both zooms and all 94 native keys are tested
+headlessly, with 40,992 roster draws and zero failures in the final DLL.
+The [unit checkpoint](verification/environment_refresh/unit-checkpoint.json)
+records the exact release hash, cache/memory results and broader workflow limits.
+The isolated close-up LUT is not the native sprite presentation.
+The separate water/reflection profile remains opt-in, and latest city/palace
+geometry, arrangement and night-lighting implementation remains pending.
+
+
 The source-fidelity-r13 natural refresh is staged for normal `INSTALL.bat`.
 The [port record](native/source_fidelity/README.md) and
 [checkpoint](verification/source_fidelity/checkpoint.json) record the exact

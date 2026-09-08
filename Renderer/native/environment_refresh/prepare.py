@@ -19,7 +19,7 @@ def main():
     water=water.replace('float object_coverage=saturate(object.a)*inside;', 'inside*=NativeReflection.w;\n float object_coverage=saturate(object.a)*inside;')
     # The original source body is retained; only the native wrap period,
     # guarded block coordinates and explicit sky-only diagnostic are adapted.
-    hydro=read(BASE/'hydrology.hlsl')
+    hydro='#define Q3_CONTINUOUS_RIVERS 1\n'+read(BASE/'hydrology.hlsl')
     marker='float4 q3_water_material(PixelInput input) {'
     assert marker in hydro
     hydro=hydro.replace(marker,FRAME+'\n#define Q3_NATURAL_WATER 1\n#define Q3_OBJECT_REFLECTION 1\n#define Q3_REFLECTION_SIZE NativeReflectionTarget.xy\n'+water+'\n'+marker)

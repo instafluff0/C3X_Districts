@@ -541,3 +541,17 @@ unit behavior and capture remain unchanged. Audit candidates: none required.
 `required_user_action: []`. No injected source, CSV or reference header changes.
 The user-run game checkpoint remains pending; the agent does not run INSTALL.bat
 or launch Civ III.
+
+
+### 2026-09-08 generic unit source-fidelity refresh
+
+Existing symbols: `Unit_tick_anim`, `Sprite_draw_unit_body_normal`,
+`Sprite_draw_unit_body_reduced` and `OutputDebugStringA`. Their existing
+signatures, supported-build addresses and native action/cursor/anchor capture
+remain unchanged. Offline assets and the DLL now preserve the selected authored
+normals, per-primitive texture addressing and BeautyStudies material response.
+No new patch capability or game-state access is required. The existing sprite
+cache, bounded dirty rectangle, input guard and native fallback stay in place.
+Audit candidates: none required. `required_user_action: []`.
+No `C3X.h`, injected source, `civ_prog_objects.csv` or reference-header edits.
+See `native/environment_refresh/UNIT_FIDELITY.md` for release evidence and limits.

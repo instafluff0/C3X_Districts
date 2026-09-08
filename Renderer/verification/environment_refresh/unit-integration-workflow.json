@@ -1,0 +1,47 @@
+{
+  "schema": "c3x.renderer_iteration_report.v0",
+  "generated_utc": "2026-09-08T04:25:46.931805+00:00",
+  "workflow": "integration",
+  "results": [
+    {
+      "name": "project_state",
+      "status": "pass",
+      "next_step": "LQ0"
+    },
+    {
+      "command": [
+        "",
+        "-m",
+        "unittest",
+        "Renderer.tools.test_project_state",
+        "Renderer.tools.test_verification",
+        "Renderer.tools.test_state_provenance_compiler",
+        "Renderer.tools.test_analyze_renderer_trace",
+        "Renderer.tools.asset_compiler.test_pack_loader_abi",
+        "Renderer.native.test_native_bridge_contract",
+        "Renderer.native.test_scroll_damage",
+        "Renderer.native.test_profile_v2"
+      ],
+      "status": "pass",
+      "returncode": 0,
+      "started_utc": "2026-09-08T04:25:01.281845+00:00",
+      "output_tail": "........................................................................profile_v2: pinned material/shore/normal parity, wrap and relief support passed\n.\n----------------------------------------------------------------------\nRan 73 tests in 6.821s\n\nOK"
+    },
+    {
+      "command": "call BUILD.bat portable no-stage",
+      "status": "pass",
+      "returncode": 0,
+      "started_utc": "2026-09-08T04:25:08.190147+00:00",
+      "output_tail": "c3x_renderer.cpp\nterrain_scene_runtime.cpp\nenvironment_runtime.cpp\nterrain_definition_runtime.cpp\nscene_export.cpp\nframe_scheduler.cpp\nGenerating Code...\n   Creating library build\\candidate\\C3XRenderer.lib and object build\\candidate\\C3XRenderer.exp\nnative_smoke.cpp\nenvironment_runtime.cpp\nGenerating Code...\nbiq_preview.cpp\ntest_animation_runtime.cpp\nanimation runtime: timing, skinning, normals, endpoints, malformed payloads passed\ntest_unit_bridge.cpp\nPASS destination RGB555 gradient_max_mean_error=0.0640 source_unchanged=1 clip_exact=1\nPASS destination RGB565 gradient_max_mean_error=0.0640 source_unchanged=1 clip_exact=1\nPASS native_renderer_smoke: layered terrain definitions, multi-material DDS sampling, connected material blending, native-underlay feathering, shared environment, moonlit water, emissive/attachment primitives, atomic fallback, off-screen render, export, absolute-time scheduling, idle/pause guards, frame skipping, ABI, and bounded blit passed; pixel_hash=15218216351113428440."
+    },
+    {
+      "command": "set \"C3X_RENDERER_VISUAL_PROFILE=frozen\" && set \"C3X_RENDERER_TRACE=0\" && build\\native_smoke.exe build\\candidate\\C3XRenderer.dll --definitions ..\\.. ..\\..\\Renderer\\default.custom_rendering.txt",
+      "status": "fail",
+      "returncode": 255,
+      "started_utc": "2026-09-08T04:25:31.164715+00:00",
+      "output_tail": "FAIL native_renderer_smoke: incremental boundary cache differs from authoritative cold rebuild\nPERF approved_live_scale_cold: tiles=400 records=800 milliseconds=1489.929 ticks=35758293.\nPERF approved_live_scale_scroll: tiles=400 records=800 milliseconds=10.205 ticks=244913.\nPERF approved_live_scale_tile_boundary: tiles=400 records=800 milliseconds=57.154 ticks=1371696.\nCACHE boundary: built=11 reused=389 upload_bytes=1956252 cache_bytes=97348512.\nDIFF boundary: changed=1494 error=42662 bytes=5344928.",
+      "name": "approved_terrain_integration"
+    }
+  ],
+  "passed": false
+}

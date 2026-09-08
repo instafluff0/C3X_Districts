@@ -1,0 +1,457 @@
+{
+  "classification": "Provisional central orthogonal capital; no general city or milestone approval",
+  "cases": {
+    "inland": {
+      "augmentation": "Renderer/terrain_lab/v2/fixtures/beauty/city-scene-r111/american-modern-s1-capital-inland-at7-4/augmentation.json",
+      "augmentation_sha256": "edad5767d8334dfdbb75454c0b293feed7f1451816ba1cb672d94a75b417ecb0",
+      "tile_count": 100,
+      "center": [
+        0,
+        0
+      ],
+      "axis_alignment": [
+        {
+          "slot": 0,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 1,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 2,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 3,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 4,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 5,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 6,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": "capital",
+          "residual_degrees": 0.0
+        }
+      ],
+      "surrounded_connected_growth_prefixes": [
+        4,
+        7
+      ],
+      "clearance": [
+        {
+          "slot": 0,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 1,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 2,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 3,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 4,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 5,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 6,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": "capital",
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        }
+      ],
+      "packet_checks": [
+        {
+          "pass": true,
+          "original_draws": 7,
+          "zero_padded_features": 5,
+          "original_geometry_materials_constants_unchanged": true
+        },
+        {
+          "pass": true,
+          "draws": 20,
+          "source_origin_z": 0.796863,
+          "reference_origin_z": 0.796863,
+          "identical_frame_texture_check": true
+        },
+        {
+          "pass": true,
+          "draws": 20,
+          "payload_bytes": 7216,
+          "original_buffers_textures_draws_and_shadow_prefix_preserved": true
+        },
+        {
+          "pass": true,
+          "original_draws": 20,
+          "added_ground_vertices": 11514,
+          "original_geometry_constants_materials_shadow_textures_unchanged": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 14178,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        },
+        {
+          "pass": true,
+          "original_draws": 7,
+          "zero_padded_features": 5,
+          "original_geometry_materials_constants_unchanged": true
+        },
+        {
+          "pass": true,
+          "draws": 20,
+          "source_origin_z": 0.796863,
+          "reference_origin_z": 0.796863,
+          "identical_frame_texture_check": true
+        },
+        {
+          "pass": true,
+          "draws": 20,
+          "payload_bytes": 7216,
+          "original_buffers_textures_draws_and_shadow_prefix_preserved": true
+        },
+        {
+          "pass": true,
+          "original_draws": 20,
+          "added_ground_vertices": 11514,
+          "original_geometry_constants_materials_shadow_textures_unchanged": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 14178,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        }
+      ],
+      "pixels": [
+        {
+          "changed_pixels_gt_2": 10744,
+          "max_channel_delta": 130,
+          "bounds": [
+            741,
+            395,
+            910,
+            501
+          ],
+          "before_sha256": "072962c5166bc06f854e8167b919b1a8c0fc45ac51bd172c62d96a083268748b",
+          "after_sha256": "7f3652c3cc403e459e75b4cf4b59b4aaaae28a5f2466c1bb3ca02f084dac5214",
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0
+        },
+        {
+          "changed_pixels_gt_2": 12371,
+          "max_channel_delta": 167,
+          "bounds": [
+            720,
+            397,
+            895,
+            510
+          ],
+          "before_sha256": "457e3ee88f0495c9d787d52f00c8858f37ec746fe2d4a75dd17ee74ae65c9636",
+          "after_sha256": "f26203f6eebee1bf14caffd8b27cd77e92fa234b40969ec5f58923323dd85d1d",
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0
+        }
+      ],
+      "windows": {
+        "promotion": false,
+        "results": [
+          {
+            "frame": "h12-z1-pan00.bmp",
+            "packet_sha256": "1bae204c9396cf58e3fdf235b4e730cf562fe1320b05283f10ba96d63bbecf0d",
+            "shader_sha256": "e685aa2fbf308ba6bd7941be26fe3e6ae0a9cfda7040c8c52ff1ba0613140e53",
+            "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+            "reflection_sha256": "e3a428cf0090cfbbe934b68d47984b64d431b7350bd7e3c6c04f76e16b09a68e",
+            "metrics": {
+              "rgb_mean_absolute": 0.005412071078431373,
+              "rgb_p99_absolute": 0,
+              "max_channel_delta": 10,
+              "changed_channels": 12418,
+              "silhouette_iou": 1.0,
+              "luminance_mean_delta": 0.00018831488969461884,
+              "pass": true
+            },
+            "d3d11_sha256": "d3c000f2c04bd56a3d4c3dd779072b6eab6e801017518eb7251e6ef8136aed45"
+          },
+          {
+            "frame": "h00-z1-pan00.bmp",
+            "packet_sha256": "c003435d38dbbbfc4af6bf1822af0c3a367a4f319fd9dd499539a7c3883c8862",
+            "shader_sha256": "e685aa2fbf308ba6bd7941be26fe3e6ae0a9cfda7040c8c52ff1ba0613140e53",
+            "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+            "reflection_sha256": "e3a428cf0090cfbbe934b68d47984b64d431b7350bd7e3c6c04f76e16b09a68e",
+            "metrics": {
+              "rgb_mean_absolute": 0.0071786151960784314,
+              "rgb_p99_absolute": 0,
+              "max_channel_delta": 7,
+              "changed_channels": 14168,
+              "silhouette_iou": 1.0,
+              "luminance_mean_delta": 0.00023831341902876054,
+              "pass": true
+            },
+            "d3d11_sha256": "8f7b3532449890901bd29ce58b64e5d9d5a2b8842f07271927c47616044f6067"
+          }
+        ]
+      }
+    },
+    "holdout": {
+      "augmentation": "Renderer/terrain_lab/v2/fixtures/beauty/city-scene-r112/american-modern-s1-capital-freshcanopy-at5-2/augmentation.json",
+      "augmentation_sha256": "1d4511b0523208c12d5ed8aa6c7297468a6bebc7b8eb302508adc19647204427",
+      "tile_count": 100,
+      "center": [
+        0,
+        0
+      ],
+      "axis_alignment": [
+        {
+          "slot": 0,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 1,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 2,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 3,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 4,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 5,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": 6,
+          "residual_degrees": 0.0
+        },
+        {
+          "slot": "capital",
+          "residual_degrees": 0.0
+        }
+      ],
+      "surrounded_connected_growth_prefixes": [
+        4,
+        7
+      ],
+      "clearance": [
+        {
+          "slot": 0,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 1,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 2,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 3,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 4,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 5,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": 6,
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        },
+        {
+          "slot": "capital",
+          "vegetation_samples_in_margin": 0,
+          "no_body_overlap": true
+        }
+      ],
+      "packet_checks": [
+        {
+          "pass": true,
+          "original_draws": 6,
+          "zero_padded_features": 4,
+          "original_geometry_materials_constants_unchanged": true
+        },
+        {
+          "pass": true,
+          "draws": 19,
+          "source_origin_z": 0.487232,
+          "reference_origin_z": 0.487232,
+          "identical_frame_texture_check": true
+        },
+        {
+          "pass": true,
+          "draws": 19,
+          "payload_bytes": 7216,
+          "original_buffers_textures_draws_and_shadow_prefix_preserved": true
+        },
+        {
+          "pass": true,
+          "original_draws": 19,
+          "added_ground_vertices": 11001,
+          "original_geometry_constants_materials_shadow_textures_unchanged": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 14178,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        },
+        {
+          "pass": true,
+          "original_draws": 6,
+          "zero_padded_features": 4,
+          "original_geometry_materials_constants_unchanged": true
+        },
+        {
+          "pass": true,
+          "draws": 19,
+          "source_origin_z": 0.487232,
+          "reference_origin_z": 0.487232,
+          "identical_frame_texture_check": true
+        },
+        {
+          "pass": true,
+          "draws": 19,
+          "payload_bytes": 7216,
+          "original_buffers_textures_draws_and_shadow_prefix_preserved": true
+        },
+        {
+          "pass": true,
+          "original_draws": 19,
+          "added_ground_vertices": 11001,
+          "original_geometry_constants_materials_shadow_textures_unchanged": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 14178,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        }
+      ],
+      "pixels": [
+        {
+          "changed_pixels_gt_2": 10690,
+          "max_channel_delta": 130,
+          "bounds": [
+            475,
+            396,
+            654,
+            501
+          ],
+          "before_sha256": "feab0c4a267109df446c79fbd823f331897da39e5e38f1dfbf9079787f6fb59a",
+          "after_sha256": "cda928c9daa56ea9da5227f90b719164723717ca950e3b08df0990b3a47bf18d",
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0
+        },
+        {
+          "changed_pixels_gt_2": 12130,
+          "max_channel_delta": 167,
+          "bounds": [
+            453,
+            397,
+            639,
+            506
+          ],
+          "before_sha256": "1dab232410b8fe5cbf3c464300ca276fb09fd59666daef376b7bc36c56f9d1bb",
+          "after_sha256": "d422cd05326ea8675e318d27c241467412a8b83e2bd9d7f71c51d76d5101dc4b",
+          "outside_city_roi_max": 0,
+          "outside_city_roi_changed_pixels": 0
+        }
+      ],
+      "windows": {
+        "promotion": false,
+        "results": [
+          {
+            "frame": "h12-z1-pan00.bmp",
+            "packet_sha256": "187509203aacd14cec417be1657b5ea687ce75121bdba92c1901f2c43406069f",
+            "shader_sha256": "bdc5becd70e7d45e67c7a38a44ec8f25e8bc3da8bdc750dcfd08edf9c7a7d486",
+            "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+            "reflection_sha256": "f48c6c35a4249ebb23511421fa8801ddc1c6cbebf05ce923b1b01a0701c95854",
+            "metrics": {
+              "rgb_mean_absolute": 0.06543504901960784,
+              "rgb_p99_absolute": 2,
+              "max_channel_delta": 11,
+              "changed_channels": 129641,
+              "silhouette_iou": 1.0,
+              "luminance_mean_delta": 0.000984941911575494,
+              "pass": true
+            },
+            "d3d11_sha256": "2e1a74ee8e21be5a5bae7abf3e7f9ebd0d49067daa239a437306aa4680c0a41f"
+          },
+          {
+            "frame": "h00-z1-pan00.bmp",
+            "packet_sha256": "1ee352df3ffa7c8a9e809acebf89c8e0322818e83c6e4a78063a9dab1d52f642",
+            "shader_sha256": "bdc5becd70e7d45e67c7a38a44ec8f25e8bc3da8bdc750dcfd08edf9c7a7d486",
+            "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+            "reflection_sha256": "f48c6c35a4249ebb23511421fa8801ddc1c6cbebf05ce923b1b01a0701c95854",
+            "metrics": {
+              "rgb_mean_absolute": 0.07902512254901961,
+              "rgb_p99_absolute": 2,
+              "max_channel_delta": 10,
+              "changed_channels": 145390,
+              "silhouette_iou": 1.0,
+              "luminance_mean_delta": 0.0008148628677488031,
+              "pass": true
+            },
+            "d3d11_sha256": "7a25179275604cbd5322adecce77d38c7672ea28953f1a206bdd124a38f19912"
+          }
+        ]
+      }
+    }
+  },
+  "coastal_remaining": {
+    "evidence": "Renderer/terrain_lab/v2/fixtures/beauty/city-scene-r115/american-modern-s1-capital-at7-5/capital-growth-search.json",
+    "sha256": "883d670006ad4049f2a28dadd0a0d6ccee4b190d3efea820e76f76fb2d8b4b50",
+    "centers_tested": 25,
+    "finding": "Even alternate side assignments lack legal placements for the required third house. Preserve prior coastal scene; no clearance relaxation or native fallback change."
+  },
+  "remaining": [
+    "Resolve coastal surrounding layout through footprint/foundation design rather than light or texture tuning",
+    "Broader single-era culture/era/size coverage and source material/environment reconstruction"
+  ],
+  "gates_advanced": false,
+  "approval": null
+}

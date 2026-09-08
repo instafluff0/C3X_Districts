@@ -1677,9 +1677,9 @@ public:
             resource_root, "resource_runtime.bin", resource_bundle, resource_texture_dds);
 
         // Bind the catalog once. Payloads are resident only when needed.
-        char unit_pack[128]="UnitAnimationRuntime",unit_root[4*MAX_PATH];
+        char unit_pack[128]="UnitAnimationFidelity",unit_root[4*MAX_PATH];
         if(GetEnvironmentVariableA("C3X_RENDERER_UNIT_PACK",unit_pack,sizeof(unit_pack))>=sizeof(unit_pack))
-            strcpy_s(unit_pack,"UnitAnimationRuntime");
+            strcpy_s(unit_pack,"UnitAnimationFidelity");
         if(unit_rendering_enabled && (!pack_path(packs_root.c_str(),unit_pack,unit_root,std::size(unit_root)) ||
             !load_unit_animations(unit_root))) {
             unit_bodies.clear();trace.write("unit-bind","complete unit pack rejected; native bodies retained",true);
@@ -2566,6 +2566,10 @@ public:
                 for(int part_index=0;part_index<int(parts);++part_index) {
                     auto record=json_member_position(data,("part"+std::to_string(part_index)).c_str(),action_location);
                     c3x_renderer::UnitBodyRenderer::Part part;
+                    float address=0;
+                    if(json_number_after(data,"address_mode",record,address) &&
+                       (address<0 || address>3 || address!=int(address)))return false;
+                    part.address=unsigned(address);
                     std::string mesh,texture;char path[4*MAX_PATH];
                     if(!json_string_after(data,"mesh",record,mesh) || !json_string_after(data,"texture",record,texture) ||
                        !json_number_after(data,"tint_r",record,part.tint[0]) || !json_number_after(data,"tint_g",record,part.tint[1]) ||
@@ -2582,7 +2586,20 @@ public:
                         if(!pack_path(root.c_str(),texture.c_str(),path,std::size(path)))return false;
                         bound.path=path;texture_ids[texture]=unsigned(unit_bodies.textures.size());unit_bodies.textures.push_back(std::move(bound));
                     }
-                    part.mesh=mesh_ids.at(mesh);part.texture=texture_ids.at(texture);action.parts.push_back(part);
+                    part.mesh=mesh_ids.at(mesh);part.texture=texture_ids.at(texture);
+                    char const* material_fields[]={"ao_texture","gloss_texture","emissive_texture"};
+                    for(unsigned channel=0;channel<3;++channel) {
+                        std::string relative;
+                        if(!json_string_after(data,material_fields[channel],record,relative))continue;
+                        if(texture_ids.find(relative)==texture_ids.end()) {
+                            c3x_renderer::UnitBodyRenderer::Texture bound;
+                            if(!pack_path(root.c_str(),relative.c_str(),path,std::size(path)))return false;
+                            bound.path=path;texture_ids[relative]=unsigned(unit_bodies.textures.size());
+                            unit_bodies.textures.push_back(std::move(bound));
+                        }
+                        part.material_textures[channel]=texture_ids.at(relative);
+                    }
+                    action.parts.push_back(part);
                 }
                 unit.actions.push_back(std::move(action));
             }
@@ -2610,7 +2627,7 @@ public:
                 }
                 for(unsigned i=0;i<bodies.textures.size();++i) {
                     auto const& t=bodies.textures[i];
-                    bool pinned=std::any_of(action.parts.begin(),action.parts.end(),[&](auto const& p){return p.texture==i;});
+                    bool pinned=std::any_of(action.parts.begin(),action.parts.end(),[&](auto const& p){return p.texture==i || std::find(std::begin(p.material_textures),std::end(p.material_textures),i)!=std::end(p.material_textures);});
                     if(t.bytes && !pinned && t.used<oldest){oldest=t.used;texture_id=int(i);mesh_id=-1;}
                 }
                 if(mesh_id>=0) {
@@ -2626,8 +2643,8 @@ public:
         unsigned loads=0;
         for(auto const& part:action.parts) {
             if(part.mesh>=bodies.meshes.size() || part.texture>=bodies.textures.size())return false;
-            auto & mesh=bodies.meshes[part.mesh];auto & texture=bodies.textures[part.texture];
-            if(mesh.failed || texture.failed)return false;
+            auto & mesh=bodies.meshes[part.mesh];
+            if(mesh.failed)return false;
             if(!mesh.bytes) {
                 std::vector<std::uint8_t> payload;c3x_renderer::AnimationMesh decoded;
                 if(!read_file(mesh.path.c_str(),payload) || !c3x_renderer::decode_animation_mesh(payload,decoded)) {
@@ -2639,21 +2656,31 @@ public:
                 mesh.animation=std::move(decoded);mesh.bytes=bytes;bodies.resident_bytes+=bytes;++loads;
             }
             mesh.used=used;
+            unsigned material_ids[]={part.texture,part.material_textures[0],part.material_textures[1],part.material_textures[2]};
+            for(unsigned channel=0;channel<4;++channel) {
+            unsigned id=material_ids[channel];if(id==UINT32_MAX)continue;
+            if(id>=bodies.textures.size())return false;
+            auto & texture=bodies.textures[id];if(texture.failed)return false;
             if(!texture.bytes) {
                 std::vector<std::uint8_t> dds;
                 if(!read_file(texture.path.c_str(),dds) || dds.size()<156 ||
                    std::memcmp(dds.data(),"DDS ",4)!=0 || std::memcmp(dds.data()+84,"DX10",4)!=0 ||
-                   (read_u32(dds,128)!=DXGI_FORMAT_BC3_UNORM_SRGB && read_u32(dds,128)!=DXGI_FORMAT_BC1_UNORM_SRGB)) {
+                   (channel==0 && read_u32(dds,128)!=DXGI_FORMAT_BC3_UNORM_SRGB && read_u32(dds,128)!=DXGI_FORMAT_BC1_UNORM_SRGB)) {
                     texture.failed=true;trace.write("unit-payload","missing texture; only this kit falls back",true);return false;
                 }
                 // Budget the retained DDS plus its GPU compressed copy.
                 if(!reserve(dds.size()*2))return false;
-                if(!ensure_dds_texture(dds,texture.view,true)) {
+                if(!ensure_dds_texture(dds,texture.view,true,true)) {
                     texture.failed=true;trace.write("unit-payload","invalid texture; only this kit falls back",true);return false;
                 }
+                char detail[160];std::snprintf(detail,sizeof(detail),
+                    "channel=%u width=%u height=%u mips=%u first_mip=0 anisotropy=16 mip_bias=0 address=%u",
+                    channel,read_u32(dds,16),read_u32(dds,12),std::max(1u,read_u32(dds,28)),part.address);
+                trace.write("unit-texture",detail,true);
                 texture.bytes=dds.size()*2;texture.dds=std::move(dds);bodies.resident_bytes+=texture.bytes;++loads;
-            } else if(!texture.view && !ensure_dds_texture(texture.dds,texture.view,true))return false;
+            } else if(!texture.view && !ensure_dds_texture(texture.dds,texture.view,true,true))return false;
             texture.used=used;
+            }
         }
         if(loads) {
             char message[160];std::snprintf(message,sizeof(message),"action=%s loaded=%u resident_bytes=%zu budget_bytes=%u",

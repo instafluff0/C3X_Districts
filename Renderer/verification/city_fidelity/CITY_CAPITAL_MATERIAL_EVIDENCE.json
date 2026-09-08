@@ -1,0 +1,875 @@
+{
+  "classification": "Provisional capital material restoration and composed coverage; no general city or milestone approval",
+  "exact_preserved_capital_instances": 8,
+  "source_palace_meshes": 8,
+  "source_palace_primitives": 9,
+  "source_palace_extra_channels": [
+    {
+      "asset": "city/palace/root/0d0c35f4a4c9651a",
+      "source_material": 8,
+      "normalized_material": 8,
+      "role": "opacity",
+      "source_class": "Generic_OPAC",
+      "source_sha256": "09147ddfc5dbd4b824d7b3a1511e819872310ed98fd421127e61fed0fb3db862",
+      "source_offset": 48,
+      "texture": "Renderer/terrain_lab/v2/fixtures/beauty/city-capital-materials-r1/palace-extra/textures/opacity_09147ddfc5dbd4b8.dds",
+      "dds_sha256": "fe386a59afa7056957719a555384fd3c3e63efbcfd2930e0c8cbf7dbc8ffdcb4"
+    }
+  ],
+  "frozen_prior_light_proxies": 31,
+  "settlement_ground_wire_exact": true,
+  "cases": {
+    "101": {
+      "augmentation_sha256": "63067b75d0a6902eb3317b2cf6c5aa838168e4279a00e3b8d49fc0f56619c384",
+      "region": "coastal",
+      "anchor": [
+        7,
+        5
+      ],
+      "tile_count": 100,
+      "body_count": 8,
+      "lights": 31,
+      "normal_meshes_applied": 29,
+      "checks": [
+        {
+          "pass": true,
+          "original_draws": 6,
+          "zero_padded_features": 4,
+          "original_geometry_materials_constants_unchanged": true
+        },
+        {
+          "pass": true,
+          "city_triangles": 13097,
+          "positions_topology_world_and_primary_uvs_exact": true
+        },
+        {
+          "pass": true,
+          "draws": 22,
+          "source_origin_z": 0.826205,
+          "reference_origin_z": 0.826205,
+          "identical_frame_texture_check": true
+        },
+        {
+          "pass": true,
+          "draws": 22,
+          "payload_bytes": 7216,
+          "original_buffers_textures_draws_and_shadow_prefix_preserved": true
+        },
+        {
+          "pass": true,
+          "original_draws": 22,
+          "added_ground_vertices": 16059,
+          "original_geometry_constants_materials_shadow_textures_unchanged": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 20100,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        },
+        {
+          "pass": true,
+          "original_draws": 6,
+          "zero_padded_features": 4,
+          "original_geometry_materials_constants_unchanged": true
+        },
+        {
+          "pass": true,
+          "city_triangles": 13097,
+          "positions_topology_world_and_primary_uvs_exact": true
+        },
+        {
+          "pass": true,
+          "draws": 22,
+          "source_origin_z": 0.826205,
+          "reference_origin_z": 0.826205,
+          "identical_frame_texture_check": true
+        },
+        {
+          "pass": true,
+          "draws": 22,
+          "payload_bytes": 7216,
+          "original_buffers_textures_draws_and_shadow_prefix_preserved": true
+        },
+        {
+          "pass": true,
+          "original_draws": 22,
+          "added_ground_vertices": 16059,
+          "original_geometry_constants_materials_shadow_textures_unchanged": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 20100,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        }
+      ],
+      "coverage": {}
+    },
+    "102": {
+      "augmentation_sha256": "ac0ccd8f4d86da80d77d7d7f7d87159a25e4f96a0bdd7efe04024a30f4330f0b",
+      "region": "inland",
+      "anchor": [
+        7,
+        4
+      ],
+      "tile_count": 100,
+      "body_count": 8,
+      "lights": 26,
+      "normal_meshes_applied": 26,
+      "checks": [
+        {
+          "pass": true,
+          "original_draws": 7,
+          "zero_padded_features": 5,
+          "original_geometry_materials_constants_unchanged": true
+        },
+        {
+          "pass": true,
+          "draws": 20,
+          "source_origin_z": 0.796863,
+          "reference_origin_z": 0.796863,
+          "identical_frame_texture_check": true
+        },
+        {
+          "pass": true,
+          "draws": 20,
+          "payload_bytes": 7216,
+          "original_buffers_textures_draws_and_shadow_prefix_preserved": true
+        },
+        {
+          "pass": true,
+          "original_draws": 20,
+          "added_ground_vertices": 12507,
+          "original_geometry_constants_materials_shadow_textures_unchanged": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 14178,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        },
+        {
+          "pass": true,
+          "original_draws": 7,
+          "zero_padded_features": 5,
+          "original_geometry_materials_constants_unchanged": true
+        },
+        {
+          "pass": true,
+          "draws": 20,
+          "source_origin_z": 0.796863,
+          "reference_origin_z": 0.796863,
+          "identical_frame_texture_check": true
+        },
+        {
+          "pass": true,
+          "draws": 20,
+          "payload_bytes": 7216,
+          "original_buffers_textures_draws_and_shadow_prefix_preserved": true
+        },
+        {
+          "pass": true,
+          "original_draws": 20,
+          "added_ground_vertices": 12507,
+          "original_geometry_constants_materials_shadow_textures_unchanged": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 14178,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        }
+      ],
+      "coverage": {
+        "clearance": [
+          {
+            "slot": 0,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 1,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 2,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 3,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 4,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 5,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 6,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": "capital",
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          }
+        ],
+        "connected_house_prefixes": [
+          4,
+          7
+        ],
+        "river_overlap_slots": [],
+        "search": [
+          {
+            "nodes": 7,
+            "backtracks": 0,
+            "candidate_counts": {
+              "0": 217,
+              "1": 210,
+              "2": 106,
+              "3": 217,
+              "4": 322,
+              "5": 432,
+              "6": 316
+            },
+            "grid_step": 0.07,
+            "preserved_prefix": 0,
+            "node_limit": 2000,
+            "slot_extents": [
+              0.65,
+              0.65,
+              0.65,
+              0.65,
+              0.8,
+              0.8,
+              0.8
+            ],
+            "neighbor_gap": 0.08,
+            "connected_prefixes": [
+              4,
+              7
+            ],
+            "ranking": "compact envelope, nearby houses, center, remaining freedom",
+            "fixed_neighbors": [
+              [
+                -0.44,
+                -0.43978343592851593,
+                0.15999999999999998,
+                0.1597834359285159
+              ]
+            ],
+            "candidate_cost": "authored projected landmark visibility preference",
+            "staged_connection": true,
+            "status": "fit",
+            "palace_attempt": 0,
+            "palace_site": [
+              -0.464,
+              -0.46378343592851595,
+              0.18399999999999997,
+              0.1837834359285159
+            ],
+            "planned_size": 1,
+            "planned_instances": [
+              {
+                "slot": 0,
+                "x": 0.56,
+                "y": -0.35000000000000003,
+                "rotation": 0.0,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/e18f5ef810f915df"
+              },
+              {
+                "slot": 1,
+                "x": 0.56,
+                "y": -0.07,
+                "rotation": 0.0,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/9b49d289b858afde"
+              },
+              {
+                "slot": 2,
+                "x": 0.35000000000000003,
+                "y": -0.28,
+                "rotation": 0.0,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/1a71fb8ac25f1241"
+              },
+              {
+                "slot": 3,
+                "x": 0.42000000000000004,
+                "y": -0.56,
+                "rotation": 1.5707963267948966,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/790e2a73c14737d8"
+              },
+              {
+                "slot": 4,
+                "x": -0.14,
+                "y": -0.6300000000000001,
+                "rotation": 0.0,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/1a2cdd77f4c26999"
+              },
+              {
+                "slot": 5,
+                "x": -0.35000000000000003,
+                "y": -0.6300000000000001,
+                "rotation": 0.0,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/81157340c6bc8609"
+              },
+              {
+                "slot": 6,
+                "x": 0.14,
+                "y": -0.6300000000000001,
+                "rotation": 1.5707963267948966,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/f65b0689b7acb564"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "103": {
+      "augmentation_sha256": "a072cf1deee3e2631d360413dedb18a3f85f263306ae390670825785662f739d",
+      "region": "freshcanopy",
+      "anchor": [
+        5,
+        2
+      ],
+      "tile_count": 100,
+      "body_count": 8,
+      "lights": 26,
+      "normal_meshes_applied": 26,
+      "checks": [
+        {
+          "pass": true,
+          "original_draws": 6,
+          "zero_padded_features": 4,
+          "original_geometry_materials_constants_unchanged": true
+        },
+        {
+          "pass": true,
+          "draws": 19,
+          "payload_bytes": 7216,
+          "original_buffers_textures_draws_and_shadow_prefix_preserved": true
+        },
+        {
+          "pass": true,
+          "original_draws": 19,
+          "added_ground_vertices": 12507,
+          "original_geometry_constants_materials_shadow_textures_unchanged": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 14178,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        },
+        {
+          "pass": true,
+          "original_draws": 6,
+          "zero_padded_features": 4,
+          "original_geometry_materials_constants_unchanged": true
+        },
+        {
+          "pass": true,
+          "draws": 19,
+          "payload_bytes": 7216,
+          "original_buffers_textures_draws_and_shadow_prefix_preserved": true
+        },
+        {
+          "pass": true,
+          "original_draws": 19,
+          "added_ground_vertices": 12507,
+          "original_geometry_constants_materials_shadow_textures_unchanged": true
+        },
+        {
+          "pass": true,
+          "changed_material_vertices": 14178,
+          "all_other_buffer_bytes_draws_and_textures_exact": true
+        }
+      ],
+      "coverage": {
+        "clearance": [
+          {
+            "slot": 0,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 1,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 2,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 3,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 4,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 5,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": 6,
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          },
+          {
+            "slot": "capital",
+            "vegetation_samples_in_margin": 0,
+            "no_body_overlap": true
+          }
+        ],
+        "connected_house_prefixes": [
+          4,
+          7
+        ],
+        "river_overlap_slots": [],
+        "search": [
+          {
+            "nodes": 7,
+            "backtracks": 0,
+            "candidate_counts": {
+              "0": 214,
+              "1": 206,
+              "2": 98,
+              "3": 214,
+              "4": 314,
+              "5": 428,
+              "6": 304
+            },
+            "grid_step": 0.07,
+            "preserved_prefix": 0,
+            "node_limit": 2000,
+            "slot_extents": [
+              0.65,
+              0.65,
+              0.65,
+              0.65,
+              0.8,
+              0.8,
+              0.8
+            ],
+            "neighbor_gap": 0.08,
+            "connected_prefixes": [
+              4,
+              7
+            ],
+            "ranking": "compact envelope, nearby houses, center, remaining freedom",
+            "fixed_neighbors": [
+              [
+                -0.44,
+                -0.43978343592851593,
+                0.15999999999999998,
+                0.1597834359285159
+              ]
+            ],
+            "candidate_cost": "authored projected landmark visibility preference",
+            "staged_connection": true,
+            "status": "fit",
+            "palace_attempt": 0,
+            "palace_site": [
+              -0.464,
+              -0.46378343592851595,
+              0.18399999999999997,
+              0.1837834359285159
+            ],
+            "planned_size": 1,
+            "planned_instances": [
+              {
+                "slot": 0,
+                "x": 0.56,
+                "y": -0.35000000000000003,
+                "rotation": 0.0,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/e18f5ef810f915df"
+              },
+              {
+                "slot": 1,
+                "x": 0.56,
+                "y": -0.07,
+                "rotation": 0.0,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/9b49d289b858afde"
+              },
+              {
+                "slot": 2,
+                "x": 0.35000000000000003,
+                "y": -0.28,
+                "rotation": 0.0,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/1a71fb8ac25f1241"
+              },
+              {
+                "slot": 3,
+                "x": 0.42000000000000004,
+                "y": -0.56,
+                "rotation": 1.5707963267948966,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/790e2a73c14737d8"
+              },
+              {
+                "slot": 4,
+                "x": -0.14,
+                "y": -0.6300000000000001,
+                "rotation": 0.0,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/1a2cdd77f4c26999"
+              },
+              {
+                "slot": 5,
+                "x": -0.35000000000000003,
+                "y": -0.6300000000000001,
+                "rotation": 0.0,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/81157340c6bc8609"
+              },
+              {
+                "slot": 6,
+                "x": 0.14,
+                "y": -0.6300000000000001,
+                "rotation": 1.5707963267948966,
+                "scale": 2.9177169657033994,
+                "asset": "city/component/f65b0689b7acb564"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "windows": {
+    "ground": {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "4789c6bc77bb2c8d4ec2582264504d4f4e186ae6fb25ed583bff9225f118abf7",
+          "shader_sha256": "5e43262afcf5a77c1b5d63560c195bc4abd07c9eb11b02ac70bc7b65a74ccf52",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "cb4c7e726cd93922b81b3d2299a42aed4b61b81174637f8631b52555ec68f3db",
+          "metrics": {
+            "rgb_mean_absolute": 0.08856985294117647,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 13,
+            "changed_channels": 167744,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.004631852205582511,
+            "pass": true
+          },
+          "d3d11_sha256": "900f80449db28b95316edd8dfc2e2271f2629d1c46f387aab0f00bef448da629"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "a2e8f0906fb32a6bba5150c7c994c8e8d98c83b3644c4d771960ffe9d963b9be",
+          "shader_sha256": "5e43262afcf5a77c1b5d63560c195bc4abd07c9eb11b02ac70bc7b65a74ccf52",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "cb4c7e726cd93922b81b3d2299a42aed4b61b81174637f8631b52555ec68f3db",
+          "metrics": {
+            "rgb_mean_absolute": 0.10069087009803922,
+            "rgb_p99_absolute": 3,
+            "max_channel_delta": 11,
+            "changed_channels": 183102,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.002489849632510039,
+            "pass": true
+          },
+          "d3d11_sha256": "26c79dd3a3c0d86ab7608ae1ada7d6dc56003e1558dc441afba79f3e6aab88e8"
+        }
+      ]
+    },
+    "environment": {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "7c3988302e3ffbd4d8c571ac96a4070820fedfa110f8767dcd02e97515fd1743",
+          "shader_sha256": "d06a3acffbc264a79ae722fab0035fdaaaaeac64ddef246c138abca0e11b36ee",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "c3b47e3f5b804f6f4c35ee50673f0ca1bed185fc5aebd8837ad7e240fa58f44b",
+          "metrics": {
+            "rgb_mean_absolute": 0.08857015931372549,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 13,
+            "changed_channels": 167745,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.004631785845315522,
+            "pass": true
+          },
+          "d3d11_sha256": "4df6da236fa9f548a7b12e3d3f93d1dc32aca528b30928cd36f03e6fa836bbcb"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "45550d4f74fb9b1b3f4825f48e8b5255d13b6fd49fdabdfcbb23c2ca860bf411",
+          "shader_sha256": "d06a3acffbc264a79ae722fab0035fdaaaaeac64ddef246c138abca0e11b36ee",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "c3b47e3f5b804f6f4c35ee50673f0ca1bed185fc5aebd8837ad7e240fa58f44b",
+          "metrics": {
+            "rgb_mean_absolute": 0.10069117647058823,
+            "rgb_p99_absolute": 3,
+            "max_channel_delta": 11,
+            "changed_channels": 183103,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.002490768750122858,
+            "pass": true
+          },
+          "d3d11_sha256": "8c9a5288770330c94f522904f4a5a544e316f7874be053f806d21b9e066e5fc4"
+        }
+      ]
+    },
+    "reflection-off": {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "7c3988302e3ffbd4d8c571ac96a4070820fedfa110f8767dcd02e97515fd1743",
+          "shader_sha256": "d06a3acffbc264a79ae722fab0035fdaaaaeac64ddef246c138abca0e11b36ee",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "e57f32ea0768534ed84a2d60d83da98b5c2c5428808ca467f1cadbe3b7345503",
+          "metrics": {
+            "rgb_mean_absolute": 0.08856985294117647,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 13,
+            "changed_channels": 167744,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.004631852205609903,
+            "pass": true
+          },
+          "d3d11_sha256": "20e5df1d462ef9341ace981fce9b2e2deb13be8a61c9c0280619336a411b6a01"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "45550d4f74fb9b1b3f4825f48e8b5255d13b6fd49fdabdfcbb23c2ca860bf411",
+          "shader_sha256": "d06a3acffbc264a79ae722fab0035fdaaaaeac64ddef246c138abca0e11b36ee",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "e57f32ea0768534ed84a2d60d83da98b5c2c5428808ca467f1cadbe3b7345503",
+          "metrics": {
+            "rgb_mean_absolute": 0.10069117647058823,
+            "rgb_p99_absolute": 3,
+            "max_channel_delta": 11,
+            "changed_channels": 183103,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0024899159927701795,
+            "pass": true
+          },
+          "d3d11_sha256": "7bf7e1d2f487f622a37ddc30fb2d21883823dbdbf921e08d7850e7148abbd9c4"
+        }
+      ]
+    },
+    "inland-environment": {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "1187a92f5227266858b2eeac3fbd7da9d781317d4aecc42606f44b52561c8cfd",
+          "shader_sha256": "e685aa2fbf308ba6bd7941be26fe3e6ae0a9cfda7040c8c52ff1ba0613140e53",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "e3a428cf0090cfbbe934b68d47984b64d431b7350bd7e3c6c04f76e16b09a68e",
+          "metrics": {
+            "rgb_mean_absolute": 0.005412071078431373,
+            "rgb_p99_absolute": 0,
+            "max_channel_delta": 10,
+            "changed_channels": 12418,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.00018831488969461884,
+            "pass": true
+          },
+          "d3d11_sha256": "0098a002928df2493faf4442a8f338ef83a23307ce3789d4f20c7fde6357446d"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "68f7c1fbaf829bc513072cd40711359acc633cc38fde1224761068d217238114",
+          "shader_sha256": "e685aa2fbf308ba6bd7941be26fe3e6ae0a9cfda7040c8c52ff1ba0613140e53",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "e3a428cf0090cfbbe934b68d47984b64d431b7350bd7e3c6c04f76e16b09a68e",
+          "metrics": {
+            "rgb_mean_absolute": 0.007178308823529412,
+            "rgb_p99_absolute": 0,
+            "max_channel_delta": 7,
+            "changed_channels": 14167,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0002382470587378039,
+            "pass": true
+          },
+          "d3d11_sha256": "ef42f933da233da31130179acd0ec005303dd53594c31769b19f4b06f86402b3"
+        }
+      ]
+    },
+    "holdout-environment": {
+      "promotion": false,
+      "results": [
+        {
+          "frame": "h12-z1-pan00.bmp",
+          "packet_sha256": "4de21860aa5a2a74a9d48649b90160aefff33dbaf84e3ddee6d1581ab5043140",
+          "shader_sha256": "bdc5becd70e7d45e67c7a38a44ec8f25e8bc3da8bdc750dcfd08edf9c7a7d486",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "f48c6c35a4249ebb23511421fa8801ddc1c6cbebf05ce923b1b01a0701c95854",
+          "metrics": {
+            "rgb_mean_absolute": 0.06543903186274509,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 11,
+            "changed_channels": 129649,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0009892757351044564,
+            "pass": true
+          },
+          "d3d11_sha256": "2d585ee9cb62e9f9fac2acfa77919cf8aa8dddb45bff1ec77ee605160761460a"
+        },
+        {
+          "frame": "h00-z1-pan00.bmp",
+          "packet_sha256": "a3d13688ad9a2bbc2943d2e2b779c53bd883a13d99c1dca153b40705b932031b",
+          "shader_sha256": "bdc5becd70e7d45e67c7a38a44ec8f25e8bc3da8bdc750dcfd08edf9c7a7d486",
+          "post_sha256": "7bfcc50789827b2c350a3d0db2f26bef2be5ba711c081403d6ef23b9cf0dd1d9",
+          "reflection_sha256": "f48c6c35a4249ebb23511421fa8801ddc1c6cbebf05ce923b1b01a0701c95854",
+          "metrics": {
+            "rgb_mean_absolute": 0.07902910539215686,
+            "rgb_p99_absolute": 2,
+            "max_channel_delta": 10,
+            "changed_channels": 145402,
+            "silhouette_iou": 1.0,
+            "luminance_mean_delta": 0.0008112490809495177,
+            "pass": true
+          },
+          "d3d11_sha256": "86415806f5f1645723693f2e664a2c27fba31f1bbdce7c9ad558c2e09ddd7ed8"
+        }
+      ]
+    }
+  },
+  "matched_pixels": {
+    "ground": [
+      {
+        "changed_pixels_gt_2": 3106,
+        "max_channel_delta": 113,
+        "bounds": [
+          797,
+          342,
+          934,
+          484
+        ],
+        "before_sha256": "bf8f5dc71f5c930aef38133a78ea6455401b9220687da3e126c50d8b4675d616",
+        "after_sha256": "5d257067675ee3d7881b21c0aaef624bf9779cc69f6fa7e6f599688c59bd243f",
+        "outside_city_roi_max": 0,
+        "outside_city_roi_changed_pixels": 0
+      },
+      {
+        "changed_pixels_gt_2": 3353,
+        "max_channel_delta": 84,
+        "bounds": [
+          797,
+          342,
+          934,
+          483
+        ],
+        "before_sha256": "c8ca846f0088083de59dd0564450f8002f127107f8926f7c93f878341e5d8f37",
+        "after_sha256": "16df31f12527bff62ac333b117c0f29b84c054ee095772fd1fba2478f97f5fe9",
+        "outside_city_roi_max": 0,
+        "outside_city_roi_changed_pixels": 0
+      }
+    ],
+    "environment": [
+      {
+        "changed_pixels_gt_2": 7797,
+        "max_channel_delta": 115,
+        "bounds": [
+          797,
+          341,
+          934,
+          484
+        ],
+        "before_sha256": "bf8f5dc71f5c930aef38133a78ea6455401b9220687da3e126c50d8b4675d616",
+        "after_sha256": "d6816772d0ca103b4ca34aeae7c186d50d923c68fcce78d0e61671d6a980e0d3",
+        "outside_city_roi_max": 0,
+        "outside_city_roi_changed_pixels": 0
+      },
+      {
+        "changed_pixels_gt_2": 5199,
+        "max_channel_delta": 86,
+        "bounds": [
+          797,
+          341,
+          934,
+          511
+        ],
+        "before_sha256": "c8ca846f0088083de59dd0564450f8002f127107f8926f7c93f878341e5d8f37",
+        "after_sha256": "34dfb519983e546e8fdf6ba53d7e1e8f6ec151afde570b8350e51fe9947bb855",
+        "outside_city_roi_max": 0,
+        "outside_city_roi_changed_pixels": 0
+      }
+    ]
+  },
+  "isolated_city_water_reflection": [
+    {
+      "changed_pixels_gt_2": 572,
+      "max_channel_delta": 9,
+      "bounds": [
+        834,
+        487,
+        905,
+        520
+      ],
+      "before_sha256": "e40f65ebce09c2f97d55bd97b1fb678acae2c51bce81ba5ffb2441da3c6884f6",
+      "after_sha256": "d6816772d0ca103b4ca34aeae7c186d50d923c68fcce78d0e61671d6a980e0d3",
+      "outside_city_roi_max": 1,
+      "outside_city_roi_changed_pixels": 1
+    },
+    {
+      "changed_pixels_gt_2": 665,
+      "max_channel_delta": 73,
+      "bounds": [
+        833,
+        487,
+        906,
+        516
+      ],
+      "before_sha256": "812b07ee3b7c9ea9377bc0f686cffb6cf41d075942cd052ed2731f40ba775fbd",
+      "after_sha256": "34dfb519983e546e8fdf6ba53d7e1e8f6ec151afde570b8350e51fe9947bb855",
+      "outside_city_roi_max": 1,
+      "outside_city_roi_changed_pixels": 1
+    }
+  ],
+  "prior_night_lake_roi": {
+    "changed_pixels_any": 26,
+    "changed_pixels_gt_2": 0,
+    "max_channel_delta": 1,
+    "bounds": null
+  },
+  "untuned_region": {
+    "revision": 103,
+    "region": "freshcanopy",
+    "terrain_origin": [
+      76,
+      58
+    ],
+    "anchor": [
+      5,
+      2
+    ],
+    "selection": "Flat nonriver grass tile selected from raw terrain cells before any city rendering; unchanged material/placement recipe, no local retries"
+  },
+  "remaining": [
+    "Exact source environment calibration and LEAN1 variance; hemisphere reflection remains authored approximation",
+    "The prior Asian dielectric environment trial stays unselected",
+    "Broader single-era culture/era/size matrix and more varied architectural/open-ground composition",
+    "Older capital preserves legacy clearance policy; new inland/holdout additionally check river/forest envelopes",
+    "Unresolved separate coastal-capital and medium/large river placement; no native or manual gate advancement"
+  ]
+}

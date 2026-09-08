@@ -323,11 +323,19 @@ def build(packs: list[Path], output: Path, standard_roster: bool = False, reuse_
                 if owner is None and material["source_tint"] == "USE_CIV_COLOR":
                     complete = False
                 mask = 0 if not owner or owner["mode"] == "none" else (1 if owner["mask_source"] == "base_color_alpha_inverse" else 2)
+                base = material["channels"]["base_color"]
+                address = [base.get("address_"+axis, "repeat") for axis in ("u", "v")]
+                if any(mode not in ("repeat", "clamp") for mode in address):
+                    raise ValueError("unsupported unit material address mode")
                 target[f"part{i}"] = {"mesh": part["mesh"],
                     "texture": material["channels"]["base_color"]["texture"],
                     "tint_r": tint[0], "tint_g": tint[1], "tint_b": tint[2],
                     "owner_mask": mask, "owner_strength": owner["strength"] if owner else 0,
-                    "cutout": int(material["alpha_mode"] == "mask")}
+                    "cutout": int(material["alpha_mode"] == "mask"),
+                    "address_mode": sum((1 << axis) for axis, mode in enumerate(address) if mode == "clamp")}
+                for channel, field in (("ambient_occlusion", "ao_texture"), ("gloss", "gloss_texture"), ("emissive", "emissive_texture")):
+                    if channel in material["channels"]:
+                        target[f"part{i}"][field] = material["channels"][channel]["texture"]
             record[action] = target
         record["complete"] = int(complete)
         bindings[f"unit{index}"] = record

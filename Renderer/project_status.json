@@ -2642,5 +2642,31 @@
       "terrain_lab/v2/audits/beauty/CITY_CENTRAL_CAPITAL_PASS.md",
       "terrain_lab/v2/audits/beauty/CITY_LIGHT_BUFFER_PASS.md"
     ]
+  },
+  "unit_source_fidelity_refresh": {
+    "authorization": "User requested the current generic unit sharpness findings from the BeautyStudies and importer source paths across the full standard Conquests roster.",
+    "status": "staged_for_user_test",
+    "scope": "Authored normals, per-primitive addressing, full mip chains and selected unit material response; preserve native animation, overlays, fallback, dirty bounds and caches.",
+    "runtime_pack": "Renderer/packs/UnitAnimationFidelity",
+    "port_record": "Renderer/native/environment_refresh/UNIT_FIDELITY.md",
+    "evidence": "Renderer/verification/environment_refresh/unit-checkpoint.json",
+    "existing_symbols": [
+      "Unit_tick_anim",
+      "Sprite_draw_unit_body_normal",
+      "Sprite_draw_unit_body_reduced",
+      "OutputDebugStringA"
+    ],
+    "audit_candidates": [],
+    "required_user_action": [],
+    "remaining_work": [
+      "User-run in-game checkpoint; normal INSTALL.bat installs the staged unit update. The agent did not run the installer or game.",
+      "The isolated Warrior LUT and native presentation are distinct; no claim of pixel-identical close-up appearance.",
+      "Separately authorized water/reflection and city/palace geometry, arrangement and night lights remain a candidate/incomplete port."
+    ],
+    "workflow_limits": [
+      "Intermittent frozen-profile boundary parity failure also reproduces on the old staged DLL.",
+      "Full workflow retains the frozen L19A fixture-hash failure."
+    ],
+    "staged_sha256": "8351b054fcfb8d6bde959cf7e857bfd03d10ab33258b688268f862e139cc7f04"
   }
 }

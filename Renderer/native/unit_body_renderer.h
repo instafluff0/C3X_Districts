@@ -3,6 +3,7 @@
 
 #include "unit_animation_runtime.h"
 #include "unit_shadow.h"
+#include "environment_refresh/unit_shader.h"
 
 namespace c3x_renderer {
 
@@ -12,7 +13,7 @@ class UnitBodyRenderer {
 public:
     struct Mesh { AnimationMesh animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
-    struct Part { unsigned mesh=0,texture=0; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
+    struct Part { unsigned mesh=0,texture=0,address=0; unsigned material_textures[3]={UINT32_MAX,UINT32_MAX,UINT32_MAX}; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
     struct Action { std::string name; bool loop=false,allow_exit_clip=false; std::vector<Part> parts; };
     struct Unit { std::vector<std::string> keys; float scale=1,yaw_offset=0,offset_z=0; std::vector<Action> actions; };
     std::vector<Mesh> meshes;
@@ -30,9 +31,10 @@ public:
     void reset_gpu() {
         for(auto & mesh:meshes) release(mesh.indices);
         for(auto & texture:textures) release(texture.view);
-        release(vertex);release(pixel);release(layout);release(settings);release(vertices);
+        release(vertex);release(pixel);release(layout);release(settings);release(beauty_frame);release(vertices);
         release(shadow_view);release(shadow_texture);
-        release(sampler);release(raster);release(target);release(output);release(readback);
+        for(auto & sampler:samplers)release(sampler);
+        release(raster);release(target);release(output);release(readback);
         linear.reset();transfer.reset(); capacity=0; image_width=image_height=0;target_width=target_height=0;
         cache.clear();cache_bytes=0;pixels.clear();
     }
@@ -86,7 +88,7 @@ public:
         D3D11_VIEWPORT vp={0,0,float(w),float(h),0,1}; context->RSSetViewports(1,&vp);context->RSSetState(raster);
         context->IASetInputLayout(layout);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
-        context->PSSetSamplers(0,1,&sampler);context->PSSetConstantBuffers(0,1,&settings);
+        context->PSSetConstantBuffers(0,1,&settings);
         std::vector<std::vector<FeatureSourceVertex>> poses(action->parts.size());
         std::vector<std::vector<UnitShadow::Point>> positions(action->parts.size());
         std::vector<UnitShadow::Point> all_points;
@@ -102,7 +104,22 @@ public:
             }
         }
         UnitShadow shadow;
+        // Selected BeautyStudies response, driven by the same native phase as
+        // the existing pose-local caster. No independent sun or animation clock.
+        auto noon=evaluate_environment(12,0);
+        bool daylight=environment.sun_intensity>=environment.moon_intensity;
+        float const* light_color=daylight?environment.sun_color:environment.moon_color;
+        float beauty[20]={};float const ambient_source[]={.34f,.45f,.60f};
+        float const chromatic[]={1.f,4.5f/6.2f,3.5f/6.2f};
         auto light=environment.sun_intensity>=environment.moon_intensity?environment.sun_direction:environment.moon_direction;
+        for(unsigned axis=0;axis<3;++axis) {
+            beauty[axis]=light[axis];beauty[4+axis]=chromatic[axis]*light_color[axis]/std::max(.001f,noon.sun_color[axis]);
+            beauty[8+axis]=ambient_source[axis]*environment.ambient_color[axis]/std::max(.001f,noon.ambient_color[axis]);
+        }
+        beauty[3]=2.05f*(environment.sun_intensity+environment.moon_intensity)/(noon.sun_intensity+noon.moon_intensity);
+        beauty[7]=1;beauty[11]=.62f;beauty[12]=.490290f;beauty[13]=-.735435f;beauty[14]=.469979f;
+        context->UpdateSubresource(beauty_frame,0,nullptr,beauty,0,0);
+        context->PSSetConstantBuffers(1,1,&beauty_frame);context->PSSetSamplers(1,1,&samplers[3]);
         if(!shadow.fit(all_points,light[0],light[1])){failure_reason="pose-envelope";return false;}
         for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
             auto const& mesh=meshes[action->parts[part_index].mesh];auto const& points=positions[part_index];
@@ -163,7 +180,7 @@ public:
             D3D11_MAPPED_SUBRESOURCE mapped={};
             if(FAILED(context->Map(vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
             std::memcpy(mapped.pData,upload.data(),bytes);context->Unmap(vertices,0);
-            float values[28]={part.tint[0],part.tint[1],part.tint[2],part.mask};
+            float values[32]={part.tint[0],part.tint[1],part.tint[2],part.mask};
             for(unsigned a=0;a<3;++a) {
                 float color=float((request.display_color_rgb>>(16-a*8))&255)/255;
                 values[4+a]=color<=.04045f?color/12.92f:std::pow((color+.055f)/1.055f,2.4f);
@@ -172,13 +189,21 @@ public:
                 values[24+a]=environment.ambient_color[a];
             }
             values[7]=part.strength;values[11]=environment.sun_intensity;values[19]=environment.moon_intensity;values[27]=part.cutout;
+            ID3D11ShaderResourceView* extra[3]={};
+            for(unsigned channel=0;channel<3;++channel)if(part.material_textures[channel]!=UINT32_MAX) {
+                unsigned index=part.material_textures[channel];
+                if(index>=textures.size() || !textures[index].view)return false;
+                extra[channel]=textures[index].view;values[28+channel]=1;
+            }
+            context->PSSetShaderResources(2,3,extra);
             context->UpdateSubresource(settings,0,nullptr,values,0,0);
             UINT stride=44,offset=0;context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
             context->IASetIndexBuffer(mesh.indices,DXGI_FORMAT_R32_UINT,0);
             context->PSSetShaderResources(0,1,&textures[part.texture].view);
+            context->PSSetSamplers(0,1,&samplers[part.address]);
             context->DrawIndexed(UINT(mesh.animation.indices.size()),0,0);
         }
-        ID3D11ShaderResourceView* empty[2]={};context->PSSetShaderResources(0,2,empty);
+        ID3D11ShaderResourceView* empty[5]={};context->PSSetShaderResources(0,5,empty);
         failure_reason="gpu-body-readback";
         transfer.draw(context,linear,target,environment.exposure);
         context->OMSetRenderTargets(0,nullptr,nullptr);context->CopyResource(readback,output);
@@ -269,8 +294,8 @@ private:
     struct Cached {Key key;std::uint64_t used;std::vector<std::uint32_t> pixels;unsigned cast_pixels;};
     std::vector<Cached> cache;std::uint64_t serial=0;
     ID3D11VertexShader *vertex=nullptr;ID3D11PixelShader *pixel=nullptr;ID3D11InputLayout *layout=nullptr;
-    ID3D11Buffer *settings=nullptr,*vertices=nullptr;UINT capacity=0;
-    ID3D11SamplerState *sampler=nullptr;ID3D11RasterizerState *raster=nullptr;
+    ID3D11Buffer *settings=nullptr,*beauty_frame=nullptr,*vertices=nullptr;UINT capacity=0;
+    ID3D11SamplerState *samplers[4]={};ID3D11RasterizerState *raster=nullptr;
     ID3D11Texture2D* shadow_texture=nullptr;ID3D11ShaderResourceView* shadow_view=nullptr;
     profile_v2::LinearTarget linear;profile_v2::LinearOutput transfer;
     ID3D11Texture2D *output=nullptr,*readback=nullptr;ID3D11RenderTargetView *target=nullptr;
@@ -288,31 +313,7 @@ private:
     }
     bool ensure(ID3D11Device* device,int w,int h) {
         if(!pixel) {
-            char const* source=R"(
-Texture2D<float> shadow_map : register(t1);
-Texture2D<float4> base : register(t0);SamplerState sample_base : register(s0);
-cbuffer Material : register(b0) {float4 tint,owner,sun,sun_color,moon,moon_color,ambient;};
-struct Input {float3 p:POSITION;float3 n:NORMAL;float2 uv:TEXCOORD0;float3 shadow:TEXCOORD1;};
-struct Output {float4 p:SV_Position;float3 n:NORMAL;float2 uv:TEXCOORD0;float3 shadow:TEXCOORD1;};
-Output VS(Input i){Output o;o.p=float4(i.p,1);o.n=i.n;o.uv=i.uv;o.shadow=i.shadow;return o;}
-float4 PS(Output i):SV_Target {
- clip(i.shadow.x);
- float4 b=base.Sample(sample_base,i.uv);if(ambient.w>.5)clip(b.a-.5);
- float3 albedo=b.rgb*tint.rgb;
- float mask=tint.w<.5?0:(tint.w<1.5?smoothstep(.06,.94,1-b.a):1);
- float value=dot(albedo,float3(.2126,.7152,.0722));
- float3 ramp=lerp(owner.rgb*.32,saturate(owner.rgb*.90+float3(.24,.24,.20)),smoothstep(.08,.86,value));
- albedo=lerp(albedo,lerp(ramp,albedo,.14),mask*owner.w);
- float3 n=normalize(i.n);
- int2 cell=int2(floor(i.shadow.yz*128));float occluded=0;
- [unroll]for(int oy=-1;oy<=1;++oy)[unroll]for(int ox=-1;ox<=1;++ox) {
-   int2 q=cell+int2(ox,oy);
-   if(all(q>=0) && all(q<128))occluded+=(shadow_map.Load(int3(q,0))>i.shadow.x+.006)?1.0/9:0;
- }
- float visibility=1-.78*occluded;
- float3 light=ambient.rgb+visibility*(sun_color.rgb*sun.w*saturate(dot(n,sun.xyz))+moon_color.rgb*moon.w*saturate(dot(n,moon.xyz)));
- return float4(albedo*max(light,.02),1);
-})";
+            char const* source=unit_material_shader();
             ID3DBlob *vs=nullptr,*ps=nullptr,*error=nullptr;
             HRESULT hr=D3DCompile(source,std::strlen(source),"unit_body",nullptr,nullptr,"VS","vs_4_0",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&vs,&error);
             if(error){OutputDebugStringA(static_cast<char const*>(error->GetBufferPointer()));release(error);}
@@ -326,10 +327,18 @@ float4 PS(Output i):SV_Target {
                 {"TEXCOORD",1,DXGI_FORMAT_R32G32B32_FLOAT,0,32,D3D11_INPUT_PER_VERTEX_DATA,0}};
             if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,4,vs->GetBufferPointer(),vs->GetBufferSize(),&layout);
             release(vs);release(ps);
-            D3D11_BUFFER_DESC b={};b.ByteWidth=112;b.Usage=D3D11_USAGE_DEFAULT;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+            D3D11_BUFFER_DESC b={};b.ByteWidth=128;b.Usage=D3D11_USAGE_DEFAULT;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&b,nullptr,&settings);
-            D3D11_SAMPLER_DESC s={};s.Filter=D3D11_FILTER_MIN_MAG_MIP_LINEAR;s.AddressU=s.AddressV=s.AddressW=D3D11_TEXTURE_ADDRESS_WRAP;s.MaxLOD=D3D11_FLOAT32_MAX;
-            if(SUCCEEDED(hr))hr=device->CreateSamplerState(&s,&sampler);
+            b.ByteWidth=80;if(SUCCEEDED(hr))hr=device->CreateBuffer(&b,nullptr,&beauty_frame);
+            // The selected unit witness uses MSAA4, anisotropy16 and zero mip
+            // bias at native sprite resolution. Address axes are material data.
+            for(unsigned mode=0;mode<4 && SUCCEEDED(hr);++mode) {
+                D3D11_SAMPLER_DESC s={};s.Filter=D3D11_FILTER_ANISOTROPIC;s.MaxAnisotropy=16;
+                s.AddressU=(mode&1)?D3D11_TEXTURE_ADDRESS_CLAMP:D3D11_TEXTURE_ADDRESS_WRAP;
+                s.AddressV=(mode&2)?D3D11_TEXTURE_ADDRESS_CLAMP:D3D11_TEXTURE_ADDRESS_WRAP;
+                s.AddressW=D3D11_TEXTURE_ADDRESS_WRAP;s.MaxLOD=D3D11_FLOAT32_MAX;
+                hr=device->CreateSamplerState(&s,&samplers[mode]);
+            }
             D3D11_RASTERIZER_DESC r={};r.FillMode=D3D11_FILL_SOLID;r.CullMode=D3D11_CULL_NONE;r.DepthClipEnable=TRUE;r.MultisampleEnable=TRUE;
             if(SUCCEEDED(hr))hr=device->CreateRasterizerState(&r,&raster);
             if(FAILED(hr)){reset_gpu();return false;}

@@ -1,3 +1,4 @@
+#define Q3_CONTINUOUS_RIVERS 1
 // Translate the authoritative Civ III viewport vertex contract into the
 // approved terrain shader contract. Production keeps a frozen copy of the
 // approved Lab implementation beside this thin Civ III input adapter, so

@@ -1,109 +1,105 @@
-[C3X renderer] qpc=931931705842 ms=38830487.743 thread=4676 sequence=0 stage=pickup-assets selected hill and 6 source cliffs / 24 channels ready
-[C3X renderer] qpc=931949193126 ms=38831216.380 thread=4676 sequence=0 stage=animation-bind resource=horses result=ready facing=SE payload_bytes=527380
-[C3X renderer] qpc=931949306535 ms=38831221.106 thread=4676 sequence=0 stage=animation-bind resource=cattle result=ready facing=SE payload_bytes=269048
-[C3X renderer] qpc=931949390355 ms=38831224.598 thread=4676 sequence=0 stage=animation-bind resource=wheat result=ready facing=SE payload_bytes=40352
-[C3X renderer] qpc=931949656631 ms=38831235.693 thread=4676 sequence=0 stage=animation-bind resource=fish result=ready facing=SE payload_bytes=1006880
-[C3X renderer] qpc=931949795084 ms=38831241.462 thread=4676 sequence=0 stage=animation-bind resource=whales result=ready facing=SE payload_bytes=434376
-[C3X renderer] qpc=931949923412 ms=38831246.809 thread=4676 sequence=0 stage=animation-bind resource=game result=ready facing=SE payload_bytes=436888
-[C3X renderer] qpc=931950089150 ms=38831253.715 thread=4676 sequence=0 stage=animation-bind resource=furs result=ready facing=SE payload_bytes=570712
-[C3X renderer] qpc=931950258810 ms=38831260.784 thread=4676 sequence=0 stage=animation-bind resource=ivory result=ready facing=SE payload_bytes=472176
-[C3X renderer] qpc=931950358678 ms=38831264.945 thread=4676 sequence=0 stage=animation-bind resource=bananas result=ready facing=SE payload_bytes=159792
-[C3X renderer] qpc=931950471319 ms=38831269.638 thread=4676 sequence=0 stage=animation-bind resource=rubber result=ready facing=SE payload_bytes=104628
-[C3X renderer] qpc=931952793274 ms=38831366.386 thread=4676 sequence=1 stage=render-begin 
-[C3X renderer] qpc=932293276343 ms=38845553.181 thread=4676 sequence=1 stage=shader-compile C:\Mac\Home\fun\Civilization III Complete\Conquests\C3X_Districts\Renderer\native\Shader@0x2C383B20(1239,2): warning X4000: use of potentially uninitialized variable (q6_receiver_visibility)
-C:\Mac\Home\fun\Civilization III Complete\Conquests\C3X_Districts\Renderer\native\Shader@0x2C383B20(1632,40): warning X4000: use of potentially uninitialized variable (q6_raw_main)
-C:\Mac\Home\fun\Civilization III Complete\Conquests\C3X_Districts\Renderer\native\Shader@0x2C383B20(1239,2): warning X4000: use of potentially uninitialized variable (q6_receiver_visibility)
+[C3X renderer] qpc=937108086433 ms=39046170.268 thread=6120 sequence=0 stage=pickup-assets selected hill and 6 source cliffs / 24 channels ready
+[C3X renderer] qpc=937115430062 ms=39046476.253 thread=6120 sequence=0 stage=animation-bind resource=horses result=ready facing=SE payload_bytes=527380
+[C3X renderer] qpc=937115583996 ms=39046482.667 thread=6120 sequence=0 stage=animation-bind resource=cattle result=ready facing=SE payload_bytes=269048
+[C3X renderer] qpc=937115678043 ms=39046486.585 thread=6120 sequence=0 stage=animation-bind resource=wheat result=ready facing=SE payload_bytes=40352
+[C3X renderer] qpc=937115945627 ms=39046497.734 thread=6120 sequence=0 stage=animation-bind resource=fish result=ready facing=SE payload_bytes=1006880
+[C3X renderer] qpc=937116090821 ms=39046503.784 thread=6120 sequence=0 stage=animation-bind resource=whales result=ready facing=SE payload_bytes=434376
+[C3X renderer] qpc=937116243622 ms=39046510.151 thread=6120 sequence=0 stage=animation-bind resource=game result=ready facing=SE payload_bytes=436888
+[C3X renderer] qpc=937116425485 ms=39046517.729 thread=6120 sequence=0 stage=animation-bind resource=furs result=ready facing=SE payload_bytes=570712
+[C3X renderer] qpc=937116621386 ms=39046525.891 thread=6120 sequence=0 stage=animation-bind resource=ivory result=ready facing=SE payload_bytes=472176
+[C3X renderer] qpc=937116772334 ms=39046532.181 thread=6120 sequence=0 stage=animation-bind resource=bananas result=ready facing=SE payload_bytes=159792
+[C3X renderer] qpc=937116871723 ms=39046536.322 thread=6120 sequence=0 stage=animation-bind resource=rubber result=ready facing=SE payload_bytes=104628
+[C3X renderer] qpc=937119218947 ms=39046634.123 thread=6120 sequence=1 stage=render-begin
+[C3X renderer] qpc=937645909376 ms=39068579.557 thread=6120 sequence=1 stage=shader-compile C:\Mac\Home\fun\Civilization III Complete\Conquests\C3X_Districts\Renderer\native\Shader@0x2C64F9E0(1240,2): warning X4000: use of potentially uninitialized variable (q6_receiver_visibility)
+C:\Mac\Home\fun\Civilization III Complete\Conquests\C3X_Districts\Renderer\native\Shader@0x2C64F9E0(1633,40): warning X4000: use of potentially uninitialized variable (q6_raw_main)
+C:\Mac\Home\fun\Civilization III Complete\Conquests\C3X_Districts\Renderer\native\Shader@0x2C64F9E0(1240,2): warning X4000: use of potentially uninitialized variable (q6_receiver_visibility)
 
-[C3X renderer] qpc=932319267696 ms=38846636.154 thread=4676 sequence=1 stage=shader-compile C:\Mac\Home\fun\Civilization III Complete\Conquests\C3X_Districts\Renderer\native\Shader@0x2C383B20(955,2): warning X4000: use of potentially uninitialized variable (q6_receiver_illumination)
-C:\Mac\Home\fun\Civilization III Complete\Conquests\C3X_Districts\Renderer\native\Shader@0x2C383B20(1001,72): warning X4000: use of potentially uninitialized variable (q6_raw_feature)
-C:\Mac\Home\fun\Civilization III Complete\Conquests\C3X_Districts\Renderer\native\Shader@0x2C383B20(955,2): warning X4000: use of potentially uninitialized variable (q6_receiver_illumination)
-
-[C3X renderer] qpc=932829273233 ms=38867886.385 thread=4676 sequence=1 stage=world-coast-update revision=1 changed=5000 cells=6272 bytes=379536 ms=327.136
-[C3X renderer] qpc=932829422177 ms=38867892.591 thread=4676 sequence=1 stage=source-fidelity authority=r13 adapter=natural-coverage-r3 mountain_mask=1 biome_field=1 coast_coverage=1 coast_height=1 trees=22 recipes=25 weight=180 msaa=4 anisotropy=16 scale=2 mip_bias=-1 scratch_max=3670016 river_pages_max=16 L=-0.000000,-0.595228,0.803557 receive=1
-[C3X renderer] qpc=932927696046 ms=38871987.335 thread=4676 sequence=1 stage=mesh-phases built=388 reused=0 ground_ms=1859.152 features_ms=45.406 cliffs_ms=1127.659 upload_ms=1024.354 bytes=74235300
-[C3X renderer] qpc=932927701055 ms=38871987.544 thread=4676 sequence=1 stage=query-cache shore_hits=717707 shore_misses=590102 material_hits=112035 material_misses=115049 height_queries=882806 scratch_bytes=950272
-[C3X renderer] qpc=932927705548 ms=38871987.731 thread=4676 sequence=1 stage=geometry-ready tiles
-[C3X renderer] qpc=932927853913 ms=38871993.913 thread=4676 sequence=1 stage=source-shadow pages_hit=0 pages_built=3 source_draws=251 casters=2091 bytes_cap=134217728 ticks=105769
-[C3X renderer] qpc=932927907074 ms=38871996.128 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4467
-[C3X renderer] qpc=932927955218 ms=38871998.134 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=2 source_draws=149 casters=2091 bytes_cap=134217728 ticks=23867
-[C3X renderer] qpc=932927965955 ms=38871998.581 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3136
-[C3X renderer] qpc=932927983264 ms=38871999.303 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4316
-[C3X renderer] qpc=932927998574 ms=38871999.941 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3125
-[C3X renderer] qpc=932928025613 ms=38872001.067 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=1 source_draws=90 casters=2091 bytes_cap=134217728 ticks=14141
-[C3X renderer] qpc=932928037504 ms=38872001.563 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3886
-[C3X renderer] qpc=932928059991 ms=38872002.500 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=1 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3893
-[C3X renderer] qpc=932928071307 ms=38872002.971 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3589
-[C3X renderer] qpc=932928088563 ms=38872003.690 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3434
-[C3X renderer] qpc=932928095047 ms=38872003.960 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3636
-[C3X renderer] qpc=932928112798 ms=38872004.700 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3395
-[C3X renderer] qpc=932928118501 ms=38872004.938 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3375
-[C3X renderer] qpc=932928131814 ms=38872005.492 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3088
-[C3X renderer] qpc=932928137276 ms=38872005.720 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3122
-[C3X renderer] qpc=932928150911 ms=38872006.288 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3125
-[C3X renderer] qpc=932928156279 ms=38872006.512 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3154
-[C3X renderer] qpc=932928186531 ms=38872007.772 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=1 source_draws=143 casters=2091 bytes_cap=134217728 ticks=20278
-[C3X renderer] qpc=932928192227 ms=38872008.009 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3392
-[C3X renderer] qpc=932928205916 ms=38872008.580 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3494
-[C3X renderer] qpc=932928213024 ms=38872008.876 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3439
-[C3X renderer] qpc=932928227097 ms=38872009.462 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3020
-[C3X renderer] qpc=932928234324 ms=38872009.763 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3014
-[C3X renderer] qpc=932928254828 ms=38872010.618 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3019
-[C3X renderer] qpc=932928261857 ms=38872010.911 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3004
-[C3X renderer] qpc=932928276870 ms=38872011.536 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3392
-[C3X renderer] qpc=932928283407 ms=38872011.809 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3426
-[C3X renderer] qpc=932928297772 ms=38872012.407 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3349
-[C3X renderer] qpc=932928303252 ms=38872012.635 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3337
-[C3X renderer] qpc=932928322228 ms=38872013.426 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=2 source_draws=45 casters=2091 bytes_cap=134217728 ticks=8927
-[C3X renderer] qpc=932928327482 ms=38872013.645 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3211
-[C3X renderer] qpc=933040558986 ms=38876689.958 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4153
-[C3X renderer] qpc=933040842155 ms=38876701.756 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3792
-[C3X renderer] qpc=933040876155 ms=38876703.173 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4953
-[C3X renderer] qpc=933040884347 ms=38876703.514 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3546
-[C3X renderer] qpc=933040902709 ms=38876704.280 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3768
-[C3X renderer] qpc=933040912460 ms=38876704.686 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3727
-[C3X renderer] qpc=933040937395 ms=38876705.725 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3689
-[C3X renderer] qpc=933040948775 ms=38876706.199 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3536
-[C3X renderer] qpc=933040966507 ms=38876706.938 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3713
-[C3X renderer] qpc=933040977050 ms=38876707.377 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3494
-[C3X renderer] qpc=933040994260 ms=38876708.094 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3220
-[C3X renderer] qpc=933041001442 ms=38876708.393 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=2951
-[C3X renderer] qpc=933041017426 ms=38876709.059 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3407
-[C3X renderer] qpc=933041024557 ms=38876709.357 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=2985
-[C3X renderer] qpc=933041040194 ms=38876710.008 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3352
-[C3X renderer] qpc=933041051620 ms=38876710.484 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3346
-[C3X renderer] qpc=933041065499 ms=38876711.062 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=2976
-[C3X renderer] qpc=933041072481 ms=38876711.353 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3060
-[C3X renderer] qpc=933041087343 ms=38876711.973 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3273
-[C3X renderer] qpc=933041094988 ms=38876712.291 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3259
-[C3X renderer] qpc=933041111067 ms=38876712.961 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3417
-[C3X renderer] qpc=933041119440 ms=38876713.310 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3324
-[C3X renderer] qpc=933041166117 ms=38876715.255 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=1 source_draws=115 casters=2091 bytes_cap=134217728 ticks=33356
-[C3X renderer] qpc=933041474349 ms=38876728.098 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=5570
-[C3X renderer] qpc=933041504267 ms=38876729.344 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3869
-[C3X renderer] qpc=933041515420 ms=38876729.809 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3711
-[C3X renderer] qpc=933041536042 ms=38876730.668 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3806
-[C3X renderer] qpc=933041546095 ms=38876731.087 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3766
-[C3X renderer] qpc=933041857191 ms=38876744.050 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3845
-[C3X renderer] qpc=933041868403 ms=38876744.517 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3630
-[C3X renderer] qpc=933041894492 ms=38876745.604 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=8654
-[C3X renderer] qpc=933041902423 ms=38876745.934 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3043
-[C3X renderer] qpc=933041930819 ms=38876747.117 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=2 source_draws=81 casters=2091 bytes_cap=134217728 ticks=14796
-[C3X renderer] qpc=933041940951 ms=38876747.540 thread=4676 sequence=1 stage=source-shadow pages_hit=5 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3750
-[C3X renderer] qpc=933041968629 ms=38876748.693 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4007
-[C3X renderer] qpc=933041978934 ms=38876749.122 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3558
-[C3X renderer] qpc=933041997750 ms=38876749.906 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3503
-[C3X renderer] qpc=933042006301 ms=38876750.263 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3185
-[C3X renderer] qpc=933042060126 ms=38876752.505 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4036
-[C3X renderer] qpc=933042073074 ms=38876753.045 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4812
-[C3X renderer] qpc=933042092401 ms=38876753.850 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3780
-[C3X renderer] qpc=933042102115 ms=38876754.255 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3776
-[C3X renderer] qpc=933042121739 ms=38876755.072 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3735
-[C3X renderer] qpc=933042495691 ms=38876770.654 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4371
-[C3X renderer] qpc=933042522793 ms=38876771.783 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3545
-[C3X renderer] qpc=933042533863 ms=38876772.244 thread=4676 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3684
-[C3X renderer] qpc=933042559387 ms=38876773.308 thread=4676 sequence=1 stage=source-shadow pages_hit=2 pages_built=2 source_draws=24 casters=2091 bytes_cap=134217728 ticks=7914
-[C3X renderer] qpc=933042568291 ms=38876773.679 thread=4676 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3362
-[C3X renderer] qpc=933042617824 ms=38876775.743 thread=4676 sequence=1 stage=readback-begin includes pending GPU execution
-[C3X renderer] qpc=933116366204 ms=38879848.592 thread=4676 sequence=1 stage=frame cache=tiles invalidations=127 camera=1 scene=1 environment=1 wrap=1 content=1 ownership=1 device=1 tiles=964 built=388 reused=0 evicted=0 gpu_bytes=74235300 upload_bytes=73820324 viewport_bytes=2939600 reused_pixels=0 draw_pixels=614400 block_pixels=0 block_bytes=0 render_ms=48482.074 geometry_ms=40621.354 draw_submit_ms=4788.007 readback_wait_ms=3071.336
-[C3X renderer] qpc=933116464403 ms=38879852.683 thread=8260 sequence=1 stage=worker-complete result=1 wait_ms=48486.224 tiles=964 prefetch_pending=448 prefetch_built=0 prefetch_unavailable=0 prefetch_cancelled=0 prefetch_bytes=0 cumulative_prewarm_ms=0.000 blocks_pending=0 blocks_built=0 block_bytes=0
-[C3X renderer] qpc=933116556711 ms=38879856.530 thread=4676 sequence=1 stage=reset device and all caches
+[C3X renderer] qpc=938194058479 ms=39091419.103 thread=6120 sequence=1 stage=world-coast-update revision=1 changed=5000 cells=6272 bytes=379536 ms=330.540
+[C3X renderer] qpc=938194100606 ms=39091420.859 thread=6120 sequence=1 stage=source-fidelity authority=r13 adapter=natural-coverage-r3 mountain_mask=1 biome_field=1 coast_coverage=1 coast_height=1 trees=22 recipes=25 weight=180 msaa=4 anisotropy=16 scale=2 mip_bias=-1 scratch_max=3670016 river_pages_max=16 L=-0.000000,-0.595228,0.803557 receive=1
+[C3X renderer] qpc=938291165996 ms=39095465.250 thread=6120 sequence=1 stage=mesh-phases built=388 reused=0 ground_ms=1912.434 features_ms=53.678 cliffs_ms=1118.279 upload_ms=930.225 bytes=74235300
+[C3X renderer] qpc=938291167398 ms=39095465.308 thread=6120 sequence=1 stage=query-cache shore_hits=717707 shore_misses=590102 material_hits=112035 material_misses=115049 height_queries=882806 scratch_bytes=950272
+[C3X renderer] qpc=938291169158 ms=39095465.382 thread=6120 sequence=1 stage=geometry-ready tiles
+[C3X renderer] qpc=938291264529 ms=39095469.355 thread=6120 sequence=1 stage=source-shadow pages_hit=0 pages_built=3 source_draws=251 casters=2091 bytes_cap=134217728 ticks=51890
+[C3X renderer] qpc=938291282905 ms=39095470.121 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3329
+[C3X renderer] qpc=938291323546 ms=39095471.814 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=2 source_draws=149 casters=2091 bytes_cap=134217728 ticks=25438
+[C3X renderer] qpc=938291334994 ms=39095472.291 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3534
+[C3X renderer] qpc=938291355480 ms=39095473.145 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3682
+[C3X renderer] qpc=938291367951 ms=39095473.665 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3085
+[C3X renderer] qpc=938291395416 ms=39095474.809 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=1 source_draws=90 casters=2091 bytes_cap=134217728 ticks=14585
+[C3X renderer] qpc=938291407054 ms=39095475.294 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3500
+[C3X renderer] qpc=938291432840 ms=39095476.368 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=1 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4130
+[C3X renderer] qpc=938291447091 ms=39095476.962 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3865
+[C3X renderer] qpc=938291463901 ms=39095477.663 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3431
+[C3X renderer] qpc=938291471472 ms=39095477.978 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3420
+[C3X renderer] qpc=938291488789 ms=39095478.700 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3330
+[C3X renderer] qpc=938291495349 ms=39095478.973 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3465
+[C3X renderer] qpc=938291508879 ms=39095479.537 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3047
+[C3X renderer] qpc=938291514039 ms=39095479.752 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3027
+[C3X renderer] qpc=938291528049 ms=39095480.335 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3156
+[C3X renderer] qpc=938291533553 ms=39095480.565 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3307
+[C3X renderer] qpc=938291564630 ms=39095481.860 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=1 source_draws=143 casters=2091 bytes_cap=134217728 ticks=19509
+[C3X renderer] qpc=938291570289 ms=39095482.095 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3341
+[C3X renderer] qpc=938291583920 ms=39095482.663 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3413
+[C3X renderer] qpc=938291590979 ms=39095482.957 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3440
+[C3X renderer] qpc=938291605038 ms=39095483.543 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=2996
+[C3X renderer] qpc=938370448806 ms=39098768.700 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3829
+[C3X renderer] qpc=938370483541 ms=39098770.148 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3749
+[C3X renderer] qpc=938370495776 ms=39098770.657 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3599
+[C3X renderer] qpc=938370526861 ms=39098771.953 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4213
+[C3X renderer] qpc=938370536075 ms=39098772.336 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3775
+[C3X renderer] qpc=938370568086 ms=39098773.670 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4378
+[C3X renderer] qpc=938370578158 ms=39098774.090 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=6508
+[C3X renderer] qpc=938370599714 ms=39098774.988 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=2 source_draws=45 casters=2091 bytes_cap=134217728 ticks=10947
+[C3X renderer] qpc=938370605197 ms=39098775.217 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3202
+[C3X renderer] qpc=938370618821 ms=39098775.784 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3235
+[C3X renderer] qpc=938370626853 ms=39098776.119 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3797
+[C3X renderer] qpc=938370648169 ms=39098777.007 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4622
+[C3X renderer] qpc=938375356546 ms=39098973.189 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=11190
+[C3X renderer] qpc=938375402923 ms=39098975.122 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4964
+[C3X renderer] qpc=938375415111 ms=39098975.630 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=5013
+[C3X renderer] qpc=938375446328 ms=39098976.930 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3962
+[C3X renderer] qpc=938375458375 ms=39098977.432 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3960
+[C3X renderer] qpc=938375498871 ms=39098979.120 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=6454
+[C3X renderer] qpc=938375520583 ms=39098980.024 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4812
+[C3X renderer] qpc=938375542146 ms=39098980.923 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=2993
+[C3X renderer] qpc=938375552417 ms=39098981.351 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4485
+[C3X renderer] qpc=938375576434 ms=39098982.351 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3843
+[C3X renderer] qpc=938375586949 ms=39098982.790 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4918
+[C3X renderer] qpc=938375604278 ms=39098983.512 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3296
+[C3X renderer] qpc=938375611745 ms=39098983.823 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3367
+[C3X renderer] qpc=938375641103 ms=39098985.046 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3052
+[C3X renderer] qpc=938375648293 ms=39098985.346 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=2972
+[C3X renderer] qpc=938375668329 ms=39098986.180 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=5160
+[C3X renderer] qpc=938375684722 ms=39098986.863 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=7543
+[C3X renderer] qpc=938375708341 ms=39098987.848 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4055
+[C3X renderer] qpc=938375724619 ms=39098988.526 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3936
+[C3X renderer] qpc=938375779853 ms=39098990.827 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=1 source_draws=115 casters=2091 bytes_cap=134217728 ticks=29312
+[C3X renderer] qpc=938375797897 ms=39098991.579 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=5135
+[C3X renderer] qpc=938375830820 ms=39098992.951 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=5309
+[C3X renderer] qpc=938375853308 ms=39098993.888 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=5091
+[C3X renderer] qpc=938375880978 ms=39098995.041 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=6740
+[C3X renderer] qpc=938375892660 ms=39098995.528 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4173
+[C3X renderer] qpc=938375915651 ms=39098996.485 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3311
+[C3X renderer] qpc=938375928841 ms=39098997.035 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=6989
+[C3X renderer] qpc=938375956254 ms=39098998.177 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3694
+[C3X renderer] qpc=938375962600 ms=39098998.442 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3030
+[C3X renderer] qpc=938375997515 ms=39098999.896 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=2 source_draws=81 casters=2091 bytes_cap=134217728 ticks=17473
+[C3X renderer] qpc=938376015086 ms=39099000.629 thread=6120 sequence=1 stage=source-shadow pages_hit=5 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=5189
+[C3X renderer] qpc=938376072785 ms=39099003.033 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3575
+[C3X renderer] qpc=938376162907 ms=39099006.788 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4371
+[C3X renderer] qpc=938376240891 ms=39099010.037 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3879
+[C3X renderer] qpc=938376251158 ms=39099010.465 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3146
+[C3X renderer] qpc=938376294659 ms=39099012.277 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=7087
+[C3X renderer] qpc=938376361363 ms=39099015.057 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=6799
+[C3X renderer] qpc=938376431855 ms=39099017.994 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=6680
+[C3X renderer] qpc=938376444563 ms=39099018.523 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=5808
+[C3X renderer] qpc=938376471312 ms=39099019.638 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3864
+[C3X renderer] qpc=938376481404 ms=39099020.058 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4026
+[C3X renderer] qpc=938376502773 ms=39099020.949 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3745
+[C3X renderer] qpc=938376516192 ms=39099021.508 thread=6120 sequence=1 stage=source-shadow pages_hit=3 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=4253
+[C3X renderer] qpc=938376544423 ms=39099022.684 thread=6120 sequence=1 stage=source-shadow pages_hit=2 pages_built=2 source_draws=24 casters=2091 bytes_cap=134217728 ticks=6941
+[C3X renderer] qpc=938376552570 ms=39099023.024 thread=6120 sequence=1 stage=source-shadow pages_hit=4 pages_built=0 source_draws=0 casters=2091 bytes_cap=134217728 ticks=3406
+[C3X renderer] qpc=938376566271 ms=39099023.595 thread=6120 sequence=1 stage=readback-begin includes pending GPU execution
+[C3X renderer] qpc=938473267129 ms=39103052.797 thread=6120 sequence=1 stage=frame cache=tiles invalidations=127 camera=1 scene=1 environment=1 wrap=1 content=1 ownership=1 device=1 tiles=964 built=388 reused=0 evicted=0 gpu_bytes=74235300 upload_bytes=73820324 viewport_bytes=2939600 reused_pixels=0 draw_pixels=614400 block_pixels=0 block_bytes=0 render_ms=56418.631 geometry_ms=48831.258 draw_submit_ms=3558.215 readback_wait_ms=4027.026
+[C3X renderer] qpc=938473350166 ms=39103056.257 thread=7096 sequence=1 stage=worker-complete result=1 wait_ms=56422.032 tiles=964 prefetch_pending=448 prefetch_built=0 prefetch_unavailable=0 prefetch_cancelled=0 prefetch_bytes=0 cumulative_prewarm_ms=0.000 blocks_pending=0 blocks_built=0 block_bytes=0
+[C3X renderer] qpc=938473463380 ms=39103060.974 thread=6120 sequence=1 stage=reset device and all caches
