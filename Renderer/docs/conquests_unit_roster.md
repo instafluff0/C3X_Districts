@@ -24,12 +24,19 @@ python3 Renderer/tools/asset_compiler/build_unit_animation_runtime.py --standard
 python3 Renderer/native/verify_unit_roster.py --hour 12
 python3 Renderer/native/verify_unit_roster.py --hour 0
 C3X_UNIT_TEST_PACK=UnitRosterRuntimeCandidate python3 -m unittest Renderer.native.test_unit_animation_runtime -q
-python3 Renderer/renderer.py integration verify units
+python3 Renderer/renderer.py integration units
 ```
 
 `--reuse-source-pack NAME` is an explicit incremental build option for an unchanged source pack. It checks the previous compiled payload hashes and rebuilds every other source pack. Omit it for a clean source rebuild. Native compilation uses the documented `renderer_dev.windows_command_result` helper with `Renderer/native/BUILD.bat candidate-compile`; injected changes use the approved injection smoke workflow.
 
-Verification evidence is in `Renderer/verification/animation/roster/`. The Windows matrix covers all 94 keys, three native cursor phases, four headings and both zooms, including attack-slot aliases. It also exercises the existing input-independent canvas, color-key, clipped RGB555/RGB565, native interruption, retained-terrain and scroll checks. Raw source-pose proof covers ordinary kits; an additional source comparison verifies the chariot parent-space correction. The final checkpoint records staging hashes and actual outcomes. Live gameplay remains a user-run checkpoint.
+Local verification output is written to `Renderer/lab/out/verification/animation/roster/`.
+The Windows matrix covers all 94 keys, three native cursor phases, four headings
+and both zooms, including attack-slot aliases. It also exercises the existing
+input-independent canvas, color-key, clipped RGB555/RGB565, native interruption,
+retained-terrain and scroll checks. Raw source-pose proof covers ordinary kits;
+an additional source comparison verifies the chariot parent-space correction.
+Generated reports are disposable and do not replace the user-run live-game
+checkpoint.
 
 Historical L/I and campaign gates are retired. Preserve the current unit behavior
 checks and explicit category approval; the baseline is the current production

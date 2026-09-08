@@ -39,7 +39,8 @@ warnings remain; they are not claimed to be a warning-free shader validation.
 Actual candidate-DLL day/night synthetic scenes render with zero terrain
 fallback and correct native ownership. The night replay returns to byte-identical
 pixels (zero changed bytes out of 1,228,800); its cached return takes about 3 ms.
-Cold rendering remains measured in seconds. See `../../verification/city_fidelity/`
+Cold rendering remains measured in seconds. Local probe output is written to
+`../../lab/out/verification/city_fidelity/`.
 for run reports and the final release checkpoint.
 
 Geometry stays world-anchored in the existing bounded caches. The city pack is

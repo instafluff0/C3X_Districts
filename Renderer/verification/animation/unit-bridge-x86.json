@@ -1,8 +1,0 @@
-{
-  "command": "call BUILD.bat unit-bridge",
-  "host": "Windows 11",
-  "status": "pass",
-  "returncode": 0,
-  "started_utc": "2026-09-07T07:26:59.665579+00:00",
-  "output_tail": "test_unit_bridge.cpp\n"
-}

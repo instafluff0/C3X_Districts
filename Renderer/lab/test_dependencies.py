@@ -1,5 +1,4 @@
 """Actual changed bytes select review scope, including contextual consumers."""
-import copy
 import unittest
 from unittest.mock import patch
 
@@ -10,7 +9,7 @@ from Renderer.lab import dependencies
 class SelectionTests(unittest.TestCase):
     def setUp(self):
         self.entries = {key: {"recipe": {"objects": key in ("cities", "day-night", "shadows", "animation")},
-                             "depends_on": [], "approved_revision": 1}
+                             "depends_on": []}
                         for key in ("grassland", "cities", "units", "resources", "animation", "day-night", "shadows")}
 
     def changed(self, path, *, assets=None, generated=()):
@@ -56,24 +55,27 @@ class SelectionTests(unittest.TestCase):
         after = dependencies.signatures({"Renderer/packs/UnitAnimationRuntime/new.bin": "new"}, self.entries)
         self.assertEqual({k for k in before if before[k] != after[k]}, {"units", "animation"})
 
-    def test_recipe_and_review_revision_are_part_of_selection(self):
+    def test_recipe_is_part_of_selection(self):
         current = dependencies.signatures({}, self.entries)
-        self.assertEqual(set(dependencies.dirty(self.entries, current)), set(self.entries))
-        for key, value in self.entries.items():
-            value["reviewed_inputs"] = {"signature": current[key], "revision": 1}
-        self.assertEqual(dependencies.dirty(self.entries, current), [])
-        self.entries["units"]["approved_revision"] = 2
-        self.assertEqual(dependencies.dirty(self.entries, current), ["units"])
-        updated = copy.deepcopy(self.entries)
+        updated = {key: {**value, "recipe": dict(value["recipe"])} for key, value in self.entries.items()}
         updated["grassland"]["recipe"]["terrain"] = 1
         self.assertNotEqual(current["grassland"], dependencies.signatures({}, updated)["grassland"])
 
-    def test_requested_category_stays_local_until_delivery_regression(self):
-        with patch.object(renderer, "declared_affected", return_value=["grassland"]), \
-             patch.object(renderer, "dirty_categories", return_value=["cities", "day-night"]):
+    def test_requested_category_and_integration_use_declared_dependents_only(self):
+        with patch.object(renderer, "declared_affected", return_value=["grassland"]):
             self.assertEqual(renderer.affected("grassland"), ["grassland"])
-            self.assertEqual(renderer.regression_affected("grassland"),
-                             ["cities", "day-night", "grassland"])
+
+    def test_asset_preparation_is_category_scoped(self):
+        with patch.object(renderer, "catalog", return_value=self.entries), \
+             patch.object(renderer, "standard", side_effect=self.entries.__getitem__):
+            self.assertEqual(renderer.asset_jobs_for(["grassland"]), {"natural", "hill-cliff"})
+            self.assertEqual(renderer.asset_jobs_for(["units"]), {"natural", "hill-cliff", "units"})
+
+    def test_asset_preparation_is_category_scoped(self):
+        with patch.object(renderer, "catalog", return_value=self.entries), \
+             patch.object(renderer, "standard", side_effect=self.entries.__getitem__):
+            self.assertEqual(renderer.asset_jobs_for(["grassland"]), {"natural", "hill-cliff"})
+            self.assertEqual(renderer.asset_jobs_for(["units"]), {"natural", "hill-cliff", "units"})
 
 
 if __name__ == "__main__":

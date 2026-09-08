@@ -9,7 +9,7 @@ from Renderer.tools.renderer_dev import windows_command_result
 
 
 def main():
-    output = ROOT / "Renderer/verification/animation"
+    output = ROOT / "Renderer/lab/out/verification/animation"
     output.mkdir(parents=True, exist_ok=True)
     results = []
     for zoom, hour in ((128, 12), (64, 12), (128, 0)):
@@ -19,12 +19,12 @@ def main():
             "C3X_RENDERER_VISUAL_PROFILE": "pickup-r1",
             "C3X_RENDERER_PREVIEW_ANIMATION": "1",
             "C3X_RENDERER_TRACE": "2",
-            "C3X_RENDERER_TRACE_FILE": f"..\\verification\\animation\\{name}.log",
+            "C3X_RENDERER_TRACE_FILE": f"..\\lab\\out\\verification\\animation\\{name}.log",
         }
         command = " && ".join(f'set "{key}={value}"' for key, value in settings.items())
         command += (" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. "
-                    "..\\..\\Renderer\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv "
-                    f"..\\verification\\animation\\{name}.bmp 960 640 75 39 {zoom} {hour}")
+                    "..\\..\\Renderer\\default.custom_rendering.txt ..\\lab\\.local\\verification\\world.csv "
+                    f"..\\lab\\out\\verification\\animation\\{name}.bmp 960 640 75 39 {zoom} {hour}")
         result = windows_command_result("Renderer/native", command)
         result.pop("cwd", None)
         text = result.get("output_tail", "")

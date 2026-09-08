@@ -63,4 +63,8 @@ scroll/refresh failure analysis are in
 
 ## In-Game Result
 
-The three captures under `Renderer/evidence/m5_1/` are historical bridge evidence. Current I11 gives the custom surface approved base terrain, relief, water/coasts, forest/jungle bodies, dunes, and marshes with zero native fallback. Volcanoes and other unported `m19` categories are absent pending their same-numbered integrations. The separate unit plane plus later fog, borders, selection, labels, minimap, HUD, and UI stages remain outside the suppressed `m19` plane.
+Current I11 gives the custom surface approved base terrain, relief, water/coasts,
+forest/jungle bodies, dunes, and marshes with zero native fallback. Volcanoes
+and other unported `m19` categories are absent pending their same-numbered
+integrations. The separate unit plane plus later fog, borders, selection,
+labels, minimap, HUD, and UI stages remain outside the suppressed `m19` plane.

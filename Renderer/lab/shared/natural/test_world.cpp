@@ -1,4 +1,4 @@
-// Migration witness: production river-page expressions versus their shared owner.
+// Shared-code witness: production river-page expressions versus their owner.
 #include "world.h"
 #include <cassert>
 #include <iostream>

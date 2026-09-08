@@ -1,9 +1,6 @@
 {
   "id": "animation",
   "title": "Animation",
-  "revision": 1,
-  "approved_revision": 1,
-  "approval": "Renderer/lab/baseline.json",
   "depends_on": [
     "units",
     "resources"
@@ -37,7 +34,7 @@
   "references": {
     "d3d11": [
       {
-        "image": "Renderer/lab/references/animation/r1/detail-start/detail-start-h12-z128.bmp",
+        "image": "Renderer/lab/references/animation/approved/detail-start/detail-start-h12-z128.bmp",
         "sha256": "55f6c6c596727400e20a4f0a85f3ecad872f69bda5e84fef56e10ebefee329be",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail-start",
@@ -47,7 +44,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/animation/r1/detail-mid/detail-mid-h12-z128.bmp",
+        "image": "Renderer/lab/references/animation/approved/detail-mid/detail-mid-h12-z128.bmp",
         "sha256": "870386aef6dd95f39a89a34789b09ec2d1d001f6142c097167b78b0af38828c2",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail-mid",
@@ -57,7 +54,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/animation/r1/gameplay-start/gameplay-start-h12-z128.bmp",
+        "image": "Renderer/lab/references/animation/approved/gameplay-start/gameplay-start-h12-z128.bmp",
         "sha256": "d1753383b3b0cd00a5cfd0437075e99d668ab1810b24eccc45a0d97d38130006",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay-start",
@@ -67,7 +64,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/animation/r1/gameplay-mid/gameplay-mid-h12-z128.bmp",
+        "image": "Renderer/lab/references/animation/approved/gameplay-mid/gameplay-mid-h12-z128.bmp",
         "sha256": "665217310569a6237519b49eebaa30fdff4a6a8779b4e32b8f60cac4ba9b00d1",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay-mid",
@@ -78,16 +75,7 @@
       }
     ]
   },
-  "candidate": {
-    "render": "Renderer/lab/out/animation/render.json",
-    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
-  },
   "limitations": [
-    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ],
-  "reviewed_inputs": {
-    "revision": 1,
-    "signature": "40e126d84bf5c8e30fcca7a51d08eedcb15ae24c8213130379304e3010e0ca98",
-    "basis": "exact_approved_reference_comparison"
-  }
+    "Current diagnostic previews use the production D3D11 renderer."
+  ]
 }

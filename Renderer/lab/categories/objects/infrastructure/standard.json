@@ -1,9 +1,6 @@
 {
   "id": "infrastructure",
   "title": "Infrastructure",
-  "revision": 1,
-  "approved_revision": 1,
-  "approval": "Renderer/lab/baseline.json",
   "depends_on": [
     "day-night",
     "shadows"
@@ -34,7 +31,7 @@
   "references": {
     "d3d11": [
       {
-        "image": "Renderer/lab/references/infrastructure/r1/detail/detail-h12-z128.bmp",
+        "image": "Renderer/lab/references/infrastructure/approved/detail/detail-h12-z128.bmp",
         "sha256": "f867ab001738b41ac6f9ed5eecd90e840af0465466aa1f557290d6260b56a094",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -44,7 +41,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/infrastructure/r1/gameplay/gameplay-h12-z128.bmp",
+        "image": "Renderer/lab/references/infrastructure/approved/gameplay/gameplay-h12-z128.bmp",
         "sha256": "5996182f35e56bf637e0c6e49751913692b317cc02c2cefe1bce58ea6285bec1",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -55,16 +52,7 @@
       }
     ]
   },
-  "candidate": {
-    "render": "Renderer/lab/out/infrastructure/render.json",
-    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
-  },
   "limitations": [
-    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ],
-  "reviewed_inputs": {
-    "revision": 1,
-    "signature": "18f0d002608c25d5a41e3797109909a1b0316b9ee6dbf6abfdace2c90028bd06",
-    "basis": "exact_approved_reference_comparison"
-  }
+    "Current diagnostic previews use the production D3D11 renderer."
+  ]
 }

@@ -1,6 +1,5 @@
 // Headless packet replay. No NSWindow, CAMetalLayer, or second presenter.
 #include "../contracts/packet_v1.h"
-#include "shadow_plan.h"
 #include "../shared/color_response.h"
 #include <CommonCrypto/CommonDigest.h>
 #import <Foundation/Foundation.h>

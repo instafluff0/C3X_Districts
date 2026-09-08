@@ -1,7 +1,7 @@
 # Lab and Integration
 
 Use [the category workbench](../lab/README.md), not a milestone ladder or campaign.
-The accepted production build starts every category at approved/integrated r1.
+The current C3X checkout is the implementation authority.
 
 Lab owns current visual recipes, source intake, shared geometry/materials/lighting,
 focused and gameplay-context previews, comparison and explicit user approval.
@@ -14,20 +14,19 @@ Day/night and shadows are lighting entries; transitions belong under terrain.
 Their dependency lists select affected consumers. Keep a few useful views per
 consumer, not every combination ever tested. Preserve reusable source findings.
 
-The normal sequence is edit, render/compare/test the requested category, receive
-explicit user approval, verify the wider delivery regression scope, test the game,
-and record the integrated revision. Dependent Lab previews are available
-explicitly when they help review; unrelated stale work does not silently expand a
-category task into a full-catalog render.
-Approval does not install code or transfer native ownership. Integration never
-silently adopts an unapproved candidate. A replay pass is not a live-game pass.
-Neither agents nor tests may invent a user approval or game-check statement.
+The normal sequence is edit, render/compare/test the requested category, then run
+`integration CATEGORY` on the current code. Integration checks the requested
+category and its declared dependents; unrelated work does not silently expand a
+category task into a full-catalog render. A fixed reference may be replaced after
+explicit user acceptance, but reference differences do not block Integration.
+Neither comparison nor Integration installs code. A replay pass is not a
+live-game pass, and agents must not invent one.
 
-Use Git for source history. Keep candidate output disposable and approved local
+Use Git for source history. Keep candidate output disposable and fixed local
 reference images intact until superseded by an explicit decision. Ignored licensed
 assets need separate preservation before cleanup; they are not backed up by Git.
 
 The architectural boundaries and deferred wonder/District contracts are in
-[Renderer's entry guide](../README.md). The current production DLL and selected
-assets are the baseline, not older isolated Lab fixtures. The Mac fast path is
-still being reconciled with production; see [migration state](../lab/MIGRATION.md).
+[Renderer's entry guide](../README.md). Current source and selected assets, not
+older isolated Lab fixtures, handoff records or cross-backend parity campaigns,
+determine behavior.

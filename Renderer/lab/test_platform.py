@@ -86,6 +86,14 @@ class PlatformTests(TestCase):
         with mock.patch.object(platform.subprocess, "run", return_value=result), mock.patch("builtins.print"):
             self.assertEqual(platform.native_command_result("Renderer/native", "test")["status"], "fail")
 
+    def test_transport_timeout_is_a_bounded_failure(self):
+        error = platform.subprocess.TimeoutExpired(["prlctl"], 120, output="partial")
+        with mock.patch.object(platform.subprocess, "run", side_effect=error), mock.patch("builtins.print"):
+            result = platform.native_command_result("Renderer/native", "test", timeout_seconds=120)
+        self.assertEqual(result["status"], "fail")
+        self.assertIsNone(result["returncode"])
+        self.assertIn("bounded fixture wait", result["output_tail"])
+
     def test_injected_detection_is_fail_safe_and_limited_to_injected_sources(self):
         result = mock.Mock(returncode=1, stdout="")
         with mock.patch.object(platform.subprocess, "run", return_value=result) as run:

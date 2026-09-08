@@ -31,11 +31,11 @@ def main():
         for key in range(u['key_count']):
             if not args.unit or u[f'key{key}']==args.unit:rows.append(f"{u[f'key{key}']} {mask}")
     if not rows:raise ValueError('requested key is absent from candidate bindings')
-    out=Path('Renderer/verification/animation/roster');out.mkdir(parents=True,exist_ok=True)
+    out=Path('Renderer/lab/out/verification/animation/roster');out.mkdir(parents=True,exist_ok=True)
     if args.profile=='source-fidelity-r13':
-        out=Path('Renderer/verification/source_fidelity/units');out.mkdir(parents=True,exist_ok=True)
+        out=Path('Renderer/lab/out/verification/source_fidelity/units');out.mkdir(parents=True,exist_ok=True)
     if args.profile=='environment-refresh':
-        out=Path('Renderer/verification/environment_refresh/units');out.mkdir(parents=True,exist_ok=True)
+        out=Path('Renderer/lab/out/verification/environment_refresh/units');out.mkdir(parents=True,exist_ok=True)
     cases=f'cases-{args.unit}.txt' if args.unit else 'cases.txt'
     (out/cases).write_text('\n'.join(rows)+'\n')
     hour=args.hour;name=f'roster-{args.unit}-h{hour}' if args.unit else f'roster-h{hour}'
@@ -46,7 +46,7 @@ def main():
         'C3X_RENDERER_UNIT_CASES':'..\\'+str(out.relative_to('Renderer')).replace('/','\\')+'\\'+cases,
         'C3X_RENDERER_TRACE_FILE':'..\\'+str(out.relative_to('Renderer')).replace('/','\\')+'\\'+name+'.log'}
     command=' && '.join(f'set "{k}={v}"' for k,v in settings.items())
-    command+=' && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\..\\Renderer\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv '
+    command+=' && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\..\\Renderer\\default.custom_rendering.txt ..\\lab\\.local\\verification\\world.csv '
     command+='..\\'+str(out.relative_to('Renderer')).replace('/','\\')+f'\\{name}.bmp 960 640 75 39 128 {hour}'
     result=windows_command_result('Renderer/native',command);result.pop('cwd',None);result.pop('host',None)
     text=result.get('output_tail','')

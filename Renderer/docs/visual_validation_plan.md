@@ -1,8 +1,8 @@
 # Visual validation
 
-The current production build is baseline revision 1. Passing tests establishes
-technical behavior; only explicit user approval establishes a new visual standard.
-The current build's acceptance does not erase known limitations.
+The current checkout is authoritative for implementation and Integration.
+Passing tests establishes technical behavior. Fixed reference images remain
+optional comparison points and may be replaced only after explicit user acceptance.
 
 ## Category review
 
@@ -25,10 +25,10 @@ in `visual_fidelity_playbook.md`.
 
 ## Automated delivery checks
 
-`python3 Renderer/renderer.py integration verify CATEGORY` runs the relevant
-portable contracts, checks affected production images against their approved
-D3D11 references and exercises headless production replay. It does not install
-a DLL, launch Civ III or certify a live-game test.
+`python3 Renderer/renderer.py integration CATEGORY` runs the relevant portable
+contracts and selected headless production replays for the current code. It does
+not read reference images; render/compare remains an explicit Lab review action.
+The command does not install a DLL, launch Civ III or certify a live-game test.
 
 Keep checks for authoritative capture/anchors, replacement ownership, config-off
 and fallback behavior, clipping/compositing, animation timing and interruption,
@@ -63,6 +63,7 @@ manual evidence for every internal change.
 
 A delivery checkpoint checks scrolling, wrapping, supported zooms, object and
 animation behavior, and that Civ III still owns fog, borders, labels, highlights,
-HUD and UI. Record the actual result separately from Lab approval. When manual
-evidence is unavailable, leave it pending and continue independent work without
-repeated requests or invented approval.
+HUD and UI. Record a material observed result in the relevant current issue or
+notes when useful; do not create a per-category release ledger. When manual
+evidence is unavailable, continue independent work without repeated requests or
+invented approval.

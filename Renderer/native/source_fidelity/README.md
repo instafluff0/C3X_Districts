@@ -95,7 +95,7 @@ python3 Renderer/renderer.py prepare
 python3 Renderer/renderer.py lab grassland
 python3 Renderer/renderer.py compare grassland
 python3 Renderer/renderer.py test grassland
-python3 Renderer/renderer.py integration verify grassland
+python3 Renderer/renderer.py integration grassland
 ```
 
 Verification uses the Windows off-screen DLL and never starts Civ III or runs

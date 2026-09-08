@@ -1,9 +1,6 @@
 {
   "id": "hills",
   "title": "Hills",
-  "revision": 1,
-  "approved_revision": 1,
-  "approval": "Renderer/lab/baseline.json",
   "depends_on": [
     "day-night",
     "shadows",
@@ -39,7 +36,7 @@
   "references": {
     "d3d11": [
       {
-        "image": "Renderer/lab/references/hills/r1/detail/detail-h12-z128.bmp",
+        "image": "Renderer/lab/references/hills/approved/detail/detail-h12-z128.bmp",
         "sha256": "1b274311053409ee31d8997c029d1eb9e9f7c10d3e524e71e27c2590dc36d2aa",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -49,7 +46,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/hills/r1/gameplay/gameplay-h12-z128.bmp",
+        "image": "Renderer/lab/references/hills/approved/gameplay/gameplay-h12-z128.bmp",
         "sha256": "57d5b59c58158d9bf8f886c7f781d694955474b9823fc6b12c6c1ca393f8e440",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -60,16 +57,7 @@
       }
     ]
   },
-  "candidate": {
-    "render": "Renderer/lab/out/hills/render.json",
-    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
-  },
   "limitations": [
-    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ],
-  "reviewed_inputs": {
-    "revision": 1,
-    "signature": "37277b5032c78d69ec18c600fe37ba3d0d5e5107806049db0055cfb891a36975",
-    "basis": "exact_approved_reference_comparison"
-  }
+    "Current diagnostic previews use the production D3D11 renderer."
+  ]
 }

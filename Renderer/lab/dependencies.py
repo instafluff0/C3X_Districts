@@ -70,9 +70,3 @@ def signatures(records, entries, *, assets=None, generated_shaders=()):
                 "recipe": value["recipe"], "dependencies": value["depends_on"]},
                 sort_keys=True).encode()).hexdigest()
             for key, value in entries.items()}
-
-
-def dirty(entries, current):
-    return sorted(key for key, value in entries.items()
-                  if value.get("reviewed_inputs", {}).get("revision") != value["approved_revision"]
-                  or value.get("reviewed_inputs", {}).get("signature") != current[key])

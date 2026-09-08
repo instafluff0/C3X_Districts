@@ -1,8 +1,9 @@
 # C3X renderer
 
-The current production build is the approved visual baseline. Lab improves a
-category; the user approves its affected appearance; Integration verifies that
-revision in Civ III. Git holds history, not an ever-growing experiment ledger.
+The current C3X checkout is the implementation authority. Lab renders and tests
+that code by category; Integration runs the affected current-code checks. Fixed
+reference images are optional visual comparison aids, not numbered releases or
+integration gates. Git holds history.
 
 Start with [the visual workbench](lab/README.md). The catalog has separate entries
 for base terrains, relief, vegetation, water, map objects and animation. Shared
@@ -14,14 +15,13 @@ python3 Renderer/renderer.py list
 python3 Renderer/renderer.py lab grassland
 python3 Renderer/renderer.py compare grassland
 python3 Renderer/renderer.py test grassland
-python3 Renderer/renderer.py integration pending
+python3 Renderer/renderer.py integration grassland
 ```
 
-Reorganization is in progress; [migration state](lab/MIGRATION.md) identifies
-remaining work. Current catalog images use the actual production D3D11 renderer.
-The Mac path now renders the grassland detail fixture from production inputs;
-complete category parity is still unfinished. Legacy milestone files still
-awaiting removal are not workflow authority.
+The Lab migration is complete. Current category previews use the production
+D3D11 renderer; the generic Metal binding/compiler smoke test remains optional.
+Retired milestone trees, release ledgers, cross-backend scene-parity experiments
+and generated preview/verification archives have been removed.
 
 ## Architectural boundaries
 

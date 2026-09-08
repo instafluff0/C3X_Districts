@@ -5,9 +5,10 @@ import argparse,hashlib,json,re,sys
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT))
 from Renderer.tools.renderer_dev import windows_command_result
-OUT=ROOT/'Renderer/verification/environment_refresh'
+OUT=ROOT/'Renderer/lab/out/verification/environment_refresh'
 def main():
     p=argparse.ArgumentParser();p.add_argument('mode',choices=['first','default','coast','coast-control','matrix','objects','animation','replay','edits','minimap','control']);p.add_argument('--resume',action='store_true');p.add_argument('--sky-only',action='store_true');a=p.parse_args()
+    OUT.mkdir(parents=True,exist_ok=True)
     cases=[('inland',69,50,128,12)]
     if a.mode in ['coast','coast-control']:cases=[('coast',85,38,128,12)]
     if a.mode=='matrix':cases=[(region,x,y,z,h) for region,x,y in [('inland',69,50),('coast',85,38),('wrap',0,50)] for z in [128,64] for h in [12,18,0,6]]
@@ -21,7 +22,7 @@ def main():
         if previous:
             records.append(previous);continue
         env={'C3X_RENDERER_VISUAL_PROFILE':'' if a.mode=='default' else 'environment-refresh','C3X_RENDERER_TRACE':'2',
-             'C3X_RENDERER_TRACE_FILE':f'..\\verification\\environment_refresh\\{name}.log',
+             'C3X_RENDERER_TRACE_FILE':f'..\\lab\\out\\verification\\environment_refresh\\{name}.log',
              'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':'..\\..\\Renderer\\custom.custom_rendering.txt',
              'C3X_RENDERER_FIDELITY_SHADOW_CONTROL':'1' if a.mode in ['control','coast-control'] else '',
              'C3X_RENDERER_REFLECTION_CONTROL':'1' if a.sky_only else '',
@@ -33,7 +34,7 @@ def main():
         # the static-object check that requires resource ownership at the end.
         env['C3X_RENDERER_PREVIEW_ANIMATION']='1' if a.mode=='animation' else ''
         cmd=' && '.join(f'set "{k}={v}"' for k,v in env.items())
-        cmd+=f' && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv ..\\verification\\environment_refresh\\{name}.bmp 960 640 {x} {y} {z} {h}'
+        cmd+=f' && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\lab\\.local\\verification\\world.csv ..\\lab\\out\\verification\\environment_refresh\\{name}.bmp 960 640 {x} {y} {z} {h}'
         print('Checking '+name,flush=True);r=windows_command_result('Renderer/native',cmd);r.pop('cwd',None);r.pop('host',None)
         output=r['output_tail'];r['name']=name;r['dll_sha256']=dll_hash
         if '0 fallback, output=' not in output or 'FAIL' in output:r['status']='fail'

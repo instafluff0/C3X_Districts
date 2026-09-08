@@ -33,8 +33,8 @@ bytes 6–7 of the proven 32-byte skinned profile. Material UV addressing is par
 of the normalized record: the Warrior body, head, and armor use repeat in both
 axes, while the selected helmet and weapon use clamp. The standalone beauty
 study must honor that distinction; clamping the repeat-addressed skin atlas was
-shown to stretch edge texels across the shoulder, hand, and eye. See
-`Renderer/terrain_lab/v2/audits/objects/WARRIOR_SOURCE_PASS.md`.
+shown to stretch edge texels across the shoulder, hand, and eye. This conclusion
+is preserved here because the original exploratory audit has been retired.
 
 ## Model extraction
 

@@ -14,17 +14,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--skip-build", action="store_true")
     args = parser.parse_args()
+    output = ROOT / "Renderer/lab/out/verification/animation"
+    output.mkdir(parents=True, exist_ok=True)
     checks=command_result([python_executable(), "-m", "unittest",
         "Renderer.native.test_unit_shadow", "Renderer.native.test_unit_input_guard",
         "Renderer.native.test_unit_bridge", "-q"])
     checks.pop("cwd", None)
-    (ROOT/"Renderer/verification/animation/unit-presentation-contracts.json").write_text(json.dumps(checks, indent=2)+"\n")
+    (output/"unit-presentation-contracts.json").write_text(json.dumps(checks, indent=2)+"\n")
     if checks["status"] != "pass":return 1
     prepare()
     if not args.skip_build:
         built = windows_command_result("Renderer/native", "call BUILD.bat candidate-compile")
         built.pop("cwd", None)
-        (ROOT/"Renderer/verification/animation/unit-body-build.json").write_text(json.dumps(built, indent=2)+"\n")
+        (output/"unit-body-build.json").write_text(json.dumps(built, indent=2)+"\n")
         if built["status"] != "pass":
             return 1
     results = []
@@ -36,12 +38,12 @@ def main():
             "C3X_RENDERER_PREVIEW_ANIMATION": "1",
             "C3X_RENDERER_PREVIEW_UNITS": "1",
             "C3X_RENDERER_TRACE": "2",
-            "C3X_RENDERER_TRACE_FILE": f"..\\verification\\animation\\{name}.log",
+            "C3X_RENDERER_TRACE_FILE": f"..\\lab\\out\\verification\\animation\\{name}.log",
         }
         command = " && ".join(f'set "{key}={value}"' for key, value in settings.items())
         command += (" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. "
-                    "..\\..\\Renderer\\default.custom_rendering.txt ..\\verification\\pickup\\world.csv "
-                    f"..\\verification\\animation\\{name}.bmp 960 640 75 39 128 {hour}")
+                    "..\\..\\Renderer\\default.custom_rendering.txt ..\\lab\\.local\\verification\\world.csv "
+                    f"..\\lab\\out\\verification\\animation\\{name}.bmp 960 640 75 39 128 {hour}")
         result = windows_command_result("Renderer/native", command)
         result.pop("cwd", None)
         text = result.get("output_tail", "")
@@ -58,7 +60,7 @@ def main():
             result["status"] = "fail"
         result["case"] = name
         results.append(result)
-        (ROOT/"Renderer/verification/animation/units.json").write_text(json.dumps(results, indent=2)+"\n")
+        (output/"units.json").write_text(json.dumps(results, indent=2)+"\n")
         if result["status"] != "pass":
             return 1
     return 0

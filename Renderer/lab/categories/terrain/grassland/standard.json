@@ -1,9 +1,6 @@
 {
   "id": "grassland",
   "title": "Grassland",
-  "revision": 1,
-  "approved_revision": 1,
-  "approval": "Renderer/lab/baseline.json",
   "depends_on": [
     "day-night",
     "shadows",
@@ -38,7 +35,7 @@
   "references": {
     "d3d11": [
       {
-        "image": "Renderer/lab/references/grassland/r1/detail/detail-h12-z128.bmp",
+        "image": "Renderer/lab/references/grassland/approved/detail/detail-h12-z128.bmp",
         "sha256": "e277b46c3fd1e3a1c144edb7240f930565190f5637eddf9cf531643a20c9fc06",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -48,7 +45,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/grassland/r1/gameplay/gameplay-h12-z128.bmp",
+        "image": "Renderer/lab/references/grassland/approved/gameplay/gameplay-h12-z128.bmp",
         "sha256": "5bd4bd0167909559ba5436a6d3337e7c078b1fce1196ebb583f72dad1259710c",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -59,17 +56,8 @@
       }
     ]
   },
-  "candidate": {
-    "render": "Renderer/lab/out/grassland/render.json",
-    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
-  },
   "limitations": [
-    "The accepted baseline is the current production profile, including continuous native biome weights and coast joins.",
-    "Mac production-scene parity remains unverified; the current category preview uses D3D11."
-  ],
-  "reviewed_inputs": {
-    "revision": 1,
-    "signature": "aa167c93fbd984d9be4edb34c8534b7589cc114d6a5a48b23cd0b6429471ecd3",
-    "basis": "exact_approved_reference_comparison"
-  }
+    "The current production profile includes continuous native biome weights and coast joins.",
+    "Current diagnostic previews use the production D3D11 renderer."
+  ]
 }

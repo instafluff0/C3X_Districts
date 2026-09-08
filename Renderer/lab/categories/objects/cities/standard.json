@@ -1,9 +1,6 @@
 {
   "id": "cities",
   "title": "Cities",
-  "revision": 1,
-  "approved_revision": 1,
-  "approval": "Renderer/lab/baseline.json",
   "depends_on": [
     "day-night",
     "shadows",
@@ -49,7 +46,7 @@
   "references": {
     "d3d11": [
       {
-        "image": "Renderer/lab/references/cities/r1/detail/detail-h12-z128.bmp",
+        "image": "Renderer/lab/references/cities/approved/detail/detail-h12-z128.bmp",
         "sha256": "81b4301a3716b7d451ebaac4f22d5515181df746e4992dff5dfc97902bbd98db",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -59,7 +56,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/cities/r1/detail/detail-h18-z128.bmp",
+        "image": "Renderer/lab/references/cities/approved/detail/detail-h18-z128.bmp",
         "sha256": "1060b1ab7e17f35d8e5bde504c59ebba652c49501175ca8cfdc100815c38ec8e",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -69,7 +66,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/cities/r1/detail/detail-h00-z128.bmp",
+        "image": "Renderer/lab/references/cities/approved/detail/detail-h00-z128.bmp",
         "sha256": "92ec1fb55442a4d21da976f6bbae7ff4963d8ca09825b23f9e29ae84d71265cf",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -79,7 +76,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/cities/r1/detail/detail-h06-z128.bmp",
+        "image": "Renderer/lab/references/cities/approved/detail/detail-h06-z128.bmp",
         "sha256": "22a3022d7eeb870c4bcd0535dd2b4b1cd3b0a5b424fd1e2cde08bb86e7f255e8",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -89,7 +86,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/cities/r1/gameplay/gameplay-h12-z128.bmp",
+        "image": "Renderer/lab/references/cities/approved/gameplay/gameplay-h12-z128.bmp",
         "sha256": "e7221761e1f1b485ea6c3eced5b09c2cb466d385e1585c306a914bf3a1504178",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -99,7 +96,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/cities/r1/gameplay/gameplay-h18-z128.bmp",
+        "image": "Renderer/lab/references/cities/approved/gameplay/gameplay-h18-z128.bmp",
         "sha256": "60d45effed0a85f115e80c9efc99d915773bb1ff009610caff2d72951758eef2",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -109,7 +106,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/cities/r1/gameplay/gameplay-h00-z128.bmp",
+        "image": "Renderer/lab/references/cities/approved/gameplay/gameplay-h00-z128.bmp",
         "sha256": "4ee5f595f71b0ce4f6f45e0a70a322836ff02d9c28dc2dfbffdf1892b5aa1f1c",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -119,7 +116,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/cities/r1/gameplay/gameplay-h06-z128.bmp",
+        "image": "Renderer/lab/references/cities/approved/gameplay/gameplay-h06-z128.bmp",
         "sha256": "3fcffe75941f1a11e2c0943138a62e3265d0ed4e835626b8816570d907998094",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -130,16 +127,7 @@
       }
     ]
   },
-  "candidate": {
-    "render": "Renderer/lab/out/cities/render.json",
-    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
-  },
   "limitations": [
-    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ],
-  "reviewed_inputs": {
-    "revision": 1,
-    "signature": "1bd297f56f0415f5a75b69d93aa6c068127dec686b0c03fc974eb0f318f7ac06",
-    "basis": "exact_approved_reference_comparison"
-  }
+    "Current diagnostic previews use the production D3D11 renderer."
+  ]
 }

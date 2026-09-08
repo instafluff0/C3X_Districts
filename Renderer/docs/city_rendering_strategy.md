@@ -26,13 +26,21 @@ prepared for Lab; it is not yet mapped to a rendered city perimeter.
 are reference evidence, not the selected appearance. Use applicable generator
 growth, placement and ground data within the current-era family.
 
-The current Lab investigation found that the importer omitted authored generator
-and grounding collections. [Recovered metadata and ground-piece evidence](../terrain_lab/v2/audits/beauty/CITY_GENERATOR_FINDINGS.md)
-now records mixed-era ordering, weights, population growth/fill parameters and
-exact ground-decal triangle UVs. The current city recipe still does not implement
-the recovered generator. Its next replacement should use those parameters with
-Civ III geometry; ordinary roads remain deferred by user instruction. A combined
-modern paving probe exists, but its narrow visible strip is not a new city best.
+The retired Lab investigation found that the importer omitted authored
+`Generator` and `GroundingMaterials` collections. Base and Expansion2 metadata
+confirm a hex/spine city-center mode, spine width/length ranges, block variation,
+height, population-driven area/fill and explicit era ordering/weights. Base
+modern data orders Modern, Industrial and Classical layers with weights 0.5,
+1.0 and 1.0; these are selection weights, not proven building percentages. The
+user subsequently selected one era per city, so the growth, density and
+placement parameters remain useful without the mixed-era appearance.
+
+Ground descriptors contain exact triangle XY/UV selection for paving and dirt
+atlas pieces. Projecting those triangles onto authoritative terrain fixed the
+height gate, but the tested modern compound exposed only 59 noon and 53 midnight
+pixels beyond its matched control because towers occluded most paving. This is
+recovered input, not a selected city appearance. The current recipe still does
+not implement the generator; ordinary roads remain deferred by user instruction.
 
 ## Why cities are compositions
 
@@ -95,15 +103,16 @@ centerpieces only through an explicit city-style mapping; it must not treat a
 source civilization or culture as a universal capital. Civ III's native
 capital icon remains retained unless the owning gate separately transfers it.
 
-The user's September 2026 capital request now has a combined Lab comparison:
-[r13 palace evidence](../terrain_lab/v2/audits/beauty/CITY_CAPITAL_r13_EVIDENCE.json).
-The Mesoamerican palace is an additive body in an explicitly mapped American
-ancient-style fixture; seven surrounding house placements remain identical in
-the palace-off control. `capital_styles.json` under the Lab objects system owns
-the experimental mapping and uniform footprint calibration. This is only one
-entry in the broader offline library, not a universal capital mapping. The
-Gran Colombian candidate still has four unresolved required tree attachments
-and is not claimed as a complete kit.
+The user's September 2026 capital comparison established the Mesoamerican
+palace as an additive body in an explicitly mapped American ancient-style
+fixture; seven surrounding house placements remain identical in the palace-off
+control. Its tested calibration used scale 2.2177303, zero rotation and tile
+offset `(0.07, -0.14)`, while retaining Civ III's native capital indicator.
+`capital_styles.json` under the Lab objects system owns the experimental mapping
+and footprint calibration. This is only one entry in the broader offline
+library, not a universal capital mapping. The Gran Colombian candidate still
+has four unresolved required tree attachments and is not claimed as a complete
+kit.
 
 Production selection must read authoritative captured capital state
 (`city_flags & C3X_RENDERER_CITY_CAPITAL`, exported as `is_capital`) and the

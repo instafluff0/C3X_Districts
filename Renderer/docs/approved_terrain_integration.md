@@ -1,9 +1,8 @@
 # Renderer integration contract
 
-The accepted C3X build is the baseline recorded by the
-[category workbench](../lab/README.md). Lab approval and game integration are
-separate records. Historical L/I handoffs do not authorize current work and are
-not read by the game DLL. A later experiment is not implicitly a better standard.
+The current C3X checkout is authoritative. Historical L/I handoffs, approval
+numbers and integration ledgers do not authorize current work and are not read by
+the game DLL. Fixed category references are visual comparison aids only.
 
 ## Visual implementation
 
@@ -58,11 +57,12 @@ in the [renderer architecture](../README.md).
 
 ## Verification and delivery
 
-Use `python3 Renderer/renderer.py integration verify CATEGORY` to build/reuse
-an isolated candidate, run relevant native checks and compare affected visuals.
-It does not stage the DLL, install C3X, launch Civ III or certify a game test.
-Only explicit visual acceptance changes an approved reference. Record integration
-only after the approved revision is actually delivered and checked in game.
+Use `python3 Renderer/renderer.py integration CATEGORY` to build/reuse an
+isolated candidate and run relevant native checks for the category and its
+declared behavior consumers. It does not read reference images; `lab` and
+`compare` remain explicit visual review actions. The command does not stage the
+DLL, install C3X, launch Civ III or certify a game test. Only explicit visual
+acceptance replaces a fixed reference.
 
 Keep executable coverage for capture, ownership, invalidation, scrolling,
 wrapping, both zooms, compositing/clipping, animation, reset and config-off.

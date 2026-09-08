@@ -1,4 +1,0 @@
-# Local licensed-art renders and debug output; retain only portable reports.
-*.bmp
-*.png
-*.log

@@ -135,7 +135,9 @@ class AnimationRuntimeTests(unittest.TestCase):
                   "resource_subjects": len(cases), "pose_samples": samples,
                   "marine_body_frames_aligned_SE": aligned_body_frames,
                   "maximum_position_error_tiles": max_error, "payload_bytes": compiled["payload_bytes"]}
-        (ROOT/"Renderer/verification/animation/resource-payloads-portable_cpp.json").write_text(json.dumps(report, indent=2)+"\n")
+        output = ROOT/"Renderer/lab/out/verification/animation/resource-payloads-portable_cpp.json"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2)+"\n")
         print(json.dumps(report))
 
 

@@ -37,7 +37,7 @@ def windows_root():
         raise ValueError("Set C3X_RENDERER_WINDOWS_ROOT to the VM's shared checkout")
 
 
-def native_command_result(relative_cwd, command):
+def native_command_result(relative_cwd, command, *, timeout_seconds=None):
     if os.name == "nt":
         args = ["cmd", "/d", "/s", "/c", command]
         cwd = ROOT / relative_cwd
@@ -47,13 +47,21 @@ def native_command_result(relative_cwd, command):
         args = ["prlctl", "exec", vm, "cmd", "/d", "/s", "/c",
                 f'pushd "{directory}" && {command}']
         cwd = ROOT
-    result = subprocess.run(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, check=False)
-    output = result.stdout or ""
+    try:
+        result = subprocess.run(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, check=False, timeout=timeout_seconds)
+        output = result.stdout or ""
+        returncode = result.returncode
+    except subprocess.TimeoutExpired as error:
+        output = error.stdout or ""
+        if isinstance(output, bytes):
+            output = output.decode(errors="replace")
+        output += "\nVM transport timed out after the bounded fixture wait\n"
+        returncode = None
     if output:
         print(output, end="" if output.endswith("\n") else "\n", flush=True)
-    failed = result.returncode != 0 or any(line.startswith("FAIL ") for line in output.splitlines())
-    return {"status": "fail" if failed else "pass", "returncode": result.returncode,
+    failed = returncode != 0 or any(line.startswith("FAIL ") for line in output.splitlines())
+    return {"status": "fail" if failed else "pass", "returncode": returncode,
             "output_tail": output[-4000:]}
 
 
@@ -74,7 +82,7 @@ def native_completion(directory, run_id):
 
 
 def run_native_fixture(directory, command, run_id):
-    transport = native_command_result("Renderer/native", command)
+    transport = native_command_result("Renderer/native", command, timeout_seconds=120)
     try:
         result = native_completion(directory, run_id)
     except ValueError:
@@ -91,7 +99,7 @@ def run_native_fixture(directory, command, run_id):
             if state["status"] != "pass" or state.get("output_tail", "").strip() != absent:
                 raise
             print("Windows confirms no preview process; retrying failed dispatch once", flush=True)
-            transport = native_command_result("Renderer/native", command)
+            transport = native_command_result("Renderer/native", command, timeout_seconds=120)
             result = native_completion(directory, run_id)
     if transport["status"] != "pass" and result["status"] == "pass":
         print("Native process completion verified from the current fixture receipt", flush=True)

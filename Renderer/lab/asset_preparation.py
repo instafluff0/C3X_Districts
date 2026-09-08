@@ -196,8 +196,10 @@ def refresh(job, *, root=ROOT, check_only=False):
     return changed
 
 
-def prepare(*, check_only=False):
+def prepare(*, selected=None, check_only=False):
     changed = []
     for job in jobs():
+        if selected is not None and job[0] not in selected:
+            continue
         changed.extend(refresh(job, check_only=check_only))
     return changed

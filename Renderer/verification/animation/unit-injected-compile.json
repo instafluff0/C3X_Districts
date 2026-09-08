@@ -1,8 +1,0 @@
-{
-  "command": "TEST_INJECTED_CODE_COMPILE.bat via renderer_dev managed VM checkout",
-  "host": "Windows 11",
-  "status": "pass",
-  "returncode": 0,
-  "started_utc": "2026-09-07T08:00:41.111574+00:00",
-  "output_tail": "Found GOG executable in \"Civ3Conquests-Unmodded.exe\"\nInjected code compiled successfully.\n"
-}

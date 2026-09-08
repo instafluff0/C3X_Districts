@@ -1,9 +1,6 @@
 {
   "id": "tundra",
   "title": "Tundra",
-  "revision": 1,
-  "approved_revision": 1,
-  "approval": "Renderer/lab/baseline.json",
   "depends_on": [
     "day-night",
     "shadows",
@@ -38,7 +35,7 @@
   "references": {
     "d3d11": [
       {
-        "image": "Renderer/lab/references/tundra/r1/detail/detail-h12-z128.bmp",
+        "image": "Renderer/lab/references/tundra/approved/detail/detail-h12-z128.bmp",
         "sha256": "4d35c8c7277e9cef66d5a1d382ad0366446d0bd3235442e98d611ac65dac296b",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -48,7 +45,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/tundra/r1/gameplay/gameplay-h12-z128.bmp",
+        "image": "Renderer/lab/references/tundra/approved/gameplay/gameplay-h12-z128.bmp",
         "sha256": "73e5d29aae6d45e6253e01dacba07668a821496d487b508de3a50ef0502f0691",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -59,16 +56,7 @@
       }
     ]
   },
-  "candidate": {
-    "render": "Renderer/lab/out/tundra/render.json",
-    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
-  },
   "limitations": [
-    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ],
-  "reviewed_inputs": {
-    "revision": 1,
-    "signature": "8af8c08334678f8285b0c5f3584375565ebdf58d80406161405706543c1724da",
-    "basis": "exact_approved_reference_comparison"
-  }
+    "Current diagnostic previews use the production D3D11 renderer."
+  ]
 }

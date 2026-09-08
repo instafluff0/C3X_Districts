@@ -1,6 +1,6 @@
 """Headless Windows pickup witnesses; never installs or launches Civ III.
 
-Requires the full authoritative CSV exported to verification/pickup/world.csv.
+Requires the full authoritative CSV at lab/.local/verification/world.csv.
 The volcano witness is explicitly synthetic and leaves the source BIQ untouched.
 """
 import argparse
@@ -19,13 +19,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=("replay", "matrix", "gpu", "edits", "defaults", "minimap"))
     args = parser.parse_args()
-    destination = ROOT / "Renderer/verification/pickup"
+    destination = ROOT / "Renderer/lab/out/verification/pickup"
     destination.mkdir(parents=True, exist_ok=True)
     results = []
     if args.mode == "gpu":
         cases = [("source-casters-linear-msaa", "Renderer/native/profile_v2", "call VERIFY.bat")]
     else:
-        source = destination / "world.csv"
+        source = ROOT / "Renderer/lab/.local/verification/world.csv"
         if not source.is_file():
             raise SystemExit("Export the complete authoritative world.csv before verification")
         synthetic = []
@@ -58,7 +58,7 @@ def main():
                 "C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS": "..\\..\\Renderer\\custom.custom_rendering.txt",
                 "C3X_RENDERER_VISUAL_PROFILE": "pickup-r1",
                 "C3X_RENDERER_TRACE": "2",
-                "C3X_RENDERER_TRACE_FILE": f"..\\verification\\pickup\\{name}.log",
+                "C3X_RENDERER_TRACE_FILE": f"..\\lab\\out\\verification\\pickup\\{name}.log",
                 "C3X_RENDERER_PREVIEW_REPLAY": "1" if args.mode in ("replay", "minimap") else "",
                 "C3X_RENDERER_PREVIEW_MINIMAP": "1" if args.mode == "minimap" else "",
                 "C3X_RENDERER_PREVIEW_OBJECTS": "1" if objects else "",
@@ -69,14 +69,15 @@ def main():
                 for key in ("C3X_RENDERER_VISUAL_PROFILE", "C3X_RENDERER_TRACE", "C3X_RENDERER_TRACE_FILE"):
                     settings[key] = ""
             command = " && ".join(f'set "{key}={value}"' for key, value in settings.items())
-            csv = "synthetic-volcano.csv" if volcano else "world.csv"
+            csv = ("..\\lab\\out\\verification\\pickup\\synthetic-volcano.csv" if volcano else
+                   "..\\lab\\.local\\verification\\world.csv")
             command += (f" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. "
-                        f"..\\..\\Renderer\\default.custom_rendering.txt ..\\verification\\pickup\\{csv} "
-                        f"..\\verification\\pickup\\{name}.bmp 960 640 {x} {y} {zoom} {hour}")
+                        f"..\\..\\Renderer\\default.custom_rendering.txt {csv} "
+                        f"..\\lab\\out\\verification\\pickup\\{name}.bmp 960 640 {x} {y} {zoom} {hour}")
             cases.append((name, "Renderer/native", command))
     for name, directory, command in cases:
         print("Checking " + name, flush=True)
-        default_log = ROOT / "Renderer/verification/in_game_trace.log"
+        default_log = ROOT / "Renderer/lab/out/verification/in_game_trace.log"
         previous_log_time = default_log.stat().st_mtime_ns if default_log.exists() else 0
         result = windows_command_result(directory, command)
         # Keep reports portable; dispatcher cwd includes a machine-local path.

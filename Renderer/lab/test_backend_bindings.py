@@ -70,7 +70,7 @@ def gpu_check(*, windows=False):
         renderer.write(receipt,{"status":"pass","metal":True,"d3d11":windows,
             "checks":["vertex b1 translation","pixel b0/b2/b7","texture array layer 1 mip 1"],
             "production_shader_compile":sorted(production),
-            "production_scene_parity":False})
+            "scope":"binding_and_shader_compile"})
         print("PASS backend bindings"+("; Metal/D3D11 pixels are identical" if windows else " on Metal"))
     except Exception as error:
         renderer.write(receipt,{"status":"fail","reason":str(error)})

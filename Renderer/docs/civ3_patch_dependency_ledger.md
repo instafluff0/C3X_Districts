@@ -16,8 +16,8 @@ Existing map and unit boundaries remain unchanged:
   `Main_Screen_Form_tile_to_screen_coords`, `Unit_tick_anim`,
   `Sprite_draw_unit_body_normal`, `Sprite_draw_unit_body_reduced`,
   `on_timer_0x9F6500`, `QueryPerformanceCounter`, `OutputDebugStringA`.
-- `audit_candidates: []` for the migration.
-- `required_user_action: []` for the migration.
+- `audit_candidates: []` for the current renderer work.
+- `required_user_action: []` for the current renderer work.
 
 The three GOG unit inleads below are already supplied; they are not outstanding
 requests. Other-build unit addresses remain unverified. The previously recorded
@@ -133,7 +133,7 @@ does not prove the outcome: `Unit::do_nuke_tile` and
 `Unit::get_intercepted_as_nuke` are the authoritative branches, including
 multiplayer replay. Victim despawns are outcome details, not detonation triggers.
 See `bombardment_and_explosion_effects.md`. Preserve these previously established
-requests for that deferred scope; none blocks the present Lab migration.
+requests for that deferred scope; none blocks the current Lab workflow.
 
 ### Upgrade `Units_Image_Data_load_animation`
 

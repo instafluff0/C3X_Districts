@@ -1,0 +1,14 @@
+{
+  "schema": "c3x.visible_scene.v0",
+  "scene_id": "scene:24539718:2824:-2284:1041x1192:12:summer",
+  "profile_id": "default",
+  "world": {"seed": 24539718, "width_tiles": 100, "height_tiles": 100, "wrap_x": true, "wrap_y": false},
+  "viewport": {"width_px": 1041, "height_px": 1192, "map_rect_px": {"x": 0, "y": 0, "width": 1041, "height": 1192}, "scroll_px": {"x": 2824, "y": -2284}},
+  "projection": {"type": "civ3-isometric-pixel", "origin_tile": {"x": 12, "y": 58}, "origin_px": {"x": -120, "y": -44}, "tile_x_basis_px": {"x": 64, "y": 32}, "tile_y_basis_px": {"x": -64, "y": 32}, "elevation_basis_px": {"x": 0, "y": -32}},
+  "environment": {"id": "earthlike", "hour": 12, "season": "summer"},
+  "tiles": [
+    {"id":"tile:12:58","map_x":12,"map_y":58,"anchor_px":{"x":-120,"y":-44},"terrain":{"id":"terrain:12:58:0","variant_seed":12503106557789841754,"resolver_input":{"category":"terrain","map_x":12,"map_y":58,"terrain_type":"grassland","real_terrain_type":"grassland","sprite_index":41,"visibility_mask":0,"fog_status":0,"territory_owner_id":0}}}
+  ],
+  "instances": [
+  ]
+}

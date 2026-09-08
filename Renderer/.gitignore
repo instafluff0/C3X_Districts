@@ -10,14 +10,9 @@
 
 # Local discovery reports can include machine-specific paths.
 /docs/*_report.json
-/verification/*.json
-/validation/*
 /inventory/generated/
 
 __pycache__/
 *.pyc
 /bin/
 /native/build/
-/terrain_lab/build/
-/terrain_lab/local_paths.bat
-/canonical/

@@ -1,9 +1,6 @@
 {
   "id": "resources",
   "title": "Resources",
-  "revision": 1,
-  "approved_revision": 1,
-  "approval": "Renderer/lab/baseline.json",
   "depends_on": [
     "day-night",
     "shadows"
@@ -37,7 +34,7 @@
   "references": {
     "d3d11": [
       {
-        "image": "Renderer/lab/references/resources/r1/detail/detail-h12-z128.bmp",
+        "image": "Renderer/lab/references/resources/approved/detail/detail-h12-z128.bmp",
         "sha256": "eadbd782e77dcb919d713c305676f9f6c6a42ef2290568dd4ba28ffa1d214652",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -47,7 +44,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/resources/r1/gameplay/gameplay-h12-z128.bmp",
+        "image": "Renderer/lab/references/resources/approved/gameplay/gameplay-h12-z128.bmp",
         "sha256": "b957bc23e47f119f806971efe0bb7af6d267d82a8c19bf7cec720c2fd407288e",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -57,7 +54,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/resources/r1/water-detail/water-detail-h12-z128.bmp",
+        "image": "Renderer/lab/references/resources/approved/water-detail/water-detail-h12-z128.bmp",
         "sha256": "1e3032289bd0f6b4dfd085b5a7f7b0f36fdcc8e4687bb1cca00f460fbe0aa516",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "water-detail",
@@ -67,7 +64,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/resources/r1/water-gameplay/water-gameplay-h12-z128.bmp",
+        "image": "Renderer/lab/references/resources/approved/water-gameplay/water-gameplay-h12-z128.bmp",
         "sha256": "f17d95ae8f670cacb912653c6d584c7b17dbba726c1c17b511904de967553ff5",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "water-gameplay",
@@ -78,16 +75,7 @@
       }
     ]
   },
-  "candidate": {
-    "render": "Renderer/lab/out/resources/render.json",
-    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
-  },
   "limitations": [
-    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ],
-  "reviewed_inputs": {
-    "revision": 1,
-    "signature": "8c7af076de6029ce1ac5ddad2eeb2d9ef5201fb9fb3ce832cd567d7bfbd54a39",
-    "basis": "exact_approved_reference_comparison"
-  }
+    "Current diagnostic previews use the production D3D11 renderer."
+  ]
 }

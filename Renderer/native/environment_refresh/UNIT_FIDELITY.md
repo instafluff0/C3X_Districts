@@ -59,5 +59,5 @@ The old isolated Warrior close-up had a separate noon LUT. Native sprites retain
 their established display transfer, authoritative environment and projection;
 the close-up does not promise equal visible detail at native unit height. No
 sharpening or invented texture detail is introduced by this reorganization.
-Current visual references and approval state live in the units and animation
-categories; `Renderer/lab/MIGRATION.md` records remaining migration work.
+Optional visual references live in the units and animation categories. Keep
+current limitations in those category or implementation notes.

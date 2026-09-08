@@ -1,9 +1,6 @@
 {
   "id": "floodplains",
   "title": "Floodplains",
-  "revision": 1,
-  "approved_revision": 1,
-  "approval": "Renderer/lab/baseline.json",
   "depends_on": [
     "day-night",
     "shadows",
@@ -38,7 +35,7 @@
   "references": {
     "d3d11": [
       {
-        "image": "Renderer/lab/references/floodplains/r1/detail/detail-h12-z128.bmp",
+        "image": "Renderer/lab/references/floodplains/approved/detail/detail-h12-z128.bmp",
         "sha256": "e1920fed5802433b2126784f84b1c2cbea367e371b77cab8237b91f195e47b17",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -48,7 +45,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/floodplains/r1/gameplay/gameplay-h12-z128.bmp",
+        "image": "Renderer/lab/references/floodplains/approved/gameplay/gameplay-h12-z128.bmp",
         "sha256": "2d089db9f5963de960c9f625d66c8bba8d81832dcfc32c6fcb1d842f06289d35",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -59,16 +56,7 @@
       }
     ]
   },
-  "candidate": {
-    "render": "Renderer/lab/out/floodplains/render.json",
-    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
-  },
   "limitations": [
-    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ],
-  "reviewed_inputs": {
-    "revision": 1,
-    "signature": "e2fbbe61368b0e5b715984bf7a3395ca71cae1357760a81c7a71f5142e81575c",
-    "basis": "exact_approved_reference_comparison"
-  }
+    "Current diagnostic previews use the production D3D11 renderer."
+  ]
 }

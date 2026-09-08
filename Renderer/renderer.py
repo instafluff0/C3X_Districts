@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Category-based C3X visual workbench. Production appearance is the baseline."""
+"""Category-based workbench and integration checks for the current C3X code."""
 from __future__ import annotations
 
 import argparse
@@ -96,22 +96,9 @@ def category_signatures():
                       assets=asset_receipts(), generated_shaders=generated)
 
 
-def dirty_categories():
-    from Renderer.lab.dependencies import dirty
-    return dirty({key: standard(key) for key in catalog()}, category_signatures())
-
-
 def affected(category):
     """Visual dependents of the category the user actually requested."""
     return declared_affected(category)
-
-
-def regression_affected(category):
-    """Conservative delivery scope, including other stale reviewed inputs."""
-    # Source-selected categories already represent actual fixture consumers.
-    # Do not expand a local city-light change into a global sun/moon change just
-    # because the day/night fixture is one of its consumers.
-    return sorted(set(declared_affected(category)) | set(dirty_categories()))
 
 
 def reexec_with_workspace_python(packages):
@@ -135,60 +122,39 @@ def reexec_with_workspace_python(packages):
                      ". Set C3X_RENDERER_PYTHON to a Python with Pillow and NumPy installed.")
 
 
-def prepare_sources():
+def asset_jobs_for(categories=None):
+    """Asset builders used by the requested category set."""
+    if categories is None:
+        return None
+    from Renderer.lab.dependencies import consumers
+    selected = set(categories)
+    return {name for name, owners in consumers({key: standard(key) for key in catalog()}).items()
+            if selected.intersection(owners)}
+
+
+def prepare_sources(categories=None):
     from Renderer.lab.preparation import prepare
     changed = prepare(ROOT)
     print(f"Prepared production shader bindings: {len(changed)} changed files", flush=True)
     from Renderer.lab.asset_preparation import prepare as prepare_assets
-    assets = prepare_assets()
+    assets = prepare_assets(selected=asset_jobs_for(categories))
     print(f"Prepared current category assets: {len(assets)} refreshed files", flush=True)
     return changed + assets
 
 
-def require_prepared():
+def require_prepared(categories=None):
     from Renderer.lab.preparation import require_current
     require_current(ROOT)
     from Renderer.lab.asset_preparation import prepare as prepare_assets
-    prepare_assets(check_only=True)
-
-
-def pack_files():
-    """Inventory the same pack tree with one cached directory-entry stat.
-
-    Directory symlinks are not followed (matching Path.rglob); file symlinks
-    still resolve to their repository-local source and cannot escape the root.
-    """
-    root = (ROOT / "Renderer/packs").resolve()
-    root.relative_to(ROOT)
-    pending = [root] if root.is_dir() else []
-    while pending:
-        with os.scandir(pending.pop()) as entries:
-            for entry in entries:
-                if entry.name == "__pycache__":
-                    continue
-                if entry.is_dir(follow_symlinks=False):
-                    pending.append(entry.path)
-                elif entry.is_file():
-                    path = Path(entry.path)
-                    key = relative(path) if entry.is_symlink() else path.relative_to(ROOT).as_posix()
-                    yield key, path, entry.stat()
+    prepare_assets(selected=asset_jobs_for(categories), check_only=True)
 
 
 def implementation_inputs():
-    """Current bytes, shared by stale-preview guards and category selection."""
+    """Bounded current source/runtime read closure used by preview freshness."""
     paths = set()
     for category in catalog():
         paths.update(local(p) for p in standard(category)["implementation"])
-    paths.update((ROOT / "Renderer/native").rglob("*.hlsl"))
-    paths.update((ROOT / "Renderer/native").rglob("*.cpp"))
-    paths.update((ROOT / "Renderer/native").rglob("*.h"))
-    paths.update((LAB / "shared").rglob("*.py"))
-    for extension in ("*.hlsl", "*.h", "*.csv", "*.json"):
-        paths.update((LAB / "shared").rglob(extension))
-    for extension in ("*.py", "*.cpp", "*.mm", "*.h", "*.hlsl"):
-        paths.update((LAB / "backends").rglob(extension))
-        paths.update((LAB / "scene").rglob(extension))
-    paths.update((LAB / "contracts").rglob("*.h"))
+    paths.update(local(path) for path in native_inputs())
     paths.update([ROOT / "C3X.h", ROOT / "injected_code.c"])
     paths.update([ROOT / "Renderer/default.custom_rendering.txt", ROOT / "Renderer/custom.custom_rendering.txt"])
     paths.update([ROOT / "Renderer/renderer.py", LAB / "native_preview.cpp", LAB / "dependencies.py", LAB / "platform.py"])
@@ -197,25 +163,17 @@ def implementation_inputs():
     from Renderer.lab.asset_preparation import jobs as asset_jobs
     paths.add(LAB / "asset_preparation.py")
     paths.update(ROOT / job[3] for job in asset_jobs())
-    for record in asset_receipts().values():
+    receipts = asset_receipts()
+    for record in receipts.values():
         paths.update(local(path) for path in record.get("inputs", {})
                      if not path.startswith("Renderer/packs/"))
     records = {relative(path): checksum(path) for path in sorted(paths) if path.is_file()}
-    # Texture/material edits must invalidate previews even when the binary index
-    # is unchanged. Cache content hashes by size/mtime/ctime for fast repeated
-    # local iteration; this is disposable internal cache, not a handoff ledger.
-    cache_path = LAB / ".cache/input-hashes.json"
-    cache = read(cache_path) if cache_path.exists() else {}
-    current = {}
-    for key, path, stat in pack_files():
-        stamp = [stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns]
-        previous = cache.get(key, {})
-        digest = previous.get("digest") if previous.get("stamp") == stamp else None
-        digest = digest or checksum(path)
-        current[key] = {"stamp": stamp, "digest": digest}
-        records[key] = digest
-    if current != cache:
-        write(cache_path, current)
+    # Preparation receipts contain the exact source/runtime bytes read by each
+    # builder. Commands verify the relevant receipt before using this identity,
+    # so historical pack paths never enter the hot loop.
+    for record in receipts.values():
+        records.update(record.get("inputs", {}))
+        records.update(record.get("outputs", {}))
     return records
 
 
@@ -264,15 +222,6 @@ def require_current_candidate():
     if receipt.exists():
         built = read(receipt)
         if built.get("dll_sha256") == digest and built.get("inputs") == inputs:
-            return
-    baseline = read(LAB / "baseline.json")
-    if digest == baseline["dll_sha256"]:
-        check = subprocess.run(["git", "diff", "--quiet", baseline["source_commit"], "--", *inputs], cwd=ROOT)
-        tracked = subprocess.run(["git", "ls-files", "--error-unmatch", "--", *inputs], cwd=ROOT,
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if check.returncode == 0 and tracked.returncode == 0:
-            # The unchanged production binary is an existing verified build.
-            write(receipt, {"dll_sha256": digest, "inputs": inputs})
             return
     raise CandidateBuildRequired("Candidate DLL does not match the current C++ inputs; run Renderer/renderer.py build")
 
@@ -345,7 +294,7 @@ def scene(category, case, destination, *, world_size=32):
     destination.write_text(f"C3X_BIQ_TERRAIN_V3,{world_size},{world_size},{len(rows)}\n" + "\n".join(rows) + "\n")
 
 
-def native_render(category, case, hour, zoom, output, *, baseline=False, behavior=None, center=(16, 16), diagnostics=False):
+def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False):
     from Renderer.lab.platform import run_native_fixture
     if behavior not in (None, "replay", "edits", "animation", "units"):
         raise ValueError("Unknown native behavior check")
@@ -354,9 +303,7 @@ def native_render(category, case, hour, zoom, output, *, baseline=False, behavio
     scene(category, case, csv, world_size=100 if behavior else 32)
     name = f"{case}-h{hour:02}-z{zoom}"
     image = output / (name + ".bmp")
-    dll = ROOT / "Renderer/bin/C3XRenderer.dll" if baseline else ROOT / "Renderer/native/build/candidate/C3XRenderer.dll"
-    if baseline and checksum(dll) != read(LAB / "baseline.json")["dll_sha256"]:
-        raise ValueError("Staged DLL differs from the user-approved baseline")
+    dll = ROOT / "Renderer/native/build/candidate/C3XRenderer.dll"
     if not dll.is_file():
         raise ValueError("Build the candidate DLL before native rendering")
     # Clear all diagnostic overrides that could otherwise change the scene.
@@ -465,14 +412,18 @@ def verify_behavior_output(behavior, output):
         raise ValueError("Warm/cold pixel comparison exceeded the production budget")
 
 
-def integration_replays():
-    cases = (("scroll", "replay", 128, (50, 50), 12),
+def integration_replays(category):
+    """Run core redraw checks plus object checks selected by visual consumers."""
+    cases = [("scroll", "replay", 128, (50, 50), 12),
              ("reduced-scroll", "replay", 64, (50, 50), 12),
              ("world-wrap", "replay", 128, (0, 50), 12),
-             ("terrain-edit", "edits", 128, (50, 50), 12),
-             ("resource-playback", "animation", 128, (50, 50), 12),
-             ("unit-actions-day", "units", 128, (50, 50), 12),
-             ("unit-actions-night", "units", 128, (50, 50), 0))
+             ("terrain-edit", "edits", 128, (50, 50), 12)]
+    selected = set(affected(category))
+    if selected.intersection(("resources", "infrastructure", "animation")):
+        cases.append(("resource-playback", "animation", 128, (50, 50), 12))
+    if selected.intersection(("units", "animation")):
+        cases.extend((("unit-actions-day", "units", 128, (50, 50), 12),
+                      ("unit-actions-night", "units", 128, (50, 50), 0)))
     results = []
     for name, behavior, zoom, center, hour in cases:
         print("Checking production behavior: " + name, flush=True)
@@ -489,40 +440,31 @@ def integration_replays():
     return results
 
 
-def render(category, *, baseline=False, selected_case=None):
+def render(category, *, selected_case=None):
     value = standard(category)
     if selected_case is not None and selected_case not in value["recipe"]["cases"]:
         raise ValueError("Unknown fixture case for " + category)
-    if not baseline:
-        require_prepared()
-        ensure_candidate()
-    out = LAB / ("references" if baseline else "out") / category
-    if baseline:
-        out /= "r1"
-        if value["approved_revision"] != 1 or value["references"]:
-            raise ValueError("Baseline references already captured or superseded")
+    require_prepared([category])
+    ensure_candidate()
+    out = LAB / "out" / category
     outputs = []
     signature = category_signatures()[category]
     recipe = value["recipe"]
     for case in ([selected_case] if selected_case else recipe["cases"]):
         for hour in recipe["hours"]:
             for zoom in recipe["zooms"]:
-                outputs.append(native_render(category, case, hour, zoom, out / case, baseline=baseline))
+                outputs.append(native_render(category, case, hour, zoom, out / case))
     if category_signatures()[category] != signature:
         raise ValueError("Renderer inputs changed during rendering; rerun the preview")
-    result = {"category": category, "revision": value["revision"], "outputs": outputs,
-              "implementation_identity": signature, "input_signature": signature, "recipe": recipe,
-              "dependency_revisions": {key: standard(key)["approved_revision"] for key in value["depends_on"]}}
+    result = {"category": category, "outputs": outputs,
+              "implementation_identity": signature, "input_signature": signature, "recipe": recipe}
     write(out / "render.json", result)
-    if baseline:
-        value["references"] = {"d3d11": outputs}
-        write(standard_path(category), value)
     print(relative(out / "render.json"))
     return result
 
 
 def compare(category):
-    require_prepared()
+    require_prepared([category])
     from PIL import Image, ImageChops, ImageDraw
     value = standard(category)
     result = read(LAB / "out" / category / "render.json")
@@ -551,8 +493,8 @@ def compare(category):
         panel = Image.new("RGB", (a.width * 2, a.height + 28), "#222222")
         panel.paste(a, (0, 28)); panel.paste(b, (a.width, 28))
         draw = ImageDraw.Draw(panel)
-        draw.text((8, 8), "Approved baseline", fill="white")
-        draw.text((a.width + 8, 8), "Candidate", fill="white")
+        draw.text((8, 8), "Reference", fill="white")
+        draw.text((a.width + 8, 8), "Current code", fill="white")
         panels.append(panel)
         summaries.append({"case": entry["case"], "hour": entry["hour"], "zoom": entry["zoom"],
                           "identical_pixels": difference.getbbox() is None})
@@ -563,17 +505,6 @@ def compare(category):
     target = LAB / "out" / category / "compare.png"
     sheet.save(target)
     write(target.with_suffix(".json"), summaries)
-    # Exact pixels establish that these inputs still reproduce the existing
-    # approval. This is not a new revision, permission for different pixels,
-    # or evidence of a game test. Partial comparisons never clear review scope.
-    expected = {(case, hour, zoom) for case in value["recipe"]["cases"]
-                for hour in value["recipe"]["hours"] for zoom in value["recipe"]["zooms"]}
-    actual = {(row["case"], row["hour"], row["zoom"]) for row in summaries}
-    if actual == expected and len(summaries) == len(expected) and all(row["identical_pixels"] for row in summaries):
-        if result.get("input_signature") == signature:
-            value["reviewed_inputs"] = {"revision": value["approved_revision"],
-                "signature": signature, "basis": "exact_approved_reference_comparison"}
-            write(standard_path(category), value)
     print(json.dumps(summaries, indent=2))
     print(relative(target))
     return summaries
@@ -592,7 +523,7 @@ def gallery(category=None):
                 if checksum(local(ref["image"])) != ref["sha256"]:
                     raise ValueError("Modified reference: " + key)
                 card = Image.new("RGB", (640, 504), "#222222")
-                label = f'{value["title"]} r{value["approved_revision"]} / {ref["case"]} / hour {ref["hour"]} / tile {ref["zoom"]}'
+                label = f'{value["title"]} / {ref["case"]} / hour {ref["hour"]} / tile {ref["zoom"]}'
                 ImageDraw.Draw(card).text((8, 7), label, fill="white")
                 im = Image.open(local(ref["image"])).convert("RGB")
                 im.thumbnail((640, 480))
@@ -625,9 +556,7 @@ def gallery(category=None):
 
 def describe(category):
     value = standard(category)
-    integrated = read(ROOT / "Renderer/integration/status.json")["categories"].get(category, {})
     print((standard_path(category).parent / "README.md").read_text().strip())
-    print(f'\nApproved r{value["approved_revision"]}; integrated r{integrated.get("integrated_revision", "none")}.')
     print("Shared dependencies: " + (", ".join(value["depends_on"]) or "none"))
     print("Current implementation:")
     for path in value["implementation"]:
@@ -636,12 +565,12 @@ def describe(category):
     print("Reference gallery: python3 Renderer/renderer.py gallery " + category)
     candidate = LAB / "out" / category / "render.json"
     if candidate.is_file():
-        print("Unapproved candidate: available; compare verifies freshness")
+        print("Current-code preview: available; compare verifies freshness")
     for limitation in value.get("limitations", []):
         print("Limit: " + limitation)
 
 
-def validate(*, complete=False):
+def validate():
     entries = catalog()
     errors = []
     for category in entries:
@@ -654,18 +583,6 @@ def validate(*, complete=False):
         for path in value["implementation"]:
             if not local(path).is_file():
                 errors.append(category + ": missing implementation " + path)
-        for refs in value["references"].values():
-            for ref in refs:
-                if not local(ref["image"]).is_file() or checksum(local(ref["image"])) != ref["sha256"]:
-                    errors.append(category + ": missing or modified reference " + ref["image"])
-        if complete:
-            expected = {(case, hour, zoom) for case in value["recipe"]["cases"]
-                        for hour in value["recipe"]["hours"] for zoom in value["recipe"]["zooms"]}
-            for backend in ("d3d11", "metal"):
-                references = value["references"].get(backend, [])
-                actual = {(r["case"], r["hour"], r["zoom"]) for r in references}
-                if actual != expected or len(actual) != len(references):
-                    errors.append(category + ": " + backend + " reference coverage is incomplete")
     visiting, visited = set(), set()
     def visit(category):
         if category in visiting:
@@ -685,21 +602,10 @@ def validate(*, complete=False):
     return len(entries)
 
 
-def pending():
-    integrated = read(ROOT / "Renderer/integration/status.json")["categories"]
-    changes = []
-    for category in catalog():
-        value = standard(category)
-        before = integrated.get(category, {}).get("integrated_revision")
-        if value["approved_revision"] != before:
-            changes.append({"category": category, "approved": value["approved_revision"], "integrated": before})
-    return changes
-
-
 def test_modules(category=None):
     selected = [category] if category else list(catalog())
-    modules = {"Renderer.lab.test_workflow", "Renderer.lab.test_dependencies", "Renderer.lab.test_platform", "Renderer.lab.test_backend_bindings",
-               "Renderer.lab.test_preparation", "Renderer.lab.test_natural_scene"}
+    modules = {"Renderer.lab.test_workflow", "Renderer.lab.test_dependencies", "Renderer.lab.test_platform",
+               "Renderer.lab.test_backend_bindings", "Renderer.lab.test_preparation"}
     for key in selected:
         modules.update(standard(key)["tests"])
     return sorted(modules)
@@ -762,7 +668,8 @@ def verify_integration(category, *, build=False):
 
 def verify_integration_checks(category, *, build=False):
     receipt_path = LAB / "out/integration" / (category + ".json")
-    prepare_sources()
+    selected = affected(category)
+    prepare_sources(selected)
     if build:
         build_candidate()
     else:
@@ -772,60 +679,25 @@ def verify_integration_checks(category, *, build=False):
     from Renderer.lab.platform import changed_injected_sources, injected_compile_result
     if changed_injected_sources() and injected_compile_result()["status"] != "pass":
         raise ValueError("Approved injected compile/injection smoke test failed")
-    selected = regression_affected(category)
-    comparisons = {}
-    for key in selected:
-        render(key)
-        comparisons[key] = compare(key)
-        if not all(row["identical_pixels"] for row in comparisons[key]):
-            raise ValueError("Delivery differs from the approved D3D11 appearance: " + key)
-    replays = integration_replays()
+    replays = integration_replays(category)
     if identity != implementation_identity():
         raise ValueError("Inputs changed during integration verification")
+    signatures = category_signatures()
     result = {"status": "pass", "category": category, "categories": selected,
-              "approved_revisions": {key: standard(key)["approved_revision"] for key in selected},
+              "input_signatures": {key: signatures[key] for key in selected},
               "implementation_identity": identity,
               "dll_sha256": checksum(ROOT / "Renderer/native/build/candidate/C3XRenderer.dll"),
-              "tests": modules, "comparisons": comparisons, "replays": replays, "live_game": "not_tested"}
+              "tests": modules, "replays": replays, "live_game": "not_tested"}
     write(receipt_path, result)
-    print("PASS automated delivery checks; Civ III has not been launched or certified.")
+    print("PASS current-code integration checks. Reference comparison is opt-in; Civ III was not launched.")
     return result
-
-
-def integration_receipt(category):
-    require_prepared()
-    result = read(LAB / "out/integration" / (category + ".json"))
-    if result.get("status") != "pass" or result.get("implementation_identity") != implementation_identity():
-        raise ValueError("Run fresh integration verification first")
-    if result["dll_sha256"] != checksum(ROOT / "Renderer/native/build/candidate/C3XRenderer.dll"):
-        raise ValueError("Candidate DLL changed after verification")
-    for key in result["categories"]:
-        if result["approved_revisions"][key] != standard(key)["approved_revision"]:
-            raise ValueError("Approval changed after verification: " + key)
-    return result
-
-
-def record_integration(category, note):
-    if not note.strip():
-        raise ValueError("Describe the actual Civ III check; automated replay alone is insufficient")
-    result = integration_receipt(category)
-    if checksum(ROOT / "Renderer/bin/C3XRenderer.dll") != result["dll_sha256"]:
-        raise ValueError("The staged DLL is not the verified candidate")
-    path = ROOT / "Renderer/integration/status.json"
-    status = read(path)
-    for key in result["categories"]:
-        status["categories"][key] = {"integrated_revision": result["approved_revisions"][key],
-            "verification": "automated_replay_and_recorded_game_check", "game_check": note,
-            "dll_sha256": result["dll_sha256"], "implementation_identity": result["implementation_identity"]}
-    write(path, status)
-    print("Recorded integration: " + ", ".join(result["categories"]))
 
 
 def approve(category, note):
-    """Record an actual user decision; a technical pass is never approval."""
+    """Replace the category's optional comparison snapshot after user acceptance."""
     if not note.strip():
         raise ValueError("Record the user's explicit approval of the affected appearance")
-    require_prepared()
+    require_prepared([category])
     selected = [category]
     signatures = category_signatures()
     identity = signatures[category]
@@ -845,32 +717,38 @@ def approve(category, note):
         actual = {(r["case"], r["hour"], r["zoom"]) for r in result["outputs"]}
         if actual != expected or len(actual) != len(result["outputs"]):
             raise ValueError("Approval requires the complete category preview: " + key)
-        revision = value["approved_revision"] + 1
-        folder = LAB / "references" / key / f"r{revision}"
-        if folder.exists():
-            raise ValueError("Reference destination already exists: " + relative(folder))
+        folder = LAB / "references" / key / "approved"
         for entry in result["outputs"]:
             if checksum(local(entry["image"])) != entry["sha256"]:
                 raise ValueError("Preview image changed: " + key)
-        updates.append((key, value, result, revision, folder))
-    # Validate the entire affected set before writing any approved reference.
-    # Prior references remain intact if an I/O error interrupts the new set.
-    for key, value, result, revision, folder in updates:
-        folder.mkdir(parents=True)
+        updates.append((key, value, result, folder))
+    for key, value, result, folder in updates:
+        staged = folder.parent / (".approved-" + uuid.uuid4().hex)
+        staged.mkdir(parents=True)
         references = []
         for entry in result["outputs"]:
-            target = folder / Path(entry["image"]).name
+            target = staged / entry["case"] / Path(entry["image"]).name
+            target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(local(entry["image"]), target)
-            references.append(dict(entry, image=relative(target)))
-        value.update(revision=revision, approved_revision=revision,
-                     approval={"user_statement": note, "affected_categories": selected,
-                               "implementation_identity": identity},
-                     references={"d3d11": references})
+            references.append(dict(entry, image=relative(folder / entry["case"] / target.name)))
+        backup = folder.parent / (".previous-" + uuid.uuid4().hex)
+        try:
+            if folder.exists():
+                folder.replace(backup)
+            staged.replace(folder)
+        except Exception:
+            if backup.exists() and not folder.exists():
+                backup.replace(folder)
+            raise
+        else:
+            if backup.exists():
+                shutil.rmtree(backup)
+        value.update(approval={"user_statement": note, "implementation_identity": identity},
+                     references={"d3d11": references}, reference_inputs=signatures[key])
         value.pop("candidate", None)
-        value["reviewed_inputs"] = {"revision": revision, "signature": signatures[key],
-                                    "basis": "explicit_user_approval"}
+        value.pop("reviewed_inputs", None)
         write(standard_path(key), value)
-    print("Approved " + ", ".join(f"{key} r{revision}" for key, _, _, revision, _ in updates))
+    print("Updated reference: " + ", ".join(key for key, _, _, _ in updates))
 
 
 def main():
@@ -885,22 +763,17 @@ def main():
     tests.add_argument("--affected", action="store_true", help="Include visual dependents; category tests are the default")
     tests.add_argument("--backends", choices=("metal","both"), help="Check GPU bindings and compile production Metal shaders; not full scene parity")
     commands.add_parser("build", help="Build a candidate and preview tools without staging")
-    check = commands.add_parser("check")
-    check.add_argument("--complete", action="store_true")
-    integration = commands.add_parser("integration")
-    integration.add_argument("action", choices=["pending", "verify", "record"])
-    integration.add_argument("category", nargs="?", choices=list(catalog()))
+    commands.add_parser("check", help="Validate the category catalog without rendering or hashing reference images")
+    integration = commands.add_parser("integration", help="Verify the current code without staging or launching Civ III")
+    integration.add_argument("category", choices=list(catalog()))
     integration.add_argument("--build", action="store_true")
-    integration.add_argument("--game-check", help="Describe the actual live Civ III test and result")
     approval = commands.add_parser("approve")
     approval.add_argument("category", choices=list(catalog()))
     approval.add_argument("--user-approval", required=True, help="Quote the user's actual approval of the complete category preview")
-    for name in ("show", "affected", "lab", "compare", "baseline"):
+    for name in ("show", "affected", "lab", "compare"):
         parser = commands.add_parser(name)
         parser.add_argument("category", choices=list(catalog()))
         if name in ("lab", "compare"):
-            parser.add_argument("--backend", choices=("d3d11", "metal"), default="d3d11",
-                                help="Metal currently supports the grassland detail pilot only")
             parser.add_argument("--affected", action="store_true", help="Include visual dependents; the requested category is the default")
         if name == "lab":
             parser.add_argument("--case", help="One fixture case listed by show CATEGORY")
@@ -909,7 +782,7 @@ def main():
         if args.command == "list":
             for key in catalog():
                 value = standard(key)
-                print(f'{key:18} approved r{value["approved_revision"]} | {value["title"]}')
+                print(f'{key:18} {value["title"]}')
         elif args.command == "show":
             describe(args.category)
         elif args.command == "gallery":
@@ -917,7 +790,9 @@ def main():
             gallery(args.category)
         elif args.command == "test":
             reexec_with_workspace_python(("PIL", "numpy"))
-            prepare_sources()
+            selected = affected(args.category) if args.category and args.affected else (
+                [args.category] if args.category else None)
+            prepare_sources(selected)
             if args.category and args.affected:
                 run_affected_tests(args.category)
             else:
@@ -931,41 +806,20 @@ def main():
             prepare_sources()
         elif args.command == "affected":
             print("\n".join(affected(args.category)))
-        elif args.command in ("lab", "baseline"):
-            if getattr(args, "backend", None) == "metal":
-                from Renderer.lab.backends import natural_scene
-                natural_scene.request(args.category, args.case, args.affected)
-                prepare_sources()
-                natural_scene.render(args.category, args.case)
-                return 0
-            if args.command == "lab":
-                prepare_sources()
+        elif args.command == "lab":
             selected = affected(args.category) if getattr(args, "affected", False) else [args.category]
+            prepare_sources(selected)
             for key in selected:
                 selected_case = getattr(args, "case", None) if key == args.category else None
-                render(key, baseline=args.command == "baseline", selected_case=selected_case)
+                render(key, selected_case=selected_case)
         elif args.command == "compare":
             reexec_with_workspace_python(("PIL",))
-            if args.backend == "metal":
-                from Renderer.lab.backends import natural_scene
-                natural_scene.compare(args.category)
-                return 0
             for key in affected(args.category) if args.affected else [args.category]:
                 compare(key)
         elif args.command == "check":
-            print(f"PASS {validate(complete=args.complete)} category definitions and current references")
+            print(f"PASS {validate()} category definitions")
         elif args.command == "integration":
-            if args.action == "pending":
-                changes = pending()
-                print(json.dumps(changes, indent=2) if changes else "No approved revisions await integration.")
-            elif not args.category:
-                raise ValueError("Select the category to verify or record")
-            elif args.action == "verify":
-                verify_integration(args.category, build=args.build)
-            elif not args.game_check:
-                raise ValueError("--game-check must describe the actual Civ III check")
-            else:
-                record_integration(args.category, args.game_check)
+            verify_integration(args.category, build=args.build)
         elif args.command == "approve":
             if not args.user_approval.strip():
                 raise ValueError("An actual user approval statement is required")

@@ -1,6 +1,5 @@
-"""Protect explicit approvals and the dependency-selected visual baseline."""
+"""Protect current-code previews, optional references and integration checks."""
 import json
-import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -22,8 +21,6 @@ class ApprovalTests(unittest.TestCase):
             mock.start(); self.addCleanup(mock.stop)
         mock = patch.object(renderer, "implementation_identity", return_value="current")
         mock.start(); self.addCleanup(mock.stop)
-        mock = patch.object(renderer, "dirty_categories", return_value=[])
-        mock.start(); self.addCleanup(mock.stop)
         mock = patch.object(renderer, "category_signatures", return_value={"lighting": "current", "grassland": "current"})
         mock.start(); self.addCleanup(mock.stop)
         for name in ("require_prepared", "prepare_sources", "ensure_candidate"):
@@ -32,7 +29,7 @@ class ApprovalTests(unittest.TestCase):
         renderer.write(self.lab / "catalog.json", {"categories": {"lighting": "lighting", "grassland": "grassland"}})
         for key in ("lighting", "grassland"):
             renderer.write(renderer.standard_path(key), {
-                "id": key, "revision": 1, "approved_revision": 1,
+                "id": key,
                 "depends_on": ["lighting"] if key == "grassland" else [],
                 "implementation": [], "references": {},
                 "tests": ["Renderer.native.test_scroll_damage"],
@@ -56,14 +53,14 @@ class ApprovalTests(unittest.TestCase):
     def test_category_approval_requires_only_the_requested_preview(self):
         self.preview("lighting")
         renderer.approve("lighting", "User approved this appearance")
-        self.assertEqual(renderer.standard("lighting")["approved_revision"], 2)
-        self.assertEqual(renderer.standard("grassland")["approved_revision"], 1)
+        self.assertEqual(renderer.standard("lighting")["reference_inputs"], "current")
+        self.assertNotIn("reference_inputs", renderer.standard("grassland"))
 
     def test_blank_statement_is_not_approval(self):
         self.preview("grassland")
         with self.assertRaisesRegex(ValueError, "explicit approval"):
             renderer.approve("grassland", "  ")
-        self.assertEqual(renderer.standard("grassland")["approved_revision"], 1)
+        self.assertNotIn("reference_inputs", renderer.standard("grassland"))
 
     def test_unprepared_source_cannot_be_rendered_compared_or_approved(self):
         self.preview("grassland")
@@ -71,19 +68,18 @@ class ApprovalTests(unittest.TestCase):
              patch.object(renderer, "native_render") as draw:
             for action in (lambda: renderer.render("grassland"),
                            lambda: renderer.compare("grassland"),
-                           lambda: renderer.approve("grassland", "User approved"),
-                           lambda: renderer.integration_receipt("grassland")):
+                           lambda: renderer.approve("grassland", "User approved")):
                 with self.assertRaisesRegex(ValueError, "bindings are stale"):
                     action()
             draw.assert_not_called()
-        self.assertEqual(renderer.standard("grassland")["approved_revision"], 1)
+        self.assertNotIn("reference_inputs", renderer.standard("grassland"))
 
     def test_stale_or_partial_preview_cannot_be_approved(self):
         for args, error in (({"stale": True}, "stale"), ({"partial": True}, "complete category")):
             self.preview("grassland", **args)
             with self.assertRaisesRegex(ValueError, error):
                 renderer.approve("grassland", "User approved")
-            self.assertEqual(renderer.standard("grassland")["approved_revision"], 1)
+            self.assertNotIn("reference_inputs", renderer.standard("grassland"))
 
     def test_modified_candidate_cannot_be_approved(self):
         self.preview("grassland")
@@ -104,7 +100,7 @@ class ApprovalTests(unittest.TestCase):
         result = renderer.read(self.lab / "out/grassland/render.json")
         refs = []
         for case in value["recipe"]["cases"]:
-            reference = self.lab / "references/grassland/r1" / (case + ".bmp")
+            reference = self.lab / "references/grassland/approved" / case / (case + ".bmp")
             reference.parent.mkdir(parents=True, exist_ok=True)
             Image.new("RGB", (2, 2), "green").save(reference)
             refs.append({"case": case, "hour": 12, "zoom": 128, "backend": "d3d11",
@@ -118,113 +114,77 @@ class ApprovalTests(unittest.TestCase):
         renderer.write(self.lab / "out/grassland/render.json", result)
         return refs
 
-    def test_exact_complete_comparison_records_inputs_not_a_new_approval(self):
+    def test_comparison_is_read_only(self):
         refs = self.comparison()
         renderer.compare("grassland")
         value = renderer.standard("grassland")
-        self.assertEqual(value["approved_revision"], 1)
         self.assertNotIn("approval", value)
         self.assertEqual(value["references"]["d3d11"], refs)
-        self.assertEqual(value["reviewed_inputs"], {"revision": 1, "signature": "current",
-            "basis": "exact_approved_reference_comparison"})
-        self.assertFalse((self.root / "Renderer/integration/status.json").exists())
+        self.assertNotIn("reference_inputs", value)
 
-    def test_different_or_partial_comparison_does_not_clear_review(self):
+    def test_different_or_partial_comparison_remains_read_only(self):
         for args in ({"changed": True}, {"partial": True}):
             self.comparison(**args)
             renderer.compare("grassland")
-            self.assertNotIn("reviewed_inputs", renderer.standard("grassland"))
+            self.assertNotIn("reference_inputs", renderer.standard("grassland"))
 
     def test_old_category_signature_rejects_comparison_before_review(self):
         self.comparison()
         with patch.object(renderer, "category_signatures", return_value={"grassland": "changed"}), \
              self.assertRaisesRegex(ValueError, "stale"):
             renderer.compare("grassland")
-        self.assertNotIn("reviewed_inputs", renderer.standard("grassland"))
+        self.assertNotIn("reference_inputs", renderer.standard("grassland"))
 
-    def test_unrelated_dirty_consumer_does_not_block_category_approval(self):
+    def test_category_reference_update_is_local(self):
         self.preview("grassland")
-        with patch.object(renderer, "dirty_categories", return_value=["lighting"]):
-            renderer.approve("grassland", "User reviewed grassland")
-        self.assertEqual(renderer.standard("grassland")["approved_revision"], 2)
-        self.assertEqual(renderer.standard("lighting")["approved_revision"], 1)
+        renderer.approve("grassland", "User reviewed grassland")
+        self.assertEqual(renderer.standard("grassland")["reference_inputs"], "current")
+        self.assertNotIn("reference_inputs", renderer.standard("lighting"))
 
-    def test_category_approval_creates_one_revision_and_retains_prior_images(self):
-        old = self.lab / "references/grassland/r1/detail.bmp"
+    def test_category_approval_replaces_one_fixed_reference(self):
+        old = self.lab / "references/lighting/approved/detail/detail.bmp"
         old.parent.mkdir(parents=True)
         old.write_bytes(b"original")
-        for key in ("lighting", "grassland"):
-            self.preview(key)
-        renderer.approve("lighting", "The user explicitly accepted both comparisons")
-        self.assertEqual(old.read_bytes(), b"original")
+        self.preview("lighting")
+        renderer.approve("lighting", "The user explicitly accepted this comparison")
         lighting = renderer.standard("lighting")
-        self.assertEqual(lighting["approved_revision"], 2)
         self.assertEqual(len(lighting["references"]["d3d11"]), 2)
-        self.assertEqual(lighting["approval"]["affected_categories"], ["lighting"])
-        self.assertEqual(renderer.standard("grassland")["approved_revision"], 1)
+        self.assertTrue(all("/approved/" in row["image"] for row in lighting["references"]["d3d11"]))
+        self.assertNotEqual(old.read_bytes(), b"original")
 
     def test_paths_cannot_escape_repository(self):
         with self.assertRaisesRegex(ValueError, "escapes"):
             renderer.local("../outside")
 
-    def delivery(self, *, staged=True):
-        candidate = self.root / "Renderer/native/build/candidate/C3XRenderer.dll"
-        candidate.parent.mkdir(parents=True)
-        candidate.write_bytes(b"verified-dll")
-        live = self.root / "Renderer/bin/C3XRenderer.dll"
-        live.parent.mkdir(parents=True)
-        live.write_bytes(b"verified-dll" if staged else b"older-dll")
-        renderer.write(self.root / "Renderer/integration/status.json", {"categories": {
-            "grassland": {"integrated_revision": 0}, "lighting": {"integrated_revision": 1}}})
-        receipt = {"status": "pass", "implementation_identity": "current",
-                   "dll_sha256": renderer.checksum(candidate), "categories": ["grassland"],
-                   "approved_revisions": {"grassland": 1}}
-        renderer.write(self.lab / "out/integration/grassland.json", receipt)
-        return candidate, receipt
-
     def test_dependency_test_selection_is_deduplicated(self):
         self.assertEqual(renderer.test_modules("lighting"), [
-            "Renderer.lab.test_backend_bindings", "Renderer.lab.test_dependencies", "Renderer.lab.test_natural_scene",
+            "Renderer.lab.test_backend_bindings", "Renderer.lab.test_dependencies",
             "Renderer.lab.test_platform", "Renderer.lab.test_preparation",
             "Renderer.lab.test_workflow", "Renderer.native.test_scroll_damage"])
 
-    def test_integration_requires_an_actual_game_check_and_staged_candidate(self):
-        self.delivery(staged=False)
-        for note, error in (("", "actual Civ III"), ("Tested game", "staged DLL")):
-            with self.assertRaisesRegex(ValueError, error):
-                renderer.record_integration("grassland", note)
-        self.assertEqual(renderer.pending(), [{"category": "grassland", "approved": 1, "integrated": 0}])
-
-    def test_modified_dll_invalidates_integration_receipt(self):
-        candidate, _ = self.delivery()
-        candidate.write_bytes(b"changed-dll")
-        with self.assertRaisesRegex(ValueError, "DLL changed"):
-            renderer.record_integration("grassland", "Tested in game")
-
-    def test_changed_approval_invalidates_integration_receipt(self):
-        self.delivery()
-        value = renderer.standard("grassland")
-        value["approved_revision"] = 2
-        renderer.write(renderer.standard_path("grassland"), value)
-        with self.assertRaisesRegex(ValueError, "Approval changed"):
-            renderer.record_integration("grassland", "Tested in game")
-
-    def test_recording_delivery_only_updates_verified_categories(self):
-        self.delivery()
-        renderer.record_integration("grassland", "Scroll, zoom, wrap and config-off checked in Civ III")
-        status = renderer.read(self.root / "Renderer/integration/status.json")["categories"]
-        self.assertEqual(status["lighting"], {"integrated_revision": 1})
-        self.assertEqual(status["grassland"]["integrated_revision"], 1)
-        self.assertEqual(renderer.pending(), [])
+    def test_integration_does_not_render_or_compare_references(self):
+        candidate = self.root / "Renderer/native/build/candidate/C3XRenderer.dll"
+        candidate.parent.mkdir(parents=True)
+        candidate.write_bytes(b"verified-dll")
+        with patch.object(renderer, "run_tests", return_value=[]), \
+             patch.object(renderer, "affected", return_value=["grassland"]), \
+             patch.object(renderer, "render") as render, \
+             patch.object(renderer, "compare") as compare, \
+             patch.object(renderer, "integration_replays", return_value=[]), \
+             patch("Renderer.lab.platform.changed_injected_sources", return_value=False):
+            result = renderer.verify_integration_checks("grassland")
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["categories"], ["grassland"])
+        self.assertEqual(result["input_signatures"], {"grassland": "current"})
+        self.assertNotIn("comparisons", result)
+        render.assert_not_called()
+        compare.assert_not_called()
 
     def test_failed_new_verification_invalidates_older_success(self):
-        self.delivery()
         with patch.object(renderer, "run_tests", side_effect=ValueError("regression")):
             with self.assertRaisesRegex(ValueError, "regression"):
                 renderer.verify_integration("grassland")
         self.assertEqual(renderer.read(self.lab / "out/integration/grassland.json")["status"], "fail")
-        with self.assertRaisesRegex(ValueError, "fresh integration"):
-            renderer.integration_receipt("grassland")
 
 
 class FixtureTests(unittest.TestCase):
@@ -270,13 +230,25 @@ class BehaviorWitnessTests(unittest.TestCase):
 
     def test_a_failed_replay_does_not_hide_independent_results(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(renderer, "LAB", Path(directory)), \
+             patch.object(renderer, "affected", return_value=["animation"]), \
              patch.object(renderer, "native_render", side_effect=[ValueError("failed"), {}, {}, {}, {}, {}, {}]) as render, \
              patch("builtins.print"):
             with self.assertRaisesRegex(ValueError, "scroll"):
-                renderer.integration_replays()
+                renderer.integration_replays("animation")
             self.assertEqual(render.call_count, 7)
             results = renderer.read(Path(directory) / "out/integration/replays/results.json")
             self.assertEqual([r["status"] for r in results], ["fail"] + ["pass"] * 6)
+
+    def test_integration_skips_unrelated_object_witnesses(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(renderer, "LAB", Path(directory)), \
+             patch.object(renderer, "affected", return_value=["grassland"]), \
+             patch.object(renderer, "native_render", return_value={}) as render, \
+             patch("builtins.print"):
+            results = renderer.integration_replays("grassland")
+        self.assertEqual([result["name"] for result in results],
+                         ["scroll", "reduced-scroll", "world-wrap", "terrain-edit"])
+        self.assertEqual(render.call_count, 4)
 
     def test_replay_requires_all_jumps_and_original_pixel_budget(self):
         prefix = "PICKUP selection p95_ms=0\n" + "PICKUP jump=0,0\n" * 5
@@ -314,65 +286,29 @@ class InputFreshnessTests(unittest.TestCase):
             replacement.start(); self.addCleanup(replacement.stop)
         replacement = patch.object(renderer, "catalog", return_value={})
         replacement.start(); self.addCleanup(replacement.stop)
+        replacement = patch.object(renderer, "native_inputs", return_value={})
+        replacement.start(); self.addCleanup(replacement.stop)
 
-    def test_texture_edit_invalidates_preview_even_with_same_size_and_mtime(self):
-        texture = self.root / "Renderer/packs/example/color.dds"
-        texture.parent.mkdir(parents=True)
-        texture.write_bytes(b"first")
-        old = texture.stat()
+    def test_preparation_receipts_define_the_bounded_pack_closure(self):
+        receipt = self.lab / ".cache/assets/example.json"
+        renderer.write(receipt, {"inputs": {"Renderer/packs/current/source.dds": "first"},
+                                 "outputs": {"Renderer/packs/runtime/color.dds": "built"}})
         before = renderer.implementation_identity()
+        unrelated = self.root / "Renderer/packs/history/unused.dds"
+        unrelated.parent.mkdir(parents=True)
+        unrelated.write_bytes(b"ignored")
         self.assertEqual(before, renderer.implementation_identity())
-        texture.write_bytes(b"other")
-        os.utime(texture, ns=(old.st_atime_ns, old.st_mtime_ns))
+        renderer.write(receipt, {"inputs": {"Renderer/packs/current/source.dds": "changed"},
+                                 "outputs": {"Renderer/packs/runtime/color.dds": "built"}})
         self.assertNotEqual(before, renderer.implementation_identity())
 
-    def test_nested_native_header_invalidates_preview(self):
-        header = self.root / "Renderer/native/materials/shared.h"
-        header.parent.mkdir(parents=True)
+    def test_injected_contract_invalidates_preview(self):
+        header = self.root / "C3X.h"
         header.write_text("old")
-        before = renderer.implementation_identity()
-        header.write_text("new")
-        self.assertNotEqual(before, renderer.implementation_identity())
-
-    def test_unchanged_inventory_does_not_rewrite_hash_cache(self):
-        path = self.root / "Renderer/packs/example/color.dds"
-        path.parent.mkdir(parents=True)
-        path.write_bytes(b"texture")
-        before = renderer.implementation_identity()
-        with patch.object(renderer, "write") as write:
-            self.assertEqual(before, renderer.implementation_identity())
-            write.assert_not_called()
-        path.unlink()
-        self.assertNotEqual(before, renderer.implementation_identity())
-
-    def test_pack_inventory_matches_previous_symlink_and_cache_semantics(self):
-        packs = self.root / "Renderer/packs"
-        folder = packs / "example"
-        folder.mkdir(parents=True)
-        (folder / "a.dds").write_bytes(b"a")
-        (folder / "b.dds").symlink_to(folder / "a.dds")
-        (folder / "loop").symlink_to(packs, target_is_directory=True)
-        (folder / "broken.dds").symlink_to(folder / "missing.dds")
-        (folder / "__pycache__").mkdir()
-        (folder / "__pycache__/ignored.pyc").write_bytes(b"ignored")
-        expected = {renderer.relative(p): renderer.checksum(p) for p in packs.rglob("*")
-                    if p.is_file() and "__pycache__" not in p.parts}
-        actual = {key: renderer.checksum(p) for key, p, _ in renderer.pack_files()}
-        self.assertEqual(actual, expected)
-        # Renaming and adding nested input paths remain observable.
-        before = renderer.implementation_identity()
-        (folder / "new.dds").write_bytes(b"new")
-        self.assertNotEqual(before, renderer.implementation_identity())
-
-    def test_pack_file_symlink_cannot_escape_repository(self):
-        with tempfile.TemporaryDirectory() as other:
-            external = Path(other) / "art.dds"
-            external.write_bytes(b"outside")
-            packs = self.root / "Renderer/packs"
-            packs.mkdir(parents=True)
-            (packs / "escape.dds").symlink_to(external)
-            with self.assertRaises(ValueError):
-                list(renderer.pack_files())
+        with patch.object(renderer, "native_inputs", return_value={renderer.relative(header): renderer.checksum(header)}):
+            before = renderer.implementation_identity()
+            header.write_text("new")
+            self.assertNotEqual(before, renderer.implementation_identity())
 
     def test_concurrent_atomic_writes_use_independent_temporary_files(self):
         from concurrent.futures import ThreadPoolExecutor
@@ -416,7 +352,6 @@ class InputFreshnessTests(unittest.TestCase):
         dll = self.root / "Renderer/native/build/candidate/C3XRenderer.dll"
         dll.parent.mkdir(parents=True)
         dll.write_bytes(b"candidate")
-        renderer.write(self.lab / "baseline.json", {"dll_sha256": "different"})
         renderer.write(self.lab / ".cache/native-build.json", {
             "dll_sha256": renderer.checksum(dll), "inputs": {"shared.h": "old"}})
         with patch.object(renderer, "native_inputs", return_value={"shared.h": "old"}):
@@ -463,11 +398,11 @@ class InputFreshnessTests(unittest.TestCase):
 
     def test_render_prepares_candidate_before_capturing_input_identity(self):
         value = {"recipe": {"cases": ["detail"], "hours": [12], "zooms": [128]},
-                 "revision": 1, "depends_on": []}
+                 "depends_on": []}
         events = []
         with patch.object(renderer, "standard", return_value=value), \
              patch.object(renderer, "standard_path", return_value=self.lab / "standard.json"), \
-             patch.object(renderer, "require_prepared", side_effect=lambda: events.append("prepared")), \
+             patch.object(renderer, "require_prepared", side_effect=lambda categories: events.append("prepared")), \
              patch.object(renderer, "ensure_candidate", side_effect=lambda: events.append("candidate")), \
              patch.object(renderer, "category_signatures", side_effect=lambda: events.append("identity") or {"grassland": "current"}), \
              patch.object(renderer, "native_render", return_value={}), patch("builtins.print"):

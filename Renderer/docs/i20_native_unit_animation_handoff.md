@@ -93,7 +93,7 @@ nine stack arguments, including its legacy draw argument and effective palette.
 The three GOG rows are already inleads in `civ_prog_objects.csv`.
 Their exact current signatures and other-build limitations belong in
 `civ3_patch_dependency_ledger.md`. Steam/PCGames addresses remain unverified;
-zero is not a patch address. No CSV edit is requested for the Lab migration.
+zero is not a patch address. No CSV edit is requested for the Lab workflow.
 
 ## Verification and limits
 
@@ -106,8 +106,8 @@ color-key, RGB555/RGB565, input-guard and unit-shadow checks cover their separat
 DLL responsibilities.
 
 Run category checks through `python3 Renderer/renderer.py test units`;
-integration verification adds delivery behavior checks. The nine-family native
+current-code integration adds delivery behavior checks. The nine-family native
 matrix is not the full 78-unit roster, and neither it nor source-payload parity
-proves a live Civ III session. Approval and integration status live in the
-category catalog and `Renderer/integration/status.json`, not old campaign
-reports. Only an actual game check can record a new integrated revision.
+proves a live Civ III session. The category catalog describes current scope;
+fixed references and disposable receipts are not release status. Only an actual
+game check can establish observed in-game behavior.

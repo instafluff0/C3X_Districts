@@ -185,7 +185,9 @@ class UnitAnimationRuntimeTests(unittest.TestCase):
             "maximum_position_error_tiles": maximum_error, "payload_bytes": exported["payload_bytes"],
             "scope": "actual portable DLL evaluator versus raw authored clips; source-payload proof; live gameplay behavior is a separate checkpoint"}
         prefix = "roster/" if os.environ.get("C3X_UNIT_TEST_PACK") else ""
-        (ROOT/f"Renderer/verification/animation/{prefix}unit-payloads-{self.backend}.json").write_text(json.dumps(report, indent=2)+"\n")
+        output = ROOT/f"Renderer/lab/out/verification/animation/{prefix}unit-payloads-{self.backend}.json"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2)+"\n")
         print(json.dumps(report))
 
     def test_parent_scene_horse_clips_apply_cart_translation_once(self):
@@ -229,7 +231,9 @@ class UnitAnimationRuntimeTests(unittest.TestCase):
                             self.assertAlmostEqual(vertex[axis],position,places=5)
                     samples+=1
         self.assertGreater(samples,0)
-        (ROOT/'Renderer/verification/animation/roster/parent-scene-reference.json').write_text(json.dumps(
+        output = ROOT/'Renderer/lab/out/verification/animation/roster/parent-scene-reference.json'
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(
             {'status':'pass','part_pose_samples':samples,'contract':'paired horse clips contain one copy of parent scene translation'},indent=2)+'\n')
         print(f"parent-scene source reference: {samples} part poses passed")
 

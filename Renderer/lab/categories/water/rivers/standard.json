@@ -1,9 +1,6 @@
 {
   "id": "rivers",
   "title": "Rivers",
-  "revision": 1,
-  "approved_revision": 1,
-  "approval": "Renderer/lab/baseline.json",
   "depends_on": [
     "day-night",
     "shadows",
@@ -39,7 +36,7 @@
   "references": {
     "d3d11": [
       {
-        "image": "Renderer/lab/references/rivers/r1/detail/detail-h12-z128.bmp",
+        "image": "Renderer/lab/references/rivers/approved/detail/detail-h12-z128.bmp",
         "sha256": "337b0f5347b71d8b0e5c066d35c40decc302502547312dcff007fd513ea0e33b",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "detail",
@@ -49,7 +46,7 @@
         "fixture": "synthetic"
       },
       {
-        "image": "Renderer/lab/references/rivers/r1/gameplay/gameplay-h12-z128.bmp",
+        "image": "Renderer/lab/references/rivers/approved/gameplay/gameplay-h12-z128.bmp",
         "sha256": "a92a446024104773e870cbec303f7da9b531a4aa8790b5778caebab99f0c898e",
         "dll_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128",
         "case": "gameplay",
@@ -60,16 +57,7 @@
       }
     ]
   },
-  "candidate": {
-    "render": "Renderer/lab/out/rivers/render.json",
-    "implementation_identity": "53ce651b9175dcc336041cd402e40f44d74ee52600676209583e1ea727dd4aa8"
-  },
   "limitations": [
-    "Accepted current production behavior; category reference capture and Mac parity are still in progress."
-  ],
-  "reviewed_inputs": {
-    "revision": 1,
-    "signature": "aa167c93fbd984d9be4edb34c8534b7589cc114d6a5a48b23cd0b6429471ecd3",
-    "basis": "exact_approved_reference_comparison"
-  }
+    "Current diagnostic previews use the production D3D11 renderer."
+  ]
 }

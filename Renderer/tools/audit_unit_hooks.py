@@ -75,8 +75,9 @@ def audit(path, csv_path=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, default=Path("Renderer/native/build/unit-audit-original.exe"))
-    parser.add_argument("--output", type=Path, default=Path("Renderer/verification/animation/unit-hook-audit.json"))
+    parser.add_argument("--output", type=Path, default=Path("Renderer/lab/out/verification/animation/unit-hook-audit.json"))
     args = parser.parse_args()
     result = audit(args.executable)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2)+"\n")
     print(json.dumps(result))

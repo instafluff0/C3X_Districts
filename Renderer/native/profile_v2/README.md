@@ -1,9 +1,8 @@
 # Production terrain helpers
 
-The active visual baseline is the current `city-fidelity` build, recorded in
-`Renderer/lab/baseline.json`. This directory contains reusable terrain,
-coastline, relief, shadow and compositing helpers; its older pickup name is not
-a separate development workflow. Use `Renderer/renderer.py`.
+The current C3X checkout is authoritative. This directory contains reusable
+terrain, coastline, relief, shadow and compositing helpers; its older pickup
+name is not a separate development workflow. Use `Renderer/renderer.py`.
 
 ## Current implementation map
 
@@ -75,21 +74,20 @@ python3 Renderer/renderer.py build
 python3 Renderer/renderer.py test grassland
 python3 Renderer/renderer.py lab grassland
 python3 Renderer/renderer.py compare grassland
-python3 Renderer/renderer.py integration verify grassland
+python3 Renderer/renderer.py integration grassland
 ```
 
-These commands do not install, stage or launch Civ III. Build writes the candidate,
-not the accepted binary. Technical passes are not new visual approval.
+These commands do not install, stage or launch Civ III. Build writes the
+candidate, not the production binary. Technical passes are not visual approval.
 `verify_d3d11.cpp` retains focused hardware checks for source cutouts, shadow-page
 reuse/invalidation, MSAA and linear transfer. The older `verify_native.py`
-contains additional minimap/default-logging probes still awaiting migration into
-the common interface; its explicit `pickup-r1` runs are not current-profile proof.
+contains optional standalone minimap/default-logging diagnostics; its explicit
+`pickup-r1` runs are not current-profile proof or category-workflow gates.
 
-The current baseline's edit-reuse witness rebuilds all visible tiles and fails
+The current edit-reuse witness rebuilds all visible tiles and fails
 its reuse assertion; do not replace that finding with earlier-profile passes.
-Cold preparation remains noticeable. Analytic dunes are not recovered source
-geometry, volcano BC5 semantics remain unresolved, and historical screenshots or
-timings do not establish current game parity. See `lab/MIGRATION.md` for remaining
-work, `docs/civ3_patch_dependency_ledger.md` for patch needs, and the preserved
-`docs/visual_fidelity_playbook.md` for graphics guidance. Wonders and Districts
-remain deferred.
+Analytic dunes are not recovered source geometry, volcano BC5 semantics remain
+unresolved, and historical screenshots or timings do not establish current game
+parity. See `docs/civ3_patch_dependency_ledger.md` for patch needs and the
+preserved `docs/visual_fidelity_playbook.md` for graphics guidance. Wonders and
+Districts remain deferred.

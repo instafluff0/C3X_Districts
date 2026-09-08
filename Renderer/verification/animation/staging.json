@@ -1,8 +1,0 @@
-{
-  "command": "copy /y \"build\\candidate\\C3XRenderer.dll\" \"..\\bin\\C3XRenderer.dll\"",
-  "host": "Windows 11",
-  "status": "pass",
-  "returncode": 0,
-  "started_utc": "2026-09-07T16:09:50.265097+00:00",
-  "output_tail": "        1 file(s) copied.\n"
-}
