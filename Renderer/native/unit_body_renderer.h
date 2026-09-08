@@ -47,7 +47,9 @@ public:
         cache_hit=false;keyed_pixels=cast_pixels=0;failure_reason="invalid-request-or-device";
         if(!device || !context || request.struct_size!=sizeof(request) ||
            request.unit_key[63]!=0 || request.hour<0 || request.hour>23 ||
-           (request.reduced!=0 && request.reduced!=1))return false;
+           (request.reduced!=0 && request.reduced!=1) ||
+           (request.projection_scale_milli!=0 &&
+            (request.projection_scale_milli<250 || request.projection_scale_milli>2000)))return false;
         auto found=std::find_if(units.begin(),units.end(),[&](Unit const& unit){
             return std::find(unit.keys.begin(),unit.keys.end(),request.unit_key)!=unit.keys.end();});
         auto name=native_unit_action(request.action);
@@ -61,6 +63,7 @@ public:
         draw.action_cursor=request.action_cursor;draw.frame_count=request.frame_count;
         draw.body_x=request.body_x;draw.body_y=request.body_y;
         draw.sprite_width=request.sprite_width;draw.sprite_height=request.sprite_height;draw.reduced=request.reduced!=0;
+        draw.projection_scale_milli=request.projection_scale_milli;
         UnitAnimationPose pose;
         failure_reason="invalid-native-pose";
         if(!prepare_native_unit_pose(draw,action->loop,pose))return false;
@@ -76,12 +79,13 @@ public:
             pose_frames=int(action->frames);
             pose.phase=double(pose_cursor)/(action->frames-1);
         }
-        int w=request.sprite_width/(draw.reduced?2:1),h=request.sprite_height/(draw.reduced?2:1);
+        int scale_milli=request.projection_scale_milli>0?request.projection_scale_milli:(draw.reduced?500:1000);
+        int w=request.sprite_width*scale_milli/1000,h=request.sprite_height*scale_milli/1000;
         if(w<1 || h<1 || w>512 || h>512)return false;
         // Placement and identity are deliberately absent: the same posed body
         // can be reused at a different native anchor or wrapped occurrence.
         Key key={unsigned(found-units.begin()),int(action-found->actions.begin()),request.direction,
-            pose_cursor,pose_frames,w,h,request.reduced,request.hour,request.season,request.display_color_rgb};
+            pose_cursor,pose_frames,w,h,scale_milli,request.hour,request.season,request.display_color_rgb};
         for(auto & saved:cache)if(saved.key==key) {
             saved.used=++serial; pixels=saved.pixels;image_width=w;image_height=h;cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";return true;
         }
@@ -299,9 +303,9 @@ public:
 
 private:
     struct Key {
-        unsigned unit;int action,direction,cursor,frames,width,height,reduced,hour,season;unsigned color;
+        unsigned unit;int action,direction,cursor,frames,width,height,scale_milli,hour,season;unsigned color;
         bool operator==(Key const& b) const {return unit==b.unit && action==b.action && direction==b.direction &&
-            cursor==b.cursor && frames==b.frames && width==b.width && height==b.height && reduced==b.reduced && hour==b.hour && season==b.season && color==b.color;}
+            cursor==b.cursor && frames==b.frames && width==b.width && height==b.height && scale_milli==b.scale_milli && hour==b.hour && season==b.season && color==b.color;}
     };
     struct Cached {Key key;std::uint64_t used;std::vector<std::uint32_t> pixels;unsigned cast_pixels;};
     std::vector<Cached> cache;std::uint64_t serial=0;

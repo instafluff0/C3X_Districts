@@ -123,6 +123,13 @@ int main(int argc, char ** argv) {
     assert(prepare_native_unit_pose(draw, true, pose));
     assert(pose.anchor_x == draw.body_x+32 && pose.anchor_y == draw.body_y+31);
     assert(pose.projection_scale == .5f);
+    draw.projection_scale_milli = 625;
+    assert(prepare_native_unit_pose(draw, true, pose));
+    assert(pose.anchor_x == draw.body_x+40 && pose.anchor_y == draw.body_y+39);
+    assert(pose.projection_scale == .625f);
+    draw.projection_scale_milli = 249;
+    assert(!prepare_native_unit_pose(draw, true, pose));
+    draw.projection_scale_milli = 625;
     draw.action = 6; draw.action_cursor = 999;
     assert(prepare_native_unit_pose(draw, false, pose));
     assert(pose.phase == 1 && std::strcmp(pose.action, "death") == 0);

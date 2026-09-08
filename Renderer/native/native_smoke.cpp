@@ -654,16 +654,17 @@ int main(int argc, char ** argv) {
         approved_frame.world_height_tiles = 80;
         approved_frame.world_wrap_x = 0;
         approved_frame.visible_animation_count = 0;
-        std::uint64_t zoom_hashes[2] = {};
-        int zoom_widths[2] = {128, 64};
-        int zoom_heights[2] = {64, 32};
+        std::uint64_t zoom_hashes[5] = {};
+        int zoom_widths[5] = {128, 112, 96, 80, 64};
+        int zoom_heights[5] = {64, 56, 48, 40, 32};
         c3x_renderer_output_v1 approved_output = {
             C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
-        for (int zoom = 0; zoom < 2; ++zoom) {
+        for (int zoom = 0; zoom < static_cast<int>(std::size(zoom_widths)); ++zoom) {
             approved_frame.tile_width = zoom_widths[zoom];
             approved_frame.tile_height = zoom_heights[zoom];
             for (std::size_t index = 0; index < std::size(approved_tiles); ++index) {
-                approved_tiles[index].anchor_x = 16 + static_cast<int>(index) * (zoom == 0 ? 64 : 44);
+                approved_tiles[index].anchor_x =
+                    16 + static_cast<int>(index) * zoom_widths[zoom] / 2;
                 approved_tiles[index].anchor_y = 24 + static_cast<int>(index & 1u) * zoom_heights[zoom];
             }
             approved_output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
@@ -784,8 +785,9 @@ int main(int argc, char ** argv) {
                 approved_output.frame_invalidation_flags != 0)
                 return fail("approved L9-L18 static zoom fixture was not exact and idle");
         }
-        if (zoom_hashes[0] == zoom_hashes[1])
-            return fail("approved L9-L18 zoom fixtures were not distinct");
+        for (int zoom = 1; zoom < static_cast<int>(std::size(zoom_hashes)); ++zoom)
+            if (zoom_hashes[zoom - 1] == zoom_hashes[zoom])
+                return fail("approved L9-L18 adjacent zoom fixtures were not distinct");
 
         // A terrain owner change is cache-relevant, while unit overlays are
         // not.  Reset must rebuild D3D resources from the same

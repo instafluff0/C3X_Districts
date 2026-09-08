@@ -12,7 +12,7 @@
     },
     {
       "path": "generated/shaders/hydrology/scene_material_v1.hlsl",
-      "sha256": "c0c5481050628d1bd0b9b8f9d3a2902abe52876ce5debd6fa1299eb7d4466952"
+      "sha256": "8ede6fb96cecea7af957b78f923eaa03262db78608bc7ce06c2a52685fbd34c8"
     },
     {
       "path": "generated/shaders/hydrology/water_effects.hlsl",
@@ -60,11 +60,11 @@
     },
     {
       "path": "generated/shaders/relief/beauty_mountain.hlsl",
-      "sha256": "0d6092b8ea5fc783a888b9b7dd3639c9d43c71bc20108365726e118d8bcfca59"
+      "sha256": "171e41ce7b9cc293f04362636266dbe7a493f1f2f9075bfa96de088c0e5fc286"
     },
     {
       "path": "generated/shaders/relief/beauty_terrain.hlsl",
-      "sha256": "5b3f8069d35f0e73d81a3d21421f6eccfe36ad0aa214a01ec7c65ac54e6ab401"
+      "sha256": "50a66fb58502d77b349f743a3196363b2653f3160d4bd5524a8ceb7149c0ec5d"
     },
     {
       "path": "generated/shaders/relief/coast_rocks.hlsl",
@@ -100,7 +100,7 @@
     },
     {
       "path": "hydrology.hlsl",
-      "sha256": "9b298e7d219b18083d17be603f1fdbdbf087a01a770edc821bc11bdf1828e971"
+      "sha256": "ab4e6642fc22c952c57049cd9e20850477c83713552be74ed8be2ca8409d83b5"
     }
   ]
 }

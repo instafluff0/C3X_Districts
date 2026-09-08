@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 15u
+#define C3X_RENDERER_API_VERSION 16u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -98,6 +98,9 @@ struct c3x_renderer_unit_v1 {
     c3x_renderer_i32 unit_id, action, queued_action, direction;
     c3x_renderer_i32 action_cursor, frame_count;
     c3x_renderer_i32 body_x, body_y, sprite_width, sprite_height, reduced;
+    // Thousandths of full-size Civ III unit projection. Zero retains the
+    // legacy normal/reduced interpretation for standalone callers.
+    c3x_renderer_i32 projection_scale_milli;
     c3x_renderer_i32 hour, season;
     c3x_renderer_u32 display_color_rgb;
     c3x_renderer_i64 presentation_time_ticks, presentation_frequency;

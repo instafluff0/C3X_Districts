@@ -15,6 +15,7 @@ struct NativeUnitDraw {
     int action_cursor = 0, frame_count = 0;
     int body_x = 0, body_y = 0, sprite_width = 0, sprite_height = 0;
     bool reduced = false;
+    int projection_scale_milli = 0;
 };
 
 struct UnitAnimationPose {
@@ -60,9 +61,11 @@ inline bool prepare_native_unit_pose(NativeUnitDraw const & draw, bool clip_loop
     // Reconstruct the exact center used by Unit::tick_anim. In particular, odd
     // reduced dimensions use Width/4, not round(Width/2)*0.5. Offscreen anchors
     // are legitimate; checked wide arithmetic avoids overflow on bad captures.
-    int divisor = draw.reduced ? 4 : 2;
-    auto x = std::int64_t(draw.body_x)+draw.sprite_width/divisor;
-    auto y = std::int64_t(draw.body_y)+draw.sprite_height/divisor;
+    int scale_milli = draw.projection_scale_milli > 0 ? draw.projection_scale_milli :
+        (draw.reduced ? 500 : 1000);
+    if (scale_milli < 250 || scale_milli > 2000) return false;
+    auto x = std::int64_t(draw.body_x)+std::int64_t(draw.sprite_width)*scale_milli/2000;
+    auto y = std::int64_t(draw.body_y)+std::int64_t(draw.sprite_height)*scale_milli/2000;
     if (x < INT32_MIN || x > INT32_MAX || y < INT32_MIN || y > INT32_MAX) return false;
     UnitAnimationPose pose;
     pose.action = action;
@@ -73,7 +76,7 @@ inline bool prepare_native_unit_pose(NativeUnitDraw const & draw, bool clip_loop
         (draw.frame_count == 1 ? 1.0 : double(std::min(draw.action_cursor, draw.frame_count-1))/(draw.frame_count-1));
     pose.anchor_x = static_cast<int>(x); pose.anchor_y = static_cast<int>(y);
     pose.direction = draw.direction;
-    pose.projection_scale = draw.reduced ? 0.5f : 1.0f;
+    pose.projection_scale = float(scale_milli)/1000;
     output = pose;
     return true;
 }

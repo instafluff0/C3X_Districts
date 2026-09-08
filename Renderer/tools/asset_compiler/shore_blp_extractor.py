@@ -13,8 +13,9 @@ import argparse
 import json
 import struct
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from Renderer.tools.asset_compiler.clutter_blp_extractor import (
@@ -29,6 +30,10 @@ from Renderer.tools.asset_compiler.grassland_pack_builder import validate_runtim
 RENDERER_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PACK = RENDERER_ROOT / "packs" / "ShoreNormalized"
 DEFAULT_REPORT = RENDERER_ROOT / "preview" / "out" / "shore" / "shore_build.json"
+CLIFF_ARTDEF_GROUPS = {
+    "cliff_large": "CLUTTER_CLIFF",
+    "cliff_small": "CLUTTER_CLIFF_SMALL",
+}
 
 
 def feature_spec(
@@ -62,7 +67,7 @@ SHORE_SPECS = tuple(
             f"cliff_small_{index:02d}",
             "cliff_small",
         )
-        for index in range(1, 3)
+        for index in range(1, 5)
     ]
     + [
         feature_spec(
@@ -87,18 +92,7 @@ SHORE_SPECS = tuple(
 )
 
 
-# These two source candidates reach the proven mesh decoder, but contain
-# zero-area indexed triangles.  Keep the strict validator and record the
-# bounded omission instead of silently repairing licensed source geometry.
 SOURCE_EXCLUSIONS = (
-    {
-        "source_name": "TER_Cliffs_RockSmall03",
-        "reason": "strict normalization rejected a degenerate indexed triangle",
-    },
-    {
-        "source_name": "TER_Cliffs_RockSmall04",
-        "reason": "strict normalization rejected a degenerate indexed triangle",
-    },
     *(
         {
             "source_name": f"TER_Coast_Decal{index:02d}",
@@ -141,19 +135,115 @@ def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _artdef_value(value: ET.Element) -> Optional[str]:
+    child = next((child for child in value if child.tag != "m_ParamName"), None)
+    return None if child is None else child.attrib.get("text", child.text)
+
+
+def read_cliff_artdef(path: Path) -> dict[str, dict[str, Any]]:
+    """Preserve the source cliff clutter controls under generic asset ids."""
+    root = ET.parse(path).getroot()
+    source_to_asset = {spec["source_name"]: spec["manifest_key"] for spec in SHORE_SPECS}
+    result: dict[str, dict[str, Any]] = {}
+    for group, set_name in CLIFF_ARTDEF_GROUPS.items():
+        matches = [
+            element
+            for element in root.iter("Element")
+            if element.find("m_Name") is not None
+            and element.find("m_Name").attrib.get("text") == set_name
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"Expected one ArtDef clutter set {set_name}, found {len(matches)}")
+        owner = matches[0]
+        values = {}
+        for value in owner.findall("./m_Fields/m_Values/Element"):
+            parameter = value.find("m_ParamName")
+            if parameter is not None:
+                values[parameter.attrib["text"]] = _artdef_value(value)
+        plants = [
+            collection
+            for collection in owner.findall("./m_ChildCollections/Element")
+            if collection.find("m_CollectionName") is not None
+            and collection.find("m_CollectionName").attrib.get("text") == "Plants"
+        ]
+        if len(plants) != 1:
+            raise ValueError(f"Expected one Plants collection in {set_name}")
+        placements = []
+        for item in plants[0].findall("Element"):
+            item_values = {}
+            for value in item.findall("./m_Fields/m_Values/Element"):
+                parameter = value.find("m_ParamName")
+                if parameter is not None:
+                    item_values[parameter.attrib["text"]] = _artdef_value(value)
+            source_asset = item_values.get("Asset")
+            if source_asset not in source_to_asset:
+                continue
+            placements.append(
+                {
+                    "asset": source_to_asset[source_asset],
+                    "scale": float(item_values["Scale"]),
+                    "count": int(item_values["Count"]),
+                    "scale_variation": float(item_values["ScaleVariation"]),
+                    "low_end_reduction": float(item_values.get("LowendReduction", 0.0)),
+                    "show_decal": item_values.get("ShowDecal", "false").lower() == "true",
+                    "priority": int(item_values.get("Priority", 0)),
+                    "width": float(item_values.get("Width", 0.0)),
+                    "rotate_mode": item_values.get("RotateMode", "RotateZ"),
+                    "is_center_model": item_values.get("IsCenterModel", "false").lower() == "true",
+                    "allow_overlap": item_values.get("AllowOverlap", "false").lower() == "true",
+                    "min_count": int(item_values.get("MinCount", 0)),
+                }
+            )
+        result[group] = {
+            "controls": {
+                "edge_falloff": float(values["EdgeFalloff"]),
+                "clip_low": float(values["ClipLow"]),
+                "clip_high": float(values["ClipHigh"]),
+                "fixed_height": float(values["FixedHeight"]),
+                "clip_river": values["ClipRiver"].lower() == "true",
+                "clip_buildings": values["ClipBuildings"].lower() == "true",
+                "clip_coastline": values["ClipCoastline"].lower() == "true",
+                "terrain_height": values["TerrainHeight"].lower() == "true",
+                "clip_sloped": values["ClipSloped"].lower() == "true",
+                "density": float(values["Density"]),
+                "mode": values["Mode"],
+            },
+            "placements": placements,
+        }
+    return result
+
+
 def build_shore_pack(
-    package_path: Path, shared_data: Path, pack: Path, report_path: Path
+    package_path: Path,
+    shared_data: Path,
+    pack: Path,
+    report_path: Path,
+    artdef_path: Optional[Path] = None,
 ) -> dict[str, Any]:
     package = StaticPackage(package_path, SHORE_SPECS[0]["source_name"])
     assets: dict[str, dict[str, Any]] = {}
     reports = []
     feature_groups: dict[str, list[str]] = {}
     for spec in SHORE_SPECS:
-        manifest_asset, report = build_feature(package, shared_data, pack, spec)
+        manifest_asset, report = build_feature(
+            package,
+            shared_data,
+            pack,
+            spec,
+            use_authored_normals=spec["group"] in {"cliff_large", "cliff_small"},
+            # The two final small cliff bodies contain source-authored
+            # zero-area triangles. D3D discards them; remove only those
+            # triangles while retaining every usable source vertex and UV.
+            drop_degenerate_triangles=spec["source_name"] in {
+                "TER_Cliffs_RockSmall03",
+                "TER_Cliffs_RockSmall04",
+            },
+        )
         assets[spec["manifest_key"]] = manifest_asset
         feature_groups.setdefault(spec["group"], []).append(spec["manifest_key"])
         reports.append(report)
 
+    artdef_groups = read_cliff_artdef(artdef_path) if artdef_path is not None else {}
     manifest = {
         "schema": "c3x.asset_pack.v0",
         "name": "ShoreNormalized",
@@ -171,9 +261,10 @@ def build_shore_pack(
                 "variants": variants,
                 "status": (
                     "complete_verified_set"
-                    if group in {"cliff_large", "polar_ice"}
+                    if group in {"cliff_large", "cliff_small", "polar_ice"}
                     else "verified_subset"
                 ),
+                **artdef_groups.get(group, {}),
             }
             for group, variants in feature_groups.items()
         },
@@ -208,11 +299,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--package", type=Path, default=root / "environment" / "clutter.blp")
     parser.add_argument("--shared-data", type=Path, default=root / "SHARED_DATA")
+    parser.add_argument(
+        "--artdef",
+        type=Path,
+        default=root.parents[2] / "ArtDefs" / "Clutter.artdef",
+    )
     parser.add_argument("--pack", type=Path, default=DEFAULT_PACK)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     args = parser.parse_args(argv)
     try:
-        report = build_shore_pack(args.package, args.shared_data, args.pack, args.report)
+        report = build_shore_pack(
+            args.package, args.shared_data, args.pack, args.report, args.artdef
+        )
     except (OSError, ValueError, struct.error) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

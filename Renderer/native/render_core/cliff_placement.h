@@ -15,7 +15,9 @@ struct CliffPlacement {
 // Retained joined-source placement. The greedy spacing order is canonical
 // world-cell order instead of fixture-crop order. Recursive earlier-neighbor
 // evaluation gives the same result regardless of which tile is requested first.
-// Only the connected .18-tile exclusion neighborhood is consulted.
+// Only the connected .13-tile exclusion neighborhood is consulted. The four
+// large source bodies establish the cliff line; the four authored small bodies
+// dress its foot and top instead of synthesizing replacement rock geometry.
 template<class Lookup,class Index,class Height,class Shore,class Maximum,class Contour>
 auto cliff_placements(World world,int owner_c,int owner_r,Lookup lookup,
                       Index index,Height height,Shore shore,Maximum maximum,Contour contour,
@@ -55,9 +57,14 @@ auto cliff_placements(World world,int owner_c,int owner_r,Lookup lookup,
                     auto& a=out.placement;a.asset=seed%4;
                     double high=maximum(a.asset);
                     if(high>0) {
-                        a.scale=std::clamp((top+.24)/high,.48,.70);
-                        a.yaw=std::atan2(ny,nx)+(hash(seed^9347u)&0xffffffu)/16777215.*2.4;
-                        a.z=top-high*a.scale-.015;a.eligible=true;
+                        double variation=(hash(seed^2179u)&0xffffffu)/16777215.;
+                        a.scale=.29+variation*.07;
+                        a.yaw=std::atan2(ny,nx)+
+                            (hash(seed^9347u)&0xffffffu)/16777215.*6.283185307179586;
+                        // Keep nearly the full authored body visible. The old
+                        // placement buried its peak at the terrain surface,
+                        // reducing each source mesh to a rounded cap.
+                        a.z=std::max(.012,top-high*a.scale*.92);a.eligible=true;
                     }
                 }
             }
@@ -75,7 +82,7 @@ auto cliff_placements(World world,int owner_c,int owner_r,Lookup lookup,
             for(int n=0;n<int(count) && result;n++) {
                 Candidate b=candidate(c,r,n);
                 Point d=a.placement.position-b.placement.position;
-                if(b.rank<a.rank && dot(d,d)<.18*.18 && accepted(b,depth+1))result=false;
+                if(b.rank<a.rank && dot(d,d)<.13*.13 && accepted(b,depth+1))result=false;
             }
         }
         decisions[a.rank]=result;return result;
@@ -88,8 +95,31 @@ auto cliff_placements(World world,int owner_c,int owner_r,Lookup lookup,
             if(int(std::floor(p.x))!=owner_c || int(std::floor(p.y))!=owner_r || !accepted(a,0))continue;
             double nx=shore(p.x+.01,p.y)-shore(p.x-.01,p.y);
             double ny=shore(p.x,p.y+.01)-shore(p.x,p.y-.01),length=std::hypot(nx,ny);
-            a.placement.position=a.placement.position+Point{nx/length,ny/length}*.02;
+            nx/=length;ny/=length;
+            Point tangent{-ny,nx};
+            unsigned seed=hash(unsigned(a.rank)^0x7f4a7c15u);
+            a.placement.position=a.placement.position-Point{nx,ny}*.035;
             result.push_back(a.placement);
+
+            double top=(height(p.x+nx*.26,p.y+ny*.26)+2.5)/112.;
+            auto append_detail=[&](unsigned salt,bool upper) {
+                CliffPlacement detail;
+                unsigned detail_seed=hash(seed^salt);
+                detail.asset=4+detail_seed%4;
+                double high=maximum(detail.asset);
+                if(high<=0)return;
+                detail.scale=.31+
+                    (hash(detail_seed^0x27d4eb2du)&0xffffffu)/16777215.*.12;
+                detail.yaw=std::atan2(ny,nx)+
+                    (hash(detail_seed^0x165667b1u)&0xffffffu)/16777215.*6.283185307179586;
+                double along=((hash(detail_seed^0xd3a2646cu)&0xffffffu)/16777215.-.5)*.14;
+                detail.position=p+tangent*along+
+                    Point{nx,ny}*(upper?.055:-.085);
+                detail.z=upper?std::max(.012,top-high*detail.scale*.62):.012;
+                detail.eligible=true;result.push_back(detail);
+            };
+            append_detail(0x9e3779b9u,false);
+            if((hash(seed^0x85ebca6bu)&3u)!=0)append_detail(0xc2b2ae35u,true);
         }
     }
     return result;

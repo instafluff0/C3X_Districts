@@ -3,11 +3,11 @@
   "reflection": "water-reflection-r5",
   "source_sha256": {
     "Renderer/lab/shared/shaders/hydrology/water_natural.hlsl": "c4c06202ff609c3f473cd35faaff7f3250bc727c8849ef51b60e82488e572dc0",
-    "Renderer/native/source_fidelity/hydrology.hlsl": "9b298e7d219b18083d17be603f1fdbdbf087a01a770edc821bc11bdf1828e971",
+    "Renderer/native/source_fidelity/hydrology.hlsl": "ab4e6642fc22c952c57049cd9e20850477c83713552be74ed8be2ca8409d83b5",
     "Renderer/native/render_core/terrain_scene.hlsl": "2a5f7e8550f3964b255d34e54f8f6bd4daaff1907715ea44f11a38591ec90067",
-    "Renderer/native/source_fidelity/terrain.hlsl": "cf8ec072c043b5f830786dcb4f810e81c36470dc33b762aff3cb0151c544a1cb",
-    "Renderer/native/source_fidelity/mountain.hlsl": "01dcda7faec35656e9780fc678c31a29fa1e45f51b629f3d0fbaa82e5705378e",
+    "Renderer/native/source_fidelity/terrain.hlsl": "576284985362fa64346067bffd4b57a4a0007f5aa64edc55ddbca742718b7fa9",
+    "Renderer/native/source_fidelity/mountain.hlsl": "636ff7618b67392bf15d37ed422eab542cb5be9267f670f69bd8f3d8bb1306a8",
     "Renderer/native/source_fidelity/objects.hlsl": "92d28d19643b27f59fa2472fbb3e17fb92e79a8ff8cfba16ee49f440f70d05a4",
-    "Renderer/native/render_core/source_caster.hlsl": "f103da3c1bcbdfd2e9e3622c9ce6a7464cf28c3713e7df1dfdb48fef83bb3c36"
+    "Renderer/native/render_core/source_caster.hlsl": "a8c0acb26a60b2cf97fd9c02b6ac51e9848bf15f4060568df89c9e93b5d3ac41"
   }
 }

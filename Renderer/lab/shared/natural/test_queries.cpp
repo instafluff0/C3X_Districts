@@ -104,7 +104,8 @@ Report original(WorldCoast const& world_coast,ExactPointCache<ShoreSample>& shor
     };
     auto height=[&](float x,float y,float* support) {
         auto shore=shore_sample_at(x,y);
-        float h=std::max(natural.height(x,y,lookup_natural,support),2.5f+pickup(x,y));
+        float h=natural.height(x,y,lookup_natural,support);
+        h=std::max(h,2.5f+pickup(x,y));
         return 2.5f+(h-2.5f)*c3x_renderer::fidelity::coast_relief(float(shore.distance),float(shore.beach_width));
     };
     exercise(result,shore_center_u,shore_center_v,world_lookup,shore_sample_at,weights,height);
@@ -127,6 +128,7 @@ int main() {
     NaturalData natural;
     natural.fields.resize(1);auto& f=natural.fields[0];f.width=f.height=8;
     for(unsigned i=0;i<64;i++)f.pixels.push_back(std::uint8_t(i*4));
+    natural.terrain[30]=0;
     unsigned scopes=0,samples=0;
     for(unsigned wraps=0;wraps<3;wraps++) {
         World world{16,16,wraps>0,wraps>1};WorldCoast coast;

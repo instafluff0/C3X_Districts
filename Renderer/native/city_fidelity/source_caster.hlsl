@@ -90,7 +90,7 @@ float PSCutout(Pixel i):SV_TARGET {
   // Mountain vertices retain their caster discriminator while carrying the
   // same coast/source-family coverage as the visible premultiplied pass.
   clip(i.material-42-.001);
-  clip(smoothstep(.08,.72,i.coverage)-.32);return i.depth;
+  clip(smoothstep(.08,.72,i.coverage)-.45);return i.depth;
  }
  if(i.material>=40) {
   uint w,h;natural_opacity.GetDimensions(w,h);

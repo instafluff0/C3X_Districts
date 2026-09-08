@@ -539,6 +539,8 @@ int main() {
             "river_base_color.dds", "river_height.dds", "river_specular.dds",
             "river_lean0.dds", "river_lean1.dds", "river_bank_noise",
             "shore_runtime.bin", 'find_feature_group(river_rock_bundle, "river_rock")',
+            "cliff_runtime.bin", 'find_feature_group(cliff_bundle, "cliff_large")',
+            'find_feature_group(cliff_bundle, "cliff_small")',
         ):
             self.assertIn(asset, renderer)
         self.assertIn("tile.river_code", runtime)
@@ -1028,7 +1030,7 @@ int main() {
         self.assertIn("water_foam_texture : register(t24)", shader)
         self.assertIn("DXGI_FORMAT_R16G16B16A16_UNORM", native)
         self.assertIn("c3x_renderer_i32 clip_left", api)
-        self.assertIn("#define C3X_RENDERER_API_VERSION 15u", api)
+        self.assertIn("#define C3X_RENDERER_API_VERSION 16u", api)
         self.assertIn("DXGI_FORMAT_R16G16_UNORM", native)
         self.assertIn("float2 combined_lean =", shader)
         self.assertIn("water_foam_texture.Sample", shader)

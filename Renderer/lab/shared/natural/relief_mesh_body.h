@@ -57,7 +57,11 @@
                 float h=natural.fields[piece.height_field].sample(u,v);
                 float blend=natural.fields[piece.blend_field].sample(u,v);
                 float shaped=piece.connected?std::pow(std::max(0.f,h),.80f):h;
-                float displacement=shaped*piece.height_scale*smooth01((blend-.10f)/.30f);
+                // Keep the outer authored footprint flat and terrain-colored,
+                // then raise the mountain within its actual rocky body. The
+                // former early ramp made low-slope ground into a circular berm
+                // whose normals and contact shadow remained visible as a lip.
+                float displacement=shaped*piece.height_scale*smooth01((blend-.28f)/.34f);
                 if(displacement>result.dominant){
                     result.dominant=displacement;result.height=h;result.u=u;result.v=v;
                 }
@@ -131,13 +135,15 @@
                         (surface_height[at+span]-surface_height[at-span])/(2*step*112),1};normalize3(n);
                     out.normal_x=n[0];out.normal_y=n[1];out.normal_z=n[2];out.u=sample.u;out.v=sample.v;
                     out.material_grass=sample.height;out.material_plains=2;out.material_desert=sample.blend;
-                    float coverage=coast_coverage(float(shore.distance),float(shore.beach_width));
                     auto weights=material_weights_for(world_x,world_y);
                     // Match the terrain provider's normalized source-family
                     // weights. Native marsh remains underneath at its boundary;
                     // the packed 42..43 range preserves the mountain caster tag
                     // while carrying the same coast coverage as the ground.
                     float source_weight=std::clamp(1-weights[3],0.f,1.f);
+                    float desert_weight=std::clamp(weights[2]/std::max(source_weight,.00001f),0.f,1.f);
+                    float coverage=coast_coverage(float(shore.distance),float(shore.beach_width))*(1-desert_weight)+
+                        desert_coast_coverage(float(shore.distance))*desert_weight;
                     for(auto&weight:weights)weight/=std::max(source_weight,.00001f);
                     out.material_marsh=weights[4];
                     out.authored_relief_height=weights[1];
@@ -148,7 +154,6 @@
             }
             for(unsigned y=0;y+1<count;y++)for(unsigned x=0;x+1<count;x++){
                 auto&a=grid[y*count+x];auto&b=grid[y*count+x+1];auto&c=grid[(y+1)*count+x+1];auto&d=grid[(y+1)*count+x];
-                if(std::max({a.material_desert,b.material_desert,c.material_desert,d.material_desert})<.015f)continue;
                 triangle(natural_vertices[2],a,b,c);triangle(natural_vertices[2],a,c,d);
             }
         }

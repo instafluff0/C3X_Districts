@@ -19,6 +19,16 @@ Existing map and unit boundaries remain unchanged:
 - `audit_candidates: []` for the current renderer work.
 - `required_user_action: []` for the current renderer work.
 
+Stepped custom zoom uses the existing `Main_Screen_Form_handle_key_down` inlead
+and consumes `Z` before Civ III's native two-level toggle. Existing
+`Main_Screen_Form_get_tile_coords_under_mouse`, left/right-click wrappers, hover
+wrapper and `Sprite_draw_on_map` inlead provide inverse input and native overlay
+placement. `audit_candidates: []`.
+
+The experimental `Main_Screen_Form_process_mouse_wheel` row is currently
+`ignore`, so it cannot install the abandoned wheel patch. It may remain ignored
+or be removed by the maintainer. `required_user_action: []`.
+
 The three GOG unit inleads below are already supplied; they are not outstanding
 requests. Other-build unit addresses remain unverified. The previously recorded
 three effects requests remain deferred and unchanged below; this cleanup does
@@ -32,6 +42,7 @@ Fog-edge work and wonders/Districts remain deferred.
 | Retained map lifecycle | `Map_Renderer_m71_Draw_Tiles` | `repl vptr`; bounded capture, reset and composite lifecycle |
 | Tile state and insertion | `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` | `repl vptr`; authoritative anchors, state, clips and exclusive custom map plane |
 | Native sprite census | `Sprite_draw_on_map` | `inlead`; not a unit-body boundary |
+| Main-map stepped zoom | `Main_Screen_Form_handle_key_down` | existing `inlead`; consumes `Z` while custom zoom is enabled |
 | Forest/jungle/swamp census | `Map_Renderer_m08_Draw_Tile_Forests_Jungle_Swamp` | `repl vptr` |
 | Resource census | `Map_Renderer_m09_Draw_Tile_Resources` | `repl vptr` |
 | Irrigation census | `Map_Renderer_m11_Draw_Tile_Irrigation` | `inlead` |

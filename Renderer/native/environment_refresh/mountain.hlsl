@@ -39,6 +39,7 @@ Texture2D GrassHillSpecular : register(t26);
 Texture2D PlainsHillColor : register(t27);
 Texture2D PlainsHillHeight : register(t28);
 Texture2D PlainsHillSpecular : register(t29);
+Texture2D GroundSurfaceDetail : register(t30);
 #endif
 #ifdef BEAUTY_COMPOSED_SHADOWS
 Texture2DArray ShadowField : register(t17);
@@ -165,6 +166,23 @@ float triplanar_scalar(Texture2D texture_map, float3 p, float3 n) {
     return triplanar(texture_map, p, n).r;
 }
 
+float3 triplanar_neighborhood(Texture2D texture_map, float3 p, float3 n) {
+    float3 weight = pow(abs(n), 5);
+    weight /= max(dot(weight, 1), 0.00001);
+    p *= Quality.y;
+    // The wider mip footprint estimates the local material neighborhood at
+    // the current viewing scale, rather than imposing a fixed texel size.
+    return texture_map.SampleBias(Wrap, p.yz, 3).rgb * weight.x +
+           texture_map.SampleBias(Wrap, p.xz, 3).rgb * weight.y +
+           texture_map.SampleBias(Wrap, p.xy, 3).rgb * weight.z;
+}
+
+float rock_crevice_visibility(float height, float neighborhood) {
+    // Valleys receive less fill; flat material and protrusions stay neutral.
+    // No altitude, compass direction, or light vector enters this response.
+    return 1 - 0.70 * saturate((neighborhood - height) * 12);
+}
+
 float macro_height_world(float2 world_xy) {
     float2 uv = world_xy / float2(3.20, 2.72) + 0.5;
     if (any(uv < 0) || any(uv > 1)) return 0;
@@ -194,13 +212,13 @@ float horizon_visibility(float3 world) {
     return lerp(1, visibility, Quality.w);
 }
 
-float3 detail_normal(float3 geometric, float3 world, float detail) {
+float3 detail_normal(float3 geometric, float3 world, float detail, float strength) {
     float3 dx = ddx(world), dy = ddy(world);
     float3 r1 = cross(dy, geometric), r2 = cross(geometric, dx);
     float determinant = dot(dx, r1);
     float3 gradient = (ddx(detail) * r1 + ddy(detail) * r2) *
         sign(determinant) / max(abs(determinant), 0.000001);
-    return normalize(geometric - gradient * Quality.z);
+    return normalize(geometric - gradient * strength);
 }
 
 float ggx(float3 n, float3 light, float3 view, float roughness, float f0) {
@@ -286,9 +304,14 @@ void ground_material(P input, out float3 albedo, out float height_detail,
     albedo = lerp(albedo, hill, hill_weight * 0.90);
     height_detail = lerp(height_detail, hill_h, hill_weight);
     specular_map = lerp(specular_map, hill_s, hill_weight);
-    float broad = AuthoredHillHeight.Sample(Wrap,
-        input.world.xy * 0.035 + float2(0.73, 0.21)).r;
-    albedo *= lerp(0.90, 1.08, broad);
+    // Match the ordinary terrain provider's world-space macro modulation so
+    // the unified relief patch is indistinguishable at its outer boundary.
+    float broad = GroundSurfaceDetail.Sample(Wrap,
+        input.world.xy * 0.071 + float2(0.13, 0.37)).r * 0.72;
+    broad += GroundSurfaceDetail.Sample(Wrap,
+        float2(input.world.y, -input.world.x) * 0.183 + float2(0.61, 0.29)).r * 0.28;
+    albedo *= lerp(float3(0.88, 0.94, 0.97),
+                   float3(1.09, 1.045, 0.91), saturate(broad));
 #else
     float2 uv = input.world.xy * 0.27 + 0.5;
     albedo = GrassColor.Sample(Wrap, uv).rgb;
@@ -308,8 +331,20 @@ Output shade(P input) {
     float3 geometric = normalize(input.normal);
     float3 albedo;
     float height_detail;
+    float rock_crevice = 1;
     float specular_map;
-    float mountain_coverage = 0;
+#ifdef BEAUTY_TERRAIN_TRANSITIONS
+    float mountain_rise = max(0, input.world.z - input.base_relief - 2.5 / 112.0);
+#else
+    float mountain_rise = max(0, input.material.x * Macro.z);
+#endif
+    // One terrain-to-rock rule for the whole composed surface. The source
+    // footprint shapes geometry, but must not bypass the material transition;
+    // doing so forced some low faces to pure rock while others retained grass.
+    // Neither source blend nor face steepness changes coverage at equal rise.
+    float mountain_coverage = smoothstep(0.02, 0.48, mountain_rise);
+    float rock_albedo_coverage = mountain_coverage;
+    float rock_detail_coverage = mountain_coverage;
 #ifdef BEAUTY_TERRAIN_TRANSITIONS
     // 42 remains the source-shadow mountain discriminator. Its fractional
     // range carries the authoritative coast/source-family coverage.
@@ -331,32 +366,56 @@ Output shade(P input) {
     } else if (Quality.x < 0.5) {
         // Control: the old failure mode stretches one planar albedo lookup over
         // steep faces and omits the source material response.
-        float footprint = smoothstep(0.08, 0.72, input.material.z);
-        mountain_coverage = footprint;
-        clip(footprint - 0.015);
-        albedo = lerp(ground_albedo, RockColor.Sample(Wrap, input.uv).rgb, footprint);
+        albedo = lerp(ground_albedo, RockColor.Sample(Wrap, input.uv).rgb,
+                      rock_albedo_coverage);
         height_detail = ground_height;
-        specular_map = ground_specular * (1 - footprint);
+        specular_map = lerp(ground_specular, 0.0, rock_detail_coverage);
     } else {
         float height = input.material.x;
-        float footprint = smoothstep(0.08, 0.72, input.material.z);
-        mountain_coverage = footprint;
-        clip(footprint - 0.015);
         float snow = smoothstep(0.79, 0.94, height) * smoothstep(0.24, 0.72, geometric.z);
-        float top = smoothstep(0.34, 0.73, height) * (1 - snow);
+        // Select the rock treatment from the final composed rise, not the
+        // dominant source patch's height (which can understate a joined face).
+        float top = smoothstep(0.08, 0.62, mountain_rise) * (1 - snow);
         float base = 1 - top - snow;
-        float3 mountain_albedo = triplanar(RockColor, input.world, geometric) * base +
+        float3 rock_albedo = triplanar(RockColor, input.world, geometric);
+        float3 mountain_albedo = rock_albedo * base +
                                  triplanar(TopColor, input.world, geometric) * top +
                                  triplanar(SnowColor, input.world, geometric) * snow;
-        albedo = lerp(ground_albedo, mountain_albedo, footprint);
-        float mountain_detail = triplanar_scalar(RockHeight, input.world, geometric) * base +
-                                triplanar_scalar(TopHeight, input.world, geometric) * top +
-                                triplanar_scalar(SnowHeight, input.world, geometric) * snow;
-        height_detail = lerp(ground_height, mountain_detail, footprint);
+        float rock_detail = triplanar_scalar(RockHeight, input.world, geometric);
+        float layered_detail = rock_detail * base +
+                               triplanar_scalar(TopHeight, input.world, geometric) * top +
+                               triplanar_scalar(SnowHeight, input.world, geometric) * snow;
+        // Snow softens the rock relief. Preserve other packs' authored upper
+        // height channel; the local base/upper height pair happens to be equal.
+        float mountain_detail = lerp(layered_detail, rock_detail, snow * 0.60);
+        // Keep the existing weak fine bump contribution. Actual crevice fill
+        // comes from local concavity rather than stronger normal perturbation.
+        float3 fine_world = input.world * 3.7 + float3(0.31, 0.17, 0.43);
+        float fine_rock = triplanar_scalar(RockHeight,
+            fine_world, geometric);
+        mountain_detail += (fine_rock - 0.5) * 0.12 * (1 - snow);
+        float neighborhood = triplanar_neighborhood(RockHeight,
+            input.world, geometric).r;
+        float fine_neighborhood = triplanar_neighborhood(RockHeight,
+            fine_world, geometric).r;
+        rock_crevice = lerp(rock_crevice_visibility(rock_detail, neighborhood) *
+            rock_crevice_visibility(fine_rock, fine_neighborhood), 1.0, snow);
+        // Normalize fine authored color against its local mean: retain the
+        // stone grain without painting a second broad color field over it.
+        float3 fine_color = triplanar(RockColor, fine_world, geometric);
+        float3 mean_color = triplanar_neighborhood(RockColor, fine_world, geometric);
+        float fine_luma = dot(fine_color, float3(0.2126, 0.7152, 0.0722));
+        float mean_luma = dot(mean_color, float3(0.2126, 0.7152, 0.0722));
+        float grain = clamp(1 + 2.0 * (fine_luma - mean_luma) / max(mean_luma, 0.02), 0.50, 1.18);
+        float rock_micro_relief = smoothstep(0.16, 0.84, rock_detail);
+        mountain_albedo *= lerp(0.82, 1.06, rock_micro_relief);
+        mountain_albedo *= lerp(1.0, grain, 1 - snow);
+        albedo = lerp(ground_albedo, mountain_albedo, rock_albedo_coverage);
+        height_detail = lerp(ground_height, mountain_detail, rock_detail_coverage);
         float mountain_specular = triplanar_scalar(RockSpecular, input.world, geometric) * base +
                                   triplanar_scalar(TopSpecular, input.world, geometric) * top +
                                   triplanar_scalar(SnowSpecular, input.world, geometric) * snow;
-        specular_map = lerp(ground_specular, mountain_specular, footprint);
+        specular_map = lerp(ground_specular, mountain_specular, rock_detail_coverage);
     }
     if (input.material.y > 1.5 && Quality.x > 0.5) {
         // Civ VI's broad cool skylight is a major part of its gray-rock read;
@@ -365,52 +424,68 @@ Output shade(P input) {
         // was the visible gray halo at plains and shoreline transitions.
         float rock_luma = dot(albedo, float3(0.2126, 0.7152, 0.0722));
         float3 graded = lerp(albedo, rock_luma.xxx, 0.28) * float3(0.96, 1.0, 1.07);
-        albedo = lerp(albedo, graded, mountain_coverage);
+        albedo = lerp(albedo, graded, rock_albedo_coverage);
     }
-    float3 normal = Quality.x > 0.5 ? detail_normal(geometric, input.world, height_detail) : geometric;
+    // The source frame's restrained value is appropriate for terrain at the
+    // unified foot, but under-resolves the authored rock height at gameplay
+    // scale. Strengthen only covered stone; this remains direction-neutral.
+    float rock_normal_strength = Quality.z * lerp(1.0, 1.60, rock_detail_coverage);
+    float3 normal = Quality.x > 0.5 ? detail_normal(geometric, input.world,
+                                                    height_detail, rock_normal_strength) : geometric;
 #ifdef BEAUTY_COMPOSED_SHADOWS
     // The shared shadow-frame light is authoritative for both the BRDF and
     // projection, so every mountain face and cast shadow agrees in direction.
     float3 light_direction = ShadowL.xyz;
+    // The shared field still supplies the directional cast/self shadow, but a
+    // mountain must not apply the generic near-contact clamp back onto its own
+    // continuous shell; that clamp traces a dark ring around low rock slopes.
     float received_shadow = q6_shadow_visibility(ShadowField, input.world, normal,
-        ShadowU, ShadowV, ShadowL, ShadowFlags.x > 0.5, true);
-    // The low-coverage collar is only a material/geometry transition into the
-    // authoritative ground. Let full cast shadow return with the rock body;
-    // otherwise a tall coastal peak draws a detached dark wedge on its collar.
-    float shadow = lerp(1.0, received_shadow,
-                        smoothstep(0.12, 0.62, mountain_coverage));
+        ShadowU, ShadowV, ShadowL, ShadowFlags.x > 0.5, false);
+    // This is now one terrain-relief surface, so its ground portion receives
+    // the same directional field as the raised rock. Coastal sky fill follows
+    // the terrain receiver's continuous shoreline response.
+    float coast_inland = smoothstep(0.18, 0.86, coast_alpha);
+    float shadow = lerp(lerp(1.0, received_shadow, 0.48),
+                        received_shadow, coast_inland);
 #else
     float3 light_direction = Sun.xyz;
     float shadow = horizon_visibility(input.world);
 #endif
     float ndl = saturate(dot(normal, light_direction));
-    float wrap = saturate((dot(normal, light_direction) + 0.18) / 1.18);
+    float wrap_bias = lerp(0.20, 0.18, rock_albedo_coverage);
+    float wrap = saturate((dot(normal, light_direction) + wrap_bias) /
+                          (1.0 + wrap_bias));
     float altitude = input.material.y > 1.5 ? input.material.x : 0;
     float mountain_cavity = lerp(0.76, 1.0, smoothstep(0.03, 0.48, altitude));
-    // The terminal collar represents inherited ground, so it must not retain
-    // the mountain's cavity darkening as its opacity falls away.
-    float cavity = input.material.y > 1.5 ?
-        lerp(1.0, mountain_cavity, mountain_coverage) : 1.0;
+    #ifdef BEAUTY_TERRAIN_TRANSITIONS
+    float ground_cavity = lerp(0.79, 1.0,
+        smoothstep(0.02, 0.30, input.base_relief));
+    #else
+    float ground_cavity = 1.0;
+    #endif
+    float cavity = lerp(ground_cavity, mountain_cavity, rock_albedo_coverage);
+    float crevice_visibility = lerp(1.0, rock_crevice, rock_albedo_coverage);
     float sky = saturate(normal.z * 0.5 + 0.5);
-    float3 ambient = Ambient.rgb * Ambient.a * lerp(0.52, 1.0, sky) * cavity;
+    float ambient_floor = lerp(0.56, 0.52, rock_albedo_coverage);
+    float3 ambient = Ambient.rgb * Ambient.a * lerp(ambient_floor, 1.0, sky) * cavity * crevice_visibility;
+    float diffuse_floor = lerp(0.07, 0.055, rock_albedo_coverage);
     float3 diffuse = albedo * (ambient + SunColorExposure.rgb * Sun.w *
-                               (0.055 + 0.945 * wrap) * shadow);
-    float roughness = lerp(0.88, 0.38, saturate(specular_map));
-    float specular = Quality.x > 0.5 ? ggx(normal, light_direction, normalize(View.xyz), roughness, 0.045) : 0;
+                               (diffuse_floor + (1.0 - diffuse_floor) * wrap) * shadow *
+                               lerp(1.0, crevice_visibility, 0.70));
+    float ground_roughness = lerp(0.92, 0.48, saturate(specular_map));
+    float rock_roughness = lerp(0.88, 0.38, saturate(specular_map));
+    float roughness = lerp(ground_roughness, rock_roughness, rock_detail_coverage);
+    float specular = Quality.x > 0.5 ? ggx(normal, light_direction,
+        normalize(View.xyz), roughness, lerp(0.035, 0.045, rock_detail_coverage)) : 0;
     float rim = Quality.x > 0.5 ? pow(1 - saturate(dot(normal, normalize(View.xyz))), 3) *
         saturate(dot(normal, -light_direction) * 0.5 + 0.5) : 0;
     float3 radiance = diffuse + SunColorExposure.rgb * Sun.w * specular * shadow +
                       Ambient.rgb * rim * 0.13;
-    // The mountain mesh deliberately extends beyond the rock footprint so its
-    // joined normals and height can settle cleanly into the authoritative
-    // terrain. Cross-fade that final collar instead of drawing its ground-like
-    // material as an opaque, slightly raised lip (most visible on beaches).
-    float surface_alpha = coast_alpha;
-    if (input.material.y > 1.5)
-        surface_alpha *= smoothstep(0.10, 0.48, mountain_coverage);
-    clip(surface_alpha - 0.001);
-    output.color = float4(max(radiance, 0) * surface_alpha, surface_alpha);
-    output.validity = surface_alpha;
+    // The relief patch owns its terrain as well as its rock. Only the
+    // authoritative coast mask may make it transparent; there is no second
+    // ground surface beneath it and therefore no collar to cross-fade.
+    output.color = float4(max(radiance, 0) * coast_alpha, coast_alpha);
+    output.validity = coast_alpha;
     return output;
 }
 

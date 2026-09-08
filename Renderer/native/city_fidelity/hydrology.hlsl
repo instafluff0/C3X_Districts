@@ -2986,15 +2986,19 @@ float3 q3_scene_bed(PixelInput input) {
  float sd=input.hydrology_data.x,rocky=saturate(input.hydrology_data.z);
  float2 uv=q3_source_world(input)*q3_source_repeat(.75);
  float3 sand=beach_base_texture.Sample(material_sampler,uv).rgb;
+ float desert=saturate(input.material_weights.z);
+ float3 desert_sand=desert_base_texture.Sample(material_sampler,input.uv).rgb;
+ sand=lerp(sand,desert_sand,desert);
  float3 bed=shallow_bed_texture.Sample(material_sampler,uv).rgb;
  float2 world=q3_source_world(input);
  float4 authored=q3_authored_bed_detail(input);
  bed=lerp(bed,authored.rgb,authored.a);
  bed*=1+(sample_water_clutter_height(world)-.5)*authored.a*.30;
  float3 rock=cliff_base_texture.Sample(material_sampler,uv).rgb;
- float3 color=lerp(sand,bed,smoothstep(0,.40,-sd));
+ float3 rim=lerp(sand,bed,authored.a*desert*.34);
+ float3 color=lerp(rim,bed,smoothstep(0,.40,-sd));
 #ifdef Q3_COAST_DETAIL
- color=lerp(sand,bed,smoothstep(0,.12,-sd));
+ color=lerp(rim,bed,smoothstep(0,lerp(.12,.34,desert),-sd));
 #endif
  color=lerp(color,lerp(rock,bed,smoothstep(0,.70,-sd)),rocky);
  color*=lerp(.72,1.0,smoothstep(0,.32,-sd));
@@ -3008,16 +3012,23 @@ float3 q3_scene_bed(PixelInput input) {
 void q3_shore_material(PixelInput input,float2 world_position,inout float3 albedo,inout float3 material_normal) {
  float sd=input.hydrology_data.x,width=input.hydrology_data.y;
  float rocky=saturate(input.hydrology_data.z);
+ float desert=saturate(input.material_weights.z);
  float3 sand=beach_base_texture.Sample(material_sampler,q3_source_world(input)*q3_source_repeat(.75)).rgb;
  float grain=dot(sand,float3(.2126,.7152,.0722));
  float blend=1-smoothstep(width*.25,width+.06,sd+(grain-.28)*.24);
- albedo=lerp(albedo,sand,blend*(1-rocky));
+ // Desert already supplies a continuous sand surface. Replacing it with the
+ // separate beach material created a flat, darker ribbon beside the desert's
+ // fine ripples. Preserve that sand family through the wet edge; mixed biome
+ // weights reduce the beach replacement continuously rather than branching by
+ // tile ownership.
+ float beach_material=blend*(1-rocky)*(1-desert);
+ albedo=lerp(albedo,sand,beach_material);
  float2 uv=q3_source_world(input)*q3_source_repeat(.75);
  float hx=beach_height_texture.Sample(material_sampler,uv+float2(.002,0)).r
   -beach_height_texture.Sample(material_sampler,uv-float2(.002,0)).r;
  float hy=beach_height_texture.Sample(material_sampler,uv+float2(0,.002)).r
   -beach_height_texture.Sample(material_sampler,uv-float2(0,.002)).r;
- float2 detail=clamp(float2(-hx-hy,-hx+hy)*12,-.18,.18)*blend*(1-rocky);
+ float2 detail=clamp(float2(-hx-hy,-hx+hy)*12,-.18,.18)*beach_material;
  material_normal=normalize(float3(material_normal.xy+detail*material_normal.z,material_normal.z));
  float3 rock=cliff_base_texture.Sample(material_sampler,q3_source_world(input)*q3_source_repeat(.75)).rgb;
  albedo=lerp(albedo,rock,rocky*(1-smoothstep(.03,.22,sd)));

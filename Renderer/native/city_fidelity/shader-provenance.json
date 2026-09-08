@@ -9,13 +9,13 @@
     "Renderer/lab/shared/shaders/objects/city_scene_material.hlsl": "75923e050f689869868b2eaebd21a7f71ea951e6e8091b9fbdc9610b36c24eaa",
     "Renderer/lab/shared/shaders/lighting/city_environment.hlsl": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9",
     "Renderer/lab/shared/shaders/objects/settlement_ground.hlsl": "a21447d01e7b1b9738cfbb766b5173778c0bea8d2a7e87a3cec3c02f94ceca31",
-    "Renderer/native/environment_refresh/hydrology.hlsl": "e04dfb0579433f0670809d0714cebeb8bc5fc3357ab069792d8e7a91548d917a",
-    "Renderer/native/environment_refresh/terrain.hlsl": "c8a2145f689b820bca547a28cf62f2eeb675b0386dc06a3c1b365bed8827cb6b",
-    "Renderer/native/environment_refresh/mountain.hlsl": "5477f3c363602b3befe0718ada0b1aae47c1e00d47edf04d4c2b54ce96ec3ab1",
+    "Renderer/native/environment_refresh/hydrology.hlsl": "1cd05be6929d92b960d9e985664b0e748efa7fe48f7dbf69ca1e9ba28174e2b4",
+    "Renderer/native/environment_refresh/terrain.hlsl": "e29cdd0dedc156237e33405698f9004cc65d739342a34409286177892f3594d7",
+    "Renderer/native/environment_refresh/mountain.hlsl": "b3380e40cfabadfbc06df0042e642cd5964fbd6a22200d917f9875267c12143e",
     "Renderer/native/environment_refresh/objects.hlsl": "545db98ca5c897ffbafc878b5a993f531fcaa672772b6141dab5aa4a137193c7",
     "Renderer/lab/shared/shaders/common/hdr_glow_tiled.hlsl": "8b796afcf2648797533eeb278b76ca0b5babfe352d522e7e80a35147bde54be7",
     "Renderer/lab/shared/shaders/sampling/reconstruction_v1.hlsl": "00eb9245631bc22c04072622e577192cc0cb01ae83863cedaf1e86a5a75d8460",
-    "Renderer/native/render_core/source_caster.hlsl": "f103da3c1bcbdfd2e9e3622c9ce6a7464cf28c3713e7df1dfdb48fef83bb3c36"
+    "Renderer/native/render_core/source_caster.hlsl": "a8c0acb26a60b2cf97fd9c02b6ac51e9848bf15f4060568df89c9e93b5d3ac41"
   },
   "bindings": "Native full vertex, shared shadow atlas, explicit material/environment and atlas constants",
   "runtime": [

@@ -19,11 +19,15 @@ int main(){using namespace c3x_renderer::render_core;
   assert(first.size()==again.size());
   for(size_t i=0;i<first.size();i++){
    assert(first[i].position.x==again[i].position.x && first[i].yaw==again[i].yaw);
-   assert(first[i].scale>=.48 && first[i].scale<=.70);all.push_back(first[i]);
+   assert(first[i].asset<8);
+   if(first[i].asset<4)assert(first[i].scale>=.29 && first[i].scale<=.36);
+   else assert(first[i].scale>=.31 && first[i].scale<=.43);
+   all.push_back(first[i]);
   }
  }
  assert(!all.empty());
  for(size_t i=0;i<all.size();i++)for(size_t j=0;j<i;j++){
-  auto d=all[i].position-all[j].position;assert(dot(d,d)>=.18*.18-1e-7);
+  if(all[i].asset>=4 || all[j].asset>=4)continue;
+  auto d=all[i].position-all[j].position;assert(dot(d,d)>=.13*.13-1e-7);
  }
 }

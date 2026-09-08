@@ -6,6 +6,11 @@ This is the implemented v0 contract. `Renderer/definitions/definition_parser.py`
 
 The complete starter fixture is `Renderer/samples/config/default.custom_rendering.txt`.
 
+The separate C3X boolean `enable_custom_rendering_zoom` enables stepped main-map
+camera levels on repeated `Z` presses when `enable_custom_rendering` is also on.
+It is an integration setting rather than a pack-definition key; see
+[the custom zoom contract](custom_rendering_zoom.md).
+
 ## Design Principles
 
 - Human-editable text consistent with C3X's existing `key = value` and `#Section` style.

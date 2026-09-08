@@ -67,6 +67,24 @@
       ]
     },
     {
+      "group_id": "terrain/desert/surface",
+      "artdef_set": "CLUTTER_DESERT",
+      "collection": "Plants",
+      "assets": [
+        {"source_asset": "TER_Desert_Decal01", "asset_id": "terrain/desert/surface/decal_01"},
+        {"source_asset": "TER_Desert_Decal02", "asset_id": "terrain/desert/surface/decal_02"},
+        {"source_asset": "TER_Desert_Decal03", "asset_id": "terrain/desert/surface/decal_03"},
+        {"source_asset": "TER_Desert_Decal04", "asset_id": "terrain/desert/surface/decal_04"},
+        {"source_asset": "TER_Desert_Decal07", "asset_id": "terrain/desert/surface/decal_07"},
+        {"source_asset": "TER_Desert_Decal08", "asset_id": "terrain/desert/surface/decal_08"},
+        {"source_asset": "TER_Desert_Decal15", "asset_id": "terrain/desert/surface/decal_15"},
+        {"source_asset": "TER_Desert_Decal16", "asset_id": "terrain/desert/surface/decal_16"},
+        {"source_asset": "TER_Desert_Decal17", "asset_id": "terrain/desert/surface/decal_17"},
+        {"source_asset": "TER_Desert_Decal18", "asset_id": "terrain/desert/surface/decal_18"},
+        {"source_asset": "TER_Desert_Decal19", "asset_id": "terrain/desert/surface/decal_19"}
+      ]
+    },
+    {
       "group_id": "terrain/desert/dunes",
       "artdef_set": "CLUTTER_DESERT",
       "collection": "Plants",

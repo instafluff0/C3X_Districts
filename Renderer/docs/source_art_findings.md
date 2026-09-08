@@ -22,6 +22,16 @@ footprints with hill-top material is a C3X adaptation, not recovered Firaxis sha
 math. Tundra has a separate snow-hill clutter layer above source height 7, with
 two count-30 entries; identifying those entries does not mean they are imported.
 
+Grassland, plains and desert expose normalized surface/decal placement groups in
+addition to their base material channels. Their placement scales, variation,
+counts, exact shared-buffer triangles, per-vertex atlas UVs, alpha footprints and
+paired color/height channels are confirmed source data. C3X consumes those
+records through a generic terrain-pack recipe and projects them onto the
+continuous terrain surface. The deterministic world-cell selection, density,
+sparse desert distribution and modest normal/AO response are explicit C3X
+composition choices; the exact source scatter sequence and terrain-cache merge
+equation remain unrecovered.
+
 Grass and paving textures are atlases of parts. Exact source triangles/UVs are
 required; repeating or stretching the whole sheet is not source reconstruction.
 Installed shader inspection established alpha-squared weighting before terrain

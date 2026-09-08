@@ -89,6 +89,7 @@ if not exist "..\packs\VegetationNormalized\vegetation_runtime.bin" set "C3X_APP
 if not exist "..\packs\DecalsNormalized\manifest.json" set "C3X_APPROVED_PAYLOAD=0"
 if not exist "..\packs\TerrainElementsNormalized\manifest.json" set "C3X_APPROVED_PAYLOAD=0"
 if not exist "..\packs\ShoreNormalized\shore_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"
+if not exist "..\packs\ShoreNormalized\cliff_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"
 if not exist "..\packs\RouteStylesNormalized\manifest.json" set "C3X_APPROVED_PAYLOAD=0"
 if not exist "..\packs\RouteDoodadsNormalized\bridge_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"
 if not exist "..\packs\ResourceNormalized\resource_runtime.bin" set "C3X_APPROVED_PAYLOAD=0"

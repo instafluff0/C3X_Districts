@@ -35,7 +35,10 @@ int main() {
             expected.material_grass=std::max(0.f,(h-2.5f)/112);
             expected.material_plains=1;expected.material_desert=.125f;
             float remaining=std::clamp(1-marsh,0.f,1.f);
-            expected.base_terrain=-10+coast_coverage(.36f,.2f)*remaining;
+            float desert_weight=std::clamp(.3f/std::max(remaining,.00001f),0.f,1.f);
+            float coverage=coast_coverage(.36f,.2f)*(1-desert_weight)+
+                desert_coast_coverage(.36f)*desert_weight;
+            expected.base_terrain=-10+coverage*remaining;
             expected.material_marsh=.4f/std::max(remaining,.00001f);
             expected.authored_relief_height=.2f/std::max(remaining,.00001f);
             expected.authored_relief_blend=.3f/std::max(remaining,.00001f);

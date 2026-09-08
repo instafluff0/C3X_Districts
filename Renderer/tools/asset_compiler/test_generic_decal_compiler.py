@@ -7,6 +7,7 @@ from pathlib import Path
 from Renderer.tools.asset_compiler.generic_decal_compiler import (
     DEFAULT_SPEC,
     decode_decal_descriptor,
+    decode_decal_mesh,
     load_mapping,
     read_artdef_group,
 )
@@ -29,6 +30,7 @@ class GenericDecalCompilerTests(unittest.TestCase):
             "terrain/water/ocean_surface": 9,
             "terrain/grassland/surface": 11,
             "terrain/plains/surface": 8,
+            "terrain/desert/surface": 11,
             "terrain/grassland_hills/surface": 3,
             "terrain/forest/floor": 2,
             "terrain/jungle/floor": 2,
@@ -143,6 +145,42 @@ class GenericDecalCompilerTests(unittest.TestCase):
             bytes(raw), entries.__getitem__, 100.0, required_roles=("base_color",)
         )
         self.assertEqual({"base_color", "fog_color"}, set(descriptor["textures"]))
+
+    def test_decal_mesh_recovers_exact_triangles_and_atlas_uvs(self) -> None:
+        raw = bytearray(108)
+        struct.pack_into("<5I", raw, 0x3C, 7, 0, 3, 1, 6)
+        vertices = b"".join(struct.pack("<4e", *vertex) for vertex in (
+            (0.0, 0.0, 0.0, 0.0),
+            (0.2, 0.3, 0.55, 0.10),
+            (0.8, 0.3, 0.90, 0.10),
+            (0.8, 0.7, 0.90, 0.45),
+            (0.2, 0.7, 0.55, 0.45),
+        ))
+        indices = struct.pack("<9H", 0, 0, 0, 0, 1, 2, 0, 2, 3)
+        mesh, evidence = decode_decal_mesh(
+            bytes(raw), [-2.0, -1.0, 2.0, 1.0], vertices, indices, 5, 9
+        )
+        self.assertEqual([0, 1, 2, 0, 2, 3], mesh["indices"])
+        self.assertAlmostEqual(-1.2, mesh["vertices"][0]["position"][0], places=3)
+        self.assertAlmostEqual(-0.4, mesh["vertices"][0]["position"][1], places=3)
+        self.assertAlmostEqual(0.55, mesh["vertices"][0]["uv0"][0], places=3)
+        self.assertAlmostEqual(0.10, mesh["vertices"][0]["uv0"][1], places=3)
+        self.assertEqual(7, evidence["buffer_index"])
+        self.assertEqual(6, evidence["index_count"])
+
+    def test_decal_mesh_rejects_rectangle_substitution_inputs(self) -> None:
+        raw = bytearray(108)
+        struct.pack_into("<5I", raw, 0x3C, 7, 0, 0, 0, 3)
+        vertices = b"".join(struct.pack("<4e", *vertex) for vertex in (
+            (0.0, 0.0, 0.0, 0.0),
+            (1.0, 0.0, 1.0, 0.0),
+            (1.2, 1.0, 1.0, 1.0),
+        ))
+        with self.assertRaisesRegex(ValueError, "outside 0..1"):
+            decode_decal_mesh(
+                bytes(raw), [-1.0, -1.0, 1.0, 1.0], vertices,
+                struct.pack("<3H", 0, 1, 2), 3, 3
+            )
 
 
 if __name__ == "__main__":

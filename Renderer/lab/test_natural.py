@@ -16,6 +16,9 @@ class NaturalInputs(unittest.TestCase):
     def test_mesh_emission_and_exclusion_queries(self):
         self.shared_probe("mesh", "328 scopes")
 
+    def test_source_surface_composition(self):
+        self.shared_probe("surface", "3 biomes")
+
     def test_relief_inputs_and_query_policy(self):
         self.shared_probe("relief", "1440 exact field samples, 16 scopes")
 
@@ -110,7 +113,7 @@ class NaturalInputs(unittest.TestCase):
             if local_pack.exists():
                 args.append(str(ROOT))
             result = subprocess.run(args, check=True, capture_output=True, text=True)
-            self.assertIn("14 invalid inputs, height sampling and 24 lighting phases", result.stdout)
+            self.assertIn("22 invalid inputs, height sampling and 24 lighting phases", result.stdout)
             if local_pack.exists():
                 self.assertIn("PASS production natural payload:", result.stdout)
 

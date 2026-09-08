@@ -19846,6 +19846,7 @@ patch_init_floating_point ()
 		{"dont_pause_for_love_the_king_messages"                 , true , offsetof (struct c3x_config, dont_pause_for_love_the_king_messages)},
 		{"reverse_specialist_order_with_shift"                   , true , offsetof (struct c3x_config, reverse_specialist_order_with_shift)},
 		{"toggle_zoom_with_z_on_city_screen"                     , true , offsetof (struct c3x_config, toggle_zoom_with_z_on_city_screen)},
+		{"enable_custom_rendering_zoom"                          , false, offsetof (struct c3x_config, enable_custom_rendering_zoom)},
 		{"dont_give_king_names_in_non_regicide_games"            , true , offsetof (struct c3x_config, dont_give_king_names_in_non_regicide_games)},
 		{"no_elvis_easter_egg"                                   , false, offsetof (struct c3x_config, no_elvis_easter_egg)},
 		{"disable_worker_automation"                             , false, offsetof (struct c3x_config, disable_worker_automation)},
@@ -22831,6 +22832,65 @@ is_command_button_active (Main_GUI * main_gui, enum Unit_Command_Values command)
 	return false;
 }
 
+bool
+advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, int virtual_key_code)
+{
+	if (! is->current_config.enable_custom_rendering ||
+	    ! is->current_config.enable_custom_rendering_zoom ||
+	    (*p_player_bits == 0) || this->is_now_loading_game ||
+	    ((virtual_key_code != VK_Z) && (char_code != 'Z') && (char_code != 'z')))
+		return false;
+
+	int levels[5] = {64, 80, 96, 112, 128};
+	int native_width = p_bic_data->is_zoomed_out ? 64 : 128;
+	if ((is->custom_renderer_zoom_native_tile_width != native_width) ||
+	    (is->custom_renderer_zoom_tile_width < 64) ||
+	    (is->custom_renderer_zoom_tile_width > 128)) {
+		is->custom_renderer_zoom_native_tile_width = native_width;
+		is->custom_renderer_zoom_tile_width = native_width;
+		is->custom_renderer_zoom_translate_x_fp = 0;
+		is->custom_renderer_zoom_translate_y_fp = 0;
+	}
+	int current = 0;
+	for (int n = 1; n < ARRAY_LEN (levels); n++) {
+		int candidate_delta = levels[n] - is->custom_renderer_zoom_tile_width;
+		int current_delta = levels[current] - is->custom_renderer_zoom_tile_width;
+		if (candidate_delta < 0) candidate_delta = -candidate_delta;
+		if (current_delta < 0) current_delta = -current_delta;
+		if (candidate_delta < current_delta)
+			current = n;
+	}
+	// Match Z's usual zoom-out direction, then wrap from 64 back to 128.
+	int next = current > 0 ? current - 1 : ARRAY_LEN (levels) - 1;
+	long long const fp_one = 65536;
+	int old_width = is->custom_renderer_zoom_tile_width;
+	int new_width = levels[next];
+	long long anchor_x_fp = (long long)(p_bic_data->ScreenWidth / 2) * fp_one;
+	long long anchor_y_fp = (long long)(p_bic_data->ScreenHeight / 2) * fp_one;
+	is->custom_renderer_zoom_translate_x_fp = anchor_x_fp -
+		(anchor_x_fp - is->custom_renderer_zoom_translate_x_fp) * new_width / old_width;
+	is->custom_renderer_zoom_translate_y_fp = anchor_y_fp -
+		(anchor_y_fp - is->custom_renderer_zoom_translate_y_fp) * new_width / old_width;
+	is->custom_renderer_zoom_tile_width = new_width;
+	is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_ALL;
+	is->custom_renderer_redraw_pending = true;
+	char message[256];
+	snprintf (message, sizeof message,
+		"[C3X renderer] stage=zoom-key old_width=%d new_width=%d anchor_x=%d anchor_y=%d queued=1\n",
+		old_width, new_width, p_bic_data->ScreenWidth / 2, p_bic_data->ScreenHeight / 2);
+	message[(sizeof message) - 1] = '\0';
+	(*p_OutputDebugStringA) (message);
+	// Native Z uses this same path after changing its two-level zoom flag. Besides
+	// preserving the current map center, it requests a complete tile traversal;
+	// merely dirtying Animator can produce a one-tile partial capture.
+	int center_x = (this->TileX_Max + this->TileX_Min) / 2;
+	int center_y = (this->TileY_Max + this->TileY_Min) / 2;
+	if ((center_x & 1) != (center_y & 1))
+		center_x += (center_y & 1) ? 1 : -1;
+	Main_Screen_Form_bring_tile_into_view (this, __, center_x - 1, center_y - 1, 0, true, false);
+	return true;
+}
+
 int __fastcall
 patch_Main_Screen_Form_handle_key_down (Main_Screen_Form * this, int edx, int char_code, int virtual_key_code)
 {
@@ -22857,6 +22917,8 @@ patch_Main_Screen_Form_handle_key_down (Main_Screen_Form * this, int edx, int ch
 			clear_highlighted_worker_tiles_and_redraw ();
 		}
 	}
+	if (advance_custom_renderer_zoom_from_key (this, char_code, virtual_key_code))
+		return 1;
 
 	char original_turn_end_flag = this->turn_end_flag;
 	int tr = Main_Screen_Form_handle_key_down (this, __, char_code, virtual_key_code);
@@ -22878,11 +22940,91 @@ patch_handle_cursor_change_in_jgl ()
 	return handle_cursor_change_in_jgl ();
 }
 
+bool
+custom_renderer_zoom_enabled ()
+{
+	return is->current_config.enable_custom_rendering &&
+		is->current_config.enable_custom_rendering_zoom &&
+		(*p_player_bits != 0) && ! p_main_screen_form->is_now_loading_game;
+}
+
+void
+sync_custom_renderer_zoom_to_native ()
+{
+	int native_width = p_bic_data->is_zoomed_out ? 64 : 128;
+	if ((is->custom_renderer_zoom_native_tile_width != native_width) ||
+	    (is->custom_renderer_zoom_tile_width < 64) ||
+	    (is->custom_renderer_zoom_tile_width > 128)) {
+		is->custom_renderer_zoom_native_tile_width = native_width;
+		is->custom_renderer_zoom_tile_width = native_width;
+		is->custom_renderer_zoom_translate_x_fp = 0;
+		is->custom_renderer_zoom_translate_y_fp = 0;
+	}
+}
+
+int
+custom_renderer_zoom_transform_coordinate (int value, long long translation_fp)
+{
+	long long const fp_one = 65536;
+	int native_width = is->custom_renderer_zoom_native_tile_width;
+	int zoom_width = is->custom_renderer_zoom_tile_width;
+	if ((native_width <= 0) || (zoom_width <= 0))
+		return value;
+	long long transformed = (long long)value * zoom_width * fp_one / native_width + translation_fp;
+	return (int)(transformed >= 0 ?
+		(transformed + fp_one / 2) / fp_one :
+		(transformed - fp_one / 2) / fp_one);
+}
+
+int
+custom_renderer_zoom_inverse_coordinate (int value, long long translation_fp)
+{
+	long long const fp_one = 65536;
+	int native_width = is->custom_renderer_zoom_native_tile_width;
+	int zoom_width = is->custom_renderer_zoom_tile_width;
+	if ((native_width <= 0) || (zoom_width <= 0))
+		return value;
+	long long native_fp = ((long long)value * fp_one - translation_fp) * native_width / zoom_width;
+	return (int)(native_fp >= 0 ?
+		(native_fp + fp_one / 2) / fp_one :
+		(native_fp - fp_one / 2) / fp_one);
+}
+
+bool
+custom_renderer_zoom_transform_active ()
+{
+	if (! custom_renderer_zoom_enabled ())
+		return false;
+	sync_custom_renderer_zoom_to_native ();
+	return is->custom_renderer_zoom_tile_width != is->custom_renderer_zoom_native_tile_width ||
+		is->custom_renderer_zoom_translate_x_fp != 0 ||
+		is->custom_renderer_zoom_translate_y_fp != 0;
+}
+
+void
+custom_renderer_zoom_transform_point (int * x, int * y)
+{
+	if (! custom_renderer_zoom_transform_active ())
+		return;
+	*x = custom_renderer_zoom_transform_coordinate (*x, is->custom_renderer_zoom_translate_x_fp);
+	*y = custom_renderer_zoom_transform_coordinate (*y, is->custom_renderer_zoom_translate_y_fp);
+}
+
+void
+custom_renderer_zoom_inverse_point (int * x, int * y)
+{
+	if (! custom_renderer_zoom_transform_active ())
+		return;
+	*x = custom_renderer_zoom_inverse_coordinate (*x, is->custom_renderer_zoom_translate_x_fp);
+	*y = custom_renderer_zoom_inverse_coordinate (*y, is->custom_renderer_zoom_translate_y_fp);
+}
+
 void __fastcall
 patch_Main_Screen_Form_handle_left_click_on_map_1 (Main_Screen_Form * this, int edx, int param_1, int param_2)
 {
 	if (is->sb_activated_by_button == 1)
 		is->sb_activated_by_button = 2;
+	custom_renderer_zoom_inverse_point (&param_1, &param_2);
 	Main_Screen_Form_handle_left_click_on_map_1 (this, __, param_1, param_2);
 	is->sb_activated_by_button = 0;
 }
@@ -26487,6 +26629,7 @@ void __fastcall
 patch_open_tile_info (void * this, int edx, int mouse_x, int mouse_y, int civ_id)
 {
 	int tx, ty;
+	custom_renderer_zoom_inverse_point (&mouse_x, &mouse_y);
 	if (is->current_config.show_detailed_tile_info &&
 	    (! Main_Screen_Form_get_tile_coords_under_mouse (p_main_screen_form, __, mouse_x, mouse_y, &tx, &ty))) {
 		is->viewing_tile_info_x = tx;
@@ -26664,6 +26807,13 @@ patch_Sprite_draw_on_map (Sprite * this, int edx, Map_Renderer * map_renderer, i
 	if (is->current_config.enable_custom_animations && ! is->current_config.enable_custom_rendering)
 		register_tile_animation_pcx_draw_for_current_tile (this);
 	Sprite * to_draw = get_cycle_sprite_proxy(this);
+	if (custom_renderer_zoom_transform_active () &&
+	    (map_renderer == &p_bic_data->Map.Renderer) && (param_6 > 0)) {
+		custom_renderer_zoom_transform_point (&pixel_x, &pixel_y);
+		param_4 *= is->custom_renderer_zoom_tile_width;
+		param_5 *= is->custom_renderer_zoom_tile_width;
+		param_6 *= is->custom_renderer_zoom_native_tile_width;
+	}
 	return Sprite_draw_on_map(to_draw ? to_draw : this, __, map_renderer, pixel_x, pixel_y, param_4, param_5, param_6, param_7);
 }
 
@@ -26777,6 +26927,12 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	draw.body_x = x; draw.body_y = y;
 	draw.sprite_width = sprite->Width; draw.sprite_height = sprite->Height;
 	draw.reduced = reduced;
+	draw.projection_scale_milli = reduced ? 500 : 1000;
+	if (custom_renderer_zoom_enabled ()) {
+		sync_custom_renderer_zoom_to_native ();
+		draw.projection_scale_milli = is->custom_renderer_zoom_tile_width * 1000 / 128;
+		custom_renderer_zoom_transform_point (&draw.body_x, &draw.body_y);
+	}
 	draw.hour = (is->current_config.day_night_cycle_mode != DNCM_OFF && ! is->day_night_cycle_unstarted) ?
 		clamp (0, 23, is->current_day_night_cycle) : 12;
 	draw.season = (is->current_config.seasonal_cycle_mode != SCM_OFF && ! is->seasonal_cycle_unstarted) ?
@@ -26814,10 +26970,12 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (result == C3X_RENDERER_RESULT_OK) {
 		// Animator unions this same Rect after tick_anim, then erases it next frame.
 		// Its native FLC crop does not cover the custom body and shadow envelope.
-		if (display_unit->Body.Rect.left > x) display_unit->Body.Rect.left = x;
-		if (display_unit->Body.Rect.top > y) display_unit->Body.Rect.top = y;
-		if (display_unit->Body.Rect.right < x + sprite->Width / (reduced ? 2 : 1)) display_unit->Body.Rect.right = x + sprite->Width / (reduced ? 2 : 1);
-		if (display_unit->Body.Rect.bottom < y + sprite->Height / (reduced ? 2 : 1)) display_unit->Body.Rect.bottom = y + sprite->Height / (reduced ? 2 : 1);
+		int body_width = sprite->Width * draw.projection_scale_milli / 1000;
+		int body_height = sprite->Height * draw.projection_scale_milli / 1000;
+		if (display_unit->Body.Rect.left > draw.body_x) display_unit->Body.Rect.left = draw.body_x;
+		if (display_unit->Body.Rect.top > draw.body_y) display_unit->Body.Rect.top = draw.body_y;
+		if (display_unit->Body.Rect.right < draw.body_x + body_width) display_unit->Body.Rect.right = draw.body_x + body_width;
+		if (display_unit->Body.Rect.bottom < draw.body_y + body_height) display_unit->Body.Rect.bottom = draw.body_y + body_height;
 	}
 	return result == C3X_RENDERER_RESULT_OK;
 }
@@ -26842,6 +27000,7 @@ patch_Sprite_draw_unit_body_normal (Sprite * this, int edx, PCX_Image * backgrou
 				  int x, int y, char * palette_path, PCX_Color_Table * palette)
 {
 	if (forward_custom_unit_body (this, background, canvas, x, y, 0, palette)) return 0;
+	if (custom_renderer_zoom_enabled ()) return 0;
 	return Sprite_draw_unit_body_normal (this, __, background, canvas, x, y, palette_path, palette);
 }
 
@@ -26851,6 +27010,7 @@ patch_Sprite_draw_unit_body_reduced (Sprite * this, int edx, PCX_Image * backgro
 {
 	if (scale_x == 1 && scale_y == 1 && divisor == 2 &&
 	    forward_custom_unit_body (this, background, canvas, x, y, 1, palette)) return 0;
+	if (custom_renderer_zoom_enabled ()) return 0;
 	return Sprite_draw_unit_body_reduced (this, __, background, canvas, x, y, scale_x, scale_y, divisor, palette_path, palette);
 }
 
@@ -27111,7 +27271,7 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 void
 capture_custom_renderer_topology (int viewer, int visibility_mask)
 {
-	int const halo = 12;
+	int halo = 12;
 	int count = is->custom_renderer_tile_count;
 	int reference = -1;
 	for (int i = 0; i < count; i++)
@@ -27143,6 +27303,19 @@ capture_custom_renderer_topology (int viewer, int visibility_mask)
 		if (dy < min_y) min_y = dy; if (dy > max_y) max_y = dy;
 	}
 	int appearance_halo = is->custom_renderer_capture_world_topology ? 8 : 4;
+	if (custom_renderer_zoom_enabled ()) {
+		sync_custom_renderer_zoom_to_native ();
+		if (is->custom_renderer_zoom_tile_width < is->custom_renderer_zoom_native_tile_width) {
+			int span_x = max_x - min_x + 1, span_y = max_y - min_y + 1;
+			int extra_x = (span_x * (is->custom_renderer_zoom_native_tile_width - is->custom_renderer_zoom_tile_width) +
+				2 * is->custom_renderer_zoom_tile_width - 1) / (2 * is->custom_renderer_zoom_tile_width) + 4;
+			int extra_y = (span_y * (is->custom_renderer_zoom_native_tile_width - is->custom_renderer_zoom_tile_width) +
+				2 * is->custom_renderer_zoom_tile_width - 1) / (2 * is->custom_renderer_zoom_tile_width) + 4;
+			if (appearance_halo < extra_x) appearance_halo = extra_x;
+			if (appearance_halo < extra_y) appearance_halo = extra_y;
+			if (halo < appearance_halo + 4) halo = appearance_halo + 4;
+		}
+	}
 	int warm_min_x = min_x - appearance_halo, warm_max_x = max_x + appearance_halo;
 	int warm_min_y = min_y - appearance_halo, warm_max_y = max_y + appearance_halo;
 	min_x -= halo; max_x += halo; min_y -= halo; max_y += halo;
@@ -27305,6 +27478,32 @@ capture_custom_renderer_world_topology ()
 	return true;
 }
 
+void
+prepare_custom_renderer_zoom_tiles (int target_width, int target_height)
+{
+	if (! custom_renderer_zoom_enabled ())
+		return;
+	sync_custom_renderer_zoom_to_native ();
+	int tile_width = is->custom_renderer_zoom_tile_width;
+	int tile_height = tile_width / 2;
+	for (int n = 0; n < is->custom_renderer_tile_count; n++) {
+		struct c3x_renderer_tile_v1 * tile = &is->custom_renderer_tiles[n];
+		custom_renderer_zoom_transform_point (&tile->anchor_x, &tile->anchor_y);
+		// The topology capture carries complete records in its appearance ring.
+		// Promote only occurrences that can reach the scaled viewport; the outer
+		// topology-only ring remains non-renderable and cannot claim ownership.
+		if ((tile->tile_flags & C3X_RENDERER_TILE_PREFETCH) &&
+		    (tile->terrain_type >= 0) &&
+		    (tile->anchor_x < target_width + 2 * tile_width) &&
+		    (tile->anchor_x + tile_width > -2 * tile_width) &&
+		    (tile->anchor_y < target_height + 4 * tile_height) &&
+		    (tile->anchor_y + 4 * tile_height > -4 * tile_height)) {
+			tile->tile_flags &= ~C3X_RENDERER_TILE_TOPOLOGY_HALO;
+			tile->tile_flags |= C3X_RENDERER_TILE_RENDER;
+		}
+	}
+}
+
 bool
 composite_custom_renderer_frame ()
 {
@@ -27330,6 +27529,9 @@ composite_custom_renderer_frame ()
 	    (clip.left >= clip.right) || (clip.top >= clip.bottom))
 		clip = (RECT){0, 0, width, height};
 	bool zoomed_out = p_bic_data->Map.vtable->m10_Get_Map_Zoom (&p_bic_data->Map);
+	prepare_custom_renderer_zoom_tiles (width, height);
+	if (custom_renderer_zoom_transform_active ())
+		clip = (RECT){0, 0, width, height};
 	struct c3x_renderer_frame_v1 frame = {0};
 	frame.api_version = C3X_RENDERER_API_VERSION;
 	frame.struct_size = sizeof frame;
@@ -27339,8 +27541,9 @@ composite_custom_renderer_frame ()
 	frame.clip_top = clip.top;
 	frame.clip_right = clip.right;
 	frame.clip_bottom = clip.bottom;
-	frame.tile_width = zoomed_out ? 64 : 128;
-	frame.tile_height = zoomed_out ? 32 : 64;
+	frame.tile_width = custom_renderer_zoom_enabled () ?
+		is->custom_renderer_zoom_tile_width : (zoomed_out ? 64 : 128);
+	frame.tile_height = frame.tile_width / 2;
 	frame.hour = (is->current_config.day_night_cycle_mode != DNCM_OFF && ! is->day_night_cycle_unstarted) ?
 		clamp (0, 23, is->current_day_night_cycle) : 12;
 	frame.season = (is->current_config.seasonal_cycle_mode != SCM_OFF && ! is->seasonal_cycle_unstarted) ?
@@ -27560,7 +27763,7 @@ patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, 
 				int midpoint = (COUNT_TILE_HIGHLIGHTS % 2 == 0) ? 1000000 : (1000000 - step_size/2);
 				int grade = (eval >= midpoint) ? (eval - midpoint) / step_size : (eval - midpoint) / step_size - 1;
 				int i_highlight = clamp (0, COUNT_TILE_HIGHLIGHTS - 1, COUNT_TILE_HIGHLIGHTS/2 + grade);
-				Sprite_draw_on_map (&is->tile_highlights[i_highlight], __, this, pixel_x, pixel_y, 1, 1, 1, 0);
+				patch_Sprite_draw_on_map (&is->tile_highlights[i_highlight], __, this, pixel_x, pixel_y, 1, 1, 1, 0);
 			}
 		}
 	}
@@ -27579,14 +27782,14 @@ patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, 
 					int stored_ptr;
 					if (itable_look_up (&is->highlighted_city_radius_tile_pointers, (int)tile, &stored_ptr)) {
 						struct highlighted_city_radius_tile_info * info = (struct highlighted_city_radius_tile_info *)stored_ptr;
-						Sprite_draw_on_map (&is->tile_highlights[clamp(0, COUNT_TILE_HIGHLIGHTS - 1, info->highlight_level)], __, this, pixel_x, pixel_y, 1, 1, 1, 0);
+						patch_Sprite_draw_on_map (&is->tile_highlights[clamp(0, COUNT_TILE_HIGHLIGHTS - 1, info->highlight_level)], __, this, pixel_x, pixel_y, 1, 1, 1, 0);
 					}
 				}
 			}
 
 			// If focusing on a tile after Great Wall completed, highlight the tile while getting user confirmation
 			if (is->focused_tile != NULL && is->focused_tile == tile) { 
-				Sprite_draw_on_map (&is->tile_highlights[10], __, this, pixel_x, pixel_y, 1, 1, 1, 0);
+				patch_Sprite_draw_on_map (&is->tile_highlights[10], __, this, pixel_x, pixel_y, 1, 1, 1, 0);
 			}
 		}
 	}
@@ -29182,7 +29385,16 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	// The custom renderer retains one complete terrain viewport, so always capture
 	// the full visible traversal and apply Civ III's clip only when compositing.
 	// This keeps partial redraws from becoming incomplete terrain cache entries.
+	JGL_Image * zoom_canvas = ((PCX_Image *)this)->JGL.Image;
+	RECT saved_zoom_clip = {0};
+	bool expanded_zoom_clip = custom_renderer_zoom_transform_active () && (zoom_canvas != NULL);
+	if (expanded_zoom_clip) {
+		saved_zoom_clip = zoom_canvas->Clip_Rect;
+		zoom_canvas->Clip_Rect = zoom_canvas->Image_Rect;
+	}
 	Map_Renderer_m71_Draw_Tiles (this, __, param_1, param_2, 0);
+	if (expanded_zoom_clip)
+		zoom_canvas->Clip_Rect = saved_zoom_clip;
 	is->custom_renderer_frame_active = false;
 	if (! is->custom_renderer_composited)
 		log_custom_renderer_event ("composite-boundary-not-reached", C3X_RENDERER_RESULT_ERROR);
@@ -29285,6 +29497,11 @@ handle_named_tile_menu_selection (void)
 void __fastcall
 patch_Main_Screen_Form_handle_right_click_on_tile (Main_Screen_Form * this, int edx, int tile_x, int tile_y, int mouse_x, int mouse_y)
 {
+	if (custom_renderer_zoom_transform_active ()) {
+		int native_x = mouse_x, native_y = mouse_y;
+		custom_renderer_zoom_inverse_point (&native_x, &native_y);
+		Main_Screen_Form_get_tile_coords_under_mouse (this, __, native_x, native_y, &tile_x, &tile_y);
+	}
 	if (is->current_config.enable_named_tiles) {
 		Tile * tile = tile_at (tile_x, tile_y);
 		if (tile_can_be_named (tile, tile_x, tile_y) && ! Tile_has_city (tile)) {
@@ -29303,6 +29520,11 @@ patch_Main_Screen_Form_handle_right_click_on_tile (Main_Screen_Form * this, int 
 void __fastcall
 patch_Main_Screen_Form_open_right_click_menu (Main_Screen_Form * this, int edx, int tile_x, int tile_y, int mouse_x, int mouse_y)
 {
+	if (custom_renderer_zoom_transform_active ()) {
+		int native_x = mouse_x, native_y = mouse_y;
+		custom_renderer_zoom_inverse_point (&native_x, &native_y);
+		Main_Screen_Form_get_tile_coords_under_mouse (this, __, native_x, native_y, &tile_x, &tile_y);
+	}
 	bool set_active = false;
 	if (!is->named_tile_menu_active && is->current_config.enable_named_tiles) {
 		Tile * tile = tile_at (tile_x, tile_y);
@@ -29321,17 +29543,19 @@ patch_Main_Screen_Form_open_right_click_menu (Main_Screen_Form * this, int edx, 
 void
 draw_map_tile_text (Main_Screen_Form * this, PCX_Image * canvas, char * text, int screen_x, int screen_y, int base_screen_height, int y_offset)
 {
-	int is_zoomed_out = (p_bic_data->is_zoomed_out != false);
-	int scale = is_zoomed_out ? 2 : 1;
-	int screen_width = 128 / scale;
-	int screen_height = base_screen_height / scale;
-	int text_width = screen_width - (is_zoomed_out ? 4 : 8);
+	custom_renderer_zoom_transform_point (&screen_x, &screen_y);
+	int tile_width = custom_renderer_zoom_enabled () ?
+		is->custom_renderer_zoom_tile_width : ((p_bic_data->is_zoomed_out != false) ? 64 : 128);
+	int screen_width = tile_width;
+	int screen_height = base_screen_height * tile_width / 128;
+	y_offset = y_offset * tile_width / 128;
+	int text_width = screen_width - tile_width / 16;
 	if (text_width < 12)
 		text_width = screen_width;
 
 	int text_left = screen_x + (screen_width - text_width) / 2;
 	int draw_y = screen_y - y_offset;
-	int text_top = draw_y + screen_height + (is_zoomed_out ? 2 : 4);
+	int text_top = draw_y + screen_height + tile_width / 32;
 
 	Object_66C3FC * font = get_font (10, FSF_NONE);
 	if (font != NULL) {
@@ -34362,6 +34586,7 @@ done:
 void __fastcall
 patch_Main_Screen_Form_process_mouse_hover (Main_Screen_Form * this, int edx, int local_x, int local_y)
 {
+	custom_renderer_zoom_inverse_point (&local_x, &local_y);
 	Main_Screen_Form_process_mouse_hover (this, __, local_x, local_y);
 	update_combat_odds_hud_for_hover (this, local_x, local_y);
 	combat_odds_hud_request_redraw_if_layout_stale (this);

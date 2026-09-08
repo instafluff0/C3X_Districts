@@ -205,6 +205,7 @@ enum GeometryLayer : std::size_t {
     geometry_mine,
     geometry_farm,
     geometry_cliff0, geometry_cliff1, geometry_cliff2, geometry_cliff3,
+    geometry_cliff4, geometry_cliff5, geometry_cliff6, geometry_cliff7,
     geometry_natural_terrain, geometry_natural_decal, geometry_natural_mountain,
     geometry_natural_forest0,
     geometry_layer_count = geometry_natural_forest0 + 22
@@ -430,8 +431,8 @@ public:
     std::array<ID3D11ShaderResourceView *, 10> river_surface_views = {};
     c3x_renderer::FeatureBundle river_rock_bundle;
     c3x_renderer::FeatureBundle cliff_bundle;
-    std::array<std::vector<std::uint8_t>,24> cliff_dds;
-    std::array<ID3D11ShaderResourceView *,24> cliff_views = {};
+    std::array<std::vector<std::uint8_t>,32> cliff_dds;
+    std::array<ID3D11ShaderResourceView *,32> cliff_views = {};
     bool cliff_assets_ready = false;
     std::array<std::vector<std::uint8_t>, 5> river_rock_texture_dds;
     std::array<ID3D11ShaderResourceView *, 5> river_rock_texture_views = {};
@@ -1371,20 +1372,22 @@ public:
             std::string root = packs_root + "\\TerrainProfileR1";
             hill_geometry = load_r8_field(root.c_str(), "height.dds",
                 hills.height_pixels, hill_width, hill_height);
-            std::string path = root + "\\cliffs.bin";
+            std::string path = shore_root + "\\cliff_runtime.bin";
             std::vector<std::uint8_t> bytes;
             cliff_assets_ready = read_file(path.c_str(), bytes) &&
-                load_feature_bundle(path, cliff_bundle) && cliff_bundle.assets.size() == 6 &&
-                cliff_bundle.texture_paths.size() == 24;
-            unsigned formats[] = {72,83,80,71};
+                load_feature_bundle(path, cliff_bundle) && cliff_bundle.assets.size() == 8 &&
+                cliff_bundle.texture_paths.size() == 32 &&
+                find_feature_group(cliff_bundle, "cliff_large") != nullptr &&
+                find_feature_group(cliff_bundle, "cliff_small") != nullptr;
+            unsigned formats[] = {72,83,80,72};
             if (cliff_assets_ready) {
                 mix_content_revision(bytes);
-                for (std::size_t i=0; i<24; ++i)
-                    cliff_assets_ready = cliff_assets_ready && load_dds_bytes(root.c_str(),
+                for (std::size_t i=0; i<cliff_dds.size(); ++i)
+                    cliff_assets_ready = cliff_assets_ready && load_dds_bytes(shore_root.c_str(),
                         cliff_bundle.texture_paths[i].c_str(), cliff_dds[i], formats[i%4], 0);
             }
             trace.write("pickup-assets", cliff_assets_ready && hill_geometry ?
-                "selected hill and 6 source cliffs / 24 channels ready" : "selected source asset missing", true);
+                "selected hill and 8 source cliffs / 32 channels ready" : "selected source asset missing", true);
         }
         if (hill_geometry) {
             hills.height_width = hill_width;
@@ -2190,7 +2193,7 @@ public:
     bool ensure_terrain_textures() {
         if (pickup_profile) {
             if (!cliff_assets_ready) return false;
-            for (std::size_t i=0;i<24;++i)
+            for (std::size_t i=0;i<cliff_dds.size();++i)
                 if (!ensure_dds_texture(cliff_dds[i],cliff_views[i],true)) return false;
         }
         if (dune_assets_ready) {
@@ -3406,7 +3409,10 @@ public:
                 if(layer==geometry_wall)views[29]=views[30]=views[31]=views[32]=wall_texture_view;
                 if(layer==geometry_mine)std::copy(mine_base_views.begin(),mine_base_views.end(),views.begin()+21);
                 if(layer==geometry_farm)std::copy(farm_base_views.begin(),farm_base_views.end(),views.begin()+21);
-                if(layer>=geometry_cliff0 && layer<geometry_natural_terrain)views[0]=cliff_views[(layer-geometry_cliff0)*4];
+                if(layer>=geometry_cliff0 && layer<geometry_natural_terrain) {
+                    auto const & asset=cliff_bundle.assets[layer-geometry_cliff0];
+                    views[0]=cliff_views[asset.texture_index];
+                }
                 context->PSSetShaderResources(0,33,views.data());return true;
             };
             LARGE_INTEGER start={},end={};QueryPerformanceCounter(&start);
@@ -3539,10 +3545,20 @@ public:
             if (!draw(geometry_underlay) || !draw(geometry_land))return false;
             if(fidelity_profile){
                 context->PSSetShaderResources(17,1,&source_shadow.view);
-                for(unsigned layer=geometry_natural_terrain;layer<geometry_layer_count;layer++){
+                // Relief-neighborhood chunks now own their complete terrain
+                // surface. Draw them before the independent decal/clutter
+                // layer so those assets remain genuinely layered on top.
+                unsigned fixed_natural_layers[]={geometry_natural_terrain,
+                    geometry_natural_mountain,geometry_natural_decal};
+                for(unsigned layer:fixed_natural_layers){
                     unsigned provider=layer<=geometry_natural_decal?0:layer==geometry_natural_mountain?1:2;
                     context->OMSetDepthStencilState(layer==geometry_natural_decal?natural.decal_depth:depth_state,0);
                     natural.bind(context,provider,provider==2?layer-geometry_natural_forest0:0);
+                    if(!draw(static_cast<GeometryLayer>(layer)))return false;
+                }
+                for(unsigned layer=geometry_natural_forest0;layer<geometry_layer_count;layer++){
+                    context->OMSetDepthStencilState(depth_state,0);
+                    natural.bind(context,2,layer-geometry_natural_forest0);
                     if(!draw(static_cast<GeometryLayer>(layer)))return false;
                 }
                 context->OMSetDepthStencilState(depth_state,0);
@@ -3568,8 +3584,9 @@ public:
                 context->PSSetShaderResources(17,1,&source_shadow.view);
                 context->VSSetShader(feature_vertex_shader, nullptr, 0);
                 context->PSSetShader(feature_pixel_shader, nullptr, 0);
-                for (unsigned i=0;i<4;++i) {
-                    context->PSSetShaderResources(25,4,cliff_views.data()+i*4);
+                for (unsigned i=0;i<cliff_bundle.assets.size();++i) {
+                    auto texture_index=cliff_bundle.assets[i].texture_index;
+                    context->PSSetShaderResources(25,4,cliff_views.data()+texture_index);
                     if (!draw(static_cast<GeometryLayer>(geometry_cliff0+i))) return false;
                 }
                 context->PSSetShaderResources(25,4,feature_texture_views.data());
@@ -4142,13 +4159,14 @@ public:
         std::vector<Vertex> wall_vertices;
         std::vector<Vertex> mine_vertices;
         std::vector<Vertex> farm_vertices;
-        std::array<std::vector<Vertex>,4> cliff_vertices;
+        std::array<std::vector<Vertex>,8> cliff_vertices;
         std::array<std::vector<Vertex>,25> natural_vertices;
         std::array<std::vector<Vertex> *, geometry_layer_count> tile_layers = {
             &underlay_vertices, &land_vertices, &bed_vertices, &water_vertices,
             &river_vertices, &route_vertices, &shadow_vertices, &feature_vertices,
             &city_vertices, &wall_vertices, &mine_vertices, &farm_vertices,
-            &cliff_vertices[0], &cliff_vertices[1], &cliff_vertices[2], &cliff_vertices[3]};
+            &cliff_vertices[0], &cliff_vertices[1], &cliff_vertices[2], &cliff_vertices[3],
+            &cliff_vertices[4], &cliff_vertices[5], &cliff_vertices[6], &cliff_vertices[7]};
         for(unsigned i=0;i<25;i++)tile_layers[geometry_natural_terrain+i]=&natural_vertices[i];
         float half_w = static_cast<float>(frame.tile_width) * 0.5f;
         float half_h = static_cast<float>(frame.tile_height) * 0.5f;
@@ -5098,7 +5116,12 @@ public:
                 return river_distance(owner,u,v);
             };
             auto pickup_dune = [&](float u, float v) {
-                return dune_assets_ready ? c3x_renderer::dune_height(u,v,1.0f) : 0.0f;
+                // Source-fidelity terrain composes localized authored dune
+                // decals. Keep the older analytic wave field only for the
+                // retained non-fidelity path so it cannot turn every desert
+                // region into one continuous parallel ridge carpet.
+                return dune_assets_ready && !fidelity_profile ?
+                    c3x_renderer::dune_height(u,v,1.0f) : 0.0f;
             };
             auto pickup_activity = [&](int c, int r) {
                 auto const & world = world_coast.world();

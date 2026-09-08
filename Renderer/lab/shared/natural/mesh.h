@@ -4,6 +4,18 @@
 #include "data.h"
 #include "ground.h"
 namespace c3x_renderer { namespace fidelity {
+template<class Height,class Shore,class Weights,class Cancelled>
+bool emit_surface_decals(NaturalData const&natural,Tile owner,GroundProjection project_natural,
+                         Height height_natural,Shore shore_sample_at,Weights material_weights_for,
+                         Cancelled cancelled,std::vector<MapVertex>&decals) {
+    using Vertex=MapVertex;
+    int nc=project_natural.column,nr=project_natural.row;
+    std::array<std::vector<Vertex>*,2> layers{{nullptr,&decals}};
+    struct LayerView {decltype(layers)&values;std::vector<Vertex>&operator[](unsigned i){return *values[i];}} natural_vertices{layers};
+    auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
+    #include "surface_mesh_body.h"
+    return true;
+}
 template<class Lookup,class Height,class Shore,class River,class Weights,class Cancelled>
 bool emit_relief_meshes(NaturalData const&natural,int real,Tile owner,GroundProjection project_natural,
                        Lookup lookup_natural,Height height_natural,Shore shore_sample_at,

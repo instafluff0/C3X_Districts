@@ -383,9 +383,22 @@ def scene(category, case, destination, *, world_size=32):
             if category == "transitions":
                 base = real = (2 if x < 16 else 1) if y < 16 else (0 if x < 16 else 3)
             if category in ("shorelines", "seas-oceans"):
-                base = real = 2 if x < 13 else 11 if x < 17 else 12 if x < 23 else 13
-                if category == "seas-oceans" and case == "detail":
-                    base = real = 12 if x < 16 else 13
+                if category == "shorelines":
+                    # Exercise the feature this category actually owns: cliffs
+                    # occur only where a hill tile meets the shore.  The detail
+                    # case keeps a long rocky run in frame; gameplay mixes it
+                    # with ordinary lowland beach so both joins remain visible.
+                    shore = 15 if 7 <= y < 14 else 11 if 23 <= y < 28 else 13
+                    if x < shore:
+                        rocky_run = case == "detail" or 8 <= y < 24
+                        base, real = 2, 5 if rocky_run and x >= shore - 4 else 2
+                    else:
+                        depth = x - shore
+                        base = real = 11 if depth < 4 else 12 if depth < 10 else 13
+                else:
+                    base = real = 2 if x < 13 else 11 if x < 17 else 12 if x < 23 else 13
+                    if case == "detail":
+                        base = real = 12 if x < 16 else 13
             if category == "rivers":
                 c, r = (x + y) // 2, (x - y) // 2
                 shore = 22 + (1 if r <= -2 else 0) + (1 if r >= 4 else 0)

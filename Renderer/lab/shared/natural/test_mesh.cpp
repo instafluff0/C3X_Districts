@@ -72,7 +72,7 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                 float h=natural.fields[piece.height_field].sample(u,v);
                 float blend=natural.fields[piece.blend_field].sample(u,v);
                 float shaped=piece.connected?std::pow(std::max(0.f,h),.80f):h;
-                float displacement=shaped*piece.height_scale*smooth01((blend-.10f)/.30f);
+                float displacement=shaped*piece.height_scale*smooth01((blend-.28f)/.34f);
                 if(displacement>result.dominant){
                     result.dominant=displacement;result.height=h;result.u=u;result.v=v;
                 }
@@ -141,16 +141,18 @@ bool reference_relief(NaturalData const&natural,int real,Tile owner,GroundProjec
                     out.material_grass=sample.height;out.material_plains=2;out.material_desert=sample.blend;
                     auto weights=material_weights_for(world_x,world_y);
                     float source_weight=std::clamp(1-weights[3],0.f,1.f);
+                    float desert_weight=std::clamp(weights[2]/std::max(source_weight,.00001f),0.f,1.f);
+                    float coverage=coast_coverage(float(shore.distance),float(shore.beach_width))*(1-desert_weight)+
+                        desert_coast_coverage(float(shore.distance))*desert_weight;
                     for(auto&weight:weights)weight/=std::max(source_weight,.00001f);
                     out.material_marsh=weights[4];out.authored_relief_height=weights[1];
                     out.authored_relief_blend=weights[2];
-                    out.base_terrain=42+coast_coverage(float(shore.distance),float(shore.beach_width))*source_weight;
+                    out.base_terrain=42+coverage*source_weight;
                     grid[y*count+x]=out;
                 }
             }
             for(unsigned y=0;y+1<count;y++)for(unsigned x=0;x+1<count;x++){
                 auto&a=grid[y*count+x];auto&b=grid[y*count+x+1];auto&c=grid[(y+1)*count+x+1];auto&d=grid[(y+1)*count+x];
-                if(std::max({a.material_desert,b.material_desert,c.material_desert,d.material_desert})<.015f)continue;
                 triangle(natural_vertices[2],a,b,c);triangle(natural_vertices[2],a,c,d);
             }
         }
@@ -301,7 +303,7 @@ int main(){
             [&](float x,float y){return a.river(x,y);},weights,cancel_a,actual[1],actual[2]));
         assert(reference_relief(data,real,owner,projection,topology,height_b,shore_b,
             [&](float x,float y){return b.river(x,y);},weights,cancel_b,expected));
-        if(real==6 && mode==2)assert(actual[2].empty());
+        if(real==6)assert(!actual[2].empty());
         if(real==6 && !actual[2].empty()){
             float x0=1e9f,x1=-1e9f,y0=1e9f,y1=-1e9f;
             for(auto const&v:actual[2]){x0=std::min(x0,v.world_x);x1=std::max(x1,v.world_x);
@@ -309,7 +311,7 @@ int main(){
             assert(x0>=float(c) && x1<=float(c+1));
             assert(y0>=float(r) && y1<=float(r+1));
             auto const&v=actual[2].front();
-            assert(std::abs(v.base_terrain-42.9f)<1e-5f);
+            assert(v.base_terrain>=42.f && v.base_terrain<=42.90001f);
             assert(std::abs(v.authored_relief_height-.25f/.9f)<1e-5f);
             assert(std::abs(v.authored_relief_blend-.15f/.9f)<1e-5f);
             assert(std::abs(v.material_marsh-.30f/.9f)<1e-5f);
@@ -383,5 +385,5 @@ int main(){
         assert(!got && got==old);check(actual,expected,a,b);scopes++;
     }
     std::cout<<"PASS shared natural meshes: "<<scopes<<" scopes, "<<vertices<<" byte-identical vertices, "
-             <<observations<<" ordered observations; five mountain variants, clipping and cancellation\n";
+             <<observations<<" ordered observations; five mountain variants, unified surfaces and cancellation\n";
 }

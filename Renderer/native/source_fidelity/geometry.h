@@ -21,9 +21,18 @@ if(fidelity_profile) {
     auto surface=[&](float u,float v){
         return ground_surface(project_natural,u,v,height_natural,shore_sample_at,material_weights_for);
     };
-    if(ground<11 || shore_sample_at(float(nc)+.5f,float(nr)+.5f).distance>-.8f){
+    // A mountain-neighborhood patch is emitted once as a continuous
+    // terrain-relief surface below. Do not leave the ordinary ground mesh
+    // underneath it: two coincident surfaces can never share depth, normals
+    // and shadow reception exactly and were the source of the visible lips.
+    bool unified_mountain_surface=false;
+    for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++)
+        unified_mountain_surface|=lookup_natural(nc+dc,nr+dr).real==6;
+    if(!unified_mountain_surface &&
+       (ground<11 || shore_sample_at(float(nc)+.5f,float(nr)+.5f).distance>-.8f)){
         if(!emit_ground_grid(natural_vertices[0],surface,cancelled))return false;
     }
+    #include "../../lab/shared/natural/surface_mesh_body.h"
     #include "../../lab/shared/natural/relief_mesh_body.h"
     #include "../../lab/shared/natural/vegetation_floor_mesh_body.h"
     #include "../city_fidelity/geometry.h"

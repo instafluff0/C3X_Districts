@@ -15,10 +15,10 @@ class ShorePackTests(unittest.TestCase):
         for spec in extractor.SHORE_SPECS:
             groups[spec["group"]] = groups.get(spec["group"], 0) + 1
         self.assertEqual(
-            {"cliff_large": 4, "cliff_small": 2, "polar_ice": 16, "river_rock": 5},
+            {"cliff_large": 4, "cliff_small": 4, "polar_ice": 16, "river_rock": 5},
             groups,
         )
-        self.assertEqual(17, len(extractor.SOURCE_EXCLUSIONS))
+        self.assertEqual(15, len(extractor.SOURCE_EXCLUSIONS))
 
     def test_build_writes_source_agnostic_runtime_manifest(self) -> None:
         class FakePackage:
@@ -27,7 +27,7 @@ class ShorePackTests(unittest.TestCase):
             allocations = [object(), object()]
             stripe_bases = {0: 100, 1: 200}
 
-        def fake_build(_package, _shared, pack, spec):
+        def fake_build(_package, _shared, pack, spec, **_options):
             mesh = f"meshes/features/{spec['stem']}.json"
             material = f"materials/features/{spec['stem']}.json"
             (pack / mesh).parent.mkdir(parents=True, exist_ok=True)
@@ -53,13 +53,13 @@ class ShorePackTests(unittest.TestCase):
                 )
 
             manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(27, len(manifest["assets"]))
+            self.assertEqual(29, len(manifest["assets"]))
             self.assertEqual(16, len(manifest["feature_sets"]["polar_ice"]["variants"]))
-            self.assertEqual("verified_subset", manifest["feature_sets"]["cliff_small"]["status"])
+            self.assertEqual("complete_verified_set", manifest["feature_sets"]["cliff_small"]["status"])
             self.assertEqual(5, len(manifest["feature_sets"]["river_rock"]["variants"]))
             self.assertNotIn("TER_", json.dumps(manifest))
             self.assertEqual("passed", result["runtime_independence"])
-            self.assertEqual(17, len(result["excluded_source_candidates"]))
+            self.assertEqual(15, len(result["excluded_source_candidates"]))
 
 
 if __name__ == "__main__":

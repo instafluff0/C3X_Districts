@@ -47,6 +47,14 @@ int main(int argc,char**argv){
             if(std::abs(slope)>.004f)return 1;
         }
     }
+    float previous_desert=0;
+    for(int i=-100;i<=400;i++) {
+        float d=i*.001f;
+        float coverage=c3x_renderer::fidelity::desert_coast_coverage(d);
+        if(coverage<previous_desert || coverage<0 || coverage>1 ||
+           (d<.01f && coverage!=0) || (d>.121f && coverage!=1))return 1;
+        previous_desert=coverage;
+    }
     // The live boundary adapter consumes the retained continuous field,
     // including four-way intersections and wrapped source coordinates.
     using namespace c3x_renderer::render_core;

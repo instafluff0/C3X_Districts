@@ -10,7 +10,7 @@ struct Natural : NaturalWorld {
     ID3D11DepthStencilState*decal_depth=nullptr;
     bool ready=false;
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
-    void reset(){drop(decal_depth);reset_world();for(auto&p:textures)drop(p);textures.clear();fields.clear();materials.clear();bodies.clear();recipes.clear();
+    void reset(){drop(decal_depth);reset_world();for(auto&p:textures)drop(p);textures.clear();fields.clear();materials.clear();bodies.clear();recipes.clear();surface_recipes.clear();surface_vertices.clear();
         for(int i=0;i<3;i++){drop(vs[i]);drop(ps[i]);drop(layout[i]);drop(frames[i]);}ready=false;}
     ~Natural(){reset();}
     template<class Read,class Upload>
@@ -53,8 +53,8 @@ struct Natural : NaturalWorld {
     void bind(ID3D11DeviceContext*c,unsigned provider,unsigned body=0){
         c->VSSetShader(vs[provider],nullptr,0);c->PSSetShader(ps[provider],nullptr,0);
         c->IASetInputLayout(layout[provider]);c->PSSetConstantBuffers(0,1,&frames[provider]);
-        ID3D11ShaderResourceView*views[30]={};
-        if(provider==0)for(unsigned i=0;i<26;i++)views[i]=textures[terrain[i]];
+        ID3D11ShaderResourceView*views[31]={};
+        if(provider==0)for(unsigned i=0;i<31;i++)views[i]=textures[terrain[i]];
         if(provider==1){
             for(unsigned i=0;i<13;i++)views[i]=textures[mountain[i]];
             // Reuse the generic terrain-pack families for the collar. Runtime
@@ -67,10 +67,11 @@ struct Natural : NaturalWorld {
             views[24]=textures[terrain[3]];views[25]=textures[terrain[4]];
             views[26]=textures[terrain[5]];views[27]=textures[terrain[9]];
             views[28]=textures[terrain[10]];views[29]=textures[terrain[11]];
+            views[30]=textures[terrain[30]];
         }
         if(provider==2){auto const&m=materials[bodies[body].material];for(unsigned i=0;i<7;i++)if(m.channels[i]!=0xffffffffu)views[i+3]=textures[m.channels[i]];}
         // t17 is always the shared atlas, never the source specular channel.
-        c->PSSetShaderResources(0,17,views);c->PSSetShaderResources(18,12,views+18);
+        c->PSSetShaderResources(0,17,views);c->PSSetShaderResources(18,13,views+18);
     }
 };
 } }

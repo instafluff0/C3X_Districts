@@ -128,12 +128,16 @@ def build_pack(output=PACK):
         pins[str(p.relative_to(ROOT))]=h
         if dst.name not in assets:assets.append(dst.name)
         return assets.index(dst.name)
+    def metadata(path):
+        p=(ROOT/path).resolve();p.relative_to(ROOT)
+        raw=p.read_bytes();pins[str(p.relative_to(ROOT))]=hashlib.sha256(raw).hexdigest()
+        return json.loads(raw)
     def source(path):return asset('Renderer/packs/Civ5EnvironmentSkin/'+path)
     decal_pack=ROOT/'Renderer/packs/DecalsNormalized'
-    decal_manifest=json.loads((decal_pack/'manifest.json').read_text())
+    decal_manifest=metadata('Renderer/packs/DecalsNormalized/manifest.json')
     def decal_channel(asset_id,role):
         entry=decal_manifest['assets'][asset_id]
-        document=json.loads((decal_pack/entry['decal']).read_text())
+        document=metadata((decal_pack/entry['decal']).relative_to(ROOT).as_posix())
         return asset((decal_pack/document['channels'][role]['texture']).relative_to(ROOT).as_posix())
     terrain=[]
     for family in ['grassland','grasshill_top','plains','plainshill_top']:
@@ -150,6 +154,27 @@ def build_pack(output=PACK):
     terrain += [source(f'textures/desert_{c}.dds') for c in ['base_color','height','specular']]
     terrain += [decal_channel('terrain/forest/floor_01',c) for c in ['base_color','height']]
     terrain += [decal_channel('terrain/jungle/floor_01',c) for c in ['base_color','height']]
+    terrain += [decal_channel('terrain/plains/decal_01',c) for c in ['base_color','height']]
+    terrain += [decal_channel('terrain/desert/dune/decal_01',c) for c in ['base_color','height']]
+    terrain += [source('textures/relief_surface_detail.dds')]
+    assert len(terrain)==31
+    surface=[]
+    surface_vertices=[]
+    for biome,group in [(0,'terrain/grassland/surface'),(1,'terrain/plains/surface'),
+                        (2,'terrain/desert/surface'),(2,'terrain/desert/dunes')]:
+        rows=decal_manifest['decal_groups'][group]['placements']
+        for placement in rows:
+            entry=decal_manifest['assets'][placement['asset']]
+            document=metadata((decal_pack/entry['decal']).relative_to(ROOT).as_posix())
+            x0,y0,x1,y1=document['footprint']['bounds_xy']
+            mesh=document['mesh'];first=len(surface_vertices)
+            for index in mesh['indices']:
+                vertex=mesh['vertices'][index]
+                surface_vertices.append((*vertex['position'],*vertex['uv0']))
+            surface.append((biome,float(placement['scale']),float(placement['scale_variation']),
+                int(placement['count']),float(x1-x0),float(y1-y0),first,len(mesh['indices'])))
+    assert surface and all(any(row[0]==biome for row in surface) for biome in range(3))
+    assert surface_vertices and len(surface_vertices)%3==0
     mountain=terrain[:3]
     for family in ['mtn_base','mtn_top','mtn_snow']:
         mountain += [source(f'textures/{family}_{c}.dds') for c in ['base_color','height','specular']]
@@ -159,8 +184,8 @@ def build_pack(output=PACK):
     for i in materials:
         paths,tint,repeat=mats[i]
         bindings.append(([asset(p) if p else 0xffffffff for p in paths],tint,repeat))
-    out=bytearray(b'C3XNAT1\0')
-    out+=struct.pack('<4I',len(assets),len(bindings),len(trees),nr)
+    out=bytearray(b'C3XNAT3\0')
+    out+=struct.pack('<6I',len(assets),len(bindings),len(trees),nr,len(surface),len(surface_vertices))
     for path in assets:
         b=path.encode();out+=struct.pack('<I',len(b))+b
     for row in [terrain,mountain,*macro]:out+=struct.pack('<'+'I'*len(row),*row)
@@ -168,17 +193,22 @@ def build_pack(output=PACK):
     for i in trees:
         _,_,mat,n,v=objs[i];out+=struct.pack('<2I',materials.index(mat),n)+v
     for r in recipes:out+=struct.pack('<IffIIIIff',trees.index(r[0]),*r[1:])
+    for r in surface:out+=struct.pack('<IffIffII',*r)
+    for vertex in surface_vertices:out+=struct.pack('<4f',*vertex)
     (output/'natural.bin').write_bytes(out)
     record={'schema':1,'authority':'source-fidelity-r13/inland','source_sha256':pins,
         'hill_height_source':'local-authored-overlay' if hill_height==LOCAL_HILL_HEIGHT else 'normalized-baseline',
-        'trees':22,'recipes':25,'count_weight':180,'texture_count':len(assets),'pack_sha256':hashlib.sha256(out).hexdigest(),'sampling':{'samples':4,'anisotropy':16,'render_scale':2,'mip_bias':-1,'reconstruction':'one scene-linear equal-area box'}}
+        'trees':22,'recipes':25,'count_weight':180,'surface_recipes':len(surface),
+        'surface_weight':sum(r[3] for r in surface),'surface_triangles':len(surface_vertices)//3,
+        'texture_count':len(assets),
+        'pack_sha256':hashlib.sha256(out).hexdigest(),'sampling':{'samples':4,'anisotropy':16,'render_scale':2,'mip_bias':-1,'reconstruction':'one scene-linear equal-area box'}}
     return record
 
 def main():
     shaders()
     record=build_pack()
     (HERE/'provenance.json').write_text(json.dumps(record,indent=2)+'\n')
-    print(f"PASS generic natural pack: {record['texture_count']} unchanged DDS payloads, 22 bodies, 25 recipes, weight 180")
+    print(f"PASS generic natural pack: {record['texture_count']} unchanged DDS payloads, 22 bodies, 25 tree recipes, {record['surface_recipes']} surface recipes, {record['surface_triangles']} exact decal triangles")
 if __name__=='__main__':
     import argparse
     parser=argparse.ArgumentParser(description=__doc__)

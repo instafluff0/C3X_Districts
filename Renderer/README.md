@@ -66,6 +66,7 @@ unless an intentional, explicitly approved change calls for something else.
   [source lighting findings](docs/civ6_lighting_findings.md): confirmed data versus inference.
 - [Patch dependency ledger](docs/civ3_patch_dependency_ledger.md): actual integration patch needs.
 - [Configuration](docs/renderer_config_spec.md) and [visible scenes](docs/visible_scene_contract.md).
+- [Mouse-wheel zoom](docs/custom_rendering_zoom.md): custom camera, input and fallback contract.
 
 Natural wonders, constructed wonders and Districts remain deferred. Preserve
 [natural-wonder contracts](docs/natural_wonder_rendering.md) and

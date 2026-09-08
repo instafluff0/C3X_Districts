@@ -331,7 +331,7 @@ struct c3x_config {
 	bool dont_pause_for_love_the_king_messages;
 	bool reverse_specialist_order_with_shift;
 	bool toggle_zoom_with_z_on_city_screen;
-	bool enable_mouse_wheel_zoom;
+	bool enable_custom_rendering_zoom;
 	bool dont_give_king_names_in_non_regicide_games;
 	bool no_elvis_easter_egg;
 	bool disable_worker_automation;
@@ -2662,6 +2662,13 @@ struct district_button_image_set {
 	int custom_renderer_world_topology_count;
 	long long custom_renderer_world_topology_revision;
 	bool custom_renderer_capture_world_topology;
+	// Main-map wheel zoom is an injected camera transform. Civ III remains the
+	// authoritative camera; these fields scale its captured anchors and invert
+	// mouse coordinates back into the native projection for interaction.
+	int custom_renderer_zoom_tile_width;
+	int custom_renderer_zoom_native_tile_width;
+	long long custom_renderer_zoom_translate_x_fp;
+	long long custom_renderer_zoom_translate_y_fp;
 	bool custom_renderer_frame_active;
 	bool custom_renderer_capture_failed;
 	bool custom_renderer_composited;

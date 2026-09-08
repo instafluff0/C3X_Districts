@@ -429,6 +429,7 @@ def normalize_mesh(
     asset_id: str,
     allow_wrapping_uvs: bool = False,
     use_authored_normals: bool = False,
+    drop_degenerate_triangles: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     profile = VERTEX_PROFILES.get(vertex_entry["format"])
     if profile is None or vertex_entry["stride"] != profile["stride"]:
@@ -492,6 +493,8 @@ def normalize_mesh(
 
     normal_sums = [[0.0, 0.0, 0.0] for _ in positions]
     triangle_areas = []
+    kept_indices = []
+    dropped_degenerate_triangles = 0
     for start in range(0, len(indices), 3):
         ia, ib, ic = indices[start : start + 3]
         a, b, c = positions[ia], positions[ib], positions[ic]
@@ -504,11 +507,25 @@ def normalize_mesh(
         )
         area2 = math.sqrt(sum(component * component for component in cross))
         if area2 <= 1.0e-10:
-            raise ValueError(f"Primitive group contains a degenerate triangle at {start // 3}")
+            if not drop_degenerate_triangles:
+                raise ValueError(f"Primitive group contains a degenerate triangle at {start // 3}")
+            dropped_degenerate_triangles += 1
+            continue
+        kept_indices.extend((ia, ib, ic))
         triangle_areas.append(area2 * 0.5)
         for index in (ia, ib, ic):
             for axis in range(3):
                 normal_sums[index][axis] += cross[axis]
+    if dropped_degenerate_triangles:
+        used = sorted(set(kept_indices))
+        remap = {source: target for target, source in enumerate(used)}
+        indices = [remap[index] for index in kept_indices]
+        source_positions = [source_positions[index] for index in used]
+        source_uvs = [source_uvs[index] for index in used]
+        positions = [positions[index] for index in used]
+        normal_sums = [normal_sums[index] for index in used]
+    if not triangle_areas:
+        raise ValueError("Primitive group contains no non-degenerate triangles")
     geometric_normals = []
     for index, value in enumerate(normal_sums):
         length = math.sqrt(sum(component * component for component in value))
@@ -518,10 +535,12 @@ def normalize_mesh(
 
     if use_authored_normals and profile.get("normal_encoding") == "octahedral_snorm8":
         normal_offset = profile["normal_offset"]
-        normals = [
+        source_normals = [
             tuple(decode_octahedral_snorm8(vertex_bytes, vertex * stride + normal_offset))
             for vertex in range(vertex_count)
         ]
+        normals = ([source_normals[index] for index in used]
+                   if dropped_degenerate_triangles else source_normals)
         normal_dots = [
             sum(authored[axis] * geometric[axis] for axis in range(3))
             for authored, geometric in zip(normals, geometric_normals)
@@ -529,7 +548,7 @@ def normalize_mesh(
         normal_source = "authored_octahedral_snorm8"
     else:
         normals = geometric_normals
-        normal_dots = [1.0] * vertex_count
+        normal_dots = [1.0] * len(positions)
         normal_source = "area_weighted_geometry"
 
     def rounded(values: tuple[float, ...] | list[float]) -> list[float]:
@@ -581,9 +600,11 @@ def normalize_mesh(
             "uniform_scale": 1.0 / SOURCE_UNITS_PER_TILE,
             "source_units_per_tile": SOURCE_UNITS_PER_TILE,
         },
-        "vertices": vertex_count,
+        "source_vertices": vertex_count,
+        "vertices": len(positions),
         "indices": len(indices),
         "triangles": len(indices) // 3,
+        "dropped_degenerate_triangles": dropped_degenerate_triangles,
         "unique_uv0": len(set(source_uvs)),
         "uv0_address_mode": "wrap" if wraps_uv0 else "clamp",
         "triangle_area_range": [min(triangle_areas), max(triangle_areas)],
@@ -743,6 +764,7 @@ def build_feature(
     allow_wrapping_uvs: bool = False,
     allow_optional_maps: bool = False,
     use_authored_normals: bool = False,
+    drop_degenerate_triangles: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     asset_name = spec["source_name"]
     package.select_direct_string(asset_name)
@@ -804,6 +826,7 @@ def build_feature(
         spec["asset_id"],
         allow_wrapping_uvs,
         use_authored_normals,
+        drop_degenerate_triangles,
     )
 
     material_user_data = package.unique_pointer_field(

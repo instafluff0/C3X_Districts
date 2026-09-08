@@ -90,6 +90,11 @@ Texture2D ForestFloorColor : register(t22);
 Texture2D ForestFloorHeight : register(t23);
 Texture2D JungleFloorColor : register(t24);
 Texture2D JungleFloorHeight : register(t25);
+Texture2D PlainsSurfaceColor : register(t26);
+Texture2D PlainsSurfaceHeight : register(t27);
+Texture2D DesertDuneColor : register(t28);
+Texture2D DesertDuneHeight : register(t29);
+Texture2D SurfaceDetail : register(t30);
 Texture2D DesertColor : register(t19);
 Texture2D DesertHeight : register(t20);
 Texture2D DesertSpecular : register(t21);
@@ -179,6 +184,13 @@ float3 atmosphere(float y) {
                 saturate(y * 0.78 + 0.18)) + float3(0.12, 0.085, 0.045) * horizon * 0.17;
 }
 
+float surface_shape(float2 world) {
+    float broad = SurfaceDetail.Sample(Wrap, world * 0.071 + float2(0.13, 0.37)).r;
+    float crossed = SurfaceDetail.Sample(Wrap,
+        float2(world.y, -world.x) * 0.183 + float2(0.61, 0.29)).r;
+    return saturate(broad * 0.72 + crossed * 0.28);
+}
+
 Output shade(P input) {
     Output output;
     if (input.material.y < 0.5) {
@@ -191,12 +203,39 @@ Output shade(P input) {
     float3 albedo;
     float height_detail;
     float specular_map;
+    float surface_occlusion = 1;
     // Retain the selected beach/water composition beneath this replacement.
     // The same coverage also clips its source-shadow caster triangles.
     float alpha = saturate(input.coast_coverage+10);
     clip(alpha-.001);
 
-    if (input.material.y > 2.5) {
+    if (input.material.y > 4.5) {
+        bool desert_dune = input.material.y > 6.5;
+        bool plains_surface = input.material.y > 5.5 && !desert_dune;
+        float4 patch = desert_dune ? DesertDuneColor.Sample(Clamp, input.uv) :
+                       (plains_surface ? PlainsSurfaceColor.Sample(Clamp, input.uv) :
+                                         HillDecalColor.Sample(Clamp, input.uv));
+        float2 packed = desert_dune ? DesertDuneHeight.Sample(Clamp, input.uv).rg :
+                        (plains_surface ? PlainsSurfaceHeight.Sample(Clamp, input.uv).rg :
+                                          HillDecalNormal.Sample(Clamp, input.uv).rg);
+        clip(patch.a - 0.015);
+        if (desert_dune) {
+            float3 substrate = DesertColor.Sample(Wrap,
+                input.world.xy * Detail.x + float2(0.31, 0.17)).rgb;
+            albedo = lerp(substrate, patch.rgb, 0.42);
+            packed = lerp(0.5.xx, packed, 0.58);
+        } else {
+            albedo = patch.rgb;
+        }
+        geometric = decal_normal(input, packed);
+        height_detail = packed.r;
+        specular_map = desert_dune ? 0.08 : 0.04;
+        surface_occlusion = lerp(1.0, 0.80, saturate(length(packed * 2 - 1)));
+        // The source patch carries its own coverage. The interpolated
+        // authoritative biome field fades it at ecotones and terrain edits.
+        alpha *= patch.a * smoothstep(0.015, 0.42, input.material.z) *
+                 (desert_dune ? 0.62 : 1.0);
+    } else if (input.material.y > 2.5) {
         bool jungle_floor = input.material.y > 3.5;
         float4 floor_sample = jungle_floor ? JungleFloorColor.Sample(Clamp, input.uv) :
                                              ForestFloorColor.Sample(Clamp, input.uv);
@@ -284,10 +323,12 @@ Output shade(P input) {
         specular_map = lerp(base_s, hill_s, rocky_band);
         geometric = detail_normal(geometric, input.world, height_detail);
 
-        // Very broad source-derived modulation breaks up large flat regions
-        // without adding synthetic high-frequency noise or tile boundaries.
-        float broad = AuthoredHillHeight.Sample(Wrap, input.world.xy * 0.035 + float2(0.73, 0.21)).r;
-        albedo *= lerp(0.90, 1.08, broad);
+        // Source-backed detail supplies a continuous material-scale response.
+        // Cooler lows and warm dry highs add readable regional variation
+        // without perturbing the flat-ground geometry or drawing tile borders.
+        float broad = surface_shape(input.world.xy);
+        albedo *= lerp(float3(0.88, 0.94, 0.97),
+                       float3(1.09, 1.045, 0.91), broad);
     }
 
 #ifdef BEAUTY_COMPOSED_SHADOWS
@@ -301,7 +342,7 @@ Output shade(P input) {
     float wrap = saturate((dot(geometric, light_direction) + 0.20) / 1.20);
     float sky = saturate(geometric.z * 0.5 + 0.5);
     float cavity = lerp(0.79, 1.0, smoothstep(0.02, 0.30, input.material.x));
-    float3 ambient = Ambient.rgb * Ambient.a * lerp(0.56, 1.0, sky) * cavity;
+    float3 ambient = Ambient.rgb * Ambient.a * lerp(0.56, 1.0, sky) * cavity * surface_occlusion;
 #ifdef BEAUTY_COMPOSED_SHADOWS
     float shadow = q6_shadow_visibility(ShadowField, input.world, geometric,
         ShadowU, ShadowV, ShadowL, ShadowFlags.x > 0.5, true);

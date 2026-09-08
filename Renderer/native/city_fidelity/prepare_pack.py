@@ -44,7 +44,9 @@ def _build(OUT):
         for key in ['normals','materials']:pins[record[key]]=sha(record[key])
         frames.update(read(record['normals'])['meshes']);extra.update(read(record['materials'])['materials'])
     # The selected palace is already fingerprinted by the pickup gates.
-    for name in ['palace-normals.json','palace-materials.json']:
+    for name in ['palace-normals.json','palace-materials.json',
+                 'asian-ancient-palace-normals.json',
+                 'asian-ancient-palace-materials.json/mapping.json']:
         p=str((INPUT/name).relative_to(ROOT));pins[p]=sha(p)
         if 'normals' in name:frames.update(read(p)['meshes'])
         else:extra.update(read(p)['materials'])
@@ -164,16 +166,28 @@ def _build(OUT):
         reference=[city.component(a) for a in read(city.PACK/'city_catalog.json')['pools'][pool]['components']]
         scale=city.source_scale(reference,1.5)
         for a in assets:a['grid_rotation']=footprint_alignment([v['position'][:2] for mesh,m in a['parts'] if m['alpha_mode']!='blend' for v in mesh['vertices']])
-        # Source neighborhoods use the smaller body budget; individual houses
-        # use the selected dense growth budget. This is offline pack policy.
+        # Preserve the documented Civ III population hierarchy at gameplay
+        # scale. Individual source houses need negative space just as much as
+        # precomposed neighborhood blocks; doubling their count collapses roof
+        # and facade silhouettes into one dark mass after reconstruction.
         blocks=set(current['blocks_by_pool'][pool])
         order=sorted([a for a in assets if a['id'] not in blocks],key=lambda a:(a['hi'][2]-a['lo'][2],a['id']))
         if not order:order=assets
-        counts=[4,7,11] if blocks else [8,16,24]
+        counts=[4,7,11]
         preserved=[]
         for size,count in enumerate(counts):
+            layout={};buildable=lambda box:True
+            if not blocks:
+                # Keep a stable civic court in the middle of individual-house
+                # pools. The first four growth slots occupy its four sides;
+                # later stages extend that connected neighborhood instead of
+                # minimizing into one unreadable row.
+                court=[-.17,-.17,.17,.17]
+                buildable=lambda box,court=court:not overlaps(box,court)
+                layout={'fixed_neighbors':[court],
+                    'surround_center':[0,0]}
             try:
-                plan,stats=solve(order,count,scale,[.65,.8,.95][size],lambda box:True,preserved=preserved,node_limit=20000,grid_step=.07,neighbor_gap=.08,connected_prefixes=tuple(counts[:size+1]))
+                plan,stats=solve(order,count,scale,[.65,.8,.95][size],buildable,preserved=preserved,node_limit=20000,grid_step=.07,neighbor_gap=.1,connected_prefixes=tuple(counts[:size+1]),**layout)
             except ValueError as e:
                 gaps.append({'pool':pool,'size':size,'reason':str(e)});break
             if plan is None:
@@ -181,6 +195,15 @@ def _build(OUT):
             instances=[{'asset':i['asset']['id'],'slot':i['slot'],'scale':i['scale'],'rotation':i['rotation'],'offset':[i['x'],i['y']],'local_bounds':bounds(i['asset'],i['rotation'],i['scale'])} for i in plan]
             preserved=instances
             template(pool,size,instances,False,'generic-source-growth',era=='modern')
+            if pool=='city/pool/asian/ancient':
+                # AncientWood is the checked source fallback for Civ III's
+                # Asian ancient group. Its matching source palace gives a
+                # capital a readable center without inventing Japanese art.
+                palace='city/palace/root/57520845b3095674'
+                template(pool,size,instances+[{'asset':palace,'slot':'capital',
+                    'pack':'Renderer/packs/CityPalacesNormalized','scale':8.5,
+                    'rotation':0,'offset':[0,0]}],True,
+                    'asian-ancientwood-capital',True)
         print('COMPOSED',pool,flush=True)
     meta={'schema':'c3x.city_composition.v1','materials':materials,'models':[{k:v for k,v in m.items() if k!='parts'} for m in models],'templates':templates,'gaps':gaps,'source_sha256':pins}
     (OUT/'manifest.json').write_text(json.dumps(meta,indent=2)+'\n')

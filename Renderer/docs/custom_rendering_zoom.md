@@ -1,0 +1,42 @@
+# Custom-rendering stepped zoom
+
+`enable_custom_rendering_zoom = true` adds instant stepped main-map zoom when
+`enable_custom_rendering = true`. The current levels use Civ III's isometric
+basis at tile widths 64, 80, 96, 112 and 128 pixels. Each `Z` press steps from
+128 toward 64, then wraps from 64 to 128. The projected world point at the
+screen center stays fixed while the level changes.
+
+Civ III remains the camera and interaction authority. The injected bridge
+applies one affine scale and translation to captured map anchors, then supplies
+the selected tile width to the off-screen renderer. Mouse coordinates are
+inverse-transformed before native tile picking. Native map sprites, C3X tile
+highlights and map text receive the same forward transform; custom-rendered
+unit bodies receive an exact numeric projection scale rather than the old
+normal/reduced binary. While this zoom feature is enabled, native FLC unit bodies
+are never shown: if custom units are disabled or a custom body cannot render,
+that body is omitted. Native selection, health, status and unit-HUD overlays keep
+their existing ownership.
+
+Zoom is deliberately main-map-only. It uses the existing patched
+`Main_Screen_Form_handle_key_down` boundary and consumes `Z` before Civ III's
+native two-level toggle. No mouse-wheel vtable entry is required. The handler
+uses Civ III's native `bring_tile_into_view` operation to preserve the map center
+and force the same complete tile traversal as native `Z`. A plain Animator dirty
+bit is insufficient because it may request only a one-tile damage redraw,
+leaving the exclusive custom terrain plane without a complete visible capture.
+The city screen retains its existing C3X `Z` handling. Changing Civ III's native
+zoom mode with another existing control resets the custom transform to that
+native level. Renderer failure retains the existing custom-map-plane policy.
+Outside this zoom mode, unit-body failure retains the existing native fallback;
+while zoom is enabled, the failed body is omitted as described above.
+
+Zoomed-out capture promotes only complete appearance records that can reach the
+scaled viewport. The outer topology ring remains non-renderable. Intermediate
+levels currently request a full map clip so native retained overlays cannot
+leave stale pixels; narrower damage tracking is a later performance refinement.
+
+Automated checks cover affine anchor invariance, inverse picking, the five-level
+`Z` cycle, expanded capture, native overlay scaling and numeric unit projection.
+A live checkpoint should exercise repeated `Z` steps, hover/left/right selection,
+scrolling and wrapping, units and selection/status overlays, city-screen `Z`,
+the native zoom control reset, and configuration-off behavior.

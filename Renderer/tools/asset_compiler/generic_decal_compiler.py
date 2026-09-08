@@ -24,11 +24,14 @@ from typing import Any, Callable
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from Renderer.tools.asset_compiler.clutter_blp_extractor import (
     StaticPackage,
+    TYPE_INDEX_BUFFER,
     TYPE_MATERIAL,
     TYPE_MESH,
     TYPE_MODEL,
     TYPE_PRIM_GROUP,
     TYPE_TEXTURE,
+    TYPE_VERTEX_BUFFER,
+    decode_buffer_entry,
     decode_texture_entry,
     extract_civbig_texture,
     landmark_base_model,
@@ -58,6 +61,8 @@ TYPE_DECAL_VECTOR = "LandmarkPackageEntry::DecalDesc2VectorEntry"
 TYPE_DECAL = "DecalDesc2"
 TYPE_TERRAIN_EDIT_VECTOR = "LandmarkPackageEntry::TerrainEditDesc3VectorEntry"
 DECAL_BYTES = 108
+DECAL_VERTEX_FORMAT = 0xE65052D7
+DECAL_VERTEX_STRIDE = 8
 SAFE_ID = re.compile(r"^[a-z0-9]+(?:[._-]?[a-z0-9]+)*(?:/[a-z0-9]+(?:[._-]?[a-z0-9]+)*)*$")
 CONVENTIONAL_CONTAINER_TYPES = (TYPE_MODEL, TYPE_MESH, TYPE_PRIM_GROUP, TYPE_MATERIAL)
 TEXTURE_SLOTS = {
@@ -260,6 +265,67 @@ def decode_decal_descriptor(
     }
 
 
+def decode_decal_mesh(
+    raw: bytes,
+    footprint_bounds: list[float],
+    vertex_bytes: bytes,
+    index_bytes: bytes,
+    vertex_count: int,
+    index_count: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Recover exact shared decal triangles and their atlas UVs."""
+    if len(raw) != DECAL_BYTES or len(footprint_bounds) != 4:
+        raise ValueError("Decal mesh input is malformed")
+    buffer_index, topology, first_index, base_vertex, draw_count = struct.unpack_from(
+        "<5I", raw, 0x3C
+    )
+    if topology != 0:
+        raise ValueError(f"Unsupported decal topology {topology}")
+    if draw_count < 3 or draw_count % 3 or first_index + draw_count > index_count:
+        raise ValueError("Decal descriptor has an invalid triangle range")
+    if len(vertex_bytes) != vertex_count * DECAL_VERTEX_STRIDE:
+        raise ValueError("Decal vertex payload has an unexpected layout")
+    if len(index_bytes) != index_count * 2:
+        raise ValueError("Decal index payload has an unexpected layout")
+
+    source_indices = struct.unpack_from(f"<{draw_count}H", index_bytes, first_index * 2)
+    source_indices = tuple(index + base_vertex for index in source_indices)
+    if min(source_indices) < 0 or max(source_indices) >= vertex_count:
+        raise ValueError("Decal triangle references an out-of-range vertex")
+    ordered = list(dict.fromkeys(source_indices))
+    remap = {source: index for index, source in enumerate(ordered)}
+    left, top, right, bottom = footprint_bounds
+    vertices = []
+    for source in ordered:
+        x, y, u, v = struct.unpack_from("<4e", vertex_bytes, source * DECAL_VERTEX_STRIDE)
+        if not all(math.isfinite(value) for value in (x, y, u, v)):
+            raise ValueError("Decal vertex contains a non-finite value")
+        # Half precision can place a clamp-addressed atlas edge one quantum
+        # beyond 1.0 (observed 1.00390625); retain that authored coordinate.
+        if not all(-0.02 <= value <= 1.02 for value in (x, y, u, v)):
+            raise ValueError("Decal packed XY/UV coordinate is outside 0..1")
+        vertices.append({
+            "position": _round_values((
+                left + (right - left) * x,
+                top + (bottom - top) * y,
+            )),
+            "uv0": _round_values((u, v)),
+        })
+    return {
+        "vertices": vertices,
+        "indices": [remap[index] for index in source_indices],
+    }, {
+        "buffer_index": buffer_index,
+        "topology": "triangles",
+        "first_index": first_index,
+        "base_vertex": base_vertex,
+        "index_count": draw_count,
+        "source_vertex_count": len(ordered),
+        "vertex_format": f"0x{DECAL_VERTEX_FORMAT:08x}",
+        "vertex_stride": DECAL_VERTEX_STRIDE,
+    }
+
+
 def _relative_asset_document(asset_id: str) -> str:
     return "decals/" + asset_id.replace("/", "_").replace(".", "_") + ".json"
 
@@ -307,13 +373,42 @@ def build_decal(
         raise ValueError(f"Source asset {source_asset} has no decal descriptors")
 
     texture_array = package.unique_allocation(TYPE_TEXTURE)
+    vertex_array = package.unique_allocation(TYPE_VERTEX_BUFFER)
+    index_array = package.unique_allocation(TYPE_INDEX_BUFFER)
+    buffer_cache: dict[int, tuple[dict[str, Any], dict[str, Any], bytes, bytes]] = {}
     relative_documents = []
     descriptor_reports = []
     for descriptor_index in range(decal_count):
+        descriptor_raw = package.array_element(decal_pointer, descriptor_index)
         descriptor = decode_decal_descriptor(
-            package.array_element(decal_pointer, descriptor_index),
+            descriptor_raw,
             lambda index: decode_texture_entry(package, texture_array, index),
             source_units_per_tile,
+        )
+        buffer_index = struct.unpack_from("<I", descriptor_raw, 0x3C)[0]
+        if buffer_index not in buffer_cache:
+            vertex_entry = decode_buffer_entry(package, vertex_array, buffer_index, True)
+            index_entry = decode_buffer_entry(package, index_array, buffer_index, False)
+            if (
+                vertex_entry["format"] != DECAL_VERTEX_FORMAT
+                or vertex_entry["stride"] != DECAL_VERTEX_STRIDE
+                or index_entry["bytes_per_index"] != 2
+            ):
+                raise ValueError(f"Unsupported packed decal buffer {buffer_index}")
+            buffer_cache[buffer_index] = (
+                vertex_entry,
+                index_entry,
+                package.big_data(vertex_entry["offset"], vertex_entry["bytes"]),
+                package.big_data(index_entry["offset"], index_entry["bytes"]),
+            )
+        vertex_entry, index_entry, vertex_payload, index_payload = buffer_cache[buffer_index]
+        mesh, mesh_evidence = decode_decal_mesh(
+            descriptor_raw,
+            descriptor["footprint_bounds"],
+            vertex_payload,
+            index_payload,
+            vertex_entry["count"],
+            index_entry["count"],
         )
         runtime_channels: dict[str, dict[str, Any]] = {}
         texture_report: dict[str, dict[str, Any]] = {}
@@ -359,6 +454,7 @@ def build_decal(
                 "content_bounds_xy": descriptor["content_bounds"],
             },
             "uv_rect": [0.0, 0.0, 1.0, 1.0],
+            "mesh": mesh,
             "channels": runtime_channels,
             "render": {
                 "projection": "terrain_surface",
@@ -384,6 +480,7 @@ def build_decal(
                 },
                 "texture_slots": descriptor["texture_slots"],
                 "textures": texture_report,
+                "mesh": mesh_evidence,
             }
         )
     manifest_asset = (

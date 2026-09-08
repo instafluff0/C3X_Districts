@@ -28,7 +28,9 @@ struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;};
 struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;int custom_renderer_init_state=1;
- struct {bool enable_custom_rendering=true,enable_custom_rendered_units=true;int day_night_cycle_mode=0,seasonal_cycle_mode=0;} current_config;
+ struct {bool enable_custom_rendering=true,enable_custom_rendered_units=true,enable_custom_rendering_zoom=false;int day_night_cycle_mode=0,seasonal_cycle_mode=0;} current_config;
+ int custom_renderer_zoom_tile_width=128,custom_renderer_zoom_native_tile_width=128;
+ long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
  bool day_night_cycle_unstarted=false,seasonal_cycle_unstarted=false;int current_day_night_cycle=12,current_seasonal_cycle=0;
  LARGE_INTEGER custom_renderer_qpc_frequency={1000000},custom_renderer_animation_timestamp={},custom_renderer_animation_sample_at={};};
 constexpr int AT_DEFAULT=1,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
@@ -38,6 +40,13 @@ int clamp(int a,int b,int v){return v<a?a:(v>b?b:v);}
 long long qpc=1000000;
 bool QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=qpc;qpc+=66000;return true;}
 bool Unit_has_ability(Unit* u,int,int){return u->army;}
+bool custom_renderer_zoom_enabled(){return state.current_config.enable_custom_rendering_zoom;}
+void sync_custom_renderer_zoom_to_native(){}
+void custom_renderer_zoom_transform_point(int* x,int* y){
+ if(!custom_renderer_zoom_enabled())return;
+ *x=*x*state.custom_renderer_zoom_tile_width/state.custom_renderer_zoom_native_tile_width;
+ *y=*y*state.custom_renderer_zoom_tile_width/state.custom_renderer_zoom_native_tile_width;
+}
 Unit* army_member=nullptr;Unit* get_unit_ptr(int id){return army_member && army_member->Body.ID==id?army_member:nullptr;}
 HDC __fastcall acquire(JGL_Image* p){if(p==denied_dc)return nullptr;++dc_count;return p;}
 void __fastcall release_dc(JGL_Image*,int,int){--dc_count;}
@@ -80,6 +89,7 @@ int main(){
   assert(unit.Body.Rect.right==11+191/(zoom?2:1) && unit.Body.Rect.bottom==23+191/(zoom?2:1));
   assert(captured.unit_id==42 && captured.action==2 && captured.action_cursor==7 && captured.frame_count==16);
   assert(captured.body_x==11 && captured.body_y==23 && captured.direction==3 && captured.reduced==zoom);
+  assert(captured.projection_scale_milli==(zoom?500:1000));
   assert(captured.presentation_frequency==1000000 && captured.presentation_time_ticks>=0);
   assert(captured.display_color_rgb==0x0c2238 && !std::strcmp(captured.unit_key,"PRTO_Archer"));
   success=false;invoke();assert(unit.Body.Rect.left==20 && unit.Body.Rect.right==45);assert((calls==std::vector<int>{10,20,30,40}));
@@ -95,6 +105,16 @@ int main(){
   army_member=nullptr;unit.army=false;
   unit.visible=false;invoke();assert(calls.empty());unit.visible=true;
  }
+ fixture_reduced=false;state.current_config.enable_custom_rendering_zoom=true;
+ state.custom_renderer_zoom_tile_width=80;state.custom_renderer_zoom_native_tile_width=128;
+ success=true;invoke();assert((calls==std::vector<int>{10,20,40}));
+ assert(captured.body_x==6 && captured.body_y==14 && captured.projection_scale_milli==625);
+ assert(unit.Body.Rect.left==6 && unit.Body.Rect.top==14);
+ assert(unit.Body.Rect.right==6+191*625/1000 && unit.Body.Rect.bottom==14+191*625/1000);
+ success=false;invoke();assert((calls==std::vector<int>{10,20,40}));
+ state.current_config.enable_custom_rendered_units=false;invoke();assert((calls==std::vector<int>{10,40}));
+ state.current_config.enable_custom_rendered_units=true;
+ state.current_config.enable_custom_rendering_zoom=false;
  state.custom_renderer_unit_context=&unit;state.custom_renderer_unit_canvas=&canvas;
  calls.clear();Sprite unrelated;assert(!forward_custom_unit_body(&unrelated,&canvas,&canvas,0,0,0,&fixture_palette));
  assert(!forward_custom_unit_body(&unit.Body.Animation.Frame_1.sprite,&canvas,&other,0,0,0,&fixture_palette));assert(calls.empty());

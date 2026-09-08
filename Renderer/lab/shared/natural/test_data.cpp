@@ -17,12 +17,12 @@ template<class T>void replace(std::vector<std::uint8_t>&out,std::size_t at,T con
     std::memcpy(out.data()+at,&value,sizeof(value));
 }
 struct Fixture {
-    std::vector<std::uint8_t> pack={'C','3','X','N','A','T','1',0},dds=std::vector<std::uint8_t>(152);
-    std::size_t bindings=0,material=0,body=0,recipe=0;
+    std::vector<std::uint8_t> pack={'C','3','X','N','A','T','3',0},dds=std::vector<std::uint8_t>(152);
+    std::size_t bindings=0,material=0,body=0,recipe=0,surface=0,surface_vertices=0;
     Fixture(){
-        for(unsigned count:{1,1,22,25})append(pack,count);
+        for(unsigned count:{1,1,22,25,3,18})append(pack,count);
         append(pack,5u);for(char c:std::string("a.dds"))pack.push_back(std::uint8_t(c));
-        bindings=pack.size();for(unsigned i=0;i<49;i++)append(pack,0u);
+        bindings=pack.size();for(unsigned i=0;i<54;i++)append(pack,0u);
         material=pack.size();append(pack,Material{});
         body=pack.size();
         for(unsigned i=0;i<22;i++){
@@ -31,6 +31,12 @@ struct Fixture {
         }
         recipe=pack.size();
         for(unsigned i=0;i<25;i++)append(pack,Recipe{i%22,1,0,i==0?180u:0u,0,0,0,1,0});
+        surface=pack.size();
+        for(unsigned biome=0;biome<3;biome++)append(pack,SurfaceRecipe{biome,2,.2f,1,.8f,.7f,biome*6,6});
+        surface_vertices=pack.size();
+        for(unsigned biome=0;biome<3;biome++)for(auto const&vertex:std::array<SurfaceVertex,6>{{
+            {-.4f,-.3f,.1f,.2f},{.4f,-.3f,.9f,.2f},{.4f,.3f,.9f,.8f},
+            {-.4f,-.3f,.1f,.2f},{.4f,.3f,.9f,.8f},{-.4f,.3f,.1f,.8f}}})append(pack,vertex);
         replace(dds,12,2u);replace(dds,16,2u);replace(dds,128,61u);
         dds[148]=0;dds[149]=64;dds[150]=128;dds[151]=255;
     }
@@ -45,8 +51,10 @@ struct Fixture {
     }
 };
 
-void valid_data(NaturalData const&data){
-    check(data.bodies.size()==22 && data.recipes.size()==25,"body/recipe count");
+void valid_data(NaturalData const&data,unsigned surface_count=3){
+    check(data.bodies.size()==22 && data.recipes.size()==25 && data.surface_recipes.size()==surface_count,"body/recipe count");
+    check(data.surface_vertices.size()>=18 && data.surface_vertices.size()%3==0,"surface triangle count");
+    check(data.fields[data.terrain[30]].sample(.25f,.25f)>0,"surface detail field");
     auto flat=[](int c,int r){return Tile{c+r,c-r,c,r,2};};
     auto hill=[](int c,int r){return Tile{c+r,c-r,c,r,c==0&&r==0?5:2};};
     bool relief=false;
@@ -76,7 +84,7 @@ void valid_data(NaturalData const&data){
 }
 
 int main(int argc,char**argv){try{
-    static_assert(sizeof(BodyVertex)==32 && sizeof(Material)==36 && sizeof(Recipe)==36 && sizeof(Frame)==96,"wire layouts");
+    static_assert(sizeof(BodyVertex)==32 && sizeof(Material)==36 && sizeof(Recipe)==36 && sizeof(SurfaceRecipe)==32 && sizeof(SurfaceVertex)==16 && sizeof(Frame)==96,"wire layouts");
     Fixture fixture;NaturalData data;
     check(fixture.load(data),"valid fixture rejected");valid_data(data);
     auto const&field=data.fields[0];
@@ -86,7 +94,7 @@ int main(int argc,char**argv){try{
     auto reject=[&](Fixture const&bad){NaturalData invalid;check(!bad.load(invalid),"malformed input accepted");++rejected;};
     auto bad=fixture;bad.pack[0]='X';reject(bad);
     bad=fixture;replace(bad.pack,8,129u);reject(bad);
-    bad=fixture;bad.pack[28]='/';reject(bad);
+    bad=fixture;bad.pack[36]='/';reject(bad);
     bad=fixture;bad.dds.resize(147);reject(bad);
     bad=fixture;replace(bad.dds,16,0u);reject(bad);
     bad=fixture;replace(bad.pack,bad.bindings,1u);reject(bad);
@@ -96,6 +104,14 @@ int main(int argc,char**argv){try{
     bad=fixture;replace(bad.pack,bad.recipe+4,0.f);reject(bad);
     bad=fixture;replace(bad.pack,bad.recipe+24,8u);reject(bad);
     bad=fixture;replace(bad.pack,bad.recipe+12,179u);reject(bad);
+    bad=fixture;replace(bad.pack,bad.surface,3u);reject(bad);
+    bad=fixture;replace(bad.pack,bad.surface+4,0.f);reject(bad);
+    bad=fixture;replace(bad.pack,bad.surface+12,0u);reject(bad);
+    bad=fixture;replace(bad.pack,bad.surface+16,0.f);reject(bad);
+    bad=fixture;replace(bad.pack,bad.surface+28,0u);reject(bad);
+    bad=fixture;replace(bad.pack,bad.surface+24,19u);reject(bad);
+    bad=fixture;replace(bad.pack,bad.surface_vertices,std::numeric_limits<float>::quiet_NaN());reject(bad);
+    bad=fixture;replace(bad.pack,bad.surface_vertices+8,1.2f);reject(bad);
     bad=fixture;bad.pack.pop_back();reject(bad);
     bad=fixture;bad.pack.push_back(0);reject(bad);
     std::cout<<"PASS natural CPU data: "<<rejected<<" invalid inputs, height sampling and 24 lighting phases\n";
@@ -105,8 +121,8 @@ int main(int argc,char**argv){try{
             std::ifstream stream(std::string(argv[1])+"/"+path,std::ios::binary);
             if(!stream)return false;out.assign(std::istreambuf_iterator<char>(stream),{});return true;
         },[](std::vector<std::uint8_t>const&bytes,std::size_t&texture){texture=bytes.size();return true;}),"production payload rejected");
-        valid_data(real);
-        std::cout<<"PASS production natural payload: textures="<<textures.size()<<" materials="<<real.materials.size()<<" bodies="<<real.bodies.size()<<" recipes="<<real.recipes.size()<<"\n";
+        valid_data(real,35);
+        std::cout<<"PASS production natural payload: textures="<<textures.size()<<" materials="<<real.materials.size()<<" bodies="<<real.bodies.size()<<" recipes="<<real.recipes.size()<<" surface="<<real.surface_recipes.size()<<"\n";
     }
     return 0;
 }catch(std::exception const&error){std::cerr<<error.what()<<"\n";return 1;}}

@@ -26,22 +26,27 @@ struct BodyVertex {float position[3],normal[3],uv[2];};
 struct Body {unsigned material=0;std::vector<BodyVertex> vertices;};
 struct Material {unsigned channels[7]={},tint=0,repeat=0;};
 struct Recipe {unsigned object;float scale,variation;unsigned count,min_count,priority,flags;float width,reduction;};
+struct SurfaceRecipe {unsigned biome;float scale,variation;unsigned weight;float width,height;unsigned first,vertex_count;};
+struct SurfaceVertex {float x,y,u,v;};
 struct Frame {float sun[4],color[4],ambient[4],view[4],detail[4],quality[4];};
 struct NaturalData {
     std::vector<HeightField> fields;
     std::vector<Material> materials;
     std::vector<Body> bodies;
     std::vector<Recipe> recipes;
-    unsigned terrain[26]={},mountain[13]={},macro[5][2]={};
+    std::vector<SurfaceRecipe> surface_recipes;
+    std::vector<SurfaceVertex> surface_vertices;
+    unsigned terrain[31]={},mountain[13]={},macro[5][2]={};
     std::string failure;
     template<class Texture,class Read,class Upload>
     bool load_data(std::vector<Texture>&textures,Read read,Upload upload){
         failure="catalog";
         std::vector<std::uint8_t>d;
-        if(!read("Renderer/packs/NaturalFidelityRuntime/natural.bin",d)||d.size()<24||std::memcmp(d.data(),"C3XNAT1\0",8))return false;
+        if(!read("Renderer/packs/NaturalFidelityRuntime/natural.bin",d)||d.size()<32||std::memcmp(d.data(),"C3XNAT3\0",8))return false;
         std::size_t pos=8;
         auto take=[&](void*out,std::size_t n){if(n>d.size()-pos)return false;std::memcpy(out,d.data()+pos,n);pos+=n;return true;};
-        unsigned count[4]={};if(!take(count,16)||count[0]>128||count[1]>64||count[2]!=22||count[3]!=25)return false;
+        unsigned count[6]={};if(!take(count,24)||count[0]>128||count[1]>64||count[2]!=22||count[3]!=25||
+                count[4]<3||count[4]>64||count[5]<3||count[5]>100000||count[5]%3)return false;
         textures.resize(count[0]);fields.resize(count[0]);
         for(unsigned i=0;i<count[0];i++){
             unsigned n=0;if(!take(&n,4)||n>128||n>d.size()-pos)return false;
@@ -62,7 +67,7 @@ struct NaturalData {
         for(auto i:terrain)if(i>=textures.size())return false;
         for(auto i:mountain)if(i>=textures.size())return false;
         for(auto const&r:macro)for(auto i:r)if(i>=fields.size()||fields[i].pixels.empty())return false;
-        if(fields[terrain[14]].pixels.empty())return false;
+        if(fields[terrain[14]].pixels.empty()||fields[terrain[30]].pixels.empty())return false;
         failure="materials";
         materials.resize(count[1]);for(auto&m:materials){if(!take(&m,sizeof(m)))return false;
             for(auto i:m.channels)if(i!=0xffffffffu && i>=textures.size())return false;
@@ -75,7 +80,17 @@ struct NaturalData {
         failure="recipes";
         recipes.resize(count[3]);unsigned weight=0;
         for(auto&r:recipes){if(!take(&r,sizeof(r))||r.object>=bodies.size()||!std::isfinite(r.scale)||r.scale<=0||!std::isfinite(r.variation)||r.variation<0||r.variation>2||r.flags>7)return false;weight+=r.count;}
-        if(pos!=d.size()||weight!=180)return false;
+        if(weight!=180)return false;
+        surface_recipes.resize(count[4]);unsigned surface_weight[3]={};
+        for(auto&r:surface_recipes){if(!take(&r,sizeof(r))||r.biome>2||!std::isfinite(r.scale)||r.scale<=0||r.scale>16||
+                !std::isfinite(r.variation)||r.variation<0||r.variation>2||!r.weight||r.weight>64||
+                !std::isfinite(r.width)||!std::isfinite(r.height)||r.width<=0||r.height<=0||r.width>4||r.height>4||
+                r.vertex_count<3||r.vertex_count%3||r.first>count[5]||r.vertex_count>count[5]-r.first)return false;
+            surface_weight[r.biome]+=r.weight;}
+        surface_vertices.resize(count[5]);if(!take(surface_vertices.data(),surface_vertices.size()*sizeof(SurfaceVertex)))return false;
+        for(auto const&v:surface_vertices)if(!std::isfinite(v.x)||!std::isfinite(v.y)||!std::isfinite(v.u)||!std::isfinite(v.v)||
+                v.u<-.02f||v.u>1.02f||v.v<-.02f||v.v>1.02f)return false;
+        if(pos!=d.size()||!surface_weight[0]||!surface_weight[1]||!surface_weight[2])return false;
         return true;
     }
     std::array<Frame,3> frame_settings(EnvironmentState const&e,float const*light)const{

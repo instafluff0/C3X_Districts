@@ -34,12 +34,18 @@ loader.
 ## Runtime contract
 
 Each `c3x.decal.v0` document contains a stable asset ID, bounds normalized to
-tile units, a full UV rectangle, generic texture channels, clamp addressing,
-and terrain-surface render intent. The pack manifest groups variants with
+tile units, exact source triangles and per-vertex atlas UVs from the shared
+packed decal buffers, generic texture channels, clamp addressing, and
+terrain-surface render intent. The pack manifest groups variants with
 normalized placement controls. A source entry with multiple descriptors becomes
 one `compound_decal` manifest asset containing ordered `c3x.decal.v0` parts;
 Oil exercises this path with two parts per authored entry. Runtime JSON contains neither source-format
 names nor absolute paths.
+
+The confirmed decal vertex profile is an eight-byte half4 stream: normalized
+footprint XY followed by atlas UV0. `DecalDesc2` supplies the shared buffer slot,
+first index, base vertex and triangle count. A rectangular carrier with full
+0–1 UVs is not an equivalent reconstruction for these atlases.
 
 The source report is written outside the pack to
 `Renderer/preview/out/decals/decal_build.json`. It records source paths, hashes,
