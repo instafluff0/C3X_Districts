@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[3];LAB=ROOT/'Renderer/terrain_lab/v2';OUT=
 sys.path[:0]=[str(LAB/'qa'),str(LAB/'systems/objects')]
 import presentation as city
 from city_growth_layout import solve,bounds,expanded,overlaps
-from settlement_ground import footprint_alignment,convex_hull
+from settlement_ground import footprint_alignment,convex_hull,grid,coverage
 from mesh_fingerprint import geometry_digest
 from city_facade_light_probe import derive
 
@@ -31,15 +31,21 @@ def main():
         if 'normals' in name:frames.update(read(p)['meshes'])
         else:extra.update(read(p)['materials'])
     ground_parts=read('Renderer/terrain_lab/v2/fixtures/beauty/city-ground-binding-r1/modern-ground-parts.json')['parts']
+    ground_binding=read('Renderer/terrain_lab/v2/fixtures/beauty/city-ground-binding-r1/modern.json')
+    ground_reference=read('Renderer/terrain_lab/v2/audits/beauty/out/city-central-capital-r2/inland/ground/settlement.json')
     body_cache={}
     def body(asset,pack=Path('Renderer/packs/CityStudyAuxiliaryUV')):
         key=str(pack)+'/'+asset
         if key not in body_cache:body_cache[key]=city.component(asset,pack)
         return body_cache[key]
     def material(mat,asset,ground=False):
-        channels={**mat['channels']};overlay=extra.get(asset+':'+mat['name'])
+        channels={**mat['channels']};overlay=extra.get(asset+':'+mat.get('name',''))
         if overlay:channels.update(overlay['channels'])
         paths=[channels.get(k,{}).get('texture','') for k in ['base_color','emissive','ambient_occlusion','normal_0','gloss','metalness','opacity']]
+        if ground and asset in ground_parts and paths[0]==ground_binding['expected']['texture']:
+            if sha(paths[0])!=ground_binding['expected']['sha256']:raise ValueError('ground binding source changed')
+            paths[0]=ground_binding['replacement']['texture']
+            if sha(paths[0])!=ground_binding['replacement']['sha256']:raise ValueError('ground binding replacement changed')
         mode=sum((1<<i) for i,a in enumerate(['u','v']) if channels['base_color'].get('address_'+a)=='clamp')
         if mode not in (0,3):raise ValueError('selected city material expects matching address axes')
         bits=(bool(paths[2])*1+bool(paths[3])*2+(mode==0)*4+bool(paths[4])*8+bool(paths[5])*16+bool(paths[6])*32)
@@ -78,10 +84,11 @@ def main():
     # Use the actual selected placements first. The coastal capital retains its
     # preceding legal composition instead of inventing a central placement.
     light_cache={}
-    def template(pool,size,instances,capital=False,authority=None,environment=False):
+    def template(pool,size,instances,capital=False,authority=None,environment=False,clearance=None):
         culture,era=pool.removeprefix('city/pool/').split('/')
         if culture not in styles:raise ValueError('unknown normalized culture '+culture)
-        out={'culture':styles.index(culture),'era':eras.index(era),'size':size,'capital':capital,'environment':environment,'authority':authority,'instances':[]}
+        out={'culture':styles.index(culture),'era':eras.index(era),'size':size,'capital':capital,'environment':environment,'authority':authority,
+            'clearance':clearance or [.05,2.5,.12,12.4],'instances':[]}
         for inst in instances:
             asset=inst['asset'];pack=Path(inst.get('pack','Renderer/packs/CityStudyAuxiliaryUV'));b=body(asset,pack)
             mid=model(asset,pack);rot=inst['rotation'];scale=inst['scale'];offset=inst['offset'];box=bounds(b,rot,scale)
@@ -101,6 +108,27 @@ def main():
                     derived={'lights':[],'blockers':[]}
                 light_cache[key]=derived
             out['instances'].append({'model':mid,'slot':inst['slot'],'scale':scale,'rotation':rot,'offset':offset,'bounds':box,'lights':light_cache[key]['lights']})
+        # The selected connected paving is the same footprint union used by
+        # Lab. Store topology/coverage offline; runtime only conforms/clips it
+        # against captured terrain and supplies a world-stable UV origin.
+        out['paving']=None
+        if era=='modern':
+            ordinary=[i for i in out['instances'] if i['slot']!='capital']
+            scale=ordinary[0]['scale']
+            if any(abs(i['scale']-scale)>1e-8 for i in ordinary):raise ValueError('nonuniform city scale')
+            boxes=[];coverage_boxes=[];polygons=[]
+            for i in out['instances']:
+                x,y=i['offset'];b=i['bounds'];box=[x+b[0],-y-b[3],x+b[2],-y-b[1]];boxes.append(box)
+                if i['slot']=='capital':
+                    polygons.append(convex_hull([(x+p[0]*i['scale'],-y-p[1]*i['scale']) for h in models[i['model']]['hull'] for p in [city.rotate([*h,0],i['rotation'])]]))
+                else:coverage_boxes.append(box)
+            xy,triangles=grid(boxes,.1)
+            alpha=[coverage(x,y,coverage_boxes,.1,.025,polygons) for x,y in xy]
+            indices=[i for tri in triangles if max(alpha[i] for i in tri)>0 for i in tri]
+            paving_mat=material({'channels':{'base_color':{'texture':ground_reference['atlas']['texture'],'address_u':'clamp','address_v':'clamp'}}},'',True)
+            out['paving']={'material':paving_mat,'period':[v*scale/ground_reference['uniform_ordinary_city_scale'] for v in ground_reference['tile_period']],
+                'atlas_uv':ground_reference['atlas_uv'],'margin':.1,'feather':.025,'grid_step':.025,
+                'vertices':[[x,y,a] for (x,y),a in zip(xy,alpha)],'indices':indices,'coverage_boxes':coverage_boxes,'coverage_polygons':polygons}
         templates.append(out);return out
     (OUT/'frames.json').write_text(json.dumps({'meshes':frames},separators=(',',':'))+'\n')
     for revision,a in selected.items():
@@ -108,7 +136,8 @@ def main():
         counts=a.get('stage_component_counts') or [4,7,11]
         for size in [0,1]:
             subset=[i for i in inst if i['slot']=='capital' or i['slot']<counts[size]]
-            template(a['pool'],size,subset,a['capital']['drawn'],f'selected-r{revision}',revision in [111,112,101])
+            template(a['pool'],size,subset,a['capital']['drawn'],f'selected-r{revision}',revision in [111,112,101],
+                [.05,2.5,a.get('vegetation_clearance') or 0,(a.get('river_exclusion') or {}).get('threshold_pixels',0)])
     # The same bounded Lab growth solver and source-scale rule cover other
     # normalized pools. These are production adaptations, not new Lab witnesses.
     for pool,record in sorted(catalog['pools'].items()):
@@ -131,6 +160,8 @@ def main():
                 plan,stats=solve(order,count,scale,[.65,.8,.95][size],lambda box:True,preserved=preserved,node_limit=20000,grid_step=.07,neighbor_gap=.08,connected_prefixes=tuple(counts[:size+1]))
             except ValueError as e:
                 gaps.append({'pool':pool,'size':size,'reason':str(e)});break
+            if plan is None:
+                gaps.append({'pool':pool,'size':size,'reason':stats});break
             instances=[{'asset':i['asset']['id'],'slot':i['slot'],'scale':i['scale'],'rotation':i['rotation'],'offset':[i['x'],i['y']],'local_bounds':bounds(i['asset'],i['rotation'],i['scale'])} for i in plan]
             preserved=instances
             template(pool,size,instances,False,'generic-source-growth',era=='modern')
@@ -139,7 +170,7 @@ def main():
     (OUT/'manifest.json').write_text(json.dumps(meta,indent=2)+'\n')
     # Generic binary: all paths are relative to the mod root; no source package
     # parser or Python runtime is needed by the game.
-    wire=bytearray(b'C3XCITY1')
+    wire=bytearray(b'C3XCITY2')
     def u(n):wire.extend(struct.pack('<I',n))
     def f(values):wire.extend(struct.pack('<'+'f'*len(values),*values))
     def string(s):b=s.encode();u(len(b));wire.extend(b)
@@ -156,10 +187,15 @@ def main():
             for i in part['indices']:u(i)
     for t in templates:
         for k in ['culture','era','size','capital','environment']:u(int(t[k]))
-        string(t['authority']);u(len(t['instances']))
+        string(t['authority']);f(t['clearance']);u(len(t['instances']))
         for i in t['instances']:
             u(i['model']);u(1 if i['slot']=='capital' else 0);f([i['scale'],i['rotation']]+i['offset']+i['bounds']);u(len(i['lights']))
             for l in i['lights']:f(l['position']+[l['range']]+l['color_linear']+[l['intensity']]+l['direction']+[0])
+        p=t['paving'];u(1 if p else 0)
+        if p:
+            u(p['material']);f(p['period']+p['atlas_uv']);u(len(p['vertices']));u(len(p['indices']))
+            for v in p['vertices']:f(v)
+            for i in p['indices']:u(i)
     (OUT/'city.bin').write_bytes(wire)
     print('PASS',len(models),'models',len(materials),'materials',len(templates),'growth templates; bytes',len(wire),'gaps',len(gaps))
 if __name__=='__main__':main()

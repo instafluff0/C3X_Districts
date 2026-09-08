@@ -86,14 +86,16 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
         if(FAILED(hr)) { reset(); return false; } return true;
     }
     void draw(ID3D11DeviceContext* context,LinearTarget const& linear,
-              ID3D11RenderTargetView* destination,float exposure,int render_scale=1) {
+              ID3D11RenderTargetView* destination,float exposure,int render_scale=1,
+              ID3D11ShaderResourceView* reconstructed=nullptr,UINT reconstructed_width=0,UINT reconstructed_height=0) {
         context->OMSetRenderTargets(0,nullptr,nullptr);
-        context->ResolveSubresource(linear.resolved,0,linear.color,0,DXGI_FORMAT_R16G16B16A16_FLOAT);
+        if(!reconstructed)context->ResolveSubresource(linear.resolved,0,linear.color,0,DXGI_FORMAT_R16G16B16A16_FLOAT);
         context->OMSetRenderTargets(1,&destination,nullptr);
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->OMSetDepthStencilState(nullptr,0);
-        D3D11_VIEWPORT viewport={0,0,float(linear.width/render_scale),float(linear.height/render_scale),0,1};
-        D3D11_RECT rect={0,0,LONG(linear.width/render_scale),LONG(linear.height/render_scale)};
+        UINT width=reconstructed?reconstructed_width:linear.width/render_scale,height=reconstructed?reconstructed_height:linear.height/render_scale;
+        D3D11_VIEWPORT viewport={0,0,float(width),float(height),0,1};
+        D3D11_RECT rect={0,0,LONG(width),LONG(height)};
         context->RSSetViewports(1,&viewport); context->RSSetScissorRects(1,&rect);
         context->IASetInputLayout(nullptr);
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -101,7 +103,8 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
         struct {float exposure;int scale;float padding[2];}values={exposure,render_scale,{0,0}};
         context->UpdateSubresource(settings,0,nullptr,&values,0,0);
         context->PSSetConstantBuffers(0,1,&settings);
-        context->PSSetShaderResources(0,1,&linear.view);
+        ID3D11ShaderResourceView*source=reconstructed?reconstructed:linear.view;
+        context->PSSetShaderResources(0,1,&source);
         context->Draw(3,0);
         ID3D11ShaderResourceView* empty=nullptr;
         context->PSSetShaderResources(0,1,&empty);

@@ -33,6 +33,7 @@ public:
     struct Caster {
         ID3D11Buffer *vertices=nullptr,*indices=nullptr;
         unsigned count=0,stride=0,layer=0;
+        unsigned binding=0xffffffffu;
         std::uint64_t version=0;
         Bounds bounds;
         float offset[3]={};
@@ -135,6 +136,7 @@ public:
             for(std::size_t i=0;i<casters.size();++i){auto const& p=caster_bounds[i];
                 if(p[2]<key.first*6 || p[0]>(key.first+1)*6 || p[3]<key.second*6 || p[1]>(key.second+1)*6)continue;
                 selected.push_back(i);mix(casters[i].version);mix(casters[i].layer);
+                if(casters[i].binding!=0xffffffffu)mix(casters[i].binding);
                 for(float f:casters[i].offset){std::uint32_t bits;std::memcpy(&bits,&f,4);mix(bits);}
             }
             int slot=-1;for(int i=0;i<32;++i)if(pages[i].hash && pages[i].x==key.first && pages[i].y==key.second){slot=i;break;}
@@ -154,7 +156,7 @@ public:
                 settings[12]=float(key.first);settings[13]=float(key.second);
                 std::copy(c.offset,c.offset+3,settings+16);
                 context->UpdateSubresource(caster_settings,0,nullptr,settings,0,0);
-                bool alpha=bind(c.layer);context->PSSetShader(alpha?cutout:opaque,nullptr,0);
+                bool alpha=bind(c.binding==0xffffffffu?c.layer:c.binding);context->PSSetShader(alpha?cutout:opaque,nullptr,0);
                 context->IASetInputLayout(c.stride==76?natural_layout:c.stride==48?feature_layout:layout);
                 UINT stride=c.stride,offset=0;context->IASetVertexBuffers(0,1,&c.vertices,&stride,&offset);
                 context->IASetIndexBuffer(c.indices,DXGI_FORMAT_R32_UINT,0);context->DrawIndexed(c.count,0,0);++draws;

@@ -43,6 +43,8 @@
 #include "source_fidelity/light_frame.h"
 #include "environment_refresh/reflection.h"
 #include "unit_body_renderer.h"
+#include "city_fidelity/gpu.h"
+#include "city_fidelity/glow.h"
 
 namespace {
 
@@ -184,6 +186,16 @@ struct CachedVertexChunk {
     c3x_renderer::profile_v2::SourceShadow::Bounds world_bounds;
     std::uint64_t version = 0;
     ID3D11ShaderResourceView * animation_texture = nullptr; // borrowed, dynamic pass only
+    unsigned city_material=0xffffffffu;
+    bool city_environment=false;
+    float city_atlas[4]={};
+    std::shared_ptr<c3x_renderer::city_fidelity::Lighting> city_lighting;
+};
+
+struct PendingCityChunk {
+    std::vector<Vertex> vertices;
+    unsigned material=0;bool environment=false;float atlas[4]={};
+    std::shared_ptr<c3x_renderer::city_fidelity::Lighting> lighting;
 };
 
 struct ResourceAnimation {
@@ -354,6 +366,9 @@ public:
     bool unit_rendering_enabled=false;
     bool fidelity_profile = false, fidelity_shadow_control = false;
     bool environment_profile = false;
+    bool city_profile=false;
+    c3x_renderer::city_fidelity::Gpu cities;
+    c3x_renderer::city_fidelity::Glow city_glow;
     c3x_renderer::environment_refresh::Reflection reflection;
     std::string fidelity_root;
     c3x_renderer::fidelity::Natural natural;
@@ -620,7 +635,7 @@ public:
         if (context != nullptr)
             context->ClearState();
         reset_targets();
-        world_coast.clear(); geometry_world_revision = -1; source_shadow.clear(); natural.reset(); reflection.reset();
+        world_coast.clear(); geometry_world_revision = -1; source_shadow.clear(); natural.reset(); reflection.reset();cities.reset();city_glow.reset();
         for (TerrainTexture & texture : terrain_textures)
         {
             release(texture.view);
@@ -745,7 +760,7 @@ public:
         auto compile_terrain_shader = [this](char const * entry, char const * target,
                                              ID3DBlob ** blob) {
             std::string selected_shader=integrated_shader_path;
-            if(fidelity_profile && std::strstr(entry,"Feature"))selected_shader=fidelity_root+(environment_profile?"/Renderer/native/environment_refresh/feature.hlsl":"/Renderer/native/profile_v2/integrated_v2.hlsl");
+            if(fidelity_profile && std::strstr(entry,"Feature"))selected_shader=fidelity_root+(city_profile?"/Renderer/native/city_fidelity/feature.hlsl":environment_profile?"/Renderer/native/environment_refresh/feature.hlsl":"/Renderer/native/profile_v2/integrated_v2.hlsl");
             int count = MultiByteToWideChar(CP_UTF8, 0, selected_shader.c_str(),
                                             -1, nullptr, 0);
             if (count <= 0)
@@ -887,7 +902,7 @@ public:
             desc.ByteWidth = 80;
             if (SUCCEEDED(hr)) hr = device->CreateBuffer(&desc, nullptr, &shadow_settings_buffer);
             if (SUCCEEDED(hr) && !linear_output.ensure(device)) hr = E_FAIL;
-            std::string source_path=fidelity_profile ? fidelity_root+(environment_profile?"/Renderer/native/environment_refresh/source_caster.hlsl":"/Renderer/native/profile_v2/source_caster.hlsl") : integrated_shader_path.substr(0,integrated_shader_path.find_last_of("\\/"))+"/source_caster.hlsl";
+            std::string source_path=fidelity_profile ? fidelity_root+(city_profile?"/Renderer/native/city_fidelity/source_caster.hlsl":environment_profile?"/Renderer/native/environment_refresh/source_caster.hlsl":"/Renderer/native/profile_v2/source_caster.hlsl") : integrated_shader_path.substr(0,integrated_shader_path.find_last_of("\\/"))+"/source_caster.hlsl";
             int count=MultiByteToWideChar(CP_UTF8,0,source_path.c_str(),-1,nullptr,0);
             std::wstring wide(static_cast<std::size_t>(count),L'\0');
             MultiByteToWideChar(CP_UTF8,0,source_path.c_str(),-1,wide.data(),count);
@@ -2001,9 +2016,11 @@ public:
                                char const * scenario_path, char const * custom_path) {
         char requested_profile[32] = {};
         GetEnvironmentVariableA("C3X_RENDERER_VISUAL_PROFILE", requested_profile, sizeof(requested_profile));
-        bool use_environment=std::strcmp(requested_profile,"environment-refresh")==0;
+        bool use_city=requested_profile[0]==0 || std::strcmp(requested_profile,"city-fidelity")==0;
+        bool use_environment=use_city || std::strcmp(requested_profile,"environment-refresh")==0;
         bool use_fidelity = use_environment || requested_profile[0] == 0 || std::strcmp(requested_profile, "source-fidelity-r13") == 0;
-        if(fidelity_profile != use_fidelity || environment_profile!=use_environment) reset();
+        if(fidelity_profile != use_fidelity || environment_profile!=use_environment || city_profile!=use_city) reset();
+        city_profile=use_city;
         environment_profile=use_environment;
         fidelity_profile = use_fidelity;
         char control[8]={};
@@ -2015,7 +2032,7 @@ public:
         pickup_profile = use_pickup;
         char shader_path[4 * MAX_PATH];
         if (mod_root != nullptr &&
-            pack_path(mod_root, environment_profile ? "Renderer\\native\\environment_refresh\\hydrology.hlsl" : fidelity_profile ? "Renderer\\native\\source_fidelity\\hydrology.hlsl" : pickup_profile ? "Renderer\\native\\profile_v2\\integrated_v2.hlsl" :
+            pack_path(mod_root, city_profile ? "Renderer\\native\\city_fidelity\\hydrology.hlsl" : environment_profile ? "Renderer\\native\\environment_refresh\\hydrology.hlsl" : fidelity_profile ? "Renderer\\native\\source_fidelity\\hydrology.hlsl" : pickup_profile ? "Renderer\\native\\profile_v2\\integrated_v2.hlsl" :
                       "Renderer\\native\\integrated_terrain.hlsl",
                       shader_path, std::size(shader_path)) &&
             GetFileAttributesA(shader_path) != INVALID_FILE_ATTRIBUTES)
@@ -3117,6 +3134,13 @@ public:
                 footprint.bounds.top = std::min(footprint.bounds.top, static_cast<int>(chunk.bounds.top));
                 footprint.bounds.right = std::max(footprint.bounds.right, static_cast<int>(chunk.bounds.right));
                 footprint.bounds.bottom = std::max(footprint.bounds.bottom, static_cast<int>(chunk.bounds.bottom));
+                if(chunk.city_lighting){
+                    int radius=int(std::ceil(shadow_tile_width*.85f))+8;
+                    footprint.bounds.left=std::min(footprint.bounds.left,int(chunk.bounds.left)-radius);
+                    footprint.bounds.right=std::max(footprint.bounds.right,int(chunk.bounds.right)+radius);
+                    footprint.bounds.top=std::min(footprint.bounds.top,int(chunk.bounds.top)-radius);
+                    footprint.bounds.bottom=std::max(footprint.bounds.bottom,int(chunk.bounds.bottom)+radius);
+                }
                 if(environment_profile){
                     int shift=int(std::ceil(2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f)))+4;
                     footprint.bounds.bottom=std::max(footprint.bounds.bottom,int(chunk.bounds.bottom)+shift);
@@ -3195,11 +3219,31 @@ public:
             UINT stride = chunk.vertex_stride, offset = 0;
             context->IASetVertexBuffers(0, 1, &chunk.buffer, &stride, &offset);
             context->IASetIndexBuffer(chunk.indices, DXGI_FORMAT_R32_UINT, 0);
+            if(chunk.city_material!=0xffffffffu){
+                ID3D11SamplerState*samplers[]={natural_wrap,natural_clamp};context->PSSetSamplers(0,2,samplers);
+                context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
+                cities.bind(context,chunk.city_material,chunk.city_environment,chunk.city_atlas,reflection_pass,false);
+                context->DrawIndexed(chunk.index_count,0,0);
+                if(!cities.library.materials[chunk.city_material].ground){
+                    cities.bind(context,chunk.city_material,chunk.city_environment,chunk.city_atlas,reflection_pass,true);
+                    context->DrawIndexed(chunk.index_count,0,0);
+                }
+                context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
+                continue;
+            }
+            if(city_profile && layer==geometry_city){
+                context->IASetInputLayout(feature_input_layout);
+                context->VSSetShader(reflection_pass?reflection.vs[1]:feature_vertex_shader,nullptr,0);
+                context->PSSetShader(reflection_pass?reflection.ps[1]:feature_pixel_shader,nullptr,0);
+                context->PSSetShaderResources(116,4,city_emissive_views.data());context->PSSetShaderResources(124,4,city_base_views.data());
+                ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);
+            }
             if (chunk.animation_texture) context->PSSetShaderResources(116,1,&chunk.animation_texture);
             context->DrawIndexed(chunk.index_count, 0, 0);
             if (chunk.animation_texture) context->PSSetShaderResources(116,1,resource_texture_views.data());
         }
         }
+        if(city_profile && layer==geometry_city){ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);}
         return true;
     }
 
@@ -3217,7 +3261,7 @@ public:
             HRESULT hr=destination_resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(&destination_texture));
             destination_resource->Release();if(FAILED(hr))return false;
             D3D11_TEXTURE2D_DESC desc={};destination_texture->GetDesc(&desc);
-            if(desc.Width>128 || desc.Height>128){
+            if((desc.Width>128 || desc.Height>128 || city_profile) && !(city_profile && projection_width==136)){
                 if(!ensure_block_targets()){destination_texture->Release();return false;}
                 // Bound RGBA16F MSAA4+resolve+depth scratch to 256x256.
                 // Each native output pixel is reconstructed once from its own
@@ -3225,16 +3269,17 @@ public:
                 for(auto const&rect:rectangles)for(int y=(rect.top/128)*128;y<rect.bottom;y+=128)
                     for(int x=(rect.left/128)*128;x<rect.right;x+=128){
                         ViewportShaderSettings local=settings;
-                        local.translation[0]-=float(x);local.translation[1]-=float(y);
-                        local.inverse_size[0]=local.inverse_size[1]=1.f/128;
-                        if(!submit_geometry(buffers,{{0,0,128,128}},local,block_target,block_depth,128,128,cancellation,false,true,shadow_buffers_ptr)){
+                        int guard=city_profile?4:0,extent=128+guard*2;
+                        local.translation[0]+=float(guard-x);local.translation[1]+=float(guard-y);
+                        local.inverse_size[0]=local.inverse_size[1]=1.f/float(extent);
+                        if(!submit_geometry(buffers,{{0,0,extent,extent}},local,city_profile?city_glow.target:block_target,block_depth,extent,extent,cancellation,false,true,shadow_buffers_ptr)){
                             destination_texture->Release();return false;
                         }
                         int l=std::max(x,int(rect.left)),t=std::max(y,int(rect.top));
                         int r=std::min(x+128,int(rect.right)),b=std::min(y+128,int(rect.bottom));
-                        D3D11_BOX box={UINT(l-x),UINT(t-y),0,UINT(r-x),UINT(b-y),1};
+                        D3D11_BOX box={UINT(l-x+guard),UINT(t-y+guard),0,UINT(r-x+guard),UINT(b-y+guard),1};
                         context->OMSetRenderTargets(0,nullptr,nullptr);
-                        context->CopySubresourceRegion(destination_texture,0,UINT(l),UINT(t),0,block_texture,0,&box);
+                        context->CopySubresourceRegion(destination_texture,0,UINT(l),UINT(t),0,city_profile?city_glow.native:block_texture,0,&box);
                     }
                 destination_texture->Release();return true;
             }
@@ -3273,8 +3318,8 @@ public:
             resource->Release();
             if (FAILED(hr)) return false;
             D3D11_TEXTURE2D_DESC desc = {}; texture->GetDesc(&desc); texture->Release();
-            linear = reflection_pass?&reflection.linear:desc.Width == 128 && desc.Height == 128 ? &linear_block : &linear_frame;
-            if (!linear->ensure(device, reflection_pass?272:desc.Width*(fidelity_profile?2:1), reflection_pass?272:desc.Height*(fidelity_profile?2:1))) {
+            linear = reflection_pass?&reflection.linear:city_profile?&city_glow.linear:desc.Width == 128 && desc.Height == 128 ? &linear_block : &linear_frame;
+            if (!linear->ensure(device, reflection_pass?reflection.native_extent*2:desc.Width*(fidelity_profile?2:1), reflection_pass?reflection.native_extent*2:desc.Height*(fidelity_profile?2:1))) {
                 trace.write("linear-target-failed", "pickup MSAA4 allocation", true); return false;
             }
             target = linear->target; depth = linear->depth;
@@ -3282,8 +3327,9 @@ public:
         if(environment_profile && !reflection_pass && reflection.enabled){
             ViewportShaderSettings reflected=settings;
             reflected.translation[0]+=4;reflected.translation[1]+=4;
-            reflected.inverse_size[0]=reflected.inverse_size[1]=1.f/136;
-            if(!submit_geometry(buffers,{{0,0,136,136}},reflected,destination,depth,136,136,
+            int reflected_extent=int(reflection.native_extent);
+            reflected.inverse_size[0]=reflected.inverse_size[1]=1.f/float(reflected_extent);
+            if(!submit_geometry(buffers,{{0,0,reflected_extent,reflected_extent}},reflected,destination,depth,reflected_extent,reflected_extent,
                 cancellation,false,true,shadow_buffers_ptr,true))return false;
         }
         if (pickup_profile) {
@@ -3300,11 +3346,13 @@ public:
                     chunk.bounds.left+dx>=rect.right || chunk.bounds.bottom+dy+high_shift<=rect.top || chunk.bounds.top+dy+low_shift>=rect.bottom);
                 if(visible && layer!=geometry_shadow)receivers.push_back(chunk.world_bounds);
                 bool caster=layer==geometry_land || (layer>=geometry_feature && layer!=geometry_natural_decal);
+                if(chunk.city_material!=0xffffffffu && cities.library.materials[chunk.city_material].ground)caster=false;
                 if(!caster || chunk.animation_texture)continue;
                 for(int wy=dims.wrap_y?-1:0;wy<=(dims.wrap_y?1:0);++wy)
                     for(int wx=dims.wrap_x?-1:0;wx<=(dims.wrap_x?1:0);++wx) {
                         Shadow::Caster c;c.vertices=chunk.buffer;c.indices=chunk.indices;c.count=chunk.index_count;
                         c.stride=chunk.vertex_stride;c.layer=layer;c.version=chunk.version;c.bounds=chunk.world_bounds;
+                        if(chunk.city_material!=0xffffffffu)c.binding=10000+chunk.city_material;
                         c.offset[0]=float(wx*dims.width+wy*dims.height)*.5f;
                         c.offset[1]=float(wx*dims.width-wy*dims.height)*.5f;casters.push_back(c);
                     }
@@ -3316,6 +3364,10 @@ public:
             std::copy(resource_texture_views.begin(),resource_texture_views.end(),alpha.begin()+21);
             std::copy(city_base_views.begin(),city_base_views.end(),alpha.begin()+29);
             auto bind=[&](unsigned layer) {
+                if(layer>=10000){
+                    auto material=layer-10000;auto mask=cities.materials[material][6];
+                    context->PSSetShaderResources(34,1,&mask);return mask!=nullptr;
+                }
                 if(layer==geometry_land)return false;
                 if(layer==geometry_natural_terrain || layer==geometry_natural_mountain)return true;
                 if(layer>=geometry_natural_forest0){
@@ -3357,6 +3409,20 @@ public:
         D3D11_RECT scissor = {0, 0, projection_width, projection_height};
         context->RSSetScissorRects(1, &scissor);
         if(environment_profile)reflection.bind(context);
+        if(city_profile){
+            std::vector<c3x_renderer::city_fidelity::Lighting const*> active;
+            for(auto const&chunk:buffers[geometry_city])if(chunk.city_lighting){
+                auto pointer=chunk.city_lighting.get();if(std::find(active.begin(),active.end(),pointer)!=active.end())continue;
+                int dx=chunk.translation_x+int(settings.translation[0]),dy=chunk.translation_y+int(settings.translation[1]);
+                bool intersects=false;int radius=int(std::ceil(shadow_tile_width*.85f))+8;
+                float low_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.low[2]-2.5f/112.f):0;
+                float high_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f):0;
+                for(auto const&r:rectangles)intersects=intersects || !(chunk.bounds.right+dx+radius<=r.left ||
+                    chunk.bounds.left+dx-radius>=r.right || chunk.bounds.bottom+dy+high_shift+radius<=r.top || chunk.bounds.top+dy+low_shift-radius>=r.bottom);
+                if(intersects)active.push_back(pointer);
+            }
+            if(!cities.lights(context,active)){trace.write("city-composition-failed","facade block capacity; no truncation",true);return false;}
+        }
 
         bool has_cached_geometry = false;
         for (std::vector<CachedVertexChunk> const & layer : buffers)
@@ -3527,6 +3593,9 @@ public:
         }
 
         if(reflection_pass){reflection.resolve(context);return true;}
+        if(city_profile && linear && finish){
+            city_glow.reconstruct(context);linear_output.draw(context,*linear,destination,display_exposure,1,city_glow.view,136,136);return true;
+        }
         if (linear && finish) linear_output.draw(context, *linear, destination, display_exposure, fidelity_profile?2:1);
         return true;
     }
@@ -3854,12 +3923,20 @@ public:
                 char path[4*MAX_PATH];
                 bool ok=pack_path(fidelity_root.c_str(),relative.c_str(),path,std::size(path)) && read_file(path,bytes);
                 if(ok)mix_content_revision(bytes);return ok;
-            },[&](auto const& bytes,auto&view){return ensure_dds_texture(bytes,view,true,true);},environment_profile?"environment_refresh":"source_fidelity")) {
+            },[&](auto const& bytes,auto&view){return ensure_dds_texture(bytes,view,true,true);},city_profile?"city_fidelity":environment_profile?"environment_refresh":"source_fidelity")) {
             trace.write("source-fidelity-failed",natural.failure.c_str(),true);return false;
         }
-        if(environment_profile && !reflection.ensure(device,fidelity_root)){
+        if(environment_profile && !reflection.ensure(device,fidelity_root,city_profile?"city_fidelity":"environment_refresh",city_profile?144:136)){
             trace.write("reflection-failed","shader initialization",true);return false;
         }
+        if(city_profile && !cities.load(device,fidelity_root,
+            [&](std::string const&relative,std::vector<std::uint8_t>&bytes){
+                char path[4*MAX_PATH];bool ok=pack_path(fidelity_root.c_str(),relative.c_str(),path,std::size(path)) && read_file(path,bytes);
+                if(ok)mix_content_revision(bytes);return ok;
+            },[&](auto const&bytes,auto&view){return ensure_dds_texture(bytes,view,true,true);})){
+            trace.write("city-composition-failed","pack/material initialization; native fallback",true);return false;
+        }
+        if(city_profile && !city_glow.ensure(device,fidelity_root)){trace.write("city-composition-failed","guarded glow initialization",true);return false;}
         if (!ensure_terrain_textures()) {
             trace.write("native-failure","terrain-textures",true);
             return false;
@@ -4013,6 +4090,7 @@ public:
         std::vector<Vertex> shadow_vertices;
         std::vector<Vertex> feature_vertices;
         std::vector<Vertex> city_vertices;
+        std::vector<PendingCityChunk> city_chunks;
         std::vector<Vertex> wall_vertices;
         std::vector<Vertex> mine_vertices;
         std::vector<Vertex> farm_vertices;
@@ -4059,6 +4137,12 @@ public:
         frame_settings.water_fresnel = environment.water_fresnel;
         frame_settings.water_specular = environment.water_specular;
         frame_settings.emissive_scale = environment.emissive_scale;
+        cities.night=environment.night_activation;cities.emissive_scale=environment.emissive_scale;
+        if(city_profile){
+            char control[8]={};
+            if(GetEnvironmentVariableA("C3X_RENDERER_CITY_LIGHT_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0)cities.night=0;
+            city_glow.gain=GetEnvironmentVariableA("C3X_RENDERER_CITY_GLOW_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0?0.f:6.f;
+        }
         frame_settings.hour = static_cast<float>(frame.hour);
         reflection.height_pixels=112.f*.82f*float(frame.tile_width)/224.f;
         reflection.depth_metric=112.f*.0016f*float(frame.target_height);
@@ -6121,11 +6205,25 @@ public:
                 ? compiled.coast_dependencies.capacity() * sizeof(compiled.coast_dependencies[0]) +
                   compiled.world_dependencies.capacity() * sizeof(compiled.world_dependencies[0]) : 0;
             metadata_bytes += compiled.resource_anchors.capacity()*sizeof(ResourceAnchor);
+            if(!city_chunks.empty())metadata_bytes+=sizeof(c3x_renderer::city_fidelity::Lighting)+
+                city_chunks.front().lighting->lights.capacity()*sizeof(c3x_renderer::city_fidelity::Light)+
+                city_chunks.front().lighting->blockers.capacity()*sizeof(c3x_renderer::city_fidelity::Lighting::Box);
             if (!make_tile_cache_room(metadata_bytes)) return false;
             tile_geometry_cache_bytes += metadata_bytes;
             compiled.byte_count = metadata_bytes;
             try {
             for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
+                if(layer==geometry_city && !city_chunks.empty()){
+                    for(auto&part:city_chunks){
+                        if(part.vertices.empty())continue;
+                        if(!cache_geometry_layer(part.vertices,compiled.buffers[layer],prewarming,compiled.byte_count,foreground_pending,false,false)){
+                            tile_geometry_cache_bytes-=compiled.byte_count;return false;
+                        }
+                        auto&chunk=compiled.buffers[layer].back();chunk.city_material=part.material;chunk.city_environment=part.environment;
+                        std::copy(part.atlas,part.atlas+4,chunk.city_atlas);chunk.city_lighting=part.lighting;compiled.byte_count+=chunk.byte_count;
+                    }
+                    city_chunks.clear();continue;
+                }
                 if(pickup_profile && (layer==geometry_bed || layer==geometry_water)) {
                     // All flat layers share exact vertex/index data. Surface
                     // kind is the per-draw b1 value; no duplicate allocation.

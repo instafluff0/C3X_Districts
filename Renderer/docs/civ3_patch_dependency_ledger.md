@@ -555,3 +555,18 @@ cache, bounded dirty rectangle, input guard and native fallback stay in place.
 Audit candidates: none required. `required_user_action: []`.
 No `C3X.h`, injected source, `civ_prog_objects.csv` or reference-header edits.
 See `native/environment_refresh/UNIT_FIDELITY.md` for release evidence and limits.
+
+
+### City composition wrap-up checkpoint
+
+Existing symbols: `Map_Renderer_m71_Draw_Tiles`,
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`,
+`Main_Screen_Form_tile_to_screen_coords` and `OutputDebugStringA`. Existing city
+culture, era, size and capital capture supplies this DLL-only composition.
+Signatures and supported-build addresses are unchanged. The existing unit
+animation hooks, dirty bounds, mouse input and overlays are unchanged.
+No new patch capability is needed; audit candidates: none.
+`required_user_action: []`. No injected source, CSV or reference-header changes.
+The user requested ending this round after compile/headless runtime checks;
+remaining palace/placement coverage is documented in
+`native/city_fidelity/CITY_FIDELITY.md`, without advancing a global milestone.

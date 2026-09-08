@@ -2627,7 +2627,7 @@
   },
   "integration_water_city_refresh": {
     "authorization": "User explicitly requested finishing the natural-coverage build first, then integrating latest Lab water/reflection and city/palace lighting updates. This supersedes the prior city exclusion for the follow-up candidate only.",
-    "status": "selected_source_audit",
+    "status": "staged_partial_composition_coverage",
     "iteration_command": "python3 Renderer/tools/renderer_dev.py integration --candidate-only",
     "scope": "Selected water-natural-r6 / water-reflection-r5 and latest selected buffered city/palace night lighting, with natural geometry, caches, unit behavior and fallback preserved. No animated surf or speculative city layout promotion.",
     "existing_symbols": [
@@ -2637,11 +2637,8 @@
     ],
     "audit_candidates": [],
     "required_user_action": [],
-    "selected_paths_pending_audit": [
-      "terrain_lab/v2/audits/beauty/WATER_OBJECT_REFLECTIONS.md",
-      "terrain_lab/v2/audits/beauty/CITY_CENTRAL_CAPITAL_PASS.md",
-      "terrain_lab/v2/audits/beauty/CITY_LIGHT_BUFFER_PASS.md"
-    ]
+    "selected_paths_pending_audit": [],
+    "evidence": "Renderer/verification/city_fidelity/checkpoint.json"
   },
   "unit_source_fidelity_refresh": {
     "authorization": "User requested the current generic unit sharpness findings from the BeautyStudies and importer source paths across the full standard Conquests roster.",
@@ -2661,12 +2658,33 @@
     "remaining_work": [
       "User-run in-game checkpoint; normal INSTALL.bat installs the staged unit update. The agent did not run the installer or game.",
       "The isolated Warrior LUT and native presentation are distinct; no claim of pixel-identical close-up appearance.",
-      "Separately authorized water/reflection and city/palace geometry, arrangement and night lights remain a candidate/incomplete port."
+      "The water/reflection and complete city composition adapter are now staged; remaining palace styles and constrained-site coverage are documented in the city checkpoint."
     ],
     "workflow_limits": [
       "Intermittent frozen-profile boundary parity failure also reproduces on the old staged DLL.",
       "Full workflow retains the frozen L19A fixture-hash failure."
     ],
     "staged_sha256": "8351b054fcfb8d6bde959cf7e857bfd03d10ab33258b688268f862e139cc7f04"
+  },
+  "city_composition_refresh": {
+    "authorization": "User requested the complete selected city composition, then requested wrapping up once it compiles and runs. Do not launch the game.",
+    "status": "staged_for_user_test",
+    "default_profile": "city-fidelity",
+    "port_record": "Renderer/native/city_fidelity/CITY_FIDELITY.md",
+    "evidence": "Renderer/verification/city_fidelity/checkpoint.json",
+    "existing_symbols": [
+      "Map_Renderer_m71_Draw_Tiles",
+      "Map_Renderer_m19_Draw_Tile_by_XY_and_Flags",
+      "Main_Screen_Form_tile_to_screen_coords",
+      "OutputDebugStringA"
+    ],
+    "audit_candidates": [],
+    "required_user_action": [],
+    "remaining_work": [
+      "User-run Civ III checkpoint; do not claim gameplay verification.",
+      "Remaining palace styles, constrained-site composition coverage and full city matrix are deferred.",
+      "Existing frozen-profile boundary parity and L19A fixture-hash failures are unchanged."
+    ],
+    "staged_sha256": "7a19217cc9b679a477869ce9665771e59e5559c86913774fe2fecef676a71128"
   }
 }

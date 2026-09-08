@@ -105,6 +105,7 @@ if(fidelity_profile) {
             triangle(natural_vertices[2],a,b,c);triangle(natural_vertices[2],a,c,d);
         }
     }
+    #include "../city_fidelity/geometry.h"
     if(tile.real_terrain_type==7){
         // Exact current production building meshes/placement, used only as
         // exclusions. City appearance and its geometry path remain unchanged.
@@ -114,6 +115,12 @@ if(fidelity_profile) {
         for(int r=nr-2;r<=nr+2;r++)for(int c=nc-2;c<=nc+2;c++){
             auto it=tile_by_coordinate.find(observed_coordinate_key(c+r,c-r));if(it==tile_by_coordinate.end())continue;
             auto const&city=*it->second;if(city.city_id<0)continue;
+            if(auto composition=selected_city(city,c,r)){
+                for(auto const&i:composition->instances)buildings.push_back({
+                    float(c)+.5f+i.offset[0]+i.bounds[0],float(r)+.5f-i.offset[1]-i.bounds[3],
+                    float(c)+.5f+i.offset[0]+i.bounds[2],float(r)+.5f-i.offset[1]-i.bounds[1]});
+                continue;
+            }
             unsigned size=unsigned(std::clamp(city.city_size,0,2)),culture=unsigned(std::max(0,city.city_culture_group));
             auto*g=c3x_renderer::find_feature_group(city_bundle,eras[std::clamp(city.city_era,0,3)]);
             if(!g || g->placements.empty())continue;

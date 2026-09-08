@@ -1,0 +1,23 @@
+{
+  "command": "set \"C3X_RENDERER_VISUAL_PROFILE=city-fidelity\" && set \"C3X_RENDERER_TRACE=2\" && set \"C3X_RENDERER_TRACE_FILE=..\\verification\\city_fidelity\\city-fidelity-0-3-1-1-h12-z128-synthetic.log\" && set \"C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS=..\\..\\Renderer\\custom.custom_rendering.txt\" && set \"C3X_RENDERER_PREVIEW_OBJECTS=1\" && set \"C3X_RENDERER_PREVIEW_CITY=0,3,1,1\" && set \"C3X_RENDERER_PREVIEW_REPLAY=\" && set \"C3X_RENDERER_PREVIEW_MINIMAP=\" && set \"C3X_RENDERER_PREVIEW_EDITS=\" && set \"C3X_RENDERER_PREVIEW_ANIMATION=\" && set \"C3X_RENDERER_FIDELITY_SHADOW_CONTROL=\" && set \"C3X_RENDERER_REFLECTION_CONTROL=\" && set \"C3X_RENDERER_CITY_LIGHT_CONTROL=\" && set \"C3X_RENDERER_CITY_GLOW_CONTROL=\" && build\\biq_preview.exe build\\candidate\\C3XRenderer.dll ..\\.. ..\\default.custom_rendering.txt ..\\verification\\city_fidelity\\dry-city.csv ..\\verification\\city_fidelity\\city-fidelity-0-3-1-1-h12-z128-synthetic.bmp 640 480 10 10 128 12",
+  "status": "pass",
+  "returncode": 0,
+  "started_utc": "2026-09-08T05:59:11.761323+00:00",
+  "output_tail": "PICKUP synthetic objects: pass ownership=8068\nBIQ 20x20 viewport: 210 visible tiles, 0 fallback, output=..\\verification\\city_fidelity\\city-fidelity-0-3-1-1-h12-z128-synthetic.bmp",
+  "inputs_sha256": {
+    "Renderer/native/build/candidate/C3XRenderer.dll": "7199a2e91efc09c0a71a9a795f8cb0c085f3d2242883d02fac94cbc1bd767ff2",
+    "Renderer/packs/CityCompositionRuntime/city.bin": "5ad4fb6de528983e6f237b1bea8cfc2e4fe1286e4ddb1104883b24e96691a668",
+    "Renderer/native/city_fidelity/city.hlsl": "e2ff387fbc2ef5b276d253aa6bc8d3a017e6767a8bf5e788b5a27426b17da523",
+    "Renderer/native/city_fidelity/feature.hlsl": "e2ff387fbc2ef5b276d253aa6bc8d3a017e6767a8bf5e788b5a27426b17da523",
+    "Renderer/native/city_fidelity/hdr_glow.hlsl": "2eb3e5c8febb17ef3a5b589bcf9cdb49dc6766559c3ff27537a35e85e49e52a2",
+    "Renderer/native/city_fidelity/hydrology.hlsl": "afd76d39f4e7c8bc9fa894a47fa59be78d41445c175cd7f8885c134d8a69a2dd",
+    "Renderer/native/city_fidelity/local_lights.hlsl": "f6e3c2322cefe901ccec0e9c35681caa78ac57950083a4ddfaea08d914eef40a",
+    "Renderer/native/city_fidelity/mountain.hlsl": "bd9712622f801ac18231fb3331ca6f3e47431f0555a02df8eb365063a8cabb0e",
+    "Renderer/native/city_fidelity/objects.hlsl": "a636829c522c28e03cf7ae380ada99ea4dc6b8e221c85d987f24b27538ba6a75",
+    "Renderer/native/city_fidelity/source_caster.hlsl": "93097a4684d5013c87c0ec21e9ec401bb35a6ac0b98affbeabc88dcb4483c451",
+    "Renderer/native/city_fidelity/terrain.hlsl": "4bc1f41b0df9e243146cd98e27e02008528fdfff56ea458dbea9bc4c9afbfbae"
+  },
+  "composition_diagnostics": [
+    " city=1 authority=selected-r111 instances=8 lights=26 paving=3180 textures_bytes=34998572 cache=world-immutable"
+  ]
+}

@@ -24,6 +24,18 @@ if not exist "..\bin" mkdir "..\bin"
 if not exist "build" mkdir "build"
 if not exist "build\candidate" mkdir "build\candidate"
 
+if /i "%~1"=="city-fidelity" (
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX city_fidelity\contract.cpp /Fo:build\city_contract.obj /Fe:build\city_contract.exe
+  if errorlevel 1 exit /b 1
+  build\city_contract.exe ..\packs\CityCompositionRuntime\city.bin
+  if errorlevel 1 exit /b 1
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX city_fidelity\d3d_contract.cpp /Fo:build\city_d3d_contract.obj /Fe:build\city_d3d_contract.exe /link d3d11.lib d3dcompiler.lib
+  if errorlevel 1 exit /b 1
+  build\city_d3d_contract.exe
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
 if /i "%~1"=="unit-bridge" (
   if not exist "build\unit_bridge_capture.h" exit /b 1
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4100 /wd4191 test_unit_bridge.cpp /Fo:build\ /Fe:build\test_unit_bridge.exe

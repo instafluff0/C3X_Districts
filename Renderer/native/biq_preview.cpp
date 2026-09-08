@@ -227,6 +227,7 @@ int main(int argc, char ** argv) {
     char object_option[8]={};bool objects=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_OBJECTS",object_option,sizeof(object_option))!=0;
     char animation_option[8]={};bool animate=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ANIMATION",animation_option,sizeof(animation_option))!=0;
     std::vector<std::array<int,2>> resource_sites;
+    std::vector<std::array<int,2>> city_object_sites;
     auto capture_view = [&]() {
     int center_raw_x = center_x * tile_width / 2;
     int center_raw_y = center_y * tile_height / 2;
@@ -281,9 +282,35 @@ int main(int argc, char ** argv) {
             auto distance=[&](auto i){auto const& t=tiles[i];return std::abs(t.anchor_x-target_width/2)+std::abs(t.anchor_y-target_height/2);};
             return distance(a)<distance(b);
         });
+        char fixed_city_case[80]={};
+        if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CITY",fixed_city_case,sizeof(fixed_city_case))){
+            if(city_object_sites.empty() && candidates.size()>=6)
+                for(unsigned object=0;object<6;object++){auto const&t=tiles[candidates[object]];
+                    city_object_sites.push_back({((t.tile_x%map_width)+map_width)%map_width,t.tile_y});}
+            if(!city_object_sites.empty()){
+                candidates.clear();
+                for(auto const&site:city_object_sites){
+                    std::size_t best=tiles.size();int nearest=0x7fffffff;
+                    for(std::size_t i=0;i<tiles.size();i++)if(((tiles[i].tile_x%map_width)+map_width)%map_width==site[0] && tiles[i].tile_y==site[1]){
+                        int distance=std::abs(tiles[i].anchor_x-target_width/2)+std::abs(tiles[i].anchor_y-target_height/2);
+                        if(distance<nearest){nearest=distance;best=i;}
+                    }
+                    if(best<tiles.size())candidates.push_back(best);
+                }
+            }
+        }
         if(candidates.size()>=6){
             auto& city=tiles[candidates[0]];city.city_id=1;city.city_owner_id=1;city.city_size=2;
             city.city_culture_group=0;city.city_era=2;city.city_flags=C3X_RENDERER_CITY_CAPITAL|C3X_RENDERER_CITY_WALLED;
+            char city_case[80]={};
+            if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CITY",city_case,sizeof(city_case))){
+                int culture=0,era=0,size=0,capital=0;
+                if(sscanf_s(city_case,"%d,%d,%d,%d",&culture,&era,&size,&capital)==4 &&
+                    culture>=0 && culture<=4 && era>=0 && era<=3 && size>=0 && size<=2 && capital>=0 && capital<=1){
+                    city.city_culture_group=culture;city.city_era=era;city.city_size=size;
+                    city.city_flags=capital?C3X_RENDERER_CITY_CAPITAL:0;
+                }
+            }
             auto& mine=tiles[candidates[1]];mine.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;mine.route_style=2;
             auto& farm=tiles[candidates[2]];farm.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;farm.irrigation_mask=15;farm.route_style=2;
             auto& resource=tiles[candidates[3]];resource.resource_id=1;resource.resource_class=0;strcpy_s(resource.resource_name,"Iron");
