@@ -13,10 +13,30 @@ struct CliffPlacement {
 };
 struct CliffRecipe { unsigned asset=0; double scale=1,variation=.1; };
 
+// Source position and normal travel through the same world basis. The vertical
+// metric matches imported features; inverse transpose preserves face normals.
+struct CliffTransform {
+    CliffPlacement const& instance;
+    float vertical_basis;
+    double cosine, sine;
+    CliffTransform(CliffPlacement const& p,float vertical)
+        :instance(p),vertical_basis(vertical),cosine(std::cos(p.yaw)),sine(std::sin(p.yaw)) {}
+    template<class Vector> std::array<float,3> position(Vector const& p) const {
+        return {float(instance.position.x+(p[0]*cosine-p[1]*sine)*instance.scale),
+            float(instance.position.y+(p[0]*sine+p[1]*cosine)*instance.scale),
+            float(instance.z+p[2]*instance.scale*vertical_basis)};
+    }
+    template<class Vector> std::array<float,3> normal(Vector const& n) const {
+        return {float(n[0]*cosine-n[1]*sine),float(n[0]*sine+n[1]*cosine),
+            float(n[2]/vertical_basis)};
+    }
+};
+
+
 // Retained joined-source placement. The greedy spacing order is canonical
 // world-cell order instead of fixture-crop order. Recursive earlier-neighbor
 // evaluation gives the same result regardless of which tile is requested first.
-// Only the connected .30-tile exclusion neighborhood is consulted. The four
+// Only the connected .20-tile exclusion neighborhood is consulted. The four
 // large source bodies establish the cliff line; the four authored small bodies
 // dress its foot and top instead of synthesizing replacement rock geometry.
 template<class Lookup,class Index,class Height,class Shore,class Maximum,class Contour>
@@ -63,13 +83,13 @@ auto cliff_placements(World world,int owner_c,int owner_r,Lookup lookup,
                         double variation=(hash(seed^2179u)&0xffffffu)/16777215.;
                         // Fit the above-anchor body to the local cliff height
                         // with one uniform scale; retain authored proportions.
-                        a.scale=std::clamp((top-2.5/112.)/high,.28,.38)*selected.scale*
+                        a.scale=std::clamp((top-2.5/112.)/high,.42,.52)*selected.scale*
                             (1+(variation*2-1)*selected.variation);
                         a.yaw=std::atan2(ny,nx)+
                             (hash(seed^9347u)&0xffffffu)/16777215.*6.283185307179586;
                         // Embed the authored body into the raised terrain rim.
                         // Source origin is preserved; the rim fit is C3X placement.
-                        a.z=std::max(2.5/112.,top-high*a.scale*.85);a.eligible=true;
+                        a.z=std::max(2.5/112.,top-high*a.scale*.70);a.eligible=true;
                     }
                 }
             }
@@ -87,7 +107,7 @@ auto cliff_placements(World world,int owner_c,int owner_r,Lookup lookup,
             for(int n=0;n<int(count) && result;n++) {
                 Candidate b=candidate(c,r,n);
                 Point d=a.placement.position-b.placement.position;
-                if(b.rank<a.rank && dot(d,d)<.30*.30 && accepted(b,depth+1))result=false;
+                if(b.rank<a.rank && dot(d,d)<.20*.20 && accepted(b,depth+1))result=false;
             }
         }
         decisions[a.rank]=result;return result;
@@ -103,10 +123,9 @@ auto cliff_placements(World world,int owner_c,int owner_r,Lookup lookup,
             nx/=length;ny/=length;
             Point tangent{-ny,nx};
             unsigned seed=hash(unsigned(a.rank)^0x7f4a7c15u);
-            a.placement.position=a.placement.position+Point{nx,ny}*.19;
+            a.placement.position=a.placement.position+Point{nx,ny}*.08;
             result.push_back(a.placement);
 
-            double top=(height(p.x+nx*.26,p.y+ny*.26)+2.5)/112.;
             auto append_detail=[&](unsigned salt,bool upper) {
                 CliffPlacement detail;
                 unsigned detail_seed=hash(seed^salt);
@@ -114,18 +133,19 @@ auto cliff_placements(World world,int owner_c,int owner_r,Lookup lookup,
                 detail.asset=selected.asset;
                 double high=maximum(detail.asset);
                 if(high<=0 || selected.scale<=0)return;
-                detail.scale=.27*selected.scale*(1+selected.variation*
+                detail.scale=(upper?.27:.40)*selected.scale*(1+selected.variation*
                     ((hash(detail_seed^0x27d4eb2du)&0xffffffu)/16777215.*2-1));
                 detail.yaw=std::atan2(ny,nx)+
                     (hash(detail_seed^0x165667b1u)&0xffffffu)/16777215.*6.283185307179586;
                 double along=((hash(detail_seed^0xd3a2646cu)&0xffffffu)/16777215.-.5)*.28;
-                detail.position=p+tangent*along+
-                    Point{nx,ny}*(upper?.30:-.13);
-                detail.z=upper?top:2.5/112.-.01;
+                double spread=(hash(detail_seed^0xb5297a4du)&0xffffffu)/16777215.;
+                double across=upper?.18+.28*spread:-(.19+.25*spread);
+                detail.position=p+tangent*along+Point{nx,ny}*across;
+                detail.z=upper?(height(detail.position.x,detail.position.y)+2.5)/112.:2.5/112.+.02;
                 detail.eligible=true;result.push_back(detail);
             };
             append_detail(0x9e3779b9u,false);
-            if((hash(seed^0x85ebca6bu)&3u)!=0)append_detail(0xc2b2ae35u,true);
+            if((hash(seed^0x85ebca6bu)%3u)==0)append_detail(0xc2b2ae35u,true);
         }
     }
     return result;

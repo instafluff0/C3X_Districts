@@ -16,13 +16,16 @@ the inspected terrain package describes cliffs as terrain material plus clutter,
 not as a standalone authored wall mesh. ArtDef counts are retained as selection
 weights; the source engine's final scattering algorithm is not claimed recovered.
 
-The current cliff candidate preserves raised coastal height through the natural
-terrain adapter and binds the existing Civ V cliff materials on steep faces.
-It embeds source rocks into that rim using the imported scale/variation recipe.
-The user selected the Civ V skin and rejected the initial boulder-only pass.
-See `Renderer/docs/coastal_cliff_findings.md` for evidence and current previews.
-The corrected cliff pack and placement must be promoted together after visual
-acceptance; the candidate is not staged for game use.
+The cliff candidate now joins the actual visible hill surface: the coastal floor
+is a minimum rather than an added ledge, hills use the steep cliff envelope,
+and rocky coverage is opaque before the face rises. Rock attachments sample
+that same surface; upper details sample their own coordinates. The earlier
+projection, normal-basis and depth corrections remain. Less regular upper/foot
+scatter and a narrow wet-rock material band refine the selected Civ V skin.
+Ordinary beaches and inland terrain keep their existing formulas. Source UVs
+and texture bytes are unchanged. See `Renderer/docs/coastal_cliff_findings.md`
+for evidence, reconstructed choices and native comparisons. Promote the
+corrected pack and compatible DLL together after visual acceptance.
 
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.

@@ -76,15 +76,20 @@ def generate(source_root=None, output_root=None, output_name='terrain_scene.hlsl
         clip(coverage - 0.08);
         // One restrained sample anchors the body without a generic blob or a
         // full static-scene rerender on every animation tick.
-        float alpha = frame_cast_shadow_strength() * 0.22 *
+        float alpha = frame_cast_shadow_strength() * c3x_dynamic_shadow_opacity *
             smoothstep(0.08, 0.35, coverage);
         clip(alpha - 0.004);
         return float4(0.008, 0.011, 0.016, alpha);
     }''' + text[finish:]
+            policy = native.parent / 'lab/shared/shaders/lighting/shadow_policy.hlsl'
+            text = policy.read_text() + '\n' + text
         if source.name == 'frame_shadow_v1.hlsl':
             text = text.replace('register(b1)', 'register(b2)')
             begin = text.index('float q6_world_visibility(')
-            text = text[:begin] + (ROOT / 'shadow_receiver.hlsl').read_text() + '\n#endif\n'
+            receiver = (ROOT / 'shadow_receiver.hlsl').read_text().replace(
+                '// C3X_SHARED_PAGED_SHADOW',
+                (native.parent / 'lab/shared/shaders/lighting/paged_shadow_v1.hlsl').read_text())
+            text = text[:begin] + receiver + '\n#endif\n'
         if source.name == 'scene_shadow_v1.hlsl':
             text = text.replace('q6_world_visibility(feature_base_texture_0,',
                                 'q6_world_visibility(pickup_shadow_terrain,')

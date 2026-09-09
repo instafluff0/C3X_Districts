@@ -19,12 +19,22 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
     GetEnvironmentVariableA("C3X_LAB_WATER_STUDY",water,sizeof(water));
     bool resources=std::strcmp(category,"resources")==0;
     bool infrastructure=std::strcmp(category,"infrastructure")==0;
-    if(!resources && !infrastructure)return;
+    bool shadows=std::strcmp(category,"shadows")==0;
+    if(!resources && !infrastructure && !shadows)return;
     char const*land[]={"Iron","Cattle","Horses","Wheat","Gold","Dyes"};
     char const*sea[]={"Fish","Whales"};
     for(auto& tile:tiles) {
         int x=((tile.tile_x%map_width)+map_width)%map_width-center_x, y=tile.tile_y-center_y;
-        if(resources) {
+        if(shadows) {
+            if(x==-4 && y==2) {
+                tile.city_id=1;tile.city_owner_id=1;tile.city_size=1;
+                tile.city_culture_group=0;tile.city_era=0;tile.city_flags=0;
+            }
+            if(y==0 && (x==0 || x==4)) {
+                tile.resource_id=x==0?100:101;tile.resource_class=0;
+                strcpy_s(tile.resource_name,x==0?"Iron":"Horses");
+            }
+        } else if(resources) {
             unsigned count=water[0]?2u:6u;
             for(unsigned i=0;i<count;++i) {
                 int sx=water[0]?(int(i)*4-2):(int(i%3)*2-2);
@@ -52,19 +62,21 @@ bool lab_verify_objects(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_
     GetEnvironmentVariableA("C3X_LAB_WATER_STUDY",water,sizeof(water));
     bool resources=std::strcmp(category,"resources")==0;
     bool infrastructure=std::strcmp(category,"infrastructure")==0;
-    if(!resources && !infrastructure)return true;
+    bool shadows=std::strcmp(category,"shadows")==0;
+    if(!resources && !infrastructure && !shadows)return true;
     bool ok=output.replacement_tile_count==frame.tile_count && output.replacement_tile_flags;
     unsigned count=0,ownership=0;
     for(unsigned i=0;i<frame.tile_count && ok;++i) {
         auto const& tile=frame.tiles[i];
         if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
         auto flags=output.replacement_tile_flags[i];ownership|=flags;
-        if(resources && tile.resource_id>=0){
+        if((resources || shadows) && tile.resource_id>=0){
             ++count;ok=(flags&C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED)!=0;
             if(!ok)std::printf("FAIL missing custom resource: %s\n",tile.resource_name);
         }
     }
     if(resources)ok=ok && count==(water[0]?2u:6u);
+    if(shadows)ok=ok && count==2 && (ownership&C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED)!=0;
     if(infrastructure){
         unsigned expected=C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED|C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED|
             C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED|C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
@@ -76,7 +88,7 @@ bool lab_verify_objects(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_
 
 bool lab_compose_units(HMODULE module, char const* image_path, int hour, int tile_width,
                        c3x_renderer_output_v1 const& terrain) {
-    char enabled[8] = {};
+    char enabled[16] = {};
     if (!GetEnvironmentVariableA("C3X_LAB_UNIT_STUDY", enabled, sizeof(enabled))) return true;
     auto draw = reinterpret_cast<c3x_renderer_unit_draw_background_fn>(GetProcAddress(module, "c3x_renderer_unit_draw_background"));
     bool ok = draw != nullptr;
@@ -98,7 +110,9 @@ bool lab_compose_units(HMODULE module, char const* image_path, int hour, int til
     char cursor[16] = {};
     GetEnvironmentVariableA("C3X_LAB_ACTION_CURSOR", cursor, sizeof(cursor));
     char const* keys[] = {"Warrior", "Settler", "Worker", "Horseman", "Tank", "Fighter"};
-    for (int index = 0; index < 6 && ok; ++index) {
+    bool shadows=std::strcmp(enabled,"shadows")==0;
+    int count=shadows?2:6;
+    for (int index = 0; index < count && ok; ++index) {
         c3x_renderer_unit_v1 unit = {};
         unit.struct_size = sizeof(unit);
         unit.unit_id = index;
@@ -113,6 +127,11 @@ bool lab_compose_units(HMODULE module, char const* image_path, int hour, int til
         unit.display_color_rgb = 0x205bdd;
         unit.body_x = 150 + (index % 3) * 160 - 191 / (unit.reduced ? 4 : 2);
         unit.body_y = 215 + (index / 3) * 150 - 191 / (unit.reduced ? 4 : 2);
+        if(shadows) {
+            // Flat receiving tiles south of the mixed static/animated scene.
+            unit.body_x=terrain.width/2+(index*2)*tile_width/2-191/(unit.reduced?4:2);
+            unit.body_y=terrain.height/2+3*tile_width/4-191/(unit.reduced?4:2);
+        }
         ok = draw(&unit, dc, dc) == C3X_RENDERER_RESULT_OK;
         if (!ok) std::printf("FAIL category unit %s\n", unit.unit_key);
     }
@@ -128,8 +147,19 @@ bool lab_compose_units(HMODULE module, char const* image_path, int hour, int til
     if (previous) SelectObject(dc, previous);
     if (bitmap) DeleteObject(bitmap);
     if (dc) DeleteDC(dc);
-    std::printf("%s category unit study: 6 current production families, native body API\n", ok ? "PASS" : "FAIL");
+    std::printf("%s category unit study: %d current production families, native body API\n", ok ? "PASS" : "FAIL",count);
     return ok;
 }
 
-int main(int argc, char** argv) { return terrain_preview_main(argc, argv); }
+int main(int argc, char** argv) {
+    // Publish this invocation's real process handle before any expensive
+    // shader compilation. A transport timeout is not a native process exit.
+    char path[1024]={},id[64]={};
+    if(GetEnvironmentVariableA("C3X_LAB_PID_FILE",path,sizeof(path)) &&
+       GetEnvironmentVariableA("C3X_LAB_RUN_ID",id,sizeof(id))) {
+        FILE* file=nullptr;
+        if(fopen_s(&file,path,"w") || !file)return 1;
+        std::fprintf(file,"%s %lu\n",id,GetCurrentProcessId());std::fclose(file);
+    }
+    return terrain_preview_main(argc, argv);
+}

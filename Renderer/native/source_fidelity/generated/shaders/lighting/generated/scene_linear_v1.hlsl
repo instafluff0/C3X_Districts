@@ -1,3 +1,8 @@
+// Shared scalar policy; also included inside the CPU lighting namespace.
+// Dynamic ground footprints approximate lost direct illumination on a cached
+// background. Self/world receivers preserve their material's ambient term.
+static const float c3x_dynamic_shadow_opacity = 0.48f;
+
 Texture2D base_color_texture : register(t0);
 Texture2D height_texture : register(t1);
 Texture2D specular_texture : register(t2);
@@ -1209,7 +1214,7 @@ float4 q6_raw_main(PixelInput input)
         clip(coverage - 0.08);
         // One restrained sample anchors the body without a generic blob or a
         // full static-scene rerender on every animation tick.
-        float alpha = frame_cast_shadow_strength() * 0.22 *
+        float alpha = frame_cast_shadow_strength() * c3x_dynamic_shadow_opacity *
             smoothstep(0.08, 0.35, coverage);
         clip(alpha - 0.004);
         return float4(0.008, 0.011, 0.016, alpha);

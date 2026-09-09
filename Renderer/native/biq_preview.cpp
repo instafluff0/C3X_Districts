@@ -176,7 +176,32 @@ bool write_color_preview(char const* path, HMODULE module, c3x_renderer_output_v
 
 #include "unit_roster_preview.h"
 
+// Offscreen verification must report a crash, not wait indefinitely in a
+// hidden Windows Error Reporting dialog. No handler is installed in Civ III.
+void preview_fault_address(char const* label,void* address) {
+    MEMORY_BASIC_INFORMATION memory={};char module[MAX_PATH]={};
+    if(VirtualQuery(address,&memory,sizeof(memory)))
+        GetModuleFileNameA(static_cast<HMODULE>(memory.AllocationBase),module,sizeof(module));
+    auto name=std::strrchr(module,'\\');
+    std::fprintf(stderr,"%s address=%p module=%s offset=0x%zx\n",label,address,
+        name?name+1:module,reinterpret_cast<std::uintptr_t>(address)-reinterpret_cast<std::uintptr_t>(memory.AllocationBase));
+}
+
+LONG WINAPI preview_unhandled_exception(EXCEPTION_POINTERS* fault) {
+    std::fprintf(stderr,"FAIL native-exception code=0x%08lx parameters=%lu\n",
+        fault->ExceptionRecord->ExceptionCode,fault->ExceptionRecord->NumberParameters);
+    preview_fault_address("fault",fault->ExceptionRecord->ExceptionAddress);
+    for(DWORD i=0;i<fault->ExceptionRecord->NumberParameters;++i)
+        std::fprintf(stderr,"exception-parameter[%lu]=0x%zx\n",i,std::size_t(fault->ExceptionRecord->ExceptionInformation[i]));
+    void* frames[32]={};USHORT count=CaptureStackBackTrace(0,32,frames,nullptr);
+    for(USHORT i=0;i<count;++i)preview_fault_address("stack",frames[i]);
+    std::fflush(stderr);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
 int main(int argc, char ** argv) {
+    SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX);
+    SetUnhandledExceptionFilter(preview_unhandled_exception);
     if (argc != 11 && argc != 12) {
         std::fprintf(stderr, "usage: biq_preview <dll> <mod-root> <definitions> <scene.csv> <out.bmp> <width> <height> <center-x> <center-y> <tile-width> [hour]\n");
         return 2;
@@ -403,7 +428,7 @@ int main(int argc, char ** argv) {
     if(ok && zoom_benchmark) {
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
         std::vector<std::vector<unsigned char>> reference(5);
-        int levels[]={128,112,96,80,64};
+        int levels[]={128,96,64,192,160}; // Native Z cycle, normal in the middle.
         for(int cycle=0;cycle<camera_cycles && ok;++cycle)for(int level=0;level<5 && ok;++level){
             tile_width=levels[level];tile_height=tile_width/2;tiles=capture_view();
             frame.tile_width=tile_width;frame.tile_height=tile_height;

@@ -3,12 +3,15 @@
   "reflection": "water-reflection-r5",
   "source_sha256": {
     "Renderer/lab/shared/shaders/hydrology/water_natural.hlsl": "5388f4863c286b0221ec5a4dd35d38164ac12e9b1cf552637d062f37396ace1a",
-    "Renderer/native/source_fidelity/hydrology.hlsl": "031b4c7cd7d65a88637054def73c053e8c5439f4c086745799f3de46643f4060",
+    "Renderer/native/source_fidelity/hydrology.hlsl": "da5c3170ccb47bf1474000b29731363f249ed4bd16c4a250f77969bd11b46244",
     "Renderer/native/render_core/terrain_scene.hlsl": "2a5f7e8550f3964b255d34e54f8f6bd4daaff1907715ea44f11a38591ec90067",
-    "Renderer/lab/shared/shaders/relief/coast_rocks.hlsl": "959d3de0a7efe2283a5dde0b3db1c9c9d741ef1d989d30c41469723d24e7d03f",
-    "Renderer/native/source_fidelity/terrain.hlsl": "1603e839f570e3297b47b17af1c617ac1c85706890f2574d6f3fcbda310138b5",
-    "Renderer/native/source_fidelity/mountain.hlsl": "636ff7618b67392bf15d37ed422eab542cb5be9267f670f69bd8f3d8bb1306a8",
-    "Renderer/native/source_fidelity/objects.hlsl": "92d28d19643b27f59fa2472fbb3e17fb92e79a8ff8cfba16ee49f440f70d05a4",
+    "Renderer/lab/shared/shaders/lighting/shadow_policy.hlsl": "4be97debb20a78e7b7c8735365d51472b00bc05a63a992f0ae73604d42a60c1a",
+    "Renderer/native/render_core/shadow_receiver.hlsl": "927b58bc3a77f8d947b54a279b1b2183ef52b01caddaf8e7d60d2484e37d9436",
+    "Renderer/lab/shared/shaders/lighting/paged_shadow_v1.hlsl": "0314e3cadc09dab8d6098f6158e97e4da269afde783d8477722a7f3be70c495f",
+    "Renderer/lab/shared/shaders/relief/coast_rocks.hlsl": "39ba4ada0ad6567b0fb75827495b55f727a98c563f13d4a762f087deba2a9398",
+    "Renderer/native/source_fidelity/terrain.hlsl": "3f60d64dd072168015e073276ef3f0706ba52945daa4efeb784ed6013579bf53",
+    "Renderer/native/source_fidelity/mountain.hlsl": "fd91d31e38126da80cec787f2f481b19591f04390f6b5ed763e43d9bb69676e1",
+    "Renderer/native/source_fidelity/objects.hlsl": "56c454cf19a468da78b0b89993d2805d8b0f733a1303b43cec7d2d75fa2dd268",
     "Renderer/native/render_core/source_caster.hlsl": "a8c0acb26a60b2cf97fd9c02b6ac51e9848bf15f4060568df89c9e93b5d3ac41"
   }
 }

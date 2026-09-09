@@ -152,9 +152,6 @@
                     grid[y*count+x]=out;
                 }
             }
-            for(unsigned y=0;y+1<count;y++)for(unsigned x=0;x+1<count;x++){
-                auto&a=grid[y*count+x];auto&b=grid[y*count+x+1];auto&c=grid[(y+1)*count+x+1];auto&d=grid[(y+1)*count+x];
-                triangle(natural_vertices[2],a,b,c);triangle(natural_vertices[2],a,c,d);
-            }
+            append_surface_grid(natural_vertices[2],grid,count-1,false,mountain_indices);
         }
     }

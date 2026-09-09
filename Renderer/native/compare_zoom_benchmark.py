@@ -24,7 +24,10 @@ def run(label, directory, scenario):
         raise ValueError(f"{label}: repeated-camera parity failed")
     if not lines[-1].startswith("BIQ ") or "0 fallback" not in lines[-1]:
         raise ValueError(f"{label}: missing successful completion marker")
-    ids = range(6) if scenario == "navigation" else (128,112,96,80,64)
+    # Keep old receipts readable, but reject arbitrary/reordered zoom ladders.
+    ids = range(6) if scenario == "navigation" else tuple(int(row["width"]) for row in rows[:5])
+    if scenario != "navigation" and ids not in ((128,112,96,80,64), (128,96,64,192,160)):
+        raise ValueError(f"{label}: unexpected zoom ladder")
     field = "step" if scenario == "navigation" else "width"
     if [(int(row["cycle"]),int(row[field])) for row in rows] != [(cycle,step) for cycle in range(cycles) for step in ids]:
         raise ValueError(f"{label}: unexpected camera sequence")
@@ -76,8 +79,10 @@ def main():
     candidate, after = run("candidate", args.candidate, args.scenario)
     if len(before) != len(after):
         raise ValueError("Benchmark cycle counts differ")
+    if args.scenario == "zoom" and [row["width"] for row in before[:5]] != [row["width"] for row in after[:5]]:
+        raise ValueError("Benchmark zoom ladders differ")
     comparisons = []
-    variants = [(f"z{width}", {"width": width}) for width in (128,112,96,80,64)] if args.scenario == "zoom" else [(f"nav{step}", {"step": step}) for step in range(6)]
+    variants = [(f"z{row['width']}", {"width": int(row["width"])}) for row in before[:5]] if args.scenario == "zoom" else [(f"nav{step}", {"step": step}) for step in range(6)]
     for suffix, identity in variants:
         size, old = pixels(baseline / f"zoom.bmp.{suffix}.bmp")
         other_size, new = pixels(candidate / f"zoom.bmp.{suffix}.bmp")

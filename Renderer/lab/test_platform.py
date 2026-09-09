@@ -7,6 +7,34 @@ from Renderer.lab import platform
 
 
 class PlatformTests(TestCase):
+    def test_timeout_waits_for_own_live_process_without_restarting(self):
+        live = {"status": "pass", "output_tail": '\"native_preview.exe\",\"1234\",\"Services\"'}
+        with mock.patch.object(platform, "native_command_result", side_effect=[{"status": "fail"}, live]) as run, \
+             mock.patch.object(platform, "fixture_process", return_value=1234), \
+             mock.patch.object(platform, "native_completion", side_effect=[ValueError(), ValueError(), ValueError(), {"status": "pass"}]), \
+             mock.patch.object(platform.time, "sleep") as sleep, mock.patch("builtins.print"):
+            self.assertEqual(platform.run_native_fixture(Path("fixture"), "draw", "id")["status"], "pass")
+            self.assertEqual(run.call_count, 2)
+            self.assertIn("PID eq 1234", run.call_args.args[1])
+            sleep.assert_called_once_with(5)
+
+    def test_process_receipt_is_bound_to_the_invocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for value in ("old 1234", "id 0", "id bad", "id 1234 extra"):
+                (root / "process.txt").write_text(value)
+                self.assertIsNone(platform.fixture_process(root, "id"))
+            (root / "process.txt").write_text("id 1234")
+            self.assertEqual(platform.fixture_process(root, "id"), 1234)
+
+    def test_transient_observation_failure_keeps_the_same_invocation(self):
+        with mock.patch.object(platform, "native_command_result", return_value={"status": "fail", "output_tail": "temporary VM error"}) as run, \
+             mock.patch.object(platform, "native_completion", side_effect=[ValueError(), ValueError(), {"status": "pass"}]), \
+             mock.patch.object(platform.time, "sleep") as sleep, mock.patch("builtins.print"):
+            self.assertEqual(platform.wait_native_fixture(Path("fixture"), "id", 1234)["status"], "pass")
+            run.assert_called_once()
+            sleep.assert_called_once_with(5)
+
     def test_transport_error_with_confirmed_completion_does_not_retry(self):
         with mock.patch.object(platform, "native_command_result", return_value={"status": "fail"}) as run, \
              mock.patch.object(platform, "native_completion", return_value={"status": "pass"}), mock.patch("builtins.print"):

@@ -137,6 +137,36 @@ int main() {
         assert(a.hits==b.hits && a.misses==b.misses && a.heights==b.heights);
         assert(a.hits>0 && a.misses>0 && a.heights>0);observations+=a.events.size();scopes+=2;
     }
+    // Production natural providers already return zero for direct hills,
+    // mountains and analytic dunes. A source-aware flat certificate must retain
+    // exact underlying heights/materials, coast rims, rivers and volcano owners.
+    for(unsigned scene=0;scene<6;scene++){
+        auto lookup=[&](int c,int r){
+            if(scene==4 && c==-1 && r==0)return render_core::Tile{};
+            int kinds[]={0,5,6,2};int real=kinds[render_core::mod(c+r,4)];
+            if((scene==3 && c==0 && r==0) || (scene==5 && c==2 && r==0))real=10;
+            return render_core::Tile{real==0?0:2,real,true};
+        };
+        auto shore=[&](float x,float){return render_core::ShoreSample{
+            scene==2?.12+double(x)*.1:scene==1?1.61+(double(x)-.5):3.,.06,.9,0};};
+        auto source=[&](int kind,unsigned variant,int channel,float u,float v){
+            return relief_source(assets,true,kind,variant,channel,u,v);};
+        auto river=[](int,int,float,float){return 8.f;};
+        auto dune=[](float,float){return 0.f;};auto activity=[](int,int){return 1.f;};
+        render_core::ExactPointCache<render_core::GroundSample> before_cache,after_cache;
+        std::size_t before_count=0,after_count=0;
+        render_core::World world{64,64,true,true};
+        ReliefSurface before(world,0,0,shore(.5f,.5f).distance,lookup,source,shore,river,dune,activity,before_cache,before_count);
+        ReliefSurface after(world,0,0,shore(.5f,.5f).distance,lookup,source,shore,river,dune,activity,after_cache,after_count,true);
+        for(int y=-2;y<=66;y++)for(int x=-2;x<=66;x++){
+            float u=x/64.f,v=y/64.f;auto a=before.sample(u,v),b=after.sample(u,v);
+            assert(a.height==b.height && a.authored_height==b.authored_height && a.authored_blend==b.authored_blend && a.owner==b.owner);
+            assert(before.height(u,v)==after.height(u,v));
+        }
+        if(scene==0)assert(after_count<before_count/8);
+        render_core::FlatGroundRegion certificate(0,0,3.,lookup,true);
+        assert(certificate.certified==(scene!=3 && scene!=4 && scene!=5));
+    }
     assert(sample_normalized_field({},4,4,0,1,0,0)==0);
     assert(sample_normalized_field({255},0,1,0,1,0,0)==0);
     assert(sample_normalized_field({255},1,0,0,1,0,0)==0);

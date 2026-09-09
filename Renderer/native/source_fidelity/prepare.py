@@ -80,14 +80,26 @@ def shaders():
         # receiver storage ABI are adapted; never overwrite the Lab provider.
         s=s.replace('Texture2D ShadowField : register(t17);','Texture2DArray ShadowField : register(t17);')
         s=s.replace('cbuffer ShadowFrame : register(b1)', 'cbuffer ShadowFrame : register(b2)')
-        s=s.replace('#include "../lighting/shadow_visibility_v1.hlsl"',(HERE/'shadow_adapter.hlsl').read_text())
+        s=s.replace('#include "../lighting/shadow_visibility_v1.hlsl"',(HERE/'shadow_adapter.hlsl').read_text().replace(
+            '// C3X_SHARED_PAGED_SHADOW',(LAB/'shaders/lighting/paged_shadow_v1.hlsl').read_text()))
         if name=='mountain':s='#define BEAUTY_TERRAIN_TRANSITIONS 1\n'+s
         s='#define BEAUTY_COMPOSED_SHADOWS 1\n'+s
         s+='''\ncbuffer NativeViewport : register(b1) {
  float2 translation; float depth_translation; float padding;
  float2 inverse_size; float2 reserved;
+ float4 natural_projection; // owner column/row, tile width, target height; zero disables
 };
+float3 native_project_position(float3 position, float3 world) {
+ if(natural_projection.z<=0) return position;
+ float dx=world.x-natural_projection.x,dy=world.y-natural_projection.y;
+ float h=world.z*112-2.5;
+ float base=(dx-dy+1)*natural_projection.z*.25;
+ return float3((dx+dy)*natural_projection.z*.5,
+     base-h*(natural_projection.z/224*.82),
+     base+h*.0016*natural_projection.w);
+}
 P VSNative(V input) {
+ input.position=native_project_position(input.position,input.world.xyz);
  P o=VSMain(input);
  o.position.xy=(floor(input.position.xy*256+0.5)/256+translation)*inverse_size*float2(2,-2)+float2(-1,1);
  o.position.z=clamp(0.5-(floor(input.position.z*256+0.5)/256+translation.y)/16384.0,0.001,0.999);

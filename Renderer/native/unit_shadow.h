@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include "scene_lighting.h"
 
 namespace c3x_renderer {
 // Small pose-local directional height map. Translation is deliberately absent.
@@ -19,8 +20,11 @@ struct UnitShadow {
             if(!std::isfinite(value) || std::abs(value)>1024.f)return false;
         if(!std::isfinite(light_x) || !std::isfinite(light_y))return false;
         float length=std::hypot(light_x,light_y);
-        dx=length>1e-5f?light_x/length*(150.f/96.f):0;
-        dy=length>1e-5f?light_y/length*(150.f/96.f):0;
+        // Inputs are WORLD light XY. The local rasterizer reflects Y and
+        // converts source height exactly as the displayed unit geometry does.
+        float scale=lighting::object_height_to_world/lighting::shadow_slope;
+        dx=length>1e-5f?light_x/length*scale:0;
+        dy=length>1e-5f?-light_y/length*scale:0;
         float right=-1e6f,bottom=-1e6f;left=top=1e6f;
         for(auto p:points)if(p[2]>=0) {
             p=project(p);left=std::min(left,p[0]);top=std::min(top,p[1]);

@@ -79,8 +79,8 @@ int main(int argc,char**argv){
             if(std::abs(dot-(i==j?1:0))>1e-5)return 1;
         }
         float dx=-f[8]/f[10],dy=-f[9]/f[10];
-        if(h==12 && !((dx+dy)>0 && (dx-dy)<0))return 1;
+        if(h==12 && !((dx+dy)<0 && std::abs(dx-dy)<1e-5f))return 1;
         ++phases;
     }
-    std::cout<<"PASS selected river provider samples="<<samples<<" exact equality; Q6 orthonormal phases="<<phases<<" noon up-right\n";
+    std::cout<<"PASS selected river provider samples="<<samples<<" exact equality; Q6 orthonormal phases="<<phases<<" noon west\n";
 }

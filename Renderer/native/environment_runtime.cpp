@@ -47,9 +47,8 @@ EnvironmentState evaluate_environment(float requested_hour, int season) {
     float sunrise = smoothstep(5.0f, 7.0f, hour);
     float sunset = 1.0f - smoothstep(17.0f, 19.0f, hour);
     float daylight = clamp01(sunrise * sunset);
-    // The canonical Civ VI phases retain a low directional sun at 06:00 and
-    // 18:00. Use a slightly wider visual daylight arc than the clock's
-    // activation window so those exact six-hour samples cast long shadows.
+    // Elevation controls radiance; the shared scene light uses a fixed shadow
+    // slope so clock phase never changes an object's height-to-length scale.
     float sun_elevation = std::max(0.0f, std::sin((hour - 5.0f) * pi / 14.0f));
     float warm = clamp01(1.0f - std::abs(sun_elevation - 0.18f) / 0.32f) *
                  smoothstep(0.02f, 0.16f, sun_elevation);
@@ -57,25 +56,31 @@ EnvironmentState evaluate_environment(float requested_hour, int season) {
     float dawn_mix = warm * (1.0f - smoothstep(12.0f, 18.0f, hour));
 
     EnvironmentState result = {};
-    float sun_angle = (hour - 6.0f) * pi / 12.0f;
-    result.sun_direction[0] = std::cos(sun_angle) * 0.78f;
-    // In the Civ III isometric basis a negative world-Y light component casts
-    // noon shadows down-screen, matching the canonical reference instead of
-    // burying them up-screen beneath feature crowns.
-    result.sun_direction[1] = -0.42f;
+    // User-selected Civ VI visual convention, expressed in screen space:
+    // 12 W, 18 S, 00 E, 06 N. Invert the 2:1 isometric ground projection,
+    // then negate the cast vector to obtain the direction toward the light.
+    // This is an authored C3X cycle, not recovered Civ VI engine behavior.
+    float phase = hour * pi / 12.f;
+    float cast_x = std::cos(phase), cast_y = -std::sin(phase);
+    float world_x = cast_x + 2.f * cast_y;
+    float world_y = cast_x - 2.f * cast_y;
+    float horizontal = std::hypot(world_x, world_y);
+    result.sun_direction[0] = -world_x / horizontal;
+    result.sun_direction[1] = -world_y / horizontal;
     result.sun_direction[2] = std::max(0.08f, sun_elevation);
     normalize(result.sun_direction);
     result.sun_color[0] = 1.0f;
     result.sun_color[1] = 0.96f - 0.30f * dusk_mix - 0.16f * dawn_mix;
     result.sun_color[2] = 0.88f - 0.46f * dusk_mix - 0.28f * dawn_mix;
     // Keep low-angle phases bright enough to read like the canonical Civ VI
-    // 06:00/18:00 frames.  Elevation still controls shadow length; a daylight
-    // fill term prevents twilight from looking like a prematurely dark night.
+    // 06:00/18:00 frames. A daylight fill term keeps twilight legible.
     result.sun_intensity = clamp01(sun_elevation * (0.45f + 0.35f * daylight) +
                                    0.20f * daylight);
 
-    result.moon_direction[0] = -result.sun_direction[0];
-    result.moon_direction[1] = -result.sun_direction[1];
+    // One continuous presentation orbit crosses the sun/moon handover. The
+    // active night light must not reverse the intended midnight cast direction.
+    result.moon_direction[0] = -world_x / horizontal;
+    result.moon_direction[1] = -world_y / horizontal;
     result.moon_direction[2] = std::max(0.18f, 1.0f - sun_elevation);
     normalize(result.moon_direction);
     result.moon_color[0] = 0.42f;

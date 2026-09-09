@@ -103,10 +103,13 @@ public:
         float coastal=coast_relief(float(sample.distance),float(sample.beach_width));
         float h=std::max(authored,2.5f+pickup);
         float rocky=coast_ramp((float(sample.rocky)-.55f)/.4f);
-        // Pickup already shapes the cliff at the waterline. A second beach
-        // envelope flattened it while rock placement retained the full height.
-        if(rocky>0)return 2.5f+std::max((authored-2.5f)*coastal,
-            pickup*(coastal+(1-coastal)*rocky));
+        // Both hill and pickup relief meet the steep rocky coast. The ordinary
+        // beach envelope must not flatten a hill behind the cliff faces.
+        if(rocky>0){
+            float cliff=coast_ramp((float(sample.distance)-.04f)/.14f);
+            return 2.5f+std::max((authored-2.5f)*(coastal+(1-coastal)*rocky*cliff),
+                pickup*(coastal+(1-coastal)*rocky));
+        }
         return 2.5f+(h-2.5f)*coastal;
     }
 };

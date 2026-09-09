@@ -11,6 +11,16 @@ Lab reorganization, shared CPU geometry/query extraction, asset preparation,
 shaders and off-screen cache/composition work require no new Civ III symbol.
 Existing map and unit boundaries remain unchanged:
 
+The full-size world-mesh sharing, version-checked viewport draw restore and
+retained-image capacity changes are DLL-only. They use the existing map capture
+and composite boundaries below. `required_user_action: []` for these performance
+changes; the separate city-HUD request remains outstanding.
+
+Direct natural-grid indexing and source-aware underlying relief queries are also
+DLL-only. They preserve those same capture/composite symbols and ownership;
+`required_user_action: []`. No cache increase or new executable address is needed
+for these cold-view optimizations.
+
 - Existing symbols: `Map_Renderer_m71_Draw_Tiles`,
   `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`,
   `Main_Screen_Form_tile_to_screen_coords`, `Unit_tick_anim`,
@@ -26,6 +36,13 @@ and consumes `Z` before Civ III's native two-level toggle. Existing
 wrapper and `Sprite_draw_on_map` inlead provide inverse input and native overlay
 placement. Native unit health/status alignment uses the existing `Unit_tick_anim`
 inlead. `audit_candidates: []`.
+
+The centered five-level range (64, 96, 128, 160, 192 pixels, normal at 128)
+changes only the existing key handler's step array and native-sync bounds.
+Those existing symbols and capture/overlay hooks already carry numeric scales;
+this range change needs no new entry, signature or address.
+`required_user_action: []` for the range change itself. The separate city-HUD
+row capability request below remains outstanding.
 
 Native city names and state labels calculate their anchor through the already
 recorded `Main_Screen_Form_tile_to_screen_coords` symbol. Change that existing

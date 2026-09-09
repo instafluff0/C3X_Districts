@@ -23,6 +23,11 @@
 #define Q3_WATER_MATERIAL 1
 #define Q3_SHORE_MATERIAL 1
 #define Q3_HYDROLOGY_DATA 1
+// Shared scalar policy; also included inside the CPU lighting namespace.
+// Dynamic ground footprints approximate lost direct illumination on a cached
+// background. Self/world receivers preserve their material's ambient term.
+static const float c3x_dynamic_shadow_opacity = 0.48f;
+
 Texture2D base_color_texture : register(t0);
 Texture2D height_texture : register(t1);
 Texture2D specular_texture : register(t2);
@@ -1179,11 +1184,14 @@ cbuffer Q6SharedShadow : register(b2) {
  float4 Q6ShadowOrigin;
  float4 Q6ShadowFlags; // enabled, tighter contact, reserved, reserved
 };
+// Binding adapter; the shared Lab provider owns filtering/contact/depth rules.
+Texture2DArray pickup_shadow_terrain : register(t25);
+Texture2DArray pickup_shadow_feature : register(t17);
 // World-aligned six-tile pages preserve the retained 6/1024 sampling density.
 // Source depths use R32_FLOAT physical light distance, avoiding page-dependent
 // normalization/quantization. Page identity never contains a screen anchor.
-Texture2DArray pickup_shadow_terrain : register(t25);
-Texture2DArray pickup_shadow_feature : register(t17);
+
+
 cbuffer C3XShadowPages : register(b4) { float4 pickup_pages[64]; };
 int pickup_page(int2 page) {
  uint key=(uint(page.x)*73856093u ^ uint(page.y)*19349663u)&63u;
@@ -1199,14 +1207,15 @@ float pickup_blocker(Texture2DArray field,int2 texel,int2 center_page,int center
  int slot=all(page==center_page)?center_slot:pickup_page(page);
  return slot<0?-1e6:field.Load(int4(texel-page*1024,slot,0)).r;
 }
-float q6_world_visibility(Texture2DArray field,float4 world,float3 normal,bool water) {
- if(world.w<=.5 || Q6ShadowFlags.x<=.5)return 1;
+float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool water,
+ float4 ShadowU,float4 ShadowV,float4 ShadowL,float4 ShadowFlags) {
+ if(world.w<=.5 || ShadowFlags.x<=.5)return 1;
  const float texel=6./1024.;
  float3 offset=world.xyz+normal*texel;
- float2 uv=float2(dot(offset,Q6ShadowU.xyz),dot(offset,Q6ShadowV.xyz))/texel;
- float z=dot(offset,Q6ShadowL.xyz);
- float2 plane=float2(dot(world.xyz,Q6ShadowU.xyz),dot(world.xyz,Q6ShadowV.xyz))/texel;
- float plane_z=dot(world.xyz,Q6ShadowL.xyz);
+ float2 uv=float2(dot(offset,ShadowU.xyz),dot(offset,ShadowV.xyz))/texel;
+ float z=dot(offset,ShadowL.xyz);
+ float2 plane=float2(dot(world.xyz,ShadowU.xyz),dot(world.xyz,ShadowV.xyz))/texel;
+ float plane_z=dot(world.xyz,ShadowL.xyz);
  float2 ux=ddx(plane),uy=ddy(plane);float zx=ddx(plane_z),zy=ddy(plane_z);
  float determinant=ux.x*uy.y-ux.y*uy.x;
  float2 gradient=0;
@@ -1221,8 +1230,12 @@ float q6_world_visibility(Texture2DArray field,float4 world,float3 normal,bool w
   if(x==0 && y==0)closest_delta=blocker-receiver;
  }
  float soft=sum/9;
- if(!water && Q6ShadowFlags.y>.5 && closest_delta>.0039 && closest_delta<.024)soft=min(soft,.15);
+ if(!water && ShadowFlags.y>.5 && closest_delta>.0039 && closest_delta<.024)soft=min(soft,.15);
  return soft;
+}
+
+float q6_world_visibility(Texture2DArray field,float4 world,float3 normal,bool water) {
+ return c3x_paged_visibility(field,world,normal,water,Q6ShadowU,Q6ShadowV,Q6ShadowL,Q6ShadowFlags);
 }
 
 #endif
@@ -1267,15 +1280,22 @@ float4 q4_coastal_rock(FeaturePixelInput input){
  float moment=feature_base_texture_2.Sample(material_sampler,input.uv).r;
  float gloss=feature_base_texture_3.Sample(material_sampler,input.uv).r;
  float3 n=normalize(input.geometry_normal);
- float3 world=input.q6_world.xyz*float3(1,-1,1);
+ // Match the mesh normal and the shared lighting/shadow world basis.
+ float3 world=input.q6_world.xyz;
  float3 dx=ddx(world),dy=ddy(world);
  float2 ux=ddx(input.uv),uy=ddy(input.uv);
  float det=ux.x*uy.y-ux.y*uy.x;
  if(abs(det)>1e-9){
   float3 tangent=normalize((dx*uy.y-dy*ux.y)/det);
   float3 bitangent=normalize((dy*ux.x-dx*uy.x)/det);
-  n=normalize(n+(tangent*lean.x+bitangent*lean.y)*.35);
+  // Unit-strength source slopes; their exact engine response is not recovered.
+  n=normalize(n+(tangent*lean.x+bitangent*lean.y));
  }
+ // A narrow wet contact band uses the same water plane as the geometry.
+ // Wet stone darkens near the water; source color and dry upper faces remain.
+ float wet=1-smoothstep(2.5/112.+.01,2.5/112.+.10,input.q6_world.z);
+ albedo*=1-.32*wet;
+ gloss=saturate(gloss+.10*wet);
  float3 color=albedo*q6_receiver_illumination(input,n,1,1);
  float roughness=clamp(1-gloss+max(0,moment-dot(lean,lean)*.25)*.25,.25,1);
  float3 view=normalize(float3(0,-.52,.86));
@@ -1746,7 +1766,7 @@ float4 q6_raw_main(PixelInput input)
         clip(coverage - 0.08);
         // One restrained sample anchors the body without a generic blob or a
         // full static-scene rerender on every animation tick.
-        float alpha = frame_cast_shadow_strength() * 0.22 *
+        float alpha = frame_cast_shadow_strength() * c3x_dynamic_shadow_opacity *
             smoothstep(0.08, 0.35, coverage);
         clip(alpha - 0.004);
         return float4(0.008, 0.011, 0.016, alpha);

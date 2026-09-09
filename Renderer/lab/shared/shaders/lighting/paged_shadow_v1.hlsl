@@ -1,23 +1,3 @@
-#ifndef Q6_FRAME_SHADOW_V1
-#define Q6_FRAME_SHADOW_V1
-#include "shadow_visibility_v1.hlsl"
-#ifndef Q6_CAST_SHADOWS
-#define Q6_CAST_SHADOWS 1
-#endif
-#ifndef Q6_SCENE_CONTACT
-#define Q6_SCENE_CONTACT 1
-#endif
-// Shared wire5/6 b1 for every shader namespace; texture binding is per draw.
-cbuffer Q6SharedShadow : register(b2) {
- float4 Q6ShadowU; // xyz light right; w span in normalized tile units
- float4 Q6ShadowV; // xyz light up; w resolution
- float4 Q6ShadowL;
- float4 Q6ShadowOrigin;
- float4 Q6ShadowFlags; // enabled, tighter contact, reserved, reserved
-};
-// Binding adapter; the shared Lab provider owns filtering/contact/depth rules.
-Texture2DArray pickup_shadow_terrain : register(t25);
-Texture2DArray pickup_shadow_feature : register(t17);
 // World-aligned six-tile pages preserve the retained 6/1024 sampling density.
 // Source depths use R32_FLOAT physical light distance, avoiding page-dependent
 // normalization/quantization. Page identity never contains a screen anchor.
@@ -64,9 +44,3 @@ float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool 
  if(!water && ShadowFlags.y>.5 && closest_delta>.0039 && closest_delta<.024)soft=min(soft,.15);
  return soft;
 }
-
-float q6_world_visibility(Texture2DArray field,float4 world,float3 normal,bool water) {
- return c3x_paged_visibility(field,world,normal,water,Q6ShadowU,Q6ShadowV,Q6ShadowL,Q6ShadowFlags);
-}
-
-#endif

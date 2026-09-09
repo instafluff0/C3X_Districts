@@ -9,6 +9,263 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ZoomMeshTests(unittest.TestCase):
+    def test_viewport_draw_identity_rejects_eviction_and_stale_frames(self):
+        compiler = shutil.which("clang++") or shutil.which("g++")
+        if not compiler:
+            self.skipTest("C++ compiler unavailable")
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        caches = "struct CachedViewport {" + source.split("struct CachedViewport {", 1)[1].split("struct CachedVertexChunk", 1)[0]
+        restore = "    bool restore_viewport_geometry(" + source.split(
+            "    bool restore_viewport_geometry(", 1)[1].split("    bool draw_cached_geometry(", 1)[0]
+        program = r'''
+#include <cassert>
+#include <cstdint>
+#include <unordered_map>
+#include <vector>
+using c3x_renderer_u32=unsigned;
+namespace c3x_renderer {struct TerrainFrameSignature {std::uint64_t complete=0;};}
+struct c3x_renderer_tile_v1 {int x=0;};
+struct c3x_renderer_frame_v1 {unsigned tile_count=2;c3x_renderer_tile_v1 const* tiles;int world_topology_revision=9;};
+''' + caches + r'''
+struct CachedTileGeometry {bool shared_natural=false;std::uint64_t version=0,natural_signature=0,natural_version=0;};
+struct State {
+ std::unordered_multimap<int,CachedTileGeometry> tile_geometry_cache;
+ CachedGeometry geometry_cache;int geometry_world_revision=0,appends=0;
+ void append_tile_geometry(CachedTileGeometry&,c3x_renderer_tile_v1 const&,bool animated){assert(animated);++appends;}
+''' + restore + r'''
+};
+int main(){
+ State state;CachedViewport view;view.signature.complete=10;
+ view.tile_keys={{1,100},{2,200}};view.tiles={{3},{5}};
+ view.replacement_flags={1,0};view.fallback_indices={1};view.rendered_tile_count=1;
+ view.fallback_tile_count=1;view.textured_tile_count=1;
+ c3x_renderer_frame_v1 frame={2,view.tiles.data(),9};
+ state.tile_geometry_cache.emplace(1,CachedTileGeometry{false,100,99,100});
+ state.tile_geometry_cache.emplace(99,CachedTileGeometry{true,100,0});
+ assert(!state.restore_viewport_geometry(view,frame,{10}) && !state.appends);
+ state.tile_geometry_cache.emplace(2,CachedTileGeometry{false,201,0});
+ assert(!state.restore_viewport_geometry(view,frame,{10}) && !state.appends);
+ state.tile_geometry_cache.emplace(2,CachedTileGeometry{false,200,0});
+ assert(!state.restore_viewport_geometry(view,frame,{11}) && !state.appends);
+ assert(state.restore_viewport_geometry(view,frame,{10}) && state.appends==2);
+ assert(state.geometry_cache.valid && state.geometry_cache.tile_keys==view.tile_keys);
+ assert(state.geometry_cache.replacement_flags==view.replacement_flags);
+ assert(state.geometry_cache.fallback_indices==view.fallback_indices && state.geometry_world_revision==9);
+ state.tile_geometry_cache.find(99)->second.version=101;state.appends=0;
+ assert(!state.restore_viewport_geometry(view,frame,{10}) && !state.appends);
+ state.tile_geometry_cache.erase(99);state.appends=0;state.geometry_cache.clear();
+ assert(!state.restore_viewport_geometry(view,frame,{10}) && !state.appends && !state.geometry_cache.valid);
+ frame.tile_count=1;assert(!state.restore_viewport_geometry(view,frame,{10}));
+ // Zero identities are intentionally non-rendered records, not missing owners.
+ frame.tile_count=2;view.tile_keys={{0,0},{2,200}};
+ assert(state.restore_viewport_geometry(view,frame,{10}) && state.appends==1);
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="c3x-viewport-identities-") as directory:
+            cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
+            cpp.write_text(program)
+            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+    def test_shared_draw_lists_pin_owners_and_grow_amortized(self):
+        compiler = shutil.which("clang++") or shutil.which("g++")
+        if not compiler:
+            self.skipTest("C++ compiler unavailable")
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        append = "    void append_tile_geometry(" + source.split(
+            "    void append_tile_geometry(", 1)[1].split("    bool restore_viewport_geometry(", 1)[0]
+        program = r'''
+#include <array>
+#include <cassert>
+#include <cstdint>
+#include <unordered_map>
+#include <vector>
+constexpr int geometry_layer_count=2,C3X_RENDERER_TILE_RENDER=1;
+struct Ref {int references=1;void AddRef(){++references;}void Release(){--references;}};
+struct CachedVertexChunk {Ref *buffer=nullptr,*indices=nullptr;int translation_x=0,translation_y=0,projected=0;};
+struct c3x_renderer_tile_v1 {int tile_flags=1,anchor_x=0,anchor_y=0;};
+struct Anchor {int anchor_x=0,anchor_y=0;};
+struct CachedTileGeometry {
+ bool prefetched=false,shared_natural=false;std::size_t byte_count=0;
+ std::uint64_t natural_signature=0,last_used=0,animation_epoch=0;
+ int anchor_x=0,anchor_y=0;std::vector<Anchor> resource_anchors;
+ std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
+};
+struct State {
+ std::size_t prefetched_geometry_bytes=20;std::uint64_t tile_geometry_epoch=5;
+ std::unordered_map<int,CachedTileGeometry> tile_geometry_cache;
+ std::vector<Anchor> resource_anchors;std::vector<int> geometry_footprints;
+ std::array<std::vector<CachedVertexChunk>,geometry_layer_count> geometry_vertex_buffers;
+ int tile_footprint(CachedTileGeometry const&,c3x_renderer_tile_v1 const&){return 1;}
+ CachedVertexChunk project_natural_chunk(CachedVertexChunk chunk,c3x_renderer_tile_v1 const&){chunk.projected=1;return chunk;}
+''' + append + r'''
+};
+int main(){
+ Ref ground,world,indices;State state;CachedTileGeometry tile;
+ tile.prefetched=true;tile.byte_count=20;tile.natural_signature=99;
+ tile.buffers[0].push_back({&ground,&indices});tile.resource_anchors.push_back({1,2});
+ auto& owner=state.tile_geometry_cache[99];owner.shared_natural=true;owner.byte_count=100;
+ owner.buffers[1].push_back({&world,&indices});
+ std::size_t copied_capacity=0;
+ for(int i=0;i<4000;i++){
+  auto old=state.geometry_vertex_buffers[0].capacity();
+  state.append_tile_geometry(tile,{1,i*2,40},true);
+  if(state.geometry_vertex_buffers[0].capacity()!=old)copied_capacity+=old;
+ }
+ assert(copied_capacity<16000); // exact per-tile reserve is quadratic, ~8 million.
+ assert(!tile.prefetched && !state.prefetched_geometry_bytes);
+ assert(tile.last_used==5 && owner.last_used==5 && owner.animation_epoch==5);
+ assert(ground.references==4001 && world.references==4001 && indices.references==8001);
+ assert(state.resource_anchors.size()==4000 && state.resource_anchors.back().anchor_x==7999);
+ assert(state.geometry_vertex_buffers[1].back().translation_x==7998);
+ assert(state.geometry_vertex_buffers[1].back().projected && !owner.buffers[1][0].projected);
+ for(auto& layer:state.geometry_vertex_buffers)for(auto& chunk:layer){chunk.buffer->Release();chunk.indices->Release();}
+ assert(ground.references==1 && world.references==1 && indices.references==1);
+ // Caster-only records must not publish resource anchors or pin indefinitely.
+ state.tile_geometry_epoch=6;state.append_tile_geometry(tile,{0,0,0},false);
+ assert(state.resource_anchors.size()==4000 && owner.last_used==6 && owner.animation_epoch==5);
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="c3x-shared-draws-") as directory:
+            cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
+            cpp.write_text(program)
+            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+    def test_pixel_prefetch_borrows_both_camera_and_world_layers(self):
+        compiler = shutil.which("clang++") or shutil.which("g++")
+        if not compiler:
+            self.skipTest("C++ compiler unavailable")
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        borrow = "        for (auto const & contributor : pending_pixel_block.key) {" + source.split(
+            "        for (auto const & contributor : pending_pixel_block.key) {", 1)[1].split(
+            "        ViewportShaderSettings settings={};", 1)[0]
+        program = r'''
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <cstdint>
+#include <unordered_map>
+#include <vector>
+constexpr int geometry_layer_count=3,geometry_natural_terrain=1;
+struct CachedVertexChunk {int id,translation_x=0,translation_y=0,projected=0;};
+struct c3x_renderer_tile_v1 {int tile_x=0,tile_y=0;};
+struct Entry {
+ bool shared_natural=false;std::uint64_t version=0,natural_signature=0,natural_version=0;
+ int tile_x=0,tile_y=0;
+ std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
+};
+struct State {
+ std::unordered_multimap<int,Entry> tile_geometry_cache;
+ struct Contributor {std::uint64_t mesh;int x,y;};
+ struct {std::vector<Contributor> key;} pending_pixel_block;
+ int pixel_prepare_cursor=0,submissions=0;
+ std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
+ CachedVertexChunk project_natural_chunk(CachedVertexChunk chunk,c3x_renderer_tile_v1 record){
+  chunk.projected=record.tile_x*100+record.tile_y;return chunk;
+ }
+ bool prepare(){
+''' + borrow + r'''
+  ++submissions;return true;
+ }
+};
+int main(){
+ State s;Entry camera;camera.version=7;camera.natural_signature=99;camera.natural_version=7;
+ camera.tile_x=15;camera.tile_y=47;camera.buffers[0].push_back({1});
+ Entry world;world.version=7;world.shared_natural=true;world.buffers[1].push_back({2});
+ s.tile_geometry_cache.emplace(42,std::move(camera));s.tile_geometry_cache.emplace(99,std::move(world));
+ s.pending_pixel_block.key.push_back({7,120,60});
+ assert(s.prepare() && s.submissions==1 && !s.pixel_prepare_cursor);
+ assert(s.buffers[0].size()==1 && s.buffers[1].size()==1 && s.buffers[2].empty());
+ assert(s.buffers[0][0].id==1 && !s.buffers[0][0].projected);
+ assert(s.buffers[1][0].id==2 && s.buffers[1][0].projected==1547);
+ assert(s.buffers[1][0].translation_x==120 && s.buffers[1][0].translation_y==60);
+ assert(!s.tile_geometry_cache.find(99)->second.buffers[1][0].projected);
+ // An evicted owner must cancel preparation, never cache incomplete pixels.
+ s.tile_geometry_cache.erase(99);s.buffers={};
+ assert(s.prepare() && s.submissions==1 && s.pixel_prepare_cursor==1);
+ // A shared owner's coincident version is not itself a camera contributor.
+ s.tile_geometry_cache.clear();Entry orphan;orphan.version=7;orphan.shared_natural=true;
+ s.tile_geometry_cache.emplace(99,std::move(orphan));
+ assert(s.prepare() && s.submissions==1 && s.pixel_prepare_cursor==2);
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="c3x-world-prefetch-") as directory:
+            cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
+            cpp.write_text(program)
+            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+    def test_shared_world_bounds_cover_every_zoom_and_reflected_height(self):
+        compiler = shutil.which("clang++") or shutil.which("g++")
+        if not compiler:
+            self.skipTest("C++ compiler unavailable")
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        project = "CachedVertexChunk project_natural_chunk(" + source.split(
+            "CachedVertexChunk project_natural_chunk(", 1)[1].split(
+            "    c3x_renderer::TileFootprint tile_footprint", 1)[0]
+        program = r'''
+#include <cassert>
+#include <climits>
+#include "Renderer/lab/shared/natural/ground.h"
+using LONG=long;
+struct c3x_renderer_tile_v1 {int tile_x,tile_y;};
+struct CachedVertexChunk {
+ float natural_projection[4]={};
+ struct {float low[3],high[3];} world_bounds;
+ struct {LONG left,top,right,bottom;} bounds;
+};
+struct State {int shadow_tile_width=128,shadow_tile_height=64,height=1192;
+''' + project + r'''
+};
+int main(){
+ State state;CachedVertexChunk stored={};
+ stored.world_bounds={{30.5f,-17.25f,-.03f},{33.5f,-14.7f,1.73f}};
+ for(int width:{64,96,128,160,192})for(int height:{480,1192,2160}){
+  state.shadow_tile_width=width;state.shadow_tile_height=width/2;state.height=height;
+  auto chunk=state.project_natural_chunk(stored,{15,47});
+  assert(chunk.natural_projection[0]==31 && chunk.natural_projection[1]==-16);
+  assert(chunk.natural_projection[2]==width && chunk.natural_projection[3]==height);
+  c3x_renderer::fidelity::GroundProjection project{31,-16,width*.5f,width*.25f,width/224.f*.82f,float(height)};
+  for(int i=0;i<10000;i++){
+   float x=30.5f+(i%101)/100.f*3,y=-17.25f+(i%103)/102.f*2.55f,z=-.03f+(i%107)/106.f*1.76f;
+   auto p=project(x,y,z*112.f);
+   assert(p.x>=chunk.bounds.left && p.x<chunk.bounds.right);
+   assert(p.y>=chunk.bounds.top && p.y<chunk.bounds.bottom);
+   float reflection=2*(112.f*.82f*width/224.f)*std::max(0.f,z-2.5f/112.f);
+   float max_reflection=2*(112.f*.82f*width/224.f)*std::max(0.f,stored.world_bounds.high[2]-2.5f/112.f);
+   assert(p.y+reflection<chunk.bounds.bottom+max_reflection);
+  }
+ }
+ // Computing a camera view must not mutate the cached world's projection.
+ assert(stored.natural_projection[2]==0);
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="c3x-shared-world-") as directory:
+            cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
+            cpp.write_text(program)
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+    def test_benchmark_validates_centered_and_historical_ladders(self):
+        from Renderer.native.compare_zoom_benchmark import run
+        with tempfile.TemporaryDirectory(prefix="c3x-zoom-ladder-") as directory:
+            root = Path(directory)
+            for levels in ((128,112,96,80,64), (128,96,64,192,160), (128,64,96,192,160)):
+                lines = []
+                for cycle in range(2):
+                    for width in levels:
+                        lines.append(f"ZOOM cycle={cycle} width={width} result=1")
+                        if cycle:
+                            lines.append(f"ZOOM parity width={width} changed=0 error=0 status=pass")
+                lines.append("BIQ 100x100 viewport: 100 visible tiles, 0 fallback")
+                (root / "benchmark.log").write_text("\n".join(lines) + "\n")
+                if levels[1] == 64:
+                    with self.assertRaisesRegex(ValueError, "unexpected zoom ladder"):
+                        run("test", root, "zoom")
+                else:
+                    self.assertEqual(len(run("test", root, "zoom")[1]), 10)
+
     def test_backdrop_budget_preserves_current_view_and_evicts_lru(self):
         compiler = shutil.which("clang++") or shutil.which("g++")
         if not compiler:
@@ -238,7 +495,7 @@ int main(){
     }
     assert(probes<4096*4);
     using c3x_renderer::fidelity::GroundProjection;
-    for(int original:{64,80,96,112,128})for(int next:{64,80,96,112,128})
+    for(int original:{64,80,96,112,128,160,192})for(int next:{64,80,96,112,128,160,192})
     for(int target:{480,640,1080})for(int i=0;i<10000;i++){
         float x=31.f+(i%65)/64.f,y=-17.f+(i%67)/64.f;
         float h=2.5f+(i%3001)*.1253f;

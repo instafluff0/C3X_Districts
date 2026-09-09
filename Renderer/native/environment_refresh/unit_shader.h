@@ -71,7 +71,7 @@ float4 PS(Output i):SV_Target {
  float ao=channels.x>.5?lerp(.48,1,ambient_occlusion.Sample(sample_base,i.uv).r):1;
  float gloss=channels.y>.5?gloss_texture.Sample(sample_base,i.uv).r:.08;
  float3 emission=channels.z>.5?emissive_texture.Sample(sample_emission,i.uv).rgb:0;
- return float4(beauty_unit_response(albedo,n,ao,gloss,emission,1-.78*occluded),1);
+ return float4(beauty_unit_response(albedo,n,ao,gloss,emission,1-occluded),1);
 }
 )C3XUNIT";}
 }

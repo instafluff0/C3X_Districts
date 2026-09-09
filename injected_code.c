@@ -22841,11 +22841,11 @@ advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, i
 	    ((virtual_key_code != VK_Z) && (char_code != 'Z') && (char_code != 'z')))
 		return false;
 
-	int levels[5] = {64, 80, 96, 112, 128};
+	int levels[5] = {64, 96, 128, 160, 192};
 	int native_width = p_bic_data->is_zoomed_out ? 64 : 128;
 	if ((is->custom_renderer_zoom_native_tile_width != native_width) ||
 	    (is->custom_renderer_zoom_tile_width < 64) ||
-	    (is->custom_renderer_zoom_tile_width > 128)) {
+	    (is->custom_renderer_zoom_tile_width > 192)) {
 		is->custom_renderer_zoom_native_tile_width = native_width;
 		is->custom_renderer_zoom_tile_width = native_width;
 		is->custom_renderer_zoom_translate_x_fp = 0;
@@ -22860,7 +22860,8 @@ advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, i
 		if (candidate_delta < current_delta)
 			current = n;
 	}
-	// Match Z's usual zoom-out direction, then wrap from 64 back to 128.
+	// Normal (128) is the middle level. Match Z's zoom-out direction, then
+	// wrap from the farthest view (64) to the closest view (192).
 	int next = current > 0 ? current - 1 : ARRAY_LEN (levels) - 1;
 	long long const fp_one = 65536;
 	int old_width = is->custom_renderer_zoom_tile_width;
@@ -22954,7 +22955,7 @@ sync_custom_renderer_zoom_to_native ()
 	int native_width = p_bic_data->is_zoomed_out ? 64 : 128;
 	if ((is->custom_renderer_zoom_native_tile_width != native_width) ||
 	    (is->custom_renderer_zoom_tile_width < 64) ||
-	    (is->custom_renderer_zoom_tile_width > 128)) {
+	    (is->custom_renderer_zoom_tile_width > 192)) {
 		is->custom_renderer_zoom_native_tile_width = native_width;
 		is->custom_renderer_zoom_tile_width = native_width;
 		is->custom_renderer_zoom_translate_x_fp = 0;

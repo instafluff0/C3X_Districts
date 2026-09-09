@@ -44,6 +44,10 @@ MapVertex ground_surface(GroundProjection const&project,float u,float v,
     float coverage=coast_coverage(float(shore.distance),float(shore.beach_width));
     coverage=coverage*(1-desert_weight)+
         desert_coast_coverage(float(shore.distance))*desert_weight;
+    // Complete cliff coverage before its .04-tile rise begins. The beach
+    // coverage ramp otherwise makes the elevated rock face translucent.
+    float rocky=coast_ramp((float(shore.rocky)-.55f)/.4f);
+    coverage=coverage*(1-rocky)+coast_ramp(float(shore.distance)/.04f)*rocky;
     // Values 1..1.25 remain the ground material class (<1.5), carrying
     // the rocky-coast weight to the cliff face shader without another stream.
     out.material_plains=1+.25f*coast_ramp((float(shore.rocky)-.55f)/.4f)*
@@ -59,19 +63,38 @@ MapVertex ground_surface(GroundProjection const&project,float u,float v,
     return out;
 }
 
+// Preserve first-reference order and omit unused corners, just as indexing the
+// expanded triangle stream does, without hashing/copying six full vertices per
+// cell. A null index destination retains the portable triangle-list adapter.
+inline void append_surface_grid(std::vector<MapVertex>&out,std::vector<MapVertex> const&grid,
+                                unsigned divisions,bool clip_coast,
+                                std::vector<unsigned>*indices=nullptr) {
+    unsigned stride=divisions+1;
+    std::vector<unsigned> remap;
+    if(indices)remap.assign(grid.size(),~0u);
+    for(unsigned y=0;y<divisions;y++)for(unsigned x=0;x<divisions;x++){
+        unsigned a=y*stride+x,b=a+1,d=a+stride,c=d+1;
+        if(clip_coast && std::max({grid[a].base_terrain,grid[b].base_terrain,
+                                  grid[c].base_terrain,grid[d].base_terrain})<=-9.999f)continue;
+        for(unsigned corner:{a,b,c,a,c,d}){
+            if(indices){
+                if(remap[corner]==~0u){remap[corner]=unsigned(out.size());out.push_back(grid[corner]);}
+                indices->push_back(remap[corner]);
+            }else out.push_back(grid[corner]);
+        }
+    }
+}
+
 template<class Surface,class Cancel>
-bool emit_ground_grid(std::vector<MapVertex>&out,Surface surface,Cancel cancelled) {
-    std::array<MapVertex,17*17> grid;
-    for(unsigned y=0;y<=16;y++){
+bool emit_ground_grid(std::vector<MapVertex>&out,Surface surface,Cancel cancelled,unsigned divisions=16,
+                      std::vector<unsigned>*indices=nullptr) {
+    unsigned stride=divisions+1;
+    std::vector<MapVertex> grid(stride*stride);
+    for(unsigned y=0;y<=divisions;y++){
         if(cancelled())return false;
-        for(unsigned x=0;x<=16;x++)grid[y*17+x]=surface(x/16.f,y/16.f);
+        for(unsigned x=0;x<=divisions;x++)grid[y*stride+x]=surface(float(x)/divisions,float(y)/divisions);
     }
-    for(unsigned y=0;y<16;y++)for(unsigned x=0;x<16;x++){
-        auto&a=grid[y*17+x];auto&b=grid[y*17+x+1];auto&c=grid[(y+1)*17+x+1];auto&d=grid[(y+1)*17+x];
-        if(std::max({a.base_terrain,b.base_terrain,c.base_terrain,d.base_terrain})<=-9.999f)continue;
-        out.push_back(a);out.push_back(b);out.push_back(c);
-        out.push_back(a);out.push_back(c);out.push_back(d);
-    }
+    append_surface_grid(out,grid,divisions,true,indices);
     return true;
 }
 }}

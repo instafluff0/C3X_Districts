@@ -20,7 +20,8 @@ template<class Lookup,class Height,class Shore,class River,class Weights,class C
 bool emit_relief_meshes(NaturalData const&natural,int real,Tile owner,GroundProjection project_natural,
                        Lookup lookup_natural,Height height_natural,Shore shore_sample_at,
                        River river_at,Weights material_weights_for,Cancelled cancelled,
-                       std::vector<MapVertex>&decals,std::vector<MapVertex>&mountains) {
+                       std::vector<MapVertex>&decals,std::vector<MapVertex>&mountains,
+                       std::vector<unsigned>*mountain_indices=nullptr) {
     using Vertex=MapVertex;
     int nc=project_natural.column,nr=project_natural.row;
     struct {int real_terrain_type;} tile{real};

@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include "../../../native/environment_runtime.h"
+#include "../../../native/scene_lighting.h"
 #include "../../../native/source_fidelity/kernels.h"
 namespace c3x_renderer { namespace fidelity {
 struct HeightField {
@@ -97,7 +98,8 @@ struct NaturalData {
         // Source response coefficients retained; one authoritative phase and L.
         auto noon=evaluate_environment(12,0);
         float strength=(e.sun_intensity+e.moon_intensity)/(noon.sun_intensity+noon.moon_intensity);
-        float const*color=e.sun_intensity>=e.moon_intensity?e.sun_color:e.moon_color;
+        auto key=lighting::key_light(e);
+        float const*color=key.color.data();
         std::array<Frame,3> result={};
         for(unsigned i=0;i<3;i++){
             Frame f={};std::copy(light,light+3,f.sun);f.sun[3]=(i==0?2.08f:i==1?2.18f:2.05f)*strength;

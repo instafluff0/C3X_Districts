@@ -2,9 +2,13 @@
 
 `enable_custom_rendering_zoom = true` adds stepped main-map zoom when
 `enable_custom_rendering = true`. The current levels use Civ III's isometric
-basis at tile widths 64, 80, 96, 112 and 128 pixels. Each `Z` press steps from
-128 toward 64, then wraps from 64 to 128. The projected world point at the
-screen center stays fixed while the level changes.
+basis at tile widths 64, 96, 128, 160 and 192 pixels: 50%, 75%, 100%, 125%
+and 150% of native normal size. Normal is the middle (third) of five levels,
+with two closer and two farther views. Starting at normal, successive `Z`
+presses select 96, 64, 192, 160 and 128 pixels. The projected world point at the
+screen center stays fixed while the level changes. Both the key handler and
+render-time native synchronization accept the close-up levels; a genuine change
+of the native binary zoom still resets the custom transform to that native size.
 
 Civ III remains the camera and interaction authority. The injected bridge
 applies one affine scale and translation to captured map anchors, then supplies

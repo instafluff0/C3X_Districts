@@ -48,10 +48,16 @@ class UnitFidelity(unittest.TestCase):
             for name,action in u.items():
                 if not isinstance(action,dict) or 'part_count' not in action:continue
                 for i in range(action['part_count']):
-                    part=action['part'+str(i)];mode=part.pop('address_mode');self.assertIn(mode,range(4));part['mesh']=a[k][name]['part'+str(i)]['mesh']
+                    original_part=a[k][name]['part'+str(i)]
+                    part=action['part'+str(i)];mode=part.pop('address_mode');self.assertIn(mode,range(4));part['mesh']=original_part['mesh']
+                    # Current upstream bindings already carry these material
+                    # channels. Compare their payloads before removing the
+                    # allowed adapter fields from BOTH identity dictionaries.
+                    original_part.pop('address_mode',None)
                     for field in ('ao_texture','gloss_texture','emissive_texture'):
                         if field in part:
                             relative=part.pop(field);self.assertEqual((old/relative).read_bytes(),(new/relative).read_bytes())
+                            if field in original_part:self.assertEqual(original_part.pop(field),relative)
         self.assertEqual(a,b)
         print('Fidelity byte gates:',len(payloads),'payloads,',len(textures),'unchanged DDS chains,',len(components),'authored components')
 

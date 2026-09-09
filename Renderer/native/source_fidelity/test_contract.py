@@ -188,5 +188,5 @@ int main() {
             subprocess.run(['c++','-std=c++17','-O2',str(HERE/'contract_probe.cpp'),str(HERE.parent/'environment_runtime.cpp'),'-o',str(out)],check=True,capture_output=True)
             r=subprocess.run([str(out),str(LAB/'hydrology/contract-terrain.csv')],check=True,capture_output=True,text=True)
             self.assertIn('samples=9216 exact equality',r.stdout)
-            self.assertIn('phases=24 noon up-right',r.stdout)
+        self.assertIn('phases=24 noon west',r.stdout)
 if __name__=='__main__':unittest.main()

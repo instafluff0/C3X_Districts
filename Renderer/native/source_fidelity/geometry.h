@@ -30,8 +30,12 @@ if(fidelity_profile) {
         unified_mountain_surface|=lookup_natural(nc+dc,nr+dr).real==6;
     if(!unified_mountain_surface &&
        (ground<11 || shore_sample_at(float(nc)+.5f,float(nr)+.5f).distance>-.8f)){
-        if(!emit_ground_grid(natural_vertices[0],surface,cancelled))return false;
+        auto coastal=shore_sample_at(float(nc)+.5f,float(nr)+.5f);
+        unsigned divisions=coastal.rocky>.55 && std::abs(coastal.distance)<1.25 ? 48 : 16;
+        if(!emit_ground_grid(natural_vertices[0],surface,cancelled,divisions,
+                             index_natural_grids?&natural_grid_indices[0]:nullptr))return false;
     }
+    auto*mountain_indices=index_natural_grids?&natural_grid_indices[1]:nullptr;
     #include "../../lab/shared/natural/surface_mesh_body.h"
     #include "../../lab/shared/natural/relief_mesh_body.h"
     #include "../../lab/shared/natural/vegetation_floor_mesh_body.h"

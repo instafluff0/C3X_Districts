@@ -35,6 +35,11 @@ missing normal authority; that absence is a tracked build dependency.
   generates the embedded native shader; material edits require a candidate build.
 - Preserve source normals under the inverse-transpose skinner, source attachments,
   primitive order, uniform native fit scale and local palette remaps.
+- After skinning and yaw, `scene_lighting.h` converts source normals into the
+  world basis used by terrain and buildings. The unit self/ground projection
+  uses that same frame light and height metric. This does not alter source
+  vertex data. Units still receive only their own pose's shadow; the native
+  sprite API does not supply a surrounding world shadow field.
 - Retain complete DDS dimensions and mip chains, 16x anisotropy, zero mip bias,
   native sprite resolution and 4x MSAA. Natural-terrain sampling settings do not
   silently replace the unit settings. Sharing a texture does not share its sampler.

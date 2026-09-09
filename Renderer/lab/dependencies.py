@@ -12,7 +12,7 @@ def consumers(entries):
     return {
         "natural": set(entries), "hill-cliff": set(entries),
         "cities": objects | ({"cities"} & entries.keys()),
-        "units": {"units", "animation"} & entries.keys(),
+        "units": {"units", "animation", "shadows"} & entries.keys(),
         "resources": objects | ({"resources", "animation"} & entries.keys()),
         "resource-animation": objects | ({"resources", "animation"} & entries.keys()),
     }

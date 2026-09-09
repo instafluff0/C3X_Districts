@@ -252,14 +252,25 @@ int main() {
         float previous=0;
         for(int i=0;i<=20;i++) {
             distance=i*.01f;auto h=query.sample(.5f,.5f).height;
-            assert(h>=previous && h<47.f);previous=h;
+            assert(h>=previous && h<29.f);previous=h;
             near(h,query.sample(.5f,.5f,false).height,0);
         }
-        assert(previous>46.f);
+        assert(previous>27.f);
         for(float d:{0.f,.03f,.07f,.2f,.5f,1.f}) {
             distance=d;rockiness=0;near(query.sample(.5f,.5f).height,0);
         }
         rockiness=1;distance=.86f;near(query.sample(.5f,.5f).height,0);
+        auto hill_land=[](int,int){return port::Tile{2,5,true};};
+        auto hill_source=[](int,unsigned,int,float,float){return 1.f;};
+        port::ReliefQuery hill_query(port::World{100,80,true,false},hill_land,hill_source,coast,river,zero,active);
+        distance=.2f;
+        // A 37-unit hill replaces the 28-unit floor; summing creates a ledge.
+        near(hill_query.sample(.5f,.5f).height,52.f*5.f/7.f,.0001f);
+        auto water=[](int,int){return port::Tile{12,12,true};};
+        port::ReliefQuery water_cap(port::World{100,80,true,false},water,zero_source,coast,river,zero,active);
+        for(float d:{-.1f,0.f,.1f,.2f,.5f,.86f}) {
+            distance=d;near(water_cap.sample(.5f,.5f).height,query.sample(.5f,.5f).height,0);
+        }
     }
     int relief_kind=6;
     auto owners=[&](int c,int r){return port::Tile{2,c==0&&r==0 ? relief_kind : 2,true};};

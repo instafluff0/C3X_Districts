@@ -7,15 +7,22 @@ float4 q4_coastal_rock(FeaturePixelInput input){
  float moment=feature_base_texture_2.Sample(material_sampler,input.uv).r;
  float gloss=feature_base_texture_3.Sample(material_sampler,input.uv).r;
  float3 n=normalize(input.geometry_normal);
- float3 world=input.q6_world.xyz*float3(1,-1,1);
+ // Match the mesh normal and the shared lighting/shadow world basis.
+ float3 world=input.q6_world.xyz;
  float3 dx=ddx(world),dy=ddy(world);
  float2 ux=ddx(input.uv),uy=ddy(input.uv);
  float det=ux.x*uy.y-ux.y*uy.x;
  if(abs(det)>1e-9){
   float3 tangent=normalize((dx*uy.y-dy*ux.y)/det);
   float3 bitangent=normalize((dy*ux.x-dx*uy.x)/det);
-  n=normalize(n+(tangent*lean.x+bitangent*lean.y)*.35);
+  // Unit-strength source slopes; their exact engine response is not recovered.
+  n=normalize(n+(tangent*lean.x+bitangent*lean.y));
  }
+ // A narrow wet contact band uses the same water plane as the geometry.
+ // Wet stone darkens near the water; source color and dry upper faces remain.
+ float wet=1-smoothstep(2.5/112.+.01,2.5/112.+.10,input.q6_world.z);
+ albedo*=1-.32*wet;
+ gloss=saturate(gloss+.10*wet);
  float3 color=albedo*q6_receiver_illumination(input,n,1,1);
  float roughness=clamp(1-gloss+max(0,moment-dot(lean,lean)*.25)*.25,.25,1);
  float3 view=normalize(float3(0,-.52,.86));

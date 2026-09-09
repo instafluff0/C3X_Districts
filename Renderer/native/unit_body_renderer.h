@@ -123,11 +123,11 @@ public:
         // Selected BeautyStudies response, driven by the same native phase as
         // the existing pose-local caster. No independent sun or animation clock.
         auto noon=evaluate_environment(12,0);
-        bool daylight=environment.sun_intensity>=environment.moon_intensity;
-        float const* light_color=daylight?environment.sun_color:environment.moon_color;
+        auto key_light=lighting::key_light(environment);
+        float const* light_color=key_light.color.data();
         float beauty[20]={};float const ambient_source[]={.34f,.45f,.60f};
         float const chromatic[]={1.f,4.5f/6.2f,3.5f/6.2f};
-        auto light=environment.sun_intensity>=environment.moon_intensity?environment.sun_direction:environment.moon_direction;
+        auto light=key_light.direction.data();
         for(unsigned axis=0;axis<3;++axis) {
             beauty[axis]=light[axis];beauty[4+axis]=chromatic[axis]*light_color[axis]/std::max(.001f,noon.sun_color[axis]);
             beauty[8+axis]=ambient_source[axis]*environment.ambient_color[axis]/std::max(.001f,noon.ambient_color[axis]);
@@ -158,8 +158,10 @@ public:
                 float y=(p.position[0]*sine+p.position[1]*cosine)*scale,z=(p.position[2]+found->offset_z)*scale;
                 float sx=float(pose.anchor_x-request.body_x)+(x-y)*64*zoom;
                 float sy=float(pose.anchor_y-request.body_y)+(x+y)*32*zoom-z*(150.f*128/224)*zoom;
+                auto normal=lighting::object_normal(p.normal[0]*cosine-p.normal[1]*sine,
+                    p.normal[0]*sine+p.normal[1]*cosine,p.normal[2]);
                 upload[i]={2*sx/w-1,1-2*sy/h,.5f-(x+y)*.05f-z*.001f,
-                    p.normal[0]*cosine-p.normal[1]*sine,p.normal[0]*sine+p.normal[1]*cosine,p.normal[2],p.uv[0],p.uv[1],z,
+                    normal[0],normal[1],normal[2],p.uv[0],p.uv[1],z,
                     (x-shadow.dx*z-shadow.left)/shadow.width,(y-shadow.dy*z-shadow.top)/shadow.height};
             }
             // The ground plane hides buried anatomy/stowed equipment. Bound
@@ -233,7 +235,7 @@ public:
             float sx=(float(x)+.5f-float(pose.anchor_x-request.body_x))/(64*zoom);
             float sy=(float(y)+.5f-float(pose.anchor_y-request.body_y))/(32*zoom);
             float fade=std::clamp(float(std::min({x,y,w-1-x,h-1-y}))/3,0.f,1.f);
-            unsigned shade=unsigned(255*.48f*environment.shadow_strength*fade*shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
+            unsigned shade=unsigned(255*lighting::c3x_dynamic_shadow_opacity*environment.shadow_strength*fade*shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
             unsigned combined=alpha+(shade*(255-alpha)+127)/255;
             if(shade && alpha<255)++cast_pixels;
             pixels[std::size_t(y)*w+x]=(combined<<24)|(((p[2]*alpha+127)/255)<<16)|(((p[1]*alpha+127)/255)<<8)|((p[0]*alpha+127)/255);

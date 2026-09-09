@@ -81,9 +81,10 @@ class ReliefSurface {
 public:
     ReliefSurface(render_core::World world,int c,int r,double center_distance,
                   Lookup lookup,Source source,Shore shore,River river,Dune dune,Activity activity,
-                  render_core::ExactPointCache<render_core::GroundSample>& samples,std::size_t& counter)
-        :query(world,lookup,source,shore,river,dune,activity),
-         flat(c,r,center_distance,lookup),
+                  render_core::ExactPointCache<render_core::GroundSample>& samples,std::size_t& counter,
+                  bool separate_natural_relief=false)
+        :query(world,lookup,source,shore,river,dune,activity,separate_natural_relief),
+         flat(c,r,center_distance,lookup,separate_natural_relief),
          scratch(samples),height_queries(counter) {}
     render_core::GroundSample sample(float u,float v) {
         if(flat.contains(u,v))return render_core::GroundSample{};

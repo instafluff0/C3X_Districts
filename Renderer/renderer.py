@@ -424,11 +424,21 @@ def scene(category, case, destination, *, world_size=32):
                 base = real = 12 if x < 16 else 13
                 if case == "water-gameplay" and x < 12:
                     base = real = 2 if x < 10 else 11
+            if category == "shadows":
+                # Stable adjacent systems, all under one captured environment.
+                # Keep the lower center flat for the native unit sprite API.
+                base = real = 2
+                if (x, y) in ((13, 13), (14, 14)):
+                    real = 6
+                if (x, y) == (18, 14):
+                    real = 7
+                if case == "gameplay" and x > 21:
+                    base = real = 11 if x < 24 else 12
             rows.append(f"{x},{y},{base},{real},0,0,{river}")
     destination.write_text(f"C3X_BIQ_TERRAIN_V3,{world_size},{world_size},{len(rows)}\n" + "\n".join(rows) + "\n")
 
 
-def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False):
+def native_render(category, case, hour, zoom, output, *, behavior=None, center=(16, 16), diagnostics=False, candidate=None, preview=None):
     from Renderer.lab.platform import run_native_fixture
     if behavior not in (None, "replay", "edits", "animation", "units"):
         raise ValueError("Unknown native behavior check")
@@ -445,7 +455,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
     scene(category, case, csv, world_size=100 if behavior else 32)
     name = f"{case}-h{hour:02}-z{zoom}"
     image = output / (name + ".bmp")
-    dll = ROOT / "Renderer/native/build/candidate/C3XRenderer.dll"
+    dll = candidate or ROOT / "Renderer/native/build/candidate/C3XRenderer.dll"
     if not dll.is_file():
         raise ValueError("Build the candidate DLL before native rendering")
     # Clear all diagnostic overrides that could otherwise change the scene.
@@ -453,7 +463,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_VISUAL_PROFILE": "", "C3X_RENDERER_TRACE": "0",
         "C3X_RENDERER_TRACE_FILE": "", "C3X_RENDERER_PREVIEW_COLOR": "",
         "C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS": r"..\..\Renderer\custom.custom_rendering.txt",
-        "C3X_RENDERER_PREVIEW_OBJECTS": "1" if standard(category)["recipe"]["objects"] else "",
+        "C3X_RENDERER_PREVIEW_OBJECTS": "1" if standard(category)["recipe"]["objects"] and category != "shadows" else "",
         "C3X_RENDERER_PREVIEW_CITY": "0,3,1,1",
         "C3X_RENDERER_PREVIEW_REPLAY": "", "C3X_RENDERER_PREVIEW_MINIMAP": "",
         "C3X_RENDERER_PREVIEW_EDITS": "", "C3X_RENDERER_PREVIEW_ANIMATION": "",
@@ -462,9 +472,9 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO": "",
         "C3X_RENDERER_FIDELITY_SHADOW_CONTROL": "", "C3X_RENDERER_REFLECTION_CONTROL": "",
         "C3X_RENDERER_CITY_LIGHT_CONTROL": "", "C3X_RENDERER_CITY_GLOW_CONTROL": "",
-        "C3X_LAB_UNIT_STUDY": "1" if category in ("units", "animation") else "",
+        "C3X_LAB_UNIT_STUDY": "shadows" if category == "shadows" else "1" if category in ("units", "animation") else "",
         "C3X_LAB_ACTION_CURSOR": "0" if category == "animation" and case.endswith("start") else "7",
-        "C3X_LAB_OBJECT_STUDY": category if category in ("resources", "infrastructure") else "",
+        "C3X_LAB_OBJECT_STUDY": category if category in ("resources", "infrastructure", "shadows") else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
     }
     if behavior:
@@ -476,12 +486,20 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
             env["C3X_RENDERER_PREVIEW_OBJECTS"] = ""
     def windows(path):
         return "..\\..\\" + relative(path).replace("/", "\\")
+    run_id = uuid.uuid4().hex
+    env["C3X_LAB_PID_FILE"] = windows(output / "process.txt")
+    env["C3X_LAB_RUN_ID"] = run_id
     if diagnostics:
         env["C3X_RENDERER_TRACE"] = "2"
         env["C3X_RENDERER_TRACE_FILE"] = windows(output / "renderer.log")
     command = " && ".join(f'set "{key}={value}"' for key, value in env.items())
-    ensure_preview_tool()
-    executable = "..\\lab\\.cache\\native_preview.exe"
+    if preview is None:
+        ensure_preview_tool()
+        executable = "..\\lab\\.cache\\native_preview.exe"
+    else:
+        if not preview.is_file():
+            raise ValueError("Build the isolated preview executable before native rendering")
+        executable = '"' + windows(preview) + '"'
     width, height = (960, 640) if behavior else (640, 480)
     command += (f' && {executable} "{windows(dll)}" ..\\.. '
                 f'..\\default.custom_rendering.txt "{windows(csv)}" "{windows(image)}" '
@@ -490,7 +508,6 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
     # Keep the VM transport argument short; Parallels rejects some long command
     # strings before launching cmd. This generated script is disposable output.
     batch = output / "render.bat"
-    run_id = uuid.uuid4().hex
     # Fixed disposable paths stay bounded; the invocation ID prevents an older
     # successful frame from certifying a command that never started/completed.
     log = windows(output / "native.log")
@@ -498,7 +515,6 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
     batch.write_text("@echo off\nsetlocal\n" + command.replace(" && ", "\n") +
         f' > "{log}" 2>&1\nset "C3X_LAB_EXIT=%errorlevel%"\n' +
         f'> "{receipt}" echo {run_id} %C3X_LAB_EXIT%\n' +
-        'taskkill /F /IM native_preview.exe >nul 2>nul\n' +
         f'type "{log}"\nexit /b %C3X_LAB_EXIT%\n')
     result = run_native_fixture(output, f'call "{windows(batch)}"', run_id)
     if behavior:
@@ -507,9 +523,9 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         (output / "witness.txt").write_text(result.get("output_tail", ""))
     if result["status"] != "pass" or "0 fallback, output=" not in result.get("output_tail", "") or not image.is_file():
         raise ValueError("Production renderer failed: " + name)
-    if category in ("units", "animation") and "PASS category unit study" not in result.get("output_tail", ""):
+    if category in ("units", "animation", "shadows") and "PASS category unit study" not in result.get("output_tail", ""):
         raise ValueError("Unit body witness did not complete")
-    if category in ("resources", "infrastructure") and "PASS category object study" not in result.get("output_tail", ""):
+    if category in ("resources", "infrastructure", "shadows") and "PASS category object study" not in result.get("output_tail", ""):
         raise ValueError("Category object ownership witness did not complete")
     if behavior:
         verify_behavior_output(behavior, result.get("output_tail", ""))
@@ -559,6 +575,8 @@ def integration_replay_cases(category, *, full=False):
     """Select focused witnesses; keep the exhaustive sweep explicit."""
     cases = []
     selected = {category}
+    if category == "shadows":
+        selected.update(("resources", "units"))
     if full:
         cases.extend((("scroll", "replay", 128, (50, 50), 12),
                       ("reduced-scroll", "replay", 64, (50, 50), 12),
@@ -581,15 +599,31 @@ def integration_replays(category, *, full=False):
     """Run the behavior witnesses selected for the current category."""
     cases = integration_replay_cases(category, full=full)
     results = []
+    # Independent category tasks must not truncate each other's native logs,
+    # process receipts, scenes or output bitmaps during a shared full sweep.
+    replay_root = LAB / "out/integration/replays" / category
+    from Renderer.lab.platform import NativeFixturePending
     for name, behavior, zoom, center, hour in cases:
         print("Checking production behavior: " + name, flush=True)
         try:
-            native_render("grassland", "gameplay", hour, zoom,
-                          LAB / "out/integration/replays" / name, behavior=behavior, center=center)
+            scene_category, scene_case = "grassland", "gameplay"
+            if behavior == "edits":
+                # Creating the first coast in an all-land world legitimately
+                # invalidates every empty nearest-coast certificate. Exercise
+                # local reuse beside an existing coast; keep the edit and
+                # warm/cold pixel assertions unchanged.
+                scene_category, scene_case, center = "shorelines", "lowland", (10, 18)
+            native_render(scene_category, scene_case, hour, zoom,
+                          replay_root / name, behavior=behavior, center=center)
             results.append({"name": name, "status": "pass"})
+        except NativeFixturePending as error:
+            results.append({"name": name, "status": "fail", "reason": str(error)})
+            # Completion may still be unconfirmed. Never overlap this case
+            # with another process or let its cleanup stop somebody else's run.
+            break
         except ValueError as error:
             results.append({"name": name, "status": "fail", "reason": str(error)})
-    write(LAB / "out/integration/replays/results.json", results)
+    write(replay_root / "results.json", results)
     failed = [r["name"] for r in results if r["status"] != "pass"]
     if failed:
         raise ValueError("Production behavior checks failed: " + ", ".join(failed))
@@ -636,8 +670,19 @@ def compare(category):
         if checksum(local(entry["image"])) != entry["sha256"]:
             raise ValueError("Candidate image changed after rendering")
         matches = [r for r in refs if all(r[k] == entry[k] for k in ("case", "hour", "zoom", "backend"))]
+        if not matches:
+            b = Image.open(local(entry["image"])).convert("RGB")
+            panel = Image.new("RGB", (b.width * 2, b.height + 28), "#222222")
+            panel.paste(b, (b.width, 28))
+            draw = ImageDraw.Draw(panel)
+            draw.text((8, 8), "No fixed reference for this case/time/zoom", fill="white")
+            draw.text((b.width + 8, 8), "Current code", fill="white")
+            panels.append(panel)
+            summaries.append({"case": entry["case"], "hour": entry["hour"], "zoom": entry["zoom"],
+                              "identical_pixels": None, "reference": "unavailable"})
+            continue
         if len(matches) != 1:
-            raise ValueError("Candidate has no corresponding approved reference")
+            raise ValueError("Candidate has ambiguous fixed references")
         ref = matches[0]
         if checksum(local(ref["image"])) != ref["sha256"]:
             raise ValueError("Approved image was modified")
@@ -785,9 +830,9 @@ def run_tests(category=None, *, integration=False, full=False):
                        "rivers", "day-night", "shadows"}
             if category in terrain:
                 modules.add("Renderer.native.test_scroll_damage")
-            if category in ("resources", "animation"):
+            if category in ("resources", "animation", "shadows"):
                 modules.add("Renderer.native.test_animation_runtime")
-            if category in ("units", "animation"):
+            if category in ("units", "animation", "shadows"):
                 modules.update("Renderer.native." + name for name in (
                     "test_unit_bridge", "test_unit_input_guard", "test_unit_shadow",
                     "test_unit_animation_runtime", "test_animation_runtime"))
@@ -824,14 +869,14 @@ def build_candidate():
         "dll_sha256": checksum(ROOT / "Renderer/native/build/candidate/C3XRenderer.dll")})
 
 
-def verify_integration(category, *, build=False, full=False):
+def verify_integration(category, *, build=False, full=False, renderer_only=False):
     """Automated delivery evidence, never an assertion of a live-game test."""
     receipt_path = LAB / "out/integration" / (category + ".json")
     scope = "full" if full else "focused"
     # Invalidate an older successful receipt before attempting new verification.
     write(receipt_path, {"status": "running", "category": category, "scope": scope})
     try:
-        return verify_integration_checks(category, build=build, full=full)
+        return verify_integration_checks(category, build=build, full=full, renderer_only=renderer_only)
     except Exception as error:
         write(receipt_path, {"status": "fail", "category": category, "scope": scope,
                              "reason": str(error),
@@ -839,7 +884,7 @@ def verify_integration(category, *, build=False, full=False):
         raise
 
 
-def verify_integration_checks(category, *, build=False, full=False):
+def verify_integration_checks(category, *, build=False, full=False, renderer_only=False):
     receipt_path = LAB / "out/integration" / (category + ".json")
     selected = affected(category) if full else [category]
     prepare_sources(selected)
@@ -850,7 +895,7 @@ def verify_integration_checks(category, *, build=False, full=False):
     identity = implementation_identity()
     modules = run_tests(category, integration=True, full=full)
     from Renderer.lab.platform import changed_injected_sources, injected_compile_result
-    if changed_injected_sources() and injected_compile_result()["status"] != "pass":
+    if not renderer_only and changed_injected_sources() and injected_compile_result()["status"] != "pass":
         raise ValueError("Approved injected compile/injection smoke test failed")
     replays = integration_replays(category, full=full)
     if identity != implementation_identity():
@@ -861,7 +906,8 @@ def verify_integration_checks(category, *, build=False, full=False):
               "input_signatures": {key: signatures[key] for key in selected},
               "implementation_identity": identity,
               "dll_sha256": checksum(ROOT / "Renderer/native/build/candidate/C3XRenderer.dll"),
-              "tests": modules, "replays": replays, "live_game": "not_tested"}
+              "tests": modules, "replays": replays, "live_game": "not_tested",
+              "injected_compile": "not_requested_renderer_only" if renderer_only else "checked_if_changed"}
     write(receipt_path, result)
     print("PASS current-code integration checks. Reference comparison is opt-in; Civ III was not launched.")
     return result
@@ -942,6 +988,7 @@ def main():
     integration.add_argument("category", choices=list(catalog()))
     integration.add_argument("--build", action="store_true")
     integration.add_argument("--full", action="store_true", help="Run the exhaustive cross-category regression sweep")
+    integration.add_argument("--renderer-only", action="store_true", help="Verify standalone renderer changes without compiling unrelated injected C edits")
     approval = commands.add_parser("approve")
     approval.add_argument("category", choices=list(catalog()))
     approval.add_argument("--user-approval", required=True, help="Quote the user's actual approval of the complete category preview")
@@ -995,7 +1042,7 @@ def main():
             print(f"PASS {validate()} category definitions")
         elif args.command == "integration":
             reexec_with_workspace_python(("PIL", "numpy"))
-            verify_integration(args.category, build=args.build, full=args.full)
+            verify_integration(args.category, build=args.build, full=args.full, renderer_only=args.renderer_only)
         elif args.command == "approve":
             if not args.user_approval.strip():
                 raise ValueError("An actual user approval statement is required")

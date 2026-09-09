@@ -301,6 +301,20 @@ int main(){
         auto cancel_a=[&](){return a.cancelled();};auto cancel_b=[&](){return b.cancelled();};
         assert(emit_relief_meshes(data,real,owner,projection,topology,height_a,shore_a,
             [&](float x,float y){return a.river(x,y);},weights,cancel_a,actual[1],actual[2]));
+        {
+            Probe indexed_probe{{},0,0,mode};std::vector<MapVertex> decals,mountains;
+            std::vector<unsigned> indices;
+            assert(emit_relief_meshes(data,real,owner,projection,topology,
+                [&](float x,float y,float*s){return indexed_probe.height(x,y,s);},
+                [&](float x,float y){return indexed_probe.shore(x,y);},
+                [&](float x,float y){return indexed_probe.river(x,y);},weights,
+                [&](){return indexed_probe.cancelled();},decals,mountains,&indices));
+            assert(indices.size()==actual[2].size() && decals.size()==actual[1].size());
+            for(unsigned i=0;i<indices.size();i++)
+                assert(std::memcmp(&mountains[indices[i]],&actual[2][i],sizeof(MapVertex))==0);
+            if(!indices.empty())assert(mountains.size()==65*65 && indices.size()==64*64*6);
+            if(!decals.empty())assert(std::memcmp(decals.data(),actual[1].data(),decals.size()*sizeof(MapVertex))==0);
+        }
         assert(reference_relief(data,real,owner,projection,topology,height_b,shore_b,
             [&](float x,float y){return b.river(x,y);},weights,cancel_b,expected));
         if(real==6)assert(!actual[2].empty());

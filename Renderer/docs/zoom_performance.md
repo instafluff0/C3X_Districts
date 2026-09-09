@@ -1,8 +1,161 @@
 # Zoom performance verification
 
-## Evaluation handoff
+## Cold-view query/index pass
 
-Optimization experiments are paused for the requested in-game evaluation. The
+This pass removes redundant CPU work without raising cache limits or changing
+the terrain samples, triangle order, materials or renderer ownership:
+
+- Natural terrain and mountain grids now emit indexed vertices directly. A
+  mountain patch retains 4,225 corners and 24,576 indices instead of expanding
+  24,576 full vertices and hashing them back into the same mesh. First-reference
+  order, coast clipping and append offsets are preserved; unused corners do not
+  enlarge bounds. The shared Lab adapter still supports triangle-list output.
+- The underlying relief query now knows when direct hill/mountain sources and
+  analytic dunes are zero because separate natural meshes own those surfaces.
+  Its flat certificate still observes the complete topology support. Away from
+  volcanoes, coastal queries retain the exact coast rim and river attenuation
+  without evaluating the discarded hill/dune/material expressions. Volcanoes,
+  missing topology and the non-fidelity provider keep the existing path.
+
+The isolated high-memory DLL is
+`native/build/camera-cold-query-zoom/C3XRenderer.dll`, SHA-256
+`cbcd840e6550e559fae6cd1db002429f3541a71f3cc95a8aaf0d7ecd1198c85d`.
+The matching control uses this exact DLL and frozen runtime inputs with
+`C3X_RENDERER_GRID_INDEX_CONTROL=1` and
+`C3X_RENDERER_RELIEF_QUERY_CONTROL=1` in a fresh process. These are diagnostic
+controls, not user configuration options. Both processes retain the prior
+world-mesh sharing and full-size viewport caches.
+
+At **2240x1192**, all five independent zoom images and all 30 repeated images
+are byte-identical. First-use zoom changes have median **6,577.333 -> 5,722.332
+ms** (about 13% lower), maximum **8,974.436 -> 7,775.887 ms**. Four first-use
+changes are not enough to report p95. Warm revisits measured median **87.797
+ms**, p95 **108.641 ms**, maximum **119.212 ms**, with zero builds/uploads,
+fallback or recovery. This is a cold-build optimization, not evidence of a new
+warm-cache speedup. Minimum free VA was 1,522,552,832 bytes; largest free region
+at the minimum sample was 1,415,073,792 bytes. Geometry residency is unchanged
+at 685,584,054 bytes. Receipt: `native/build/camera-cold-query-zoom/comparison.json`.
+
+The separate grid-only A/B also reproduced all five images exactly:
+`native/build/camera-grid-index-candidate/comparison.json`. Its timings were
+noisy, including a slower first 96-pixel view; do not present it as a uniform
+speedup. The combined same-DLL comparison above is the current measurement.
+
+Cold views still take seconds and do **not** meet the targets below. Further
+work must address remaining terrain/coast queries, new natural geometry and
+upload rather than claiming cache hits represent first-use latency. This DLL
+is not staged or installed; `bin/C3XRenderer.dll` remains `1a2de66d...`.
+
+## Current full-size optimization
+
+Active acceptance dimensions are **2240x1192**, for both the centered five-level
+zoom cycle and minimap navigation. The previous evaluation DLL below remains
+staged; the new candidates have not been staged, installed or launched in Civ III.
+
+Latest evaluation build: `native/build/world-cache-evaluation/C3XRenderer.dll`,
+SHA-256 `d90fdad0a1865d2138007d3614b0b9c31d16e9d0025b18e3814f9a9f9b647c29`.
+It was rebuilt from current code and checked against current production shaders,
+not the frozen A/B shader snapshot. All 30 full-size zoom revisits passed exactly,
+with zero mesh builds/uploads, fallback or device recovery: median **78.457 ms**,
+p95 **96.007 ms**, maximum **109.585 ms**. First-use changes still took
+3.87–7.81 seconds. Sampled free VA stayed above 1,522,757,632 bytes. The native
+ABI/scheduling/fallback and RGB555/RGB565 blit smoke tests also passed on this exact
+DLL. Its `comparison.json` is a self-comparison for distribution/repeat parity,
+not a new independent speedup claim. The staged DLL remains the previous
+evaluation (`1a2de66d...`); running INSTALL alone will not select this new DLL.
+
+The current implementation addresses three separate costs:
+
+- Natural terrain/tree GPU meshes are owned once in world coordinates. Each
+  camera entry holds a weak key and owner version; the vertex shader applies the
+  selected projection. Active draws pin both owners inside the existing geometry
+  budget. Eviction or a rebuilt owner's version rejects old draw identities.
+- Retained animated viewports record weak draw identities, checked as a complete
+  set before restore. The complete frame signature still validates scene, camera,
+  visibility/ownership, environment, topology and asset/device revisions. Poses
+  are recomposed, never frozen into the terrain bitmap. Pixel-block prefetch
+  borrows both camera and shared natural layers, or skips an incomplete set.
+- Draw lists now grow amortized instead of reserving exactly one additional
+  tile at a time, which repeatedly copied the entire preceding layer.
+
+The isolated high-memory candidate uses 768 MiB geometry, 192 MiB CPU natural
+meshes, **128 MiB retained viewports** and **288 MiB animation backdrops**.
+World owners and camera entries share the geometry byte budget; its entry limit
+is 16,384. Normal-build byte budgets remain unchanged. These are separate cache
+ceilings, not reservations and not a total-process memory guarantee.
+
+An independent A/B used the exact same DLL and frozen runtime inputs with
+`C3X_RENDERER_SHARED_NATURAL_CONTROL=1` only in the control process. All five
+images passed existing parity thresholds (0–3 pixels exceeding two channel
+levels per image); all repeated images were exact. Sharing alone reduced warm
+revisits from 4.90–9.18 seconds to 0.92–1.77 seconds, with zero mesh builds on
+revisits and about 407 million additional free VA bytes at the minimum sample.
+Receipts: `native/build/camera-shared-natural-ab-control` and
+`native/build/camera-shared-natural/comparison.json`. This diagnostic switch
+selects a fresh-process control, not a runtime user setting.
+
+Retaining the full-size images then removed the rerasterization cost. Thirty
+revisits with amortized draw lists measured median 131.756 ms, p95 202.089 ms,
+maximum 266.257 ms, with no mesh builds, fallback or recovery and exact repeat
+pixels (`native/build/camera-shared-natural-linear`). The subsequent identity
+restore measured 91.590 ms median / 118.705 ms p95 over 30 warm zoom changes.
+The cross-build image comparison against the preceding candidate was rejected:
+even its initial cold images differed. It is not an optimization-parity receipt;
+a same-DLL control supplies the final comparison instead.
+
+The final matched full-size zoom run uses DLL SHA-256
+`188ace56f04c16c6b7d88e44211a9f3655c5a99db1e6313d26dc64ce45968be1`
+and identical frozen shaders/assets in both processes. Across 30 warm changes:
+median **6,830.628 -> 82.025 ms**, p95 **8,982.259 -> 106.448 ms**, maximum
+**9,435.036 -> 111.056 ms**. Every shared-cache revisit builds/uploads zero tiles;
+GPU residency stays at 685,840,246 bytes. All five independent images pass
+(0–3 pixels over the existing channel threshold); all repeat images are exact,
+with zero fallback or device recovery. Minimum free VA is 1,520,443,392 bytes,
+largest free region 1,460,088,832 bytes. Receipt:
+`native/build/camera-world-cache-zoom/comparison.json`, paired with
+`native/build/camera-world-cache-control`. The 150 ms final-quality warm-zoom
+target passes; the separate 50 ms response target does not. First-use changes
+still take 4.48–8.55 seconds.
+
+The six-destination **2240x1192 minimap** witness now passes all 30 repeat images
+exactly, with no fallback or recovery: median **30.680 ms**, p95 **66.046 ms**,
+maximum **76.811 ms**. This meets both cached-move targets. Minimum sampled free
+VA was 1,639,870,464 bytes, largest free region 1,556,746,240 bytes. Receipt:
+`native/build/camera-world-cache-navigation/comparison.json` (self-comparison,
+distribution and repeat parity only). Cold first moves still took 341–7,275 ms,
+including 341 ms for the nearby overlap move. Distant views spend seconds in
+terrain/natural geometry generation and upload. They do not meet the cold target.
+
+Neither these results nor the cache ceilings establish live-game latency, memory
+safety or smooth transitions. Targets below remain unchanged.
+
+Verification of the current normal-budget code passed 210 selected regressions;
+98 focused workbench/cache/zoom checks also passed after the test-harness changes.
+All six production behavior replays passed using private copies of both the DLL
+and Lab executable: normal/reduced scrolling, world wrapping, resource animation
+with zoom return/scroll/removal, and daytime/nighttime unit matrices. Receipt:
+`native/build/world-cache-integration/verified/results.json`, DLL SHA-256
+`54a870c155d51be0998dc869a6c3826a294e702ae5f986bc823f0f546594fd6d`.
+The earlier shared-output integration attempt encountered file locks, mismatched
+completion records and crashed verifier processes; it is not a successful receipt.
+The wrap failure did not reproduce with both binaries isolated. Failed evidence
+is preserved; only this task's two confirmed crashed verifier processes were
+stopped, not Civ III or other tasks' processes.
+
+`native_render(..., candidate=..., preview=...)` can now select a private preview
+without rebuilding the shared executable. Offscreen preview exceptions log code,
+module/offset and stack addresses and exit instead of leaving a hidden error
+dialog. A controlled Windows exception verified this diagnostic path. No such
+exception handler is installed in Civ III. The current-code guard also preserves
+the original CPU projection for non-native diamond aspect ratios.
+
+Remaining work is cold geometry generation/upload, the tighter 50 ms response
+goal, and combined zoom/navigation working-set stress. Separate repeated-camera
+benchmarks are not a claim that arbitrary mixed camera paths remain resident.
+
+## Previous evaluation handoff
+
+The prior requested in-game evaluation used the following snapshot. The
 unfinished mutable ground-point scratch-cache change was withdrawn; no partial
 implementation remains. The evaluation DLL is
 `native/build/zoom-evaluation-960/C3XRenderer.dll`, SHA-256
@@ -11,6 +164,9 @@ It uses the experimental 768 MiB GPU geometry, 192 MiB natural CPU mesh and
 160 MiB resource-backdrop caps, plus the unchanged 32 MiB viewport tier. These
 are cache budgets, not reservations or a cap on all process memory. Ordinary
 build defaults remain unchanged; rebuilding normally loses these higher caps.
+The exact DLL is staged in `bin/C3XRenderer.dll`; hashes match. The previous
+staged DLL is preserved as `native/build/zoom-evaluation-960/previous-staged.dll`.
+Neither installation nor game launch was performed.
 
 Final checks on this exact DLL:
 
@@ -49,7 +205,11 @@ No live-game pass or smooth-transition claim is made.
 ## Witness
 
 The offscreen witness in `native/biq_preview.cpp` recaptures the same full-world
-fixture at 128, 112, 96, 80 and 64 pixels, then repeats the cycle. It retains the
+fixture in the current `Z` cycle: 128, 96, 64, 192 and 160 pixels, then repeats.
+This is the centered range (normal plus two farther and two closer levels).
+Historical measurements below used the old 128, 112, 96, 80, 64 ladder; the
+comparison tool recognizes both sequences but never compares mismatched ladders.
+It retains the
 same resource sites and animation time so cached-image parity has a deterministic
 reference. Every step checks ownership and fallback; repeated steps use the
 existing pixel-error thresholds. The independent comparison tool checks the
@@ -85,6 +245,42 @@ Initial asset/shader loading is outside the timed zoom steps. The first 128-pixe
 step is an unchanged-current-view control and is excluded from the median.
 Geometry timing includes construction and upload; readback timing includes pending
 GPU execution. Do not interpret a replay as a live-game or smooth-transition pass.
+
+## Centered zoom range and actual-size check
+
+The injected `Z` control now selects 50%, 75%, 100%, 125% and 150%, with
+normal in the middle. Its render-time synchronization accepts both close-ups.
+The existing staged evaluation DLL already accepts these numeric projections;
+its bytes were not changed. Applying the new controls requires rerunning
+`INSTALL.bat`; the automated compile check did not install or launch the game.
+
+Verification passed the approved injected compile/injection smoke test and 49
+focused tests, including execution of the actual key-handler/native-sync C,
+inverse picking, world-mesh reprojection, unit body/HUD offsets and native-unit
+suppression at every level. All seven 960x640 replay cycles passed, including
+both close-ups, exact repeat pixels and zero device recoveries. Across 30 warm
+changes, median was 46.650 ms and p95 90.019 ms. The receipt under
+`native/build/camera-centered-zoom` is a self-comparison recording distribution
+and parity, not an independent speedup measurement or comparison of different
+zoom ranges.
+
+The latest captured game viewport is 2240x1192, not 960x640. An additional
+full-world replay at those dimensions passed two complete cycles with exact
+repeat pixels and zero fallback/recoveries, including 160/192-pixel close-ups.
+However, its five repeat changes took **5.744–14.170 seconds** and each rebuilt
+all GPU tiles for that projection. The 768 MiB geometry cache remains full;
+five raw full-view BGRA bitmaps alone also exceed the separate 32 MiB viewport
+budget. This is direct evidence that small-view warm-cache results do not prove
+responsiveness at the user's game size. The minimum sampled free VA was
+1,154,306,048 bytes in the standalone process, not a live-game safety guarantee.
+Logs and images: `native/build/camera-centered-live-size`.
+
+Use **2240x1192** for the next interactive acceptance measurements (zoom and
+minimap). Keep 960x640 as a compact regression fixture and retain the existing
+latency targets below. The actual-size replay is a fully visible synthetic
+world, not the user's exact fog/capture workload. Projection-independent GPU
+storage, scalable retained images and reduced cold-build work remain necessary;
+this range change does not claim to fix the remaining performance issue.
 
 The earlier 960×640 baseline spent about 20–25 seconds on individual 112/96/80
 steps, mostly in geometry construction and upload, and was stopped after the
@@ -128,9 +324,11 @@ RGB555/RGB565 blit smoke tests. No live-game performance claim is made.
 
 ## Interaction targets (ongoing)
 
-These are engineering targets, not measured achievements. Primary workload:
-960×640 production rendering with animated map objects; 640×480 is a fast
-diagnostic and 1280×720 a stress case. Preserve current image quality, ownership,
+These are engineering targets, not measured achievements. The original primary
+workload was 960×640 with animated map objects, with 640×480 fast diagnostics
+and a 1280×720 stress case. The actual-size check above supersedes the primary
+acceptance dimensions with 2240×1192; prior measurements retain their original
+dimensions and must not be relabeled. Preserve current image quality, ownership,
 fog/visibility, latest-request correctness and bounded memory.
 
 | Interaction | First correct visual response, p95 | Final-quality image, p95 |

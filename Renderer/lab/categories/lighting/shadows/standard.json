@@ -9,17 +9,26 @@
     "Renderer/native/environment_runtime.cpp",
     "Renderer/native/source_fidelity/light_frame.h",
     "Renderer/native/render_core/source_shadow.h",
-    "Renderer/native/city_fidelity/source_caster.hlsl"
+    "Renderer/native/city_fidelity/source_caster.hlsl",
+    "Renderer/native/scene_lighting.h",
+    "Renderer/native/unit_shadow.h",
+    "Renderer/native/unit_body_renderer.h",
+    "Renderer/lab/shared/shaders/lighting/paged_shadow_v1.hlsl",
+    "Renderer/lab/shared/shaders/lighting/shadow_policy.hlsl"
   ],
   "recipe": {
     "terrain": 2,
     "feature": 2,
     "objects": true,
     "hours": [
-      12
+      12,
+      18,
+      0,
+      6
     ],
     "zooms": [
-      128
+      128,
+      64
     ],
     "cases": [
       "detail",
@@ -28,7 +37,11 @@
   },
   "tests": [
     "Renderer.native.source_fidelity.test_contract",
-    "Renderer.native.test_render_core"
+    "Renderer.native.test_render_core",
+    "Renderer.native.test_scene_lighting",
+    "Renderer.native.test_unit_shadow",
+    "Renderer.native.test_unit_animation_runtime",
+    "Renderer.lab.test_shadow_fixture"
   ],
   "references": {
     "d3d11": [
@@ -55,6 +68,7 @@
     ]
   },
   "limitations": [
-    "Current diagnostic previews use the production D3D11 renderer."
+    "Units receive pose-local self shadows; surrounding world shadows are not supplied by the native sprite API.",
+    "Animated ground shadows approximate a locally flat receiver to preserve bounded redraw."
   ]
 }

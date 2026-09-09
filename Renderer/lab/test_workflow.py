@@ -128,6 +128,17 @@ class ApprovalTests(unittest.TestCase):
             renderer.compare("grassland")
             self.assertNotIn("reference_inputs", renderer.standard("grassland"))
 
+    def test_new_time_of_day_diagnostic_needs_no_reference_replacement(self):
+        refs = self.comparison()
+        path = self.lab / "out/grassland/render.json"
+        result = renderer.read(path)
+        for entry in result["outputs"]:
+            entry["hour"] = 18
+        renderer.write(path, result)
+        compared = renderer.compare("grassland")
+        self.assertTrue(all(row["identical_pixels"] is None and row["reference"] == "unavailable" for row in compared))
+        self.assertEqual(renderer.standard("grassland")["references"]["d3d11"], refs)
+
     def test_old_category_signature_rejects_comparison_before_review(self):
         self.comparison()
         with patch.object(renderer, "category_signatures", return_value={"grassland": "changed"}), \
@@ -180,6 +191,21 @@ class ApprovalTests(unittest.TestCase):
         self.assertNotIn("comparisons", result)
         render.assert_not_called()
         compare.assert_not_called()
+
+    def test_renderer_only_integration_preserves_checks_without_compiling_other_work(self):
+        candidate = self.root / "Renderer/native/build/candidate/C3XRenderer.dll"
+        candidate.parent.mkdir(parents=True)
+        candidate.write_bytes(b"verified-dll")
+        with patch.object(renderer, "run_tests", return_value=["renderer tests"]) as tests, \
+             patch.object(renderer, "integration_replays", return_value=["renderer replays"]) as replays, \
+             patch("Renderer.lab.platform.changed_injected_sources", return_value=True), \
+             patch("Renderer.lab.platform.injected_compile_result") as injected:
+            result = renderer.verify_integration_checks("grassland", renderer_only=True)
+        tests.assert_called_once()
+        replays.assert_called_once()
+        injected.assert_not_called()
+        self.assertEqual(result["injected_compile"], "not_requested_renderer_only")
+        self.assertEqual(result["status"], "pass")
 
     def test_failed_new_verification_invalidates_older_success(self):
         with patch.object(renderer, "run_tests", side_effect=ValueError("regression")):
@@ -307,10 +333,40 @@ class FixtureTests(unittest.TestCase):
 
 
 class BehaviorWitnessTests(unittest.TestCase):
-    def test_fixture_batch_cleans_up_preview_children_after_recording_exit(self):
+    def test_private_preview_does_not_rebuild_the_shared_executable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory).resolve();dll=root/"candidate.dll";preview=root/"private preview.exe"
+            dll.write_bytes(b"dll");preview.write_bytes(b"exe");output=root/"output"
+            def fixture(path,command,run_id):
+                (path/"gameplay-h12-z128.bmp").write_bytes(b"image")
+                return {"status":"pass","output_tail":"BIQ viewport: 0 fallback, output=image"}
+            with patch.object(renderer,"ROOT",root), \
+                 patch.object(renderer,"scene"), \
+                 patch.object(renderer,"standard",return_value={"recipe":{"objects":False}}), \
+                 patch.object(renderer,"ensure_preview_tool") as build, \
+                 patch("Renderer.lab.platform.run_native_fixture",side_effect=fixture), patch("builtins.print"):
+                result=renderer.native_render("grassland","gameplay",12,128,output,candidate=dll,preview=preview)
+                self.assertEqual(result["backend"],"d3d11")
+                build.assert_not_called()
+                batch=(output/"render.bat").read_text()
+                self.assertIn('"..\\..\\private preview.exe"',batch)
+                self.assertNotIn('..\\lab\\.cache\\native_preview.exe',batch)
+
+    def test_fixture_batch_records_own_process_without_killing_other_tasks(self):
         import inspect
         source = inspect.getsource(renderer.native_render)
-        self.assertLess(source.index('echo {run_id}'), source.index('taskkill /F /IM native_preview.exe'))
+        self.assertIn('C3X_LAB_PID_FILE', source)
+        self.assertIn('echo {run_id}', source)
+        self.assertNotIn('taskkill /F /IM', source)
+
+    def test_pending_replay_prevents_overlapping_the_next_case(self):
+        from Renderer.lab.platform import NativeFixturePending
+        with tempfile.TemporaryDirectory() as directory, patch.object(renderer, "LAB", Path(directory)), \
+             patch.object(renderer, "native_render", side_effect=NativeFixturePending("PID 1234 still running")) as render, \
+             patch("builtins.print"):
+            with self.assertRaisesRegex(ValueError, "terrain-edit"):
+                renderer.integration_replays("shadows")
+            render.assert_called_once()
 
     def test_unit_check_cannot_pass_without_the_executed_matrix(self):
         with self.assertRaisesRegex(ValueError, "Incomplete native unit"):
@@ -324,8 +380,26 @@ class BehaviorWitnessTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "scroll"):
                 renderer.integration_replays("animation", full=True)
             self.assertEqual(render.call_count, 6)
-            results = renderer.read(Path(directory) / "out/integration/replays/results.json")
+            results = renderer.read(Path(directory) / "out/integration/replays/animation/results.json")
             self.assertEqual([r["status"] for r in results], ["fail"] + ["pass"] * 5)
+
+    def test_category_replays_do_not_share_output_files(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(renderer, "LAB", Path(directory)), \
+             patch.object(renderer, "native_render", return_value={}) as render, patch("builtins.print"):
+            renderer.integration_replays("shadows")
+            first = {call.args[4] for call in render.call_args_list}
+            render.reset_mock()
+            renderer.integration_replays("resources")
+            second = {call.args[4] for call in render.call_args_list}
+            self.assertFalse(first.intersection(second))
+
+    def test_partial_edit_reuse_has_an_existing_coast(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(renderer, "LAB", Path(directory)), \
+             patch.object(renderer, "native_render", return_value={}) as render, patch("builtins.print"):
+            renderer.integration_replays("grassland")
+            self.assertEqual(render.call_count, 1)
+            self.assertEqual(render.call_args.args[:4], ("shorelines", "lowland", 12, 128))
+            self.assertEqual(render.call_args.kwargs, {"behavior": "edits", "center": (10, 18)})
 
     def test_focused_resource_check_runs_only_its_playback_witness(self):
         with patch.object(renderer, "affected", return_value=["animation", "resources"]):

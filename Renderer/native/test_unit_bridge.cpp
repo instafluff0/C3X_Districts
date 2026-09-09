@@ -74,7 +74,10 @@ void __fastcall Unit_tick_anim(Unit*,int,PCX_Image*,int,int,bool);
 #include "build/unit_bridge_capture.h"
 #undef this
 void __fastcall Unit_tick_anim(Unit* u,int,PCX_Image* canvas,int x,int y,bool status){
- if(state.custom_renderer_zoom_unit_tick_translated){assert(x==303 && y==306);}
+ if(state.custom_renderer_zoom_unit_tick_translated){
+  int width=state.custom_renderer_zoom_tile_width;
+  assert(x==640-(539*width+64)/128 && y==480-(278*width+64)/128);
+ }
  else {assert(x==101 && y==202);}
  assert(status);if(!u->visible)return;
  u->Body.Rect={};
@@ -130,6 +133,18 @@ int main(){
  success=false;invoke();assert((calls==std::vector<int>{10,20,40}));
  state.current_config.enable_custom_rendered_units=false;invoke();assert((calls==std::vector<int>{10,40}));
  state.current_config.enable_custom_rendered_units=true;
+ for(int width:{64,96,128,160,192}){
+  state.custom_renderer_zoom_tile_width=width;success=true;invoke();
+  int scale=width*1000/128;
+  assert(captured.projection_scale_milli==scale);
+  assert(captured.body_x==(11*width+64)/128 && captured.body_y==(23*width+64)/128);
+  assert(unit.Body.Rect.left<=captured.body_x && unit.Body.Rect.top<=captured.body_y);
+  assert(unit.Body.Rect.right>=captured.body_x+191*scale/1000);
+  assert(unit.Body.Rect.bottom>=captured.body_y+191*scale/1000);
+  success=false;invoke();assert((calls==std::vector<int>{10,20,40}));
+  state.current_config.enable_custom_rendered_units=false;invoke();assert((calls==std::vector<int>{10,40}));
+  state.current_config.enable_custom_rendered_units=true;
+ }
  state.current_config.enable_custom_rendering_zoom=false;
  state.custom_renderer_unit_context=&unit;state.custom_renderer_unit_canvas=&canvas;
  calls.clear();Sprite unrelated;assert(!forward_custom_unit_body(&unrelated,&canvas,&canvas,0,0,0,&fixture_palette));

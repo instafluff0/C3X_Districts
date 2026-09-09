@@ -22,7 +22,10 @@
     "Renderer/lab/shared/shaders/relief/coast_rocks.hlsl",
     "Renderer/native/render_core/relief_query.h",
     "Renderer/lab/shared/natural/ground.h",
-    "Renderer/lab/shared/natural/queries.h"
+    "Renderer/lab/shared/natural/queries.h",
+    "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
+    "Renderer/native/source_fidelity/prepare.py",
+    "Renderer/native/source_fidelity/geometry.h"
   ],
   "recipe": {
     "terrain": 2,

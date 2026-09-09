@@ -50,6 +50,7 @@ cbuffer ShadowFrame : register(b2) {
     float4 ShadowOrigin;
     float4 ShadowFlags;
 };
+// Binding adapter; the shared Lab provider owns filtering/contact/depth rules.
 // World-aligned six-tile pages preserve the retained 6/1024 sampling density.
 // Source depths use R32_FLOAT physical light distance, avoiding page-dependent
 // normalization/quantization. Page identity never contains a screen anchor.
@@ -70,7 +71,8 @@ float pickup_blocker(Texture2DArray field,int2 texel,int2 center_page,int center
  int slot=all(page==center_page)?center_slot:pickup_page(page);
  return slot<0?-1e6:field.Load(int4(texel-page*1024,slot,0)).r;
 }
-float q6_world_visibility(Texture2DArray field,float4 world,float3 normal,bool water) {
+float c3x_paged_visibility(Texture2DArray field,float4 world,float3 normal,bool water,
+ float4 ShadowU,float4 ShadowV,float4 ShadowL,float4 ShadowFlags) {
  if(world.w<=.5 || ShadowFlags.x<=.5)return 1;
  const float texel=6./1024.;
  float3 offset=world.xyz+normal*texel;
@@ -96,6 +98,9 @@ float q6_world_visibility(Texture2DArray field,float4 world,float3 normal,bool w
  return soft;
 }
 
+float q6_world_visibility(Texture2DArray field,float4 world,float3 normal,bool water) {
+ return c3x_paged_visibility(field,world,normal,water,ShadowU,ShadowV,ShadowL,ShadowFlags);
+}
 float q6_shadow_visibility(Texture2DArray field,float3 world,float3 normal,float4 u,float4 v,float4 l,bool receive,bool contact) {
  return receive?q6_world_visibility(field,float4(world,1),normal,!contact):1;
 }
@@ -495,8 +500,19 @@ Output PSFeature(P input) { return shade(input); }
 cbuffer NativeViewport : register(b1) {
  float2 translation; float depth_translation; float padding;
  float2 inverse_size; float2 reserved;
+ float4 natural_projection; // owner column/row, tile width, target height; zero disables
 };
+float3 native_project_position(float3 position, float3 world) {
+ if(natural_projection.z<=0) return position;
+ float dx=world.x-natural_projection.x,dy=world.y-natural_projection.y;
+ float h=world.z*112-2.5;
+ float base=(dx-dy+1)*natural_projection.z*.25;
+ return float3((dx+dy)*natural_projection.z*.5,
+     base-h*(natural_projection.z/224*.82),
+     base+h*.0016*natural_projection.w);
+}
 P VSNative(V input) {
+ input.position=native_project_position(input.position,input.world.xyz);
  P o=VSMain(input);
  o.position.xy=(floor(input.position.xy*256+0.5)/256+translation)*inverse_size*float2(2,-2)+float2(-1,1);
  o.position.z=clamp(0.5-(floor(input.position.z*256+0.5)/256+translation.y)/16384.0,0.001,0.999);

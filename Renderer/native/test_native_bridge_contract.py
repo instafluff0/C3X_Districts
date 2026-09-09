@@ -373,7 +373,7 @@ int main() {
         self.assertIn("result.geometry = fnv_offset", signature)
         self.assertIn("reuse_geometry_for_translation", renderer)
         self.assertIn("tile_geometry_cache_budget = 192u * 1024u * 1024u", renderer)
-        self.assertIn("tile_geometry_cache_capacity = 2048u", renderer)
+        self.assertIn("tile_geometry_cache_capacity = 4096u", renderer)  # World owners plus camera references.
         self.assertIn("observed_coordinate_key", renderer)
         self.assertIn("context->DrawIndexed", renderer)
         self.assertIn("tile_geometry_epoch", renderer)

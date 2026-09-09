@@ -40,6 +40,17 @@ float4 PSReflection(PixelInput input):SV_Target {
 '''
     (HERE/'hydrology.hlsl').write_text(hydro+terrain_reflect)
     feature=read(HERE.parent/'render_core/terrain_scene.hlsl')
+    feature=read(LAB/'shaders/lighting/shadow_policy.hlsl')+'\n'+feature
+    old='float alpha = frame_cast_shadow_strength() * 0.22 *'
+    assert feature.count(old)==1
+    feature=feature.replace(old,'float alpha = frame_cast_shadow_strength() * c3x_dynamic_shadow_opacity *')
+    # The retained feature provider predates the common paged receiver. Bind
+    # the current filter here as well as in the natural shader generator.
+    receiver=read(HERE.parent/'render_core/shadow_receiver.hlsl').replace(
+        '// C3X_SHARED_PAGED_SHADOW',read(LAB/'shaders/lighting/paged_shadow_v1.hlsl'))
+    start=feature.index('Texture2DArray pickup_shadow_terrain')
+    end=feature.index('\n#endif',start)
+    feature=feature[:start]+receiver+feature[end:]
     # This retained provider predates the shared cliff material. Bind that one
     # current body explicitly, without changing unrelated feature shaders.
     cliff=read(LAB/'shaders/relief/coast_rocks.hlsl')
@@ -69,7 +80,7 @@ P VSReflection(V input) {
  P o=VSNative(input);
  float h=max(0,input.world.z-NativeReflection.z);
  o.position.y-=h*NativeReflection.x*4*inverse_size.y;
- float base=input.position.y+h*NativeReflection.x;
+ float base=native_project_position(input.position,input.world.xyz).y+h*NativeReflection.x;
  o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+translation.y)/16384,.001,.999);
  return o;
 }

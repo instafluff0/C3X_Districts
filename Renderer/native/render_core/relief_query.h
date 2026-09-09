@@ -14,7 +14,8 @@ struct FlatGroundRegion {
     float u, v;
     bool certified = false;
     template<class Lookup>
-    FlatGroundRegion(int c, int r, double center_shore_distance, Lookup const& lookup)
+    FlatGroundRegion(int c, int r, double center_shore_distance, Lookup const& lookup,
+                     bool separate_natural_relief=false)
         : u(float(c)), v(float(r)) {
         // Farthest query is < .722 tiles from center. At distance > .85,
         // the cliff shoulder is exactly zero; use a conservative 1.6 bound.
@@ -22,8 +23,8 @@ struct FlatGroundRegion {
         certified = true;
         for (int y=-2;y<=2;y++) for (int x=-2;x<=2;x++) {
             Tile t=lookup(c+x,r+y);
-            if (!t.present || t.real==5 || t.real==6 || t.real==10 ||
-                (t.base==0 && t.real==0)) certified=false;
+            if (!t.present || t.real==10 || (!separate_natural_relief &&
+                (t.real==5 || t.real==6 || (t.base==0 && t.real==0)))) certified=false;
         }
     }
     bool contains(float x, float y) const {
@@ -52,6 +53,9 @@ template<class Lookup,class Source,class Shore,class River,class Dune,class Acti
 class ReliefQuery {
     World world;
     Lookup lookup; Source source; Shore shore; River river; Dune dune; Activity activity;
+    // Contract: direct hills/mountains and analytic dunes contribute zero to
+    // this underlying provider; their separate natural meshes still own relief.
+    bool separate_natural_relief;
     mutable bool quiet_ready=false,quiet=false;
     mutable int quiet_c=0,quiet_r=0;
     bool quiet_neighborhood(int c,int r) const {
@@ -59,7 +63,8 @@ class ReliefQuery {
         quiet=true;quiet_c=c;quiet_r=r;quiet_ready=true;
         for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++){
             Tile t=lookup(c+dx,r+dy);
-            if(t.real==5 || t.real==6 || t.real==10 || (t.present && t.base==0 && t.real==0))quiet=false;
+            if(t.real==10 || (!separate_natural_relief &&
+                (t.real==5 || t.real==6 || (t.present && t.base==0 && t.real==0))))quiet=false;
         }
         return quiet;
     }
@@ -70,8 +75,10 @@ class ReliefQuery {
         return {x,y};
     }
 public:
-    ReliefQuery(World w,Lookup l,Source s,Shore h,River r,Dune d,Activity a)
-        :world(w),lookup(l),source(s),shore(h),river(r),dune(d),activity(a) {}
+    ReliefQuery(World w,Lookup l,Source s,Shore h,River r,Dune d,Activity a,
+                bool separate_relief=false)
+        :world(w),lookup(l),source(s),shore(h),river(r),dune(d),activity(a),
+         separate_natural_relief(separate_relief) {}
     ReliefSample body(int c,int r,float x,float y) const {
         Tile tile=lookup(c,r); ReliefSample result;
         if(!tile.present || (tile.real!=6 && tile.real!=10)) return result;
@@ -123,8 +130,27 @@ public:
     GroundSample sample(float x,float y,bool with_material=true) const {
         int c=int(std::floor(x)),r=int(std::floor(y)); Tile tile=lookup(c,r);
         GroundSample result;
-        if(!tile.present || water(tile)) return result;
+        if(!tile.present) return result;
+        auto hydrology=shore(x,y);
+        float rocky=smooth01((float(hydrology.rocky)-.55f)/.40f);
+        float cliff=smooth01((float(hydrology.distance)-.04f)/.14f);
+        float shoulder=1-smooth01((float(hydrology.distance)-.20f)/.65f);
+        // A minimum coastal rim, not an extra ledge added to the hills.
+        result.height=(3.f/12.f)*112.f*rocky*cliff*shoulder;
+        // The visual contour can cross a water-owned cell. Preserve its
+        // narrow positive-land cliff cap instead of cutting at the tile grid.
+        if(water(tile))return result;
         float u=x-c,v=1-(y-r);
+        if(separate_natural_relief && quiet_neighborhood(c,r)){
+            // With no volcano in the complete support, only the existing coast
+            // rim can contribute. Keep its exact river-valley attenuation; the
+            // discarded hill/dune/owner expressions all evaluate to zero.
+            if(result.height>0){
+                float valley=1-smooth01((river(c,r,u,v)-4.f)/16.f);
+                result.height*=1-valley*.92f*.90f;
+            }
+            return result;
+        }
         float distances[]={u,v,1-u,1-v};
         int offsets[][2]={{-1,0},{0,1},{1,0},{0,-1}};
         float compatibility=1;
@@ -132,17 +158,12 @@ public:
             Tile neighbor=lookup(c+offsets[i][0],r+offsets[i][1]);
             if(!neighbor.present || water(neighbor)) compatibility*=smooth01(distances[i]/.22f);
         }
-        auto hydrology=shore(x,y);
         // Beyond the cliff shoulder, a neighborhood without relief or dunes
         // contributes exactly zero. Observe its full support once per integer
         // cell; normal samples may differ by tiny fractions but share this fact.
         if(hydrology.distance>1.0 && quiet_neighborhood(c,r))return result;
         float signed_shore=float(std::clamp(-hydrology.distance/.65,-1.,1.));
         float coastal=smooth01((-signed_shore-.02f)/.42f);
-        float rocky=smooth01((float(hydrology.rocky)-.55f)/.40f);
-        float cliff=smooth01((float(hydrology.distance)-.01f)/.06f);
-        float shoulder=1-smooth01((float(hydrology.distance)-.20f)/.65f);
-        result.height=(5.f/12.f)*112.f*rocky*cliff*shoulder;
         float support=0;
         for(int dy=-1;dy<=1;dy++) for(int dx=-1;dx<=1;dx++) {
             if(lookup(c+dx,r+dy).real!=5) continue;
@@ -154,7 +175,7 @@ public:
             support*compatibility*(coastal*(1-rocky)+cliff*rocky)*(5.f/7.f) : 0;
         bool contains_volcano=false;
         auto relief=chain(x,y,true,&contains_volcano);
-        result.height+=smooth_max(hill,relief.displacement*coastal*compatibility);
+        result.height=std::max(result.height,smooth_max(hill,relief.displacement*coastal*compatibility));
         // Existing analytic dune body is retained as a diagnostic proxy. Only
         // its continuous ownership/collar is ported; no source recovery claimed.
         int left=int(std::floor(x-.5f)),top=int(std::floor(y-.5f));

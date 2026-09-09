@@ -3,6 +3,7 @@ from pathlib import Path, PureWindowsPath
 import os
 import subprocess
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -81,11 +82,51 @@ def native_completion(directory, run_id):
     return {"status": "fail" if failed else "pass", "returncode": code, "output_tail": output[-4000:]}
 
 
+class NativeFixturePending(ValueError):
+    """An invocation may still be live; do not start the next fixture."""
+
+
+def fixture_process(directory, run_id):
+    try:
+        fields = (directory / "process.txt").read_text().split()
+        if len(fields) == 2 and fields[0] == run_id and int(fields[1]) > 0:
+            return int(fields[1])
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def wait_native_fixture(directory, run_id, process):
+    # Poll the exact process published by this invocation, not an image-name
+    # guess. Each observation is short; never restart a confirmed live render.
+    for attempt in range(120):
+        try:
+            return native_completion(directory, run_id)
+        except ValueError:
+            state = native_command_result("Renderer/native",
+                f'tasklist /FO CSV /NH /FI "PID eq {process}"', timeout_seconds=30)
+            try:
+                return native_completion(directory, run_id)
+            except ValueError:
+                absent = "INFO: No tasks are running which match the specified criteria."
+                if state["status"] == "pass" and state.get("output_tail", "").strip() == absent:
+                    raise ValueError(f"Preview PID {process} exited without a matching completion receipt")
+                if state["status"] != "pass" or f'"native_preview.exe","{process}"' not in state.get("output_tail", ""):
+                    print(f"Preview PID {process} observation is uncertain; keeping this invocation pending", flush=True)
+        if attempt % 6 == 0:
+            print(f"Waiting for current native preview PID {process}; it is still running", flush=True)
+        time.sleep(5)
+    raise NativeFixturePending(f"Preview PID {process} is still pending; inspect that process before another fixture")
+
+
 def run_native_fixture(directory, command, run_id):
     transport = native_command_result("Renderer/native", command, timeout_seconds=120)
     try:
         result = native_completion(directory, run_id)
     except ValueError:
+        process = fixture_process(directory, run_id)
+        if process is not None:
+            return wait_native_fixture(directory, run_id, process)
         if transport["status"] == "pass":
             raise
         # A transport error is not a stopped render. Ask Windows explicitly and
@@ -97,7 +138,7 @@ def run_native_fixture(directory, command, run_id):
         except ValueError:
             absent = "INFO: No tasks are running which match the specified criteria."
             if state["status"] != "pass" or state.get("output_tail", "").strip() != absent:
-                raise
+                raise NativeFixturePending("Native completion is unconfirmed; inspect the existing invocation before another fixture")
             print("Windows confirms no preview process; retrying failed dispatch once", flush=True)
             transport = native_command_result("Renderer/native", command, timeout_seconds=120)
             result = native_completion(directory, run_id)

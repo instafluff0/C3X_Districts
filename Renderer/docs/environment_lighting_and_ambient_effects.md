@@ -20,6 +20,12 @@ M6.4 proves the shared primitives with synthetic terrain/water and emissive fixt
 
 ## Frame Environment
 
+The current shared shadow implementation is described in
+[shared_shadow_contract.md](shared_shadow_contract.md). Its user-selected
+screen-space cycle is noon west, 18:00 south, midnight east and 06:00 north.
+Those directions and the fixed slope are authored C3X presentation choices,
+calibrated against the supplied Civ VI comparison, not decoded engine settings.
+
 Each immutable render frame derives these source-independent values from the captured C3X environment:
 
 - Hour, optional transition fraction, season, and stable presentation timestamp.

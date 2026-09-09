@@ -28,8 +28,8 @@ class SelectionTests(unittest.TestCase):
                      "Renderer/lab/shared/new_system.py"):
             self.assertEqual(self.changed(path), set(self.entries))
 
-    def test_unit_edit_selects_units_and_animation(self):
-        self.assertEqual(self.changed("Renderer/packs/UnitAnimationRuntime/clips/test.bin"), {"units", "animation"})
+    def test_unit_edit_selects_units_animation_and_mixed_shadows(self):
+        self.assertEqual(self.changed("Renderer/packs/UnitAnimationRuntime/clips/test.bin"), {"units", "animation", "shadows"})
 
     def test_resource_edit_includes_resource_bearing_contexts(self):
         self.assertEqual(self.changed("Renderer/lab/shared/resources/clip_units.json"),
@@ -53,7 +53,7 @@ class SelectionTests(unittest.TestCase):
     def test_added_and_removed_inputs_change_signatures(self):
         before = dependencies.signatures({}, self.entries)
         after = dependencies.signatures({"Renderer/packs/UnitAnimationRuntime/new.bin": "new"}, self.entries)
-        self.assertEqual({k for k in before if before[k] != after[k]}, {"units", "animation"})
+        self.assertEqual({k for k in before if before[k] != after[k]}, {"units", "animation", "shadows"})
 
     def test_recipe_is_part_of_selection(self):
         current = dependencies.signatures({}, self.entries)

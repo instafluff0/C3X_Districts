@@ -174,6 +174,21 @@ int main() {
             witnessed=true;
         }
         assert(witnessed);
+        if(rocky){
+            bool hill_meets_cliff=false;
+            for(int i=0;i<125 && !hill_meets_cliff;i++)for(int j=0;j<40 && !hill_meets_cliff;j++){
+                float x=4+i*.04f,y=-1+j*.1f;auto sample=query.shore(x,y);
+                if(sample.distance<.18 || sample.distance>.22 || sample.rocky<.95)continue;
+                float authored=natural.height(x,y,[&](int c,int r){return query.natural_tile(c,r);});
+                if(authored<8)continue;
+                auto h=query.height(natural,[](float,float){return 0.f;},x,y);
+                // The cliff slope has finished where the ordinary beach slope
+                // has not begun. Keep the hill's height at this contact.
+                assert(h>=2.5f+(authored-2.5f)*.95f);
+                hill_meets_cliff=true;
+            }
+            assert(hill_meets_cliff);
+        }
     }
     std::cout<<"PASS production surface queries: "<<scopes<<" scopes, "<<samples
              <<" exact values, world/coast observations and cache statistics; wrapping and terrain edits\n";

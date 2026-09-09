@@ -48,6 +48,13 @@ Integration does not read or compare reference images. Visual comparison is an
 explicit Lab action, so a stale or intentionally different snapshot cannot block
 the current code.
 
+For standalone renderer work in a checkout containing another task's injected
+C edits, use `integration CATEGORY --renderer-only`. It retains the category
+tests and production behavior witnesses and records that injected compilation
+was not requested. Omit this option when verifying changes to `C3X.h` or
+`injected_code.c`. New diagnostic times/zooms without a fixed image are shown by
+`compare` as unpaired current renders; they do not replace or acquire references.
+
 ## Visual acceptance and promotion
 
 Automated `test` and `integration` checks may run before visual acceptance so
