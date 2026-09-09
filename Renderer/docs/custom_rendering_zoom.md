@@ -2,13 +2,15 @@
 
 `enable_custom_rendering_zoom = true` adds stepped main-map zoom when
 `enable_custom_rendering = true`. The current levels use Civ III's isometric
-basis at tile widths 64, 96, 128, 160 and 192 pixels: 50%, 75%, 100%, 125%
-and 150% of native normal size. Normal is the middle (third) of five levels,
-with two closer and two farther views. Starting at normal, successive `Z`
-presses select 96, 64, 192, 160 and 128 pixels. The projected world point at the
-screen center stays fixed while the level changes. Both the key handler and
-render-time native synchronization accept the close-up levels; a genuine change
-of the native binary zoom still resets the custom transform to that native size.
+basis at tile widths 128, 160 and 192 pixels: 100%, 125% and 150% of native
+normal size. The user limited the supported envelope to these three closest
+levels on September 9, 2026; 64 and 96 are disabled in the custom zoom control.
+Starting at normal, successive `Z` presses select 192, 160 and 128 pixels.
+The projected world point at the screen center stays fixed while the level
+changes. Native synchronization accepts only those three widths. A change to
+Civ III's native reduced-zoom flag retains its 64-pixel anchor basis but resets
+the custom view to 128 around the screen center; it does not restore a disabled
+farther-out level. Configuration-off retains the original native zoom path.
 
 Civ III remains the camera and interaction authority. The injected bridge
 applies one affine scale and translation to captured map anchors, then supplies
@@ -32,8 +34,8 @@ and force the same complete tile traversal as native `Z`. A plain Animator dirty
 bit is insufficient because it may request only a one-tile damage redraw,
 leaving the exclusive custom terrain plane without a complete visible capture.
 The city screen retains its existing C3X `Z` handling. Changing Civ III's native
-zoom mode with another existing control resets the custom transform to that
-native level. Renderer failure retains the existing custom-map-plane policy.
+zoom mode with another existing control resets the custom transform to the
+supported normal level around the screen center. Renderer failure retains the existing custom-map-plane policy.
 Outside this zoom mode, unit-body failure retains the existing native fallback;
 while zoom is enabled, the failed body is omitted as described above.
 
@@ -77,8 +79,15 @@ bitmap immediately while a high-quality target raster completes. Performance and
 pixel parity can be reproduced with `Renderer/native/BENCHMARK_ZOOM.bat` and
 `Renderer/native/compare_zoom_benchmark.py`; see [benchmark notes](zoom_performance.md).
 
-Automated checks cover affine anchor invariance, inverse picking, the five-level
+Automated checks cover affine anchor invariance, inverse picking, the three-level
 `Z` cycle, expanded capture, native overlay scaling and numeric unit projection.
 A live checkpoint should exercise repeated `Z` steps, hover/left/right selection,
 scrolling and wrapping, units and selection/status overlays, city-screen `Z`,
 the native zoom control reset, and configuration-off behavior.
+
+The three-level cycle and native-state clamping pass five focused checks,
+including actual compiled injected function bodies with MSVC and center-offset
+checks for loaded native reduced zoom. `TEST_INJECTED_CODE_COMPILE.bat` passes;
+this is not a live gameplay check. No candidate has been staged for this change.
+Standalone lower-zoom diagnostic inputs remain available to reproduce previous
+pressure findings; they are outside the current supported custom-zoom envelope.

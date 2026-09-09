@@ -1,8 +1,6 @@
 """Validate the injected main-map zoom transform and its integration contracts."""
+from Renderer.native.native_cpp_test import run_cpp
 from pathlib import Path
-import shutil
-import subprocess
-import tempfile
 import unittest
 
 
@@ -28,22 +26,22 @@ def inverse(value: int, width: int, native_width: int, translation: int) -> int:
 
 class CustomZoomTests(unittest.TestCase):
     def test_z_key_cycles_toward_zoom_out_then_wraps(self) -> None:
-        levels = [64, 96, 128, 160, 192]
+        levels = [128, 160, 192]
         current = 128
         observed = []
         for _ in levels:
             index = levels.index(current)
             current = levels[index - 1] if index > 0 else levels[-1]
             observed.append(current)
-        self.assertEqual(observed, [96, 64, 192, 160, 128])
-        self.assertEqual(levels[2], 128)
+        self.assertEqual(observed, [192, 160, 128])
+        self.assertEqual(levels[0], 128)
 
     def test_cursor_anchor_and_inverse_pick(self) -> None:
         for native_width in (64, 128):
             translation = 0
             old_width = native_width
             cursor = 517
-            for width in (96, 64, 192, 160, 128):
+            for width in (192, 160, 128):
                 cursor_fp = cursor * FP_ONE
                 translation = cursor_fp - c_div((cursor_fp - translation) * width, old_width)
                 self.assertEqual(transform(inverse(cursor, width, native_width, translation), width, native_width, translation), cursor)
@@ -57,7 +55,7 @@ class CustomZoomTests(unittest.TestCase):
         header = (ROOT / "C3X.h").read_text()
         api = (ROOT / "Renderer/native/c3x_renderer_api.h").read_text()
         for marker in (
-            "int levels[5] = {64, 96, 128, 160, 192}",
+            "int levels[3] = {128, 160, 192}",
             "advance_custom_renderer_zoom_from_key",
             "custom_renderer_zoom_inverse_point (&param_1, &param_2)",
             "custom_renderer_zoom_inverse_point (&local_x, &local_y)",
@@ -80,9 +78,6 @@ class CustomZoomTests(unittest.TestCase):
         self.assertIn("projection_scale_milli", api)
 
     def test_actual_injected_cycle_and_close_zoom_survive_sync(self) -> None:
-        compiler = shutil.which("clang++") or shutil.which("g++")
-        if not compiler:
-            self.skipTest("C++ compiler unavailable")
         source = (ROOT / "injected_code.c").read_text()
         key = "bool\nadvance_custom_renderer_zoom_from_key" + source.split(
             "bool\nadvance_custom_renderer_zoom_from_key", 1)[1].split(
@@ -108,11 +103,11 @@ struct Bic {bool is_zoomed_out=false;int ScreenWidth=1024,ScreenHeight=768;} bic
 int player_bits=1,*p_player_bits=&player_bits,redraws=0;
 void debug(char const*){} auto p_OutputDebugStringA=debug;
 void Main_Screen_Form_bring_tile_into_view(Main_Screen_Form*,int,int,int,int,bool,bool){++redraws;}
-''' + key + sync + r'''
+''' + sync + key + r'''
 int main(){
  Main_Screen_Form screen;
  sync_custom_renderer_zoom_to_native();assert(state.custom_renderer_zoom_tile_width==128);
- for(int cycle=0;cycle<3;cycle++)for(int width:{96,64,192,160,128}){
+ for(int cycle=0;cycle<3;cycle++)for(int width:{192,160,128}){
   assert(advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
   assert(state.custom_renderer_zoom_tile_width==width);
   auto x=state.custom_renderer_zoom_translate_x_fp,y=state.custom_renderer_zoom_translate_y_fp;
@@ -120,27 +115,34 @@ int main(){
   assert(state.custom_renderer_zoom_tile_width==width);
   assert(state.custom_renderer_zoom_translate_x_fp==x && state.custom_renderer_zoom_translate_y_fp==y);
  }
- assert(redraws==15);
+ assert(redraws==9);
  state.current_config.enable_custom_rendering_zoom=false;
- assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));assert(redraws==15);
+ assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));assert(redraws==9);
  state.current_config.enable_custom_rendering_zoom=true;
  screen.is_now_loading_game=true;assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
  screen.is_now_loading_game=false;player_bits=0;assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
  player_bits=1;assert(!advance_custom_renderer_zoom_from_key(&screen,'x',88));
- bic.is_zoomed_out=true;sync_custom_renderer_zoom_to_native();assert(state.custom_renderer_zoom_tile_width==64);
+ bic.is_zoomed_out=true;sync_custom_renderer_zoom_to_native();assert(state.custom_renderer_zoom_tile_width==128);
+ assert(state.custom_renderer_zoom_native_tile_width==64);
+ assert(state.custom_renderer_zoom_translate_x_fp==-512LL*65536);
+ assert(state.custom_renderer_zoom_translate_y_fp==-384LL*65536);
  assert(advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
  sync_custom_renderer_zoom_to_native();assert(state.custom_renderer_zoom_tile_width==192);
  state.custom_renderer_zoom_tile_width=256;sync_custom_renderer_zoom_to_native();
- assert(state.custom_renderer_zoom_tile_width==64 && state.custom_renderer_zoom_translate_x_fp==0);
+ assert(state.custom_renderer_zoom_tile_width==128 && state.custom_renderer_zoom_translate_x_fp==-512LL*65536);
+ for(int retired:{64,96}){state.custom_renderer_zoom_tile_width=retired;sync_custom_renderer_zoom_to_native();
+  assert(state.custom_renderer_zoom_tile_width==128);}
+ // Configuration-off never consumes Z or changes the native camera state.
+ state.current_config.enable_custom_rendering=false;
+ auto before=state.custom_renderer_zoom_translate_x_fp;
+ assert(!advance_custom_renderer_zoom_from_key(&screen,'z',VK_Z));
+ assert(bic.is_zoomed_out && state.custom_renderer_zoom_translate_x_fp==before);
+ state.current_config.enable_custom_rendering=true;
  bic.is_zoomed_out=false;sync_custom_renderer_zoom_to_native();assert(state.custom_renderer_zoom_tile_width==128);
 }
 '''
         program = "#include <initializer_list>\n" + program
-        with tempfile.TemporaryDirectory(prefix="c3x-centered-zoom-") as directory:
-            cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
-            cpp.write_text(program)
-            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
-            subprocess.run([str(binary)], check=True)
+        run_cpp(program)
 
     def test_key_handler_queues_native_redraw_without_indirect_dispatch(self) -> None:
         source = (ROOT / "injected_code.c").read_text()

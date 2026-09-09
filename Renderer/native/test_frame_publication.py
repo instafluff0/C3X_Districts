@@ -1,18 +1,14 @@
 """Execute the production publication owner and its failure/size boundaries."""
 from pathlib import Path
-import shutil
-import subprocess
-import tempfile
 import unittest
+
+from Renderer.native.native_cpp_test import run_cpp
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 class PublicationTests(unittest.TestCase):
     def test_terrain_preview_anchors_ownership_and_input_bounds(self):
-        compiler = shutil.which("clang++") or shutil.which("g++")
-        if not compiler:
-            self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         body = "struct PublishedMapFrame {" + source.split("struct PublishedMapFrame {", 1)[1].split("// Civ III remains", 1)[0]
         program = r'''
@@ -78,24 +74,18 @@ int main(){
     assert(preview.render(frame,textures,out,cancelled));for(auto p:out.pixels)assert(p==0xff000000u);
 }
 '''
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "preview.cpp"
-            path.write_text(program)
-            exe = Path(folder) / "preview"
-            built = subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(path), str(ROOT / "Renderer/native/environment_runtime.cpp"), "-o", str(exe)], capture_output=True, text=True)
-            self.assertEqual(built.returncode, 0, built.stderr)
-            subprocess.run([str(exe)], check=True, timeout=30)
+        run_cpp(program, sources=("Renderer/native/environment_runtime.cpp",))
 
     def test_camera_cancellation_reaches_draw_submission(self):
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         submission = source.split('trace.write("geometry-ready", frame_cache_path);', 1)[1].split('trace.write("readback-begin"', 1)[0]
-        self.assertIn("c3x_renderer::power_of_two_extent(height),foreground_pending)", submission)
+        self.assertIn("c3x_renderer::power_of_two_extent(height),foreground_pending,", submission)
         self.assertEqual(submission.count("if(cancelled())return false;"), 2)
+        copy = source.split('trace.write("readback-begin"', 1)[1].split("bitmap_footprints =", 1)[0]
+        self.assertLess(copy.index("if(cancelled())"), copy.index("cache_valid=false;"))
+        self.assertLess(copy.index("cache_valid=false;"), copy.index("std::memmove"))
 
     def test_actual_worker_camera_supersession_and_takeover(self):
-        compiler = shutil.which("clang++") or shutil.which("g++")
-        if not compiler:
-            self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         publication = "struct PublishedMapFrame {" + source.split("struct PublishedMapFrame {", 1)[1].split("// Civ III remains", 1)[0]
         worker = "class RendererWorker {" + source.split("class RendererWorker {", 1)[1].split("RendererWorker * renderer_worker", 1)[0]
@@ -106,6 +96,7 @@ int main(){
 #include <cassert>
 #include <chrono>
 #include <climits>
+#include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
@@ -121,7 +112,9 @@ using HDC=void*;
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=std::chrono::steady_clock::now().time_since_epoch().count();}
 unsigned GetEnvironmentVariableA(char const*,char*,std::size_t){return 0;}
+#ifndef _MSC_VER
 template<std::size_t N,class... T> void sprintf_s(char (&buffer)[N],char const* format,T... args){std::snprintf(buffer,N,format,args...);}
+#endif
 namespace c3x_renderer {
 struct Signature {std::uint64_t complete=0;};
 Signature terrain_frame_signature(c3x_renderer_frame_v1 const& f,long long,unsigned){
@@ -140,7 +133,7 @@ struct Bodies {
 struct RendererState {
     struct Terrain {bool configured=false;std::vector<std::uint8_t> dds;};
     std::array<Terrain,14> terrain_textures;
-    Trace trace;Bodies unit_bodies;bool unit_rendering_enabled=true,pickup_profile=false,cache_valid=false;
+    Trace trace;Bodies unit_bodies;bool unit_rendering_enabled=true,pickup_profile=false,cache_valid=false,profiling=false;
     int device=0,context=0;
     unsigned cache_hits=0,device_recoveries=0,frame_tiles_built=0,prepared_blocks=0,visible_resource_animations=0;
     unsigned ambient_count() const {return visible_resource_animations;}
@@ -163,8 +156,9 @@ struct RendererState {
         if(stop && stop->load()){++cancelled;return false;}
         unsigned value=unsigned(f.tiles[0].anchor_x)^f.world_topology[0];
         pixels.assign(std::size_t(f.target_width)*f.target_height,value);
-        flags.assign(f.tile_count,f.tiles[0].tile_flags);
+        flags.clear();for(unsigned i=0;i<f.tile_count;++i)flags.push_back(f.tiles[i].tile_flags);
         cached_tiles.assign(f.tiles,f.tiles+f.tile_count);
+        cache_valid=true;
         requested_signature=std::uint64_t(f.presentation_time_ticks)+1;
         out={C3X_RENDERER_API_VERSION,sizeof(out)};
         out.width=f.target_width;out.height=f.target_height;out.stride_bytes=out.width*4;
@@ -224,32 +218,76 @@ int main(){
     for(std::size_t i=0;i<2240u*1192u;++i)assert(pixels[i]==expected);
     assert(out.replacement_tile_count==1 && out.replacement_tile_flags[0]==C3X_RENDERER_TILE_RENDER);
     assert(state.cancelled>0 && state.resets==0); // Supersession is not device recovery.
-    // Synchronous unit work cancels an actively blocked terrain build first.
+    // Unit takeover interrupts active work but preserves the latest immutable request.
     state.hold=true;entered=state.entered.load();
     assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
     until([&]{return state.entered.load()>entered;});
     c3x_renderer_unit_v1 unit={};
     assert(worker.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
-    assert(worker.camera_poll(last,out)==C3X_RENDERER_RESULT_SUPERSEDED);
+    assert(worker.camera_poll(last,out)==C3X_RENDERER_RESULT_PENDING);
+    assert(state.cache_valid); // Interruption before pixel mutation preserves the donor bitmap.
+    // Repeated units neither grow a queue nor discard the requested map.
+    for(int i=0;i<30;++i){
+        assert(worker.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
+        assert(worker.camera_poll(last,out)==C3X_RENDERER_RESULT_PENDING);
+    }
+    state.hold=false;
+    until([&]{return worker.camera_poll(last,out)==C3X_RENDERER_RESULT_OK;});
+    assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==(unsigned(tile.anchor_x)^topology));
+    // Even rejected unit requests release the pause and resume the map.
+    state.hold=true;entered=state.entered.load();
+    assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
+    until([&]{return state.entered.load()>entered;});
+    state.unit_rendering_enabled=false;
+    assert(worker.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_ERROR);
+    state.unit_rendering_enabled=true;state.hold=false;
+    until([&]{return worker.camera_poll(last,out)==C3X_RENDERER_RESULT_OK;});
+    // Publish identity and exact ordered occurrences atomically with ownership.
+    c3x_renderer_tile_v1 captured[2]={tile,tile};
+    captured[0].anchor_x=31;captured[0].visibility_mask=4;
+    captured[1].anchor_x=99;captured[1].tile_flags=8;captured[1].visibility_mask=8;
+    f.tiles=captured;f.tile_count=2;f.world_topology_revision=73;
+    c3x_renderer_camera_identity_v1 identity={11,22,33,44};
+    c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+    view.ticket=-7;auto untouched=view;
+    state.hold=true;
+    assert(worker.camera_begin(f,last,identity)==C3X_RENDERER_RESULT_PENDING);
+    assert(worker.camera_poll_view(last,view)==C3X_RENDERER_RESULT_PENDING);
+    auto too_large=f;too_large.target_width=too_large.target_height=8192;
+    c3x_renderer_i64 rejected_ticket=-1;
+    assert(worker.camera_begin(too_large,rejected_ticket,identity)==C3X_RENDERER_RESULT_BAD_ARGUMENT);
+    assert(rejected_ticket==-1 && worker.camera_poll_view(last,view)==C3X_RENDERER_RESULT_PENDING);
+    assert(!std::memcmp(&view,&untouched,sizeof(view)));
+    std::swap(captured[0],captured[1]);identity.visibility_epoch=34;
+    state.hold=false;
+    until([&]{return worker.camera_poll_view(last,view)==C3X_RENDERER_RESULT_OK;});
+    assert(view.ticket==last && view.identity.map_epoch==11 && view.identity.viewer_epoch==22);
+    assert(view.identity.visibility_epoch==33 && view.identity.scene_epoch==44);
+    assert(view.frame.tiles!=captured && view.frame.tile_count==2);
+    assert(view.frame.tiles[0].anchor_x==31 && view.frame.tiles[1].anchor_x==99);
+    assert(view.frame.tiles[0].visibility_mask==4 && view.frame.tiles[1].visibility_mask==8);
+    assert(view.output.replacement_tile_flags[0]==view.frame.tiles[0].tile_flags);
+    assert(view.output.replacement_tile_flags[1]==view.frame.tiles[1].tile_flags);
+    assert(!view.frame.world_topology && !view.frame.world_topology_count && view.frame.world_topology_revision==73);
+    first=last;state.hold=true;
+    assert(worker.camera_begin(f,last,identity)==C3X_RENDERER_RESULT_PENDING);
+    untouched=view;
+    assert(worker.camera_poll_view(first,view)==C3X_RENDERER_RESULT_SUPERSEDED);
+    assert(!std::memcmp(&view,&untouched,sizeof(view)));
+    assert(worker.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
+    state.hold=false;
+    until([&]{return worker.camera_poll_view(last,view)==C3X_RENDERER_RESULT_OK;});
+    assert(view.identity.visibility_epoch==34 && view.frame.tiles[0].anchor_x==99);
     // Reset also joins an active cancellation, and never hangs on a pending job.
-    entered=state.entered.load();assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
+    state.hold=true;entered=state.entered.load();assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
     until([&]{return state.entered.load()>entered;});
     worker.reset_and_stop();assert(state.resets==1);
     assert(worker.camera_poll(last,out)==C3X_RENDERER_RESULT_SUPERSEDED);
 }
 '''
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "worker.cpp"
-            path.write_text(program)
-            exe = Path(folder) / "worker"
-            built = subprocess.run([compiler, "-std=c++17", "-O1", "-pthread", "-I", str(ROOT), str(path), str(ROOT / "Renderer/native/environment_runtime.cpp"), "-o", str(exe)], capture_output=True, text=True)
-            self.assertEqual(built.returncode, 0, built.stderr)
-            subprocess.run([str(exe)], check=True, timeout=30)
+        run_cpp(program, sources=("Renderer/native/environment_runtime.cpp",))
 
     def test_ui_blitter_resource_lifetime_and_failures(self):
-        compiler = shutil.which("clang++") or shutil.which("g++")
-        if not compiler:
-            self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         render_state = source.split("class RendererState {", 1)[1].split("class MapBlitter {", 1)[0]
         self.assertNotIn("DeleteDC(", render_state)
@@ -337,17 +375,9 @@ int main(){
     assert(!bitmaps && contexts.empty());
 }
 '''
-        with tempfile.TemporaryDirectory(prefix="c3x-blitter-") as directory:
-            cpp = Path(directory) / "test.cpp"
-            cpp.write_text(program)
-            binary = Path(directory) / "test"
-            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
-            subprocess.run([str(binary)], check=True)
+        run_cpp(program)
 
     def test_owned_output_atomic_failure_and_budget(self):
-        compiler = shutil.which("clang++") or shutil.which("g++")
-        if not compiler:
-            self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         body = "struct PublishedMapFrame {" + source.split("struct PublishedMapFrame {", 1)[1].split(
             "// Cheap, deliberately provisional", 1)[0]
@@ -415,16 +445,33 @@ int main() {
     assert(published.capture(out,1,2));
     assert(published.output.fallback_tile_indices==nullptr && published.output.replacement_tile_flags==nullptr);
     assert(published.pixels[100]==0 && published.phase_x==1 && published.phase_y==2);
+    c3x_renderer_tile_v1 tiles[2]={};tiles[0].anchor_x=123;tiles[1].visibility_mask=8;
+    c3x_renderer_frame_v1 frame={};frame.target_width=2240;frame.target_height=1192;frame.tiles=tiles;frame.tile_count=2;
+    frame.world_topology_revision=79;
+    out.replacement_tile_count=2;out.replacement_tile_flags=flags;
+    c3x_renderer_camera_identity_v1 identity={1,2,3,4};
+    assert(published.capture(out,4,5,&frame,identity));
+    assert(published.frame.tiles!=tiles && published.frame.tiles[0].anchor_x==123);
+    assert(published.frame.tiles[1].visibility_mask==8 && published.identity.viewer_epoch==2);
+    assert(published.frame.world_topology_revision==79);
+    old_pixels=published.output.bgra_pixels;
+    auto old_occurrences=published.frame.tiles;
+    for(int failure=0;failure<3;++failure){
+        allocations_before_failure=failure;
+        assert(!published.capture(out,0,0,&frame,{}));allocations_before_failure=-1;
+        assert(published.output.bgra_pixels==old_pixels && published.frame.tiles==old_occurrences);
+        assert(published.identity.visibility_epoch==3);
+    }
+    frame.tile_count=3;assert(!published.capture(out,0,0,&frame,{}));frame.tile_count=2;
+    frame.target_width=17;assert(!published.capture(out,0,0,&frame,{}));frame.target_width=2240;
+    unsigned invalid_index=2;out.fallback_tile_count=1;out.fallback_tile_indices=&invalid_index;
+    assert(!published.capture(out,0,0,&frame,{}));
+    assert(published.frame.tiles==old_occurrences && published.identity.visibility_epoch==3);
     published.clear();assert(!published.output.bgra_pixels && published.pixels.capacity()==0);
-    assert(published.fallback.capacity()==0 && published.replacements.capacity()==0);
+    assert(published.fallback.capacity()==0 && published.replacements.capacity()==0 && published.occurrences.capacity()==0);
 }
 '''
-        with tempfile.TemporaryDirectory(prefix="c3x-publication-") as directory:
-            cpp = Path(directory) / "test.cpp"
-            cpp.write_text(program)
-            binary = Path(directory) / "test"
-            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
-            subprocess.run([str(binary)], check=True)
+        run_cpp(program)
 
 
 if __name__ == "__main__":

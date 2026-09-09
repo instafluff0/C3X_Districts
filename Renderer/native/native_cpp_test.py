@@ -1,0 +1,47 @@
+"""Run extracted production C++ contracts with the host's native compiler."""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+from Renderer.lab.platform import ROOT, native_command_result
+
+
+def run_cpp(program, *, sources=(), timeout=30):
+    build = ROOT / "Renderer/native/build"
+    build.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=build, ignore_cleanup_errors=True) as directory:
+        path = Path(directory)
+        cpp = path / "contract.cpp"
+        cpp.write_text(program)
+        if os.name == "nt":
+            # Keep generated paths as quoted batch arguments; no shell expansion
+            # is allowed in caller-provided source names.
+            paths = [str(ROOT), *(str(ROOT / source) for source in sources)]
+            if any(any(char in value for char in '\"%\r\n') for value in paths):
+                raise ValueError("Unsupported native test path")
+            additional = " ".join(f'"{value}"' for value in paths[1:])
+            batch = path / "test.bat"
+            batch.write_text(r'''@echo off
+setlocal
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+for /f "usebackq tokens=*" %%I in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "C3X_TEST_VS=%%I"
+if not defined C3X_TEST_VS exit /b 2
+call "%C3X_TEST_VS%\VC\Auxiliary\Build\vcvars32.bat" >nul
+if errorlevel 1 exit /b 2
+cd /d "%~dp0"
+''' + f'cl /nologo /std:c++17 /EHsc /O1 /W3 /I "{ROOT}" contract.cpp {additional} /Fe:contract.exe /link /LARGEADDRESSAWARE\n'
+                + 'if errorlevel 1 exit /b 1\ncontract.exe\nexit /b %errorlevel%\n')
+            result = native_command_result("Renderer/native", f'call "{batch}"', timeout_seconds=timeout+60)
+            if result["returncode"] != 0:
+                raise AssertionError(result["output_tail"])
+        else:
+            compiler = shutil.which("clang++") or shutil.which("g++")
+            if not compiler:
+                raise unittest.SkipTest("C++ compiler unavailable")
+            executable = path / "contract"
+            subprocess.run([compiler, "-std=c++17", "-O1", "-pthread", "-I", str(ROOT),
+                            str(cpp), *(str(ROOT / source) for source in sources), "-o", str(executable)], check=True)
+            subprocess.run([str(executable)], check=True, timeout=timeout)

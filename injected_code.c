@@ -22832,6 +22832,8 @@ is_command_button_active (Main_GUI * main_gui, enum Unit_Command_Values command)
 	return false;
 }
 
+void sync_custom_renderer_zoom_to_native ();
+
 bool
 advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, int virtual_key_code)
 {
@@ -22841,16 +22843,8 @@ advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, i
 	    ((virtual_key_code != VK_Z) && (char_code != 'Z') && (char_code != 'z')))
 		return false;
 
-	int levels[5] = {64, 96, 128, 160, 192};
-	int native_width = p_bic_data->is_zoomed_out ? 64 : 128;
-	if ((is->custom_renderer_zoom_native_tile_width != native_width) ||
-	    (is->custom_renderer_zoom_tile_width < 64) ||
-	    (is->custom_renderer_zoom_tile_width > 192)) {
-		is->custom_renderer_zoom_native_tile_width = native_width;
-		is->custom_renderer_zoom_tile_width = native_width;
-		is->custom_renderer_zoom_translate_x_fp = 0;
-		is->custom_renderer_zoom_translate_y_fp = 0;
-	}
+	int levels[3] = {128, 160, 192};
+	sync_custom_renderer_zoom_to_native ();
 	int current = 0;
 	for (int n = 1; n < ARRAY_LEN (levels); n++) {
 		int candidate_delta = levels[n] - is->custom_renderer_zoom_tile_width;
@@ -22860,8 +22854,8 @@ advance_custom_renderer_zoom_from_key (Main_Screen_Form * this, int char_code, i
 		if (candidate_delta < current_delta)
 			current = n;
 	}
-	// Normal (128) is the middle level. Match Z's zoom-out direction, then
-	// wrap from the farthest view (64) to the closest view (192).
+	// Keep normal and the two closer views. Z moves outward, then wraps
+	// from the supported minimum (128) to the closest view (192).
 	int next = current > 0 ? current - 1 : ARRAY_LEN (levels) - 1;
 	long long const fp_one = 65536;
 	int old_width = is->custom_renderer_zoom_tile_width;
@@ -22953,13 +22947,19 @@ void
 sync_custom_renderer_zoom_to_native ()
 {
 	int native_width = p_bic_data->is_zoomed_out ? 64 : 128;
+	int width = is->custom_renderer_zoom_tile_width;
 	if ((is->custom_renderer_zoom_native_tile_width != native_width) ||
-	    (is->custom_renderer_zoom_tile_width < 64) ||
-	    (is->custom_renderer_zoom_tile_width > 192)) {
+	    ((width != 128) && (width != 160) && (width != 192))) {
 		is->custom_renderer_zoom_native_tile_width = native_width;
-		is->custom_renderer_zoom_tile_width = native_width;
-		is->custom_renderer_zoom_translate_x_fp = 0;
-		is->custom_renderer_zoom_translate_y_fp = 0;
+		is->custom_renderer_zoom_tile_width = 128;
+		// An existing native reduced-zoom state still supplies 64-pixel anchors.
+		// Clamp custom zoom to normal around the screen center, without changing
+		// Civ III's native camera flag or the configuration-off path.
+		long long const fp_one = 65536;
+		is->custom_renderer_zoom_translate_x_fp =
+			(long long)(p_bic_data->ScreenWidth / 2) * fp_one * (native_width - 128) / native_width;
+		is->custom_renderer_zoom_translate_y_fp =
+			(long long)(p_bic_data->ScreenHeight / 2) * fp_one * (native_width - 128) / native_width;
 	}
 }
 

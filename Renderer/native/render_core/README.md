@@ -21,6 +21,24 @@ production renderer. It is one component, not a versioned visual profile. Use
   their coordinates are independent of viewport anchors.
 - `linear_target.h`: off-screen linear composition, MSAA resolve and display
   transfer. Exposure and transfer occur after reconstruction, not per material.
+- `frame_telemetry.h`: bounded delayed GPU queries and process address-space
+  observations; query readiness checks never flush or wait. Invalid or
+  implausible driver timestamps cannot establish a GPU timing result.
+- `raster_grid.h`: world-anchor phase and translation checks for the opt-in
+  raster-reuse experiment, including non-divisible wrap periods.
+- `water_coverage.h`: conservative rejection of empty bed/water passes from
+  actual uploaded hydrology samples. The experiment remains disabled by default;
+  it does not simplify coastal geometry or change a material/shader.
+- `wave_retention.h`: camera-independent wave geometry scope and current-capture
+  cell eligibility. The experimental GPU pool lives in `c3x_renderer.cpp`;
+  cache residency does not grant permission to display an uncaptured cell.
+- `render_region_cache.h`: bounded ownership of completed static render textures
+  and value-only dependency keys. The opt-in world-grid producer validates main
+  and reflected draw contributors, shared shadow-page selection and local city
+  lights; it does not retain native surfaces or infer ownership from cache hits.
+- `projected_mesh_bounds.h`: fixed-size actual-vertex extrema in the native
+  natural-mesh projection. Experimental tighter culling retains the existing
+  pixel margin and requires no vertex copies or new resource owners.
 
 Current natural-pack decoding, height sampling and lighting-frame calculations
 are shared in `lab/shared/natural/data.h`. Shader source preparation uses

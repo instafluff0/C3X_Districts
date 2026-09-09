@@ -7,6 +7,17 @@ from Renderer.lab import platform
 
 
 class PlatformTests(TestCase):
+    def test_windows_dispatch_preserves_quoted_batch_path(self):
+        if os.name != "nt":
+            self.skipTest("Native Windows command parsing")
+        with tempfile.TemporaryDirectory(prefix="renderer dispatch ") as directory:
+            batch = Path(directory) / "quoted command.bat"
+            batch.write_text('@echo off\necho PASS quoted batch\nexit /b 0\n')
+            with mock.patch("builtins.print"):
+                result = platform.native_command_result("", f'call "{batch}"')
+            self.assertEqual(result["status"], "pass", result)
+            self.assertIn("PASS quoted batch", result["output_tail"])
+
     def test_timeout_waits_for_own_live_process_without_restarting(self):
         live = {"status": "pass", "output_tail": '\"native_preview.exe\",\"1234\",\"Services\"'}
         with mock.patch.object(platform, "native_command_result", side_effect=[{"status": "fail"}, live]) as run, \

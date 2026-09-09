@@ -372,8 +372,12 @@ int main() {
         self.assertIn("frame_invalidation_flags", api)
         self.assertIn("result.geometry = fnv_offset", signature)
         self.assertIn("reuse_geometry_for_translation", renderer)
-        self.assertIn("tile_geometry_cache_budget = 192u * 1024u * 1024u", renderer)
-        self.assertIn("tile_geometry_cache_capacity = 4096u", renderer)  # World owners plus camera references.
+        self.assertTrue("#define C3X_RENDERER_GPU_GEOMETRY_MIB 768" in renderer,
+                        "The user-authorized modern default must be explicit")
+        self.assertTrue("C3X_RENDERER_GPU_GEOMETRY_MIB<=1024" in renderer,
+                        "Pressure-test overrides must remain bounded in the x86 host")
+        self.assertTrue("tile_geometry_cache_budget = C3X_RENDERER_GPU_GEOMETRY_MIB * 1024u * 1024u" in renderer)
+        self.assertTrue("tile_geometry_cache_capacity = C3X_RENDERER_GPU_GEOMETRY_MIB / 192u * 4096u" in renderer)
         self.assertIn("observed_coordinate_key", renderer)
         self.assertIn("context->DrawIndexed", renderer)
         self.assertIn("tile_geometry_epoch", renderer)
@@ -479,7 +483,9 @@ int main() {
         self.assertNotIn("terrain_lab", adapter)
         self.assertEqual(
             "e1216eb007348fee650c8583e4d90dcb800cdfce0850aa76e34a2fccd8ec5dec",
-            hashlib.sha256(production_shader_path.read_bytes()).hexdigest(),
+            # Git may check this text shader out as CRLF on Windows. Pin the
+            # same source content independently of checkout newline conversion.
+            hashlib.sha256(production_shader.encode("utf-8")).hexdigest(),
         )
         self.assertIn("return PSMain(input);", adapter)
         self.assertIn("return PSFeature(input);", adapter)

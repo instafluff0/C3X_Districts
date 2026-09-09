@@ -31,6 +31,9 @@ cbuffer PostSettings:register(b2) {uint2 input_size;uint2 output_size;int4 valid
 #ifndef Q8_GLOW_GAIN
 #define Q8_GLOW_GAIN NativeGlow.x
 #endif
+#ifndef Q8_OUTPUT_ORIGIN
+#define Q8_OUTPUT_ORIGIN uint2(NativeGlow.yz)
+#endif
 groupshared float3 highlights[1024];
 groupshared float3 near_rows[256];
 groupshared float3 far_rows[256];
@@ -43,6 +46,10 @@ float3 q8_highlight(int2 p) {
 }
 [numthreads(8,8,1)]
 void CSPost(uint3 id:SV_DispatchThreadID,uint3 group:SV_GroupID,uint3 local:SV_GroupThreadID) {
+ // The caller aligns the origin to eight pixels, preserving exactly the same
+ // workgroup samples and arithmetic as a complete-target dispatch.
+ uint2 origin=Q8_OUTPUT_ORIGIN;
+ id.xy+=origin;group.xy+=origin/8;
  uint step=input_size.x/output_size.x;
  bool supported=step>=1&&step<=2&&all(input_size==output_size*step);
  // Keep all lanes alive through both barriers, including output-edge lanes.

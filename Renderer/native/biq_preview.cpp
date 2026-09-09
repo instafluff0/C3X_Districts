@@ -391,6 +391,12 @@ int main(int argc, char ** argv) {
     bool background_camera=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CAMERA_QUEUE",camera_option,sizeof(camera_option))!=0;
     auto camera_begin=reinterpret_cast<c3x_renderer_camera_begin_fn>(GetProcAddress(module,"c3x_renderer_camera_begin"));
     auto camera_poll=reinterpret_cast<c3x_renderer_camera_poll_fn>(GetProcAddress(module,"c3x_renderer_camera_poll"));
+    bool camera_view=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CAMERA_VIEW",camera_option,sizeof(camera_option))!=0;
+    auto camera_begin_view=reinterpret_cast<c3x_renderer_camera_begin_view_fn>(GetProcAddress(module,"c3x_renderer_camera_begin_view"));
+    auto camera_poll_view=reinterpret_cast<c3x_renderer_camera_poll_view_fn>(GetProcAddress(module,"c3x_renderer_camera_poll_view"));
+    if(camera_view && (!background_camera || !camera_begin_view || !camera_poll_view)) {
+        std::fputs("camera view extension exports missing or queue disabled\n",stderr);return 1;
+    }
     if(background_camera && (!camera_begin || !camera_poll)) {
         std::fputs("camera extension exports missing\n",stderr);return 1;
     }
@@ -407,13 +413,29 @@ int main(int argc, char ** argv) {
             if(camera_begin(&earlier,&obsolete)!=C3X_RENDERER_RESULT_PENDING)return int(C3X_RENDERER_RESULT_ERROR);
             Sleep(10);
             QueryPerformanceCounter(&begin);
-            code=camera_begin(input,&ticket);QueryPerformanceCounter(&accepted);
+            c3x_renderer_camera_identity_v1 identity={1,2,c3x_renderer_i64(camera_case)+1,c3x_renderer_i64(camera_case)+1};
+            c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),input,identity};
+            code=camera_view?camera_begin_view(&request,&ticket):camera_begin(input,&ticket);
+            QueryPerformanceCounter(&accepted);
             if(code!=C3X_RENDERER_RESULT_PENDING || camera_poll(obsolete,result)!=C3X_RENDERER_RESULT_SUPERSEDED)
                 return int(C3X_RENDERER_RESULT_ERROR);
             auto start=GetTickCount64();unsigned polls=0;bool first_image=false;
             ++camera_case;
             while(code==C3X_RENDERER_RESULT_PENDING && GetTickCount64()-start<120000) {
-                code=camera_poll(ticket,result);++polls;
+                if(camera_view){
+                    c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+                    code=camera_poll_view(ticket,&view);
+                    if(code==C3X_RENDERER_RESULT_OK || code==C3X_RENDERER_RESULT_PREVIEW){
+                        auto expected=*input;expected.tiles=view.frame.tiles;
+                        expected.world_topology=nullptr;expected.world_topology_count=0;
+                        if(view.ticket!=ticket || std::memcmp(&view.identity,&identity,sizeof(identity)) ||
+                           std::memcmp(&view.frame,&expected,sizeof(expected)) ||
+                           (input->tile_count && (!view.frame.tiles || std::memcmp(view.frame.tiles,input->tiles,input->tile_count*sizeof(input->tiles[0])))))
+                            return int(C3X_RENDERER_RESULT_ERROR);
+                        *result=view.output;
+                    }
+                }else code=camera_poll(ticket,result);
+                ++polls;
                 if(code==C3X_RENDERER_RESULT_PREVIEW) {
                     if(!first_image) {
                         LARGE_INTEGER shown={};QueryPerformanceCounter(&shown);
@@ -441,6 +463,8 @@ int main(int argc, char ** argv) {
             std::printf("CAMERA ticket=%lld accepted_ms=%.3f final_ms=%.3f polls=%u stale_rejected=1 result=%d\n",
                 static_cast<long long>(ticket),double(accepted.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
                 double(finished.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,polls,code);
+            if(camera_view && code==C3X_RENDERER_RESULT_OK)std::printf("CAMERA_IDENTITY ticket=%lld occurrences=%u visibility_epoch=%lld scene_epoch=%lld exact=1\n",
+                static_cast<long long>(ticket),input->tile_count,static_cast<long long>(identity.visibility_epoch),static_cast<long long>(identity.scene_epoch));
             std::fflush(stdout);
         }else code=render(input,result);
         return code==C3X_RENDERER_RESULT_OK && !preview_ownership(*input,*result)
@@ -653,10 +677,15 @@ int main(int argc, char ** argv) {
         char resident_cold_option[8]={};
         bool resident_cold=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_RESIDENT_COLD",resident_cold_option,sizeof(resident_cold_option)) &&
             std::strcmp(resident_cold_option,"1")==0;
-        std::printf("RESIDENT_BEGIN mode=%s steps=14 width=%d height=%d tile_width=%d\n",
-            resident_cold?"cold":"retained",target_width,target_height,tile_width);
-        for(int step=0;step<14 && ok;++step) {
-            center_x=35;center_y=41+step*2;
+        char steps_option[16]={};
+        int steps=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_RESIDENT_STEPS",steps_option,sizeof(steps_option))?
+            std::clamp(std::atoi(steps_option),14,1000):14;
+        if(steps!=14 && steps>=15*tile_height){std::fprintf(stderr,"resident sweep needs unique pixel cameras\n");return 2;}
+        std::printf("RESIDENT_BEGIN mode=%s steps=%d width=%d height=%d tile_width=%d pattern=%s\n",
+            resident_cold?"cold":"retained",steps,target_width,target_height,tile_width,steps==14?"tile-v1":"pixel-v1");
+        for(int step=0;step<steps && ok;++step) {
+            int pixel_y=steps==14?(step+1)*tile_height:(step+1)*15*tile_height/(steps+1);
+            center_x=35;center_y=39+(pixel_y/tile_height)*2;
             // Independent reference pixels: forget renderer caches, but keep
             // the fixture's authoritative object sites and presentation clock.
             if(resident_cold){
@@ -665,17 +694,20 @@ int main(int argc, char ** argv) {
                 if(!ok)break;
             }
             LARGE_INTEGER begin={},captured={},end={};QueryPerformanceCounter(&begin);
-            tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            tiles=capture_view();
+            for(auto& tile:tiles)tile.anchor_y-=pixel_y%tile_height;
+            frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
             QueryPerformanceCounter(&captured);
             int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
             ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;
-            std::printf("RESIDENT_NAV step=%d x=%d y=%d result=%d built=%u reused=%u upload_bytes=%llu ms=%.3f capture_ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f\n",
+            std::printf("RESIDENT_NAV step=%d x=%d y=%d result=%d built=%u reused=%u upload_bytes=%llu ms=%.3f capture_ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f pixel_y=%d reused_pixels=%u draw_pixels=%u cached_pixels=%u\n",
                 step,center_x,center_y,code,output.geometry_tiles_built,output.geometry_tiles_reused,
                 static_cast<unsigned long long>(output.geometry_upload_bytes),
                 double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
                 double(captured.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
                 double(output.geometry_ticks)*1000/frequency.QuadPart,
-                double(output.draw_ticks)*1000/frequency.QuadPart,double(output.readback_ticks)*1000/frequency.QuadPart);
+                double(output.draw_ticks)*1000/frequency.QuadPart,double(output.readback_ticks)*1000/frequency.QuadPart,
+                pixel_y,output.raster_reused_pixels,output.raster_draw_pixels,output.raster_cached_pixels);
             camera_memory();std::fflush(stdout);
             if(ok){
                 ok=write_bmp((std::string(argv[5])+".resident"+std::to_string(step)+".bmp").c_str(),output);

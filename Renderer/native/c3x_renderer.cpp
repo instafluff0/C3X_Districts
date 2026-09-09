@@ -32,12 +32,18 @@
 #include "scroll_damage.h"
 #include "river_node_locality.h"
 #include "pixel_block_cache.h"
+#include "render_core/render_region_cache.h"
+#include "render_core/projected_mesh_bounds.h"
 #include "color_quantization.h"
 #include "render_core/terrain_query.h"
 #include "render_core/world_coast.h"
 #include "render_core/coastal_waves.h"
 #include "render_core/relief_query.h"
 #include "render_core/exact_point_cache.h"
+#include "render_core/frame_telemetry.h"
+#include "render_core/raster_grid.h"
+#include "render_core/water_coverage.h"
+#include "render_core/wave_retention.h"
 #include "render_core/cliff_placement.h"
 #include "render_core/source_shadow.h"
 #include "render_core/linear_target.h"
@@ -68,12 +74,20 @@ constexpr std::size_t tile_geometry_cache_capacity = C3X_RENDERER_BENCHMARK_GPU_
 constexpr std::size_t viewport_cache_budget = 32u * 1024u * 1024u;
 constexpr std::size_t natural_mesh_cache_budget = 96u * 1024u * 1024u;
 constexpr std::size_t natural_mesh_cache_capacity = 1024u;
-constexpr std::size_t resource_backdrop_cache_budget = 32u * 1024u * 1024u;
+constexpr std::size_t resource_backdrop_cache_budget = 128u * 1024u * 1024u;
 static_assert(viewport_cache_budget+natural_mesh_cache_budget==128u*1024u*1024u,
     "World mesh reuse must not increase the combined CPU cache budget");
 // Includes active buffers: a frame pins its entries, never a second copy.
-constexpr std::size_t tile_geometry_cache_budget = 192u * 1024u * 1024u;
-constexpr std::size_t tile_geometry_cache_capacity = 4096u;
+// The 2240x1192 witness exceeds the old 192 MiB cap in its first view.
+// User-authorized modern-machine tier; keep CPU caches at their separate caps.
+// A compile-time override retains explicit pressure testing of smaller tiers.
+#ifndef C3X_RENDERER_GPU_GEOMETRY_MIB
+#define C3X_RENDERER_GPU_GEOMETRY_MIB 768
+#endif
+static_assert(C3X_RENDERER_GPU_GEOMETRY_MIB>=192 && C3X_RENDERER_GPU_GEOMETRY_MIB<=1024,
+    "Geometry tier must leave room for other resources in the x86 host");
+constexpr std::size_t tile_geometry_cache_budget = C3X_RENDERER_GPU_GEOMETRY_MIB * 1024u * 1024u;
+constexpr std::size_t tile_geometry_cache_capacity = C3X_RENDERER_GPU_GEOMETRY_MIB / 192u * 4096u;
 #endif
 
 using Vertex = c3x_renderer::fidelity::MapVertex;
@@ -177,6 +191,7 @@ struct CachedVertexChunk {
     int translation_x = 0, translation_y = 0;
     D3D11_RECT bounds = {};
     c3x_renderer::render_core::SourceShadow::Bounds world_bounds;
+    c3x_renderer::render_core::ProjectedMeshBounds projected_bounds;
     std::uint64_t version = 0;
     ID3D11ShaderResourceView * animation_texture = nullptr; // borrowed, dynamic pass only
     unsigned city_material=0xffffffffu;
@@ -190,6 +205,22 @@ struct PendingCityChunk {
     std::vector<Vertex> vertices;
     unsigned material=0;bool environment=false;float atlas[4]={};
     std::shared_ptr<c3x_renderer::city_fidelity::Lighting> lighting;
+};
+
+// Own one immutable coast-cell occurrence. Raw lattice coordinates preserve
+// wrapped world/shadow coordinates; the viewport borrows references and anchors.
+struct RetainedWaveCell {
+    CachedVertexChunk chunk;
+    std::uint64_t used=0;
+    std::size_t bytes=0;
+    RetainedWaveCell()=default;
+    RetainedWaveCell(RetainedWaveCell const&)=delete;
+    RetainedWaveCell& operator=(RetainedWaveCell const&)=delete;
+    RetainedWaveCell(RetainedWaveCell&& other) noexcept
+        :chunk(std::move(other.chunk)),used(other.used),bytes(other.bytes) {
+        other.chunk.buffer=nullptr;other.chunk.indices=nullptr;
+    }
+    ~RetainedWaveCell(){if(chunk.buffer)chunk.buffer->Release();if(chunk.indices)chunk.indices->Release();}
 };
 
 struct ResourceAnimation {
@@ -441,12 +472,54 @@ public:
     bool environment_profile = false;
     bool city_profile=false;
     bool clip_dirty_blocks=false;
+    bool bounded_post=false;
+    int scene_region_size=128;
+    int scene_region_height=128;
+    bool cull_empty_water=false;
+    bool world_backdrops=false,backdrop_reuse_control=false;
+    bool world_waves=false,wave_reuse_control=false;
+    bool world_raster_grid=false;
+    bool world_regions=false,world_regions_control=false;
+    bool region_diagnostics=false;
+    bool region_receiver_shadows=false;
+    bool tight_natural_bounds=false;
+    int region_input_ring=2;
+    std::int64_t region_origin_x=0,region_origin_y=0;
+    c3x_renderer::render_core::RenderRegionCache<ID3D11Texture2D> render_regions;
+    c3x_renderer::render_core::RenderRegionKey region_context;
+    std::size_t frame_region_hits=0,frame_region_misses=0,frame_region_hit_pixels=0,frame_region_rejected=0;
+
     c3x_renderer::city_fidelity::Gpu cities;
     c3x_renderer::city_fidelity::Glow city_glow;
+    c3x_renderer::city_fidelity::Glow region_glow;
     c3x_renderer::environment_refresh::Reflection reflection;
+    c3x_renderer::environment_refresh::Reflection region_reflection;
     std::string fidelity_root;
     c3x_renderer::fidelity::Natural natural;
     RendererTrace trace;
+    c3x_renderer::render_core::GpuFrameTelemetry gpu_telemetry;
+    bool profiling=false;
+    std::size_t sampled_geometry_bucket=~std::size_t(0);
+    std::uint64_t frame_draw_calls=0,frame_parameter_updates=0,frame_bounds_tests=0;
+    unsigned frame_caster_preparations=0;
+    std::size_t frame_post_lanes=0;
+    void memory_sample(char const* phase) {
+        if(!profiling)return;
+        auto sample=c3x_renderer::render_core::AddressSpaceSample::capture();
+        char detail[640];sprintf_s(detail,
+            "phase=%s available_virtual=%llu largest_free_region=%llu committed_va=%llu reserved_va=%llu "
+            "gpu_geometry=%zu gpu_geometry_cap=%zu natural_cpu=%zu ground_cpu=%zu natural_cpu_cap=%zu "
+            "viewport_cpu=%zu viewport_cpu_cap=%zu backdrop_gpu=%zu backdrop_gpu_cap=%zu pixels_capacity=%zu",
+            phase,sample.available,sample.largest,sample.committed,sample.reserved,
+            tile_geometry_cache_bytes,tile_geometry_cache_budget,natural_mesh_cache_bytes,ground_grid_cache_bytes,
+            natural_mesh_cache_budget,viewport_cache_bytes,viewport_cache_budget,resource_backdrop_bytes,
+            resource_backdrop_cache_budget,pixels.capacity()*sizeof(pixels[0]));
+        trace.write("memory-sample",detail,true);
+        sprintf_s(detail,"linear_frame=%zu linear_block=%zu reflection=%zu glow=%zu region_reflection=%zu region_glow=%zu wave_geometry=%zu",
+            linear_frame.bytes(),linear_block.bytes(),reflection.linear.bytes(),city_glow.linear.bytes(),
+            region_reflection.linear.bytes(),region_glow.linear.bytes(),wave_geometry_bytes);
+        trace.write("memory-linear-scratch",detail,true);
+    }
     SceneTopology topology_cache;
     std::uint64_t requested_signature = 0;
     char const * frame_cache_path = "cold";
@@ -593,10 +666,15 @@ public:
     std::array<ID3D11ShaderResourceView*,3> wave_views={};
     std::vector<CachedVertexChunk> wave_chunks;
     std::uint64_t wave_signature=0;
+    std::size_t wave_geometry_bytes=0,wave_upload_bytes=0;
+    std::map<std::pair<int,int>,RetainedWaveCell> retained_wave_cells;
+    std::uint64_t retained_wave_scope=0,retained_wave_epoch=0;
+    unsigned wave_cells_built=0,wave_cells_reused=0;
     unsigned ambient_count() const {return visible_resource_animations+visible_wave_animations;}
     void reset_waves() {
         for(auto& c:wave_chunks){release(c.buffer);release(c.indices);}wave_chunks.clear();
-        wave_signature=0;visible_wave_animations=0;
+        retained_wave_cells.clear();retained_wave_scope=retained_wave_epoch=0;
+        wave_signature=0;visible_wave_animations=0;wave_geometry_bytes=wave_upload_bytes=0;
     }
     c3x_renderer_u32 cached_visible_animation_count = 0;
     c3x_renderer_u32 cached_request_continuous_redraw = 0;
@@ -671,7 +749,7 @@ public:
 
     void reset_targets() {
         cancel_pixel_preparation();
-        linear_frame.reset(); linear_block.reset(); reflection.linear.reset();
+        linear_frame.reset(); linear_block.reset(); reflection.linear.reset();region_reflection.linear.reset();region_glow.linear.reset();
         pixel_blocks.clear();
         release(block_readback); release(block_depth); release(block_depth_texture);
         release(block_target); release(block_texture);
@@ -718,12 +796,17 @@ public:
     }
 
     void reset() {
+        memory_sample("before-reset");
+        render_regions.clear();region_context.clear();
+        gpu_telemetry.reset();
+        sampled_geometry_bucket=~std::size_t(0);
         unit_bodies.reset_gpu();
         reset_resource_buffers();
         if (context != nullptr)
             context->ClearState();
         reset_targets();
         world_coast.clear(); geometry_world_revision = -1; source_shadow.clear(); natural.reset(); reflection.reset();cities.reset();city_glow.reset();
+        region_reflection.reset();region_glow.reset();
         for (TerrainTexture & texture : terrain_textures)
         {
             release(texture.view);
@@ -814,11 +897,16 @@ public:
         cache_valid = false;
         if (device_generation != 0xffffffffu)
             ++device_generation;
+        memory_sample("after-reset");
     }
 
     bool initialize() {
         if (device != nullptr)
             return true;
+
+        char budget_detail[256];sprintf_s(budget_detail,"gpu_geometry=%zu natural_cpu=%zu viewport_cpu=%zu backdrop_gpu=%zu region_size=%d",
+            tile_geometry_cache_budget,natural_mesh_cache_budget,viewport_cache_budget,resource_backdrop_cache_budget,scene_region_size);
+        trace.write("cache-budgets",budget_detail,true);
 
         UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
         D3D_FEATURE_LEVEL levels[] = {
@@ -2144,6 +2232,28 @@ public:
         fidelity_profile = use_fidelity;
         char control[8]={};
         clip_dirty_blocks=GetEnvironmentVariableA("C3X_RENDERER_BLOCK_CLIP",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        bounded_post=GetEnvironmentVariableA("C3X_RENDERER_BOUNDED_POST",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        GetEnvironmentVariableA("C3X_RENDERER_REGION_SIZE",control,sizeof(control));
+        scene_region_size=std::strcmp(control,"2240")==0?2240:std::strcmp(control,"256")==0?256:std::strcmp(control,"512")==0?512:128;
+        scene_region_height=scene_region_size==2240?256:scene_region_size;
+        world_raster_grid=GetEnvironmentVariableA("C3X_RENDERER_WORLD_RASTER_GRID",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        world_regions=world_raster_grid && city_profile && scene_region_size==128 &&
+            GetEnvironmentVariableA("C3X_RENDERER_WORLD_REGIONS",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        world_regions_control=GetEnvironmentVariableA("C3X_RENDERER_WORLD_REGIONS_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        region_diagnostics=GetEnvironmentVariableA("C3X_RENDERER_REGION_DIAGNOSTICS",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        region_receiver_shadows=GetEnvironmentVariableA("C3X_RENDERER_REGION_RECEIVER_SHADOWS",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
+        region_input_ring=std::strcmp(control,"4")==0?4:2;
+        GetEnvironmentVariableA("C3X_RENDERER_REGION_METADATA_MIB",control,sizeof(control));
+        std::size_t metadata_limit=std::strcmp(control,"32")==0?32u*1024u*1024u:96u*1024u*1024u;
+        if(render_regions.metadata_limit!=metadata_limit)render_regions.clear();
+        render_regions.metadata_limit=metadata_limit;
+        cull_empty_water=GetEnvironmentVariableA("C3X_RENDERER_WATER_COVERAGE",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        world_backdrops=world_raster_grid && GetEnvironmentVariableA("C3X_RENDERER_WORLD_BACKDROPS",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        backdrop_reuse_control=GetEnvironmentVariableA("C3X_RENDERER_BACKDROP_REUSE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        world_waves=GetEnvironmentVariableA("C3X_RENDERER_WORLD_WAVES",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        wave_reuse_control=GetEnvironmentVariableA("C3X_RENDERER_WAVE_REUSE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         reflection.enabled=!(GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         fidelity_shadow_control=GetEnvironmentVariableA("C3X_RENDERER_FIDELITY_SHADOW_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         fidelity_root = mod_root ? mod_root : "";
@@ -2848,8 +2958,100 @@ public:
         return frame.presentation_time_ticks/std::max<c3x_renderer_i64>(1,frame.presentation_frequency/15);
     }
 
+    bool make_wave_cell_room(std::size_t bytes) {
+        constexpr std::size_t budget=32u*1024u*1024u,entries=16384;
+        if(bytes>budget)return false;
+        while(retained_wave_cells.size()>=entries || wave_geometry_bytes>budget-bytes) {
+            auto oldest=retained_wave_cells.end();
+            for(auto it=retained_wave_cells.begin();it!=retained_wave_cells.end();++it)
+                if(it->second.used!=retained_wave_epoch &&
+                   (oldest==retained_wave_cells.end() || it->second.used<oldest->second.used))oldest=it;
+            if(oldest==retained_wave_cells.end())return false;
+            wave_geometry_bytes-=oldest->second.bytes;retained_wave_cells.erase(oldest);
+        }
+        return true;
+    }
+
+    bool prepare_retained_wave_chunks(c3x_renderer_frame_v1 const& frame) {
+        using namespace c3x_renderer::render_core;
+        // Coast geometry is independent of light and animation time. Keep the
+        // full topology revision until local coast dependency proofs exist.
+        auto scope=wave_geometry_scope(frame,content_revision,device_generation);
+        if(scope!=retained_wave_scope || wave_reuse_control)reset_waves();
+        retained_wave_scope=scope;
+        for(auto& chunk:wave_chunks){release(chunk.buffer);release(chunk.indices);}wave_chunks.clear();
+        wave_signature=0;
+        if(!wave_ready || !frame.tile_count)return true;
+        if(++retained_wave_epoch==0){reset_waves();retained_wave_scope=scope;retained_wave_epoch=1;}
+        auto cells=captured_wave_cells(frame,C3X_RENDERER_TILE_RENDER);
+        auto anchor=frame.tiles;
+        for(unsigned i=0;i<frame.tile_count;++i)if(frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER){anchor=frame.tiles+i;break;}
+        // Pin the complete requested set before any admission can evict cells.
+        for(auto const& cell:cells){auto found=retained_wave_cells.find(cell.first);
+            if(found!=retained_wave_cells.end())found->second.used=retained_wave_epoch;}
+        float hw=frame.tile_width*.5f,hh=frame.tile_height*.5f;
+        int dx=int(geometry_viewport_settings.translation[0]),dy=int(geometry_viewport_settings.translation[1]);
+        for(auto const& entry:cells) {
+            int c=entry.first.first,r=entry.first.second;
+            auto found=retained_wave_cells.find(entry.first);
+            if(found==retained_wave_cells.end()) {
+                RetainedWaveCell cell;cell.used=retained_wave_epoch;
+                auto identity=world_coast.world().index(c,r);
+                if(identity!=std::size_t(-1)) {
+                    auto hash=c3x_renderer::stable_hash(unsigned(identity)*193u+71u);
+                    float seed=c3x_renderer::stable_random(hash),seed2=c3x_renderer::stable_random(hash+23u);
+                    auto ribbon=coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed);
+                    cell.bytes=ribbon.size()*(sizeof(Vertex)+sizeof(unsigned));
+                    if(!make_wave_cell_room(cell.bytes)){trace.write("coastal-wave-budget","active cells exceed 32 MiB/16384 entries; no truncation",true);return false;}
+                    if(!ribbon.empty()) {
+                        std::vector<Vertex> vertices;vertices.reserve(ribbon.size());
+                        auto& chunk=cell.chunk;chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
+                        for(unsigned axis=0;axis<3;++axis){chunk.world_bounds.low[axis]=1e9f;chunk.world_bounds.high[axis]=-1e9f;}
+                        for(auto const& point:ribbon) {
+                            float u=float(point.position.x)-float(c),v=1-(float(point.position.y)-float(r));
+                            Vertex out={};out.x=hw+(u-v)*hw;out.y=(u+v)*hh;out.z=out.y+.08f;
+                            out.u=point.distance;out.v=point.along;out.panel=1;out.normal_z=1;
+                            out.shadow_visibility=1;out.ambient_visibility=point.coverage;
+                            out.base_terrain=seed;out.real_terrain=seed2;out.surface_kind=7;
+                            out.world_x=float(point.position.x);out.world_y=float(point.position.y);out.world_z=2.5f/112;out.world_valid=1;
+                            out.macro_u=out.world_x*.5f;out.macro_v=out.world_y*.5f;vertices.push_back(out);
+                            chunk.bounds.left=std::min(chunk.bounds.left,LONG(std::floor(out.x))-2);chunk.bounds.right=std::max(chunk.bounds.right,LONG(std::ceil(out.x))+2);
+                            chunk.bounds.top=std::min(chunk.bounds.top,LONG(std::floor(out.y))-2);chunk.bounds.bottom=std::max(chunk.bounds.bottom,LONG(std::ceil(out.y))+2);
+                            float world[]={out.world_x,out.world_y,out.world_z};for(unsigned axis=0;axis<3;++axis){
+                                chunk.world_bounds.low[axis]=std::min(chunk.world_bounds.low[axis],world[axis]);chunk.world_bounds.high[axis]=std::max(chunk.world_bounds.high[axis],world[axis]);}
+                        }
+                        std::vector<unsigned> indices(vertices.size());for(unsigned i=0;i<indices.size();++i)indices[i]=i;
+                        D3D11_BUFFER_DESC desc={};desc.ByteWidth=unsigned(vertices.size()*sizeof(Vertex));desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+                        D3D11_SUBRESOURCE_DATA data={};data.pSysMem=vertices.data();
+                        if(FAILED(device->CreateBuffer(&desc,&data,&chunk.buffer)))return false;
+                        desc.ByteWidth=unsigned(indices.size()*sizeof(unsigned));desc.BindFlags=D3D11_BIND_INDEX_BUFFER;data.pSysMem=indices.data();
+                        if(FAILED(device->CreateBuffer(&desc,&data,&chunk.indices)))return false;
+                        chunk.vertex_stride=sizeof(Vertex);chunk.index_count=unsigned(indices.size());chunk.version=scope;
+                    }
+                } else if(!make_wave_cell_room(0))return false;
+                auto bytes=cell.bytes;
+                found=retained_wave_cells.emplace(entry.first,std::move(cell)).first;
+                wave_geometry_bytes+=bytes;wave_upload_bytes+=bytes;++wave_cells_built;
+            } else ++wave_cells_reused;
+            auto const& owner=found->second.chunk;if(!owner.buffer)continue;
+            auto chunk=owner;
+            // Cell-local vertices stay immutable. Visible occurrences provide
+            // their authoritative screen transform through the existing buffer.
+            chunk.translation_x=anchor->anchor_x+(c+r-anchor->tile_x)*int(hw)-dx;
+            chunk.translation_y=anchor->anchor_y+(c-r-anchor->tile_y)*int(hh)-dy;
+            if(chunk.bounds.right+chunk.translation_x+dx<=0 || chunk.bounds.left+chunk.translation_x+dx>=width ||
+               chunk.bounds.bottom+chunk.translation_y+dy<=0 || chunk.bounds.top+chunk.translation_y+dy>=height)continue;
+            wave_chunks.push_back(chunk);chunk.buffer->AddRef();chunk.indices->AddRef();
+        }
+        wave_signature=cached_signature.complete;
+        return true;
+    }
+
     bool prepare_wave_chunks(c3x_renderer_frame_v1 const& frame) {
-        if(wave_signature==cached_signature.complete)return true;
+        wave_upload_bytes=0;
+        wave_cells_built=wave_cells_reused=0;
+        if(!wave_reuse_control && wave_signature==cached_signature.complete)return true;
+        if(world_waves)return prepare_retained_wave_chunks(frame);
         reset_waves();wave_signature=cached_signature.complete;
         if(!wave_ready || !frame.tile_count)return true;
         using namespace c3x_renderer::render_core;
@@ -2891,7 +3093,7 @@ public:
             }
             if(chunk.bounds.right+dx<=0 || chunk.bounds.left+dx>=width || chunk.bounds.bottom+dy<=0 || chunk.bounds.top+dy>=height)continue;
             auto size=unsigned(vertices.size()*sizeof(Vertex));
-            if(bytes+size+vertices.size()*4>16u*1024u*1024u){trace.write("coastal-wave-budget","16 MiB; remaining ribbons omitted",true);break;}
+            if(bytes+size+vertices.size()*4>16u*1024u*1024u){trace.write("coastal-wave-budget","16 MiB active-view cap; no truncation",true);reset_waves();return false;}
             D3D11_BUFFER_DESC desc={};desc.ByteWidth=size;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
             D3D11_SUBRESOURCE_DATA data={};data.pSysMem=vertices.data();
             if(FAILED(device->CreateBuffer(&desc,&data,&chunk.buffer))){reset_waves();return false;}
@@ -2900,6 +3102,7 @@ public:
             if(FAILED(device->CreateBuffer(&desc,&data,&chunk.indices))){release(chunk.buffer);reset_waves();return false;}
             chunk.vertex_stride=sizeof(Vertex);chunk.index_count=unsigned(indices.size());chunk.version=cached_signature.complete;
             wave_chunks.push_back(chunk);bytes+=size+indices.size()*4;
+            wave_upload_bytes=wave_geometry_bytes=bytes;
         }
         return true;
     }
@@ -2916,7 +3119,19 @@ public:
         visible_resource_animations=0;
         std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers; // posed bodies only
         std::vector<D3D11_RECT> rectangles;
-        std::vector<unsigned char> dirty_blocks(std::size_t((width+127)/128)*((height+127)/128),0);
+        using c3x_renderer::render_core::RasterRegionAxis;
+        using c3x_renderer::render_core::raster_anchor_phase;
+        bool anchored=world_backdrops && frame.tile_count!=0;
+        int anchor_x=anchored?frame.tiles[0].anchor_x:0,anchor_y=anchored?frame.tiles[0].anchor_y:0;
+        RasterRegionAxis backdrop_grid_x(width,anchored?raster_anchor_phase(anchor_x,frame.tiles[0].tile_x,frame.tile_width,128):0);
+        RasterRegionAxis backdrop_grid_y(height,anchored?raster_anchor_phase(anchor_y,frame.tiles[0].tile_y,frame.tile_height,128):0);
+        std::vector<unsigned char> dirty_blocks(std::size_t(backdrop_grid_x.count)*backdrop_grid_y.count,0);
+        auto dirty=[&](D3D11_RECT const& visible) {
+            if(visible.left>=visible.right || visible.top>=visible.bottom)return;
+            for(int y=backdrop_grid_y.at(visible.top);y<=backdrop_grid_y.at(visible.bottom-1);++y)
+                for(int x=backdrop_grid_x.at(visible.left);x<=backdrop_grid_x.at(visible.right-1);++x)
+                    dirty_blocks[std::size_t(y)*backdrop_grid_x.count+x]=1;
+        };
         std::vector<c3x_renderer::FeatureSourceVertex> posed;
         std::vector<std::array<float,12>> vertices;
         std::vector<Vertex> shadow_vertices;
@@ -2997,9 +3212,7 @@ public:
             D3D11_RECT visible={std::max<LONG>(0,chunk.bounds.left+dx),std::max<LONG>(0,chunk.bounds.top+dy),
                 std::min<LONG>(width,chunk.bounds.right+dx),std::min<LONG>(height,chunk.bounds.bottom+dy)};
             if (visible.left>=visible.right || visible.top>=visible.bottom) continue;
-            for (int y=visible.top/128;y<=(visible.bottom-1)/128;++y)
-                for (int x=visible.left/128;x<=(visible.right-1)/128;++x)
-                    dirty_blocks[std::size_t(y)*((width+127)/128)+x]=1;
+            dirty(visible);
             if (resource_buffers.size()<=visible_resource_animations) resource_buffers.emplace_back();
             auto & pool=resource_buffers[visible_resource_animations];
             unsigned bytes=unsigned(vertices.size()*sizeof(vertices[0]));
@@ -3055,15 +3268,30 @@ public:
             float time[]={float(double(ticks)/std::max<c3x_renderer_i64>(1,frame.presentation_frequency)),0,0,0};
             context->UpdateSubresource(wave_frame,0,nullptr,time,0,0);
             for(auto const& chunk:wave_chunks){
-                D3D11_RECT visible={std::max<LONG>(0,chunk.bounds.left+dx),std::max<LONG>(0,chunk.bounds.top+dy),std::min<LONG>(width,chunk.bounds.right+dx),std::min<LONG>(height,chunk.bounds.bottom+dy)};
-                for(int y=visible.top/128;y<=(visible.bottom-1)/128;++y)for(int x=visible.left/128;x<=(visible.right-1)/128;++x)
-                    dirty_blocks[std::size_t(y)*((width+127)/128)+x]=1;
+                int wave_dx=chunk.translation_x+dx,wave_dy=chunk.translation_y+dy;
+                D3D11_RECT visible={std::max<LONG>(0,chunk.bounds.left+wave_dx),std::max<LONG>(0,chunk.bounds.top+wave_dy),std::min<LONG>(width,chunk.bounds.right+wave_dx),std::min<LONG>(height,chunk.bounds.bottom+wave_dy)};
+                dirty(visible);
             }
         }
         if (!ambient_count()) {resource_pixel_signature=0;return true;}
-        for (int y=0;y<(height+127)/128;++y)for(int x=0;x<(width+127)/128;++x)
-            if(dirty_blocks[std::size_t(y)*((width+127)/128)+x])
-                rectangles.push_back({x*128,y*128,std::min((x+1)*128,width),std::min((y+1)*128,height)});
+        // All regions in this composition borrow the same pinned static
+        // geometry and light basis, including their reflection passes.
+        using Shadow=c3x_renderer::render_core::SourceShadow;
+        std::vector<Shadow::Caster> animation_casters;
+        Shadow::PreparedCasters animation_prepared;
+        std::vector<Shadow::Caster> const* animation_casters_ptr=nullptr;
+        Shadow::PreparedCasters* animation_prepared_ptr=nullptr;
+        char caster_control[8]={};
+        bool share_casters=!(GetEnvironmentVariableA("C3X_RENDERER_COMPOSITION_CASTERS_CONTROL",caster_control,sizeof(caster_control)) && std::strcmp(caster_control,"1")==0);
+        if(pickup_profile && share_casters) {
+            animation_prepared_ptr=prepare_shadow_submission(geometry_vertex_buffers,animation_casters,animation_prepared);
+            animation_casters_ptr=&animation_casters;
+        }
+        for(int y=0;y<backdrop_grid_y.count;++y)for(int x=0;x<backdrop_grid_x.count;++x)
+            if(dirty_blocks[std::size_t(y)*backdrop_grid_x.count+x]) {
+                int left=backdrop_grid_x.start(x),top=backdrop_grid_y.start(y);
+                rectangles.push_back({left,top,left+128,top+128});
+            }
         ++resource_backdrop_epoch;
         if(!ensure_block_targets())return false;
         // City fidelity renders each native 128-pixel block through a guarded
@@ -3073,9 +3301,15 @@ public:
         int backdrop_extent=city_profile?272:fidelity_profile?256:128;
         if(!backdrop.ensure(device,backdrop_extent,backdrop_extent))return false;
         unsigned backdrop_hits=0,backdrop_misses=0;
-        for(auto const & rect:rectangles) {
+        // Geometry identity includes the entire captured semantic/ownership
+        // set, target/zoom, light, wrap, content and device generations, but
+        // excludes camera anchors. Conservatively miss when that set changes.
+        auto backdrop_signature=anchored?c3x_renderer::render_core::static_region_identity(
+            cached_signature.geometry,std::uint64_t(geometry_world_revision)):cached_signature.complete;
+        for(auto & rect:rectangles) {
+            int key_x=rect.left-anchor_x,key_y=rect.top-anchor_y;
             auto found=std::find_if(resource_backdrops.begin(),resource_backdrops.end(),[&](auto const& block){
-                return block.signature==cached_signature.complete && block.x==rect.left && block.y==rect.top;
+                return !backdrop_reuse_control && block.signature==backdrop_signature && block.x==key_x && block.y==key_y;
             });
             ViewportShaderSettings settings=geometry_viewport_settings;
             settings.translation[0]-=float(rect.left);settings.translation[1]-=float(rect.top);
@@ -3086,16 +3320,17 @@ public:
                 context->CopyResource(backdrop.color,found->color);
                 context->CopyResource(backdrop.depth_texture,found->depth);++backdrop_hits;
             } else {
-                if(!submit_geometry(geometry_vertex_buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128))return false;
+                if(!submit_geometry(geometry_vertex_buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
+                    nullptr,false,true,nullptr,false,animation_casters_ptr,animation_prepared_ptr))return false;
                 ++backdrop_misses;
                 // RGBA16F + D24S8, both MSAA4. Cache immutable scene-linear
-                // background/depth by the complete static frame signature;
-                // animation time and posed pixels never enter this cache.
+                // background/depth by static inputs and the region's relative
+                // world placement. Animation time and poses never enter it.
                 std::size_t bytes=std::size_t(backdrop_extent)*backdrop_extent*48u;
-                if(make_resource_backdrop_room(bytes,cached_signature.complete)) {
+                if(!backdrop_reuse_control && make_resource_backdrop_room(bytes,backdrop_signature)) {
                     resource_backdrops.reserve(resource_backdrops.size()+1);
-                    ResourceBackdrop block;block.x=rect.left;block.y=rect.top;block.bytes=bytes;
-                    block.signature=cached_signature.complete;block.used=resource_backdrop_epoch;
+                    ResourceBackdrop block;block.x=key_x;block.y=key_y;block.bytes=bytes;
+                    block.signature=backdrop_signature;block.used=resource_backdrop_epoch;
                     D3D11_TEXTURE2D_DESC desc={};backdrop.color->GetDesc(&desc);
                     bool allocated=SUCCEEDED(device->CreateTexture2D(&desc,nullptr,&block.color));
                     backdrop.depth_texture->GetDesc(&desc);
@@ -3113,9 +3348,13 @@ public:
             // Keep the background depth and linear color intact. Reuse static
             // source casters for lighting; animated bodies never invalidate pages.
             if(!submit_geometry(buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
-                    nullptr,true,true,&geometry_vertex_buffers))return false;
-            D3D11_BOX box={0,0,0,unsigned(rect.right-rect.left),unsigned(rect.bottom-rect.top),1};
-            context->CopySubresourceRegion(render_texture,0,unsigned(rect.left),unsigned(rect.top),0,block_texture,0,&box);
+                    nullptr,true,true,&geometry_vertex_buffers,false,animation_casters_ptr,animation_prepared_ptr))return false;
+            D3D11_RECT clipped={std::max<LONG>(0,rect.left),std::max<LONG>(0,rect.top),
+                std::min<LONG>(width,rect.right),std::min<LONG>(height,rect.bottom)};
+            D3D11_BOX box={unsigned(clipped.left-rect.left),unsigned(clipped.top-rect.top),0,
+                unsigned(clipped.right-rect.left),unsigned(clipped.bottom-rect.top),1};
+            context->CopySubresourceRegion(render_texture,0,unsigned(clipped.left),unsigned(clipped.top),0,block_texture,0,&box);
+            rect=clipped;
         }
         unsigned dirty_pixels=0;
         for(auto const & rect:rectangles) {
@@ -3134,10 +3373,10 @@ public:
         context->Unmap(readback_texture,0);
         resource_pixel_signature=cached_signature.complete;resource_pixel_clock=clock;
         QueryPerformanceCounter(&finished);resource_composite_ticks=finished.QuadPart-started.QuadPart;
-        char detail[320];sprintf_s(detail,"visible=%u waves=%u facing=SE clock=%lld rects=%zu pixels=%u upload_bytes=%zu pool_bytes=%zu backdrop_hits=%u backdrop_misses=%u backdrop_bytes=%zu terrain_built=%u ms=%.3f",
+        char detail[544];sprintf_s(detail,"visible=%u waves=%u facing=SE clock=%lld rects=%zu pixels=%u upload_bytes=%zu pool_bytes=%zu backdrop_hits=%u backdrop_misses=%u backdrop_bytes=%zu terrain_built=%u ms=%.3f wave_upload_bytes=%zu wave_geometry_bytes=%zu wave_cells_built=%u wave_cells_reused=%u wave_cell_entries=%zu caster_preparations=%u",
             visible_resource_animations,visible_wave_animations,clock,rectangles.size(),dirty_pixels,uploaded,pool_bytes,backdrop_hits,backdrop_misses,
             resource_backdrop_bytes,frame_tiles_built,
-            trace.milliseconds(resource_composite_ticks));trace.write("animation-frame",detail);
+            trace.milliseconds(resource_composite_ticks),wave_upload_bytes,wave_geometry_bytes,wave_cells_built,wave_cells_reused,retained_wave_cells.size(),frame_caster_preparations);trace.write("animation-frame",detail);
         return true;
     }
 
@@ -3156,6 +3395,11 @@ public:
         output.rendered_tile_count = cached_rendered_tile_count;
         output.fallback_tile_count = cached_fallback_tile_count;
         if (!compose_resource_animations(frame)) return false;
+        if(world_regions){
+            char detail[320];sprintf_s(detail,"hits=%zu misses=%zu hit_pixels=%zu gpu_bytes=%zu metadata_bytes=%zu entries=%zu rejected=%zu evictions=%llu metadata_cap=%zu",
+                frame_region_hits,frame_region_misses,frame_region_hit_pixels,render_regions.gpu_bytes,render_regions.metadata_bytes,
+                render_regions.entries.size(),frame_region_rejected,render_regions.evictions,render_regions.metadata_limit);trace.write("render-region-cache",detail,false);
+        }
         output.bgra_pixels = ambient_count() ? resource_pixels.data() : pixels.data();
         // Terrain is independent of retained native unit/effect animation.  A
         // cache hit must still report the current frame's animation demand so
@@ -3194,14 +3438,14 @@ public:
             std::snprintf(detail, sizeof(detail),
                 "cache=%s invalidations=%u camera=%u scene=%u environment=%u wrap=%u content=%u ownership=%u device=%u "
                 "tiles=%u built=%u reused=%u evicted=%u gpu_bytes=%zu upload_bytes=%zu viewport_bytes=%zu "
-                "reused_pixels=%u draw_pixels=%u block_pixels=%u block_bytes=%zu render_ms=%.3f geometry_ms=%.3f draw_submit_ms=%.3f readback_wait_ms=%.3f",
+                "reused_pixels=%u draw_pixels=%u block_pixels=%u block_bytes=%zu render_ms=%.3f geometry_ms=%.3f draw_submit_ms=%.3f readback_wait_ms=%.3f post_lanes=%zu",
                 frame_cache_path, invalidations, (invalidations & 1u) != 0, (invalidations & 2u) != 0,
                 (invalidations & 4u) != 0, (invalidations & 8u) != 0, (invalidations & 16u) != 0,
                 (invalidations & 32u) != 0, (invalidations & 64u) != 0, frame.tile_count,
                 frame_tiles_built, frame_tiles_reused, frame_tiles_evicted,
                 tile_geometry_cache_bytes, frame_upload_bytes, viewport_cache_bytes,
                 raster_reused_pixels, raster_draw_pixels, raster_cached_pixels, pixel_blocks.bytes, trace.milliseconds(renderer_ticks), trace.milliseconds(frame_geometry_ticks),
-                trace.milliseconds(frame_draw_ticks), trace.milliseconds(frame_readback_ticks));
+                trace.milliseconds(frame_draw_ticks), trace.milliseconds(frame_readback_ticks),frame_post_lanes);
             trace.write("frame", detail, invalidations != 0);
         }
         return true;
@@ -3347,6 +3591,7 @@ public:
         chunk.version=tile_geometry_version; chunk.vertex_stride=static_cast<UINT>(vertex_stride);
         for(unsigned i=0;i<3;++i){chunk.world_bounds.low[i]=1e9f;chunk.world_bounds.high[i]=-1e9f;}
         for (Vertex const & vertex : packed) {
+            if(natural_vertex)chunk.projected_bounds.include(vertex.world_x,vertex.world_y,vertex.world_z);
             float world_values[]={vertex.world_x,vertex.world_y,vertex.world_z};
             if(pickup_profile)for(unsigned i=0;i<3;++i){float value=world_values[i];
                 chunk.world_bounds.low[i]=std::min(chunk.world_bounds.low[i],value);
@@ -3382,6 +3627,14 @@ public:
         }
         if (!make_tile_cache_room(chunk.byte_count)) return false;
         if (prefetch && foreground_pending->load(std::memory_order_relaxed)) return false;
+        if(profiling && sampled_geometry_bucket!=tile_geometry_cache_bytes/(32u*1024u*1024u)){
+            sampled_geometry_bucket=tile_geometry_cache_bytes/(32u*1024u*1024u);
+            char detail[192];sprintf_s(detail,"gpu_request=%zu packed_capacity=%zu index_capacity=%zu narrow_capacity=%zu",
+                chunk.byte_count,packed.capacity()*sizeof(packed[0]),indices.capacity()*sizeof(indices[0]),
+                narrow_indices.capacity()*sizeof(narrow_indices[0]));
+            trace.write("geometry-allocation",detail,true);
+            memory_sample("before-geometry-allocation");
+        }
         output.reserve(output.size()+1); // allocate before acquiring COM resources
         D3D11_BUFFER_DESC desc = {};
         desc.ByteWidth = static_cast<UINT>(packed.size() * vertex_stride);
@@ -3447,6 +3700,10 @@ public:
         int c=(record.tile_x+record.tile_y)/2,r=(record.tile_x-record.tile_y)/2;
         chunk.natural_projection[0]=float(c);chunk.natural_projection[1]=float(r);
         chunk.natural_projection[2]=float(shadow_tile_width);chunk.natural_projection[3]=float(height);
+        if(tight_natural_bounds && chunk.projected_bounds.valid && shadow_tile_height*2==shadow_tile_width){
+            auto bounds=chunk.projected_bounds.project(c,r,shadow_tile_width);
+            chunk.bounds={bounds[0],bounds[1],bounds[2],bounds[3]};return chunk;
+        }
         c3x_renderer::fidelity::GroundProjection projection{c,r,shadow_tile_width*.5f,
             shadow_tile_height*.5f,shadow_tile_width/224.f*.82f,float(height)};
         chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
@@ -3585,6 +3842,90 @@ public:
         return true;
     }
 
+    static bool append_region_bytes(c3x_renderer::render_core::RenderRegionKey& key,void const* data,std::size_t bytes) {
+        auto words=(bytes+7)/8;
+        if(key.size()+1+words>c3x_renderer::render_core::RenderRegionCache<ID3D11Texture2D>::key_words_limit)return false;
+        key.push_back(bytes);auto source=static_cast<unsigned char const*>(data);
+        for(std::size_t i=0;i<bytes;i+=8){std::uint64_t word=0;std::memcpy(&word,source+i,std::min<std::size_t>(8,bytes-i));key.push_back(word);}
+        return true;
+    }
+
+    bool chunk_intersects_region(CachedVertexChunk const& chunk,ViewportShaderSettings const& settings,
+                                 D3D11_RECT const& rect,bool reflected,int radius=0) const {
+        int dx=chunk.translation_x+int(settings.translation[0]),dy=chunk.translation_y+int(settings.translation[1]);
+        float low=reflected?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.low[2]-2.5f/112.f):0;
+        float high=reflected?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f):0;
+        return !(chunk.bounds.right+dx+radius<=rect.left || chunk.bounds.left+dx-radius>=rect.right ||
+                 chunk.bounds.bottom+dy+high+radius<=rect.top || chunk.bounds.top+dy+low-radius>=rect.bottom);
+    }
+
+    bool render_region_key(std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers,
+            ViewportShaderSettings const& settings,
+            std::vector<c3x_renderer::render_core::SourceShadow::Caster> const& casters,
+            c3x_renderer::render_core::SourceShadow::PreparedCasters* prepared,
+            c3x_renderer::render_core::RenderRegionKey& key,std::vector<std::size_t>* sections=nullptr) {
+        using Shadow=c3x_renderer::render_core::SourceShadow;
+        if(region_context.empty() || !prepared || !prepared->matches(casters,shadow_basis))return false;
+        key=region_context;
+        if(sections){sections->clear();sections->push_back(key.size());}
+        for(unsigned pass=0;pass<(reflection.enabled?2u:1u);++pass){
+            ViewportShaderSettings local=settings;
+            int extent=pass?144:136;
+            if(pass){local.translation[0]+=4;local.translation[1]+=4;local.inverse_size[0]=local.inverse_size[1]=1.f/float(extent);}
+            D3D11_RECT rect={0,0,extent,extent};
+            std::vector<Shadow::Bounds> receivers;
+            std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
+            key.push_back(0x726567696f6e0000ull+pass);
+            for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:buffers[layer]){
+                if(layer==geometry_city && chunk.city_lighting &&
+                   chunk_intersects_region(chunk,local,rect,pass!=0,int(std::ceil(shadow_tile_width*.85f))+8)){
+                    auto light=chunk.city_lighting.get();
+                    if(std::find(lights.begin(),lights.end(),light)==lights.end())lights.push_back(light);
+                }
+                if(!chunk_intersects_region(chunk,local,rect,pass!=0))continue;
+                if(chunk.animation_texture)return false; // Posed pixels never enter this static cache.
+                if(layer!=geometry_shadow)receivers.push_back(chunk.world_bounds);
+                std::uint64_t identity[]={layer,chunk.version,chunk.index_count,std::uint64_t(chunk.index_format),
+                    chunk.vertex_stride,chunk.city_material,std::uint64_t(chunk.city_environment)};
+                if(!append_region_bytes(key,identity,sizeof(identity)))return false;
+                auto effective=local;
+                std::copy(std::begin(chunk.natural_projection),std::end(chunk.natural_projection),effective.natural_projection);
+                effective.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
+                effective.translation[0]+=float(chunk.translation_x);effective.translation[1]+=float(chunk.translation_y);
+                effective.depth_translation=-effective.translation[1]/height;
+                if(!append_region_bytes(key,&effective,sizeof(effective)) ||
+                   !append_region_bytes(key,chunk.city_atlas,sizeof(chunk.city_atlas)))return false;
+            }
+            if(sections)sections->push_back(key.size());
+            key.push_back(0x6c69676874730000ull);key.push_back(lights.size());
+            for(auto light:lights){
+                if(!append_region_bytes(key,light->lights.data(),light->lights.size()*sizeof(light->lights[0])) ||
+                   !append_region_bytes(key,light->blockers.data(),light->blockers.size()*sizeof(light->blockers[0])))return false;
+            }
+            if(sections)sections->push_back(key.size());
+            auto pages=Shadow::required_pages(receivers,shadow_basis);
+            if(pages.size()>32)return false;
+            key.push_back(0x736861646f770000ull);key.push_back(pages.size());
+            for(auto page:pages){
+                auto selection=prepared->find(page);Shadow::PreparedCasters::Selection temporary;
+                if(!selection){
+                    temporary=Shadow::PreparedCasters::select(casters,prepared->bounds,page);
+                    selection=prepared->admit(page,std::move(temporary));
+                    if(!selection)selection=&temporary;
+                }
+                Shadow::PreparedCasters::Selection narrowed;
+                if(region_receiver_shadows){
+                    narrowed=Shadow::PreparedCasters::receiver_selection(*selection,casters,prepared->bounds,receivers,shadow_basis);
+                    selection=&narrowed;
+                }
+                std::uint64_t identity[]={std::uint64_t(page.first),std::uint64_t(page.second),selection->hash,std::uint64_t(selection->indices.size())};
+                if(!append_region_bytes(key,identity,sizeof(identity)))return false;
+            }
+            if(sections)sections->push_back(key.size());
+        }
+        return key.size()<=c3x_renderer::render_core::RenderRegionCache<ID3D11Texture2D>::key_words_limit;
+    }
+
     bool draw_cached_geometry(GeometryLayer layer,
             std::array<std::vector<CachedVertexChunk>, geometry_layer_count> const & buffers,
             std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & viewport_settings,
@@ -3597,14 +3938,10 @@ public:
         if(fidelity_profile){scaled.left*=2;scaled.top*=2;scaled.right*=2;scaled.bottom*=2;}
         context->RSSetScissorRects(1, &scaled);
         for (CachedVertexChunk const & chunk : buffers[layer]) {
+            ++frame_bounds_tests;
             if (cancellation && cancellation->load(std::memory_order_relaxed)) return false;
             if(reflection_pass && chunk.animation_texture)continue;
-            int dx = chunk.translation_x + static_cast<int>(viewport_settings.translation[0]);
-            int dy = chunk.translation_y + static_cast<int>(viewport_settings.translation[1]);
-            float low_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.low[2]-2.5f/112.f):0;
-            float high_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f):0;
-            if (chunk.bounds.right + dx <= rect.left || chunk.bounds.left + dx >= rect.right ||
-                chunk.bounds.bottom + dy + high_shift <= rect.top || chunk.bounds.top + dy + low_shift >= rect.bottom) continue;
+            if(!chunk_intersects_region(chunk,viewport_settings,rect,reflection_pass))continue;
             ViewportShaderSettings settings = viewport_settings;
             std::copy(std::begin(chunk.natural_projection),std::end(chunk.natural_projection),settings.natural_projection);
             if(pickup_profile)settings.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
@@ -3613,6 +3950,7 @@ public:
             settings.depth_translation = -settings.translation[1] / height;
             if (first || std::memcmp(&previous, &settings, sizeof(settings)) != 0) {
                 context->UpdateSubresource(viewport_settings_buffer, 0, nullptr, &settings, 0, 0);
+                ++frame_parameter_updates;
                 previous = settings;
                 first = false;
             }
@@ -3624,9 +3962,11 @@ public:
                 context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
                 cities.bind(context,chunk.city_material,chunk.city_environment,chunk.city_atlas,reflection_pass,false);
                 context->DrawIndexed(chunk.index_count,0,0);
+                ++frame_draw_calls;
                 if(!cities.library.materials[chunk.city_material].ground){
                     cities.bind(context,chunk.city_material,chunk.city_environment,chunk.city_atlas,reflection_pass,true);
                     context->DrawIndexed(chunk.index_count,0,0);
+                    ++frame_draw_calls;
                 }
                 context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
                 continue;
@@ -3640,6 +3980,7 @@ public:
             }
             if (chunk.animation_texture) context->PSSetShaderResources(116,1,&chunk.animation_texture);
             context->DrawIndexed(chunk.index_count, 0, 0);
+            ++frame_draw_calls;
             if (chunk.animation_texture) context->PSSetShaderResources(116,1,resource_texture_views.data());
         }
         }
@@ -3647,9 +3988,10 @@ public:
         return true;
     }
 
-    D3D11_RECT guarded_block_rectangle(D3D11_RECT const& rect, int dx, int dy, int guard, int extent) {
+    D3D11_RECT guarded_block_rectangle(D3D11_RECT const& rect, int dx, int dy, int guard, int extent, int extent_y=0) {
+        if(!extent_y)extent_y=extent;
         return {std::max<LONG>(0,rect.left+dx-guard),std::max<LONG>(0,rect.top+dy-guard),
-                std::min<LONG>(extent,rect.right+dx+guard),std::min<LONG>(extent,rect.bottom+dy+guard)};
+                std::min<LONG>(extent,rect.right+dx+guard),std::min<LONG>(extent_y,rect.bottom+dy+guard)};
     }
 
     void collect_shadow_casters(
@@ -3673,6 +4015,23 @@ public:
         }
     }
 
+    c3x_renderer::render_core::SourceShadow::PreparedCasters* prepare_shadow_submission(
+            std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers,
+            std::vector<c3x_renderer::render_core::SourceShadow::Caster>& casters,
+            c3x_renderer::render_core::SourceShadow::PreparedCasters& prepared) {
+        ++frame_caster_preparations;
+        collect_shadow_casters(buffers,casters);
+        char control[8]={};
+        bool reuse=!(GetEnvironmentVariableA("C3X_RENDERER_CASTER_BOUNDS_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+        auto result=reuse && prepared.build(casters,shadow_basis)?&prepared:nullptr;
+        char detail[160];sprintf_s(detail,"casters=%zu descriptor_bytes=%zu dirty_block_clip=%u",casters.size(),
+            casters.capacity()*sizeof(casters[0]),unsigned(clip_dirty_blocks));
+        trace.write("submission-casters",detail,false);
+        if(profiling){sprintf_s(detail,"casters=%zu bounds_capacity=%zu",casters.size(),prepared.bounds.capacity()*sizeof(prepared.bounds[0]));
+            trace.write("prepared-caster-bounds",detail,false);}
+        return result;
+    }
+
     bool submit_geometry(std::array<std::vector<CachedVertexChunk>, geometry_layer_count> const & buffers,
                          std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & settings,
                          ID3D11RenderTargetView * target, ID3D11DepthStencilView * depth,
@@ -3681,19 +4040,22 @@ public:
                          bool accumulate = false, bool finish = true,
                          std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const * shadow_buffers_ptr = nullptr,
                          bool reflection_pass=false,
-                         std::vector<c3x_renderer::render_core::SourceShadow::Caster> const * shadow_casters_ptr=nullptr) {
+                         std::vector<c3x_renderer::render_core::SourceShadow::Caster> const * shadow_casters_ptr=nullptr,
+                         c3x_renderer::render_core::SourceShadow::PreparedCasters * prepared_casters_ptr=nullptr,
+                         int region_size=128,int grid_x=0,int grid_y=0) {
+        int const region_height=region_size==2240?256:region_size;
+        auto& active_glow=region_size==128?city_glow:region_glow;
+        auto& active_reflection=region_size==128?reflection:region_reflection;
         // Geometry owners remain pinned throughout this synchronous submission.
         // Camera blocks and reflection passes borrow one immutable caster list;
         // only receivers depend on their current screen rectangle. No list is
         // retained across a frame, content edit, animation update or eviction.
         std::vector<c3x_renderer::render_core::SourceShadow::Caster> submission_casters;
+        c3x_renderer::render_core::SourceShadow::PreparedCasters prepared_casters;
         if(pickup_profile && !shadow_casters_ptr) {
             if(cancellation && cancellation->load(std::memory_order_relaxed))return false;
-            collect_shadow_casters(shadow_buffers_ptr?*shadow_buffers_ptr:buffers,submission_casters);
+            prepared_casters_ptr=prepare_shadow_submission(shadow_buffers_ptr?*shadow_buffers_ptr:buffers,submission_casters,prepared_casters);
             shadow_casters_ptr=&submission_casters;
-            char detail[160];sprintf_s(detail,"casters=%zu descriptor_bytes=%zu dirty_block_clip=%u",submission_casters.size(),
-                submission_casters.capacity()*sizeof(submission_casters[0]),unsigned(clip_dirty_blocks));
-            trace.write("submission-casters",detail,false);
         }
         if(fidelity_profile && !reflection_pass) {
             ID3D11Resource* destination_resource=nullptr;target->GetResource(&destination_resource);
@@ -3701,36 +4063,84 @@ public:
             HRESULT hr=destination_resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(&destination_texture));
             destination_resource->Release();if(FAILED(hr))return false;
             D3D11_TEXTURE2D_DESC desc={};destination_texture->GetDesc(&desc);
-            if((desc.Width>128 || desc.Height>128 || city_profile) && !(city_profile && projection_width==136)){
+            if((desc.Width>unsigned(region_size) || desc.Height>unsigned(region_height) || city_profile) && !(city_profile && projection_width==region_size+8 && projection_height==region_height+8)){
                 if(!ensure_block_targets()){destination_texture->Release();return false;}
-                // Bound RGBA16F MSAA4+resolve+depth scratch to 256x256.
+                // Bounded guarded region scratch retains RGBA16F MSAA4,
+                // 2x reconstruction and the same pixel-sized glow filter.
                 // Each native output pixel is reconstructed once from its own
                 // 2x2 linear samples. Integer block origins preserve coverage.
-                for(auto const&rect:rectangles)for(int y=(rect.top/128)*128;y<rect.bottom;y+=128)
-                    for(int x=(rect.left/128)*128;x<rect.right;x+=128){
+                auto floor_region=[](int value,int phase,int size){return c3x_renderer::render_core::raster_region_floor(value,phase,size);};
+                for(auto const&rect:rectangles)for(int y=floor_region(rect.top,grid_y,region_height);y<rect.bottom;y+=region_height)
+                    for(int x=floor_region(rect.left,grid_x,region_size);x<rect.right;x+=region_size){
+                        if(cancellation && cancellation->load(std::memory_order_relaxed)){destination_texture->Release();return false;}
                         ViewportShaderSettings local=settings;
-                        int guard=city_profile?4:0,extent=128+guard*2;
+                        int guard=city_profile?4:0,extent=region_size+guard*2,extent_y=region_height+guard*2;
                         local.translation[0]+=float(guard-x);local.translation[1]+=float(guard-y);
-                        local.inverse_size[0]=local.inverse_size[1]=1.f/float(extent);
+                        local.inverse_size[0]=1.f/float(extent);local.inverse_size[1]=1.f/float(extent_y);
                         int l=std::max(x,int(rect.left)),t=std::max(y,int(rect.top));
-                        int r=std::min(x+128,int(rect.right)),b=std::min(y+128,int(rect.bottom));
+                        int r=std::min(x+region_size,int(rect.right)),b=std::min(y+region_height,int(rect.bottom));
                         // Only these pixels are copied out. Preserve four native
                         // pixels around them for the city's +/-8 high-res glow
                         // taps; drawing uses the unchanged 2x/MSAA projection.
-                        D3D11_RECT block_rect={0,0,extent,extent};
-                        if(clip_dirty_blocks)block_rect=guarded_block_rectangle({l,t,r,b},guard-x,guard-y,guard,extent);
-                        if(!submit_geometry(buffers,{block_rect},local,city_profile?city_glow.target:block_target,block_depth,extent,extent,cancellation,accumulate,true,shadow_buffers_ptr,false,shadow_casters_ptr)){
-                            destination_texture->Release();return false;
+                        bool const region_path=world_regions && region_size==128 && !accumulate && !shadow_buffers_ptr &&
+                            &buffers==&geometry_vertex_buffers;
+                        D3D11_RECT block_rect={0,0,extent,extent_y};
+                        if(clip_dirty_blocks && !region_path)block_rect=guarded_block_rectangle({l,t,r,b},guard-x,guard-y,guard,extent,extent_y);
+                        c3x_renderer::render_core::RenderRegionKey key;
+                        std::vector<std::size_t> sections;
+                        bool cacheable=false;
+                        if(region_path && !world_regions_control){
+                            try{cacheable=render_region_key(buffers,local,*shadow_casters_ptr,prepared_casters_ptr,key,region_diagnostics?&sections:nullptr);}
+                            catch(...){key.clear();}
+                            if(!cacheable)++frame_region_rejected;
+                        }
+                        auto cached=cacheable?render_regions.find(key):nullptr;
+                        if(region_diagnostics && region_path && cacheable){
+                            // Diagnostic hashes never authorize cache reuse. Exact value keys above do.
+                            std::uint64_t hashes[7]={};std::size_t begin=0;
+                            for(std::size_t part=0;part<sections.size() && part<7;++part){
+                                auto hash=14695981039346656037ull;
+                                for(std::size_t word=begin;word<sections[part];++word){hash^=key[word];hash*=1099511628211ull;}
+                                hashes[part]=hash;begin=sections[part];
+                            }
+                            char detail[512];sprintf_s(detail,"x=%lld y=%lld hit=%u parts=%zu context=%llu draw=%llu lights=%llu shadow=%llu reflected_draw=%llu reflected_lights=%llu reflected_shadow=%llu screen_x=%d screen_y=%d left=%d top=%d right=%d bottom=%d",
+                                static_cast<long long>(x-region_origin_x),static_cast<long long>(y-region_origin_y),cached?1u:0u,sections.size(),
+                                hashes[0],hashes[1],hashes[2],hashes[3],hashes[4],hashes[5],hashes[6],x,y,l,t,r,b);
+                            trace.write("render-region-dependencies",detail,false);
+                        }
+                        if(cached){++frame_region_hits;frame_region_hit_pixels+=std::size_t(r-l)*(b-t);}
+                        else {
+                            if(region_path)++frame_region_misses;
+                            if(!submit_geometry(buffers,{block_rect},local,city_profile?active_glow.target:block_target,block_depth,extent,extent_y,cancellation,accumulate,true,shadow_buffers_ptr,false,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y)){
+                                destination_texture->Release();return false;
+                            }
+                            if(cacheable){
+                                std::size_t bytes=std::size_t(extent)*extent_y*4;
+                                ID3D11Texture2D* image=nullptr;bool admitted=false;
+                                if(render_regions.make_room(key,bytes)){
+                                    D3D11_TEXTURE2D_DESC image_desc={};image_desc.Width=UINT(extent);image_desc.Height=UINT(extent_y);
+                                    image_desc.MipLevels=image_desc.ArraySize=image_desc.SampleDesc.Count=1;
+                                    image_desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;image_desc.Usage=D3D11_USAGE_DEFAULT;
+                                    if(SUCCEEDED(device->CreateTexture2D(&image_desc,nullptr,&image))){
+                                        context->OMSetRenderTargets(0,nullptr,nullptr);
+                                        context->CopyResource(image,active_glow.native);
+                                        try{admitted=render_regions.insert(std::move(key),image,bytes);}catch(...){}
+                                        if(admitted)image=nullptr;
+                                    }
+                                }
+                                if(image)image->Release();
+                                if(!admitted)++frame_region_rejected;
+                            }
                         }
                         D3D11_BOX box={UINT(l-x+guard),UINT(t-y+guard),0,UINT(r-x+guard),UINT(b-y+guard),1};
                         context->OMSetRenderTargets(0,nullptr,nullptr);
-                        context->CopySubresourceRegion(destination_texture,0,UINT(l),UINT(t),0,city_profile?city_glow.native:block_texture,0,&box);
+                        context->CopySubresourceRegion(destination_texture,0,UINT(l),UINT(t),0,cached?cached:city_profile?active_glow.native:block_texture,0,&box);
                     }
                 destination_texture->Release();return true;
             }
             destination_texture->Release();
         }
-        if(pickup_profile) {
+        if(pickup_profile && !(city_profile && region_size==2240)) {
             std::vector<D3D11_RECT> pieces;
             for(auto const& rect:rectangles)
                 for(LONG y=rect.top;y<rect.bottom;y+=512)for(LONG x=rect.left;x<rect.right;x+=512)
@@ -3738,7 +4148,7 @@ public:
             if(pieces.size()>1) {
                 for(std::size_t i=0;i<pieces.size();++i)
                     if(!submit_geometry(buffers,{pieces[i]},settings,target,depth,projection_width,projection_height,
-                        cancellation,accumulate || i!=0,finish && i+1==pieces.size(),shadow_buffers_ptr,reflection_pass,shadow_casters_ptr))return false;
+                        cancellation,accumulate || i!=0,finish && i+1==pieces.size(),shadow_buffers_ptr,reflection_pass,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y))return false;
                 return true;
             }
         }
@@ -3748,8 +4158,8 @@ public:
                     layer==geometry_river || layer==geometry_route || layer==geometry_shadow || layer==geometry_wave)return true;
                 unsigned provider=layer<geometry_feature?0:layer<geometry_natural_terrain?1:
                     layer<=geometry_natural_decal?2:layer==geometry_natural_mountain?3:4;
-                context->VSSetShader(reflection.vs[provider],nullptr,0);
-                context->PSSetShader(reflection.ps[provider],nullptr,0);
+                context->VSSetShader(active_reflection.vs[provider],nullptr,0);
+                context->PSSetShader(active_reflection.ps[provider],nullptr,0);
             }
             return draw_cached_geometry(layer, buffers, rectangles, settings, cancellation,reflection_pass);
         };
@@ -3763,27 +4173,38 @@ public:
             resource->Release();
             if (FAILED(hr)) return false;
             D3D11_TEXTURE2D_DESC desc = {}; texture->GetDesc(&desc); texture->Release();
-            linear = reflection_pass?&reflection.linear:city_profile?&city_glow.linear:desc.Width == 128 && desc.Height == 128 ? &linear_block : &linear_frame;
-            if (!linear->ensure(device, reflection_pass?reflection.native_extent*2:desc.Width*(fidelity_profile?2:1), reflection_pass?reflection.native_extent*2:desc.Height*(fidelity_profile?2:1))) {
+            linear = reflection_pass?&active_reflection.linear:city_profile?&active_glow.linear:desc.Width == 128 && desc.Height == 128 ? &linear_block : &linear_frame;
+            if (!linear->ensure(device, reflection_pass?active_reflection.native_extent*2:desc.Width*(fidelity_profile?2:1), reflection_pass?active_reflection.native_height*2:desc.Height*(fidelity_profile?2:1))) {
                 trace.write("linear-target-failed", "pickup MSAA4 allocation", true); return false;
             }
             target = linear->target; depth = linear->depth;
         }
-        if(environment_profile && !reflection_pass && reflection.enabled){
+        bool reflection_needed=true;
+        if(cull_empty_water && environment_profile && !reflection_pass) {
+            reflection_needed=false;
+            for(auto const& chunk:buffers[geometry_water]) {
+                int dx=chunk.translation_x+int(settings.translation[0]);
+                int dy=chunk.translation_y+int(settings.translation[1]);
+                for(auto const& rect:rectangles)
+                    reflection_needed=reflection_needed || !(chunk.bounds.right+dx<=rect.left ||
+                        chunk.bounds.left+dx>=rect.right || chunk.bounds.bottom+dy<=rect.top || chunk.bounds.top+dy>=rect.bottom);
+            }
+        }
+        if(environment_profile && !reflection_pass && active_reflection.enabled && reflection_needed){
             ViewportShaderSettings reflected=settings;
             reflected.translation[0]+=4;reflected.translation[1]+=4;
-            int reflected_extent=int(reflection.native_extent);
-            reflected.inverse_size[0]=reflected.inverse_size[1]=1.f/float(reflected_extent);
-            std::vector<D3D11_RECT> reflected_rects={{0,0,reflected_extent,reflected_extent}};
+            int reflected_extent=int(active_reflection.native_extent),reflected_height=int(active_reflection.native_height);
+            reflected.inverse_size[0]=1.f/float(reflected_extent);reflected.inverse_size[1]=1.f/float(reflected_height);
+            std::vector<D3D11_RECT> reflected_rects={{0,0,reflected_extent,reflected_height}};
             if(clip_dirty_blocks){
                 reflected_rects.clear();
                 // Mirror coordinates add four native pixels. Another four
                 // conservatively cover water's <=3 high-res distortion plus
                 // bilinear sampling. Main-pass glow padding is already present.
-                for(auto const& rect:rectangles)reflected_rects.push_back(guarded_block_rectangle(rect,4,4,4,reflected_extent));
+                for(auto const& rect:rectangles)reflected_rects.push_back(guarded_block_rectangle(rect,4,4,4,reflected_extent,reflected_height));
             }
-            if(!submit_geometry(buffers,reflected_rects,reflected,destination,depth,reflected_extent,reflected_extent,
-                cancellation,false,true,shadow_buffers_ptr,true,shadow_casters_ptr))return false;
+            if(!submit_geometry(buffers,reflected_rects,reflected,destination,depth,reflected_extent,reflected_height,
+                cancellation,false,true,shadow_buffers_ptr,true,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y))return false;
         }
         if (pickup_profile) {
             using Shadow=c3x_renderer::render_core::SourceShadow;
@@ -3792,11 +4213,7 @@ public:
             auto const & shadow_buffers=shadow_buffers_ptr ? *shadow_buffers_ptr : buffers;
             for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:shadow_buffers[layer]) {
                 bool visible=false;
-                int dx=chunk.translation_x+int(settings.translation[0]),dy=chunk.translation_y+int(settings.translation[1]);
-                float low_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.low[2]-2.5f/112.f):0;
-                float high_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f):0;
-                for(auto const& rect:rectangles)visible=visible || !(chunk.bounds.right+dx<=rect.left ||
-                    chunk.bounds.left+dx>=rect.right || chunk.bounds.bottom+dy+high_shift<=rect.top || chunk.bounds.top+dy+low_shift>=rect.bottom);
+                for(auto const& rect:rectangles)visible=visible || chunk_intersects_region(chunk,settings,rect,reflection_pass);
                 if(visible && layer!=geometry_shadow)receivers.push_back(chunk.world_bounds);
             }
             std::array<ID3D11ShaderResourceView*,33> alpha{};
@@ -3830,7 +4247,7 @@ public:
                 context->PSSetShaderResources(0,33,views.data());return true;
             };
             LARGE_INTEGER start={},end={};QueryPerformanceCounter(&start);
-            if(!source_shadow.prepare(context,shadow_basis,receivers,casters,bind,cancellation)) {
+            if(!source_shadow.prepare(context,shadow_basis,receivers,casters,bind,cancellation,prepared_casters_ptr)) {
                 trace.write("source-shadow-failed","caster pages exceeded budget or preparation interrupted",true);return false;
             }
             QueryPerformanceCounter(&end);
@@ -3854,17 +4271,13 @@ public:
         // only by c3x_renderer_blit when Civ III composites its dirty rectangle.
         D3D11_RECT scissor = {0, 0, projection_width, projection_height};
         context->RSSetScissorRects(1, &scissor);
-        if(environment_profile)reflection.bind(context);
+        if(environment_profile)active_reflection.bind(context);
         if(city_profile){
             std::vector<c3x_renderer::city_fidelity::Lighting const*> active;
             for(auto const&chunk:buffers[geometry_city])if(chunk.city_lighting){
                 auto pointer=chunk.city_lighting.get();if(std::find(active.begin(),active.end(),pointer)!=active.end())continue;
-                int dx=chunk.translation_x+int(settings.translation[0]),dy=chunk.translation_y+int(settings.translation[1]);
                 bool intersects=false;int radius=int(std::ceil(shadow_tile_width*.85f))+8;
-                float low_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.low[2]-2.5f/112.f):0;
-                float high_shift=reflection_pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f):0;
-                for(auto const&r:rectangles)intersects=intersects || !(chunk.bounds.right+dx+radius<=r.left ||
-                    chunk.bounds.left+dx-radius>=r.right || chunk.bounds.bottom+dy+high_shift+radius<=r.top || chunk.bounds.top+dy+low_shift-radius>=r.bottom);
+                for(auto const&r:rectangles)intersects=intersects || chunk_intersects_region(chunk,settings,r,reflection_pass,radius);
                 if(intersects)active.push_back(pointer);
             }
             if(!cities.lights(context,active)){trace.write("city-composition-failed","facade block capacity; no truncation",true);return false;}
@@ -3988,7 +4401,7 @@ public:
                 context->VSSetShader(vertex_shader,nullptr,0);context->PSSetShader(pixel_shader,nullptr,0);
             }
             if(environment_profile && !reflection_pass){
-                ID3D11ShaderResourceView*view=reflection.enabled?reflection.linear.view:nullptr;
+                ID3D11ShaderResourceView*view=active_reflection.enabled?active_reflection.linear.view:nullptr;
                 context->PSSetShaderResources(121,1,&view);
             }
             if (!draw(geometry_bed) ||
@@ -4072,9 +4485,14 @@ public:
             }
         }
 
-        if(reflection_pass){reflection.resolve(context);return true;}
+        if(reflection_pass){active_reflection.resolve(context);return true;}
         if(city_profile && linear && finish){
-            city_glow.reconstruct(context);linear_output.draw(context,*linear,destination,display_exposure,1,city_glow.view,136,136);return true;
+            // Only the experimental strip leaf has no accumulated 512-pixel
+            // siblings. Its guarded rectangle contains every copied pixel.
+            // Other submissions reconstruct the whole target as before.
+            auto dirty=bounded_post && region_size==2240 && !accumulate && rectangles.size()==1?&rectangles[0]:nullptr;
+            frame_post_lanes+=active_glow.reconstruct(context,dirty);
+            linear_output.draw(context,*linear,destination,display_exposure,1,active_glow.view,active_glow.native_extent,active_glow.native_height,dirty);return true;
         }
         if (linear && finish) linear_output.draw(context, *linear, destination, display_exposure, fidelity_profile?2:1);
         return true;
@@ -4102,6 +4520,9 @@ public:
 
     void begin_pixel_neighborhood(c3x_renderer_frame_v1 const & frame) {
         cancel_pixel_preparation();
+        // The legacy pixel-block producer uses its own screen-space scratch
+        // grid. Do not mix those pixels with the world-grid experiment.
+        if(world_raster_grid)return;
         bool has_prefetch=false;
         for(unsigned i=0;i<frame.tile_count;++i) has_prefetch=has_prefetch || (frame.tiles[i].tile_flags & C3X_RENDERER_TILE_PREFETCH) != 0;
         if (!has_prefetch) return;
@@ -4360,6 +4781,7 @@ public:
 
     bool reuse_cached_subset(c3x_renderer_frame_v1 const & frame,
                              c3x_renderer::TerrainFrameSignature const & signature) {
+        if(world_raster_grid)return false; // Subsets may choose a different wrapped raster origin.
         if (!cache_valid || cached_tiles.empty() ||
             frame.tile_count > cached_tiles.size() ||
             signature.camera != cached_signature.camera ||
@@ -4403,6 +4825,13 @@ public:
         frame_cache_path = "tiles";
         if (!prewarming) {
         ++trace.sequence;
+        char profile_option[8]={};
+        profiling=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",profile_option,sizeof(profile_option)) &&
+            std::strcmp(profile_option,"1")==0;
+        frame_draw_calls=frame_parameter_updates=frame_bounds_tests=0;
+        frame_caster_preparations=0;frame_post_lanes=0;
+        frame_region_hits=frame_region_misses=frame_region_hit_pixels=frame_region_rejected=0;
+        memory_sample("frame-start");
         trace.write("render-begin", "", false);
         LARGE_INTEGER load_mark={};QueryPerformanceCounter(&load_mark);
         auto load_phase=[&](char const* stage){
@@ -4419,6 +4848,12 @@ public:
             trace.write("native-failure","targets",true);
             return false;
         }
+        memory_sample("targets-ready");
+        if(profiling)gpu_telemetry.poll(context,[&](std::uint64_t sequence,bool valid,double draw_ms,double copy_ms,unsigned skipped){
+            char detail[320];sprintf_s(detail,"sample_sequence=%llu valid=%u gpu_draw_ms=%.6f gpu_copy_ms=%.6f frequency=%llu draw_ticks=%llu copy_ticks=%llu ring_skipped=%u",
+                sequence,unsigned(valid),draw_ms,copy_ms,gpu_telemetry.last_frequency,gpu_telemetry.last_draw_ticks,gpu_telemetry.last_copy_ticks,skipped);
+            trace.write("gpu-timing",detail,true);
+        });
         for (int index = 0; index < c3x_renderer::terrain_type_count; ++index)
             if (terrain_textures[index].configured && !ensure_pack_texture(index))
                 terrain_textures[index].configured = false;
@@ -4465,6 +4900,11 @@ public:
         if(asset_bytes){char detail[192];sprintf_s(detail,"bytes=%zu read_ms=%.3f hash_ms=%.3f texture_ms=%.3f",asset_bytes,
             trace.milliseconds(read_ticks),trace.milliseconds(hash_ticks),trace.milliseconds(texture_ticks));trace.write("load-assets",detail,true);}
         if(city_profile && !city_glow.ensure(device,fidelity_root)){trace.write("city-composition-failed","guarded glow initialization",true);return false;}
+        if(city_profile && scene_region_size!=128 &&
+           (!region_glow.ensure(device,fidelity_root,unsigned(scene_region_size+8),unsigned(scene_region_height+8)) ||
+            !region_reflection.ensure(device,fidelity_root,"city_fidelity",unsigned(scene_region_size+16),unsigned(scene_region_height+16)))) {
+            trace.write("region-scratch-failed","bounded guarded region initialization",true);return false;
+        }
         load_phase("load-glow");
         if (!ensure_terrain_textures()) {
             trace.write("native-failure","terrain-textures",true);
@@ -4534,7 +4974,7 @@ public:
         std::vector<std::uint32_t> restored_viewport;
         CachedViewport const* restored_viewport_entry=nullptr;
         if (!prewarming) {
-        if (cache_valid &&
+        if (cache_valid && (!frame_has_resource_animation(frame) || geometry_cache.valid) &&
             signature.complete == cached_signature.complete) {
             if (cache_hits != 0xffffffffu)
                 ++cache_hits;
@@ -4591,15 +5031,36 @@ public:
         // The previous bitmap may belong to a recent-view LRU entry instead of
         // the active geometry owner. Validate its own snapshot before shifting.
         int raster_dx = 0, raster_dy = 0;
-        bool reuse_raster = !prewarming && cache_valid && frame.tile_count != 0 &&
+        char raster_control[8]={};
+        bool const retain_raster=!(GetEnvironmentVariableA("C3X_RENDERER_RASTER_REUSE_CONTROL",raster_control,sizeof(raster_control)) &&
+            std::strcmp(raster_control,"1")==0);
+        bool const allow_odd_raster=world_raster_grid && fidelity_profile;
+        auto origin_phase=[&](c3x_renderer_tile_v1 const& origin){
+            return std::array<int,2>{
+                c3x_renderer::render_core::raster_anchor_phase(origin.anchor_x,origin.tile_x,frame.tile_width,scene_region_size),
+                c3x_renderer::render_core::raster_anchor_phase(origin.anchor_y,origin.tile_y,frame.tile_height,scene_region_height)};
+        };
+        auto raster_grid_phase=world_raster_grid && frame.tile_count?origin_phase(frame.tiles[0]):std::array<int,2>{};
+        auto same_grid=[&](int dx,int dy){
+            if(!world_raster_grid)return true;
+            if(cached_tiles.empty())return false;
+            auto old=origin_phase(cached_tiles[0]);
+            // A canonical wrapped origin can jump by a map period which is
+            // not divisible by the region extent. Reject that donor's pixels.
+            return c3x_renderer::render_core::raster_translation_matches(old[0],raster_grid_phase[0],dx,scene_region_size) &&
+                c3x_renderer::render_core::raster_translation_matches(old[1],raster_grid_phase[1],dy,scene_region_height);
+        };
+        bool reuse_raster = retain_raster && !prewarming && cache_valid && frame.tile_count != 0 &&
             cached_tiles.size() == frame.tile_count && signature.geometry == cached_signature.geometry;
         if (reuse_raster) {
             raster_dx = frame.tiles[0].anchor_x - cached_tiles[0].anchor_x;
             raster_dy = frame.tiles[0].anchor_y - cached_tiles[0].anchor_y;
-            // Preserve the GPU derivative-quad phase. Native tile steps are
-            // even; odd-pixel diagnostic/camera moves reuse meshes but reraster.
+            // The world-grid experiment preserves local raster coordinates.
+            // At 2x reconstruction one native pixel moves two shader pixels,
+            // retaining derivative-quad phase even for odd native-pixel pans.
             reuse_raster = (raster_dx != 0 || raster_dy != 0) &&
-                (raster_dx & 1) == 0 && (raster_dy & 1) == 0 &&
+                same_grid(raster_dx,raster_dy) &&
+                (allow_odd_raster || ((raster_dx & 1) == 0 && (raster_dy & 1) == 0)) &&
                 std::abs(raster_dx) < width && std::abs(raster_dy) < height;
             for (c3x_renderer_u32 i = 0; reuse_raster && i < frame.tile_count; ++i)
                 reuse_raster = same_terrain_content(frame.tiles[i], cached_tiles[i]) &&
@@ -4731,6 +5192,8 @@ public:
         frame_settings.hour = static_cast<float>(frame.hour);
         reflection.height_pixels=112.f*.82f*float(frame.tile_width)/224.f;
         reflection.depth_metric=112.f*.0016f*float(frame.target_height);
+        region_reflection.height_pixels=reflection.height_pixels;region_reflection.depth_metric=reflection.depth_metric;
+        region_reflection.enabled=reflection.enabled;region_glow.gain=city_glow.gain;
         ViewportShaderSettings viewport_settings = {};
         viewport_settings.translation[0] =
             static_cast<float>(geometry_translation_x);
@@ -4764,6 +5227,18 @@ public:
         viewport_settings.inverse_size[1] = 1.0f / c3x_renderer::power_of_two_extent(frame.target_height);
         viewport_settings.reserved[0] = static_cast<float>(frame.target_height);
         if (!prewarming) geometry_viewport_settings = viewport_settings;
+        if(!prewarming && world_regions){
+            region_origin_x=frame.tile_count?std::int64_t(frame.tiles[0].anchor_x)-std::int64_t(frame.tiles[0].tile_x)*frame.tile_width/2:0;
+            region_origin_y=frame.tile_count?std::int64_t(frame.tiles[0].anchor_y)-std::int64_t(frame.tiles[0].tile_y)*frame.tile_height/2:0;
+            region_context={content_revision,device_generation,std::uint64_t(frame.world_topology_revision),
+                signature.environment,signature.wrap,std::uint64_t(width),std::uint64_t(height),
+                std::uint64_t(frame.tile_width),std::uint64_t(frame.tile_height),
+                std::uint64_t(reflection.enabled),std::uint64_t(fidelity_shadow_control),std::uint64_t(cull_empty_water),std::uint64_t(region_receiver_shadows),std::uint64_t(tight_natural_bounds),std::uint64_t(region_input_ring)};
+            append_region_bytes(region_context,&frame_settings,sizeof(frame_settings));
+            append_region_bytes(region_context,shadow_basis.data(),sizeof(shadow_basis));
+            float response[]={display_exposure,city_glow.gain,cities.night,cities.emissive_scale,reflection.height_pixels,reflection.depth_metric};
+            append_region_bytes(region_context,response,sizeof(response));
+        }
         if(!reuse_geometry && restored_viewport_entry &&
            restore_viewport_geometry(*restored_viewport_entry,frame,signature)){
             reuse_geometry=true;
@@ -4972,9 +5447,10 @@ public:
                 (tile.tile_flags & (C3X_RENDERER_TILE_RENDER |
                     (pickup_profile ? C3X_RENDERER_TILE_PREFETCH : 0))) == 0) continue;
             if(!prewarming && pickup_profile && (tile.tile_flags&C3X_RENDERER_TILE_RENDER)==0) {
-                // The outer full-appearance ring is optional idle work. Keep
-                // only the conservative caster ring in this foreground frame.
-                int mx=frame.tile_width*2,my=frame.tile_height*2;
+                // Only currently captured full-appearance records are eligible.
+                // The optional wider ring stabilizes prepared region inputs;
+                // topology-only records and prior captures are never promoted.
+                int mx=frame.tile_width*region_input_ring,my=frame.tile_height*region_input_ring;
                 if(tile.anchor_x+frame.tile_width < -mx || tile.anchor_x>frame.target_width+mx ||
                    tile.anchor_y+frame.tile_height < -my || tile.anchor_y>frame.target_height+my)continue;
             }
@@ -6975,6 +7451,11 @@ public:
             tile_geometry_cache_bytes += metadata_bytes;
             compiled.byte_count = metadata_bytes;
             try {
+            // Compute before cache_geometry_layer moves the flat grid into its
+            // immutable buffer. Retained tiles carry the resulting absent
+            // layers with the same coast/semantic dependencies as that grid.
+            bool water_coverage=!cull_empty_water || !environment_profile ||
+                c3x_renderer::render_core::water_surface_can_contribute(underlay_vertices);
             for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
                 if(layer==geometry_city && !city_chunks.empty()){
                     for(auto&part:city_chunks){
@@ -6988,6 +7469,7 @@ public:
                     city_chunks.clear();continue;
                 }
                 if(pickup_profile && (layer==geometry_bed || layer==geometry_water)) {
+                    if(!water_coverage)continue;
                     // All flat layers share exact vertex/index data. Surface
                     // kind is the per-draw b1 value; no duplicate allocation.
                     compiled.buffers[layer]=compiled.buffers[geometry_underlay];
@@ -7152,7 +7634,7 @@ public:
         }
         // Only the exact bitmap that owns these footprints can donate pixels.
         // An LRU/subset hit may have changed the bitmap without rebuilding meshes.
-        if (!reuse_raster && cache_valid &&
+        if (retain_raster && !reuse_raster && cache_valid &&
             bitmap_footprint_signature.complete == cached_signature.complete &&
             signature.camera == cached_signature.camera &&
             signature.environment == cached_signature.environment &&
@@ -7160,7 +7642,8 @@ public:
             std::vector<c3x_renderer::PixelRect> damage;
             if (c3x_renderer::scroll_damage(bitmap_footprints, current_footprints,
                     width, height, raster_dx, raster_dy, damage, pickup_profile ? 0 : 32) &&
-                (raster_dx & 1) == 0 && (raster_dy & 1) == 0) {
+                same_grid(raster_dx,raster_dy) &&
+                (allow_odd_raster || ((raster_dx & 1) == 0 && (raster_dy & 1) == 0))) {
                 raster_rects.clear(); raster_draw_pixels = 0;
                 for (auto const & rect : damage) dirty_rect(rect.left, rect.top, rect.right, rect.bottom);
                 raster_reused_pixels = static_cast<c3x_renderer_u32>(width * height) - raster_draw_pixels;
@@ -7173,7 +7656,7 @@ public:
         struct BlockCopy { D3D11_RECT rect; int cache_index, origin_x, origin_y; };
         std::vector<BlockCopy> block_copies;
         int block_phase_x=0,block_phase_y=0;
-        if (!pixel_blocks.blocks.empty() &&
+        if (retain_raster && !world_raster_grid && !pixel_blocks.blocks.empty() &&
             block_phase(current_footprints,frame.tile_width,frame.tile_height,block_phase_x,block_phase_y)) {
             std::vector<D3D11_RECT> misses;
             for (auto const & dirty : raster_rects)
@@ -7197,6 +7680,7 @@ public:
 
         if(!restored_viewport.empty()){
             raster_rects.clear();block_copies.clear();reuse_raster=false;
+            cache_valid=false; // Pixel identity is committed with metadata below.
             pixels=std::move(restored_viewport);raster_draw_pixels=0;
             raster_cached_pixels=static_cast<c3x_renderer_u32>(width*height);
             frame_cache_path="viewport-lru-animation";
@@ -7206,9 +7690,14 @@ public:
         frame_geometry_ticks = geometry_finished.QuadPart - started.QuadPart;
         trace.write("geometry-ready", frame_cache_path);
         if(cancelled())return false;
+        memory_sample("geometry-ready");
+        if(profiling && !raster_rects.empty())gpu_telemetry.begin(device,context,trace.sequence.load());
+        c3x_renderer::render_core::GpuFrameTelemetry::Scope timing_scope{gpu_telemetry,context};
         if (!raster_rects.empty() && !submit_geometry(geometry_vertex_buffers, raster_rects,
                 geometry_viewport_settings, render_target, depth_target,
-                c3x_renderer::power_of_two_extent(width), c3x_renderer::power_of_two_extent(height),foreground_pending)) return false;
+                c3x_renderer::power_of_two_extent(width), c3x_renderer::power_of_two_extent(height),foreground_pending,
+                false,true,nullptr,false,nullptr,nullptr,city_profile?scene_region_size:128,raster_grid_phase[0],raster_grid_phase[1])) return false;
+        gpu_telemetry.draw_end(context);
 
         QueryPerformanceCounter(&draw_finished);
         frame_draw_ticks = draw_finished.QuadPart - geometry_finished.QuadPart;
@@ -7223,12 +7712,22 @@ public:
             context->CopySubresourceRegion(readback_texture, 0, box.left, box.top, 0,
                 render_texture, 0, &box);
         }
+        gpu_telemetry.end(context);
+        LARGE_INTEGER map_begin={},map_end={};QueryPerformanceCounter(&map_begin);
         D3D11_MAPPED_SUBRESOURCE mapped = {};
         HRESULT hr = raster_rects.empty() ? S_OK : context->Map(readback_texture, 0, D3D11_MAP_READ, 0, &mapped);
+        QueryPerformanceCounter(&map_end);
         if (FAILED(hr)) {
             OutputDebugStringA("[C3X renderer] native-failure=readback\n");
             return false;
         }
+        if(cancelled()){
+            if(!raster_rects.empty())context->Unmap(readback_texture,0);
+            return false;
+        }
+        // Until here cancellation leaves the previous CPU bitmap untouched.
+        // From the first write until metadata commit it cannot donate pixels.
+        cache_valid=false;
         if (reuse_raster) {
             // Copy in the safe vertical direction, using memmove for horizontal
             // overlap. No second full-resolution CPU scratch bitmap is needed.
@@ -7254,6 +7753,13 @@ public:
         if (!raster_rects.empty()) context->Unmap(readback_texture, 0);
         QueryPerformanceCounter(&readback_finished);
         frame_readback_ticks = readback_finished.QuadPart - draw_finished.QuadPart;
+        if(profiling){
+            char detail[320];sprintf_s(detail,"map_wait_ms=%.3f cpu_copy_ms=%.3f draws=%llu parameter_updates=%llu bounds_tests=%llu raster_rects=%zu",
+                trace.milliseconds(map_end.QuadPart-map_begin.QuadPart),trace.milliseconds(readback_finished.QuadPart-map_end.QuadPart),
+                frame_draw_calls,frame_parameter_updates,frame_bounds_tests,raster_rects.size());
+            trace.write("submission-phases",detail,true);
+            memory_sample("readback-complete");
+        }
 
         bitmap_footprints = std::move(current_footprints);
         bitmap_footprint_signature = signature;
@@ -7433,6 +7939,9 @@ RendererState renderer;
 struct PublishedMapFrame {
     c3x_renderer_output_v1 output={};
     std::vector<std::uint32_t> pixels, fallback, replacements;
+    std::vector<c3x_renderer_tile_v1> occurrences;
+    c3x_renderer_frame_v1 frame={};
+    c3x_renderer_camera_identity_v1 identity={};
     int phase_x=0,phase_y=0;
     PublishedMapFrame()=default;
     PublishedMapFrame(PublishedMapFrame const&)=delete;
@@ -7440,9 +7949,15 @@ struct PublishedMapFrame {
     void swap(PublishedMapFrame& other) noexcept {
         std::swap(output,other.output);
         pixels.swap(other.pixels);fallback.swap(other.fallback);replacements.swap(other.replacements);
+        occurrences.swap(other.occurrences);std::swap(frame,other.frame);std::swap(identity,other.identity);
         std::swap(phase_x,other.phase_x);std::swap(phase_y,other.phase_y);
     }
-    bool capture(c3x_renderer_output_v1 const& source,int x,int y) {
+    std::size_t bytes() const {
+        return (pixels.capacity()+fallback.capacity()+replacements.capacity())*sizeof(std::uint32_t)+
+            occurrences.capacity()*sizeof(c3x_renderer_tile_v1)+sizeof(PublishedMapFrame);
+    }
+    bool capture(c3x_renderer_output_v1 const& source,int x,int y,
+                 c3x_renderer_frame_v1 const* captured=nullptr,c3x_renderer_camera_identity_v1 const& epochs={}) {
         constexpr std::uint64_t budget=32u*1024u*1024u;
         if(source.width<=0 || source.height<=0 || source.width>8192 || source.height>8192 ||
            source.stride_bytes!=source.width*4 || !source.bgra_pixels ||
@@ -7450,7 +7965,13 @@ struct PublishedMapFrame {
            (source.fallback_tile_count && !source.fallback_tile_indices) ||
            (source.replacement_tile_count && !source.replacement_tile_flags))return false;
         auto count=std::uint64_t(source.width)*std::uint64_t(source.height);
-        if((count+source.fallback_tile_count+source.replacement_tile_count)*4+sizeof(PublishedMapFrame)>budget)return false;
+        if(captured && (captured->tile_count>8192 || (captured->tile_count && !captured->tiles) ||
+           source.replacement_tile_count!=captured->tile_count || source.width!=captured->target_width ||
+           source.height!=captured->target_height))return false;
+        if(captured)for(unsigned i=0;i<source.fallback_tile_count;++i)
+            if(source.fallback_tile_indices[i]>=captured->tile_count)return false;
+        auto occurrence_bytes=captured?std::uint64_t(captured->tile_count)*sizeof(c3x_renderer_tile_v1):0;
+        if((count+source.fallback_tile_count+source.replacement_tile_count)*4+occurrence_bytes+sizeof(PublishedMapFrame)>budget)return false;
         try {
             PublishedMapFrame next;
             auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);
@@ -7459,11 +7980,17 @@ struct PublishedMapFrame {
                 source.fallback_tile_indices+source.fallback_tile_count);
             if(source.replacement_tile_count)next.replacements.assign(source.replacement_tile_flags,
                 source.replacement_tile_flags+source.replacement_tile_count);
+            if(captured){
+                if(captured->tile_count)next.occurrences.assign(captured->tiles,captured->tiles+captured->tile_count);
+                next.frame=*captured;next.identity=epochs;
+                next.frame.tiles=next.occurrences.empty()?nullptr:next.occurrences.data();
+                next.frame.world_topology=nullptr;next.frame.world_topology_count=0;
+            }
             // Account allocated capacity, not just requested payload bytes.
-            if((std::uint64_t(next.pixels.capacity())+next.fallback.capacity()+next.replacements.capacity())*4+
-               sizeof(PublishedMapFrame)>budget)return false;
+            if(next.bytes()>budget)return false;
             next.output=source;next.phase_x=x;next.phase_y=y;
             pixels.swap(next.pixels);fallback.swap(next.fallback);replacements.swap(next.replacements);
+            occurrences.swap(next.occurrences);frame=next.frame;identity=next.identity;
             output=next.output;phase_x=next.phase_x;phase_y=next.phase_y;
             output.bgra_pixels=pixels.data();
             output.fallback_tile_indices=fallback.empty()?nullptr:fallback.data();
@@ -7475,6 +8002,7 @@ struct PublishedMapFrame {
         std::vector<std::uint32_t>().swap(pixels);
         std::vector<std::uint32_t>().swap(fallback);
         std::vector<std::uint32_t>().swap(replacements);
+        std::vector<c3x_renderer_tile_v1>().swap(occurrences);frame={};identity={};
         output={};phase_x=phase_y=0;
     }
 };
@@ -7485,7 +8013,8 @@ struct PublishedMapFrame {
 struct CameraTerrainPreview {
     template<class Textures>
     bool render(c3x_renderer_frame_v1 const& frame,Textures const& textures,
-                PublishedMapFrame& target,std::atomic<bool> const& cancelled) {
+                PublishedMapFrame& target,std::atomic<bool> const& cancelled,
+                c3x_renderer_camera_identity_v1 const& identity={}) {
         constexpr unsigned edge=32;
         std::array<std::array<std::uint32_t,edge*edge>,14> colors{};
         std::array<bool,14> ready{};
@@ -7533,9 +8062,15 @@ struct CameraTerrainPreview {
             ready[type]=true;
         }
         auto count=std::uint64_t(frame.target_width)*frame.target_height;
-        if((count+frame.tile_count)*4+sizeof(PublishedMapFrame)>32u*1024u*1024u)return false;
+        if((count+frame.tile_count)*4+std::uint64_t(frame.tile_count)*sizeof(c3x_renderer_tile_v1)+
+           sizeof(PublishedMapFrame)>32u*1024u*1024u)return false;
         target.clear();target.pixels.assign(std::size_t(count),0xff000000u);
         target.replacements.assign(frame.tile_count,0);
+        if(frame.tile_count)target.occurrences.assign(frame.tiles,frame.tiles+frame.tile_count);
+        target.frame=frame;target.identity=identity;
+        target.frame.tiles=target.occurrences.empty()?nullptr:target.occurrences.data();
+        target.frame.world_topology=nullptr;target.frame.world_topology_count=0;
+        if(target.bytes()>32u*1024u*1024u)return false;
         auto environment=c3x_renderer::evaluate_environment(float(frame.hour),frame.season);
         // A base water texture is the bed, not the water surface. Use a coarse
         // optical-depth estimate per captured water family with the existing
@@ -7723,10 +8258,16 @@ public:
 
     // Optional Lab-facing camera API. One active immutable snapshot and one
     // replaceable pending snapshot; no backlog and no old-camera success.
-    int camera_begin(c3x_renderer_frame_v1 const& frame,c3x_renderer_i64& ticket) {
+    int camera_begin(c3x_renderer_frame_v1 const& frame,c3x_renderer_i64& ticket,
+                     c3x_renderer_camera_identity_v1 const& identity={}) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         if(camera_ticket==INT64_MAX)return C3X_RENDERER_RESULT_ERROR;
+        // Reject an unsupported publication before copying snapshots or asking
+        // D3D for a target. Include worst-case fallback/replacement arrays.
+        auto required=(std::uint64_t(frame.target_width)*frame.target_height+std::uint64_t(frame.tile_count)*2)*4+
+            std::uint64_t(frame.tile_count)*sizeof(c3x_renderer_tile_v1)+sizeof(PublishedMapFrame);
+        if(required>32u*1024u*1024u)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         std::vector<c3x_renderer_tile_v1> tiles;
         std::vector<c3x_renderer_u32> topology;
         try {
@@ -7743,6 +8284,7 @@ public:
         }
         start_locked();
         camera_pending_frame=frame;
+        camera_pending_identity=identity;
         camera_pending_tiles.swap(tiles);camera_pending_topology.swap(topology);
         camera_pending_frame.tiles=camera_pending_tiles.empty()?nullptr:camera_pending_tiles.data();
         camera_pending_frame.world_topology=camera_pending_topology.empty()?nullptr:camera_pending_topology.data();
@@ -7753,6 +8295,7 @@ public:
         camera_cancelled.store(true,std::memory_order_relaxed);
         foreground_pending.store(true,std::memory_order_relaxed);
         completed_scene_signature=0;
+        snapshot_memory("camera-begin");
         wake.notify_one();
         return C3X_RENDERER_RESULT_PENDING;
     }
@@ -7760,6 +8303,24 @@ public:
     int camera_poll(c3x_renderer_i64 ticket,c3x_renderer_output_v1& output) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::lock_guard<std::mutex> lock(state_mutex);
+        return camera_poll_locked(ticket,output);
+    }
+
+    int camera_poll_view(c3x_renderer_i64 ticket,c3x_renderer_camera_view_v1& view) {
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        c3x_renderer_output_v1 output={};
+        int result=camera_poll_locked(ticket,output);
+        if(result==C3X_RENDERER_RESULT_OK || result==C3X_RENDERER_RESULT_PREVIEW){
+            view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+            view.ticket=ticket;view.identity=publication.identity;
+            view.frame=publication.frame;view.output=output;
+        }
+        return result;
+    }
+
+private:
+    int camera_poll_locked(c3x_renderer_i64 ticket,c3x_renderer_output_v1& output) {
         if(ticket<=0 || ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
         if(camera_result!=C3X_RENDERER_RESULT_OK && camera_result!=C3X_RENDERER_RESULT_PENDING)return camera_result;
         if(camera_ready.output.bgra_pixels) {
@@ -7775,6 +8336,7 @@ public:
         return camera_front_result;
     }
 
+public:
     int camera_cancel(c3x_renderer_i64 ticket) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::lock_guard<std::mutex> lock(state_mutex);
@@ -7812,7 +8374,7 @@ public:
     int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr,int* bounds=nullptr) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
-        drain_camera_locked(lock);
+        UnitCameraPause pause(*this,lock);
         if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
         start_locked();job_unit=request;
         if(bounds) {
@@ -7881,11 +8443,12 @@ private:
     c3x_renderer_i64 camera_front_ticket=0;
     int camera_ready_result=C3X_RENDERER_RESULT_OK,camera_front_result=C3X_RENDERER_RESULT_PENDING;
     c3x_renderer_frame_v1 camera_pending_frame={};
+    c3x_renderer_camera_identity_v1 camera_pending_identity={},job_camera_identity={};
     std::vector<c3x_renderer_tile_v1> camera_pending_tiles;
     std::vector<c3x_renderer_u32> camera_pending_topology;
     c3x_renderer_i64 camera_ticket=0;
     int camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
-    bool camera_active=false,camera_pending=false;
+    bool camera_active=false,camera_pending=false,camera_paused=false;
     std::atomic<bool> camera_cancelled{false};
     bool isolated_publication=false;
     int completed_phase_x=0,completed_phase_y=0;
@@ -7940,8 +8503,20 @@ private:
         worker = std::thread(&RendererWorker::run, this);
     }
 
+    void snapshot_memory(char const* phase) {
+        if(!renderer_state.profiling)return;
+        char detail[384];std::snprintf(detail,sizeof(detail),
+            "phase=%s active_tiles=%zu pending_tiles=%zu warm_tiles=%zu active_topology=%zu pending_topology=%zu warm_topology=%zu front=%zu ready=%zu active=%u pending=%u paused=%u",
+            phase,job_tiles.capacity()*sizeof(c3x_renderer_tile_v1),camera_pending_tiles.capacity()*sizeof(c3x_renderer_tile_v1),
+            warm_tiles.capacity()*sizeof(c3x_renderer_tile_v1),job_world_topology.capacity()*4,
+            camera_pending_topology.capacity()*4,warm_world_topology.capacity()*4,publication.bytes(),camera_ready.bytes(),
+            unsigned(camera_active),unsigned(camera_pending),unsigned(camera_paused));
+        renderer_state.trace.write("memory-worker",detail,true);
+    }
+
     void drain_camera_locked(std::unique_lock<std::mutex>& lock) {
-        // Synchronous unit/config/render commands take priority. Never change
+        // Configuration, reset and synchronous map draws replace camera work.
+        // Units use a resumable pause instead. Never change
         // job_frame or any renderer-owned object while the camera uses it.
         camera_cancelled.store(true,std::memory_order_relaxed);
         camera_pending=false;camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
@@ -7950,6 +8525,36 @@ private:
         camera_ready.clear();
         camera_pending_tiles.clear();camera_pending_topology.clear();
     }
+
+    // A unit owns the serialized renderer until its UI-thread copy finishes.
+    // Save the interrupted immutable map without allocating a third snapshot.
+    // A newer pending camera takes precedence over the interrupted one.
+    struct UnitCameraPause {
+        RendererWorker& owner;
+        std::unique_lock<std::mutex>& lock;
+        UnitCameraPause(RendererWorker& worker,std::unique_lock<std::mutex>& gate):owner(worker),lock(gate) {
+            owner.camera_paused=true;
+            bool const interrupted=owner.camera_active;
+            owner.foreground_pending.store(true,std::memory_order_relaxed);
+            if(interrupted)owner.camera_cancelled.store(true,std::memory_order_relaxed);
+            owner.completed.wait(lock,[&]{return !owner.camera_active;});
+            if(interrupted && !owner.camera_pending && owner.camera_result==C3X_RENDERER_RESULT_PENDING) {
+                owner.camera_pending_frame=owner.job_frame;
+                owner.camera_pending_identity=owner.job_camera_identity;
+                owner.camera_pending_tiles.swap(owner.job_tiles);
+                owner.camera_pending_topology.swap(owner.job_world_topology);
+                owner.camera_pending_frame.tiles=owner.camera_pending_tiles.empty()?nullptr:owner.camera_pending_tiles.data();
+                owner.camera_pending_frame.world_topology=owner.camera_pending_topology.empty()?nullptr:owner.camera_pending_topology.data();
+                owner.camera_pending=true;
+            }
+        }
+        ~UnitCameraPause() {
+            if(!lock.owns_lock())lock.lock();
+            owner.camera_paused=false;
+            owner.foreground_pending.store(owner.camera_pending,std::memory_order_relaxed);
+            owner.wake.notify_one();
+        }
+    };
 
     int submit_locked(std::unique_lock<std::mutex> & lock, Command command) {
         if(command!=Command::unit)foreground_pending.store(true, std::memory_order_relaxed);
@@ -8033,9 +8638,10 @@ private:
     void run() {
         std::unique_lock<std::mutex> lock(state_mutex);
         for (;;) {
-            if(!has_job && !stop_requested && camera_pending) {
+            if(!has_job && !stop_requested && camera_pending && !camera_paused) {
                 auto const ticket=camera_ticket;
                 job_frame=camera_pending_frame;
+                job_camera_identity=camera_pending_identity;
                 job_tiles.swap(camera_pending_tiles);job_world_topology.swap(camera_pending_topology);
                 camera_pending_tiles.clear();camera_pending_topology.clear();
                 job_frame.tiles=job_tiles.empty()?nullptr:job_tiles.data();
@@ -8051,7 +8657,7 @@ private:
                     PublishedMapFrame preview;
                     bool available=false;
                     LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
-                    try {available=CameraTerrainPreview{}.render(job_frame,renderer_state.terrain_textures,preview,camera_cancelled);}
+                    try {available=CameraTerrainPreview{}.render(job_frame,renderer_state.terrain_textures,preview,camera_cancelled,job_camera_identity);}
                     catch(...){available=false;}
                     QueryPerformanceCounter(&end);
                     lock.lock();
@@ -8067,9 +8673,10 @@ private:
                 try {
                     bool ok=renderer_state.render(job_frame,output,-1,&camera_cancelled);
                     if(camera_cancelled.load(std::memory_order_relaxed)) {
-                        // Completed tile entries remain individually validated.
-                        // Partial viewport/draw assemblies must never be reused.
-                        renderer_state.cache_valid=false;
+                        // Completed tile entries and the last committed CPU
+                        // bitmap remain individually validated. Render marks
+                        // the bitmap invalid before any partial pixel mutation.
+                        // Only interrupted draw/animation assemblies are lost.
                         renderer_state.geometry_cache.clear();
                         renderer_state.clear_geometry_vertex_buffers();
                         result=C3X_RENDERER_RESULT_SUPERSEDED;
@@ -8089,7 +8696,7 @@ private:
                         int x=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_x;
                         int y=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_y;
                         camera_ready.clear();camera_ready_result=C3X_RENDERER_RESULT_OK;
-                        if(!camera_ready.capture(output,x,y))result=C3X_RENDERER_RESULT_ERROR;
+                        if(!camera_ready.capture(output,x,y,&job_frame,job_camera_identity))result=C3X_RENDERER_RESULT_ERROR;
                     }
                     camera_result=result;
                 }
@@ -8097,11 +8704,12 @@ private:
                     static_cast<long long>(ticket),static_cast<long long>(camera_ticket),result);
                 renderer_state.trace.write("camera-complete",detail,true);
                 camera_active=false;
+                snapshot_memory("camera-complete");
                 foreground_pending.store(camera_pending,std::memory_order_relaxed);
                 completed.notify_all();
                 continue;
             }
-            if (!has_job && !stop_requested && warm_cursor < warm_order.size()) {
+            if (!has_job && !stop_requested && !camera_paused && warm_cursor < warm_order.size()) {
                 // Yield between individual tiles. A foreground request wakes
                 // this delay and cancels CPU construction before GPU upload.
                 if (wake.wait_for(lock, std::chrono::milliseconds(2), [this] {
@@ -8162,7 +8770,7 @@ private:
                 }
                 continue;
             }
-            if (!has_job && !stop_requested && renderer_state.pixel_work_pending()) {
+            if (!has_job && !stop_requested && !camera_paused && renderer_state.pixel_work_pending()) {
                 if (wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;})) continue;
                 lock.unlock();
                 bool ok=false;
@@ -8178,8 +8786,8 @@ private:
                 }
                 continue;
             }
-            wake.wait(lock, [this] { return has_job || camera_pending || stop_requested; });
-            if(camera_pending && !has_job && !stop_requested)continue;
+            wake.wait(lock, [this] { return has_job || (camera_pending && !camera_paused) || stop_requested; });
+            if(camera_pending && !camera_paused && !has_job && !stop_requested)continue;
             if (stop_requested && !has_job)
                 break;
             Command command = job_command;
@@ -8381,6 +8989,22 @@ extern "C" __declspec(dllexport) int c3x_renderer_camera_poll(
 extern "C" __declspec(dllexport) int c3x_renderer_camera_cancel(c3x_renderer_i64 ticket) {
     if(!renderer_worker)return C3X_RENDERER_RESULT_SUPERSEDED;
     return renderer_worker->camera_cancel(ticket);
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_camera_begin_view(
+    c3x_renderer_camera_request_v1 const* request,c3x_renderer_i64* ticket) {
+    c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(c3x_renderer_output_v1)};
+    if(!request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || request->struct_size!=sizeof(*request) ||
+       !ticket || !valid_frame(request->frame,&output))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().camera_begin(*request->frame,*ticket,request->identity);
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_camera_poll_view(
+    c3x_renderer_i64 ticket,c3x_renderer_camera_view_v1* view) {
+    if(!view || view->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || view->struct_size!=sizeof(*view))
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    if(!renderer_worker)return C3X_RENDERER_RESULT_SUPERSEDED;
+    return renderer_worker->camera_poll_view(ticket,*view);
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_blit(

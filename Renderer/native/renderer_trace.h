@@ -11,6 +11,7 @@ struct RendererTrace {
     int level = 2;
     FILE * file = nullptr;
     std::size_t bytes = 0;
+    std::size_t file_limit = 8u * 1024u * 1024u;
     std::atomic<std::uint64_t> sequence{0};
     LARGE_INTEGER frequency = {};
     LARGE_INTEGER last_summary = {};
@@ -19,6 +20,8 @@ struct RendererTrace {
         char value[16] = {};
         if (GetEnvironmentVariableA("C3X_RENDERER_TRACE", value, sizeof(value)))
             level = std::clamp(std::atoi(value), 0, 2);
+        if (GetEnvironmentVariableA("C3X_RENDERER_REGION_DIAGNOSTICS", value, sizeof(value)) && std::strcmp(value,"1")==0)
+            file_limit = 32u * 1024u * 1024u;
         QueryPerformanceFrequency(&frequency);
         char path[MAX_PATH] = {};
         DWORD length = GetEnvironmentVariableA("C3X_RENDERER_TRACE_FILE", path, sizeof(path));
@@ -48,9 +51,9 @@ struct RendererTrace {
         if (count <= 0) return;
         std::size_t size = std::min(static_cast<std::size_t>(count), sizeof(line) - 1u);
         OutputDebugStringA(line);
-        // Stop file logging at 8 MiB; debugger output remains available. No
+        // Stop at 8 MiB (32 MiB for explicit region diagnostics); debugger output remains available. No
         // unbounded file growth, per-line flush, path disclosure, or rotation I/O.
-        if (file && bytes + size <= 8u * 1024u * 1024u) {
+        if (file && bytes + size <= file_limit) {
             bytes += std::fwrite(line, 1, size, file);
         }
     }

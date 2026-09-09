@@ -11,6 +11,113 @@ camera levels on repeated `Z` presses when `enable_custom_rendering` is also on.
 It is an integration setting rather than a pack-definition key; see
 [the custom zoom contract](custom_rendering_zoom.md).
 
+The current modern-machine candidate budgets GPU tile geometry at 768 MiB,
+CPU natural/ground retention at 96 MiB, viewport bitmaps at 32 MiB and static
+resource/wave backdrops at 128 MiB. These are separate ceilings, not a total
+process-memory allowance. Shadow atlases, textures, scratch targets, unit data,
+snapshots, publications and driver allocations require additional space. Civ III
+remains a 32-bit process; large physical RAM does not remove its address-space
+limit. These changes were authorized for modern computers and remain subject
+to widest-view and live-game memory verification.
+
+`C3X_RENDERER_GPU_GEOMETRY_MIB` is a compile-time pressure-test override
+(192–1024 MiB), not a definition-file setting. The older large-cache benchmark
+macro also increases CPU/bitmap/backdrop tiers; identify it separately from the
+production tier. Opt-in standalone diagnostics include `C3X_RENDERER_PROFILE=1`,
+`C3X_RENDERER_REGION_SIZE=256`, `512`, or `2240`, and `C3X_RENDERER_BLOCK_CLIP=1`.
+The `2240` experiment uses 2240-by-256 strips, with four-pixel main-pass
+guards and another four pixels for reflections. The linear targets retain
+2x resolution and MSAA4; their width and height are bounded independently.
+`C3X_RENDERER_BOUNDED_POST=1` additionally limits that strip path's glow
+dispatch and final color conversion to the guarded rectangle copied out.
+Dispatch origins align to eight pixels to retain the complete-target
+workgroup sampling. This switch is off by default; accumulated passes,
+512-pixel siblings and the dynamic 128-pixel backdrop path retain complete
+reconstruction. It does not reduce scratch allocation or MSAA resolve size.
+`C3X_RENDERER_WORLD_RASTER_GRID=1` keeps regions anchored to captured world
+coordinates for the scrolling parity experiment; it is off by default.
+Region size defaults to 128; larger regions remain experimental. They retain
+the same MSAA, reconstruction and filter quality, and use separate scratch
+from the 128-pixel dynamic backdrop path. No configuration here enables native
+asynchronous presentation.
+
+`C3X_RENDERER_WORLD_REGIONS=1`, together with the world raster grid and
+128-pixel regions, enables the experimental completed-region cache. It retains
+BGRA output in worker-owned GPU textures, with 256 MiB for images, 96 MiB for
+key/node metadata and at most 4,096 entries. `C3X_RENDERER_REGION_METADATA_MIB=32`
+selects the lower pressure-test limit. These are additional conditional cache
+ceilings, not total process or deferred-driver memory measurements. Admission
+failure skips caching while preserving ordinary full-quality rendering.
+`C3X_RENDERER_WORLD_REGIONS_CONTROL=1` renders the same full guarded regions
+independently for comparison. Both paths preserve current publication ownership;
+native surfaces are never retained by this cache. The feature defaults off.
+
+`C3X_RENDERER_REGION_RECEIVER_SHADOWS=1` experimentally narrows completed-region
+shadow dependencies from all casters in a required atlas page to the subset whose
+projected bounds reach any current region receiver bounds. A four-shadow-texel
+margin preserves normal offset, floor/tap footprint and raster tolerance. It does
+not alter atlas rendering or the shared shadow shader. Required page coordinates,
+selected caster versions/material bindings/offsets, reflection receivers and other
+region dependencies remain represented. The evidence runner exposes
+`--region-receiver-shadows`; the switch defaults off pending matched parity and
+broader edit/visibility checks.
+
+`C3X_RENDERER_TIGHT_NATURAL_BOUNDS=1` uses extrema of actual natural-mesh vertices
+in the native affine projection, instead of projecting the corners of the mesh's
+3D bounding box. The fixed-size retained metadata has no vertex copies or resource
+ownership. Projection preserves the existing two-pixel culling margin; unsupported
+tile aspect ratios use the previous bounds. The option affects culling and region
+dependencies, not vertices, shading or shadow atlas contents, and defaults off.
+The evidence runner exposes `--tight-natural-bounds`.
+
+`C3X_RENDERER_REGION_DIAGNOSTICS=1` emits per-region dependency component
+fingerprints and world/screen rectangles for offline miss analysis. The evidence
+runner exposes `--region-diagnostics`; `analyze_region_dependencies.py` classifies
+misses and optionally compares earlier region pixels with `--images`. Diagnostic
+hashes never authorize reuse or replace the full value key. Trace-heavy runs are
+not performance evidence. This explicit mode raises the bounded trace-file limit
+from 8 MiB to 32 MiB. Fingerprint or screenshot equality in one fixed-clock
+sweep does not establish a safe general invalidation rule.
+
+Region validity includes contributing draw order and transforms, material/content
+and environment state, required shadow-page identities, reflected contributors
+and nearby city lights. The current implementation derives those keys from
+prepared geometry; it does not yet bypass geometry preparation after mesh eviction
+or provide whole-map/disk-backed preparation. Newly exposed or differently captured
+regions can still miss. Exact new-camera parity does not establish instant cold
+jumps, animated performance, native presentation or the complete memory envelope.
+
+Static shadow caster preparation is shared for the lifetime of one animation
+composition by default. `C3X_RENDERER_COMPOSITION_CASTERS_CONTROL=1` restores
+independent preparation for every region for matched timing/pixel comparisons.
+The existing bounds/selection budgets and geometry ownership are unchanged.
+
+`C3X_RENDERER_WATER_COVERAGE=1` is an opt-in standalone experiment. It omits
+bed/water layers only when every uploaded flat-grid hydrology distance is
+safely positive, and skips reflection work in regions with no remaining water
+coverage. Shoreline, negative, uncertain and nonfinite samples retain the
+existing passes. This switch is off by default pending measured pixel parity.
+
+`C3X_RENDERER_WORLD_BACKDROPS=1` enables a separate animation-backdrop
+experiment when the world raster grid is also enabled. Regions retain their
+world-relative placement across pans; static scene, ownership, lighting,
+topology revision, zoom and device identity still invalidate cached linear
+color/depth. The 128 MiB backdrop cap is unchanged. Set
+`C3X_RENDERER_BACKDROP_REUSE_CONTROL=1` to redraw each region independently
+for pixel comparisons while preserving the same region placement. Both
+diagnostics default off; native presentation is unaffected.
+
+`C3X_RENDERER_WORLD_WAVES=1` enables a bounded pool of immutable coast-cell
+occurrences, including cached empty cells. Its GPU buffers have a 32 MiB cap;
+metadata has a separate 16,384-entry cap. The complete requested cell set is
+pinned before eviction. Raw wrapped coordinates retain their existing shadow
+and world placement. Topology revision, map/wrap dimensions, zoom/target,
+content and device changes invalidate the pool; light/time updates use the
+unchanged dynamic shader inputs. `C3X_RENDERER_WAVE_REUSE_CONTROL=1` rebuilds
+cells for independent comparisons. The new cell-local projection remains
+experimental. The legacy path retains its 16 MiB active-buffer cap, but now
+reports failure on overflow instead of silently dropping remaining ribbons.
+
 ## Design Principles
 
 - Human-editable text consistent with C3X's existing `key = value` and `#Section` style.

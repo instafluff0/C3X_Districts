@@ -1,5 +1,441 @@
 # Zoom performance verification
 
+## Current results — September 9, 2026
+
+**Current supported zoom envelope:** the user approved restricting custom zoom
+to the three closest levels, 128/160/192, on September 9, 2026. The injected `Z`
+control and native-state synchronization now exclude 64/96. Earlier five-level
+and widest-64 findings below remain diagnostic history, not new production gates.
+This reduces working-set and verification scope; it does not excuse the remaining
+full-view latency at 128 or the cold-destination/native-presentation requirements.
+
+The navigation implementation is in progress. No candidate from this work has
+been staged and Civ III has not been launched. The native boundary is still
+synchronous; [the source audit](native_async_presentation_audit.md) records the
+completion/redraw, displayed-transform and unit-scheduling requirements.
+
+**Architecture assessment:** the latest receiver-scoped shadow dependency
+experiment completes 100 prepared new views in 56.978 ms median / 197.096 ms p95,
+versus 938.716 / 1021.405 ms independently rendered with the same DLL and inputs.
+All 100 images match exactly. The 100 ms p95 and 30 FPS targets remain unmet.
+Compared with the preceding broad-page-key run, misses fall from 593 to 323 and
+p95 from 286.502 to 197.096 ms, but median rises from 41.541 to 56.978 ms. That
+cross-build comparison suggests a tail/CPU tradeoff, not a universal speedup.
+
+Completed world-region caching demonstrates a
+large, exact-image improvement for newly assembled prepared views. In the latest
+matched 100-view pair, median completion falls from 924.136 to 41.541 ms and p95
+from 1026.033 to 286.502 ms. All 100 images match independently rendered regions
+byte for byte; both paths build/upload zero static geometry. Legacy translated
+bitmap reuse and viewport-cache hits are disabled in this witness. This is useful
+evidence for prepared scrolling and revisits, but p95 still fails 100 ms, and
+fast pan/zoom anywhere is not established. The measured workload is 128 zoom,
+waves off, standalone completion; it does not certify other zooms, unseen or
+evicted destinations, animation, native presentation, or 30 FPS.
+
+The latest cost attribution rules out reflection-only work as the main solution.
+With the entire reflected-scene pass disabled, 100 complete prepared views still
+take 511.645 ms median, 565.262 ms p95, 635.980 ms p99 and 684.696 ms maximum.
+The matched current-quality run is 633.708 / 689.040 / 707.643 / 787.392 ms.
+This is a **diagnostic pass omission**, not a quality-preserving speedup: images
+intentionally lack reflections and cannot pass the resident-quality analyzer.
+Both runs use the same frozen `cb5324c0...` DLL and runtime inputs, no waves,
+no pixel reuse, and 100 full rasters with zero static builds/uploads. Receipt:
+`reflection-ablation-100/comparison.json`. The changed tool exposes the existing
+reflection-control switch, labels ablation receipts and rejects those receipts
+from quality gates; the executable receipt-rejection test passes.
+
+The implemented opt-in world-region cache owns completed guarded 136-by-136 GPU
+images for the 128-pixel world grid. Full value keys cover guarded ordered draw
+contributors, off-region shadow casters, reflections, nearby city lights,
+lighting/material/content revisions and current captured eligibility. Dynamic
+textures are excluded. The cache requires prepared geometry and includes its
+allocation versions: it cannot bypass geometry compilation after mesh eviction.
+It owns no native surfaces and adds no presenter. Cancellation is checked between
+regions, including cache hits. Defaults remain unchanged pending broader checks.
+
+The latest run records 17,929 hits and 593 misses, reusing 261,992,576 of
+267,008,000 output pixels across the sweep. Retained GPU images peak at
+112,307,712 bytes and accounted key/entry metadata at 44,495,520 bytes, within
+explicit 256 MiB GPU / 96 MiB metadata / 4,096-entry limits. There are zero
+evictions and rejected admissions. An earlier 32 MiB metadata run had 613 misses
+and eviction pressure; raising the limit removed eviction but barely changed
+misses. **Memory pressure is therefore not the principal explanation for the
+remaining misses.** The next high-value experiment must distinguish previously
+unprepared world regions from changed draw/shadow/capture dependencies. That
+determines whether advance preparation or dependency work will remove scrolling
+hitches. Do not weaken validity keys or keep raising budgets without that evidence.
+
+The first complete dependency trace (`world-region-dependencies-100`) now resolves
+that question: all 593 misses are previously observed world-region occurrences
+with changed component fingerprints. None are first-observed regions or unchanged
+fingerprints. Main shadows change in 517 misses, reflected shadows in 542, main
+draw contributors in 250 and reflected draw contributors in 274 (overlapping
+counts). Global context and city lights remain stable. This supports investigating
+capture-dependent draw/shadow invalidation before expanding neighborhood prefetch.
+Fingerprints are diagnostics only; exact value keys still govern cache reuse.
+The completed pixel diagnostic (`world-region-pixels-complete-100`) repeats those
+same counts. Of 593 misses, 273 have earlier fully covered region images available
+inside this sweep; all 273 have identical currently visible pixels. The other 320
+lack that comparison coverage and remain unclassified. Guard pixels are not
+compared. This is evidence of avoidable invalidation in this workload, not a
+general proof that changed casters/contributors can be ignored. The next targeted
+implementation investigation is narrowing draw/shadow dependencies to contributors
+that can affect guarded region pixels, while preserving off-screen caster reach,
+reflections and current visibility eligibility. Simply prefetching more neighboring
+regions or increasing memory does not address the demonstrated cause.
+
+The diagnostic DLL is
+`c0af26ce0bec0f553dc241761cd95718e040f1527d4b5abfebd2b53e4bd5b7ce`;
+its `/W4 /WX` build and runtime/binary integrity receipts pass. All 100 complete
+images also match the prior independent-region images exactly (different DLL,
+unchanged runtime content). Four region ownership/dependency/analysis tests and
+the resident evidence rejection test pass. Trace-heavy timings are excluded from
+performance claims and rejected by the performance analyzer. The earlier
+`world-region-pixels-100` trace hit the default 8 MiB log cap and was correctly
+rejected as incomplete; the explicit diagnostic mode now permits a bounded 32 MiB
+trace. No native presentation, visual acceptance or staging is implied.
+
+The receiver-scoped matched pair is `receiver-shadows-100` versus
+`receiver-shadows-independent-100`, DLL
+`c067345a3c2b471ac4317e8e2a9261d394fb78e2ea3270864515215567257d13`.
+Both completion and runtime/binary integrity receipts pass. Cached p99/max are
+313.221/344.486 ms versus 1094.383/1139.843 ms independently rendered. The cache
+records 18,199 hits / 323 misses, 265,617,248 reused pixels, zero rejected
+admissions/evictions, and peaks of 85,673,472 GPU image bytes / 32,532,744 metadata
+bytes. Median CPU submission is 35.149 ms and GPU-completion/readback 5.614 ms.
+The actual shadow atlas and shader are unchanged; only completed-region validity
+uses the subset of page casters reaching receiver bounds, with a conservative
+four-shadow-texel margin. Required pages and material/version/offset dependencies
+remain represented. The option stays off by default pending broader edits,
+visibility, reflection and supported-zoom validation. The next implementation
+must address remaining misses and avoid repeatedly calculating identical
+dependency subsets; raising budgets is not supported by this run's zero evictions.
+
+The follow-up `receiver-shadow-dependencies-100` diagnostic confirms 323 changed-
+dependency misses: main draw fingerprints change in 231, reflected draw in 254,
+main shadows in 240 and reflected shadows in 264 (overlapping counts). All 76
+misses with an earlier fully covered region image have identical visible pixels;
+247 lack comparison coverage. This directs the next experiment toward culling
+extrema of actual natural-mesh vertices, since projected 3D boxes include empty
+space and inflate both draw and receiver dependencies. Diagnostic timings are
+excluded from performance results.
+
+The opt-in actual-vertex projected-bound follow-up (`tight-natural-bounds-100`)
+removes only 28 further misses: 295 misses / 18,227 hits, median 55.196 ms,
+p95 185.345 ms, p99 275.989 ms, maximum 286.076 ms. All 100 images match the
+preceding independent-region renders, but this is a different-DLL reference, not
+a new matched independent timing pair. Build and runtime/binary integrity pass;
+five region tests pass, including extrema against the actual GroundProjection
+at supported zooms, negative coordinates and sloped meshes. Fixed-size extrema
+replace projected 3D-box corners only in the experimental culling path; geometry
+and shaders remain unchanged. There are zero rejected admissions. This is a
+modest follow-up, not a route to the remaining nearly twofold p95 improvement.
+Stop further bounding-box refinements as the primary strategy; investigate stable
+region scene inputs/preparation across capture changes and repeated dependency
+calculation. Native presentation, arbitrary cold/evicted jumps and other zooms
+remain unmet. No candidate has been staged.
+
+The projected-bound candidate DLL SHA-256 is
+`e1cbd382a23aa2395c8e0104e1a2df3007c64bdbddd649491d297ff16c99ced0`.
+
+The preceding matched pair is `world-regions-metadata96-100` versus
+`world-regions-current-independent-100`; the former contains `comparison.json`.
+Both freeze DLL
+`163acb0037d9a47181934c9133f3e36632a7e1b8491f5be2649de057088af928`
+and executable
+`9554855651b964d13f41cef319abe6781d6d639fd0fd91ecad48913640660347`,
+with stable runtime inputs and successful completion. Cached p99/max are
+526.850/585.588 ms versus 1172.173/1270.996 ms independently rendered. Median CPU
+submission falls from 176.690 to 21.403 ms; readback/GPU-completion interval falls
+from 716.155 to 5.928 ms. The latter remains a combined interval, not isolated
+transfer timing. After-frame free address space stays above 1,831,845,888 bytes,
+largest contiguous region 1,704,984,576 bytes; these do not prove allocation-spike,
+deferred-driver or live-game memory bounds.
+
+The candidate builds with `/W4 /WX` and unchanged native/shared source closure.
+The preceding focused region/telemetry/animation/publication/core suite passes
+18 tests; the latest metadata/cancellation candidate passes all five region and
+telemetry tests. Executable tests cover cache ownership, pressure, queued-resource
+lifetime and dependency changes (off-region casters, alpha state, reflections,
+lights, draw order, content and visible geometry). Broader visibility, wrap,
+eviction/reset, all-supported-zoom and native integration checks remain required.
+Cold map preparation and native completion/pending-view integration remain
+separate required work.
+
+Fresh isolated measurements use the exported 100-by-100 `test.biq` map (5,000
+tiles), 2240-by-1192 output, fixed noon/season/presentation clock and the current
+local packs/shaders. The host is an 8 GiB Windows ARM Parallels VM on Apple
+Silicon, four logical processors, Parallels WDDM driver 20.18.2641.57516. Native
+witnesses use optimized MSVC x86 builds and large-address-aware executables.
+`native/record_navigation_evidence.py` freezes the DLL/executable and records
+runtime input hashes, switches, logs, images and exit receipts in a new folder.
+Receipts are disposable under `native/build/navigation-evidence-20260909/`.
+
+| Workload / receipt folder | Samples | Median / p95 / p99 (ms) | Finding |
+| --- | ---: | --- | --- |
+| Original 192 MiB GPU tier, `normal-resident-run` | 0 | unavailable | First view exceeds the geometry cap; retry also fails. |
+| Original high tier, `high-profile-resident` | 14 | 313.383 / 1187.936 / 1187.936 | Profiled; zero unchanged static builds/uploads. Too few samples for the plan's distribution gate. |
+| Independent high-tier cold, `high-profile-cold` | 14 | 8054.173 / 11957.117 / 11957.117 | Geometry dominates; reset and definition loading excluded. |
+| Cached caster bounds + block clipping, `block-clip-resident` | 14 | 167.241 / 935.982 / 935.982 | Unprofiled, waves off; exact against the earlier retained images. |
+| Waves enabled, `modern-100-resident` | 100 | 946.377 / 1511.149 / 1577.561 | 50 full rasters; 32 MiB backdrop cap at build time. Static counters exclude wave buffers. |
+| Experimental world-anchored raster grid, `world-grid-100-retained` | 100 | 67.434 / 141.960 / 176.037 | Waves off; only one full raster, zero static builds/uploads; 21 requests exceed 100 ms. All 100 images match independent same-DLL cold images byte for byte. |
+| Camera queue before bitmap transaction fix, `view-100-retained` | 100 | 965.784 / 1215.764 / 1244.192 | Deliberately superseded requests discarded still-valid raster reuse; 100 full rasters. |
+| Camera queue after bitmap transaction fix, `transaction-view-100-retained` | 100 | 120.114 / 162.939 / 207.811 | Same workload; one full raster, zero static builds/uploads. All 100 images exactly match independent cold results; 113 publication identity checks pass. |
+| Whole prepared views, `full-view-128-100` | 100 | 875.448 / 945.686 / 968.047 | Pixel reuse disabled deliberately; 100 full rasters, zero static builds/uploads. Current full rendering remains far above the 100 ms target. |
+| Larger-region whole prepared views, `full-view-512-100-complete` | 100 | 697.394 / 774.149 / 781.632 | Same DLL/clock/content, zero static builds/uploads. CPU submission median falls to 67.389 ms, but the readback/GPU-completion interval remains 608.784 ms. |
+| Same-build full-view water-coverage control, `water-control-full-view-128-100` | 100 | 948.532 / 1265.777 / 1365.058 | All pixels rendered, waves off, coverage culling disabled. |
+| Empty-water/reflection rejection, `water-coverage-full-view-128-100` | 100 | 808.053 / 864.015 / 884.902 | Same DLL/executable/input hashes, all pixels rendered; all 100 images byte-identical to control. Still far above target. |
+| World-grid pans with waves, `world-grid-waves-100` | 100 | 528.288 / 769.447 / 1087.881 | One full terrain raster, zero static builds/uploads; wave geometry and backdrop work remain expensive. |
+| World-aligned backdrops redrawn independently, `world-backdrops-100-fresh` | 100 | 657.049 / 1064.858 / 1448.105 | Same current DLL/grid/clock; all 5,153 static animation regions redrawn. |
+| Retained world-aligned backdrops, `world-backdrops-100-retained` | 100 | 432.654 / 859.108 / 1302.410 | 3,026 hits and 2,127 misses; all 100 images byte-identical to the independent-backdrop control. |
+| Independent coast-cell wave rebuilding, `world-wave-cells-100-fresh` | 100 | 310.100 / 608.876 / 687.331 | Same current DLL/projection/backdrop settings; 87,300 cell queries rebuilt and 1,010,930,688 wave-buffer bytes uploaded. |
+| Retained coast-cell waves, `world-wave-cells-100-retained` | 100 | 258.975 / 587.893 / 666.435 | Zero wave/static mesh builds or uploads; 87,300 cell hits; all 100 images exactly match the wave-rebuild control. |
+| Independent per-region caster preparation, `composition-casters-100-control` | 100 | 215.118 / 509.632 / 566.567 | Same DLL and wave/backdrop retention; 38–127 caster preparations per frame. |
+| Shared composition caster preparation, `composition-casters-100-shared` | 100 | 194.264 / 461.097 / 512.428 | Two preparations per frame; all 100 images exactly match control; zero static/wave builds or uploads. |
+| Same-build whole-view control, `whole-view-128-matched-100` | 100 | 869.901 / 976.769 / 1064.910 | 100 complete prepared views; waves and pixel reuse off; no test/build work overlapped timing. |
+| Bounded rectangular strips, `whole-view-strips-uncontended-100` | 100 | 653.641 / 708.204 / 738.716 | 2240-by-256 regions; same DLL/content; zero static builds/uploads. Small pixel differences remain, and the 100 ms gate fails. |
+| Complete strip post-processing, `bounded-post-control-100` | 100 | 660.675 / 719.876 / 749.117 | Same current DLL/shader inputs, full prepared views with waves/pixel reuse off. |
+| Guarded strip post-processing, `bounded-post-stable-100` | 100 | 633.708 / 689.040 / 707.643 | All 100 images exactly match control; glow dispatch work falls 57.8%, but p95 improves only 4.3%. |
+
+All times above end at standalone render/capture completion, **not native
+presentation**. The current experiments do not meet 30 FPS or the warm p95
+100 ms target. The fixture does not establish animated-resource or native-unit
+coverage. The 1,000-presented-frame gate, all-three-supported-zoom distributions, arbitrary
+cold/evicted destinations and live game-thread bookkeeping remain unmet.
+
+The composition comparison shares one bounded immutable caster preparation
+across static backdrop and animated-region submissions. It extends the existing
+recursive submission sharing; it does not introduce a persistent shadow cache.
+Both runs use DLL `9cae17c50683a3ecf8e2f534ac2109188af6dcafff9fdd2d3b6603888f7dd723`
+and matching frozen runtime inputs. Median improves by 9.7% and p95 by 9.5%;
+maximum is 1321.001 ms shared versus 1238.962 ms control, so worst-case latency
+does not improve. The independent control rebuilds caster preparation over the
+same retained static base and backdrops, not a wholly cold scene. The focused
+suite at this checkpoint has 52 passing tests and 17 compiler-path skips.
+
+The rectangular strip experiment lowers whole-view p95 by 27.5%, but it is
+still 7.1 times the 100 ms target. CPU submission median falls from 166.262 to
+47.888 ms (71.2%), while the GPU-completion/readback interval falls only from
+669.597 to 588.372 ms (12.1%). Total maxima are 1083.621 ms control and
+782.960 ms strips. This is evidence that repeated submission is expensive,
+and equally that reducing it alone is insufficient. The next full-view work
+must reduce GPU pass/resolve/reconstruction cost, including unused scratch
+area, rather than count another small-pan cache improvement as that solution.
+The VM's delayed GPU timestamps remain unusable for precise pass attribution.
+
+The strip pair uses DLL
+`7b76d8357940868fd2b03e39cbf7aba4d3378e6d556877c7c53b87112f91cfb5`,
+with matching frozen inputs and a `/W4 /WX` build whose native/shared source
+closure was unchanged. Every image differs from the 128-pixel control: at most
+434 of 2,670,080 pixels and 5/255 in a channel. A focused/context comparison is
+saved beside `comparison.json`; this is not visual acceptance. The default
+remains 128-pixel regions. The earlier `whole-view-strips-100` run is diagnostic
+only because test compilation overlapped it; it is excluded from these timings.
+
+After-frame address-space samples in the uncontended strip sweep retain at
+least 1,914,060,800 bytes free, with a largest free region of 1,783,627,776 bytes.
+These are standalone after-frame samples, not allocation-spike or live-game
+reserve verification. Rectangular scratch preserves MSAA4, 2x reconstruction
+and pixel-sized guards, with separate 128-pixel animation scratch. The focused
+current suite has 53 passing tests and 17 compiler-path skips, including actual
+C++ clipping checks for independent strip axes; full integration and all-zoom
+stress remain pending.
+
+The bounded-post pair shows that unused glow/conversion work is a secondary
+cost, not the missing large speedup. Across 100 complete views, compute lanes
+fall from 664,688,640 to 280,592,256. Median CPU submission is almost unchanged
+(48.474 versus 47.297 ms), and GPU-completion/readback median falls from
+587.947 to 564.660 ms. Maximum total time is worse in this pair (765.728 versus
+787.392 ms); do not claim improved worst-case latency. The next rendering
+investigation must address scene/reflection/resolve work rather than continue
+optimizing glow as though it dominates. Native presentation remains unmeasured.
+
+Both valid runs use DLL
+`cb5324c0acf5403261e9ed2aded9725175406b5bdb24be525ac57208cf19a696`
+and matching stable runtime inputs. All 100 control images also exactly match
+the previous shader's strip outputs. `bounded-post-100` is excluded because
+its first execution refreshed `hdr_glow.hlsl.CSPost.cso`; only the fresh stable
+pair above passed input-integrity checks. The shared shader source and native
+adapter preserve the original workgroups by using an eight-pixel-aligned
+dispatch origin. Scratch dimensions, MSAA resolve and filter quality are
+unchanged; accumulated/non-strip paths retain full reconstruction. The feature
+is opt-in. The current focused suite executes 60 passing tests with 17
+compiler-path skips, including six city pickup checks and actual C++ dispatch
+coverage/coordinate tests. The build passes `/W4 /WX` with unchanged native/shared
+build inputs.
+
+The bitmap transaction fix preserves a completed CPU image when cancellation
+occurs before the next readback changes it. Interrupted geometry assembly still
+invalidates independently. Identity, ordered captured occurrences and ownership
+now publish atomically through optional versioned camera-view exports. Unit
+takeover pauses/resumes the requested map instead of unconditionally losing it.
+These exports are not bound by the injected bridge. Queue begin p95 was 1.175 ms
+over 113 calls in the transaction witness; this is not total game-thread
+capture/submission/poll/composition cost. Its 120 ms total includes the witness's
+deliberate obsolete request and 10 ms pause. The before/after images agree with
+the previously frozen independent cold DLL, not a new same-DLL cold sweep.
+
+For the whole prepared-view control, median capture was 1.793 ms, geometry
+assembly 2.306 ms, CPU draw submission 174.927 ms and readback interval 665.600 ms.
+The last interval includes GPU completion. These measurements establish that
+removing cold mesh construction alone cannot meet the arbitrary-jump objective.
+The next decision points are larger-region/full-view cost, widest-zoom memory,
+animated-water cost and missing-region preparation, measured separately.
+
+The 512-pixel experiment reduces whole-view p95 by 18%, insufficient to close
+the nearly eightfold remaining gap. Compared with 128-pixel regions, all 100
+images differ: at most 430 pixels per 2,670,080-pixel image, with maximum channel
+difference 5/255. Keep this path experimental; it is not an exact-parity win or
+accepted appearance change. The earlier `full-view-512-100` directory was
+interrupted before its completion marker and must not be treated as a complete
+distribution receipt. Only the `-complete` run above passed execution/input
+integrity checks. Larger blocks alone are not a viable complete solution.
+
+The water-coverage experiment omits bed/water geometry only when every actual
+uploaded hydrology sample has positive land distance beyond a conservative
+margin. Unknown/nonfinite samples retain their passes. Regions with no drawable
+water skip their unused reflected scene. Two executable/contract tests pass,
+and the 100-frame paired full-view witness preserves exact output. Median CPU
+submission falls from 200.394 to 140.778 ms in that pair. The control also shows
+greater variation in unchanged capture/geometry work; do not extrapolate this
+single pair's percentage to other hardware or the complete experience. It is
+useful work elimination, not evidence that full-view rendering meets the goal.
+The switch remains opt-in. Its DLL SHA-256 is
+`9d6d9388f20e763a04c91110b16d722fbdbea42529755368f5cf2a68b3608fad`;
+the isolated build passed `/W4 /WX` with unchanged native/shared source inputs.
+Telemetry and water-coverage tests are now included in the renderer workbench's
+integration test selection.
+The focused run at the water-coverage checkpoint executes 65 tests: 48 pass and
+17 skip for unavailable compiler paths; there are no failures or errors in
+this set (`navigation-current-native-tests.log`). This includes the actual
+MSVC publication/query/coverage/render-core witnesses. The broader integration
+limitations recorded below remain outstanding.
+
+The latest waves witness uses the 128 MiB backdrop tier and current raster
+transaction fix, with water-coverage rejection disabled. Its trace reaches the
+last frame: 30 wave ribbons, 38 backdrop regions, zero backdrop hits, 38 misses,
+131,395,584 backdrop bytes and 5,944,320 newly uploaded wave-geometry bytes.
+The dynamic composition alone takes 310.264 ms on that frame. Static mesh
+counters do not include those wave buffers. Both `prepare_wave_chunks` and
+backdrop lookup still use the complete frame signature, so camera changes
+invalidate otherwise reusable data in that baseline. Increasing backdrop
+capacity alone cannot fix those camera-invalidated entries. The waves sweep
+has no independent whole-scene cold comparison yet.
+
+The next experiment removes camera anchors from backdrop identity and places
+regions on the world raster grid. It retains conservative whole-capture scene
+and ownership identity, target/zoom, light, wrap, content/device generation and
+the topology revision even when a request carries no new topology payload.
+Negative or overhanging region origins remain intact for caching and rendering;
+only the final native-size output copy is clipped. Two actual MSVC tests cover
+the grid's complete/non-overlapping output coverage, all-five-zoom translation
+keys and conservative static-identity changes. The frozen build is
+`navigation-world-backdrops-topology-20260909`, DLL SHA-256
+`04d03081c6d9c59d921ae84add93f95cdc41f3b5d66d4d9646968aa5cbe2bf7c`;
+`/W4 /WX` compilation and unchanged-source build receipts pass.
+The current focused native test run passes 50 executed tests, with 17 compiler
+path skips and no failures/errors (67 total, `navigation-backdrop-native-tests.log`).
+
+The paired 100-pan witness above uses identical DLL/executable/input hashes,
+waves and region placement. Reuse avoids 59% of static animation-region
+rebuilds, lowers median completion by 34% and p95 by 19% in this pair, and
+preserves every output byte. Backdrop textures peak at 131,395,584 bytes within
+the unchanged 128 MiB cap. This control independently redraws each animation
+backdrop over retained terrain; it is not an independent geometry-cold scene.
+The new grid also differs from the previous screen-aligned animation grid, so
+do not treat the older waves run as a matched timing or appearance control.
+Whole-capture changes and capacity still cause misses; wave ribbons still use
+complete-frame identity and rebuild/upload during pans. This is an opt-in
+intermediate improvement, not a warm-latency, arbitrary-jump or native pass.
+
+The wave-cell experiment retains immutable cell-local buffers and cached empty
+cells across views, with a 32 MiB GPU-buffer cap and 16,384 metadata-entry cap.
+The complete current captured set pins its existing cells before admission or
+eviction; cached off-screen cells alone never make a visible occurrence. Raw
+wrapped coordinates preserve source world/shadow placement. Whole topology
+revision, dimensions/wrap, target/zoom, content and device generations remain
+conservative invalidation boundaries. Light and animation time do not change
+wave geometry. RAII owners release partially allocated cells on failure, while
+active views retain their own references. The old 16 MiB path now explicitly
+fails overflow rather than silently omitting ribbons.
+
+The matched 100-pan test eliminates 1.01 GB of repeated uploads and all 87,300
+cell rebuild queries, while preserving every output byte against independent
+cell rebuilding. The pool peaks at 33,486,336 GPU-buffer bytes and 3,464 entries.
+Median completion improves 16%, but p95 improves only 3% and remains 588 ms:
+wave preparation is no longer the main obstacle in this prepared workload.
+Full-view draw/submission cost and remaining backdrop misses still require work.
+These are isolated comparisons; do not combine percentage changes across runs.
+
+Cell-local arithmetic differs from the previous projection in at most 72 pixels
+per image over the 100-view comparison, all by one channel level. Keep the path
+experimental pending broader visual/zoom/edit/pressure coverage. The reference
+rebuilds wave cells over retained terrain/backdrops; it is not a whole-scene cold
+or native-presentation test. DLL SHA-256:
+`74e720c988e59cb18030284d71a82c6b416b66cfd9c4f2cecde5c106d6cc3a13`,
+from `navigation-world-wave-cells-20260909`; `/W4 /WX` and source-closure receipts
+pass. The latest focused native suite runs 69 tests: 52 pass, 17 skip, with no
+failures/errors (`navigation-wave-retention-native-tests.log`).
+
+The previous retained/cold pixel discrepancy is isolated to bitmap translation:
+`raster-control-resident` disables translated overlap/block reuse and matches all
+14 independent cold images exactly with retained geometry. This excludes the
+retained meshes as the cause in that witness. The world-grid experiment keeps
+raster-region coordinates attached to authoritative world anchors; it remains
+off by default pending exact comparison and visual/context review. Larger
+256-pixel regions did not improve total latency and changed a few pixels; they
+also remain opt-in. No shading, detail or reference acceptance gate was relaxed.
+
+Delayed timestamp/disjoint queries use eight fixed slots and non-flushing polls.
+This VM returns implausibly tiny GPU timestamp intervals despite valid status,
+so they cannot support GPU speedup claims here. A separate 100-copy D3D11
+readback-floor witness measured 2240-by-1192 copy/Map/CPU-copy median 2.751 ms,
+p95 10.550 ms, p99 11.018 ms. It excludes scene rendering and native blitting;
+the much larger renderer Map interval includes outstanding GPU work.
+
+With the user's explicit higher-memory authorization, the candidate default is
+768 MiB GPU geometry, 96 MiB CPU natural data, 32 MiB viewport cache and 128 MiB
+resource backdrops. These are separate caps, not a process budget. The earlier
+high tier used 192/128/288 MiB for the latter three categories. Sampled free VA
+was above 1.83 GB in the profiled high-tier retained sweep; this is not a live
+game reserve or peak guarantee. Allocation-point VA/capacity telemetry and
+separate wave-buffer accounting are now available; the complete simultaneous
+CPU/GPU/publication/driver inventory and pressure envelope are still required.
+
+The profiled widest-zoom witness `widest-64-memory` now completes warmup and
+100 distinct pans at tile width 64, up to 3,443 captured tiles, without fallback,
+static mesh builds or geometry uploads in the resident sweep. Across 474
+allocation/phase/reset memory samples, retained GPU geometry peaks at
+734,584,218 bytes (700.6 MiB), combined natural/ground CPU caches at 16,806,416
+bytes and viewport cache at 26,404,640 bytes. Minimum sampled free address
+space is 1,610,506,240 bytes; the smallest largest-free-region observation is
+1,531,904,000 bytes. This supports the 768 MiB geometry tier for this standalone
+map/zoom witness. It is not an inventory of all GPU allocations, a live Civ III
+reserve, a leak test or an all-five-zoom pressure pass. Waves are disabled.
+Profiled completion median/p95/p99 is 230.375/330.471/406.363 ms; frequent memory
+sampling overhead is included. No independent cold pixel comparison at this
+zoom has yet been completed, so this is a memory/residency result, not a visual
+parity or latency pass.
+
+The tested bitmap-transaction DLL SHA-256 is
+`ec94dc08ab391df4dc3385589de0f58dd610a35d0d3913e4b3f8f3445d8be988`;
+the frozen build receipt records unchanged native/shared source hashes and
+successful MSVC `/W4 /WX` compilation. Focused telemetry, publication, resident
+witness and bridge tests ran 61 cases: 44 executed successfully and 17 skipped.
+Two additional render-core tests passed with actual MSVC numerical witnesses.
+The broader shadow integration test set does not pass in this Windows setup
+(217 cases, one failure, 18 errors, 23 skips); the remaining output includes
+Unix-only compiler/locking assumptions, symlink permissions and path handling.
+Do not interpret focused success as a full integration or live-game pass.
+
+Before the bitmap-only cancellation change, the current shared-shadow lab run
+rendered all 16 focused/context, time and zoom combinations without fallback.
+Four matched noon/midnight focused/context images were byte-identical to the
+frozen pre-change renderer. Optional fixed-reference comparison could not run
+because its BMPs are absent. No appearance acceptance, staging or live pass is
+claimed by this evidence.
+
 ## Exact height reuse and new-view witness
 
 The current candidate adds bounded exact-coordinate height/support reuse within
@@ -1171,3 +1607,41 @@ first-use moves take 610.774–3,149.261 ms, still outside the cold-move target.
 zoom-return, scrolling and removal parity. Its disposable receipt is
 `lab/out/integration/resources.json`. This checks the normal build separately;
 the low-budget build is not claimed to achieve the experimental warm timings.
+
+## Current experiment decisions
+
+| Workload | Established result | Highest-value remaining question |
+| --- | --- | --- |
+| Unchanged camera/scene | Completed bitmap reuse is cheap; not proof of animated performance. | Preserve idle reuse while integrating completion. |
+| Small prepared pan | Correct pixel reuse helps; waves-on p95 remains hundreds of milliseconds. | Which substantial static work still repeats during movement? |
+| Complete prepared destination | Geometry retention removes compilation; full render p95 is still about 0.7 seconds. | Can most scene/shadow/reflection work be retained or eliminated? |
+| Unprepared/evicted destination | Geometry preparation remains measured in seconds. | Compact map preparation and bounded compiled-region reuse remain necessary. |
+| Supported zoom transitions | 128/160/192 selection is implemented, but timing distributions are unproven. | Measure genuine changes, not cached repeats, at the three supported levels. |
+| Native interaction/display | The game bridge remains synchronous. | Safe current-camera pending output and completion-driven native redraw remain prerequisites. |
+
+For each next experiment, state the affected workload, measured reason for its
+priority, expected in-game benefit, and success/stop criterion before running it.
+A small isolated saving is not evidence for fast navigation everywhere. The
+bounded-glow result closes glow as a major optimization target: 58% less dispatch
+work saved only about 4% total completion time. Inspect retained shadow-page build
+counters before increasing their budget or redesigning their lifetime.
+
+The `bounded-post-widest-diagnostic` run failed at navigation step 2 (tile width
+64): `source-shadow-failed` reported exceeded page budget or interruption. This
+synchronous run has no superseding camera requests; the 32-page capacity check
+is the relevant remaining constraint. Inputs/binaries stayed unchanged. The
+experimental strip path therefore does not establish a supported widest-view
+solution. Under the user's subsequent three-level decision, 64 is a pressure
+probe rather than a production requirement. Scratch ledger values at failure
+were 132,937,728 bytes main linear and 137,453,568 bytes reflected linear, plus
+other resources. No silent quality reduction or native terrain replay was used.
+
+Inspection of the existing 100-frame shadow counters rules out atlas capacity
+as the typical full-view bottleneck at supported width 128. The bounded-post
+control and candidate each build 130 pages total (7,502 source draws), with
+median zero page builds and zero source draws per frame. The 128-pixel-region
+control builds 146 pages total and also has median zero. Increasing atlas size
+is therefore not the next median-latency optimization. Separate main-scene and
+reflected-scene cost attribution is the next major decision gate; any pass-off
+measurement must be labeled diagnostic and cannot count as correct-quality
+performance.

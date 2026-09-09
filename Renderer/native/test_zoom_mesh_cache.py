@@ -55,7 +55,7 @@ int main(){
         from Renderer.native.analyze_resident_navigation import analyze, checksum
         import struct
 
-        def fixture(root, mode):
+        def fixture(root, mode, steps=14):
             root.mkdir(exist_ok=True)
             (root / "completion.txt").write_text("0\n")
             (root / "C3XRenderer.dll").write_bytes(b"synthetic identity only; never executable")
@@ -65,10 +65,12 @@ int main(){
                     lines.append(f"NAV cycle={cycle} step={step} result=1")
                     if cycle:
                         lines.append(f"NAV parity step={step} status=pass")
-            lines.append(f"RESIDENT_BEGIN mode={mode} steps=14 width=16 height=8 tile_width=128")
-            for step in range(14):
+            pattern = "tile-v1" if steps == 14 else "pixel-v1"
+            lines.append(f"RESIDENT_BEGIN mode={mode} steps={steps} width=16 height=8 tile_width=128 pattern={pattern}")
+            for step in range(steps):
                 cold = mode == "cold"
-                lines.append(f"RESIDENT_NAV step={step} x=35 y={41 + step*2} result=1 built={3 if cold else 0} reused={0 if cold else 3} upload_bytes={168 if cold else 0} ms=20 capture_ms=1 geometry_ms=5 draw_ms=7 readback_ms=7")
+                pixel_y = (step+1)*64 if steps == 14 else (step+1)*960//(steps+1)
+                lines.append(f"RESIDENT_NAV step={step} x=35 y={39 + (pixel_y//64)*2} result=1 built={3 if cold else 0} reused={0 if cold else 3} upload_bytes={168 if cold else 0} ms=20 capture_ms=1 geometry_ms=5 draw_ms=7 readback_ms=7 pixel_y={pixel_y}")
                 body = bytes((step, 100, 200, 255)) * (16 * 8)
                 header = bytearray(54)
                 header[:2] = b"BM"
@@ -89,6 +91,7 @@ int main(){
             self.assertTrue(report["pass"])
             self.assertEqual(report["max_ms"], 20)
             self.assertEqual(len(report["steps"]), 14)
+            self.assertFalse(report["discrete_sample_requirement_met"])
             good = (warm / "benchmark.log").read_text()
             # Success markers alone cannot certify missing/duplicated evidence,
             # camera identity, NaN timings, or stale output files.
@@ -149,6 +152,55 @@ int main(){
             cold_log.write_text(cold_log.read_text().replace("built=3", "built=0"))
             with self.assertRaises(ValueError):
                 analyze(cold, warm)
+            fixture(cold, "cold", 100)
+            fixture(warm, "retained", 100)
+            report = analyze(cold, warm)
+            self.assertTrue(report["pass"])
+            self.assertTrue(report["discrete_sample_requirement_met"])
+            self.assertEqual(len({r["pixel_y"] for r in report["steps"]}), 100)
+            self.assertEqual(report["p95_ms"], 20)
+            self.assertEqual(report["p99_ms"], 20)
+            log = warm / "benchmark.log"
+            log.write_text(log.read_text().replace("pixel_y=9\n", "pixel_y=0\n"))
+            with self.assertRaisesRegex(ValueError, "Unexpected pixel camera"):
+                analyze(cold, warm)
+            fixture(warm, "retained", 100)
+            import hashlib, json
+            for folder in (cold, warm):
+                (folder / "biq_preview.exe").write_bytes(b"frozen witness")
+                receipt={"invocation":folder.name,"inputs":{"fixture":"same"},
+                         "args":{"waves":"0","world_grid":True},"environment":{},
+                         "binaries":{name:hashlib.sha256((folder/name).read_bytes()).hexdigest()
+                                     for name in ("C3XRenderer.dll","biq_preview.exe")}}
+                (folder / "inputs.json").write_text(json.dumps(receipt))
+                (folder / "evidence.json").write_text(json.dumps({"invocation":folder.name,"returncode":0,"inputs_unchanged":True}))
+            self.assertTrue(analyze(cold,warm)["pass"])
+            original=(warm/"inputs.json").read_text()
+            for field, value in (("args", {"region_diagnostics":True}),
+                                 ("environment", {"C3X_RENDERER_REGION_DIAGNOSTICS":"1"})):
+                changed=json.loads(original);changed[field]=value
+                (warm/"inputs.json").write_text(json.dumps(changed))
+                with self.assertRaisesRegex(ValueError,"Per-region diagnostic logging"):
+                    analyze(cold,warm)
+            for field, value in (("quality_mode", "diagnostic_reflections_disabled"),
+                                 ("args", {"waves":"0", "world_grid":True, "reflection_ablation":True}),
+                                 ("environment", {"C3X_RENDERER_REFLECTION_CONTROL":"1"})):
+                changed=json.loads(original);changed[field]=value
+                (warm/"inputs.json").write_text(json.dumps(changed))
+                with self.assertRaisesRegex(ValueError,"Diagnostic pass ablation"):
+                    analyze(cold,warm)
+            changed=json.loads(original);changed["args"]["waves"]="1"
+            (warm/"inputs.json").write_text(json.dumps(changed))
+            with self.assertRaisesRegex(ValueError,"quality settings"):
+                analyze(cold,warm)
+            changed=json.loads(original);changed["args"]["world_regions"]=True
+            (warm/"inputs.json").write_text(json.dumps(changed))
+            with self.assertRaisesRegex(ValueError,"Completed-region raster recipe"):
+                analyze(cold,warm)
+            (warm/"inputs.json").write_text(original)
+            (warm/"biq_preview.exe").write_bytes(b"changed after execution")
+            with self.assertRaisesRegex(ValueError,"binary identity"):
+                analyze(cold,warm)
 
     def test_exact_height_cache_keeps_support_dependencies_and_owner_scope(self):
         compiler = shutil.which("clang++") or shutil.which("g++")

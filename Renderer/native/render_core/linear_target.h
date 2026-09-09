@@ -87,7 +87,8 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
     }
     void draw(ID3D11DeviceContext* context,LinearTarget const& linear,
               ID3D11RenderTargetView* destination,float exposure,int render_scale=1,
-              ID3D11ShaderResourceView* reconstructed=nullptr,UINT reconstructed_width=0,UINT reconstructed_height=0) {
+              ID3D11ShaderResourceView* reconstructed=nullptr,UINT reconstructed_width=0,UINT reconstructed_height=0,
+              D3D11_RECT const* dirty=nullptr) {
         context->OMSetRenderTargets(0,nullptr,nullptr);
         if(!reconstructed)context->ResolveSubresource(linear.resolved,0,linear.color,0,DXGI_FORMAT_R16G16B16A16_FLOAT);
         context->OMSetRenderTargets(1,&destination,nullptr);
@@ -96,6 +97,7 @@ float4 PSOutput(float4 position : SV_Position) : SV_Target {
         UINT width=reconstructed?reconstructed_width:linear.width/render_scale,height=reconstructed?reconstructed_height:linear.height/render_scale;
         D3D11_VIEWPORT viewport={0,0,float(width),float(height),0,1};
         D3D11_RECT rect={0,0,LONG(width),LONG(height)};
+        if(dirty)rect=*dirty;
         context->RSSetViewports(1,&viewport); context->RSSetScissorRects(1,&rect);
         context->IASetInputLayout(nullptr);
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

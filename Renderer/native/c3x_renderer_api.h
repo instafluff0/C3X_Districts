@@ -254,6 +254,31 @@ struct c3x_renderer_output_v1 {
     c3x_renderer_u32 pixel_block_cache_bytes;
 };
 
+// Optional camera-publication extension. Independently versioned so synchronous
+// API 17 callers and older camera callers keep their existing layouts.
+#define C3X_RENDERER_CAMERA_VIEW_VERSION 1u
+struct c3x_renderer_camera_identity_v1 {
+    c3x_renderer_i64 map_epoch;
+    c3x_renderer_i64 viewer_epoch;
+    c3x_renderer_i64 visibility_epoch;
+    c3x_renderer_i64 scene_epoch;
+};
+struct c3x_renderer_camera_request_v1 {
+    c3x_renderer_u32 version, struct_size;
+    struct c3x_renderer_frame_v1 const * frame;
+    struct c3x_renderer_camera_identity_v1 identity;
+};
+struct c3x_renderer_camera_view_v1 {
+    c3x_renderer_u32 version, struct_size;
+    c3x_renderer_i64 ticket;
+    struct c3x_renderer_camera_identity_v1 identity;
+    // Exact ordered captured occurrences, anchors, clock, zoom and world basis.
+    // Topology payload is not a display input: its pointer/count are zero here,
+    // while world_topology_revision remains the captured revision.
+    struct c3x_renderer_frame_v1 frame;
+    struct c3x_renderer_output_v1 output;
+};
+
 struct c3x_renderer_schedule_v1 {
     c3x_renderer_u32 api_version;
     c3x_renderer_u32 struct_size;
@@ -311,11 +336,23 @@ typedef int (*c3x_renderer_render_fn)(struct c3x_renderer_frame_v1 const *, stru
 // Begin expires earlier synchronous borrowed outputs. Poll's borrowed publication
 // survives background work, but expires at the next successful publication poll,
 // synchronous render, pack/definition change or reset. Copy it for longer use.
-// Synchronous render/configuration/unit calls cancel and drain camera work first.
+// Synchronous render/configuration calls cancel and drain camera work first.
+// Unit drawing interrupts active camera work at cancellation boundaries, keeps
+// the latest immutable request, and resumes it after the UI-thread unit copy.
+// Unit drawing remains synchronous and may wait for an outstanding GPU pass.
 // Reset destroys tickets; callers must discard them before using another worker.
 typedef int (*c3x_renderer_camera_begin_fn)(struct c3x_renderer_frame_v1 const *, c3x_renderer_i64 * ticket);
 typedef int (*c3x_renderer_camera_poll_fn)(c3x_renderer_i64 ticket, struct c3x_renderer_output_v1 *);
 typedef int (*c3x_renderer_camera_cancel_fn)(c3x_renderer_i64 ticket);
+// Begin-view copies the frame and the caller's authoritative lifecycle epochs.
+// Poll-view publishes those identities, captured occurrences and ownership with
+// the pixels in one transaction; all pointers share the lifetime above. A
+// consumer must reject epochs incompatible with its current visibility/viewer
+// before copying any pixels or reading replacement flags. Flags index the
+// returned frame.tiles, never a later capture array. This does not schedule a
+// native redraw or authorize displaying an older camera with current overlays.
+typedef int (*c3x_renderer_camera_begin_view_fn)(struct c3x_renderer_camera_request_v1 const *, c3x_renderer_i64 * ticket);
+typedef int (*c3x_renderer_camera_poll_view_fn)(c3x_renderer_i64 ticket, struct c3x_renderer_camera_view_v1 *);
 typedef int (*c3x_renderer_blit_fn)(struct c3x_renderer_output_v1 const *, void * destination_hdc);
 typedef int (*c3x_renderer_unit_draw_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc);
 /* Optional extension: native underlay resolves color-key canvas antialiasing. */

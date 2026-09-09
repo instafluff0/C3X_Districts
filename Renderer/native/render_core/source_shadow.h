@@ -101,45 +101,122 @@ public:
         if(SUCCEEDED(hr))hr=device->CreateBlendState(&blend,&maximum);
         if(FAILED(hr)){clear();return false;}return true;
     }
-    std::array<float,4> projected(Bounds const& b,float const* offset)const {
+    static std::array<float,4> project(Bounds const& b,float const* offset,std::array<float,12> const& projection) {
         std::array<float,4> out={1e9f,1e9f,-1e9f,-1e9f};
         for(unsigned mask=0;mask<8;++mask){float u=0,v=0;
-            for(unsigned i=0;i<3;++i){float x=((mask>>i)&1?b.high[i]:b.low[i])+offset[i];u+=x*basis[i];v+=x*basis[4+i];}
+            for(unsigned i=0;i<3;++i){float x=((mask>>i)&1?b.high[i]:b.low[i])+offset[i];u+=x*projection[i];v+=x*projection[4+i];}
             out[0]=std::min(out[0],u);out[1]=std::min(out[1],v);out[2]=std::max(out[2],u);out[3]=std::max(out[3],v);
         }return out;
     }
-    template<class Bind>
-    bool prepare(ID3D11DeviceContext* context,std::array<float,12> const& next_basis,
-                 std::vector<Bounds> const& receivers,std::vector<Caster> const& casters,
-                 Bind bind,std::atomic<bool> const* cancellation) {
-        hits=rebuilt=draws=0;++epoch;
-        if(basis!=next_basis){basis=next_basis;pages={};}
+    std::array<float,4> projected(Bounds const& b,float const* offset)const {return project(b,offset,basis);}
+    static std::set<std::pair<int,int>> required_pages(std::vector<Bounds> const& receivers,std::array<float,12> const& projection){
         std::set<std::pair<int,int>> needed;float zero[3]={};
-        for(auto const& b:receivers){auto p=projected(b,zero);
+        for(auto const& b:receivers){auto p=project(b,zero,projection);
             for(int y=int(std::floor((p[1]-.018f)/6));y<=int(std::floor((p[3]+.018f)/6));++y)
                 for(int x=int(std::floor((p[0]-.018f)/6));x<=int(std::floor((p[2]+.018f)/6));++x)needed.emplace(x,y);
         }
-        if(needed.size()>32)return false;
-        for(auto& p:pages)if(p.hash && needed.count({p.x,p.y}))p.used=epoch;
-        std::vector<std::array<float,4>> caster_bounds;caster_bounds.reserve(casters.size());
-        for(auto const& c:casters)caster_bounds.push_back(projected(c.bounds,c.offset));
-        std::array<ID3D11ShaderResourceView*,128> empty{};
-        context->PSSetShaderResources(0,128,empty.data());
-        context->IASetInputLayout(layout);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        context->VSSetShader(vertex,nullptr,0);context->VSSetConstantBuffers(0,1,&caster_settings);
-        context->RSSetState(raster);D3D11_VIEWPORT viewport={0,0,1024,1024,0,1};context->RSSetViewports(1,&viewport);
-        context->OMSetDepthStencilState(nullptr,0);context->OMSetBlendState(maximum,nullptr,0xffffffff);
-        std::array<std::array<float,4>,64> lookup{};
-        for(auto const& key:needed){
-            if(cancellation && cancellation->load(std::memory_order_relaxed))return false;
-            std::vector<std::size_t> selected;std::uint64_t hash=1469598103934665603ull;
-            auto mix=[&](std::uint64_t x){hash=(hash^x)*1099511628211ull;};
-            for(std::size_t i=0;i<casters.size();++i){auto const& p=caster_bounds[i];
+        return needed;
+    }
+    // Borrowed by one outer submission's blocks/reflections only. Geometry,
+    // material versions and light basis cannot change within that call. Optional
+    // admission has a strict cap and failure falls back to ordinary projection.
+    struct PreparedCasters {
+        struct Selection {
+            std::vector<std::size_t> indices;
+            std::uint64_t hash=1469598103934665603ull;
+        };
+        struct Entry {std::pair<int,int> key{};Selection selection;bool valid=false;};
+        std::vector<std::array<float,4>> bounds;
+        std::array<float,12> basis{};
+        Caster const* owner=nullptr;
+        std::array<Entry,128> selections{};
+        std::size_t selection_bytes=0;
+        bool build(std::vector<Caster> const& casters,std::array<float,12> const& projection) {
+            owner=nullptr;bounds.clear();selections={};selection_bytes=0;
+            constexpr std::size_t cap=8u*1024u*1024u;
+            if(casters.size()>cap/sizeof(bounds[0]))return false;
+            try {
+                std::vector<std::array<float,4>> next;next.reserve(casters.size());
+                if(next.capacity()>cap/sizeof(next[0]))return false;
+                for(auto const& c:casters)next.push_back(project(c.bounds,c.offset,projection));
+                bounds.swap(next);basis=projection;owner=casters.data();return true;
+            }catch(...){return false;}
+        }
+        bool matches(std::vector<Caster> const& casters,std::array<float,12> const& projection)const {
+            return owner==casters.data() && bounds.size()==casters.size() && basis==projection;
+        }
+        Selection const* find(std::pair<int,int> key)const {
+            for(auto const& entry:selections)if(entry.valid && entry.key==key)return &entry.selection;
+            return nullptr;
+        }
+        Selection const* admit(std::pair<int,int> key,Selection&& selection) {
+            auto bytes=selection.indices.capacity()*sizeof(std::size_t);
+            constexpr std::size_t cap=8u*1024u*1024u;
+            if(bytes>cap || selection_bytes>cap-bytes)return nullptr;
+            for(auto& entry:selections)if(!entry.valid){
+                entry.key=key;entry.selection=std::move(selection);entry.valid=true;
+                selection_bytes+=bytes;return &entry.selection;
+            }
+            return nullptr;
+        }
+        static Selection select(std::vector<Caster> const& casters,std::vector<std::array<float,4>> const& projected_bounds,std::pair<int,int> key) {
+            Selection result;
+            auto mix=[&](std::uint64_t x){result.hash=(result.hash^x)*1099511628211ull;};
+            for(std::size_t i=0;i<casters.size();++i){auto const& p=projected_bounds[i];
                 if(p[2]<key.first*6 || p[0]>(key.first+1)*6 || p[3]<key.second*6 || p[1]>(key.second+1)*6)continue;
-                selected.push_back(i);mix(casters[i].version);mix(casters[i].layer);mix(casters[i].index_format);
+                result.indices.push_back(i);mix(casters[i].version);mix(casters[i].layer);mix(casters[i].index_format);
                 if(casters[i].binding!=0xffffffffu)mix(casters[i].binding);
                 for(float f:casters[i].offset){std::uint32_t bits;std::memcpy(&bits,&f,4);mix(bits);}
             }
+            return result;
+        }
+        static Selection receiver_selection(Selection const& page,std::vector<Caster> const& casters,
+                std::vector<std::array<float,4>> const& projected_bounds,
+                std::vector<Bounds> const& receivers,std::array<float,12> const& projection) {
+            // paged_shadow_v1: unit-normal offset, floor, then +/-1 texel taps.
+            // Four texels conservatively cover that reach plus raster precision.
+            constexpr float margin=4.f*6.f/1024.f;
+            std::vector<std::array<float,4>> coverage;coverage.reserve(receivers.size());
+            float zero[3]={};for(auto const& receiver:receivers)coverage.push_back(project(receiver,zero,projection));
+            Selection result;auto mix=[&](std::uint64_t x){result.hash=(result.hash^x)*1099511628211ull;};
+            for(auto i:page.indices){auto const& p=projected_bounds[i];bool reaches=false;
+                for(auto const& r:coverage)if(!(p[2]<r[0]-margin || p[0]>r[2]+margin || p[3]<r[1]-margin || p[1]>r[3]+margin)){reaches=true;break;}
+                if(!reaches)continue;
+                result.indices.push_back(i);mix(casters[i].version);mix(casters[i].layer);mix(casters[i].index_format);
+                if(casters[i].binding!=0xffffffffu)mix(casters[i].binding);
+                for(float f:casters[i].offset){std::uint32_t bits;std::memcpy(&bits,&f,4);mix(bits);}
+            }
+            return result;
+        }
+    };
+    template<class Bind>
+    bool prepare(ID3D11DeviceContext* context,std::array<float,12> const& next_basis,
+                 std::vector<Bounds> const& receivers,std::vector<Caster> const& casters,
+                 Bind bind,std::atomic<bool> const* cancellation,PreparedCasters* prepared=nullptr) {
+        hits=rebuilt=draws=0;++epoch;
+        if(basis!=next_basis){basis=next_basis;pages={};}
+        auto needed=required_pages(receivers,basis);
+        if(needed.size()>32)return false;
+        for(auto& p:pages)if(p.hash && needed.count({p.x,p.y}))p.used=epoch;
+        std::vector<std::array<float,4>> local_bounds;
+        if(!prepared || !prepared->matches(casters,basis)){
+            local_bounds.reserve(casters.size());
+            for(auto const& c:casters)local_bounds.push_back(projected(c.bounds,c.offset));
+        }
+        auto const& caster_bounds=prepared && prepared->matches(casters,basis)?prepared->bounds:local_bounds;
+        bool pipeline_ready=false;
+        std::array<std::array<float,4>,64> lookup{};
+        for(auto const& key:needed){
+            if(cancellation && cancellation->load(std::memory_order_relaxed))return false;
+            bool can_reuse=prepared && prepared->matches(casters,basis);
+            auto selection=can_reuse?prepared->find(key):nullptr;
+            PreparedCasters::Selection local;
+            if(!selection){
+                local=PreparedCasters::select(casters,caster_bounds,key);
+                if(can_reuse)selection=prepared->admit(key,std::move(local));
+                if(!selection)selection=&local;
+            }
+            auto const& selected=selection->indices;auto hash=selection->hash;
             int slot=-1;for(int i=0;i<32;++i)if(pages[i].hash && pages[i].x==key.first && pages[i].y==key.second){slot=i;break;}
             if(slot<0){for(int i=0;i<32;++i)if(pages[i].used!=epoch && (slot<0 || pages[i].used<pages[slot].used))slot=i;}
             if(slot<0)return false;
@@ -148,6 +225,15 @@ public:
             while(lookup[hash_slot][3]>.5f)hash_slot=(hash_slot+1)&63u;
             lookup[hash_slot]={float(key.first),float(key.second),float(slot),1};
             if(page.hash==hash && page.x==key.first && page.y==key.second){++hits;page.used=epoch;continue;}
+            if(!pipeline_ready){
+                std::array<ID3D11ShaderResourceView*,128> empty{};
+                context->PSSetShaderResources(0,128,empty.data());
+                context->IASetInputLayout(layout);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                context->VSSetShader(vertex,nullptr,0);context->VSSetConstantBuffers(0,1,&caster_settings);
+                context->RSSetState(raster);D3D11_VIEWPORT viewport={0,0,1024,1024,0,1};context->RSSetViewports(1,&viewport);
+                context->OMSetDepthStencilState(nullptr,0);context->OMSetBlendState(maximum,nullptr,0xffffffff);
+                pipeline_ready=true;
+            }
             // Publish identity only after the entire source field completes.
             page.hash=0;float clear[4]={-1e6f,-1e6f,-1e6f,-1e6f};
             context->ClearRenderTargetView(targets[slot],clear);context->OMSetRenderTargets(1,&targets[slot],nullptr);
@@ -164,7 +250,8 @@ public:
             }
             page={key.first,key.second,hash,epoch};++rebuilt;
         }
-        context->OMSetRenderTargets(0,nullptr,nullptr);context->UpdateSubresource(table,0,nullptr,lookup.data(),0,0);
+        if(pipeline_ready)context->OMSetRenderTargets(0,nullptr,nullptr);
+        context->UpdateSubresource(table,0,nullptr,lookup.data(),0,0);
         return true;
     }
 };

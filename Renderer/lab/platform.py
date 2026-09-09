@@ -40,7 +40,9 @@ def windows_root():
 
 def native_command_result(relative_cwd, command, *, timeout_seconds=None):
     if os.name == "nt":
-        args = ["cmd", "/d", "/s", "/c", command]
+        # cmd parses its own command tail; list2cmdline would escape embedded
+        # quotes with backslashes, breaking quoted batch paths and task filters.
+        args = 'cmd /d /s /c "' + command + '"'
         cwd = ROOT / relative_cwd
     else:
         vm = os.environ.get("C3X_RENDERER_VM", "Windows 11")
@@ -120,7 +122,10 @@ def wait_native_fixture(directory, run_id, process):
 
 
 def run_native_fixture(directory, command, run_id):
-    transport = native_command_result("Renderer/native", command, timeout_seconds=120)
+    # A local timeout terminates cmd and can orphan/kill its render before it
+    # writes completion. Allow cold D3D shader compilation on Windows hosts.
+    timeout = 600 if os.name == "nt" else 120
+    transport = native_command_result("Renderer/native", command, timeout_seconds=timeout)
     try:
         result = native_completion(directory, run_id)
     except ValueError:
@@ -140,7 +145,7 @@ def run_native_fixture(directory, command, run_id):
             if state["status"] != "pass" or state.get("output_tail", "").strip() != absent:
                 raise NativeFixturePending("Native completion is unconfirmed; inspect the existing invocation before another fixture")
             print("Windows confirms no preview process; retrying failed dispatch once", flush=True)
-            transport = native_command_result("Renderer/native", command, timeout_seconds=120)
+            transport = native_command_result("Renderer/native", command, timeout_seconds=timeout)
             result = native_completion(directory, run_id)
     if transport["status"] != "pass" and result["status"] == "pass":
         print("Native process completion verified from the current fixture receipt", flush=True)

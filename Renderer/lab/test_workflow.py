@@ -450,6 +450,19 @@ class BehaviorWitnessTests(unittest.TestCase):
 
 
 class InputFreshnessTests(unittest.TestCase):
+    def test_first_build_does_not_require_or_create_a_staged_dll(self):
+        candidate = self.root / "Renderer/native/build/candidate/C3XRenderer.dll"
+        candidate.parent.mkdir(parents=True)
+        candidate.write_bytes(b"tested-candidate")
+        with patch.object(renderer, "prepare_sources"), \
+             patch.object(renderer, "native_inputs", return_value={}), \
+             patch.object(renderer, "ensure_preview_tool"), \
+             patch("Renderer.lab.platform.native_command_result", return_value={"status": "pass"}):
+            renderer.build_candidate()
+        self.assertFalse((self.root / "Renderer/bin/C3XRenderer.dll").exists())
+        self.assertEqual(renderer.read(self.lab / ".cache/native-build.json")["dll_sha256"],
+                         renderer.checksum(candidate))
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

@@ -856,6 +856,10 @@ def run_tests(category=None, *, integration=False, full=False):
                         "Renderer.native.test_native_bridge_contract",
                         "Renderer.native.test_zoom_mesh_cache",
                         "Renderer.native.test_frame_publication",
+                        "Renderer.native.test_frame_telemetry",
+                        "Renderer.native.test_water_coverage",
+                        "Renderer.native.test_animation_retention",
+                        "Renderer.native.test_render_region_cache",
                         "Renderer.native.test_asset_content_hash"))
         if full:
             modules.update("Renderer.native." + name for name in (
@@ -892,13 +896,14 @@ def run_affected_tests(category):
 def build_candidate():
     from Renderer.lab.platform import native_command_result
     prepare_sources()
-    before = checksum(ROOT / "Renderer/bin/C3XRenderer.dll")
+    staged = ROOT / "Renderer/bin/C3XRenderer.dll"
+    before = checksum(staged) if staged.is_file() else None
     inputs = native_inputs()
     result = native_command_result("Renderer/native", "call BUILD.bat candidate-compile")
     if result["status"] != "pass":
         raise ValueError("Candidate build failed")
     ensure_preview_tool()
-    if checksum(ROOT / "Renderer/bin/C3XRenderer.dll") != before:
+    if (checksum(staged) if staged.is_file() else None) != before:
         raise ValueError("Candidate build unexpectedly changed the staged DLL")
     if native_inputs() != inputs:
         raise ValueError("Native source changed during compilation; rebuild")

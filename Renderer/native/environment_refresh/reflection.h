@@ -7,13 +7,14 @@ struct Reflection {
     ID3D11Buffer*frame=nullptr;
     float height_pixels=0,depth_metric=0;
     bool enabled=true;
-    unsigned native_extent=136;
+    unsigned native_extent=136,native_height=136;
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
     void reset(){linear.reset();for(auto&p:vs)drop(p);for(auto&p:ps)drop(p);drop(frame);}
     ~Reflection(){reset();}
-    bool ensure(ID3D11Device*device,std::string const&root,char const*directory="environment_refresh",unsigned extent=136){
-        if(frame)return true;
-        native_extent=extent;
+    bool ensure(ID3D11Device*device,std::string const&root,char const*directory="environment_refresh",unsigned extent=136,unsigned height=0){
+        if(!height)height=extent;
+        if(frame && native_extent==extent && native_height==height)return true;
+        reset();native_extent=extent;native_height=height;
         char const*names[]={"hydrology","feature","terrain","mountain","objects"};
         for(unsigned i=0;i<5;i++){
             std::string path=root+"/Renderer/native/"+directory+"/"+names[i]+".hlsl";
@@ -30,7 +31,7 @@ struct Reflection {
         if(FAILED(device->CreateBuffer(&d,nullptr,&frame))){reset();return false;}return true;
     }
     void bind(ID3D11DeviceContext*context){
-        float values[]={height_pixels,depth_metric,2.5f/112.f,enabled?1.f:0.f,float(native_extent*2),float(native_extent*2),8,8};
+        float values[]={height_pixels,depth_metric,2.5f/112.f,enabled?1.f:0.f,float(native_extent*2),float(native_height*2),8,8};
         context->UpdateSubresource(frame,0,nullptr,values,0,0);
         context->VSSetConstantBuffers(5,1,&frame);context->PSSetConstantBuffers(5,1,&frame);
     }
