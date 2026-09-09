@@ -299,3 +299,35 @@ sequence. `C3X_LAB_WAVE_SEQUENCE=N` captures up to 240 quarter-second samples,
 checks that playback builds/uploads no terrain and verifies an exact return to
 the initial frame. Eligibility remains ordinary beaches only, even though the
 Civ VI reference also has breakers beside cliffs.
+
+The retained baseline passed 207 current-code integration tests, serial beach/
+rocky/night witnesses and a 120-frame native sequence with zero terrain rebuilds
+or uploads. Current-code images at 1/5/9/13 seconds and the wave-off control are
+pixel-identical to the preceding baseline. The exact verified current-code DLL
+is staged; `lab/out/waves-shoaling/staging.json` records its identity and backup.
+The supplied motion video contains quarter-second native samples, not a live-game
+frame-rate measurement. Civ III was not launched.
+
+## Quieter shoreline spacing
+
+The subsequent density adjustment retains the selected baseline material,
+dimensions and timing. Eligible origins compete by deterministic canonical
+world-cell priority within 0.85 world units; the survivors keep their original
+art selection and phase. Selection consults world topology, so viewport crops
+and wrapped copies do not reshuffle the result. An origin must itself sit on an
+ordinary beach, in addition to the existing per-vertex relief/land exclusions.
+This distance is C3X calibration, not a recovered Civ VI spacing parameter.
+
+The beach witness drops from 19 ribbon instances to 9; the wider mixed night
+view drops from 26 to 10, and the rocky control remains zero. These are retained
+wave origins, not a count of visible white crests at every animation phase.
+The complete curved-coast fixture retains 33 of 66 eligible origins and checks
+pairwise minimum spacing through wrapped copies. All 207 integration tests and
+serial native witnesses pass. A 120-frame, quarter-second native sequence
+builds/uploads no terrain and returns exactly to its starting image. The
+isolated wave-off control remains pixel-identical to the baseline. Comparisons,
+motion and verification receipts live under `lab/out/waves-spacing/`.
+
+Day/night Lab previews and the staged production evaluation DLL use the exact
+verified current-code candidate. `staging.json` records its identity and the
+previous-DLL backup. Fixed references are unchanged; Civ III was not launched.

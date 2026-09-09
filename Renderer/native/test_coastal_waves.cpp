@@ -32,5 +32,20 @@ int main(){using namespace c3x_renderer::render_core;
    auto observe=[](auto...){ };assert(coast.sample(p,observe,observe).distance<=.002);
   }
  }
- std::puts("PASS coastal beaches, hill/mountain exclusion, contour determinism, wrap, topology edit");
+ std::vector<Point> origins;unsigned candidates=0;
+ for(int y=0;y<32;++y)for(int x=y&1;x<32;x+=2){
+  int c=(x+y)/2,r=(x-y)/2;CoastSegment site;
+  if(!coastal_wave_site(coast,c,r,site))continue;
+  ++candidates;bool selected=coastal_wave_spaced(coast,c,r,site);
+  CoastSegment copy;assert(coastal_wave_site(coast,c+16,r+16,copy));
+  assert(selected==coastal_wave_spaced(coast,c+16,r+16,copy));
+  if(selected)origins.push_back((site.a+site.b)*.5);
+ }
+ assert(!origins.empty() && origins.size()<candidates);
+ for(unsigned i=0;i<origins.size();++i)for(unsigned j=0;j<i;++j)
+  for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x){
+   Point offset{double((x+y)*16),double((x-y)*16)};
+   assert(length(origins[i]-origins[j]+offset)>=.85-1e-8);
+  }
+ std::printf("PASS coastal beaches, relief exclusion, deterministic spacing/wrap, cove safety, topology edit; origins=%zu/%u\n",origins.size(),candidates);
 }

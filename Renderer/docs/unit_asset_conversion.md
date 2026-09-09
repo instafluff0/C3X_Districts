@@ -158,6 +158,29 @@ task, not hidden by ad hoc preview offsets.
 `WeaponSecondary -> Inven_L_Hand`, and the Infantry `ArmBand -> Lure` aliases
 remain explicitly inferred.
 
+### Archer equipment parenting
+
+The bow is a separately skinned model, not another world-space body part.
+Only its common `Root` matches the humanoid clips; treating that skeleton as
+world-space leaves the bow behind during locomotion. The compiler now removes
+that imported root transform, parents the entire local bow rig to
+`Inven_L_Hand`, and then applies the kit's existing native-anchor normalization.
+Local bow deformation is retained and planar root travel is removed once.
+The arrow uses `Inven_R_Hand`: the source firing clips animate and hide that
+inventory socket while the left socket stays at the bow. These assignments in
+`unit_attachment_bindings.json` are offline calibration from observed source
+bone motion, not decoded Firaxis engine attachment semantics.
+
+The correction changes equipment palettes across all eight archer actions.
+Body geometry, textures, material response, anatomy scale and ground offset
+remain unchanged. `test_unit_attachment_bindings.py` checks parenting with
+moving roots, rotated sockets and deforming joints. The portable native skin
+evaluator is also checked against independently sampled source clips.
+`python3 -m Renderer.lab.studies.units.archer_attachment` produces native idle
+and movement comparisons in `Renderer/lab/out/units/archer-attachment/`.
+Its ignored `ArcherAttachmentBefore` pack retains the old equipment result;
+the study rejects a corrected pack as a replacement for that old baseline.
+
 Eight-direction presentation does not require eight converted mesh copies.
 The eventual lab path rotates the normalized model about +Z in 45-degree steps,
 using Civ III's authoritative facing and screen anchor. A per-unit authored

@@ -42,3 +42,9 @@ The subsequent longer-front and shore-break experiments were not selected after
 comparison with the closer Civ VI reference. The preceding feathered baseline
 remains the production appearance; source findings and motion/cove tests were
 retained.
+
+Wave origins now have a 0.85-world-unit minimum separation, selected by stable
+world-cell priority. This reduces clustered breakers while preserving the
+baseline material, scale and clocks. Placement remains beach-only and stable
+across viewport changes and map wrapping. The matched density comparison and
+30-second sequence are under `Renderer/lab/out/waves-spacing/`.

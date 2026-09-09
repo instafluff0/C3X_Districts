@@ -21,20 +21,47 @@ inline double beach_wave_coverage(WorldTopology const& world,Point foot,double r
     return beach?1.:0.;
 }
 
-inline std::vector<WavePoint> coastal_wave_ribbon(WorldCoast const& coast,int c,int r,float scale) {
+inline bool coastal_wave_site(WorldCoast const& coast,int c,int r,CoastSegment& chosen) {
     auto observe=[](auto...){ };
-    auto own=coast.cell(c,r,observe);if(own.empty())return {};
+    if(coast.world().index(c,r)==std::size_t(-1))return false;
+    auto own=coast.cell(c,r,observe);if(own.empty())return false;
     Point center{double(c)+.5,double(r)+.5};
-    auto chosen=std::min_element(own.begin(),own.end(),[&](auto const&a,auto const&b){
+    chosen=*std::min_element(own.begin(),own.end(),[&](auto const&a,auto const&b){
         return length((a.a+a.b)*.5-center)<length((b.a+b.b)*.5-center);
     });
+    Point foot=(chosen.a+chosen.b)*.5+Point{.5,.5};
+    return beach_wave_coverage(coast.world(),foot,coast.sample(foot,observe,observe).rocky)>0;
+}
+
+inline bool coastal_wave_spaced(WorldCoast const& coast,int c,int r,CoastSegment const& chosen) {
+    auto identity=coast.world().index(c,r);
+    auto priority=hash(std::uint32_t(identity)^0x77617665u);
+    Point center=(chosen.a+chosen.b)*.5;
+    // Stable local priority prevents clustered origins without shifting the
+    // surviving waves' art or clocks. Consult world topology, not the viewport.
+    for(int y=r-2;y<=r+2;++y)for(int x=c-2;x<=c+2;++x){
+        auto other=coast.world().index(x,y);
+        if(other==identity || other==std::size_t(-1))continue;
+        auto rank=hash(std::uint32_t(other)^0x77617665u);
+        if(rank>priority || (rank==priority && other>identity))continue;
+        CoastSegment neighbor;
+        if(!coastal_wave_site(coast,x,y,neighbor))continue;
+        if(length((neighbor.a+neighbor.b)*.5-center)<.85)return false;
+    }
+    return true;
+}
+
+inline std::vector<WavePoint> coastal_wave_ribbon(WorldCoast const& coast,int c,int r,float scale) {
+    CoastSegment chosen;
+    if(!coastal_wave_site(coast,c,r,chosen) || !coastal_wave_spaced(coast,c,r,chosen))return {};
+    auto observe=[](auto...){ };
     std::vector<CoastSegment> edges;
     for(int y=r-2;y<=r+2;++y)for(int x=c-2;x<=c+2;++x){
         auto part=coast.cell(x,y,observe);edges.insert(edges.end(),part.begin(),part.end());
     }
-    Point middle=(chosen->a+chosen->b)*.5;
+    Point middle=(chosen.a+chosen.b)*.5;
     auto walk=[&](double distance){
-        Point previous=middle,at=distance<0?chosen->a:chosen->b;
+        Point previous=middle,at=distance<0?chosen.a:chosen.b;
         double remaining=std::abs(distance);
         for(unsigned step=0;step<256;++step){
             double span=length(at-previous);
@@ -48,7 +75,7 @@ inline std::vector<WavePoint> coastal_wave_ribbon(WorldCoast const& coast,int c,
                 else continue;
                 if(length(other-previous)<1e-6)continue;
                 // Do not walk back through the starting segment.
-                if(step==0 && length(other-(distance<0?chosen->b:chosen->a))<1e-6)continue;
+                if(step==0 && length(other-(distance<0?chosen.b:chosen.a))<1e-6)continue;
                 previous=at;at=other;next=true;break;
             }
             if(!next)return at;
@@ -63,7 +90,7 @@ inline std::vector<WavePoint> coastal_wave_ribbon(WorldCoast const& coast,int c,
         double along=double(row)/rows,arc=(along-.5)*2*scale;
         Point foot=walk(arc)+Point{.5,.5};
         Point tangent=walk(arc+.14)-walk(arc-.14);
-        double len=length(tangent);if(len<1e-8)tangent=chosen->b-chosen->a;
+        double len=length(tangent);if(len<1e-8)tangent=chosen.b-chosen.a;
         len=std::max(length(tangent),1e-8);
         Point normal{-tangent.y/len,tangent.x/len};
         if(coast.sample(foot+normal*.08,observe,observe,&patch).distance>0)normal=normal*-1;

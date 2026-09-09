@@ -44,7 +44,8 @@
     "Renderer.lab.test_unit_preparation",
     "Renderer.native.test_animation_runtime",
     "Renderer.native.test_unit_animation_runtime",
-    "Renderer.lab.studies.units.test_sizing"
+    "Renderer.lab.studies.units.test_sizing",
+    "Renderer.tools.asset_compiler.test_unit_attachment_bindings"
   ],
   "references": {
     "d3d11": [

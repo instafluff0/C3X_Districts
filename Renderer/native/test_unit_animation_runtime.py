@@ -143,10 +143,20 @@ class UnitAnimationRuntimeTests(unittest.TestCase):
                         if mesh_document["schema"] == normalized_skin.MESH_SCHEMA:
                             skeleton = skeletons[part["asset"]]
                             mesh = normalized_skin.load_mesh(pack/part["source_mesh"], len(skeleton["bones"]))
-                            expected = _skinned_mesh(mesh, skeleton, worlds[part["asset"]])
+                            component_worlds=worlds[part["asset"]]
+                            attachment=part.get('attachment_binding')
+                            if attachment and 'local_root' in attachment:
+                                import numpy as np
+                                root_index=[b['name'] for b in skeleton['bones']].index(attachment['local_root'])
+                                socket_index=[b['name'] for b in skeletons[attachment['driver']]['bones']].index(attachment['bone'])
+                                local=np.array(component_worlds).reshape(-1,4,4)
+                                parent=np.array(worlds[attachment['driver']][socket_index]).reshape(4,4)
+                                component_worlds=[tuple(m.reshape(-1)) for m in local@np.linalg.inv(local[root_index])@parent]
+                            expected = _skinned_mesh(mesh, skeleton, component_worlds)
                         else:
-                            local_driver = part["asset"] if part["asset"] in worlds and component.get("rigid_driver_bone") else driver
-                            bone = component.get("rigid_driver_bone") or sockets[component["attachment_point"]]["bone"]
+                            attachment=part.get('attachment_binding',{})
+                            local_driver = attachment.get('driver') or (part["asset"] if part["asset"] in worlds and component.get("rigid_driver_bone") else driver)
+                            bone = attachment.get("bone") or component.get("rigid_driver_bone") or sockets[component["attachment_point"]]["bone"]
                             index = [b["name"] for b in skeletons[local_driver]["bones"]].index(bone)
                             mesh = json.loads((pack/part["source_mesh"]).read_text())
                             expected = _rigid_mesh(mesh, worlds[local_driver][index], component["model_scale"])
