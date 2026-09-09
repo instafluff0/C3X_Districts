@@ -333,7 +333,50 @@ struct GroundPoint {
     float surface_coordinate = 0.0f;
     float relief[3] = {};
     float normal[3] = {0.0f, 0.0f, 1.0f};
+    float normal_delta[2] = {};
     bool terrain_ready = false;
+};
+
+struct CachedGroundGrid {
+    int divisions=0;
+    float layer=0;
+    std::vector<Vertex> vertices;
+    // Preserve raw height and normal numerators; recovering these from packed
+    // world Z or normalized normals would introduce zoom-dependent rounding.
+    std::vector<std::array<float,3>> samples;
+    int sample_stride(int requested) const {
+        if(requested<=0 || divisions<requested || divisions%requested!=0)return 0;
+        int stride=divisions/requested;
+        // Only reuse genuinely identical sampling coordinates, including the
+        // floating-point division. Never interpolate a coarser approximation.
+        for(int i=0;i<=requested;++i)
+            if(float(i*stride)/divisions!=float(i)/requested)return 0;
+        return stride;
+    }
+    Vertex project(std::size_t index,int width,int height) const {
+        Vertex out=vertices[index];
+        float u=float(index%std::size_t(divisions+1))/divisions;
+        float v=float(index/std::size_t(divisions+1))/divisions;
+        float half_w=float(width)*.5f,half_h=float(height)*.5f;
+        float h=samples[index][0]*(float(width)/224.f*.82f);
+        float base=(u+v)*half_h;
+        out.x=half_w+(u-v)*half_w;out.y=base-h;out.z=base+h*.75f;
+        if(layer==1.f || layer==9.f){
+            float su=samples[index][1]/(2.f*.006f*float(width));
+            float sv=samples[index][2]*-1.f/(2.f*.006f*float(width));
+            float length=std::sqrt(su*su+sv*sv+1.f);
+            out.normal_x=-su/length;out.normal_y=-sv/length;out.normal_z=1.f/length;
+        }
+        return out;
+    }
+};
+struct CachedGroundTile {
+    std::uint64_t signature=0,used=0;
+    int x=0,y=0;
+    std::size_t bytes=0;
+    std::vector<CachedGroundGrid> grids;
+    std::vector<std::pair<std::uint64_t,std::uint64_t>> dependencies,coast_dependencies;
+    std::vector<std::pair<std::size_t,std::uint32_t>> world_dependencies;
 };
 
 struct RiverNode {
@@ -555,6 +598,9 @@ public:
     std::size_t tile_geometry_cache_bytes = 0, prefetched_geometry_bytes = 0;
     std::unordered_map<std::uint64_t,NaturalTile> natural_mesh_cache;
     std::size_t natural_mesh_cache_bytes=0;
+    std::unordered_map<std::uint64_t,CachedGroundTile> ground_grid_cache;
+    std::size_t ground_grid_cache_bytes=0;
+    unsigned frame_ground_grid_hits=0;
     unsigned frame_natural_hits=0;
     std::uint64_t tile_geometry_epoch = 0, tile_geometry_version = 0;
     std::vector<c3x_renderer::TileFootprint> geometry_footprints, bitmap_footprints;
@@ -579,16 +625,6 @@ public:
     ID3D11DepthStencilView * block_depth = nullptr;
     unsigned raster_cached_pixels = 0, prepared_blocks = 0;
 
-    HDC blit_dc = nullptr;
-    HBITMAP blit_bitmap = nullptr;
-    HGDIOBJ blit_previous_bitmap = nullptr;
-    void * blit_bits = nullptr;
-    int blit_width = 0;
-    int blit_height = 0;
-    int blit_destination_bits = -1;
-    unsigned blit_destination_green_mask = 0;
-    c3x_renderer::ColorRoundingTable blit_round5{}, blit_round6{};
-    bool blit_rounding_ready = false;
     bool cache_valid = false;
     bool feature_assets_ready = false;
     bool dune_assets_ready = false;
@@ -604,7 +640,6 @@ public:
 
     ~RendererState() {
         reset();
-        reset_blit_surface();
     }
 
     template <typename T>
@@ -630,20 +665,6 @@ public:
         height = 0;
         pixels.clear();
         cache_valid = false;
-    }
-
-    void reset_blit_surface() {
-        if (blit_dc != nullptr && blit_previous_bitmap != nullptr)
-            SelectObject(blit_dc, blit_previous_bitmap);
-        blit_previous_bitmap = nullptr;
-        if (blit_bitmap != nullptr)
-            DeleteObject(blit_bitmap);
-        blit_bitmap = nullptr;
-        if (blit_dc != nullptr)
-            DeleteDC(blit_dc);
-        blit_dc = nullptr;
-        blit_bits = nullptr;
-        blit_width = blit_height = 0;
     }
 
     void clear_resource_backdrops() {
@@ -2592,6 +2613,10 @@ public:
             if(!json_number_after(data,"complete",location,complete))return false;
             if(complete!=1){trace.write("unit-bind",("unit="+std::to_string(i)+" unresolved material contract; native body").c_str(),true);continue;}
             c3x_renderer::UnitBodyRenderer::Unit unit;
+            float sample_scale=1;
+            if(json_number_after(data,"sample_scale",location,sample_scale) &&
+               sample_scale!=1 && sample_scale!=2)return false;
+            unit.sample_scale=int(sample_scale);
             if(!json_number_after(data,"key_count",location,keys) || keys<1 || keys>16 || keys!=int(keys) ||
                !json_number_after(data,"scale",location,unit.scale) || unit.scale<=0 || unit.scale>10 ||
                !json_number_after(data,"yaw_offset",location,unit.yaw_offset) ||
@@ -3099,6 +3124,7 @@ public:
 
     void clear_tile_geometry_cache() {
         natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
+        ground_grid_cache.clear();ground_grid_cache_bytes=0;
         topology_cache = {};
         cancel_pixel_preparation();
         pixel_blocks.clear();
@@ -4188,7 +4214,8 @@ public:
                 std::uint64_t prewarm_signature = 0) {
         bool const prewarming = prewarm_index >= 0;
         if (prewarming) prepared_footprint = {};
-        auto cancelled = [&] { return prewarming && foreground_pending->load(std::memory_order_relaxed); };
+        auto cancelled = [&] { return foreground_pending && foreground_pending->load(std::memory_order_relaxed); };
+        if (cancelled()) return false;
         if (prewarming && (static_cast<unsigned>(prewarm_index) >= frame.tile_count ||
             (frame.tiles[prewarm_index].tile_flags & C3X_RENDERER_TILE_PREFETCH) == 0 ||
             !cache_valid || cancelled())) return false;
@@ -4277,6 +4304,7 @@ public:
         }
         frame_tiles_built = frame_tiles_reused = frame_tiles_evicted = 0;
         frame_natural_hits=0;
+        frame_ground_grid_hits=0;
         bool const animated_view=frame_has_resource_animation(frame);
         char sharing_control[8]={};
         // Civ III uses a 2:1 diamond; preserve the existing CPU projection for
@@ -4291,6 +4319,20 @@ public:
         bool const separate_natural_relief=fidelity_profile &&
             !(GetEnvironmentVariableA("C3X_RENDERER_RELIEF_QUERY_CONTROL",relief_control,sizeof(relief_control)) &&
             std::strcmp(relief_control,"1")==0);
+        char ground_control[8]={};
+        bool const retain_ground_grids=fidelity_profile && share_world_meshes &&
+            !(GetEnvironmentVariableA("C3X_RENDERER_GROUND_GRID_CONTROL",ground_control,sizeof(ground_control)) &&
+            std::strcmp(ground_control,"1")==0);
+        char nested_control[8]={};
+        bool const reuse_nested_ground_grids=!(GetEnvironmentVariableA("C3X_RENDERER_NESTED_GRID_CONTROL",nested_control,sizeof(nested_control)) &&
+            std::strcmp(nested_control,"1")==0);
+        char flat_shore_control[8]={};
+        bool const skip_flat_shore=!(GetEnvironmentVariableA("C3X_RENDERER_FLAT_SHORE_CONTROL",flat_shore_control,sizeof(flat_shore_control)) &&
+            std::strcmp(flat_shore_control,"1")==0);
+        // Reuse the existing CPU tier, not another reservation. World-owned
+        // natural GPU meshes already survive zoom changes independently.
+        if(retain_ground_grids){natural_mesh_cache.clear();natural_mesh_cache_bytes=0;}
+        else {ground_grid_cache.clear();ground_grid_cache_bytes=0;}
         frame_upload_bytes = 0;
         raster_reused_pixels = raster_draw_pixels = raster_cached_pixels = 0;
         c3x_renderer::TerrainFrameSignature signature = prewarming ? c3x_renderer::TerrainFrameSignature{} :
@@ -4785,7 +4827,7 @@ public:
             auto observe_world = [&](std::size_t i, std::uint32_t value) { world_dependencies.emplace(i,value); };
             auto observe_coast = [&](auto id,auto revision) { coast_dependencies.emplace(id,revision); };
             c3x_renderer::fidelity::SurfaceQueries queries(world_coast,shore_samples,
-                tile.tile_x,tile.tile_y,observe_world,observe_coast);
+                tile.tile_x,tile.tile_y,observe_world,observe_coast,skip_flat_shore);
             auto world_lookup = [&](int c,int r) { return queries.tile(c,r); };
             float shore_center_u=queries.center_u,shore_center_v=queries.center_v;
             pickup_ground_samples.clear();
@@ -5707,6 +5749,8 @@ public:
                     float right_height = pickup_profile ? pickup_height_at(world_u + normal_step, world_v) : relief_at_world(world_u + normal_step, world_v)[0];
                     float down_height = pickup_profile ? pickup_height_at(world_u, world_v - normal_step) : relief_at_world(world_u, world_v - normal_step)[0];
                     float up_height = pickup_profile ? pickup_height_at(world_u, world_v + normal_step) : relief_at_world(world_u, world_v + normal_step)[0];
+                    point.normal_delta[0]=right_height-left_height;
+                    point.normal_delta[1]=up_height-down_height;
                     float slope_u = (right_height - left_height) * (pickup_profile ? 1.0f : relief_projection_scale) /
                         (2.0f * normal_step * static_cast<float>(frame.tile_width));
                     float slope_v = (up_height - down_height) * (pickup_profile ? -1.0f : relief_projection_scale) /
@@ -5772,6 +5816,34 @@ public:
                     owner_material[0], owner_material[1], owner_material[2], owner_material[3]
                 };
             };
+            // Retain the actual wrapped occurrence: vertices contain raw world
+            // coordinates/UVs, not just canonical gameplay identity.
+            auto ground_key=(std::uint64_t(std::uint32_t(tile.tile_x))<<32)|std::uint32_t(tile.tile_y);
+            std::uint64_t ground_signature=tile_content_signature(tile);
+            for(auto value:{content_revision,std::uint64_t(frame.world_topology_revision),
+                    std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
+                    std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y)})
+                ground_signature=(ground_signature^value)*1099511628211ull;
+            auto retained_ground=ground_grid_cache.find(ground_key);
+            bool ground_hit=retain_ground_grids && !prewarming && retained_ground!=ground_grid_cache.end() &&
+                retained_ground->second.signature==ground_signature;
+            if(ground_hit)for(auto const& dependency:retained_ground->second.dependencies){
+                auto found=semantic_by_coordinate.find(dependency.first);
+                if((found==semantic_by_coordinate.end()?0:found->second)!=dependency.second){ground_hit=false;break;}
+            }
+            if(ground_hit)for(auto const& dependency:retained_ground->second.coast_dependencies)
+                if(world_coast.node_revision(dependency.first)!=dependency.second){ground_hit=false;break;}
+            if(ground_hit)for(auto const& dependency:retained_ground->second.world_dependencies)
+                if(world_coast.world().at(dependency.first)!=dependency.second){ground_hit=false;break;}
+            if(ground_hit){
+                auto& cached=retained_ground->second;cached.used=tile_geometry_epoch;
+                dependencies.insert(cached.dependencies.begin(),cached.dependencies.end());
+                coast_dependencies.insert(cached.coast_dependencies.begin(),cached.coast_dependencies.end());
+                world_dependencies.insert(cached.world_dependencies.begin(),cached.world_dependencies.end());
+            }else if(retain_ground_grids && !prewarming && retained_ground!=ground_grid_cache.end()){
+                ground_grid_cache_bytes-=retained_ground->second.bytes;ground_grid_cache.erase(retained_ground);
+            }
+            std::vector<CachedGroundGrid> pending_ground_grids;
             auto append_ground_layer = [&](std::vector<Vertex> & target, float layer,
                                            int subdivisions, std::vector<UINT>* indices=nullptr) {
                 // Adjacent cells share grid corners. Build and upload each
@@ -5781,15 +5853,37 @@ public:
                 std::vector<Vertex> expanded_corners;
                 auto& grid_vertices=indices?target:expanded_corners;
                 grid_vertices.resize(static_cast<std::size_t>(row_width) * row_width);
+                CachedGroundGrid const* cached_grid=nullptr;
+                int cached_stride=0;
+                if(ground_hit)for(auto const& grid:retained_ground->second.grids)
+                    if(grid.layer==layer && (grid.divisions==subdivisions || reuse_nested_ground_grids)){
+                        int stride=grid.sample_stride(subdivisions);
+                        if(stride){cached_grid=&grid;cached_stride=stride;break;}
+                    }
+                bool record=retain_ground_grids && !prewarming && indices && !cached_grid;
+                CachedGroundGrid pending;
+                if(record){pending.layer=layer;pending.divisions=subdivisions;pending.samples.resize(grid_vertices.size());}
+                if(cached_grid)++frame_ground_grid_hits;
                 for (int grid_v = 0; grid_v <= subdivisions; ++grid_v) {
                     if (cancelled()) return;
                     for (int grid_u = 0; grid_u <= subdivisions; ++grid_u) {
                         float u = static_cast<float>(grid_u) / subdivisions;
                         float v = static_cast<float>(grid_v) / subdivisions;
-                        grid_vertices[static_cast<std::size_t>(grid_v) * row_width + grid_u] =
-                            make_ground_vertex(u, v, layer);
+                        auto at=static_cast<std::size_t>(grid_v)*row_width+grid_u;
+                        if(cached_grid){
+                            auto source_at=static_cast<std::size_t>(grid_v*cached_stride)*(cached_grid->divisions+1)+grid_u*cached_stride;
+                            auto vertex=cached_grid->project(source_at,frame.tile_width,frame.tile_height);
+                            if(layer==9.f)vertex.river_branch_count=river_node_distance(u,v,1u);
+                            grid_vertices[at]=vertex;
+                        }else{
+                            grid_vertices[at]=make_ground_vertex(u,v,layer);
+                            if(record){auto const& point=ground_point_at(u,v);
+                                pending.samples[at]={layer==1.f || layer==9.f?point.relief[0]:0.f,
+                                    point.normal_delta[0],point.normal_delta[1]};}
+                        }
                     }
                 }
+                if(record){pending.vertices=grid_vertices;pending_ground_grids.push_back(std::move(pending));}
                 if(indices){
                     indices->clear();indices->reserve(std::size_t(subdivisions)*subdivisions*6);
                     for(int y=0;y<subdivisions;++y)for(int x=0;x<subdivisions;++x){
@@ -5980,6 +6074,39 @@ public:
                 // interpolates visibility across the unchanged terrain body.
                 append_ground_layer(shadow_vertices, 10.0f,
                                     shadow_grid);
+            }
+            if(!pending_ground_grids.empty()){
+                CachedGroundTile incoming;
+                incoming.signature=ground_signature;incoming.used=tile_geometry_epoch;incoming.x=tile.tile_x;incoming.y=tile.tile_y;
+                incoming.grids=std::move(pending_ground_grids);
+                incoming.dependencies.assign(dependencies.begin(),dependencies.end());
+                incoming.coast_dependencies.assign(coast_dependencies.begin(),coast_dependencies.end());
+                incoming.world_dependencies.assign(world_dependencies.begin(),world_dependencies.end());
+                if(ground_hit){
+                    // Allocate before moving any retained grids. A failed
+                    // allocation must leave the old cache entry usable.
+                    incoming.grids.reserve(incoming.grids.size()+retained_ground->second.grids.size());
+                    for(auto& grid:retained_ground->second.grids)incoming.grids.push_back(std::move(grid));
+                    ground_grid_cache_bytes-=retained_ground->second.bytes;ground_grid_cache.erase(retained_ground);
+                }
+                incoming.bytes=sizeof(CachedGroundTile)+64+incoming.grids.capacity()*sizeof(CachedGroundGrid)+
+                    incoming.dependencies.capacity()*sizeof(incoming.dependencies[0])+
+                    incoming.coast_dependencies.capacity()*sizeof(incoming.coast_dependencies[0])+
+                    incoming.world_dependencies.capacity()*sizeof(incoming.world_dependencies[0]);
+                for(auto const& grid:incoming.grids)incoming.bytes+=grid.vertices.capacity()*sizeof(Vertex)+grid.samples.capacity()*sizeof(grid.samples[0]);
+                float cx=float(tile.tile_x)+float(frame.target_width-frame.tile_width-2*tile.anchor_x)/frame.tile_width;
+                float cy=float(tile.tile_y)+float(frame.target_height-frame.tile_height-2*tile.anchor_y)/frame.tile_height;
+                auto distance=[&](CachedGroundTile const& value){float dx=value.x-cx,dy=value.y-cy;return dx*dx+dy*dy;};
+                bool admit=incoming.bytes<=natural_mesh_cache_budget;
+                while(admit && !ground_grid_cache.empty() && (ground_grid_cache_bytes+incoming.bytes>natural_mesh_cache_budget ||
+                        ground_grid_cache.size()>=natural_mesh_cache_capacity)){
+                    auto victim=ground_grid_cache.begin();
+                    for(auto it=ground_grid_cache.begin();it!=ground_grid_cache.end();++it)
+                        if(distance(it->second)>distance(victim->second))victim=it;
+                    if(distance(incoming)>distance(victim->second))admit=false;
+                    else {ground_grid_cache_bytes-=victim->second.bytes;ground_grid_cache.erase(victim);}
+                }
+                if(admit){auto bytes=incoming.bytes;ground_grid_cache.emplace(ground_key,std::move(incoming));ground_grid_cache_bytes+=bytes;}
             }
             QueryPerformanceCounter(&phase_end);ground_ticks+=phase_end.QuadPart-phase_time.QuadPart;
             phase_time=phase_end;
@@ -6637,7 +6764,7 @@ public:
                 bool natural_layer=layer>=geometry_natural_terrain;
                 if(natural_layer && shared_hit)continue;
                 auto const* cached_mesh=natural_layer && natural_hit?&natural_found->second.layers[layer-geometry_natural_terrain]:nullptr;
-                auto* record_mesh=natural_layer && cache_natural && !natural_hit?&pending_natural.layers[layer-geometry_natural_terrain]:nullptr;
+                auto* record_mesh=natural_layer && cache_natural && !natural_hit && !retain_ground_grids?&pending_natural.layers[layer-geometry_natural_terrain]:nullptr;
                 bool reproject=natural_hit && (natural_found->second.tile_width!=frame.tile_width ||
                     natural_found->second.tile_height!=frame.tile_height || natural_found->second.target_height!=frame.target_height);
                 if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer], prewarming, compiled.byte_count, foreground_pending, layer>=geometry_feature && layer<geometry_natural_terrain, natural_layer,
@@ -6661,7 +6788,7 @@ public:
                 tile_geometry_cache_bytes -= compiled.byte_count;
                 return false; // compiled owns every successfully uploaded buffer
             }
-            if(cache_natural && !natural_hit && !shared_hit){
+            if(cache_natural && !natural_hit && !shared_hit && !retain_ground_grids){
                 pending_natural.bytes=sizeof(NaturalTile)+pending_natural.dependencies.capacity()*sizeof(pending_natural.dependencies[0])+
                     pending_natural.coast_dependencies.capacity()*sizeof(pending_natural.coast_dependencies[0])+
                     pending_natural.world_dependencies.capacity()*sizeof(pending_natural.world_dependencies[0]);
@@ -6742,9 +6869,9 @@ public:
             QueryPerformanceCounter(&phase_end);upload_ticks+=phase_end.QuadPart-phase_time.QuadPart;
         }
         if(pickup_profile && !prewarming) {
-            char detail[320];sprintf_s(detail,"built=%u reused=%u ground_ms=%.3f features_ms=%.3f cliffs_ms=%.3f upload_ms=%.3f bytes=%llu natural_hits=%u natural_bytes=%zu",
+            char detail[384];sprintf_s(detail,"built=%u reused=%u ground_ms=%.3f features_ms=%.3f cliffs_ms=%.3f upload_ms=%.3f bytes=%llu natural_hits=%u natural_bytes=%zu ground_grid_hits=%u ground_grid_bytes=%zu",
                 frame_tiles_built,frame_tiles_reused,trace.milliseconds(ground_ticks),trace.milliseconds(feature_ticks),
-                trace.milliseconds(cliff_ticks),trace.milliseconds(upload_ticks),static_cast<unsigned long long>(tile_geometry_cache_bytes),frame_natural_hits,natural_mesh_cache_bytes);
+                trace.milliseconds(cliff_ticks),trace.milliseconds(upload_ticks),static_cast<unsigned long long>(tile_geometry_cache_bytes),frame_natural_hits,natural_mesh_cache_bytes,frame_ground_grid_hits,ground_grid_cache_bytes);
             trace.write("mesh-phases",detail,true);
             sprintf_s(detail,"shore_hits=%zu shore_misses=%zu material_hits=%zu material_misses=%zu height_queries=%zu scratch_bytes=%zu",
                 shore_samples.hits,shore_samples.misses,pickup_ground_samples.hits,pickup_ground_samples.misses,
@@ -6840,12 +6967,14 @@ public:
         QueryPerformanceCounter(&geometry_finished);
         frame_geometry_ticks = geometry_finished.QuadPart - started.QuadPart;
         trace.write("geometry-ready", frame_cache_path);
+        if(cancelled())return false;
         if (!raster_rects.empty() && !submit_geometry(geometry_vertex_buffers, raster_rects,
                 geometry_viewport_settings, render_target, depth_target,
-                c3x_renderer::power_of_two_extent(width), c3x_renderer::power_of_two_extent(height))) return false;
+                c3x_renderer::power_of_two_extent(width), c3x_renderer::power_of_two_extent(height),foreground_pending)) return false;
 
         QueryPerformanceCounter(&draw_finished);
         frame_draw_ticks = draw_finished.QuadPart - geometry_finished.QuadPart;
+        if(cancelled())return false;
         trace.write("readback-begin", "includes pending GPU execution");
         // The retained CPU bitmap already owns the unchanged overlap. Transfer
         // only freshly rasterized rectangles; the staging surface outside them
@@ -6944,7 +7073,41 @@ public:
         return fill_output(frame, output, invalidations, finished.QuadPart - started.QuadPart);
     }
 
-    bool blit(c3x_renderer_output_v1 const & output, HDC destination) {
+};
+
+// Only the calling/UI thread creates, uses and destroys these GDI resources.
+// D3D state and its reset/destructor have no ownership of the blit surface.
+class MapBlitter {
+    HDC blit_dc = nullptr;
+    HBITMAP blit_bitmap = nullptr;
+    HGDIOBJ blit_previous_bitmap = nullptr;
+    void * blit_bits = nullptr;
+    int blit_width = 0, blit_height = 0;
+    int blit_destination_bits = -1;
+    unsigned blit_destination_green_mask = 0;
+    c3x_renderer::ColorRoundingTable blit_round5{}, blit_round6{};
+    bool blit_rounding_ready = false;
+public:
+    MapBlitter() = default;
+    MapBlitter(MapBlitter const&) = delete;
+    MapBlitter& operator=(MapBlitter const&) = delete;
+    ~MapBlitter() {reset_blit_surface();}
+    void reset_blit_surface() {
+        if (blit_dc != nullptr && blit_previous_bitmap != nullptr)
+            SelectObject(blit_dc, blit_previous_bitmap);
+        blit_previous_bitmap = nullptr;
+        if (blit_bitmap != nullptr)
+            DeleteObject(blit_bitmap);
+        blit_bitmap = nullptr;
+        if (blit_dc != nullptr)
+            DeleteDC(blit_dc);
+        blit_dc = nullptr;
+        blit_bits = nullptr;
+        blit_width = blit_height = 0;
+    }
+
+    template<class Trace>
+    bool blit(c3x_renderer_output_v1 const & output, HDC destination, int phase_x, int phase_y, Trace& trace) {
         if (blit_dc == nullptr || blit_bitmap == nullptr ||
             blit_width != output.width || blit_height != output.height) {
             reset_blit_surface();
@@ -6998,8 +7161,6 @@ public:
             blit_round6=c3x_renderer::color_rounding_table(63);
             blit_rounding_ready=true;
         }
-        int phase_x=cached_tiles.empty()?0:cached_tiles.front().anchor_x;
-        int phase_y=cached_tiles.empty()?0:cached_tiles.front().anchor_y;
         auto const& green_rounding=green_mask==0x7e0?blit_round6:blit_round5;
         std::size_t row_bytes = static_cast<std::size_t>(
             output.clip_right - output.clip_left) * sizeof(std::uint32_t);
@@ -7027,6 +7188,160 @@ public:
 
 RendererState renderer;
 
+// A presentation owns all pointer-bearing output fields together. Construction
+// is transactional: an allocation failure cannot partly replace the image or
+// its ownership. Two publications may coexist briefly during commit, each at
+// most 32 MiB including ownership arrays. This is not a viewport cache.
+struct PublishedMapFrame {
+    c3x_renderer_output_v1 output={};
+    std::vector<std::uint32_t> pixels, fallback, replacements;
+    int phase_x=0,phase_y=0;
+    PublishedMapFrame()=default;
+    PublishedMapFrame(PublishedMapFrame const&)=delete;
+    PublishedMapFrame& operator=(PublishedMapFrame const&)=delete;
+    void swap(PublishedMapFrame& other) noexcept {
+        std::swap(output,other.output);
+        pixels.swap(other.pixels);fallback.swap(other.fallback);replacements.swap(other.replacements);
+        std::swap(phase_x,other.phase_x);std::swap(phase_y,other.phase_y);
+    }
+    bool capture(c3x_renderer_output_v1 const& source,int x,int y) {
+        constexpr std::uint64_t budget=32u*1024u*1024u;
+        if(source.width<=0 || source.height<=0 || source.width>8192 || source.height>8192 ||
+           source.stride_bytes!=source.width*4 || !source.bgra_pixels ||
+           source.fallback_tile_count>8192 || source.replacement_tile_count>8192 ||
+           (source.fallback_tile_count && !source.fallback_tile_indices) ||
+           (source.replacement_tile_count && !source.replacement_tile_flags))return false;
+        auto count=std::uint64_t(source.width)*std::uint64_t(source.height);
+        if((count+source.fallback_tile_count+source.replacement_tile_count)*4+sizeof(PublishedMapFrame)>budget)return false;
+        try {
+            PublishedMapFrame next;
+            auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);
+            next.pixels.assign(first,first+std::size_t(count));
+            if(source.fallback_tile_count)next.fallback.assign(source.fallback_tile_indices,
+                source.fallback_tile_indices+source.fallback_tile_count);
+            if(source.replacement_tile_count)next.replacements.assign(source.replacement_tile_flags,
+                source.replacement_tile_flags+source.replacement_tile_count);
+            // Account allocated capacity, not just requested payload bytes.
+            if((std::uint64_t(next.pixels.capacity())+next.fallback.capacity()+next.replacements.capacity())*4+
+               sizeof(PublishedMapFrame)>budget)return false;
+            next.output=source;next.phase_x=x;next.phase_y=y;
+            pixels.swap(next.pixels);fallback.swap(next.fallback);replacements.swap(next.replacements);
+            output=next.output;phase_x=next.phase_x;phase_y=next.phase_y;
+            output.bgra_pixels=pixels.data();
+            output.fallback_tile_indices=fallback.empty()?nullptr:fallback.data();
+            output.replacement_tile_flags=replacements.empty()?nullptr:replacements.data();
+            return true;
+        } catch (...) {return false;}
+    }
+    void clear() {
+        std::vector<std::uint32_t>().swap(pixels);
+        std::vector<std::uint32_t>().swap(fallback);
+        std::vector<std::uint32_t>().swap(replacements);
+        output={};phase_x=phase_y=0;
+    }
+};
+
+// Cheap, deliberately provisional terrain-only view. It consumes the same
+// generic normalized base-color DDS inputs and captured screen anchors, never
+// prior-camera pixels or uncaptured world cells. No detailed cache is modified.
+struct CameraTerrainPreview {
+    template<class Textures>
+    bool render(c3x_renderer_frame_v1 const& frame,Textures const& textures,
+                PublishedMapFrame& target,std::atomic<bool> const& cancelled) {
+        constexpr unsigned edge=32;
+        std::array<std::array<std::uint32_t,edge*edge>,14> colors{};
+        std::array<bool,14> ready{};
+        auto material=[&](c3x_renderer_tile_v1 const& tile) {
+            int type=tile.real_terrain_type;
+            if(type!=5 && type!=6 && type!=10)type=tile.terrain_type;
+            return type;
+        };
+        auto read32=[](std::vector<std::uint8_t> const& bytes,std::size_t n) {
+            return std::uint32_t(bytes[n])|(std::uint32_t(bytes[n+1])<<8)|
+                (std::uint32_t(bytes[n+2])<<16)|(std::uint32_t(bytes[n+3])<<24);
+        };
+        for(unsigned i=0;i<frame.tile_count;++i) {
+            if(cancelled.load(std::memory_order_relaxed))return false;
+            auto const& tile=frame.tiles[i];
+            if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
+            int type=material(tile);
+            if(type<0 || type>=14 || !textures[type].configured)return false;
+            if(ready[type])continue;
+            auto const& dds=textures[type].dds;
+            if(dds.size()<164 || std::memcmp(dds.data(),"DDS ",4) ||
+               read32(dds,4)!=124 || std::memcmp(dds.data()+84,"DX10",4))return false;
+            unsigned format=read32(dds,128),w=read32(dds,16),h=read32(dds,12);
+            if((format!=77 && format!=78) || !w || !h || w>16384 || h>16384)return false;
+            auto bytes=std::uint64_t((w+3)/4)*((h+3)/4)*16;
+            if(bytes>dds.size()-148)return false;
+            // BC3's color block is opaque BC1 interpolation. Terrain preview
+            // ignores alpha, but never accepts another compression format.
+            for(unsigned y=0;y<edge;++y)for(unsigned x=0;x<edge;++x) {
+                unsigned sx=std::min(w-1,(2*x+1)*w/(2*edge));
+                unsigned sy=std::min(h-1,(2*y+1)*h/(2*edge));
+                auto at=148+std::size_t((sy/4)*((w+3)/4)+sx/4)*16+8;
+                unsigned a=unsigned(dds[at])|(unsigned(dds[at+1])<<8);
+                unsigned b=unsigned(dds[at+2])|(unsigned(dds[at+3])<<8);
+                unsigned which=(read32(dds,at+4)>>(2*((sy%4)*4+sx%4)))&3;
+                unsigned value=0xff000000u;
+                for(unsigned channel=0;channel<3;++channel) {
+                    unsigned shift=channel==0?11:channel==1?5:0,mask=channel==1?63:31;
+                    unsigned ca=((a>>shift)&mask)*255/mask,cb=((b>>shift)&mask)*255/mask;
+                    unsigned c=which==0?ca:which==1?cb:which==2?(2*ca+cb)/3:(ca+2*cb)/3;
+                    value|=c<<(16-channel*8);
+                }
+                colors[type][y*edge+x]=value;
+            }
+            ready[type]=true;
+        }
+        auto count=std::uint64_t(frame.target_width)*frame.target_height;
+        if((count+frame.tile_count)*4+sizeof(PublishedMapFrame)>32u*1024u*1024u)return false;
+        target.clear();target.pixels.assign(std::size_t(count),0xff000000u);
+        target.replacements.assign(frame.tile_count,0);
+        auto environment=c3x_renderer::evaluate_environment(float(frame.hour),frame.season);
+        float half_w=frame.tile_width*.5f,half_h=frame.tile_height*.5f;
+        unsigned rendered=0;
+        for(unsigned i=0;i<frame.tile_count;++i) {
+            if(cancelled.load(std::memory_order_relaxed))return false;
+            auto const& tile=frame.tiles[i];
+            if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
+            int type=material(tile);
+            float light[3]={};c3x_renderer::shade_terrain(environment,type,tile.tile_x,tile.tile_y,1.f,light);
+            std::array<std::uint32_t,edge*edge> lit{};
+            for(unsigned k=0;k<edge*edge;++k) {
+                auto value=colors[type][k];unsigned out=0xff000000u;
+                for(unsigned c=0;c<3;++c)out|=unsigned(std::clamp(float((value>>(16-c*8))&255)*light[c],0.f,255.f))<<(16-c*8);
+                lit[k]=out;
+            }
+            // Pixel-center diamond coverage: u grows down/right, v down/left.
+            // Use 64-bit extents so even off-screen sentinel anchors cannot wrap.
+            int left=int(std::clamp<std::int64_t>(tile.anchor_x,0,frame.target_width));
+            int right=int(std::clamp<std::int64_t>(std::int64_t(tile.anchor_x)+frame.tile_width,0,frame.target_width));
+            int top=int(std::clamp<std::int64_t>(tile.anchor_y,0,frame.target_height));
+            int bottom=int(std::clamp<std::int64_t>(std::int64_t(tile.anchor_y)+frame.tile_height,0,frame.target_height));
+            for(int y=top;y<bottom;++y) {
+                if(cancelled.load(std::memory_order_relaxed))return false;
+                float dy=(float(y)+.5f-float(tile.anchor_y))/half_h;
+                for(int x=left;x<right;++x) {
+                    float dx=(float(x)+.5f-float(tile.anchor_x)-half_w)/half_w;
+                    float u=(dx+dy)*.5f,v=(dy-dx)*.5f;
+                    if(u<0 || v<0 || u>=1 || v>=1)continue;
+                    target.pixels[std::size_t(y)*frame.target_width+x]=lit[unsigned(v*edge)*edge+unsigned(u*edge)];
+                }
+            }
+            target.replacements[i]=C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED;++rendered;
+        }
+        target.output={C3X_RENDERER_API_VERSION,sizeof(c3x_renderer_output_v1)};
+        auto& out=target.output;out.width=frame.target_width;out.height=frame.target_height;out.stride_bytes=out.width*4;
+        out.clip_left=frame.clip_left;out.clip_top=frame.clip_top;out.clip_right=frame.clip_right;out.clip_bottom=frame.clip_bottom;
+        out.bgra_pixels=target.pixels.data();out.replacement_tile_flags=target.replacements.data();out.replacement_tile_count=frame.tile_count;
+        out.rendered_tile_count=out.textured_tile_count=rendered;
+        target.phase_x=frame.tile_count?frame.tiles[0].anchor_x:0;
+        target.phase_y=frame.tile_count?frame.tiles[0].anchor_y:0;
+        return true;
+    }
+};
+
 // Civ III remains the caller and presenter. One renderer worker owns all
 // renderer-state mutation and D3D work, consuming a deep copy of each captured
 // frame. The synchronous ABI intentionally permits no stale-frame fallback: at
@@ -7034,12 +7349,19 @@ RendererState renderer;
 // result bearing the caller's exact sequence is returned for UI-thread blitting.
 class RendererWorker {
 public:
-    explicit RendererWorker(RendererState & state) : renderer_state(state) {}
+    explicit RendererWorker(RendererState & state) : renderer_state(state) {
+        char option[8]={};
+        isolated_publication=GetEnvironmentVariableA("C3X_RENDERER_CAMERA_PUBLICATION",option,sizeof(option)) &&
+            std::strcmp(option,"1")==0;
+        camera_preview_enabled=GetEnvironmentVariableA("C3X_RENDERER_CAMERA_PREVIEW",option,sizeof(option)) &&
+            std::strcmp(option,"1")==0;
+    }
 
     int set_unit_rendering(int enabled) {
         if(enabled!=0 && enabled!=1)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         std::lock_guard<std::mutex> call_guard(call_mutex);
-        std::lock_guard<std::mutex> lock(state_mutex);
+        std::unique_lock<std::mutex> lock(state_mutex);
+        drain_camera_locked(lock);
         // Call serialization excludes foreground configure/render jobs. Idle
         // terrain preparation never reads this unit-only configuration value.
         renderer_state.unit_rendering_enabled=enabled!=0;
@@ -7055,6 +7377,7 @@ public:
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();
+        drain_camera_locked(lock);
         job_pack_present = path != nullptr;
         job_pack_path = path != nullptr ? path : "";
         return submit_locked(lock, Command::configure_pack);
@@ -7065,6 +7388,7 @@ public:
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();
+        drain_camera_locked(lock);
         job_mod_root_present = mod_root != nullptr;
         job_default_path_present = default_path != nullptr;
         job_scenario_path_present = scenario_path != nullptr;
@@ -7080,6 +7404,7 @@ public:
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();
+        drain_camera_locked(lock);
         // Idle geometry/pixel preparation never mutates the published frame
         // bitmap or ownership arrays. An identical authoritative appearance
         // can return that immutable publication without cancelling useful work.
@@ -7138,6 +7463,73 @@ public:
         return result;
     }
 
+    // Optional Lab-facing camera API. One active immutable snapshot and one
+    // replaceable pending snapshot; no backlog and no old-camera success.
+    int camera_begin(c3x_renderer_frame_v1 const& frame,c3x_renderer_i64& ticket) {
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::unique_lock<std::mutex> lock(state_mutex);
+        if(camera_ticket==INT64_MAX)return C3X_RENDERER_RESULT_ERROR;
+        std::vector<c3x_renderer_tile_v1> tiles;
+        std::vector<c3x_renderer_u32> topology;
+        try {
+            if(frame.tile_count)tiles.assign(frame.tiles,frame.tiles+frame.tile_count);
+            if(frame.world_topology_count)topology.assign(frame.world_topology,frame.world_topology+frame.world_topology_count);
+        }catch(...){return C3X_RENDERER_RESULT_ERROR;}
+        // Preserve a synchronous publication before background work may mutate
+        // render scratch. Its previous borrowed pointer expires at this begin.
+        if(completed_result==C3X_RENDERER_RESULT_OK && completed_output.bgra_pixels &&
+           completed_output.bgra_pixels!=publication.output.bgra_pixels) {
+            if(!publication.capture(completed_output,completed_phase_x,completed_phase_y))
+                return C3X_RENDERER_RESULT_ERROR;
+            completed_output=publication.output;
+        }
+        start_locked();
+        camera_pending_frame=frame;
+        camera_pending_tiles.swap(tiles);camera_pending_topology.swap(topology);
+        camera_pending_frame.tiles=camera_pending_tiles.empty()?nullptr:camera_pending_tiles.data();
+        camera_pending_frame.world_topology=camera_pending_topology.empty()?nullptr:camera_pending_topology.data();
+        ticket=++camera_ticket;
+        camera_result=C3X_RENDERER_RESULT_PENDING;
+        camera_ready.clear();
+        camera_pending=true;
+        camera_cancelled.store(true,std::memory_order_relaxed);
+        foreground_pending.store(true,std::memory_order_relaxed);
+        completed_scene_signature=0;
+        wake.notify_one();
+        return C3X_RENDERER_RESULT_PENDING;
+    }
+
+    int camera_poll(c3x_renderer_i64 ticket,c3x_renderer_output_v1& output) {
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        if(ticket<=0 || ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(camera_result!=C3X_RENDERER_RESULT_OK && camera_result!=C3X_RENDERER_RESULT_PENDING)return camera_result;
+        if(camera_ready.output.bgra_pixels) {
+            publication.swap(camera_ready);
+            camera_ready.clear();
+            completed_output=publication.output;
+            completed_phase_x=publication.phase_x;completed_phase_y=publication.phase_y;
+            completed_result=C3X_RENDERER_RESULT_OK;
+            camera_front_ticket=ticket;camera_front_result=camera_ready_result;
+        }
+        if(camera_front_ticket!=ticket)return C3X_RENDERER_RESULT_PENDING;
+        output=completed_output;
+        return camera_front_result;
+    }
+
+    int camera_cancel(c3x_renderer_i64 ticket) {
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        if(ticket<=0 || ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        camera_cancelled.store(true,std::memory_order_relaxed);
+        camera_pending=false;camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
+        camera_ready.clear();
+        camera_pending_tiles.clear();camera_pending_topology.clear();
+        if(!camera_active)foreground_pending.store(false,std::memory_order_relaxed);
+        wake.notify_one();
+        return C3X_RENDERER_RESULT_OK;
+    }
+
     int blit(c3x_renderer_output_v1 const & output, HDC destination) {
         // This method executes on Civ III's calling/UI thread. Holding the call
         // gate excludes foreground rendering/reset. Idle mesh preparation may
@@ -7146,7 +7538,7 @@ public:
         std::lock_guard<std::mutex> call_guard(call_mutex);
         LARGE_INTEGER started = {}, finished = {};
         QueryPerformanceCounter(&started);
-        int result = renderer_state.blit(output, destination)
+        int result = map_blitter.blit(output, destination, completed_phase_x, completed_phase_y, renderer_state.trace)
             ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_ERROR;
         QueryPerformanceCounter(&finished);
         if (renderer_state.trace.level) {
@@ -7162,6 +7554,7 @@ public:
     int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
+        drain_camera_locked(lock);
         if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
         start_locked();job_unit=request;
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
@@ -7186,6 +7579,7 @@ public:
         std::unique_lock<std::mutex> lock(state_mutex);
         if (!running)
             return;
+        drain_camera_locked(lock);
         submit_locked(lock, Command::reset);
         stop_requested = true;
         wake.notify_one();
@@ -7194,6 +7588,7 @@ public:
         lock.lock();
         running = false;
         stop_requested = false;
+        map_blitter.reset_blit_surface();
     }
 
 private:
@@ -7207,6 +7602,21 @@ private:
     };
 
     RendererState & renderer_state;
+    MapBlitter map_blitter;
+    PublishedMapFrame publication;
+    PublishedMapFrame camera_ready;
+    bool camera_preview_enabled=false;
+    c3x_renderer_i64 camera_front_ticket=0;
+    int camera_ready_result=C3X_RENDERER_RESULT_OK,camera_front_result=C3X_RENDERER_RESULT_PENDING;
+    c3x_renderer_frame_v1 camera_pending_frame={};
+    std::vector<c3x_renderer_tile_v1> camera_pending_tiles;
+    std::vector<c3x_renderer_u32> camera_pending_topology;
+    c3x_renderer_i64 camera_ticket=0;
+    int camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
+    bool camera_active=false,camera_pending=false;
+    std::atomic<bool> camera_cancelled{false};
+    bool isolated_publication=false;
+    int completed_phase_x=0,completed_phase_y=0;
     std::mutex call_mutex;
     std::mutex state_mutex;
     std::condition_variable wake;
@@ -7256,6 +7666,17 @@ private:
         has_job = false;
         running = true;
         worker = std::thread(&RendererWorker::run, this);
+    }
+
+    void drain_camera_locked(std::unique_lock<std::mutex>& lock) {
+        // Synchronous unit/config/render commands take priority. Never change
+        // job_frame or any renderer-owned object while the camera uses it.
+        camera_cancelled.store(true,std::memory_order_relaxed);
+        camera_pending=false;camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
+        completed.wait(lock,[this]{return !camera_active;});
+        foreground_pending.store(false,std::memory_order_relaxed);
+        camera_ready.clear();
+        camera_pending_tiles.clear();camera_pending_topology.clear();
     }
 
     int submit_locked(std::unique_lock<std::mutex> & lock, Command command) {
@@ -7340,11 +7761,79 @@ private:
     void run() {
         std::unique_lock<std::mutex> lock(state_mutex);
         for (;;) {
+            if(!has_job && !stop_requested && camera_pending) {
+                auto const ticket=camera_ticket;
+                job_frame=camera_pending_frame;
+                job_tiles.swap(camera_pending_tiles);job_world_topology.swap(camera_pending_topology);
+                camera_pending_tiles.clear();camera_pending_topology.clear();
+                job_frame.tiles=job_tiles.empty()?nullptr:job_tiles.data();
+                job_frame.world_topology=job_world_topology.empty()?nullptr:job_world_topology.data();
+                camera_pending=false;camera_active=true;
+                camera_cancelled.store(false,std::memory_order_relaxed);
+                warm_order.clear();warm_cursor=0;warm_signature=0;
+                renderer_state.cancel_pixel_preparation();
+                lock.unlock();
+                c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(c3x_renderer_output_v1)};
+                int result=C3X_RENDERER_RESULT_ERROR;
+                if(camera_preview_enabled) {
+                    PublishedMapFrame preview;
+                    bool available=false;
+                    LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+                    try {available=CameraTerrainPreview{}.render(job_frame,renderer_state.terrain_textures,preview,camera_cancelled);}
+                    catch(...){available=false;}
+                    QueryPerformanceCounter(&end);
+                    lock.lock();
+                    if(available && ticket==camera_ticket && camera_result==C3X_RENDERER_RESULT_PENDING &&
+                       !camera_cancelled.load(std::memory_order_relaxed)) {
+                        camera_ready.swap(preview);camera_ready_result=C3X_RENDERER_RESULT_PREVIEW;
+                        char detail[128];std::snprintf(detail,sizeof(detail),"ticket=%lld ms=%.3f terrain_only=1",
+                            static_cast<long long>(ticket),renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart));
+                        renderer_state.trace.write("camera-preview",detail,true);
+                    }
+                    lock.unlock();
+                }
+                try {
+                    bool ok=renderer_state.render(job_frame,output,-1,&camera_cancelled);
+                    if(camera_cancelled.load(std::memory_order_relaxed)) {
+                        // Completed tile entries remain individually validated.
+                        // Partial viewport/draw assemblies must never be reused.
+                        renderer_state.cache_valid=false;
+                        renderer_state.geometry_cache.clear();
+                        renderer_state.clear_geometry_vertex_buffers();
+                        result=C3X_RENDERER_RESULT_SUPERSEDED;
+                    }else if(ok)result=C3X_RENDERER_RESULT_OK;
+                    else {
+                        renderer_state.reset();
+                        result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+                    }
+                }catch(...) {
+                    renderer_state.reset();
+                    result=C3X_RENDERER_RESULT_ERROR;
+                }
+                lock.lock();
+                if(ticket==camera_ticket && camera_result==C3X_RENDERER_RESULT_PENDING &&
+                   !camera_cancelled.load(std::memory_order_relaxed)) {
+                    if(result==C3X_RENDERER_RESULT_OK) {
+                        int x=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_x;
+                        int y=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_y;
+                        camera_ready.clear();camera_ready_result=C3X_RENDERER_RESULT_OK;
+                        if(!camera_ready.capture(output,x,y))result=C3X_RENDERER_RESULT_ERROR;
+                    }
+                    camera_result=result;
+                }
+                char detail[128];std::snprintf(detail,sizeof(detail),"ticket=%lld current=%lld result=%d",
+                    static_cast<long long>(ticket),static_cast<long long>(camera_ticket),result);
+                renderer_state.trace.write("camera-complete",detail,true);
+                camera_active=false;
+                foreground_pending.store(camera_pending,std::memory_order_relaxed);
+                completed.notify_all();
+                continue;
+            }
             if (!has_job && !stop_requested && warm_cursor < warm_order.size()) {
                 // Yield between individual tiles. A foreground request wakes
                 // this delay and cancels CPU construction before GPU upload.
                 if (wake.wait_for(lock, std::chrono::milliseconds(2), [this] {
-                    return has_job || stop_requested;
+                    return has_job || camera_pending || stop_requested;
                 })) continue;
                 unsigned index = warm_order[warm_cursor];
                 lock.unlock();
@@ -7402,7 +7891,7 @@ private:
                 continue;
             }
             if (!has_job && !stop_requested && renderer_state.pixel_work_pending()) {
-                if (wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || stop_requested;})) continue;
+                if (wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;})) continue;
                 lock.unlock();
                 bool ok=false;
                 try { ok=renderer_state.prepare_pixel_block(foreground_pending); } catch (...) { ok=false; }
@@ -7417,7 +7906,8 @@ private:
                 }
                 continue;
             }
-            wake.wait(lock, [this] { return has_job || stop_requested; });
+            wake.wait(lock, [this] { return has_job || camera_pending || stop_requested; });
+            if(camera_pending && !has_job && !stop_requested)continue;
             if (stop_requested && !has_job)
                 break;
             Command command = job_command;
@@ -7490,6 +7980,17 @@ private:
                 renderer_state.cancel_pixel_preparation();
             }
             if(command!=Command::unit) {
+            if(command==Command::render && result==C3X_RENDERER_RESULT_OK){
+                completed_phase_x=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_x;
+                completed_phase_y=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_y;
+                if(isolated_publication){
+                    if(publication.capture(output,completed_phase_x,completed_phase_y))output=publication.output;
+                    else {
+                        publication.clear();
+                        renderer_state.trace.write("publication-unavailable","synchronous exact output retained",true);
+                    }
+                }
+            }else {publication.clear();completed_phase_x=completed_phase_y=0;}
             completed_resources = command==Command::render ? renderer_state.visible_resource_animations : 0;
             completed_resource_clock=command==Command::render ? RendererState::resource_clock(job_frame) : -1;
             completed_output = output;
@@ -7588,6 +8089,26 @@ extern "C" __declspec(dllexport) int c3x_renderer_render(
     if (!valid_frame(frame, output))
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return get_renderer_worker().render(*frame, *output);
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_camera_begin(
+    c3x_renderer_frame_v1 const* frame,c3x_renderer_i64* ticket) {
+    c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(c3x_renderer_output_v1)};
+    if(!ticket || !valid_frame(frame,&output))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().camera_begin(*frame,*ticket);
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_camera_poll(
+    c3x_renderer_i64 ticket,c3x_renderer_output_v1* output) {
+    if(!output || output->api_version!=C3X_RENDERER_API_VERSION || output->struct_size!=sizeof(*output))
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    if(!renderer_worker)return C3X_RENDERER_RESULT_SUPERSEDED;
+    return renderer_worker->camera_poll(ticket,*output);
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_camera_cancel(c3x_renderer_i64 ticket) {
+    if(!renderer_worker)return C3X_RENDERER_RESULT_SUPERSEDED;
+    return renderer_worker->camera_cancel(ticket);
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_blit(

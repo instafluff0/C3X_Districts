@@ -111,8 +111,9 @@ as a comparison aid. Source-derived art remains local. Complete category renders
 use the production D3D11 renderer through the Windows VM dispatcher. `check`
 validates the catalog and dependency graph without rendering or hashing images.
 
-Current known limitations include connected-route gaps, incomplete resource
-mapping and a production edit-reuse witness that rebuilds all visible tiles.
+Current known limitations include connected-route gaps and incomplete resource
+mapping. The production edit witness checks partial terrain reuse and exact
+warm/cold pixel parity on an existing coast.
 The current resource code fixes the animated black-backdrop defect; an older
 fixed reference may still show it until the user elects to replace that visual
 comparison point. That difference does not block Integration.

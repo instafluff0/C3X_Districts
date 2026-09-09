@@ -21,6 +21,27 @@ DLL-only. They preserve those same capture/composite symbols and ownership;
 `required_user_action: []`. No cache increase or new executable address is needed
 for these cold-view optimizations.
 
+Underlying ground-grid retention is also DLL-only and uses the same existing
+capture/composite boundaries. It reallocates the existing CPU cache tier while
+world GPU sharing is active, validates captured dependencies and preserves raw
+wrapped occurrence identity. `required_user_action: []`; no new patch capability,
+signature or supported-build address is required.
+Exact nested-grid sample reuse has the same DLL-only boundary and unchanged
+cache ceilings: `required_user_action: []`. It needs no Civ III patch-table edit.
+The flat-height shoreline certificate is also renderer-only, retaining the
+existing capture and invalidation inputs: `required_user_action: []`.
+Opt-in immutable completed-frame publication is internal to the existing
+renderer render/blit ABI. It does not yet enable background presentation and
+requires no new executable symbol or patch capability: `required_user_action: []`.
+UI-owned GDI blit lifetime and the documented borrowed-output lifetime also keep
+the existing ABI and native map-composite boundary: `required_user_action: []`.
+The experimental DLL-only `c3x_renderer_camera_begin`, `c3x_renderer_camera_poll`
+and `c3x_renderer_camera_cancel` exports add a bounded latest-request queue.
+They are not Civ III symbols, require no executable addresses, and are not bound
+by the injected bridge yet. Existing synchronous hooks remain unchanged;
+`required_user_action: []`. Current-camera previews and native final-redraw
+coordination remain implementation work, not an additional patch-table request.
+
 - Existing symbols: `Map_Renderer_m71_Draw_Tiles`,
   `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`,
   `Main_Screen_Form_tile_to_screen_coords`, `Unit_tick_anim`,
@@ -68,6 +89,14 @@ not authorize implementing nuclear/transient effects or ask for those edits now.
 Fog-edge work and wonders/Districts remain deferred.
 
 ## Available boundaries
+
+The candidate unit anatomy/supersampling study uses the existing `Unit_tick_anim`,
+`Sprite_draw_unit_body_normal` and `Sprite_draw_unit_body_reduced` boundaries.
+It does not change their signatures or expand native dirty regions. Long-weapon
+anatomy sizing is restricted to the larger standalone Lab canvas until visible
+bounds and dirty redraws are reconciled with the native Sprite. No concrete new
+symbol is established by that requirement. `required_user_action: []` for this
+study; the separate outstanding requests elsewhere in this ledger are unchanged.
 
 | Responsibility | Existing symbol | CSV capability / use |
 | --- | --- | --- |

@@ -9,7 +9,9 @@
     "Renderer/lab/shared/shaders/objects/beauty_objects.hlsl",
     "Renderer/native/c3x_renderer.cpp",
     "Renderer/native/terrain_scene_runtime.cpp",
-    "Renderer/native/animation_runtime.h"
+    "Renderer/native/animation_runtime.h",
+    "Renderer/lab/studies/units/prepare.py",
+    "Renderer/lab/studies/units/sizing.json"
   ],
   "recipe": {
     "terrain": 2,
@@ -19,17 +21,22 @@
       12
     ],
     "zooms": [
-      128
+      128,
+      192
     ],
     "cases": [
       "detail",
-      "gameplay"
+      "gameplay",
+      "sizing",
+      "sizing-gameplay",
+      "sizing-move"
     ]
   },
   "tests": [
     "Renderer.lab.test_unit_preparation",
     "Renderer.native.test_animation_runtime",
-    "Renderer.native.test_unit_animation_runtime"
+    "Renderer.native.test_unit_animation_runtime",
+    "Renderer.lab.studies.units.test_sizing"
   ],
   "references": {
     "d3d11": [

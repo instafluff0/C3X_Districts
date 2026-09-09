@@ -9,6 +9,134 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ZoomMeshTests(unittest.TestCase):
+    def test_retained_ground_dependencies_and_bounded_admission(self):
+        compiler = shutil.which("clang++") or shutil.which("g++")
+        if not compiler:
+            self.skipTest("C++ compiler unavailable")
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        retained = "struct CachedGroundGrid {" + source.split("struct CachedGroundGrid {", 1)[1].split("struct RiverNode", 1)[0]
+        lookup = "auto ground_key=" + source.split("auto ground_key=", 1)[1].split("            auto append_ground_layer", 1)[0]
+        admission = "if(!pending_ground_grids.empty()){\n" + source.split("if(!pending_ground_grids.empty()){\n", 1)[1].split("            QueryPerformanceCounter(&phase_end);ground_ticks", 1)[0]
+        program = r'''
+#include <array>
+#include <cassert>
+#include <cmath>
+#include <cstdint>
+#include <unordered_map>
+#include <vector>
+#include "Renderer/lab/shared/natural/vertex.h"
+using Vertex=c3x_renderer::fidelity::MapVertex;
+''' + retained + r'''
+struct State {
+ struct Frame {int world_width_tiles=100,world_height_tiles=100,world_wrap_x=1,world_wrap_y=0;
+  int world_topology_revision=1,tile_width=128,tile_height=64,target_width=128,target_height=64;} frame;
+ struct Tile {int tile_x=0,tile_y=0,anchor_x=0,anchor_y=0;} tile;
+ std::uint64_t content_revision=1,tile_geometry_epoch=1;
+ std::unordered_map<std::uint64_t,CachedGroundTile> ground_grid_cache;
+ std::size_t ground_grid_cache_bytes=0,natural_mesh_cache_budget=8192,natural_mesh_cache_capacity=4;
+ std::unordered_map<std::uint64_t,std::uint64_t> semantic_by_coordinate{{9,11}};
+ struct World {unsigned value=17;unsigned at(std::size_t) const{return value;}};
+ struct Coast {World data;std::uint64_t revision=23;
+  World const& world() const{return data;}
+  std::uint64_t node_revision(std::uint64_t) const{return revision;}} world_coast;
+ auto coordinate_key(int x,int y){return (std::uint64_t(std::uint32_t(x))<<32)|std::uint32_t(y);}
+ std::uint64_t tile_content_signature(Tile const&) const{return 3;}
+ bool run(int x,bool record){
+  tile.tile_x=x;tile.anchor_x=x*64;
+  bool retain_ground_grids=true,prewarming=false;
+  std::unordered_map<std::uint64_t,std::uint64_t> dependencies,coast_dependencies;
+  std::unordered_map<std::size_t,std::uint32_t> world_dependencies;
+''' + lookup + r'''
+  bool hit=ground_hit;
+  if(record){
+   CachedGroundGrid grid;grid.divisions=1;grid.layer=.5f;grid.vertices.resize(4);grid.samples.resize(4);
+   pending_ground_grids.push_back(std::move(grid));
+   dependencies[9]=semantic_by_coordinate.at(9);coast_dependencies[5]=world_coast.revision;world_dependencies[7]=world_coast.data.value;
+  }else if(hit){assert(dependencies.at(9)==semantic_by_coordinate.at(9));assert(coast_dependencies.at(5)==world_coast.revision);assert(world_dependencies.at(7)==world_coast.data.value);}
+''' + admission + r'''
+  std::size_t sum=0;for(auto const& entry:ground_grid_cache)sum+=entry.second.bytes;
+  assert(sum==ground_grid_cache_bytes && sum<=natural_mesh_cache_budget && ground_grid_cache.size()<=natural_mesh_cache_capacity);
+  return hit;
+ }
+};
+int main(){
+ State s;assert(!s.run(0,true));assert(s.run(0,false));
+ assert(!s.run(100,false) && !s.run(-100,false));
+ s.world_coast.revision++;assert(!s.run(0,false) && !s.ground_grid_cache_bytes);
+ s.run(0,true);s.world_coast.data.value++;assert(!s.run(0,false));
+ s.run(0,true);s.semantic_by_coordinate[9]++;assert(!s.run(0,false));
+ s.run(0,true);s.content_revision++;assert(!s.run(0,false));
+ s.run(0,true);s.frame.world_topology_revision++;assert(!s.run(0,false));
+ s.run(0,true);s.frame.world_width_tiles+=2;assert(!s.run(0,false));
+ s.run(0,true);s.frame.world_wrap_x=0;assert(!s.run(0,false));
+ s.run(0,true);s.frame.tile_width=192;s.frame.tile_height=96;assert(s.run(0,false));
+ State bounded;for(int x:{-2,-1,0,1})bounded.run(x,true);
+ assert(bounded.ground_grid_cache.size()==4);
+ bounded.run(100,true);assert(bounded.ground_grid_cache.size()==4 && !bounded.run(100,false));
+ State tiny;tiny.natural_mesh_cache_budget=1;tiny.run(0,true);assert(tiny.ground_grid_cache.empty());
+ State extended;extended.run(0,true);auto before=extended.ground_grid_cache_bytes;
+ assert(extended.run(0,true) && extended.ground_grid_cache_bytes>before);
+ assert(extended.ground_grid_cache.begin()->second.grids.size()==2);
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="c3x-ground-cache-") as directory:
+            cpp = Path(directory) / "test.cpp"
+            cpp.write_text(program)
+            binary = Path(directory) / "test"
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+    def test_retained_ground_grid_preserves_projection_and_raw_normals(self):
+        compiler = shutil.which("clang++") or shutil.which("g++")
+        if not compiler:
+            self.skipTest("C++ compiler unavailable")
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        retained = "struct CachedGroundGrid {" + source.split("struct CachedGroundGrid {", 1)[1].split("struct CachedGroundTile", 1)[0]
+        program = r'''
+#include <array>
+#include <cassert>
+#include <cmath>
+#include <cstring>
+#include <vector>
+#include "Renderer/lab/shared/natural/vertex.h"
+using Vertex=c3x_renderer::fidelity::MapVertex;
+''' + retained + r'''
+int main(){
+ for(int divisions:{8,12,16,24,32})for(float layer:{.5f,1.f,9.f}){
+  CachedGroundGrid grid;grid.divisions=divisions;grid.layer=layer;
+  grid.vertices.resize((divisions+1)*(divisions+1));grid.samples.resize(grid.vertices.size());
+  for(unsigned i=0;i<grid.vertices.size();i++){
+   auto& vertex=grid.vertices[i];auto* fields=reinterpret_cast<float*>(&vertex);
+   for(unsigned j=0;j<sizeof(Vertex)/sizeof(float);j++)fields[j]=float(i+j)*.123f;
+   grid.samples[i]={layer==.5f?0.f:float(i%37)*.73f,float(int(i%7)-3)*.031f,float(int(i%13)-6)*.019f};
+  }
+  for(int width:{64,96,128,160,192})for(int height:{32,48,64,80,96})
+  for(unsigned i=0;i<grid.vertices.size();i++){
+   float u=float(i%unsigned(divisions+1))/divisions,v=float(i/unsigned(divisions+1))/divisions;
+   float half_w=float(width)*.5f,half_h=float(height)*.5f;
+   Vertex expected=grid.vertices[i];
+   float h=grid.samples[i][0]*(float(width)/224.f*.82f);
+   float gx=0.f+(half_w+(u-v)*half_w),gy=0.f+(u+v)*half_h;
+   expected.x=gx;expected.y=gy-h;expected.z=gy+h*.75f;
+   if(layer==1.f || layer==9.f){
+    float su=grid.samples[i][1]*1.f/(2.f*.006f*float(width));
+    float sv=grid.samples[i][2]*-1.f/(2.f*.006f*float(width));
+    float length=std::sqrt(su*su+sv*sv+1.f);
+    expected.normal_x=-su/length;expected.normal_y=-sv/length;expected.normal_z=1.f/length;
+   }
+   auto actual=grid.project(i,width,height);
+   assert(!std::memcmp(&actual,&expected,sizeof(Vertex)));
+  }
+ }
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="c3x-ground-reprojection-") as directory:
+            cpp = Path(directory) / "test.cpp"
+            cpp.write_text(program)
+            binary = Path(directory) / "test"
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
     def test_viewport_draw_identity_rejects_eviction_and_stale_frames(self):
         compiler = shutil.which("clang++") or shutil.which("g++")
         if not compiler:
@@ -311,14 +439,29 @@ int main(){
             self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         grid = "auto append_ground_layer = " + source.split("auto append_ground_layer = ", 1)[1].split("            auto append_feature_instance", 1)[0]
+        retained = "struct CachedGroundGrid {" + source.split("struct CachedGroundGrid {", 1)[1].split("struct RiverNode", 1)[0]
         program = r'''
+#include <array>
+#include <cmath>
+#include <cstdint>
 #include <cassert>
 #include <cstring>
+#include <unordered_map>
 #include <vector>
 #include "Renderer/lab/shared/natural/vertex.h"
 using Vertex=c3x_renderer::fidelity::MapVertex;
 using UINT=unsigned;
+''' + retained + r'''
 int main(){
+ bool ground_hit=false,retain_ground_grids=false,prewarming=false,reuse_nested_ground_grids=true;
+ std::unordered_map<int,CachedGroundTile> retained_cache;
+ auto retained_ground=retained_cache.end();
+ std::vector<CachedGroundGrid> pending_ground_grids;
+ unsigned frame_ground_grid_hits=0;
+ struct {int tile_width=128,tile_height=64;} frame;
+ auto river_node_distance=[](float,float,unsigned){return 1000.f;};
+ struct Point {float relief[3]={},normal_delta[2]={};} point;
+ auto ground_point_at=[&](float,float)->Point&{return point;};
  bool stop=false;unsigned samples=0;
  auto cancelled=[&](){return stop;};
  auto make_ground_vertex=[&](float u,float v,float layer){
@@ -341,6 +484,40 @@ int main(){
   // Reuse a larger scratch allocation for a smaller grid: no stale triangles.
   append_ground_layer(packed,layer,1,&indices);
   assert(packed.size()==4 && indices==std::vector<UINT>({0,1,3,0,3,2}));
+ }
+ // Execute the actual cached-grid selection/indexing against every supported
+ // fine/coarse pair. Compare all channels, not only the projected position.
+ ground_hit=true;retained_cache.emplace(0,CachedGroundTile{});retained_ground=retained_cache.find(0);
+ for(int fine:{8,12,16,24,32})for(int coarse:{8,12,16,24,32})
+ for(float layer:{.5f,1.f,9.f})for(int width:{64,96,128,160,192}){
+  frame.tile_width=width;frame.tile_height=width/2;
+  auto& grids=retained_ground->second.grids;grids.clear();grids.emplace_back();
+  auto& cached=grids.back();cached.divisions=fine;cached.layer=layer;
+  for(int y=0;y<=fine;++y)for(int x=0;x<=fine;++x){
+   cached.vertices.push_back(make_ground_vertex(float(x)/fine,float(y)/fine,layer));
+   cached.samples.push_back({float(x+y)*.25f,float(x)*.017f,float(y)*-.023f});
+  }
+  int stride=cached.sample_stride(coarse);
+  assert(bool(stride)==(fine>=coarse && fine%coarse==0));
+  assert(!cached.sample_stride(0) && !cached.sample_stride(-1));
+  std::vector<Vertex> packed;std::vector<UINT> indices;samples=0;
+  append_ground_layer(packed,layer,coarse,&indices);
+  assert(indices.size()==unsigned(coarse*coarse*6));
+  if(!stride){assert(samples==unsigned((coarse+1)*(coarse+1)));continue;}
+  assert(!samples);
+  CachedGroundGrid expected;expected.divisions=coarse;expected.layer=layer;
+  for(int y=0;y<=coarse;++y)for(int x=0;x<=coarse;++x){
+   auto from=(y*stride)*(fine+1)+x*stride;
+   expected.vertices.push_back(cached.vertices[from]);expected.samples.push_back(cached.samples[from]);
+  }
+  for(unsigned i=0;i<packed.size();++i){
+   auto vertex=expected.project(i,width,width/2);
+   if(layer==9.f)vertex.river_branch_count=1000.f;
+   assert(!std::memcmp(&packed[i],&vertex,sizeof(Vertex)));
+  }
+  reuse_nested_ground_grids=false;samples=0;append_ground_layer(packed,layer,coarse,&indices);
+  assert(samples==(fine==coarse?0u:unsigned((coarse+1)*(coarse+1))));
+  reuse_nested_ground_grids=true;
  }
  stop=true;samples=0;std::vector<Vertex> aborted;std::vector<UINT> empty;
  append_ground_layer(aborted,.5f,32,&empty);assert(!samples && empty.empty());

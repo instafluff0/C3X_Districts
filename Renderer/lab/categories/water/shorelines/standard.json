@@ -32,7 +32,10 @@
     "feature": 2,
     "objects": false,
     "hours": [
-      12
+      12,
+      18,
+      0,
+      6
     ],
     "zooms": [
       128

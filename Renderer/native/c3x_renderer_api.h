@@ -20,7 +20,10 @@ enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
     C3X_RENDERER_RESULT_OK = 1,
     C3X_RENDERER_RESULT_BAD_ARGUMENT = 2,
-    C3X_RENDERER_RESULT_DEVICE_ERROR = 3
+    C3X_RENDERER_RESULT_DEVICE_ERROR = 3,
+    C3X_RENDERER_RESULT_PENDING = 4,
+    C3X_RENDERER_RESULT_SUPERSEDED = 5,
+    C3X_RENDERER_RESULT_PREVIEW = 6
 };
 
 enum c3x_renderer_tile_flags {
@@ -188,6 +191,9 @@ struct c3x_renderer_frame_v1 {
     c3x_renderer_i64 world_topology_revision;
 };
 
+// Pointer fields borrow renderer-owned storage until the next render,
+// pack/definition configuration or reset call. Copy data that must outlive
+// those calls. Idle preparation and unit drawing do not invalidate map output.
 struct c3x_renderer_output_v1 {
     c3x_renderer_u32 api_version;
     c3x_renderer_u32 struct_size;
@@ -286,6 +292,24 @@ typedef int (*c3x_renderer_set_pack_path_fn)(char const * pack_path);
 typedef int (*c3x_renderer_set_definition_paths_fn)(char const * mod_root, char const * default_path,
                                                     char const * scenario_path, char const * custom_path);
 typedef int (*c3x_renderer_render_fn)(struct c3x_renderer_frame_v1 const *, struct c3x_renderer_output_v1 *);
+// Optional experimental camera extension; existing render ABI stays synchronous.
+// Call on the same presentation thread as render/blit/reset. Begin copies the
+// complete frame and returns PENDING plus a positive ticket. A successful newer
+// begin supersedes older tickets; failed begin leaves the previous request alone.
+// Poll returns OK only for that exact ticket's complete pixels and ownership.
+// With the experimental CAMERA_PREVIEW switch, PREVIEW may return terrain-only
+// pixels for that ticket. It is not final success and owns no objects/overlays.
+// Continue polling after PREVIEW; its pointers have the same publication lifetime.
+// PENDING/error/superseded leave its output untouched. Poll does not advance the
+// captured presentation clock. No preview or redraw scheduling is supplied here.
+// Begin expires earlier synchronous borrowed outputs. Poll's borrowed publication
+// survives background work, but expires at the next successful publication poll,
+// synchronous render, pack/definition change or reset. Copy it for longer use.
+// Synchronous render/configuration/unit calls cancel and drain camera work first.
+// Reset destroys tickets; callers must discard them before using another worker.
+typedef int (*c3x_renderer_camera_begin_fn)(struct c3x_renderer_frame_v1 const *, c3x_renderer_i64 * ticket);
+typedef int (*c3x_renderer_camera_poll_fn)(c3x_renderer_i64 ticket, struct c3x_renderer_output_v1 *);
+typedef int (*c3x_renderer_camera_cancel_fn)(c3x_renderer_i64 ticket);
 typedef int (*c3x_renderer_blit_fn)(struct c3x_renderer_output_v1 const *, void * destination_hdc);
 typedef int (*c3x_renderer_unit_draw_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc);
 /* Optional extension: native underlay resolves color-key canvas antialiasing. */

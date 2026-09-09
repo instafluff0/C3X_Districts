@@ -25,7 +25,9 @@ scatter and a narrow wet-rock material band refine the selected Civ V skin.
 Ordinary beaches and inland terrain keep their existing formulas. Source UVs
 and texture bytes are unchanged. See `Renderer/docs/coastal_cliff_findings.md`
 for evidence, reconstructed choices and native comparisons. Promote the
-corrected pack and compatible DLL together after visual acceptance.
+corrected pack and compatible DLL together. The regular diagnostic now covers
+noon, evening, midnight and dawn with the shared light basis, including a lowland
+control. Explicit deployment requests do not replace fixed reference images.
 
 `standard.json` identifies the shared implementation, dependencies, fixture recipe
 and focused regression tests. The current checkout is authoritative.

@@ -11,7 +11,7 @@ struct RendererTrace {
     int level = 2;
     FILE * file = nullptr;
     std::size_t bytes = 0;
-    std::uint64_t sequence = 0;
+    std::atomic<std::uint64_t> sequence{0};
     LARGE_INTEGER frequency = {};
     LARGE_INTEGER last_summary = {};
 
@@ -44,7 +44,7 @@ struct RendererTrace {
         int count = std::snprintf(line, sizeof(line),
             "[C3X renderer] qpc=%lld ms=%.3f thread=%lu sequence=%llu stage=%s %s\n",
             static_cast<long long>(now.QuadPart), milliseconds(now.QuadPart),
-            GetCurrentThreadId(), static_cast<unsigned long long>(sequence), stage, detail);
+            GetCurrentThreadId(), static_cast<unsigned long long>(sequence.load(std::memory_order_relaxed)), stage, detail);
         if (count <= 0) return;
         std::size_t size = std::min(static_cast<std::size_t>(count), sizeof(line) - 1u);
         OutputDebugStringA(line);

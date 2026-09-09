@@ -1509,6 +1509,13 @@ int main(int argc, char ** argv) {
         blend_pixels = static_cast<std::uint32_t const *>(blend_output.bgra_pixels);
         if ((blend_pixels[96 * blend_output.width + 200] >> 24) != 0)
             return fail("omitted terrain unexpectedly drew pixels");
+        // Render output arrays are borrowed until the next render/config/reset.
+        // The smaller blend fixture invalidated output's earlier image pointer.
+        // Reacquire the primary frame before testing its dimensions and blit.
+        output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
+        if (render(&frame, &output) != C3X_RENDERER_RESULT_OK ||
+            output.width != frame.target_width || output.height != frame.target_height)
+            return fail("could not reacquire primary output after material-boundary fixture");
     }
 
     BITMAPINFO info = {};
@@ -1719,6 +1726,58 @@ int main(int argc, char ** argv) {
         large_environment_hashes[0] == large_environment_hashes[2] ||
         large_environment_hashes[2] == large_environment_hashes[3])
         return fail("large noon/sunset/midnight/sunrise fixtures are not visually distinct");
+
+    // Optional camera extension: exact final frame, immutable snapshots,
+    // latest-ticket fencing, cancellation, and synchronous takeover.
+    auto camera_begin=reinterpret_cast<c3x_renderer_camera_begin_fn>(GetProcAddress(module,"c3x_renderer_camera_begin"));
+    auto camera_poll=reinterpret_cast<c3x_renderer_camera_poll_fn>(GetProcAddress(module,"c3x_renderer_camera_poll"));
+    auto camera_cancel=reinterpret_cast<c3x_renderer_camera_cancel_fn>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
+    if(!camera_begin || !camera_poll || !camera_cancel)return fail("camera extension exports missing");
+    auto expected_camera_hash=hash_pixels(output.bgra_pixels,large_byte_count);
+    c3x_renderer_i64 ticket=0,obsolete=0;
+    auto poll_camera=[&]() {
+        auto start=GetTickCount64();
+        int code=C3X_RENDERER_RESULT_PENDING;
+        while(code==C3X_RENDERER_RESULT_PENDING && GetTickCount64()-start<30000){
+            code=camera_poll(ticket,&output);
+            if(code==C3X_RENDERER_RESULT_PREVIEW)code=C3X_RENDERER_RESULT_PENDING;
+            if(code==C3X_RENDERER_RESULT_PENDING)Sleep(1);
+        }
+        return code;
+    };
+    if(camera_begin(&frame,&obsolete)!=C3X_RENDERER_RESULT_PENDING || obsolete<=0 ||
+       camera_begin(&frame,&ticket)!=C3X_RENDERER_RESULT_PENDING || ticket<=obsolete)
+        return fail("camera begin did not issue monotonic tickets");
+    auto unchanged=output;
+    if(camera_poll(obsolete,&output)!=C3X_RENDERER_RESULT_SUPERSEDED ||
+       std::memcmp(&unchanged,&output,sizeof(output))!=0)
+        return fail("obsolete camera ticket changed output");
+    if(poll_camera()!=C3X_RENDERER_RESULT_OK || hash_pixels(output.bgra_pixels,large_byte_count)!=expected_camera_hash)
+        return fail("asynchronous camera did not match exact synchronous pixels");
+    // The source arrays may be discarded immediately after begin. Changing the
+    // caller copy must not change the accepted snapshot or its ownership count.
+    std::vector<c3x_renderer_tile_v1> camera_tiles(frame.tiles,frame.tiles+frame.tile_count);
+    auto snapshot=frame;snapshot.tiles=camera_tiles.data();
+    auto published=output;
+    if(camera_begin(&snapshot,&ticket)!=C3X_RENDERER_RESULT_PENDING)return fail("snapshot begin failed");
+    for(auto& tile:camera_tiles){tile.anchor_x+=10000;tile.tile_flags=0;}
+    if(hash_pixels(published.bgra_pixels,large_byte_count)!=expected_camera_hash)
+        return fail("begin mutated a polled publication");
+    if(poll_camera()!=C3X_RENDERER_RESULT_OK || hash_pixels(output.bgra_pixels,large_byte_count)!=expected_camera_hash ||
+       output.replacement_tile_count!=frame.tile_count)
+        return fail("camera snapshot was not an independent capture");
+    if(camera_begin(&frame,&ticket)!=C3X_RENDERER_RESULT_PENDING || camera_cancel(ticket)!=C3X_RENDERER_RESULT_OK ||
+       camera_poll(ticket,&output)!=C3X_RENDERER_RESULT_SUPERSEDED)
+        return fail("camera cancellation did not fence result");
+    if(camera_begin(&frame,&ticket)!=C3X_RENDERER_RESULT_PENDING || render(&frame,&output)!=C3X_RENDERER_RESULT_OK ||
+       camera_poll(ticket,&output)!=C3X_RENDERER_RESULT_SUPERSEDED ||
+       hash_pixels(output.bgra_pixels,large_byte_count)!=expected_camera_hash)
+        return fail("synchronous camera takeover failed");
+    auto invalid_camera=frame;invalid_camera.tile_count=8193;
+    auto saved_ticket=ticket;
+    if(camera_begin(&invalid_camera,&ticket)!=C3X_RENDERER_RESULT_BAD_ARGUMENT || ticket!=saved_ticket)
+        return fail("invalid camera input was not rejected transactionally");
+    std::puts("PASS camera extension: exact pixels, copied snapshot, immutable publication, latest ticket, cancel, synchronous takeover, invalid input");
 
     frame.api_version = 999;
     if (render(&frame, &output) != C3X_RENDERER_RESULT_BAD_ARGUMENT)

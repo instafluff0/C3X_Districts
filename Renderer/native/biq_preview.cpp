@@ -387,8 +387,59 @@ int main(int argc, char ** argv) {
     if(pickup){frame.world_topology_count=unsigned(world.size());frame.world_topology=world.data();frame.world_topology_revision=1;}
     char season[16]={};if(GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SEASON",season,sizeof(season)))frame.season=std::atoi(season);
     c3x_renderer_output_v1 output = {C3X_RENDERER_API_VERSION, sizeof(output)};
+    char camera_option[16]={};
+    bool background_camera=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CAMERA_QUEUE",camera_option,sizeof(camera_option))!=0;
+    auto camera_begin=reinterpret_cast<c3x_renderer_camera_begin_fn>(GetProcAddress(module,"c3x_renderer_camera_begin"));
+    auto camera_poll=reinterpret_cast<c3x_renderer_camera_poll_fn>(GetProcAddress(module,"c3x_renderer_camera_poll"));
+    if(background_camera && (!camera_begin || !camera_poll)) {
+        std::fputs("camera extension exports missing\n",stderr);return 1;
+    }
+    unsigned camera_case=0;
     auto render_checked = [&](c3x_renderer_frame_v1 const* input, c3x_renderer_output_v1* result) {
-        int code=render(input,result);
+        int code=C3X_RENDERER_RESULT_ERROR;
+        if(background_camera) {
+            LARGE_INTEGER begin={},accepted={},finished={},frequency={};QueryPerformanceFrequency(&frequency);
+            c3x_renderer_i64 ticket=0,obsolete=0;
+            // Exercise actual in-flight supersession, not only an empty queue.
+            // This earlier valid scene has a different environment/pose clock.
+            auto earlier=*input;earlier.hour=(earlier.hour+1)%24;
+            earlier.presentation_time_ticks+=earlier.presentation_frequency/2;
+            if(camera_begin(&earlier,&obsolete)!=C3X_RENDERER_RESULT_PENDING)return int(C3X_RENDERER_RESULT_ERROR);
+            Sleep(10);
+            QueryPerformanceCounter(&begin);
+            code=camera_begin(input,&ticket);QueryPerformanceCounter(&accepted);
+            if(code!=C3X_RENDERER_RESULT_PENDING || camera_poll(obsolete,result)!=C3X_RENDERER_RESULT_SUPERSEDED)
+                return int(C3X_RENDERER_RESULT_ERROR);
+            auto start=GetTickCount64();unsigned polls=0;bool first_image=false;
+            ++camera_case;
+            while(code==C3X_RENDERER_RESULT_PENDING && GetTickCount64()-start<120000) {
+                code=camera_poll(ticket,result);++polls;
+                if(code==C3X_RENDERER_RESULT_PREVIEW) {
+                    if(!first_image) {
+                        LARGE_INTEGER shown={};QueryPerformanceCounter(&shown);
+                        if(result->width!=input->target_width || result->height!=input->target_height ||
+                           result->replacement_tile_count!=input->tile_count)return int(C3X_RENDERER_RESULT_ERROR);
+                        for(unsigned i=0;i<input->tile_count;++i) {
+                            unsigned expected=(input->tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER)?C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED:0;
+                            if(result->replacement_tile_flags[i]!=expected)return int(C3X_RENDERER_RESULT_ERROR);
+                        }
+                        std::printf("CAMERA first_image ticket=%lld ms=%.3f terrain_only=1\n",static_cast<long long>(ticket),
+                            double(shown.QuadPart-begin.QuadPart)*1000/frequency.QuadPart);
+                        // First cycle only: diagnostic evidence, never reference replacement.
+                        if(camera_case<=7 && !write_bmp((std::string(argv[5])+".preview"+std::to_string(camera_case)+".bmp").c_str(),*result))
+                            return int(C3X_RENDERER_RESULT_ERROR);
+                        first_image=true;
+                    }
+                    code=C3X_RENDERER_RESULT_PENDING;
+                }
+                if(code==C3X_RENDERER_RESULT_PENDING)Sleep(1);
+            }
+            QueryPerformanceCounter(&finished);
+            std::printf("CAMERA ticket=%lld accepted_ms=%.3f final_ms=%.3f polls=%u stale_rejected=1 result=%d\n",
+                static_cast<long long>(ticket),double(accepted.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(finished.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,polls,code);
+            std::fflush(stdout);
+        }else code=render(input,result);
         return code==C3X_RENDERER_RESULT_OK && !preview_ownership(*input,*result)
             ? int(C3X_RENDERER_RESULT_ERROR) : code;
     };

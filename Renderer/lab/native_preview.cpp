@@ -88,7 +88,7 @@ bool lab_verify_objects(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_
 
 bool lab_compose_units(HMODULE module, char const* image_path, int hour, int tile_width,
                        c3x_renderer_output_v1 const& terrain) {
-    char enabled[16] = {};
+    char enabled[32] = {};
     if (!GetEnvironmentVariableA("C3X_LAB_UNIT_STUDY", enabled, sizeof(enabled))) return true;
     auto draw = reinterpret_cast<c3x_renderer_unit_draw_background_fn>(GetProcAddress(module, "c3x_renderer_unit_draw_background"));
     bool ok = draw != nullptr;
@@ -110,13 +110,20 @@ bool lab_compose_units(HMODULE module, char const* image_path, int hour, int til
     char cursor[16] = {};
     GetEnvironmentVariableA("C3X_LAB_ACTION_CURSOR", cursor, sizeof(cursor));
     char const* keys[] = {"Warrior", "Settler", "Worker", "Horseman", "Tank", "Fighter"};
+    char const* study_keys[] = {"warrior", "spearman", "pikeman", "archer", "settler", "worker"};
+    char const* variants[] = {"baseline", "anatomy", "ssaa"};
+    char const* labels[] = {"Current fit / 1x material sampling", "Anatomy fit / 1x material sampling", "Anatomy fit / 2x material sampling"};
+    bool sizing=std::strncmp(enabled,"sizing",6)==0;
+    if(sizing && std::strcmp(enabled,"sizing-gameplay")!=0 && pixels)
+        std::fill_n(static_cast<unsigned*>(pixels),std::size_t(terrain.width)*terrain.height,0xff929c9bu);
     bool shadows=std::strcmp(enabled,"shadows")==0;
-    int count=shadows?2:6;
+    int count=sizing?18:shadows?2:6;
+    if(sizing && dc) {SetBkMode(dc,TRANSPARENT);SetTextColor(dc,RGB(245,245,245));}
     for (int index = 0; index < count && ok; ++index) {
         c3x_renderer_unit_v1 unit = {};
         unit.struct_size = sizeof(unit);
         unit.unit_id = index;
-        sprintf_s(unit.unit_key, "PRTO_%s", keys[index]);
+        sprintf_s(unit.unit_key, "PRTO_%s", keys[index%6]);
         unit.action = 2;
         unit.action_cursor = cursor[0] ? std::atoi(cursor) : 7;
         unit.frame_count = 16;
@@ -124,9 +131,24 @@ bool lab_compose_units(HMODULE module, char const* image_path, int hour, int til
         unit.hour = hour;
         unit.sprite_width = unit.sprite_height = 191;
         unit.reduced = tile_width == 64;
+        unit.projection_scale_milli=tile_width*1000/128;
         unit.display_color_rgb = 0x205bdd;
-        unit.body_x = 150 + (index % 3) * 160 - 191 / (unit.reduced ? 4 : 2);
-        unit.body_y = 215 + (index / 3) * 150 - 191 / (unit.reduced ? 4 : 2);
+        unit.body_x = 150 + (index % 3) * 160 - 191*unit.projection_scale_milli/2000;
+        unit.body_y = 215 + (index / 3) * 150 - 191*unit.projection_scale_milli/2000;
+        if(sizing) {
+            int column=index%6,row=index/6;
+            sprintf_s(unit.unit_key,"PRTO_Lab_%s_%s",variants[row],study_keys[column]);
+            unit.action=std::strcmp(enabled,"sizing-move")==0?2:1;
+            unit.action_cursor=unit.action==1?0:7;
+            unit.presentation_frequency=1000;unit.presentation_time_ticks=0;
+            unit.sprite_width=unit.sprite_height=320;
+            unit.projection_scale_milli=tile_width*1000/128;
+            int half=unit.sprite_width*unit.projection_scale_milli/2000;
+            unit.body_x=100+column*200-half;
+            unit.body_y=265+row*290-half;
+            if(column==0)TextOutA(dc,12,12+row*290,labels[row],int(std::strlen(labels[row])));
+            TextOutA(dc,70+column*200,274+row*290,study_keys[column],int(std::strlen(study_keys[column])));
+        }
         if(shadows) {
             // Flat receiving tiles south of the mixed static/animated scene.
             unit.body_x=terrain.width/2+(index*2)*tile_width/2-191/(unit.reduced?4:2);

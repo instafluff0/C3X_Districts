@@ -16,7 +16,7 @@ public:
     struct Part { unsigned mesh=0,texture=0,address=0; unsigned material_textures[3]={UINT32_MAX,UINT32_MAX,UINT32_MAX}; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
     struct Action { std::string name; bool loop=false,ambient=false,allow_exit_clip=false;
         float duration=0;unsigned frames=0;std::vector<Part> parts; };
-    struct Unit { std::vector<std::string> keys; float scale=1,yaw_offset=0,offset_z=0; std::vector<Action> actions; };
+    struct Unit { std::vector<std::string> keys; float scale=1,yaw_offset=0,offset_z=0; int sample_scale=1; std::vector<Action> actions; };
     std::vector<Mesh> meshes;
     std::vector<Texture> textures;
     std::vector<Unit> units;
@@ -92,7 +92,10 @@ public:
         failure_reason="animation-payload-load";
         if(!prepare(*action))return false;
         failure_reason="gpu-target-setup";
-        if(!ensure(device,w,h))return false;
+        // Pack-selected material supersampling changes scratch resolution only.
+        // Native placement, clipping, readback and cached sprite sizes stay exact.
+        int samples=found->sample_scale;
+        if((samples!=1 && samples!=2) || !ensure(device,w,h,samples))return false;
         auto environment=evaluate_environment(float(request.hour),request.season);
         float cosine=std::cos((found->yaw_offset+float(request.direction%8)*45)*.01745329252f);
         float sine=std::sin((found->yaw_offset+float(request.direction%8)*45)*.01745329252f);
@@ -101,7 +104,7 @@ public:
         context->ClearRenderTargetView(linear.target,clear_color);
         context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH,1,0);
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);context->OMSetDepthStencilState(nullptr,0);
-        D3D11_VIEWPORT vp={0,0,float(w),float(h),0,1}; context->RSSetViewports(1,&vp);context->RSSetState(raster);
+        D3D11_VIEWPORT vp={0,0,float(w*samples),float(h*samples),0,1}; context->RSSetViewports(1,&vp);context->RSSetState(raster);
         context->IASetInputLayout(layout);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
         context->PSSetConstantBuffers(0,1,&settings);
@@ -223,7 +226,7 @@ public:
         }
         ID3D11ShaderResourceView* empty[5]={};context->PSSetShaderResources(0,5,empty);
         failure_reason="gpu-body-readback";
-        transfer.draw(context,linear,target,environment.exposure);
+        transfer.draw(context,linear,target,environment.exposure,samples);
         context->OMSetRenderTargets(0,nullptr,nullptr);context->CopyResource(readback,output);
         D3D11_MAPPED_SUBRESOURCE mapped={};
         if(FAILED(context->Map(readback,0,D3D11_MAP_READ,0,&mapped)))return false;
@@ -329,7 +332,7 @@ private:
         underlay_dc=nullptr;underlay_bitmap=nullptr;underlay_previous=nullptr;underlay_bits=nullptr;
         bits=nullptr;blit_width=blit_height=0;
     }
-    bool ensure(ID3D11Device* device,int w,int h) {
+    bool ensure(ID3D11Device* device,int w,int h,int samples) {
         if(!pixel) {
             char const* source=unit_material_shader();
             ID3DBlob *vs=nullptr,*ps=nullptr,*error=nullptr;
@@ -368,7 +371,7 @@ private:
             if(SUCCEEDED(hr))hr=device->CreateShaderResourceView(shadow_texture,nullptr,&shadow_view);
             if(FAILED(hr)){reset_gpu();return false;}
         }
-        if(!linear.ensure(device,UINT(w),UINT(h)) || !transfer.ensure(device))return false;
+        if(!linear.ensure(device,UINT(w*samples),UINT(h*samples)) || !transfer.ensure(device))return false;
         if(!target || target_width!=w || target_height!=h) {
             release(target);release(output);release(readback);
             D3D11_TEXTURE2D_DESC d={};d.Width=UINT(w);d.Height=UINT(h);d.MipLevels=d.ArraySize=1;

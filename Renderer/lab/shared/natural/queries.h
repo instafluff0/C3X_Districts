@@ -17,6 +17,7 @@ template<class ObserveWorld,class ObserveCoast> class SurfaceQueries {
     std::array<render_core::Tile,81> nearby_tiles{};
     std::array<bool,81> nearby_ready{};
     int nearby_c,nearby_r;
+    bool skip_flat_shore;
     render_core::ShoreSample center{};
     bool center_ready=false,patch_attempted=false;
     render_core::WorldCoast::Patch patch;
@@ -29,9 +30,11 @@ public:
     float const center_u,center_v;
     SurfaceQueries(render_core::WorldCoast const& world,
                    render_core::ExactPointCache<render_core::ShoreSample>& scratch,
-                   int tile_x,int tile_y,ObserveWorld observe,ObserveCoast nodes)
+                   int tile_x,int tile_y,ObserveWorld observe,ObserveCoast nodes,
+                   bool skip_flat=true)
         :coast(world),samples(scratch),observe_world(observe),observe_coast(nodes),
          nearby_c((tile_x+tile_y)/2-4),nearby_r((tile_x-tile_y)/2-4),
+         skip_flat_shore(skip_flat),
          center_u(float(tile_x+tile_y)*.5f+.5f),center_v(float(tile_x-tile_y)*.5f+.5f) {
         samples.clear();
     }
@@ -83,7 +86,8 @@ public:
     }
     template<class Height>
     float height(NaturalData const& natural,Height pickup_height,float x,float y,float* support=nullptr) {
-        auto sample=shore(x,y);
+        render_core::ShoreSample sample{};
+        if(!skip_flat_shore)sample=shore(x,y);
         int c=int(std::floor(x)),r=int(std::floor(y));
         int local_c=c-(nearby_c+3),local_r=r-(nearby_r+3);
         float authored=2.5f,s=0;
@@ -100,6 +104,11 @@ public:
             if(support)*support=s;
         }else authored=natural.height(x,y,[&](int nc,int nr){return natural_tile(nc,nr);},support);
         float pickup=pickup_height(x,y);
+        // Both coastal branches multiply displacement above the 2.5 datum.
+        // With both sources exactly flat the result is independent of shore;
+        // the source queries above still observe all height dependencies.
+        if(skip_flat_shore && authored==2.5f && pickup==0.f)return 2.5f;
+        if(skip_flat_shore)sample=shore(x,y);
         float coastal=coast_relief(float(sample.distance),float(sample.beach_width));
         float h=std::max(authored,2.5f+pickup);
         float rocky=coast_ramp((float(sample.rocky)-.55f)/.4f);

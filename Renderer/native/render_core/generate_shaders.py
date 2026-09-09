@@ -76,7 +76,7 @@ def generate(source_root=None, output_root=None, output_name='terrain_scene.hlsl
         clip(coverage - 0.08);
         // One restrained sample anchors the body without a generic blob or a
         // full static-scene rerender on every animation tick.
-        float alpha = frame_cast_shadow_strength() * c3x_dynamic_shadow_opacity *
+        float alpha = environment_shadow_strength * c3x_dynamic_shadow_opacity *
             smoothstep(0.08, 0.35, coverage);
         clip(alpha - 0.004);
         return float4(0.008, 0.011, 0.016, alpha);

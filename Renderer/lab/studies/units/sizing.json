@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "reference": "unit/warrior",
+  "policy": "First idle anatomy height; preserve reference Warrior scale and source member-size ratios. Ground comes from the same explicit anatomy set. Uniform whole-kit scale only.",
+  "subjects": {
+    "unit/warrior": ["body", "armor", "head"],
+    "unit/spearman": ["body", "armor", "head"],
+    "unit/pikeman": ["armor", "head"],
+    "unit/archer": ["body", "armor", "head"],
+    "unit/settler": ["body", "armor", "head"],
+    "unit/worker": ["body", "armor", "head"]
+  }
+}

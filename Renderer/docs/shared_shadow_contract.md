@@ -20,6 +20,12 @@ the inverse transpose of the same transform, after pose skinning and rotation.
 Geometry, face lighting, specular highlights and shadow projection must agree
 in screen space; passing identical numbers between different bases is incorrect.
 
+Coastal cliffs already rotate directly into world XY, without the source-object
+Y reflection. Their `CliffTransform` uses the same height metric and inverse
+transpose; their generated faces and rock bodies receive the shared world pages.
+Applying the object adapter again would reverse cliff normals. The corrected
+source-origin meshes must accompany this placement code.
+
 ## Ownership and interactions
 
 | Content | Casts | Receives | Update ownership |
@@ -37,7 +43,8 @@ ownership or change the native API. Natural wonders, constructed wonders and
 Districts remain deferred.
 
 Both dynamic ground paths use `shadow_policy.hlsl` for opacity, with the
-captured environment's shadow strength. Actual self/world visibility attenuates
+captured environment's shadow strength directly; animated resources do not
+apply the legacy feature shader's separate night-time minimum. Actual self/world visibility attenuates
 direct illumination and leaves the material's ambient contribution intact.
 The shared paged receiver owns cross-page sampling, receiver-plane depth bias,
 3-by-3 filtering and tight contact. Local unit filtering remains limited to its
@@ -54,19 +61,24 @@ The shared paged receiver owns cross-page sampling, receiver-plane depth bias,
 - Present candidate comparisons for visual review. Reference replacement,
   staging and live-game acceptance remain separate from automated verification.
 
-The shared contract passed 5,764 phase/season samples and 209 combined portable
-regression tests. Sixteen production D3D captures cover the mixed fixture at
-four hours, two zooms and two scene contexts. Scrolling at both zooms, wrapping,
-resource playback/removal, and day/night unit action/compositing witnesses passed.
-The terrain-edit witness also passed with an established coast (127 tiles rebuilt,
-260 reused, exact warm/cold pixels). An all-land world creating its first coast
-legitimately invalidates all nearest-coast certificates, so that scene cannot
-assert partial mesh reuse.
+The shared contract passed 5,764 phase/season samples and 214 affected portable
+regressions. The exact high-memory deployment DLL passed native API/pixel-format
+smoke, 28 D3D captures (16 mixed-object and 12 shoreline views), and all seven
+behavior replays: normal/reduced scrolling, wrapping, terrain edits, resource
+playback/removal, and day/night unit actions/compositing. The coastal edit rebuilt
+127 tiles and reused 260 with exact warm/cold pixels. All 12 shoreline views are
+pixel-identical across standard and high-memory cache configurations.
 
-All seven native behavior replays passed in one combined run. Its final freshness
-check rejected current-checkout certification because concurrent terrain/geometry
-edits changed compiled inputs during verification. The successful candidate
-snapshot is recorded under `lab/out/shadows/verification-snapshot.json`; a final
-current-checkout run remains pending until the shared sources are stable.
-Candidate captures are not visual acceptance or live-game evidence; no reference
-replacement or staging is authorized by them.
+At the user's explicit production request, the combined DLL and corrected eight
+cliff meshes were deployed together. Runtime hashes remained unchanged through
+verification, and Windows confirmed the installed-game path exposes the tested
+DLL. `lab/out/shadows/deployment/deployment.json` records the deployment and
+rollback files; `verification.json` records captures and executed witnesses.
+The corresponding source snapshot and build flags are retained under
+`native/build/shadow-cliff-production/`. It preserves the selected 768 MiB GPU
+cache tier and completed query/index optimizations. Subsequent ground-grid cache
+experiments in the concurrent zoom task have their own verification cycle.
+
+These are production-renderer diagnostics, not a live-game acceptance claim.
+Fixed references remain unchanged. This renderer-only deployment requires no
+new native patches; INSTALL and Civ III were not run.

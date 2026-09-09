@@ -4,6 +4,9 @@ EXPORTS
     c3x_renderer_set_pack_path
     c3x_renderer_set_definition_paths
     c3x_renderer_render
+    c3x_renderer_camera_begin
+    c3x_renderer_camera_poll
+    c3x_renderer_camera_cancel
     c3x_renderer_blit
     c3x_renderer_unit_draw
     c3x_renderer_unit_draw_background

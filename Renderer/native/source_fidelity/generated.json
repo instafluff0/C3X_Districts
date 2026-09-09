@@ -32,7 +32,7 @@
     },
     {
       "path": "generated/shaders/lighting/generated/scene_linear_v1.hlsl",
-      "sha256": "1d1413ff3b26a49d893eb167694da45d72d535733a973c4c1a5e6e9b7bcb6ede"
+      "sha256": "b69ad331179a068ab4dcbe76e41ce6b84d55176228524e9ec1ef3861d8b4540e"
     },
     {
       "path": "generated/shaders/lighting/local_facade_lights.hlsl",
@@ -108,7 +108,7 @@
     },
     {
       "path": "hydrology.hlsl",
-      "sha256": "da5c3170ccb47bf1474000b29731363f249ed4bd16c4a250f77969bd11b46244"
+      "sha256": "9d9f226452408cf2d691577466862999299bc9369955fa9ea89af121b60825e8"
     }
   ]
 }

@@ -167,6 +167,19 @@ int main() {
         render_core::FlatGroundRegion certificate(0,0,3.,lookup,true);
         assert(certificate.certified==(scene!=3 && scene!=4 && scene!=5));
     }
+    {
+        std::vector<std::array<int,2>> observed;bool add_volcano=false;
+        auto lookup=[&](int c,int r){observed.push_back({c,r});
+            return render_core::Tile{2,add_volcano && c==2 && r==2?10:6,true};};
+        assert(render_core::FlatGroundRegion(0,0,3.,lookup,true).certified);
+        assert(observed.size()==25);
+        for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++)
+            assert((observed[unsigned((y+2)*5+x+2)]==std::array<int,2>{x,y}));
+        // A previously certified owner observes even this outer support cell.
+        // Its authoritative edit must reject/recompute the certificate.
+        add_volcano=true;
+        assert(!render_core::FlatGroundRegion(0,0,3.,lookup,true).certified);
+    }
     assert(sample_normalized_field({},4,4,0,1,0,0)==0);
     assert(sample_normalized_field({255},0,1,0,1,0,0)==0);
     assert(sample_normalized_field({255},1,0,0,1,0,0)==0);

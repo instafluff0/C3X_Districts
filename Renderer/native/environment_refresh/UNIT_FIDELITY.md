@@ -66,3 +66,10 @@ the close-up does not promise equal visible detail at native unit height. No
 sharpening or invented texture detail is introduced by this reorganization.
 Optional visual references live in the units and animation categories. Keep
 current limitations in those category or implementation notes.
+
+The separate `lab/studies/units` candidate adds explicit anatomy-fit comparisons
+and optional per-unit `sample_scale: 2` scratch supersampling. Production bindings
+omit that option and retain scale 1. Its shader-archive probe now confirms the
+object-family LEAN equations; exact unit tangent/binding/constant correspondence
+is still unresolved, so no normal-map behavior changes here. The sizing study
+requires larger native dirty bounds for long weapons before any promotion.

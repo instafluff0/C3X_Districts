@@ -477,6 +477,12 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_LAB_OBJECT_STUDY": category if category in ("resources", "infrastructure", "shadows") else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
     }
+    unit_sizing = category == "units" and case in ("sizing", "sizing-gameplay", "sizing-move")
+    if unit_sizing:
+        from Renderer.lab.studies.units.prepare import build as build_unit_study
+        build_unit_study()
+        env["C3X_RENDERER_UNIT_PACK"] = "UnitQualityStudy"
+        env["C3X_LAB_UNIT_STUDY"] = case
     if behavior:
         env["C3X_RENDERER_PREVIEW_" + behavior.upper()] = "1"
         # The resource playback/removal witness supplies its own resources.
@@ -501,6 +507,8 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
             raise ValueError("Build the isolated preview executable before native rendering")
         executable = '"' + windows(preview) + '"'
     width, height = (960, 640) if behavior else (640, 480)
+    if unit_sizing:
+        width, height = 1200, 880
     command += (f' && {executable} "{windows(dll)}" ..\\.. '
                 f'..\\default.custom_rendering.txt "{windows(csv)}" "{windows(image)}" '
                 f'{width} {height} {center[0]} {center[1]} {zoom} {hour}')
@@ -819,6 +827,7 @@ def run_tests(category=None, *, integration=False, full=False):
                         "Renderer.definitions.test_rule_resolver", "Renderer.scenes.test_scene_contract",
                         "Renderer.native.test_native_bridge_contract",
                         "Renderer.native.test_zoom_mesh_cache",
+                        "Renderer.native.test_frame_publication",
                         "Renderer.native.test_asset_content_hash"))
         if full:
             modules.update("Renderer.native." + name for name in (

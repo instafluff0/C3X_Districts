@@ -4,8 +4,8 @@ The September 2026 audit found errors in projection, normal orientation,
 attachment, depth and terrain tessellation. The earlier conclusion that the
 rocks were not stretched was incomplete: it checked imported mesh bytes and
 instance scale, but missed the separate vertical projection. The user selected
-the Civ V Environment Skin. The current revision is a preview awaiting visual
-acceptance.
+the Civ V Environment Skin. The corrected cliff pack is deployed with the shared shadow system at the
+user's explicit request; fixed references remain unchanged.
 
 ## Confirmed source evidence
 
@@ -101,13 +101,24 @@ The `fine`, `proportion`, `normal` and `world-normal` views isolate tessellation
 attachment/size, detail strength and normal orientation respectively. Sun-angle
 and color-coded ownership diagnostics are also retained.
 
-The preview uses a frozen C++ and shader input snapshot because other tasks are
-changing renderer caching and shadows concurrently. The receipt identifies the
-DLL, compiled inputs, shader set and corrected cliff pack. No production staging
-or reference replacement is performed here. This task did not stage its cliff
-candidate; production may change independently in other tasks.
+The original cliff preview used a frozen C++ and shader snapshot while other
+tasks changed caching and shadows. Its receipt remains evidence for that pass.
+The subsequent shared-shadow deployment uses the corrected eight source-origin
+meshes in `packs/ShoreNormalized/`, with `cliff_runtime.bin` rebuilt through the
+generic shore compiler. All other pack files, including the selected Civ V
+texture channels and river materials, remain byte-identical. The old rebased
+bundle must not be paired with the current placement.
 
-On visual acceptance, promote the corrected cliff meshes and rebuilt bundle
-with a compatible tested DLL. Do not pair this placement with the old rebased
-cliff bundle. Preserve the approved shore/river materials and unrelated native
-work. INSTALL and live-game launch remain separate actions.
+Cliff geometry already uses world XY and inverse-transpose normals. Both its
+rock bodies and generated terrain faces now use the shared directional frame
+and paged receiver. The regular shoreline recipe covers noon, evening, midnight
+and dawn in detail, gameplay and lowland-control views. All 12 captures completed
+without fallback; standard and high-memory cache configurations give identical
+pixels. The combined deployment passed 214 affected regressions, native smoke,
+and seven production behavior replays. Its exact DLL, runtime hashes and rollback
+files are recorded in `lab/out/shadows/deployment/deployment.json`; comparisons
+are in the same directory. See [the shared contract](shared_shadow_contract.md).
+
+The user explicitly requested production deployment. The tested DLL and corrected
+pack are available through the installed Windows game's shared renderer path.
+INSTALL, game launch and fixed-reference replacement were not performed.

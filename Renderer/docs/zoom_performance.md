@@ -1,5 +1,343 @@
 # Zoom performance verification
 
+## Cancellable camera requests (standalone experiment)
+
+The optional DLL camera begin/poll/cancel exports now run on the existing D3D
+worker. There is one immutable active snapshot and one replaceable pending
+snapshot, with a monotonic ticket fencing completion. Begin copies both tile
+records and authoritative world topology. Older tickets never return success;
+poll only publishes the matching complete image and its ownership arrays.
+No game hook uses these exports yet, and the synchronous ABI remains intact.
+
+The caller owns the front publication; the worker can only fill the separate
+back publication. Poll swaps them under the call/state gates. Published frames
+retain the 32 MiB-per-owner cap; the back is cleared before another capture, so
+front plus candidate is bounded to 64 MiB. Input counts retain the existing ABI
+limits (8,192 tile records and at most 2,097,152 packed topology cells per
+snapshot); replacing a pending capture temporarily holds its old and new
+arrays alongside the active snapshot. This is bounded storage, not an
+unlimited camera history or a total-process memory guarantee.
+
+Synchronous render, configuration, units and reset cancel/drain camera work
+before mutating shared renderer state. Intentional cancellation invalidates
+partial viewport/draw assemblies without resetting the device or deleting the
+individually validated tile cache. Unit takeover currently supersedes the
+camera request; automatic resumable refinement remains future work. The
+caller must explicitly request a new frame after such a takeover.
+
+The first candidate (`camera-queue`, `9ca86f5e...`) accepted 37 minimap requests
+in 0.440 ms median / 0.854 ms maximum, rejecting all 37 obsolete tickets.
+All five zoom images were exact against the same DLL's synchronous path;
+navigation passed the existing pixel tolerance, with aggregate channel error
+4 in one image and zero in the others. All 30 repeats per scenario were exact.
+However, the supersession workload exposed uncancelled GPU submission: warm
+zoom p95 was 1,005.179 ms and minimap p95 was 187.242 ms. Those include deliberately
+starting and replacing an earlier scene, unlike the synchronous control, so
+they are not a clean asynchronous-overhead measurement or a speedup claim.
+
+The follow-up forwards the cancellation flag into the existing interruptible
+draw/shadow path and checks it before submission/readback. Candidate:
+`native/build/camera-queue-draw-cancel/C3XRenderer.dll`, SHA-256
+`38751820606b5ef654e39c27131ac989beaffcaa1617d148428738c0f794c72b`.
+Native smoke passes with publication on and off. The actual worker runs in a
+portable threaded test with deliberately blocked rendering, 30 replacements,
+copied input mutation, immutable full-size front pixels, unit takeover and
+reset/join. All 53 focused tests and 131 selected grassland tests pass on the
+final source. All verification processes finished; staging is unchanged.
+The full-size follow-up uses the same
+deliberate supersession workload as the first queue, including 30 warm revisits
+per scenario:
+
+| Queued workload | First queue p95 / max | Interruptible draw p95 / max |
+| --- | --- | --- |
+| Five-level zoom | 1,005.179 / 1,489.096 ms | 132.305 / 142.673 ms |
+| Minimap movement | 187.242 / 816.987 ms | 101.130 / 104.467 ms |
+
+Latest request acceptance maxima were 0.945 ms (zoom, 36 requests) and 0.576 ms
+(navigation, 37 requests); every obsolete request was rejected. Cold-change
+medians remain 2,592.786 ms for zoom and 4,839.132 ms for navigation; maxima were
+5,342.687 and 5,517.835 ms. The initial asset-loading request took about 12.6 s
+and is reported separately, not hidden inside the cold-change median. There
+are too few cold samples to establish p95.
+
+The five independent zoom images are exact against the first candidate's
+synchronous control. Navigation passes the same tolerance as above (aggregate
+channel error 4 at one destination, otherwise exact); all 30 repeated images
+per scenario are exact. This comparison crosses the draw-cancellation code
+change and is not described as a same-DLL A/B. Receipts:
+`native/build/camera-queue-draw-cancel/zoom/comparison.json` and
+`native/build/camera-queue-draw-cancel/navigation/comparison.json`.
+Geometry residency remains 685,584,054 bytes for zoom and 611,114,938 bytes for
+navigation; no fallback or device recovery occurred. Minimum sampled free VA
+and largest free-region sizes are recorded in those receipts. Mixed zoom plus
+distant-navigation stress and sustained unit animation are not covered here.
+
+This removes a synchronous request/ownership obstacle, not the user-visible
+stall yet. Request acceptance is **not map response**: a correct new-camera
+preview, scheduled final redraw and sustained input/animation coordination
+remain necessary. Cold geometry work is still multi-second; GPU readback and
+some asset/mesh phases still lack bounded cooperative cancellation. The staged
+evaluation DLL remains `91b5e315...`; no INSTALL, game launch, injected source
+change or new Civ III patch-table entry was involved.
+
+## Current install staging
+
+At the user's explicit staging request, the verified `camera-ui-blitter`
+evaluation DLL was copied to `Renderer/bin/C3XRenderer.dll`. Both SHA-256 hashes
+are `91b5e31540bcb49fd01425e0cadc0d9c9e6c659a19013e1f0389b98d26bb5ece`.
+The previous staged DLL (`dd7b9d5b...`) is preserved at
+`native/build/install-backup-siha3z/C3XRenderer.dll`. Civ III was confirmed closed
+before staging, and all 51 focused bridge/cache/publication tests passed again.
+The candidate's native smoke and full-size navigation evidence are below.
+
+This is the high-memory evaluation build; publication remains opt-in and
+background rendering is not implemented. Cold views remain multi-second.
+Runtime assets, configuration, references and injected code were not changed by
+staging. INSTALL and game launch remain for the user; neither was run here.
+Earlier statements that staging was untouched describe their individual passes.
+
+## UI-owned blit lifetime
+
+`MapBlitter` now owns the GDI bitmap/DC and destination rounding tables, separately
+from RendererState. Its calls and cleanup run on the calling thread; worker
+shutdown joins before releasing these UI resources. It consumes the completed
+output and captured rounding phase, not mutable tile/camera data. The shared
+trace sequence is atomic for eventual concurrent render/blit diagnostics.
+Correction to the earlier investigation: ordinary `RendererState::reset` did
+not destroy its GDI surface; its destructor did. This refactor removes that
+ownership coupling without claiming a previously unobserved device-reset race.
+
+Candidate SHA-256:
+`91b5e31540bcb49fd01425e0cadc0d9c9e6c659a19013e1f0389b98d26bb5ece`.
+The opt-in publication path passes all six full-size navigation images and
+30 repeats exactly against the prior flat-shore candidate. This is cross-build
+functional parity, not an isolated performance A/B: publication is enabled only
+in the new run. Warm navigation measured **37.296 ms median / 74.213 ms p95 /
+76.941 ms maximum**; cold median remains **4,805.152 ms**. Receipt:
+`native/build/camera-ui-blitter/comparison.json`. There is no new latency win
+claimed here; responsive/background rendering is still not enabled.
+
+The executable UI-resource test runs the actual blitter with instrumented GDI
+calls: all calls stay on its owner thread, resizing releases old handles,
+double reset is harmless, clipping preserves untouched pixels, and DC/bitmap/
+selection/BitBlt failure paths recover without leaking or deleting a selected
+bitmap. Native RGB555/RGB565 smoke passes with publication on and off. All 131
+selected grassland tests and 51 focused bridge/cache/publication tests pass.
+
+The first native smoke attempt crashed, not merely timed out. The process was
+confirmed stopped and Windows recorded an access violation in DLL memcpy.
+The fixture had retained its primary output across two smaller material-boundary
+renders, then blitted that expired pointer using the old dimensions. Previously
+reused vector storage could conceal the lifetime error; owned publication exposed
+it. The fixture now reacquires the primary frame before blitting. Borrowed output
+lifetimes are documented in the ABI header (no layout/version change), and the
+corrected executable passes against the unchanged DLL in both modes. Preserve
+`native/build/camera-ui-blitter/smoke/stale-output-failed-trace.log` as failed
+evidence; the old smoke passes do not prove that stale-pointer use was valid.
+
+Staging is untouched. No INSTALL, game launch, injected compilation or new
+patch-table entry was needed. All test processes are finished. Remaining work
+is a bounded/cancellable foreground refinement path, unit-request coordination,
+and a current-camera preview with a scheduled final redraw—not returning an
+unchanged old map while a new view builds.
+
+## Immutable publication groundwork (opt-in, still synchronous)
+
+`C3X_RENDERER_CAMERA_PUBLICATION=1` enables an experimental completed-frame
+owner in `RendererWorker`. It copies pixels, fallback indices and replacement
+flags together, and captures the blit rounding phase from the completed camera.
+Later mutation of render scratch no longer changes that publication. Identical
+scene/time hits reuse it without another image copy. Each publication is capped
+at 32 MiB including ownership and allocated vector capacities; a transactional
+commit can temporarily hold two. At 2240x1192 one image is 10,680,320 bytes.
+Allocation/size rejection preserves the ordinary synchronous exact result;
+it does not return a stale frame or silently skip ownership validation.
+
+This is a prerequisite for progressive presentation, **not asynchronous
+rendering yet**. It is off by default and not staged. The same-DLL 2240x1192 A/B
+reproduces all five independent images and 30 revisits exactly. Warm median is
+**83.254 -> 86.393 ms**, p95 **99.854 -> 105.835 ms**; this added copy has a cost,
+not a speedup. Candidate SHA-256:
+`bd0b999b9296544b7a8db0fb1af60bb5d6381eefc6707f1fbcc77493631d6957`.
+Receipt: `native/build/camera-publication/zoom/comparison.json`. Minimum sampled
+free VA is 1,595,432,960 bytes, largest free region 1,510,281,216 bytes. Geometry
+residency is unchanged; no fallback or recovery occurred.
+
+Native smoke passes with the switch both on and off, including ABI, scheduling,
+fallback, RGB555/RGB565 gradients, exact clipping and unchanged source pixels.
+The 131 selected grassland regressions and 50 focused bridge/cache/publication
+checks pass. The executable publication test runs the actual production owner,
+mutates source buffers, injects allocation failure at each copy step, rejects
+oversized/invalid inputs, tests aliased capture and verifies release on clear.
+Integration now selects that test. No injected code or patch-table change was
+made; no INSTALL or game launch ran. All processes for this pass finished.
+
+At this pass GDI resources still belonged to RendererState (its destructor,
+not ordinary device reset, released them). The UI-blitter pass above separates
+that lifetime. Remaining asynchronous hazards are explicit: unit drawing shares the
+worker's D3D context; foreground render currently has no cooperative deadline;
+and a provisional image must depict the new camera, never an unchanged old
+view. Bounded/cancellable refinement and a
+validated current-camera preview/final-redraw path are still needed. Do not
+enable background rendering merely because the output arrays are now separable.
+
+## Flat-height shoreline certificate
+
+The shared natural height query now evaluates its two height sources before
+the shoreline response. When authored height is exactly 2.5 and pickup relief
+is exactly zero, both coastal formulas return 2.5 regardless of shoreline.
+That case skips the redundant shore query; non-flat samples retain the existing
+formula. Source observations are still recorded, including absent neighboring
+hills, so introducing relief invalidates the certificate. No resolution,
+geometry ownership, rendering budget or cache ceiling changes.
+
+Candidate: `native/build/camera-flat-shore/C3XRenderer.dll`, SHA-256
+`e2ef305378b91dec60e3d569f0407f5e4ef1ded799d81c4e8f34640fe884078d`.
+Its same-DLL minimap control sets only `C3X_RENDERER_FLAT_SHORE_CONTROL=1`.
+At **2240x1192**, all six independent images and 30 repeated images are exact,
+with no fallback or recovery. First-use median **4,949.151 -> 4,796.570 ms** and
+maximum **5,858.602 -> 5,656.593 ms** are modest improvements, not a solution to
+multi-second cold rendering. Warm moves measured **29.723 ms median / 70.183 ms
+p95 / 71.642 ms maximum**, versus control p95 68.517 ms; no warm improvement is
+claimed. Five cold samples do not establish p95. Receipt:
+`native/build/camera-flat-shore/navigation/comparison.json`.
+
+Geometry residency remains 611,114,938 bytes. Minimum sampled free VA was
+1,724,035,072 bytes and minimum largest free region was 1,642,860,544 bytes.
+The source test compares 26,010 exact height/support results across hills,
+coasts, wrapping, tiny/zero/negative source displacements and distant samples;
+8,952 redundant shore calls are avoided. The zero-height test still observes
+all nine hill-source cells and detects a new hill without a coast query.
+All 131 selected grassland tests pass. The explicit production terrain-edit
+witness rebuilt 127 tiles, reused 260 and matched the cold image exactly
+(`native/build/camera-flat-shore/terrain-edit/witness.txt`). No full zoom or
+seven-case replay result is attributed to this DLL. Staging is unchanged; no
+INSTALL or game launch ran, and all processes started for this pass finished.
+
+Cold interaction remains synchronously blocked: `RendererWorker::render`
+submits the exact captured scene, `submit_locked` waits for its exact sequence,
+and only then can the injected bridge validate ownership and blit. Moving work
+onto that existing worker does not make input responsive. Any progressive or
+asynchronous path must preserve immutable publications, current-camera pixels,
+ownership, cancellation, unit-draw serialization and a scheduled final redraw;
+merely returning an old frame or shortening the wait would violate the current
+contract. This is the next architectural constraint to investigate alongside
+remaining cold geometry/upload cost, not a claim that asynchronous presentation
+has been implemented.
+
+## Exact nested-grid reuse
+
+The next isolated candidate reuses a retained finer ground grid when every
+requested coarse coordinate is already present exactly. It verifies integral
+stride and float-division equality, selects those vertices directly, and keeps
+the requested triangle stream. There is no interpolation, mesh-resolution
+change, extra cache tier or expanded ownership. Invalidation still validates
+the finer grid's full dependency set, a conservative superset for decimation.
+
+Candidate: `native/build/camera-nested-ground-grid/C3XRenderer.dll`, SHA-256
+`09a53c028d0c5ba19daf7e5cc5fd409cedeb33160afb8418ee472825101a9d60`.
+The paired control uses the exact same DLL with
+`C3X_RENDERER_NESTED_GRID_CONTROL=1`; all earlier ground retention remains on.
+At **2240x1192**, all five independent zoom images and all 30 revisits match
+exactly, with no fallback or recovery. Receipt:
+`native/build/camera-nested-ground-grid/zoom/comparison.json`.
+
+The widest first-use change measured **7,023.546 -> 5,951.272 ms** (about 15%
+lower); its ground phase measured **1,911.401 -> 969.453 ms**. Overall first-use
+median barely changed (**2,873.254 -> 2,820.725 ms**), as the other three changes
+already use matching grid sizes. Warm zoom measured **78.446 ms median /
+98.196 ms p95 / 101.626 ms maximum**; this does not establish a warm speedup.
+Retained CPU grids finished at **112,710,888 bytes**, versus **136,421,756** in
+the control, because redundant coarser copies are not admitted. GPU residency
+is unchanged at 685,584,054 bytes. Minimum sampled free VA was 1,604,648,960
+bytes; minimum largest free region was 1,514,606,592 bytes. The limits remain
+unchanged and these samples are not a total-process memory guarantee.
+
+The 12 focused executable tests now exercise actual fine/coarse selection and
+indexing for 8/12/16/24/32 divisions, all five zooms and all retained layer types.
+They compare complete vertex bytes, reject non-nested/invalid grids, exercise
+the diagnostic control, and preserve cancellation and dependency tests.
+All 131 selected grassland regressions and the isolated native ABI/scheduling/
+fallback/RGB555/RGB565 smoke passed. The seven behavior replays below belong to
+the preceding candidate; they were not rerun or attributed to this DLL.
+
+No minimap speedup is claimed for this change: constant-zoom moves normally
+request the same grid size. Existing full-size navigation traces identify
+roughly 0.9--1.75 seconds in ground and 2.3--3.0 seconds in the combined
+natural/cliff phase on distant first moves. Further cold-view work must address
+new geometry/query work and uploads, not just exact cache revisits. The staged
+DLL remains untouched pending the existing user choice; INSTALL and game launch
+were not run. All benchmark and smoke processes are terminal.
+
+## Underlying ground-grid retention
+
+The current isolated candidate retains sampled ground grids across zoom changes.
+It keeps exact raw relief heights and normal differences, then reconstructs
+projection and zoom-dependent river junction distance. Full vertex-byte tests
+cover all five zoom levels. Cache identity uses the raw wrapped occurrence,
+not just the canonical gameplay tile: world coordinates and UVs must not alias
+across a minimap seam. Semantic, coast and world-topology dependencies are
+validated before reuse, and cancelled grids are not published.
+
+This reuses the existing CPU natural-mesh tier (192 MiB experimental, 96 MiB
+normal) while world GPU sharing is active; the two CPU caches are not retained
+together. It adds no budget and does not change renderer ownership or hooks.
+Allocation reserves precede moving retained grids, so an allocation failure
+cannot leave a partially moved entry available for later reuse.
+
+The matched DLL is `native/build/camera-ground-grid-wrap-safe/C3XRenderer.dll`,
+SHA-256 `b1e9e40dc66d08e0b9aa27211ffcc0c92803cb70e68500b062340f3df8cfa8e5`.
+Both processes use this exact DLL and frozen runtime inputs; the control alone
+sets `C3X_RENDERER_GROUND_GRID_CONTROL=1`. At **2240x1192**, all five independent
+zoom images, six navigation images and 30 revisits per scenario are byte-identical.
+Both `zoom/comparison.json` and `navigation/comparison.json` under that build
+directory pass, with no fallback or device recovery.
+
+First-use zoom changes measured **5,228.201 -> 2,656.077 ms median**; maximum
+**6,823.032 -> 6,525.392 ms**. Close views improve substantially, but the widest
+view remains slow. Warm zoom measured **74.571 ms median / 93.837 ms p95 /
+95.093 ms maximum**. Minimum sampled free VA was 1,572,741,120 bytes; smallest
+sampled largest free region was 1,496,977,408 bytes. Geometry residency remained
+685,584,054 bytes.
+
+Minimap first-use latency was essentially unchanged: **4,914.913 -> 4,924.060 ms
+median**, maximum **5,816.306 -> 5,827.818 ms**. Warm navigation measured
+**30.700 ms median / 65.021 ms p95 / 68.211 ms maximum**. Minimum sampled free VA
+was 1,724,153,856 bytes; minimum largest free region was 1,628,700,672 bytes.
+Four cold zooms and five cold moves do not establish cold p95. This pass does
+not meet instant first-response, cold-view or smooth-transition targets.
+
+Twelve focused executable cache tests pass, including exact projection, raw
+wrapped occurrence identity, dependency invalidation and bounded admission.
+The selected grassland dispatcher suite passed 131 tests. An earlier centered
+comparison passed before the raw-occurrence correction, but is not the current
+candidate. The intermediate navigation comparison against a different build
+was rejected (even initial images differed); it is not optimization-parity proof.
+Only the matched four-run sweep above supplies this pass's parity and timings.
+
+The same high-memory DLL passed native ABI/scheduling/fallback and RGB555/RGB565
+smoke, plus seven current-production behavior replays: normal/reduced scrolling,
+world wrapping, resource playback/removal, day/night unit actions/compositing
+and explicit terrain-edit invalidation. The edit rebuilt 127 tiles, reused 260,
+and matched the cold image exactly. Receipt: `verified/results.json` under the
+candidate directory. The resource-focused dispatcher selected six cases, so the
+seventh terrain witness was run explicitly rather than assumed covered.
+The isolated smoke folder initially omitted its shader inputs; that run failed
+initialization, and the preserved `smoke/missing-shader-failed.log` is not a pass.
+With the required shader files present and the intended frozen synthetic profile,
+smoke passed with pixel hash 7513777451713106803. No production code change was
+needed for that test-setup correction.
+
+The staged DLL changed independently after the previous handoff. This experiment
+has not overwritten that newer staged build. The staging record below describes
+the earlier handoff, not a guarantee of the current binary's identity.
+At this handoff the staged SHA-256 is
+`dd7b9d5baef6f17fe8475969a8feae87e2d873233e9ec9f294c8e263f7763435`.
+Replacing it with the verified performance candidate is awaiting the user's
+choice because it would overwrite another task's staging. All test processes
+have finished. No INSTALL, game launch, injected compilation or reference-image
+replacement was performed for this DLL-only pass.
+
 ## Cold-view query/index pass
 
 This pass removes redundant CPU work without raising cache limits or changing
@@ -14,8 +352,9 @@ the terrain samples, triangle order, materials or renderer ownership:
   analytic dunes are zero because separate natural meshes own those surfaces.
   Its flat certificate still observes the complete topology support. Away from
   volcanoes, coastal queries retain the exact coast rim and river attenuation
-  without evaluating the discarded hill/dune/material expressions. Volcanoes,
-  missing topology and the non-fidelity provider keep the existing path.
+  without evaluating the discarded hill/dune/material expressions. Volcano
+  neighborhoods and the non-fidelity provider keep the existing path; missing
+  topology still prevents the flat certificate.
 
 The isolated high-memory DLL is
 `native/build/camera-cold-query-zoom/C3XRenderer.dll`, SHA-256
@@ -32,9 +371,37 @@ ms** (about 13% lower), maximum **8,974.436 -> 7,775.887 ms**. Four first-use
 changes are not enough to report p95. Warm revisits measured median **87.797
 ms**, p95 **108.641 ms**, maximum **119.212 ms**, with zero builds/uploads,
 fallback or recovery. This is a cold-build optimization, not evidence of a new
-warm-cache speedup. Minimum free VA was 1,522,552,832 bytes; largest free region
-at the minimum sample was 1,415,073,792 bytes. Geometry residency is unchanged
+warm-cache speedup. Minimum free VA was 1,522,552,832 bytes; the minimum sampled
+largest free region was 1,415,073,792 bytes. Geometry residency is unchanged
 at 685,584,054 bytes. Receipt: `native/build/camera-cold-query-zoom/comparison.json`.
+
+The matching **2240x1192 minimap** A/B also reproduces all six independent
+images and all 30 revisits exactly, without fallback or recovery. First-use
+median is **5,846.188 -> 5,667.444 ms**, maximum **8,515.228 -> 6,285.094 ms**;
+the nearby overlap move is slightly slower (**331.764 -> 348.365 ms**).
+These five first-use moves do not establish a cold p95 or a uniform speedup.
+Warm revisits measured **31.365 ms median / 122.566 ms p95 / 133.225 ms maximum**.
+That meets the 150 ms completion target, but not the stricter 100 ms response
+target in this run. The prior 66 ms p95 is not a guarantee for every run.
+Minimum free VA was 1,641,324,544 bytes; minimum sampled largest free region
+was 1,558,183,936 bytes. Geometry residency remained 611,114,938 bytes. Receipt:
+`native/build/camera-cold-query-navigation/comparison.json`.
+
+The category dispatcher passed 131 selected grassland regressions; 99 focused
+workbench/cache/zoom checks also passed. Executable geometry tests expand direct
+indices and compare every vertex byte, including holes, append offsets and
+cancellation. The source-aware query test compares 28,566 points against the
+unoptimized evaluator, including coast/river rims, missing cells and volcanoes,
+and checks all 25 flat-certificate topology observations. Both high-memory and
+normal-budget DLLs passed native ABI/scheduling/fallback/RGB555/RGB565 smoke.
+All six isolated current-production replays passed with the normal-budget DLL:
+normal/reduced scrolling, world wrapping, resource playback/removal and day/night
+unit actions/compositing. Receipt:
+`native/build/camera-cold-query-verification/verified/results.json`, DLL SHA-256
+`94b7bb43dbf567de87bf3e88aeb9865f483d532fd5035339959f46bb7fc923b0`.
+The bounded VM transport wait expired during the first replay; its task-owned
+process continued and subsequently produced the matching successful completion
+receipt. No replay was killed or represented as passed while still running.
 
 The separate grid-only A/B also reproduced all five images exactly:
 `native/build/camera-grid-index-candidate/comparison.json`. Its timings were
@@ -43,14 +410,24 @@ speedup. The combined same-DLL comparison above is the current measurement.
 
 Cold views still take seconds and do **not** meet the targets below. Further
 work must address remaining terrain/coast queries, new natural geometry and
-upload rather than claiming cache hits represent first-use latency. This DLL
-is not staged or installed; `bin/C3XRenderer.dll` remains `1a2de66d...`.
+upload rather than claiming cache hits represent first-use latency.
 
-## Current full-size optimization
+At the user's explicit request, the high-memory `cbcd840e...` evaluation DLL was
+staged at `bin/C3XRenderer.dll`; candidate/staged hashes matched at handoff. The previous
+`1a2de66d...` DLL is preserved at
+`native/build/camera-cold-query-zoom/previous-staged.dll`. Custom rendering and
+custom zoom are already enabled in the local configuration. No patch-table
+entry is needed for this performance pass. INSTALL and game launch were **not**
+run; the user can run their usual Windows `INSTALL.bat` and test the five-level
+Z cycle. Automated replay processes have finished, so this task leaves no
+benchmark workload competing with the game. This is evaluation staging, not
+visual acceptance, reference replacement or a claim of instant cold views.
+
+## Earlier full-size cache optimization
 
 Active acceptance dimensions are **2240x1192**, for both the centered five-level
-zoom cycle and minimap navigation. The previous evaluation DLL below remains
-staged; the new candidates have not been staged, installed or launched in Civ III.
+zoom cycle and minimap navigation. The following records the earlier cache pass;
+the cold-query evaluation staged above supersedes its unstaged candidates.
 
 Latest evaluation build: `native/build/world-cache-evaluation/C3XRenderer.dll`,
 SHA-256 `d90fdad0a1865d2138007d3614b0b9c31d16e9d0025b18e3814f9a9f9b647c29`.
@@ -61,8 +438,8 @@ p95 **96.007 ms**, maximum **109.585 ms**. First-use changes still took
 3.87–7.81 seconds. Sampled free VA stayed above 1,522,757,632 bytes. The native
 ABI/scheduling/fallback and RGB555/RGB565 blit smoke tests also passed on this exact
 DLL. Its `comparison.json` is a self-comparison for distribution/repeat parity,
-not a new independent speedup claim. The staged DLL remains the previous
-evaluation (`1a2de66d...`); running INSTALL alone will not select this new DLL.
+not a new independent speedup claim. At the end of that pass, the staged DLL was
+still the previous evaluation (`1a2de66d...`).
 
 The current implementation addresses three separate costs:
 
@@ -164,9 +541,10 @@ It uses the experimental 768 MiB GPU geometry, 192 MiB natural CPU mesh and
 160 MiB resource-backdrop caps, plus the unchanged 32 MiB viewport tier. These
 are cache budgets, not reservations or a cap on all process memory. Ordinary
 build defaults remain unchanged; rebuilding normally loses these higher caps.
-The exact DLL is staged in `bin/C3XRenderer.dll`; hashes match. The previous
-staged DLL is preserved as `native/build/zoom-evaluation-960/previous-staged.dll`.
-Neither installation nor game launch was performed.
+That DLL was staged at the previous handoff and is now the rollback for the
+cold-query evaluation above. Its own earlier rollback is preserved as
+`native/build/zoom-evaluation-960/previous-staged.dll`. Neither installation nor
+game launch was performed by that handoff.
 
 Final checks on this exact DLL:
 

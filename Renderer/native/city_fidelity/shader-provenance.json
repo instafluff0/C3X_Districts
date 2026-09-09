@@ -4,12 +4,12 @@
     "r112-freshcanopy"
   ],
   "source_sha256": {
-    "Renderer/native/environment_refresh/feature.hlsl": "cf62e3a87c6793b2cf1c15ca4b393c6823d83e6e4bcd8721be7274018e02c8ce",
+    "Renderer/native/environment_refresh/feature.hlsl": "bf6229a09a1e92556d337dfd00707c65b665eb1fd5607c896978c5c42391744c",
     "Renderer/lab/shared/shaders/lighting/local_facade_lights.hlsl": "264bd350d639f897924489c2773434b2f9e0af5cf37e8f3c7034764ae47bb2c3",
     "Renderer/lab/shared/shaders/objects/city_scene_material.hlsl": "75923e050f689869868b2eaebd21a7f71ea951e6e8091b9fbdc9610b36c24eaa",
     "Renderer/lab/shared/shaders/lighting/city_environment.hlsl": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9",
     "Renderer/lab/shared/shaders/objects/settlement_ground.hlsl": "a21447d01e7b1b9738cfbb766b5173778c0bea8d2a7e87a3cec3c02f94ceca31",
-    "Renderer/native/environment_refresh/hydrology.hlsl": "7adb46db5b1b25ca2c669a5871316017dcceda036a4cfd240dd18d968fcb353a",
+    "Renderer/native/environment_refresh/hydrology.hlsl": "736d3b9782531e33d16cc6764f359c6e4aa6277d1764cc1196d6073af9e42a9e",
     "Renderer/native/environment_refresh/terrain.hlsl": "33d398a728fb93294c5182a1bfa12365ca3da96977c9efd371c65c6e96b3ba28",
     "Renderer/native/environment_refresh/mountain.hlsl": "8d7240bcd0991fc1722ed341186552f622089cc9bde8b74bc123efe814e143d4",
     "Renderer/native/environment_refresh/objects.hlsl": "3baf5793f30cbc7dd1bbc4ff15cd0021445ab8ae3a1b539f477675fe7b6283aa",

@@ -112,11 +112,11 @@ Report original(WorldCoast const& world_coast,ExactPointCache<ShoreSample>& shor
     return result;
 }
 Report shared(WorldCoast const& coast,ExactPointCache<ShoreSample>& scratch,
-              NaturalData const& natural,int tx,int ty) {
+              NaturalData const& natural,int tx,int ty,bool skip_flat=false) {
     Report result;
     auto observe=[&](auto i,auto value){result.world.emplace(i,value);};
     auto nodes=[&](auto id,auto revision){result.coast.emplace(id,revision);};
-    SurfaceQueries query(coast,scratch,tx,ty,observe,nodes);
+    SurfaceQueries query(coast,scratch,tx,ty,observe,nodes,skip_flat);
     exercise(result,query.center_u,query.center_v,
         [&](int c,int r){return query.tile(c,r);},
         [&](float u,float v){return query.shore(u,v);},
@@ -148,6 +148,9 @@ int main() {
                 auto b=shared(coast,new_scratch,natural,owner[0],owner[1]);
                 assert(a.values==b.values);assert(a.world==b.world);assert(a.coast==b.coast);
                 assert(old_scratch.hits==new_scratch.hits && old_scratch.misses==new_scratch.misses);
+                ExactPointCache<ShoreSample> fast_scratch;
+                auto fast=shared(coast,fast_scratch,natural,owner[0],owner[1],true);
+                assert(fast.values==a.values);
                 samples+=unsigned(a.values.size());scopes++;
             }
         }
@@ -190,6 +193,56 @@ int main() {
             assert(hill_meets_cliff);
         }
     }
+    unsigned flat_samples=0,flat_avoided=0;
+    for(unsigned wraps=0;wraps<3;wraps++)for(bool hills:{false,true}) {
+        WorldCoast coast;World world{16,16,wraps>0,wraps>1};
+        std::vector<std::uint32_t> data(128);
+        for(unsigned i=0;i<data.size();++i){
+            int y=int(i/8),x=int(i%8)*2+(y&1);
+            unsigned base=x<8?2:12;
+            unsigned real=hills && x==6 && y==6?5:base;
+            data[i]=base|(real<<8);
+        }
+        coast.update(world,data.data(),data.size(),1);
+        for(auto owner:std::array<std::array<int,2>,3>{{{{6,6}},{{-2,6}},{{18,6}}}}){
+            ExactPointCache<ShoreSample> slow_cache,fast_cache;
+            Report slow_dependencies,fast_dependencies;
+            auto slow_world=[&](auto i,auto v){slow_dependencies.world.emplace(i,v);};
+            auto fast_world=[&](auto i,auto v){fast_dependencies.world.emplace(i,v);};
+            auto nodes=[](auto,auto){};
+            SurfaceQueries slow(coast,slow_cache,owner[0],owner[1],slow_world,nodes,false);
+            SurfaceQueries fast(coast,fast_cache,owner[0],owner[1],fast_world,nodes,true);
+            for(float displacement:{0.f,-0.f,-1.f,.000001f,40.f})
+            for(int y=-8;y<=8;++y)for(int x=-8;x<=8;++x){
+                float u=slow.center_u+x*.173f,v=slow.center_v+y*.193f;
+                auto source=[&](float,float){return displacement;};
+                float slow_support=-1,fast_support=-1;
+                float a=slow.height(natural,source,u,v,&slow_support);
+                float b=fast.height(natural,source,u,v,&fast_support);
+                assert(a==b && slow_support==fast_support);++flat_samples;
+            }
+            assert(fast_cache.hits+fast_cache.misses<=slow_cache.hits+slow_cache.misses);
+            flat_avoided+=unsigned(slow_cache.hits+slow_cache.misses-fast_cache.hits-fast_cache.misses);
+        }
+        if(!hills && !wraps){
+            ExactPointCache<ShoreSample> scratch;Report observed;
+            auto observe=[&](auto i,auto value){observed.world.emplace(i,value);};
+            auto nodes=[&](auto i,auto value){observed.coast.emplace(i,value);};
+            SurfaceQueries flat(coast,scratch,6,6,observe,nodes);
+            assert(flat.height(natural,[](float,float){return 0.f;},6.5f,.5f)==2.5f);
+            assert(observed.world.size()==9 && observed.coast.empty());
+            assert(scratch.hits==0 && scratch.misses==0);
+            // Introducing relief invalidates the exact source observations,
+            // even though this flat height needed no coast query at all.
+            auto center=coast.world().index(6,0);
+            assert(observed.world.count(center));data[center]=2u|(5u<<8);
+            coast.update(world,data.data(),data.size(),2);
+            assert(coast.world().at(center)!=observed.world.at(center));
+        }
+    }
+    assert(flat_avoided>0);
+    std::cout<<"PASS flat height certificate: "<<flat_samples<<" exact heights/supports, "
+             <<flat_avoided<<" redundant shore calls avoided; source edit observations retained\n";
     std::cout<<"PASS production surface queries: "<<scopes<<" scopes, "<<samples
              <<" exact values, world/coast observations and cache statistics; wrapping and terrain edits\n";
 }
