@@ -194,6 +194,7 @@ struct c3x_renderer_frame_v1 {
 // Pointer fields borrow renderer-owned storage until the next render,
 // pack/definition configuration or reset call. Copy data that must outlive
 // those calls. Idle preparation and unit drawing do not invalidate map output.
+// The optional camera extension below specifies its additional publication lifetime.
 struct c3x_renderer_output_v1 {
     c3x_renderer_u32 api_version;
     c3x_renderer_u32 struct_size;
@@ -301,7 +302,7 @@ typedef int (*c3x_renderer_render_fn)(struct c3x_renderer_frame_v1 const *, stru
 // pixels for that ticket. It is not final success and owns no objects/overlays.
 // Continue polling after PREVIEW; its pointers have the same publication lifetime.
 // PENDING/error/superseded leave its output untouched. Poll does not advance the
-// captured presentation clock. No preview or redraw scheduling is supplied here.
+// captured presentation clock. This interface supplies no redraw scheduling.
 // Begin expires earlier synchronous borrowed outputs. Poll's borrowed publication
 // survives background work, but expires at the next successful publication poll,
 // synchronous render, pack/definition change or reset. Copy it for longer use.

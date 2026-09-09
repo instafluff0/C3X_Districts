@@ -27036,7 +27036,9 @@ patch_Sprite_draw_unit_body_normal (Sprite * this, int edx, PCX_Image * backgrou
 				  int x, int y, char * palette_path, PCX_Color_Table * palette)
 {
 	if (forward_custom_unit_body (this, background, canvas, x, y, 0, palette)) return 0;
-	if (custom_renderer_zoom_enabled ()) return 0;
+	// These body hooks also draw UI portraits. Suppress native map bodies only
+	// inside tick_anim's canvas scope, even when custom unit rendering is off.
+	if (custom_renderer_zoom_enabled () && canvas != NULL && canvas == is->custom_renderer_unit_canvas) return 0;
 	return Sprite_draw_unit_body_normal (this, __, background, canvas, x, y, palette_path, palette);
 }
 
@@ -27046,7 +27048,7 @@ patch_Sprite_draw_unit_body_reduced (Sprite * this, int edx, PCX_Image * backgro
 {
 	if (scale_x == 1 && scale_y == 1 && divisor == 2 &&
 	    forward_custom_unit_body (this, background, canvas, x, y, 1, palette)) return 0;
-	if (custom_renderer_zoom_enabled ()) return 0;
+	if (custom_renderer_zoom_enabled () && canvas != NULL && canvas == is->custom_renderer_unit_canvas) return 0;
 	return Sprite_draw_unit_body_reduced (this, __, background, canvas, x, y, scale_x, scale_y, divisor, palette_path, palette);
 }
 

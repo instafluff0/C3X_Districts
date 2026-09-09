@@ -41,6 +41,10 @@ They are not Civ III symbols, require no executable addresses, and are not bound
 by the injected bridge yet. Existing synchronous hooks remain unchanged;
 `required_user_action: []`. Current-camera previews and native final-redraw
 coordination remain implementation work, not an additional patch-table request.
+Opt-in terrain-only provisional images add a distinct `PREVIEW` result to those
+experimental exports, not a success result on the synchronous map API. They
+claim terrain ownership only; the injected bridge does not consume them yet.
+No new Civ III symbol or address is needed: `required_user_action: []`.
 
 - Existing symbols: `Map_Renderer_m71_Draw_Tiles`,
   `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`,
@@ -57,6 +61,13 @@ and consumes `Z` before Civ III's native two-level toggle. Existing
 wrapper and `Sprite_draw_on_map` inlead provide inverse input and native overlay
 placement. Native unit health/status alignment uses the existing `Unit_tick_anim`
 inlead. `audit_candidates: []`.
+
+Native UI unit portraits remain outside zoom suppression. The existing
+`Sprite_draw_unit_body_normal` and `Sprite_draw_unit_body_reduced` wrappers
+suppress fallback only on the canvas scoped by `Unit_tick_anim`, independently
+of custom unit availability. HUD/city-screen calls outside that scope retain
+their original native arguments and return values. No new symbols, signatures
+or addresses are required for this correction: `required_user_action: []`.
 
 The centered five-level range (64, 96, 128, 160, 192 pixels, normal at 128)
 changes only the existing key handler's step array and native-sync bounds.

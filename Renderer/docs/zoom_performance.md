@@ -1,5 +1,85 @@
 # Zoom performance verification
 
+## Test handoff
+
+Experiments are paused for the user's in-game evaluation. The verified
+high-memory DLL is staged; see **Current install staging** below. The game still
+uses synchronous rendering: the optional camera queue and coarse previews are
+not connected to injected hooks or enabled for this test. Their standalone
+first-image timings below are **not in-game performance claims**. Cold views
+still take seconds. Test the existing five Z zoom levels and minimap movement;
+this handoff does not claim smooth transitions or a completed performance goal.
+
+## Current-camera terrain preview experiment
+
+`C3X_RENDERER_CAMERA_PREVIEW=1` enables a CPU terrain-only provisional image in
+the optional camera queue. It uses the new request's captured anchors, render
+flags and normalized base-color textures, never an unchanged prior-camera
+bitmap. `PREVIEW` is distinct from `OK`; the caller must keep polling for the
+full scene. Only terrain replacement bits are set. Objects, overlays and all
+detailed geometry remain outside preview ownership. The injected game bridge
+does not consume this result yet; the preview is disabled and not visually accepted.
+
+The first Windows candidate (`camera-terrain-preview`, `6eec1285...`) produced
+first images at 2240x1192 with these request-to-first-image times:
+
+- Minimap: 37 requests, median 33.494 ms, p95 55.391 ms, maximum 85.056 ms.
+- Zoom: 36 requests, median 35.577 ms, p95 65.872 ms, maximum 82.380 ms.
+
+These include the initial request. Five navigation requests completed before a
+preview was observed; their full completion times count as first image, not
+missing/zero samples. All five independent zoom images, six navigation images
+and 30 repeats per scenario were exact at final completion against the prior
+queue candidate. The receipts are under `native/build/camera-terrain-preview/`.
+Cold final detail still takes seconds, so first-image latency is not substituted
+for the final-completion target.
+
+Visual inspection rejected raw water base textures as a useful preview: they
+are seabed textures and looked sandy. The follow-up adds an approximate optical
+depth per captured water family using the renderer's existing absorption/tint
+response, and shades each material once instead of once per tile. It uses the
+shared captured environment; it is not an exact production-shader approximation
+or a claim about source-game optics. The corrected view remains a flat,
+terrain-only draft with hard tile transitions—not accepted visual quality.
+
+Follow-up DLL SHA-256:
+`6a57b54f4877224e16d966e8bd4a50fb668aa8a06f94d9791d19a31131f20899`.
+Compilation succeeded; the Windows guard paused verification while Civ III
+was running. After the game closed, smoke with the switch on/off and both
+full-size camera workloads completed on this exact DLL. First-image median /
+p95 / maximum is **34.714 / 38.655 / 38.669 ms** for zoom (36 requests) and
+**34.594 / 42.307 / 48.661 ms** for navigation (37 requests). The measured CPU
+preview routine itself has median 23.722 ms for zoom and 23.600 ms for navigation;
+polling and cancelled prior work account for additional first-image latency.
+
+All five independent zoom images, six navigation images and 30 repeats per
+scenario are exact at final completion against the earlier no-preview queue.
+Receipts: `native/build/camera-terrain-preview-optics/zoom/comparison.json` and
+`native/build/camera-terrain-preview-optics/navigation/comparison.json`.
+Warm full-completion p95 is **161.293 ms** for zoom and **137.134 ms** for
+navigation; cold medians are **2,794.500 ms** and **4,907.174 ms**, respectively.
+Thus the coarse image improves first response, but does not satisfy the detailed
+cold-completion target, sustained-input smoothness or game integration.
+No fallback/device recovery occurred. Sampled free VA stayed above
+1,594,478,592 bytes, with a largest free region above 1,503,002,624 bytes.
+Mixed zoom/navigation plus active units is not yet a covered stress workload.
+All benchmark/build processes finished; the user's game was left alone.
+The 54 focused checks and 131 selected grassland checks pass locally.
+
+`native/camera_preview_cpu.py` executes the actual production preview routine
+against an explicit generic pack and BIQ fixture without a VM. The corrected
+2240x1192 local preview took 7.467 ms; this is local CPU evidence, not Windows
+latency or a full-renderer baseline. Its pixels match the Windows preview at
+this exact navigation destination; that single comparison is not a general
+cross-platform renderer qualification. Image/receipt:
+`native/build/camera-terrain-preview-optics/preview-current.png` and `.json`.
+Executable tests cover anchors, zoom, terrain-only ownership, halo exclusion,
+water-family selection, shared time, malformed DDS, bounded output and extreme
+off-screen coordinates. Final-image quality, preview usefulness during rapid
+input, native redraw integration and cold-detail speed remain unfinished.
+The experiment was subsequently staged with preview disabled for the user's
+evaluation; see the install handoff below. No INSTALL or game launch was run.
+
 ## Cancellable camera requests (standalone experiment)
 
 The optional DLL camera begin/poll/cancel exports now run on the existing D3D
@@ -82,16 +162,21 @@ change or new Civ III patch-table entry was involved.
 
 ## Current install staging
 
-At the user's explicit staging request, the verified `camera-ui-blitter`
-evaluation DLL was copied to `Renderer/bin/C3XRenderer.dll`. Both SHA-256 hashes
-are `91b5e31540bcb49fd01425e0cadc0d9c9e6c659a19013e1f0389b98d26bb5ece`.
-The previous staged DLL (`dd7b9d5b...`) is preserved at
-`native/build/install-backup-siha3z/C3XRenderer.dll`. Civ III was confirmed closed
-before staging, and all 51 focused bridge/cache/publication tests passed again.
-The candidate's native smoke and full-size navigation evidence are below.
+At the user's explicit wrap-up/staging request, the verified
+`camera-terrain-preview-optics` evaluation DLL was copied to
+`Renderer/bin/C3XRenderer.dll`. Candidate and staged SHA-256 hashes match:
+`6a57b54f4877224e16d966e8bd4a50fb668aa8a06f94d9791d19a31131f20899`.
+The previous staged DLL (`91b5e315...`) is preserved at
+`native/build/install-backup-iCT0xD/C3XRenderer.dll`; the older `dd7b9d5b...`
+backup remains at `native/build/install-backup-siha3z/C3XRenderer.dll`.
+Civ III was confirmed closed before staging. All 54 focused tests passed again;
+the exact candidate already passed Windows native smoke with preview on/off,
+131 selected grassland tests, and full-size zoom/navigation final-image checks.
 
-This is the high-memory evaluation build; publication remains opt-in and
-background rendering is not implemented. Cold views remain multi-second.
+This retains the high-memory cache build. Both
+`C3X_RENDERER_CAMERA_PUBLICATION` and `C3X_RENDERER_CAMERA_PREVIEW` default off;
+no environment switch was enabled. The asynchronous camera API is experimental
+and not called by the injected game bridge. Cold views remain multi-second.
 Runtime assets, configuration, references and injected code were not changed by
 staging. INSTALL and game launch remain for the user; neither was run here.
 Earlier statements that staging was untouched describe their individual passes.

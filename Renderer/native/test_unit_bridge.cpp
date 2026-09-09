@@ -124,6 +124,24 @@ int main(){
   army_member=nullptr;unit.army=false;
   unit.visible=false;invoke();assert(calls.empty());unit.visible=true;
  }
+ // UI portraits use these same native hooks, outside the map tick's canvas.
+ // They must preserve native arguments/return values at every custom zoom.
+ state.current_config.enable_custom_rendering_zoom=true;
+ for(int width:{64,96,128,160,192})for(bool custom_units:{false,true}){
+  state.custom_renderer_zoom_tile_width=width;
+  state.current_config.enable_custom_rendered_units=custom_units;
+  for(bool nested:{false,true}){
+   state.custom_renderer_unit_context=nested?&unit:nullptr;
+   state.custom_renderer_unit_canvas=nested?&canvas:nullptr;
+   PCX_Image* portrait=nested?&other:&canvas;
+   calls.clear();
+   assert(patch_Sprite_draw_unit_body_normal(&unit.Body.Animation.Frame_1.sprite,0,&background,portrait,11,23,const_cast<char*>("palette"),&fixture_palette)==77);
+   assert(patch_Sprite_draw_unit_body_reduced(&unit.Body.Animation.Frame_1.sprite,0,&background,portrait,11,23,1,1,2,const_cast<char*>("palette"),&fixture_palette)==77);
+   assert((calls==std::vector<int>{30,30}) && dc_count==0);
+  }
+ }
+ state.custom_renderer_unit_context=nullptr;state.custom_renderer_unit_canvas=nullptr;
+ state.current_config.enable_custom_rendered_units=true;
  fixture_reduced=false;state.current_config.enable_custom_rendering_zoom=true;
  state.custom_renderer_zoom_tile_width=80;state.custom_renderer_zoom_native_tile_width=128;
  success=true;invoke();assert((calls==std::vector<int>{10,20,40}));
@@ -133,7 +151,8 @@ int main(){
  success=false;invoke();assert((calls==std::vector<int>{10,20,40}));
  state.current_config.enable_custom_rendered_units=false;invoke();assert((calls==std::vector<int>{10,40}));
  state.current_config.enable_custom_rendered_units=true;
- for(int width:{64,96,128,160,192}){
+ for(int width:{64,96,128,160,192})for(bool reduced:{false,true}){
+  fixture_reduced=reduced;
   state.custom_renderer_zoom_tile_width=width;success=true;invoke();
   int scale=width*1000/128;
   assert(captured.projection_scale_milli==scale);
@@ -144,6 +163,10 @@ int main(){
   success=false;invoke();assert((calls==std::vector<int>{10,20,40}));
   state.current_config.enable_custom_rendered_units=false;invoke();assert((calls==std::vector<int>{10,40}));
   state.current_config.enable_custom_rendered_units=true;
+  state.custom_renderer_unit_draw=nullptr;invoke();assert((calls==std::vector<int>{10,40}));
+  state.custom_renderer_unit_draw=capture;
+  state.custom_renderer_init_state=0;invoke();assert((calls==std::vector<int>{10,40}));
+  state.custom_renderer_init_state=IS_OK;
  }
  state.current_config.enable_custom_rendering_zoom=false;
  state.custom_renderer_unit_context=&unit;state.custom_renderer_unit_canvas=&canvas;

@@ -55,6 +55,12 @@ int main(){
     assert(out.output.bgra_pixels==out.pixels.data() && out.output.replacement_tile_flags==out.replacements.data());
     frame.hour=0;assert(preview.render(frame,textures,out,cancelled));assert(out.pixels[16*128+32]!=red);
     frame.hour=12;
+    textures[11].dds=texture(0xffff);textures[13].dds=texture(0xffff);
+    tiles[0].real_terrain_type=11;assert(preview.render(frame,textures,out,cancelled));
+    auto coast=out.pixels[16*128+32];assert((coast&255)>((coast>>16)&255));
+    tiles[0].real_terrain_type=13;assert(preview.render(frame,textures,out,cancelled));
+    auto ocean=out.pixels[16*128+32];assert((ocean&255)<(coast&255) && (ocean&255)>((ocean>>16)&255));
+    tiles[0].real_terrain_type=2;
     for(auto& t:tiles)t.anchor_x+=32;
     assert(preview.render(frame,textures,out,cancelled));
     assert(out.pixels[16*128+64]==red && out.pixels[16*128+32]==0xff000000u);

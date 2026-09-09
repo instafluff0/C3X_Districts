@@ -435,6 +435,9 @@ int main(int argc, char ** argv) {
                 if(code==C3X_RENDERER_RESULT_PENDING)Sleep(1);
             }
             QueryPerformanceCounter(&finished);
+            if(!first_image && code==C3X_RENDERER_RESULT_OK)
+                std::printf("CAMERA first_image ticket=%lld ms=%.3f terrain_only=0\n",static_cast<long long>(ticket),
+                    double(finished.QuadPart-begin.QuadPart)*1000/frequency.QuadPart);
             std::printf("CAMERA ticket=%lld accepted_ms=%.3f final_ms=%.3f polls=%u stale_rejected=1 result=%d\n",
                 static_cast<long long>(ticket),double(accepted.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
                 double(finished.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,polls,code);

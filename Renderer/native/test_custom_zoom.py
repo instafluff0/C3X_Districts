@@ -66,7 +66,7 @@ class CustomZoomTests(unittest.TestCase):
             "C3X_RENDERER_TILE_PREFETCH",
             "frame.tile_width = custom_renderer_zoom_enabled ()",
             "draw.projection_scale_milli = is->custom_renderer_zoom_tile_width * 1000 / 128",
-            "if (custom_renderer_zoom_enabled ()) return 0",
+            "if (custom_renderer_zoom_enabled () && canvas != NULL && canvas == is->custom_renderer_unit_canvas) return 0",
             "patch_Main_Screen_Form_tile_to_screen_coords",
             "custom_renderer_zoom_native_hud_context",
             "custom_renderer_zoom_unit_tick_translated",

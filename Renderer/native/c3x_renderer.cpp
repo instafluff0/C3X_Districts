@@ -7253,7 +7253,7 @@ struct CameraTerrainPreview {
         std::array<bool,14> ready{};
         auto material=[&](c3x_renderer_tile_v1 const& tile) {
             int type=tile.real_terrain_type;
-            if(type!=5 && type!=6 && type!=10)type=tile.terrain_type;
+            if(type!=4 && type!=5 && type!=6 && type!=10 && type<11)type=tile.terrain_type;
             return type;
         };
         auto read32=[](std::vector<std::uint8_t> const& bytes,std::size_t n) {
@@ -7299,6 +7299,32 @@ struct CameraTerrainPreview {
         target.clear();target.pixels.assign(std::size_t(count),0xff000000u);
         target.replacements.assign(frame.tile_count,0);
         auto environment=c3x_renderer::evaluate_environment(float(frame.hour),frame.season);
+        // A base water texture is the bed, not the water surface. Use a coarse
+        // optical-depth estimate per captured water family with the existing
+        // absorption/tint response from render_core's scene_material_v1.hlsl.
+        // This deliberately omits coast geometry, normals and reflection detail;
+        // it is not source-engine evidence or a final-shader parity claim.
+        for(unsigned type=0;type<14;++type)if(ready[type]) {
+            float light[3]={};c3x_renderer::shade_terrain(environment,int(type),0,0,1.f,light);
+            float depth=type==11?.15f:type==12?.35f:.65f;
+            float mix=std::clamp((depth-.18f)/(.43f-.18f),0.f,1.f);mix=mix*mix*(3-2*mix);
+            float absorption[]={14,7,3},shallow[]={.023f,.074f,.096f},deep[]={.003f,.015f,.040f};
+            for(auto& value:colors[type]) {
+                unsigned out=0xff000000u;
+                for(unsigned c=0;c<3;++c) {
+                    float channel=float((value>>(16-c*8))&255)/255.f;
+                    if(type>=11) {
+                        float linear=channel<=.04045f?channel/12.92f:std::pow((channel+.055f)/1.055f,2.4f);
+                        float transmission=std::exp(-depth*3.2f);
+                        linear=(linear*std::exp(-depth*absorption[c])*transmission+
+                            (shallow[c]+(deep[c]-shallow[c])*mix)*(1-transmission))*light[c];
+                        channel=linear<=.0031308f?linear*12.92f:1.055f*std::pow(linear,1/2.4f)-.055f;
+                    }else channel*=light[c];
+                    out|=unsigned(std::clamp(channel*255.f,0.f,255.f))<<(16-c*8);
+                }
+                value=out;
+            }
+        }
         float half_w=frame.tile_width*.5f,half_h=frame.tile_height*.5f;
         unsigned rendered=0;
         for(unsigned i=0;i<frame.tile_count;++i) {
@@ -7306,13 +7332,7 @@ struct CameraTerrainPreview {
             auto const& tile=frame.tiles[i];
             if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
             int type=material(tile);
-            float light[3]={};c3x_renderer::shade_terrain(environment,type,tile.tile_x,tile.tile_y,1.f,light);
-            std::array<std::uint32_t,edge*edge> lit{};
-            for(unsigned k=0;k<edge*edge;++k) {
-                auto value=colors[type][k];unsigned out=0xff000000u;
-                for(unsigned c=0;c<3;++c)out|=unsigned(std::clamp(float((value>>(16-c*8))&255)*light[c],0.f,255.f))<<(16-c*8);
-                lit[k]=out;
-            }
+            auto const& lit=colors[type];
             // Pixel-center diamond coverage: u grows down/right, v down/left.
             // Use 64-bit extents so even off-screen sentinel anchors cannot wrap.
             int left=int(std::clamp<std::int64_t>(tile.anchor_x,0,frame.target_width));
