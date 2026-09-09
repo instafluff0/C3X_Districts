@@ -9,6 +9,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ZoomMeshTests(unittest.TestCase):
+    def test_evidence_storage_preflight_keeps_reserve_before_output_creation(self):
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        from Renderer.native.record_navigation_evidence import storage_preflight
+        with patch("Renderer.native.record_navigation_evidence.shutil.disk_usage",return_value=SimpleNamespace(free=40*1024**3)):
+            report=storage_preflight(ROOT,2240,1192,100)
+            self.assertGreater(report["estimated_output_bytes"],100*2240*1192*4)
+            self.assertEqual(report["reserve_bytes"],8*1024**3)
+        with patch("Renderer.native.record_navigation_evidence.shutil.disk_usage",return_value=SimpleNamespace(free=8*1024**3)):
+            with self.assertRaisesRegex(RuntimeError,"Insufficient evidence disk space"):
+                storage_preflight(ROOT,2240,1192,100)
+
     def test_dirty_block_clip_keeps_glow_and_reflection_sample_coverage(self):
         compiler = shutil.which("clang++") or shutil.which("g++")
         if not compiler:

@@ -3321,7 +3321,7 @@ public:
                 context->CopyResource(backdrop.depth_texture,found->depth);++backdrop_hits;
             } else {
                 if(!submit_geometry(geometry_vertex_buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
-                    nullptr,false,true,nullptr,false,animation_casters_ptr,animation_prepared_ptr))return false;
+                    nullptr,false,true,nullptr,false,animation_casters_ptr,animation_prepared_ptr,128,0,0,true))return false;
                 ++backdrop_misses;
                 // RGBA16F + D24S8, both MSAA4. Cache immutable scene-linear
                 // background/depth by static inputs and the region's relative
@@ -4042,7 +4042,7 @@ public:
                          bool reflection_pass=false,
                          std::vector<c3x_renderer::render_core::SourceShadow::Caster> const * shadow_casters_ptr=nullptr,
                          c3x_renderer::render_core::SourceShadow::PreparedCasters * prepared_casters_ptr=nullptr,
-                         int region_size=128,int grid_x=0,int grid_y=0) {
+                         int region_size=128,int grid_x=0,int grid_y=0,bool require_linear_backdrop=false) {
         int const region_height=region_size==2240?256:region_size;
         auto& active_glow=region_size==128?city_glow:region_glow;
         auto& active_reflection=region_size==128?reflection:region_reflection;
@@ -4082,7 +4082,8 @@ public:
                         // Only these pixels are copied out. Preserve four native
                         // pixels around them for the city's +/-8 high-res glow
                         // taps; drawing uses the unchanged 2x/MSAA projection.
-                        bool const region_path=world_regions && region_size==128 && !accumulate && !shadow_buffers_ptr &&
+                        // A finished bitmap cannot restore MSAA linear color/depth for animation accumulation.
+                        bool const region_path=!require_linear_backdrop && world_regions && region_size==128 && !accumulate && !shadow_buffers_ptr &&
                             &buffers==&geometry_vertex_buffers;
                         D3D11_RECT block_rect={0,0,extent,extent_y};
                         if(clip_dirty_blocks && !region_path)block_rect=guarded_block_rectangle({l,t,r,b},guard-x,guard-y,guard,extent,extent_y);

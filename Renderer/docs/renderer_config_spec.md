@@ -1,5 +1,38 @@
 # C3X Custom Rendering Configuration Contract
 
+## C3X map effects and cache switches
+
+The C3X configuration loader accepts these booleans in `custom.c3x_config.ini`
+(and the normal scenario configuration layers):
+
+```ini
+enable_custom_rendering_reflections = false
+enable_custom_rendering_waves = false
+enable_custom_rendering_cache = true
+```
+
+Reflections and waves default to `true`; setting either to `false` intentionally
+omits that effect. The cache defaults to `false` in distributed defaults and is
+enabled in this checkout's local custom configuration. Effects are independent
+of cache enablement. They do not affect config-off native rendering or units.
+The cache switch selects the existing bounded ring-four world-region method;
+it does not implement instant cold-map jumps or asynchronous native presentation.
+
+The injected bridge applies these settings through the existing renderer
+environment controls before DLL initialization. They take precedence over the
+evaluation launcher and inherited effect/cache settings, and require a game
+restart after editing. Install the updated C3X injected source to recognize the
+new flags; the already staged renderer DLL supports them without rebuilding.
+The two effect flags alone do not enable custom rendering.
+
+The user-requested navigation evaluation profile is
+`Renderer/run_navigation_evaluation.cmd`. It scopes experimental environment
+settings to one launched game process; ordinary launches keep the existing
+defaults. It enables world-region reuse, receiver-scoped shadow dependencies,
+tighter natural bounds and current-capture ring four, while preserving waves
+and reflections. It does not install C3X or change the configuration format.
+See [the handoff](navigation_handoff.md) for measured coverage and limitations.
+
 ## Status
 
 This is the implemented v0 contract. `Renderer/definitions/definition_parser.py` parses it into a deterministic intermediate catalog; table-driven tests cover the syntax, layer merge, diagnostics, references, and path safety before injected code relies on it.
@@ -69,6 +102,13 @@ ownership. Projection preserves the existing two-pixel culling margin; unsupport
 tile aspect ratios use the previous bounds. The option affects culling and region
 dependencies, not vertices, shading or shadow atlas contents, and defaults off.
 The evidence runner exposes `--tight-natural-bounds`.
+
+`C3X_RENDERER_REGION_INPUT_RING=4` extends foreground support from the default
+two-tile ring to four tiles, using only full-appearance PREFETCH records in the
+current capture. Topology-only records and older captures remain ineligible.
+This stabilizes region contributor sets at the cost of preparing and retaining
+more detailed geometry. The runner exposes `--region-input-ring {2,4}`. It adds
+no capture permissions and does not synthesize off-screen appearance.
 
 `C3X_RENDERER_REGION_DIAGNOSTICS=1` emits per-region dependency component
 fingerprints and world/screen rectangles for offline miss analysis. The evidence

@@ -17,6 +17,21 @@ import uuid
 from Renderer.lab.platform import ROOT, native_command_result, windows_root
 
 
+def storage_preflight(root, width, height, samples):
+    if width <= 0 or height <= 0 or samples < 0:
+        raise ValueError("Invalid evidence dimensions or sample count")
+    # Reserve startup/navigation images and logs in addition to the saved sweep.
+    # Keep eight GiB free after the estimate; never rely on filesystem compression.
+    estimated = (width * height * 4 + 54) * (samples + 64) + 128 * 1024**2
+    reserve = 8 * 1024**3
+    free = shutil.disk_usage(root).free
+    if free < estimated + reserve:
+        raise RuntimeError(f"Insufficient evidence disk space: {free / 1024**3:.1f} GiB free; "
+                           f"need {(estimated + reserve) / 1024**3:.1f} GiB including reserve. "
+                           "Clean obsolete generated images before another run.")
+    return {"free_bytes": free, "estimated_output_bytes": estimated, "reserve_bytes": reserve}
+
+
 def digest(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
@@ -47,7 +62,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binaries", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--scenario", choices=("navigation", "zoom"), default="navigation")
+    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation"), default="navigation")
     parser.add_argument("--width", type=int, default=2240)
     parser.add_argument("--height", type=int, default=1192)
     parser.add_argument("--resident", action="store_true")
@@ -81,6 +96,7 @@ def main():
     args = parser.parse_args()
     out = args.out.resolve()
     relative = out.relative_to(ROOT)
+    storage = storage_preflight(ROOT, args.width, args.height, args.resident_steps if args.resident else 0)
     out.mkdir(parents=True, exist_ok=False)
     for name in ("C3XRenderer.dll", "biq_preview.exe"):
         shutil.copy2(args.binaries / name, out / name)
@@ -126,6 +142,7 @@ def main():
     env["C3X_RENDERER_TRACE_FILE"] = str(win_out / "renderer.log")
     env["C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS"] = str(win_root / "Renderer/custom.custom_rendering.txt")
     receipt = {"invocation": uuid.uuid4().hex, "endpoint": "standalone capture plus completed render; no native presentation",
+               "storage_preflight": storage,
                "quality_mode": "diagnostic_reflections_disabled" if args.reflection_ablation else "current",
                "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
                "environment": env, "inputs": before,

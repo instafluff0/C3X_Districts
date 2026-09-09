@@ -1,5 +1,21 @@
 # Zoom performance verification
 
+**Animation correctness correction:** a live report revealed that the e25
+candidate's bitmap region hits could leave stale linear color/depth in the
+resource-animation backdrop path. The new staged DLL is `71e969c7…`; it requires
+actual linear backdrop restoration and retains main-map caching. Seven animation
+images match independent rendering exactly; the old DLL reproduced the reported
+block corruption. Historical static timings below do not validate that old
+animation path. See [the current handoff](navigation_handoff.md) for receipts
+and the corrected output contract.
+
+**Handoff staging:** the user requested production staging on September 9.
+The exact `navigation-region-inputs-20260909` DLL (`e25e139c…`) is now in
+`Renderer/bin/` for evaluation. No installation, game launch or visual acceptance
+is implied. See [the handoff](navigation_handoff.md) for full hashes, activation,
+rollback, compact evidence, measured targets and next work. Statements below
+that a historical experiment was not staged describe that earlier checkpoint.
+
 ## Current results — September 9, 2026
 
 **Current supported zoom envelope:** the user approved restricting custom zoom
@@ -14,7 +30,18 @@ been staged and Civ III has not been launched. The native boundary is still
 synchronous; [the source audit](native_async_presentation_audit.md) records the
 completion/redraw, displayed-transform and unit-scheduling requirements.
 
-**Architecture assessment:** the latest receiver-scoped shadow dependency
+**Architecture assessment:** the latest clean four-tile current-input-ring sweep
+(`region-input-ring4-clean-100`) has 35 misses rather than the preceding 295,
+60.130 ms median / 137.580 ms p95 / 176.845 ms p99 / 226.245 ms maximum.
+All 100 images exactly match the prior two-tile-ring images (different DLL).
+This is a large reduction in unnecessary raster work, but routine CPU dependency
+work and periodic geometry assembly remain too expensive. Median CPU submission
+is 37.363 ms; geometry assembly p95 is 36.695 ms despite zero static builds/uploads.
+The next high-value targets are retaining prepared scene/dependency calculations
+across unchanged captures and incremental handling of capture-set changes. The
+100 ms p95, continuous 30 FPS and native presentation targets remain unmet.
+
+The preceding receiver-scoped shadow dependency
 experiment completes 100 prepared new views in 56.978 ms median / 197.096 ms p95,
 versus 938.716 / 1021.405 ms independently rendered with the same DLL and inputs.
 All 100 images match exactly. The 100 ms p95 and 30 FPS targets remain unmet.
@@ -138,6 +165,30 @@ remain unmet. No candidate has been staged.
 
 The projected-bound candidate DLL SHA-256 is
 `e1cbd382a23aa2395c8e0104e1a2df3007c64bdbddd649491d297ff16c99ced0`.
+
+The clean ring-four candidate DLL is
+`e25e139c85265de233e9e7d0da5057466f2c321ed8677f184e5c038a36d5c406`.
+Runtime/binary integrity and completion receipts pass. Six region tests cover
+the current support selection, including rejection of topology-only inputs.
+It reuses 1,457 prepared tiles per view versus 1,057 in the earlier ring-two
+witness. Region images peak at 62,368,512 bytes, metadata at 22,834,772 bytes,
+with no eviction or rejected admission. These figures exclude retained meshes,
+scratch, driver allocations and native game state. The first `region-input-ring4-100`
+run overlapped storage investigation and is timing-diagnostic only; the fresh
+`-clean-100` run above is the uncontended measurement.
+
+The installed `Civ3Conquests.exe` PE header is x86 and large-address-aware;
+`Civ3Conquests-Unmodded.exe` is x86 without that flag. This read-only check removes
+one uncertainty about process addressability, but does not establish live-game
+headroom or allocation-spike safety. Neither executable was modified or launched.
+
+Navigation evidence accumulated about 40 GiB of mostly BMP files. User-directed
+cleanup scripts preserve reports and recent reference runs; old deleted images
+must be regenerated for renewed pixel inspection. Filesystem compression was
+stopped when free space declined and is not used by the runner. New runs now
+check estimated image output plus an eight-GiB free-space reserve before creating
+an output directory. This check covers the filesystem visible to the Python host;
+remote native hosts still require their own disk-space verification.
 
 The preceding matched pair is `world-regions-metadata96-100` versus
 `world-regions-current-independent-100`; the former contains `comparison.json`.

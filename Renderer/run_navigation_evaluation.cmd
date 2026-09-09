@@ -1,0 +1,40 @@
+@echo off
+setlocal
+rem Scoped evaluation settings; ordinary launches retain the DLL defaults.
+rem Keep waves, reflections, native overlays and animation at current quality.
+set "C3X_RENDERER_VISUAL_PROFILE=city-fidelity"
+set "C3X_RENDERER_BLOCK_CLIP=1"
+set "C3X_RENDERER_RASTER_REUSE_CONTROL=1"
+set "C3X_RENDERER_REGION_SIZE=128"
+set "C3X_RENDERER_WORLD_RASTER_GRID=1"
+set "C3X_RENDERER_WORLD_REGIONS=1"
+set "C3X_RENDERER_REGION_RECEIVER_SHADOWS=1"
+set "C3X_RENDERER_TIGHT_NATURAL_BOUNDS=1"
+set "C3X_RENDERER_REGION_INPUT_RING=4"
+set "C3X_RENDERER_REGION_METADATA_MIB=96"
+set "C3X_RENDERER_WORLD_REGIONS_CONTROL=0"
+set "C3X_RENDERER_REGION_DIAGNOSTICS=0"
+set "C3X_RENDERER_PROFILE=0"
+set "C3X_RENDERER_BOUNDED_POST=0"
+set "C3X_RENDERER_REFLECTION_CONTROL=0"
+set "C3X_RENDERER_CASTER_BOUNDS_CONTROL=0"
+set "C3X_RENDERER_FIDELITY_SHADOW_CONTROL=0"
+set "C3X_RENDERER_COMPOSITION_CASTERS_CONTROL=0"
+set "C3X_RENDERER_WATER_COVERAGE=0"
+set "C3X_RENDERER_WORLD_BACKDROPS=0"
+set "C3X_RENDERER_BACKDROP_REUSE_CONTROL=0"
+set "C3X_RENDERER_WORLD_WAVES=0"
+set "C3X_RENDERER_WAVE_REUSE_CONTROL=0"
+set "C3X_RENDERER_WAVES=1"
+if /i "%~1"=="--check" (
+    set C3X_RENDERER_
+    exit /b 0
+)
+if not "%~1"=="" exit /b 2
+if not exist "%~dp0bin\C3XRenderer.dll" exit /b 3
+if not exist "%~dp0..\..\Civ3Conquests.exe" exit /b 4
+pushd "%~dp0..\.." || exit /b 5
+start "" /wait "Civ3Conquests.exe"
+set "navigation_result=%errorlevel%"
+popd
+exit /b %navigation_result%

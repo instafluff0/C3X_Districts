@@ -19972,6 +19972,9 @@ patch_init_floating_point ()
 		{"add_natural_wonders_to_scenarios_if_none"              , false, offsetof (struct c3x_config, add_natural_wonders_to_scenarios_if_none)},
 		{"enable_custom_animations"                              , false, offsetof (struct c3x_config, enable_custom_animations)},
 		{"enable_custom_rendering"                               , false, offsetof (struct c3x_config, enable_custom_rendering)},
+		{"enable_custom_rendering_reflections", true, offsetof (struct c3x_config, enable_custom_rendering_reflections)},
+		{"enable_custom_rendering_waves", true, offsetof (struct c3x_config, enable_custom_rendering_waves)},
+		{"enable_custom_rendering_cache", false, offsetof (struct c3x_config, enable_custom_rendering_cache)},
 		{"enable_custom_rendered_units"                         , false, offsetof (struct c3x_config, enable_custom_rendered_units)},
 		{"enable_named_tiles"                                    , false, offsetof (struct c3x_config, enable_named_tiles)},
 		{"enable_distribution_hub_districts"                     , false, offsetof (struct c3x_config, enable_distribution_hub_districts)},
@@ -27060,6 +27063,38 @@ patch_Sprite_draw_unit_body_reduced (Sprite * this, int edx, PCX_Image * backgro
 }
 
 bool
+configure_custom_renderer_effects (BOOL (WINAPI * set_environment) (char const *, char const *))
+{
+	if (set_environment == NULL)
+		return false;
+	char const * cache = is->current_config.enable_custom_rendering_cache ? "1" : "0";
+	char const * settings[][2] = {
+		{"C3X_RENDERER_REFLECTION_CONTROL", is->current_config.enable_custom_rendering_reflections ? "0" : "1"},
+		{"C3X_RENDERER_WAVES", is->current_config.enable_custom_rendering_waves ? "1" : "0"},
+		{"C3X_RENDERER_BLOCK_CLIP", cache},
+		{"C3X_RENDERER_RASTER_REUSE_CONTROL", cache},
+		{"C3X_RENDERER_WORLD_RASTER_GRID", cache},
+		{"C3X_RENDERER_WORLD_REGIONS", cache},
+		{"C3X_RENDERER_REGION_RECEIVER_SHADOWS", cache},
+		{"C3X_RENDERER_TIGHT_NATURAL_BOUNDS", cache},
+		{"C3X_RENDERER_REGION_INPUT_RING", is->current_config.enable_custom_rendering_cache ? "4" : "2"},
+		{"C3X_RENDERER_REGION_SIZE", "128"},
+		{"C3X_RENDERER_REGION_METADATA_MIB", "96"},
+		{"C3X_RENDERER_WORLD_REGIONS_CONTROL", "0"},
+		{"C3X_RENDERER_BOUNDED_POST", "0"}
+	};
+	int n;
+	for (n = 0; n < sizeof settings / sizeof settings[0]; n++)
+		if (! set_environment (settings[n][0], settings[n][1]))
+			return false;
+	// The completed-region producer belongs to the current full-fidelity profile.
+	if (is->current_config.enable_custom_rendering_cache &&
+	    ! set_environment ("C3X_RENDERER_VISUAL_PROFILE", "city-fidelity"))
+		return false;
+	return true;
+}
+
+bool
 ensure_custom_renderer_loaded ()
 {
 	if (is->custom_renderer_init_state == IS_OK)
@@ -27067,6 +27102,13 @@ ensure_custom_renderer_loaded ()
 	if (is->custom_renderer_init_state == IS_INIT_FAILED)
 		return false;
 
+	BOOL (WINAPI * set_environment) (char const *, char const *) =
+		(void *)(*p_GetProcAddress) (is->kernel32, "SetEnvironmentVariableA");
+	if (! configure_custom_renderer_effects (set_environment)) {
+		log_custom_renderer_event ("effect-config", C3X_RENDERER_RESULT_ERROR);
+		is->custom_renderer_init_state = IS_INIT_FAILED;
+		return false;
+	}
 	char path[2 * MAX_PATH];
 	snprintf (path, sizeof path, "%s\\Renderer\\bin\\C3XRenderer.dll", is->mod_rel_dir);
 	path[(sizeof path) - 1] = '\0';

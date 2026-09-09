@@ -26,7 +26,7 @@ images=()
 for run in "$root"/*; do
   [[ -d "$run" && ! -L "$run" ]] || continue
   case "${run##*/}" in
-    region-input-ring4-100|tight-natural-bounds-100|receiver-shadows-independent-100) continue ;;
+    region-input-ring4-100|region-input-ring4-clean-100|tight-natural-bounds-100|receiver-shadows-independent-100) continue ;;
   esac
   for file in "$run"/*.bmp; do
     [[ -f "$file" && ! -L "$file" ]] || continue
@@ -39,7 +39,7 @@ for run in "$root"/*; do
 done
 
 printf 'Selected %s obsolete generated BMP files.\n' "${#images[@]}"
-printf 'Sources, assets, logs, reports and three recent runs are preserved.\n'
+printf 'Sources, assets, logs, reports and recent reference runs are preserved.\n'
 if [[ "$apply" == false ]]; then
   printf 'Preview only. Run with --apply to delete these images.\n'
   exit 0

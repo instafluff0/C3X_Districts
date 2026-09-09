@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build\navigation-evidence-20260909'))
 if (-not (Test-Path -LiteralPath $root -PathType Container)) { throw "Evidence folder not found: $root" }
 if ((Get-Item -LiteralPath $root).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing a linked evidence folder.' }
-$keepRuns = @('region-input-ring4-100', 'tight-natural-bounds-100', 'receiver-shadows-independent-100')
+$keepRuns = @('region-input-ring4-100', 'region-input-ring4-clean-100', 'tight-natural-bounds-100', 'receiver-shadows-independent-100')
 $keepImages = @('zoom.bmp', 'zoom.bmp.resident0.bmp', 'zoom.bmp.resident47.bmp', 'zoom.bmp.resident99.bmp')
 $images = @(foreach ($run in Get-ChildItem -LiteralPath $root -Directory) {
     if ($run.Name -in $keepRuns -or ($run.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }

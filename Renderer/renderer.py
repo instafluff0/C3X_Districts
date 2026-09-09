@@ -854,6 +854,7 @@ def run_tests(category=None, *, integration=False, full=False):
         modules.update(("Renderer.definitions.test_definition_parser",
                         "Renderer.definitions.test_rule_resolver", "Renderer.scenes.test_scene_contract",
                         "Renderer.native.test_native_bridge_contract",
+                        "Renderer.native.test_effect_config",
                         "Renderer.native.test_zoom_mesh_cache",
                         "Renderer.native.test_frame_publication",
                         "Renderer.native.test_frame_telemetry",

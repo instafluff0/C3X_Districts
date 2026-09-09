@@ -5,6 +5,22 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class RenderRegionTests(unittest.TestCase):
+    def test_animation_backdrop_cannot_hit_bitmap_only_cache(self):
+        source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
+        predicate=source.split("bool const region_path=",1)[1].split(";",1)[0]
+        run_cpp(r'''
+#include <cassert>
+bool eligible(bool require_linear_backdrop) {
+ bool world_regions=true,accumulate=false;int region_size=128;
+ void *shadow_buffers_ptr=nullptr;int geometry_vertex_buffers=0;
+ auto &buffers=geometry_vertex_buffers;
+ return '''+predicate+r''';
+}
+int main(){assert(eligible(false));assert(!eligible(true));}
+''')
+        animation=source.split('unsigned backdrop_hits=0,backdrop_misses=0;',1)[1].split('++backdrop_misses;',1)[0]
+        self.assertIn('animation_casters_ptr,animation_prepared_ptr,128,0,0,true)',animation)
+
     def test_support_ring_never_promotes_topology_only_or_uncaptured_inputs(self):
         source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
         predicate="            if (prewarming ?"+source.split("            if (prewarming ?",1)[1].split("            if (cancelled())",1)[0]
