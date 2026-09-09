@@ -20,12 +20,20 @@ void lab_place_objects(std::vector<c3x_renderer_tile_v1>& tiles, int center_x, i
     bool resources=std::strcmp(category,"resources")==0;
     bool infrastructure=std::strcmp(category,"infrastructure")==0;
     bool shadows=std::strcmp(category,"shadows")==0;
-    if(!resources && !infrastructure && !shadows)return;
+    bool sites=std::strcmp(category,"huts-camps")==0;
+    if(!resources && !infrastructure && !shadows && !sites)return;
     char const*land[]={"Iron","Cattle","Horses","Wheat","Gold","Dyes"};
     char const*sea[]={"Fish","Whales"};
     for(auto& tile:tiles) {
         int x=((tile.tile_x%map_width)+map_width)%map_width-center_x, y=tile.tile_y-center_y;
-        if(shadows) {
+        if(sites) {
+            if(x==-2 && y==0)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
+            if(x==2 && y==0) {
+                tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;
+                tile.barbarian_tribe_id=7;tile.resource_id=100;tile.resource_class=0;
+                strcpy_s(tile.resource_name,"Iron");
+            }
+        } else if(shadows) {
             if(x==-4 && y==2) {
                 tile.city_id=1;tile.city_owner_id=1;tile.city_size=1;
                 tile.city_culture_group=0;tile.city_era=0;tile.city_flags=0;
@@ -63,7 +71,8 @@ bool lab_verify_objects(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_
     bool resources=std::strcmp(category,"resources")==0;
     bool infrastructure=std::strcmp(category,"infrastructure")==0;
     bool shadows=std::strcmp(category,"shadows")==0;
-    if(!resources && !infrastructure && !shadows)return true;
+    bool sites=std::strcmp(category,"huts-camps")==0;
+    if(!resources && !infrastructure && !shadows && !sites)return true;
     bool ok=output.replacement_tile_count==frame.tile_count && output.replacement_tile_flags;
     unsigned count=0,ownership=0;
     for(unsigned i=0;i<frame.tile_count && ok;++i) {
@@ -77,6 +86,10 @@ bool lab_verify_objects(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_
     }
     if(resources)ok=ok && count==(water[0]?2u:6u);
     if(shadows)ok=ok && count==2 && (ownership&C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED)!=0;
+    if(sites) {
+        unsigned expected=C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED|C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED|C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
+        ok=ok && (ownership&expected)==expected;
+    }
     if(infrastructure){
         unsigned expected=C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED|C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED|
             C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED|C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
@@ -149,7 +162,14 @@ bool lab_compose_units(HMODULE module, char const* image_path, int hour, int til
             if(column==0)TextOutA(dc,12,12+row*290,labels[row],int(std::strlen(labels[row])));
             TextOutA(dc,70+column*200,274+row*290,study_keys[column],int(std::strlen(study_keys[column])));
         }
-        if(shadows) {
+        if(sites) {
+            if(x==-2 && y==0)tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
+            if(x==2 && y==0) {
+                tile.improvement_flags|=C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;
+                tile.barbarian_tribe_id=7;tile.resource_id=100;tile.resource_class=0;
+                strcpy_s(tile.resource_name,"Iron");
+            }
+        } else if(shadows) {
             // Flat receiving tiles south of the mixed static/animated scene.
             unit.body_x=terrain.width/2+(index*2)*tile_width/2-191/(unit.reduced?4:2);
             unit.body_y=terrain.height/2+3*tile_width/4-191/(unit.reduced?4:2);

@@ -230,6 +230,7 @@ enum GeometryLayer : std::size_t {
     geometry_wall,
     geometry_mine,
     geometry_farm,
+    geometry_site,
     geometry_cliff0, geometry_cliff1, geometry_cliff2, geometry_cliff3,
     geometry_cliff4, geometry_cliff5, geometry_cliff6, geometry_cliff7,
     geometry_natural_terrain, geometry_natural_decal, geometry_natural_mountain,
@@ -556,6 +557,10 @@ public:
     std::array<ID3D11ShaderResourceView *, 6> mine_base_views = {};
     std::array<std::vector<std::uint8_t>, 2> mine_emissive_dds;
     std::array<ID3D11ShaderResourceView *, 2> mine_emissive_views = {};
+    c3x_renderer::FeatureBundle site_bundle;
+    std::array<std::vector<std::uint8_t>, 8> site_dds;
+    std::array<ID3D11ShaderResourceView *, 8> site_views = {};
+    bool site_assets_ready = false;
     c3x_renderer::FeatureBundle farm_bundle;
     std::array<std::vector<std::uint8_t>, 6> farm_base_dds;
     std::array<ID3D11ShaderResourceView *, 6> farm_base_views = {};
@@ -756,6 +761,7 @@ public:
         for (ID3D11ShaderResourceView *& view : city_emissive_views)
             release(view);
         release(wall_texture_view);
+        for (ID3D11ShaderResourceView *& view : site_views) release(view);
         for (ID3D11ShaderResourceView *& view : mine_base_views)
             release(view);
         for (ID3D11ShaderResourceView *& view : mine_emissive_views)
@@ -1278,6 +1284,8 @@ public:
             mine_emissive_dds[index].clear();
         }
         mine_bundle = {};
+        for (unsigned i=0;i<site_views.size();++i) {release(site_views[i]);site_dds[i].clear();}
+        site_bundle={};site_assets_ready=false;
         for (std::size_t index = 0; index < farm_base_views.size(); ++index) {
             release(farm_base_views[index]);
             farm_base_dds[index].clear();
@@ -1838,6 +1846,17 @@ public:
                 wall_texture_dds, DXGI_FORMAT_BC1_UNORM_SRGB, DXGI_FORMAT_BC1_UNORM);
         }
 
+        std::string site_root = packs_root + "\\TileSitesRuntime";
+        std::vector<std::uint8_t> site_bytes;
+        site_assets_ready=read_file((site_root+"\\sites.bin").c_str(),site_bytes) &&
+            load_feature_bundle(site_root+"\\sites.bin",site_bundle) && site_bundle.texture_paths.size()==8;
+        if(site_assets_ready) {
+            mix_content_revision(site_bytes);
+            for(unsigned i=0;i<site_dds.size();++i)
+                site_assets_ready=site_assets_ready &&
+                    (load_dds_bytes(site_root.c_str(),site_bundle.texture_paths[i].c_str(),site_dds[i],DXGI_FORMAT_BC1_UNORM_SRGB,DXGI_FORMAT_BC3_UNORM_SRGB) ||
+                     load_dds_bytes(site_root.c_str(),site_bundle.texture_paths[i].c_str(),site_dds[i],DXGI_FORMAT_BC1_UNORM,DXGI_FORMAT_BC3_UNORM));
+        }
         std::string improvement_root = packs_root + "\\ImprovementsNormalized";
         auto load_improvement = [&](char const * runtime_name,
                                     c3x_renderer::FeatureBundle & bundle,
@@ -2375,6 +2394,8 @@ public:
                 mine_assets_ready = mine_assets_ready && ensure_dds_texture(
                     mine_emissive_dds[index], mine_emissive_views[index], true);
         }
+        if(site_assets_ready) for(unsigned i=0;i<site_views.size();++i)
+            site_assets_ready=site_assets_ready && ensure_dds_texture(site_dds[i],site_views[i],true);
         if (farm_assets_ready) {
             for (std::size_t index = 0; index < farm_base_views.size(); ++index)
                 farm_assets_ready = farm_assets_ready && ensure_dds_texture(
@@ -3658,6 +3679,7 @@ public:
                 auto views=alpha;
                 if(layer==geometry_city)std::copy(city_base_views.begin(),city_base_views.end(),views.begin()+29);
                 if(layer==geometry_wall)views[29]=views[30]=views[31]=views[32]=wall_texture_view;
+                if(layer==geometry_site)std::copy(site_views.begin(),site_views.end(),views.begin()+21);
                 if(layer==geometry_mine)std::copy(mine_base_views.begin(),mine_base_views.end(),views.begin()+21);
                 if(layer==geometry_farm)std::copy(farm_base_views.begin(),farm_base_views.end(),views.begin()+21);
                 if(layer>=geometry_cliff0 && layer<geometry_natural_terrain) {
@@ -3857,6 +3879,12 @@ public:
                 context->PSSetShaderResources(94, 4, feature_texture_views.data() + 4);
                 if (!draw(geometry_feature))
                     return false;
+            }
+            if (!buffers[geometry_site].empty()) {
+                context->VSSetShader(feature_vertex_shader,nullptr,0);
+                context->PSSetShader(feature_pixel_shader,nullptr,0);
+                context->PSSetShaderResources(116,8,site_views.data());
+                if(!draw(geometry_site))return false;
             }
             if (!buffers[geometry_mine].empty()) {
                 context->VSSetShader(feature_vertex_shader, nullptr, 0);
@@ -4078,7 +4106,7 @@ public:
                            static_cast<c3x_renderer_i32>(tile.river_code),
                            static_cast<c3x_renderer_i32>(tile.road_mask),
                            static_cast<c3x_renderer_i32>(tile.railroad_mask),
-                           tile.route_style, tile.resource_id, tile.resource_class,
+                           tile.route_style, tile.resource_id, tile.resource_class, tile.barbarian_tribe_id,
                            tile.city_id, tile.city_owner_id, tile.city_size,
                            tile.city_culture_group, tile.city_era,
                            static_cast<c3x_renderer_i32>(tile.city_flags)})
@@ -4147,6 +4175,7 @@ public:
             left.tile_flags == right.tile_flags &&
             left.feature_flags == right.feature_flags &&
             left.improvement_flags == right.improvement_flags &&
+            left.barbarian_tribe_id == right.barbarian_tribe_id &&
             left.irrigation_mask == right.irrigation_mask &&
             left.has_effect == right.has_effect &&
             left.river_code == right.river_code &&
@@ -4476,13 +4505,14 @@ public:
         std::vector<Vertex> wall_vertices;
         std::vector<Vertex> mine_vertices;
         std::vector<Vertex> farm_vertices;
+        std::vector<Vertex> site_vertices;
         std::array<std::vector<Vertex>,8> cliff_vertices;
         std::array<std::vector<Vertex>,25> natural_vertices;
         std::array<std::vector<UINT>,2> natural_grid_indices;
         std::array<std::vector<Vertex> *, geometry_layer_count> tile_layers = {
             &underlay_vertices, &land_vertices, &bed_vertices, &water_vertices,
             &river_vertices, &route_vertices, &shadow_vertices, &feature_vertices,
-            &city_vertices, &wall_vertices, &mine_vertices, &farm_vertices,
+            &city_vertices, &wall_vertices, &mine_vertices, &farm_vertices, &site_vertices,
             &cliff_vertices[0], &cliff_vertices[1], &cliff_vertices[2], &cliff_vertices[3],
             &cliff_vertices[4], &cliff_vertices[5], &cliff_vertices[6], &cliff_vertices[7]};
         for(unsigned i=0;i<25;i++)tile_layers[geometry_natural_terrain+i]=&natural_vertices[i];
@@ -4815,6 +4845,12 @@ public:
                 build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED;
             if (city_assets_ready && tile.city_id >= 0)
                 build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED;
+            unsigned site_flags=tile.improvement_flags & (C3X_RENDERER_IMPROVEMENT_GOODY_HUT | C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
+            if(site_flags) {
+                if(!site_assets_ready)return false;
+                if(site_flags&C3X_RENDERER_IMPROVEMENT_GOODY_HUT)build_replacement[index]|=C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED;
+                if(site_flags&C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP)build_replacement[index]|=C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED;
+            }
             if (mine_assets_ready &&
                 (tile.improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) != 0)
                 build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED;
@@ -6460,6 +6496,24 @@ public:
                             0.5f + std::cos(angle) * ring,
                             0.5f + std::sin(angle) * ring * 0.78f,
                             rotation, scale, 21.0f, 0.0f, !fish, feature_vertices);
+                    }
+                }
+            }
+            if(site_flags) {
+                for(unsigned kind=0;kind<2;++kind) {
+                    unsigned flag=kind?C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP:C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
+                    if(!(site_flags&flag))continue;
+                    unsigned seed=c3x_renderer::stable_hash(tile.variant_seed ^
+                        (kind?unsigned(tile.barbarian_tribe_id)*0x9e3779b9u:0u));
+                    unsigned buckets[8]={0,1,2,0,1,2,0,1};
+                    std::string name=kind?"camp":"hut_"+std::to_string(buckets[seed%8]);
+                    auto group=c3x_renderer::find_feature_group(site_bundle,name.c_str());
+                    if(!group || group->placements.empty())return false;
+                    float rotation=float(seed%4)*1.57079632679f;
+                    for(auto const& placement:group->placements) {
+                        if(placement.asset_index>=site_bundle.assets.size())return false;
+                        append_feature_instance(site_bundle,placement,.5f,.5f,rotation,
+                            1.55f,21.f,.18f,false,site_vertices);
                     }
                 }
             }

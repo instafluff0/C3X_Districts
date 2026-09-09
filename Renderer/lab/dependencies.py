@@ -11,6 +11,7 @@ def consumers(entries):
     objects = {key for key, value in entries.items() if value["recipe"].get("objects")}
     return {
         "natural": set(entries), "hill-cliff": set(entries),
+        "tile-sites": {"huts-camps", "shadows"} & entries.keys(),
         "cities": objects | ({"cities"} & entries.keys()),
         "units": {"units", "animation", "shadows"} & entries.keys(),
         "resources": objects | ({"resources", "animation"} & entries.keys()),

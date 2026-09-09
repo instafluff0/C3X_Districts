@@ -14,7 +14,7 @@ typedef int32_t c3x_renderer_i32;
 typedef int64_t c3x_renderer_i64;
 #endif
 
-#define C3X_RENDERER_API_VERSION 16u
+#define C3X_RENDERER_API_VERSION 17u
 
 enum c3x_renderer_result {
     C3X_RENDERER_RESULT_ERROR = 0,
@@ -43,7 +43,9 @@ enum c3x_renderer_tile_flags {
     // Full authoritative appearance, captured outside the visible draw set.
     // Paired with TOPOLOGY_HALO; permits bounded idle mesh preparation.
     // A source-shadow profile may consume the necessary caster ring in foreground.
-    C3X_RENDERER_TILE_PREFETCH = 8192u
+    C3X_RENDERER_TILE_PREFETCH = 8192u,
+    C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED = 16384u,
+    C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED = 32768u
 };
 
 enum c3x_renderer_invalidation_flags {
@@ -69,7 +71,9 @@ enum c3x_renderer_improvement_flags {
     C3X_RENDERER_IMPROVEMENT_MINE = 2u,
     C3X_RENDERER_IMPROVEMENT_TILE_BUILDING = 4u,
     C3X_RENDERER_IMPROVEMENT_POLLUTION = 8u,
-    C3X_RENDERER_IMPROVEMENT_CRATER = 16u
+    C3X_RENDERER_IMPROVEMENT_CRATER = 16u,
+    C3X_RENDERER_IMPROVEMENT_GOODY_HUT = 32u,
+    C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP = 64u
 };
 
 enum c3x_renderer_city_flags {
@@ -157,6 +161,7 @@ struct c3x_renderer_tile_v1 {
     char unit_civilization[40];
     char unit_era_name[64];
     char unit_type_name[32];
+    c3x_renderer_i32 barbarian_tribe_id;
 };
 
 struct c3x_renderer_frame_v1 {

@@ -474,7 +474,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_CITY_LIGHT_CONTROL": "", "C3X_RENDERER_CITY_GLOW_CONTROL": "",
         "C3X_LAB_UNIT_STUDY": "shadows" if category == "shadows" else "1" if category in ("units", "animation") else "",
         "C3X_LAB_ACTION_CURSOR": "0" if category == "animation" and case.endswith("start") else "7",
-        "C3X_LAB_OBJECT_STUDY": category if category in ("resources", "infrastructure", "shadows") else "",
+        "C3X_LAB_OBJECT_STUDY": category if category in ("resources", "infrastructure", "shadows", "huts-camps") else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
     }
     unit_sizing = category == "units" and case in ("sizing", "sizing-gameplay", "sizing-move")
@@ -533,7 +533,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         raise ValueError("Production renderer failed: " + name)
     if category in ("units", "animation", "shadows") and "PASS category unit study" not in result.get("output_tail", ""):
         raise ValueError("Unit body witness did not complete")
-    if category in ("resources", "infrastructure", "shadows") and "PASS category object study" not in result.get("output_tail", ""):
+    if category in ("resources", "infrastructure", "shadows", "huts-camps") and "PASS category object study" not in result.get("output_tail", ""):
         raise ValueError("Category object ownership witness did not complete")
     if behavior:
         verify_behavior_output(behavior, result.get("output_tail", ""))

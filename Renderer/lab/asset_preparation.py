@@ -95,7 +95,16 @@ def jobs():
         print(f"Prepared animation for {len(result['resources'])} resource families", flush=True)
         return consumed
 
+    def site_sources():
+        from Renderer.tools.asset_compiler.build_site_runtime import plan
+        return plan()[2]
+
+    def build_sites(stage):
+        from Renderer.tools.asset_compiler.build_site_runtime import build
+        return build(stage / "Renderer/packs/TileSitesRuntime")
+
     return (
+        ("tile-sites", site_sources, build_sites, "Renderer/tools/asset_compiler/build_site_runtime.py"),
         ("natural", natural_sources, build_natural, "Renderer/native/source_fidelity/prepare.py"),
         ("hill-cliff", cliff_sources, build_cliffs, "Renderer/native/render_core/prepare_assets.py"),
         ("cities", city_sources, build_cities, "Renderer/native/city_fidelity/prepare_pack.py"),

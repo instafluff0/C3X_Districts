@@ -46,6 +46,7 @@ float4 PSReflection(PixelInput input):SV_Target {
     # Native unit footprints use the captured strength directly. The legacy
     # feature floor would otherwise make resource shadows stronger at night.
     feature=feature.replace(old,'float alpha = environment_shadow_strength * c3x_dynamic_shadow_opacity *')
+    feature=feature.replace('tile_object_weight * 0.07);','tile_object_weight * 0.07 * (1.0-step(0.175, material_fraction)));')
     # The retained feature provider predates the common paged receiver. Bind
     # the current filter here as well as in the natural shader generator.
     receiver=read(HERE.parent/'render_core/shadow_receiver.hlsl').replace(

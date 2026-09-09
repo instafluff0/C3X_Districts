@@ -20,6 +20,7 @@
     "infrastructure": "objects/infrastructure",
     "day-night": "lighting/day-night",
     "shadows": "lighting/shadows",
-    "animation": "animation"
+    "animation": "animation",
+    "huts-camps": "objects/huts-camps"
   }
 }

@@ -240,6 +240,7 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
         // terrain plane.
         for (auto value : {tile.variant_seed, tile.tile_flags, tile.feature_flags,
                            tile.improvement_flags, tile.irrigation_mask,
+                           static_cast<c3x_renderer_u32>(tile.barbarian_tribe_id),
                            tile.has_effect, tile.river_code, tile.road_mask,
                            tile.railroad_mask, static_cast<c3x_renderer_u32>(tile.route_style),
                            static_cast<c3x_renderer_u32>(tile.resource_id),
@@ -252,6 +253,7 @@ TerrainFrameSignature terrain_frame_signature(c3x_renderer_frame_v1 const & fram
             hash_value(result.scene, value);
         for (auto value : {tile.variant_seed, tile.tile_flags, tile.feature_flags,
                            tile.improvement_flags, tile.irrigation_mask,
+                           static_cast<c3x_renderer_u32>(tile.barbarian_tribe_id),
                            tile.has_effect, tile.river_code, tile.road_mask,
                            tile.railroad_mask, static_cast<c3x_renderer_u32>(tile.route_style),
                            static_cast<c3x_renderer_u32>(tile.resource_id),

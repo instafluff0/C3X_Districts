@@ -81,6 +81,7 @@ def generate(source_root=None, output_root=None, output_name='terrain_scene.hlsl
         clip(alpha - 0.004);
         return float4(0.008, 0.011, 0.016, alpha);
     }''' + text[finish:]
+            text=text.replace('tile_object_weight * 0.07);','tile_object_weight * 0.07 * (1.0-step(0.175, material_fraction)));')
             policy = native.parent / 'lab/shared/shaders/lighting/shadow_policy.hlsl'
             text = policy.read_text() + '\n' + text
         if source.name == 'frame_shadow_v1.hlsl':

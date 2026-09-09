@@ -1157,7 +1157,7 @@ float4 q6_raw_feature(FeaturePixelInput input)
         (tile_object_owner < 2.5 ? float3(0.80, 1.08, 0.80) :
                                   float3(1.10, 0.92, 0.68)));
     albedo *= lerp(float3(1.0, 1.0, 1.0), tile_object_tint,
-                   tile_object_weight * 0.07);
+                   tile_object_weight * 0.07 * (1.0-step(0.175, material_fraction)));
     float infrastructure_owner = floor(material_fraction * 100.0 + 0.5) - 20.0;
     float3 infrastructure_tint = infrastructure_owner < 0.5
         ? float3(0.78, 0.94, 1.12)

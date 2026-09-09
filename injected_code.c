@@ -27213,6 +27213,13 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 						record->irrigation_mask |= 1u << neighbor_index;
 				}
 			}
+			record->barbarian_tribe_id = -1;
+			if (tile->vtable->m15_Check_Goody_Hut (tile, __, visible_to_civ_id))
+				record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_GOODY_HUT;
+			if (tile->vtable->m7_Check_Barbarian_Camp (tile, __, visible_to_civ_id)) {
+				record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;
+				record->barbarian_tribe_id = tile->vtable->m44_Get_Barbarian_TribeID (tile);
+			}
 			if (tile->vtable->m18_Check_Mines (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_MINE;
 			if (tile->vtable->m26_Check_Tile_Building (tile)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_TILE_BUILDING;
 			if (tile->vtable->m20_Check_Pollution (tile, __, visible_to_civ_id)) record->improvement_flags |= C3X_RENDERER_IMPROVEMENT_POLLUTION;
@@ -27417,7 +27424,8 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 		C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED | C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED |
 		C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED | C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED |
 		C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED | C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED |
-		C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
+		C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED |
+		C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED | C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED;
 	for (unsigned int n = 0; n < output->replacement_tile_count; n++) {
 		unsigned int flags = output->replacement_tile_flags[n];
 		struct c3x_renderer_tile_v1 const * captured = &is->custom_renderer_tiles[n];
@@ -27443,6 +27451,19 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 		if (((flags & C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED) != 0) &&
 		    (captured->city_id < 0))
 			return false;
+		if (((flags & C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED) != 0) &&
+		    ((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_GOODY_HUT) == 0))
+			return false;
+		if (((flags & C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED) != 0) &&
+		    ((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP) == 0))
+			return false;
+		// A captured site cannot silently disappear from the exclusively owned map.
+		if ((captured->tile_flags & C3X_RENDERER_TILE_RENDER) &&
+		    ((((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_GOODY_HUT) != 0) &&
+		      ((flags & C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED) == 0)) ||
+		     (((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP) != 0) &&
+		      ((flags & C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED) == 0))))
+			return false;
 		if (((flags & C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED) != 0) &&
 		    ((captured->improvement_flags & C3X_RENDERER_IMPROVEMENT_MINE) == 0))
 			return false;
@@ -27457,7 +27478,9 @@ validate_custom_renderer_replacement_ownership (struct c3x_renderer_output_v1 co
 		               C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED |
 		               C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED |
-		               C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED)) != 0) &&
+		               C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED |
+		               C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED |
+		               C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED)) != 0) &&
 		    ((flags & C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED) == 0))
 			return false;
 	}
