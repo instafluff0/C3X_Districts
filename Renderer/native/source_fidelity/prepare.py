@@ -24,6 +24,7 @@ def terrain_boundaries(s):
     four-way material boundary. Keep its channels and lighting equations, but
     supply independent interpolated weights from the retained world field.
     """
+    s='#define BEAUTY_COAST_CLIFF 1\n'+s
     s=s.replace('    float4 material : TEXCOORD2;',
         '    float4 material : TEXCOORD2;\n    float2 biome : TEXCOORD3;\n    float coast_coverage : TEXCOORD4;')
     s=s.replace('    float3 world : TEXCOORD0;',
@@ -37,6 +38,13 @@ def terrain_boundaries(s):
     s=s.replace('    float alpha = 1;', '''    // Retain the selected beach/water composition beneath this replacement.
     // The same coverage also clips its source-shadow caster triangles.
     float alpha = saturate(input.coast_coverage+10);
+    if (input.material.y < 1.5) {
+        float2 edge_uv=input.world.xy*Detail.x*2.05+float2(.31,.17);
+        float edge_height=GrassColor.Sample(Wrap,edge_uv).a;
+        float edge_mean=GrassColor.SampleBias(Wrap,edge_uv,3).a;
+        float edge_grain=saturate(.5+(edge_height-edge_mean)*3);
+        alpha=lerp(coast_edge_coverage(alpha,edge_grain),alpha,input.coast_inland);
+    }
     clip(alpha-.001);''')
     s=s.replace('        alpha = decal.a;', '        alpha *= decal.a;')
     s=s.replace('SamplerState Wrap : register(s0);', '''Texture2D DesertColor : register(t19);

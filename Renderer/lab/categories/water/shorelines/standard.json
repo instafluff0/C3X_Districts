@@ -16,7 +16,13 @@
     "Renderer/native/render_core/cliff_placement.h",
     "Renderer/tools/asset_compiler/shore_blp_extractor.py",
     "Renderer/tools/asset_compiler/build_shore_runtime.py",
-    "Renderer/native/c3x_renderer.cpp"
+    "Renderer/native/c3x_renderer.cpp",
+    "Renderer/tools/asset_compiler/clutter_blp_extractor.py",
+    "Renderer/native/environment_refresh/prepare.py",
+    "Renderer/lab/shared/shaders/relief/coast_rocks.hlsl",
+    "Renderer/native/render_core/relief_query.h",
+    "Renderer/lab/shared/natural/ground.h",
+    "Renderer/lab/shared/natural/queries.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -30,12 +36,16 @@
     ],
     "cases": [
       "detail",
-      "gameplay"
+      "gameplay",
+      "lowland"
     ]
   },
   "tests": [
     "Renderer.native.source_fidelity.test_contract",
-    "Renderer.native.test_render_core"
+    "Renderer.native.test_render_core",
+    "Renderer.tools.asset_compiler.test_clutter_blp_extractor",
+    "Renderer.tools.asset_compiler.test_shore_blp_extractor",
+    "Renderer.lab.test_natural"
   ],
   "references": {
     "d3d11": [

@@ -152,6 +152,29 @@ int main() {
             }
         }
     }
+    // A full rocky coast must retain the already-shaped pickup rim, even
+    // where the ordinary beach envelope is zero. Lowland beaches keep it.
+    for(bool rocky:{false,true}) {
+        WorldCoast coast;std::vector<std::uint32_t> data(128);
+        for(unsigned i=0;i<data.size();i++) {
+            int x=int(i%8)*2+int(i/8)%2;
+            unsigned real=x<8?(rocky?5:2):12;data[i]=(x<8?2:12)|(real<<8);
+        }
+        coast.update(World{16,16,false,false},data.data(),data.size(),1);
+        ExactPointCache<ShoreSample> scratch;
+        auto observe=[](auto,auto){};
+        SurfaceQueries query(coast,scratch,6,6,observe,observe);
+        bool witnessed=false;
+        for(int i=0;i<125 && !witnessed;i++)for(int j=0;j<40 && !witnessed;j++) {
+            float x=4+i*.04f,y=-1+j*.1f;auto sample=query.shore(x,y);
+            if(sample.distance<=.03 || sample.distance>=.18 || (rocky && sample.rocky<.95))continue;
+            auto h=query.height(natural,[](float,float){return 40.f;},x,y);
+            if(rocky)assert(h>=42.5f);
+            else assert(h==2.5f);
+            witnessed=true;
+        }
+        assert(witnessed);
+    }
     std::cout<<"PASS production surface queries: "<<scopes<<" scopes, "<<samples
              <<" exact values, world/coast observations and cache statistics; wrapping and terrain edits\n";
 }

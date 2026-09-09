@@ -1,4 +1,5 @@
 #define BEAUTY_COMPOSED_SHADOWS 1
+#define BEAUTY_COAST_CLIFF 1
 cbuffer Frame : register(b0) {
     float4 Sun;
     float4 SunColorExposure;
@@ -6,6 +7,10 @@ cbuffer Frame : register(b0) {
     float4 View;
     float4 Detail;
 };
+#ifdef BEAUTY_COAST_CLIFF
+Texture2D CliffColor : register(t31);
+Texture2D CliffHeight : register(t32);
+#endif
 Texture2D GrassColor : register(t0);
 Texture2D GrassHeight : register(t1);
 Texture2D GrassSpecular : register(t2);
@@ -191,6 +196,12 @@ float surface_shape(float2 world) {
     return saturate(broad * 0.72 + crossed * 0.28);
 }
 
+// Keep the dry and wet endpoints fixed while source grain breaks up only
+// the material transition. This changes coverage, not the physical shoreline.
+float coast_edge_coverage(float coverage,float grain) {
+    return saturate(coverage+(grain-.5)*1.8*coverage*(1-coverage));
+}
+
 Output shade(P input) {
     Output output;
     if (input.material.y < 0.5) {
@@ -207,6 +218,13 @@ Output shade(P input) {
     // Retain the selected beach/water composition beneath this replacement.
     // The same coverage also clips its source-shadow caster triangles.
     float alpha = saturate(input.coast_coverage+10);
+    if (input.material.y < 1.5) {
+        float2 edge_uv=input.world.xy*Detail.x*2.05+float2(.31,.17);
+        float edge_height=GrassColor.Sample(Wrap,edge_uv).a;
+        float edge_mean=GrassColor.SampleBias(Wrap,edge_uv,3).a;
+        float edge_grain=saturate(.5+(edge_height-edge_mean)*3);
+        alpha=lerp(coast_edge_coverage(alpha,edge_grain),alpha,input.coast_inland);
+    }
     clip(alpha-.001);
 
     if (input.material.y > 4.5) {
@@ -337,6 +355,26 @@ Output shade(P input) {
     float3 light_direction = ShadowL.xyz;
 #else
     float3 light_direction = Sun.xyz;
+#endif
+#ifdef BEAUTY_COAST_CLIFF
+    if (input.material.y < 1.5) {
+        // Derivatives describe the rendered face even when a narrow cliff
+        // falls between the heightfield's vertex-normal sample locations.
+        float3 face=normalize(cross(ddx(input.world),ddy(input.world)));
+        if(face.z<0)face=-face;
+        float exposure=saturate((input.material.y-1)*4)*(1-smoothstep(.42,.78,face.z));
+        float3 weights=pow(abs(face),4);
+        weights/=max(.00001,dot(weights,float3(1,1,1)));
+        float3 uv=input.world*1.5;
+        float3 rock=CliffColor.Sample(Wrap,uv.yz).rgb*weights.x+
+            CliffColor.Sample(Wrap,uv.xz).rgb*weights.y+
+            CliffColor.Sample(Wrap,uv.xy).rgb*weights.z;
+        float height=CliffHeight.Sample(Wrap,uv.yz).r*weights.x+
+            CliffHeight.Sample(Wrap,uv.xz).r*weights.y+
+            CliffHeight.Sample(Wrap,uv.xy).r*weights.z;
+        albedo=lerp(albedo,rock*(.9+height*.2),exposure);
+        geometric=normalize(lerp(geometric,face,exposure));
+    }
 #endif
     float ndl = saturate(dot(geometric, light_direction));
     float wrap = saturate((dot(geometric, light_direction) + 0.20) / 1.20);

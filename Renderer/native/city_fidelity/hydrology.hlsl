@@ -2963,29 +2963,77 @@ float q3_source_repeat(float requested) {
  return period>0?round(requested*period)/period:requested;
 }
 float4 q3_authored_bed_detail(PixelInput input) {
- float2 projected=q3_source_world(input)/1.0+float2(.29,.53);
+ float2 world=q3_source_world(input);
+ // Both confirmed source layers matter: broader ocean-rock forms plus cracks.
+ float4 ocean=sample_water_clutter(world);
+ float4 cracks=sample_coast_clutter(world);
+ cracks.a*=1-smoothstep(.16,.55,input.hydrology_data.w);
+ float alpha=cracks.a+ocean.a*(1-cracks.a);
+ float3 color=(cracks.rgb*cracks.a+ocean.rgb*ocean.a*(1-cracks.a))/max(alpha,.0001);
+ alpha*=1-smoothstep(.30,.60,input.hydrology_data.w);
+ return float4(color,alpha);
+}
+// One world-anchored fine shore field continues from dry margins into shallows.
+// Atlas cells are source-authored; scale, placement and shading are C3X choices.
+float q3_surface_grain(float detail,float neighborhood) {
+ // The installed terrain base-color alpha contains the fine material pattern;
+ // its separate displacement height is nearly flat. Reconstruct local material
+ // contrast from that pattern, without treating it as surface transparency.
+ return clamp((detail-neighborhood)*3.5,-.45,.80);
+}
+float q3_margin_patch(float2 world) {
+ float patch=river_bank_noise_texture.Sample(material_sampler,
+  world*float2(q3_source_repeat(.63),q3_source_repeat(.81))+float2(.41,.13)).r;
+ return smoothstep(.28,.72,patch);
+}
+float q3_margin_visibility(float height,float neighborhood) {
+ return 1-.46*saturate((neighborhood-height)*9);
+}
+float4 q3_margin_detail(float2 world,out float height,out float cavity) {
+ float2 projected=world*q3_source_repeat(1.785714)+float2(.29,.53);
  float variant=floor(macro_decal_hash(floor(projected))*4);
- float2 uv=coast_clutter_atlas_uv(frac(projected),variant);
- float4 detail=water_decal_base_texture.Sample(decal_sampler,uv);
- detail.a*=projected_decal_edge_fade(frac(projected))
-  *(1-smoothstep(.24,.43,input.hydrology_data.w));
+ // Four authored gravel patches; retain each cell's transparent perimeter.
+ float2 cell=float2(fmod(variant,2),floor(variant*.5));
+ float2 uv=(frac(projected)+cell)*.5;
+ float4 detail=river_clutter_base_texture.Sample(decal_sampler,uv);
+ float raw_height=river_clutter_height_texture.Sample(decal_sampler,uv).r;
+ float mean_height=river_clutter_height_texture.SampleBias(decal_sampler,uv,2).r;
+ detail.a*=projected_decal_edge_fade(frac(projected));
+ height=lerp(.5,raw_height,detail.a);
+ cavity=lerp(1,q3_margin_visibility(raw_height,mean_height),detail.a);
  return detail;
 }
+float3 q3_margin_normal(PixelInput input,float height,float strength) {
+ float3 n=normalize(input.geometry_normal);
+ float3 world=input.q6_world.xyz*float3(1,-1,1);
+ float3 dx=ddx(world),dy=ddy(world);
+ float3 r1=cross(dy,n),r2=cross(n,dx);
+ float determinant=dot(dx,r1);
+ float3 gradient=(ddx(height)*r1+ddy(height)*r2)*sign(determinant)/max(abs(determinant),.000001);
+ gradient/=max(1,length(gradient)*.10);
+ return normalize(n-gradient*strength);
+}
 float3 q3_authored_bed_normal(PixelInput input) {
- float2 projected=q3_source_world(input)/1.0+float2(.29,.53);
+ float2 world=q3_source_world(input);
+ float4 ocean=sample_water_clutter(world);
+ float4 cracks=sample_coast_clutter(world);
+ float2 projected=world/1.20+float2(.29,.53);
  float variant=floor(macro_decal_hash(floor(projected))*4);
  float2 uv=coast_clutter_atlas_uv(frac(projected),variant);
- float dx=water_decal_height_texture.Sample(decal_sampler,uv+float2(.001,0)).r
-  -water_decal_height_texture.Sample(decal_sampler,uv-float2(.001,0)).r;
- float dy=water_decal_height_texture.Sample(decal_sampler,uv+float2(0,.001)).r
-  -water_decal_height_texture.Sample(decal_sampler,uv-float2(0,.001)).r;
- float support=q3_authored_bed_detail(input).a;
- return normalize(float3(-dx*14*support,-dy*14*support,1));
+ float crack_height=water_decal_height_texture.Sample(decal_sampler,uv).r-.5;
+ float height=(sample_water_clutter_height(world)-.5)*ocean.a;
+ float crack_coverage=cracks.a*(1-smoothstep(.16,.55,input.hydrology_data.w));
+ height=lerp(height,crack_height,crack_coverage);
+ height*=1-smoothstep(.30,.60,input.hydrology_data.w);
+ return q3_margin_normal(input,height,.045);
 }
 float3 q3_scene_bed(PixelInput input) {
  float sd=input.hydrology_data.x,rocky=saturate(input.hydrology_data.z);
  float2 uv=q3_source_world(input)*q3_source_repeat(.75);
- float3 sand=beach_base_texture.Sample(material_sampler,uv).rgb;
+ float4 beach=beach_base_texture.Sample(material_sampler,uv);
+ float beach_grain=q3_surface_grain(beach.a,
+  beach_base_texture.SampleBias(material_sampler,uv,3).a);
+ float3 sand=beach.rgb*(1+beach_grain);
  float desert=saturate(input.material_weights.z);
  float3 desert_sand=desert_base_texture.Sample(material_sampler,input.uv).rgb;
  sand=lerp(sand,desert_sand,desert);
@@ -2995,6 +3043,9 @@ float3 q3_scene_bed(PixelInput input) {
  bed=lerp(bed,authored.rgb,authored.a);
  bed*=1+(sample_water_clutter_height(world)-.5)*authored.a*.30;
  float3 rock=cliff_base_texture.Sample(material_sampler,uv).rgb;
+ float fine_height,fine_cavity;
+ float4 fine=q3_margin_detail(world,fine_height,fine_cavity);
+ float margin=(1-smoothstep(.08,.38,input.hydrology_data.w))*lerp(.25,1.0,q3_margin_patch(world));
  float3 rim=lerp(sand,bed,authored.a*desert*.34);
  float3 color=lerp(rim,bed,smoothstep(0,.40,-sd));
 #ifdef Q3_COAST_DETAIL
@@ -3002,18 +3053,24 @@ float3 q3_scene_bed(PixelInput input) {
 #endif
  color=lerp(color,lerp(rock,bed,smoothstep(0,.70,-sd)),rocky);
  color*=lerp(.72,1.0,smoothstep(0,.32,-sd));
+ color=lerp(color,fine.rgb,fine.a*margin*lerp(1,.35,desert));
+ color*=lerp(1,fine_cavity,margin);
  float height=water_height_texture.Sample(material_sampler,uv).r;
  // Confirmed source height detail; no animated or inferred wave channels.
  // Spectral absorption tints the actual bed before coverage compositing.
  // This preserves authored contrast in shallows without a beige offshore plate.
- float3 absorption=exp(-input.hydrology_data.w*float3(14,7,3));
+ float3 absorption=exp(-input.hydrology_data.w*float3(9,5,3));
  return color*clamp(.86+(height-.426)*.55,.65,1.1)*absorption;
 }
 void q3_shore_material(PixelInput input,float2 world_position,inout float3 albedo,inout float3 material_normal) {
  float sd=input.hydrology_data.x,width=input.hydrology_data.y;
  float rocky=saturate(input.hydrology_data.z);
  float desert=saturate(input.material_weights.z);
- float3 sand=beach_base_texture.Sample(material_sampler,q3_source_world(input)*q3_source_repeat(.75)).rgb;
+ float2 uv=q3_source_world(input)*q3_source_repeat(.75);
+ float4 beach=beach_base_texture.Sample(material_sampler,uv);
+ float beach_grain=q3_surface_grain(beach.a,
+  beach_base_texture.SampleBias(material_sampler,uv,3).a);
+ float3 sand=beach.rgb*(1+beach_grain);
  float grain=dot(sand,float3(.2126,.7152,.0722));
  float blend=1-smoothstep(width*.25,width+.06,sd+(grain-.28)*.24);
  // Desert already supplies a continuous sand surface. Replacing it with the
@@ -3021,17 +3078,26 @@ void q3_shore_material(PixelInput input,float2 world_position,inout float3 albed
  // fine ripples. Preserve that sand family through the wet edge; mixed biome
  // weights reduce the beach replacement continuously rather than branching by
  // tile ownership.
+ float2 world=q3_source_world(input);
+ float patch=q3_margin_patch(world);
  float beach_material=blend*(1-rocky)*(1-desert);
- albedo=lerp(albedo,sand,beach_material);
- float2 uv=q3_source_world(input)*q3_source_repeat(.75);
+ albedo=lerp(albedo,sand*lerp(.82,1.0,patch),beach_material);
  float hx=beach_height_texture.Sample(material_sampler,uv+float2(.002,0)).r
   -beach_height_texture.Sample(material_sampler,uv-float2(.002,0)).r;
  float hy=beach_height_texture.Sample(material_sampler,uv+float2(0,.002)).r
   -beach_height_texture.Sample(material_sampler,uv-float2(0,.002)).r;
  float2 detail=clamp(float2(-hx-hy,-hx+hy)*12,-.18,.18)*beach_material;
  material_normal=normalize(float3(material_normal.xy+detail*material_normal.z,material_normal.z));
+ material_normal=normalize(lerp(material_normal,
+  q3_margin_normal(input,beach_grain,.022),beach_material));
  float3 rock=cliff_base_texture.Sample(material_sampler,q3_source_world(input)*q3_source_repeat(.75)).rgb;
  albedo=lerp(albedo,rock,rocky*(1-smoothstep(.03,.22,sd)));
+ float fine_height,fine_cavity;
+ float4 fine=q3_margin_detail(world,fine_height,fine_cavity);
+ float margin=(1-smoothstep(width*.35,width+.10,sd))*lerp(.25,1.0,patch)*lerp(1,.35,desert);
+ albedo=lerp(albedo,fine.rgb,fine.a*margin);
+ albedo*=lerp(1,fine_cavity,margin);
+ material_normal=normalize(lerp(material_normal,q3_margin_normal(input,fine_height,.065),margin));
  albedo*=1-.28*(1-smoothstep(-.02,.12,sd));
 }
 
@@ -3078,7 +3144,7 @@ float3 q3_natural_normal(PixelInput input) {
  // Broad calm lanes interrupt the source pattern without per-tile phases.
  float envelope=lerp(.16,1,smoothstep(.20,.78,warp.x+.5));
  float2 slope=(a*.40+b*.38+c*.22)*envelope;
- slope*=lerp(.48,1,smoothstep(.01,.24,input.hydrology_data.w));
+ slope*=lerp(.20,1,smoothstep(.015,.32,input.hydrology_data.w));
  return normalize(float3(-slope,1));
 }
 float4 q3_natural_water(PixelInput input) {
@@ -3119,7 +3185,7 @@ float4 q3_natural_water(PixelInput input) {
   +environment_moon_color*environment_moon_intensity*pow(saturate(dot(normal,moonhalf)),48))
   *sparkle*.045*environment_water_specular*q6_receiver_visibility(input,normal,1);
  float reflection=saturate(fresnel);
- float coverage=1-exp(-depth*3.2);
+ float coverage=1-exp(-depth*lerp(2.3,3.2,smoothstep(.10,.32,depth)));
  float alpha=coverage+(1-coverage)*reflection;
  float3 premult=body*coverage*(1-reflection)+sky*reflection+glint;
  return float4(premult/max(alpha,.0001),alpha);
@@ -3170,35 +3236,40 @@ float4 q3_water_material(PixelInput input) {
    world*float2(q3_source_repeat(.43),q3_source_repeat(.61))+float2(.61,.11)).r;
   float gravel_noise=river_bank_noise_texture.Sample(material_sampler,
    world*float2(q3_source_repeat(6.71),q3_source_repeat(8.93))+float2(.07,.73)).r;
+  float4 river_material=river_base_texture.Sample(material_sampler,uv);
   float grain=river_height_texture.Sample(material_sampler,uv).r;
+  float material_grain=q3_surface_grain(river_material.a,
+   river_base_texture.SampleBias(material_sampler,uv,3).a);
   float water_width=5.8+noise*.8;
-  float water=1-smoothstep(water_width-1.2,water_width,distance_pixels);
+  float water=1-smoothstep(water_width-.65,water_width,distance_pixels);
   float bank_width=12.2+noise*4.8+(sediment_noise-.5)*2.4+(grain-.5)*1.2;
   // Feather only the bank coverage: the sand retains its high-frequency
   // material detail while the underlying grassland/plains resolves gradually.
-  float bank_feather=4.2+sediment_noise*.8;
+  float bank_feather=2.2+sediment_noise*.8;
   float bank_edge_distance=distance_pixels+(gravel_noise-.5)*.7;
   float bank=1-smoothstep(bank_width-bank_feather,bank_width+.6,bank_edge_distance);
+  bank=saturate(bank+material_grain*2.0*bank*(1-bank));
   // Banks end at the optical shore; the water itself overlaps and dissolves
   // into the existing sea surface instead of ending in an offshore capsule.
   float land_bank=smoothstep(-.025,.065,sd);
   float outlet=smoothstep(-.20,.025,sd);
   bank*=outlet;clip(bank-.001);
   water=lerp(1,water,land_bank);
-  float3 bed=river_base_texture.Sample(material_sampler,uv).rgb;
+  float3 bed=river_material.rgb;
   float3 sand=beach_base_texture.Sample(material_sampler,uv).rgb;
   float3 fine_sand=beach_base_texture.Sample(material_sampler,
    world*float2(q3_source_repeat(2.17),q3_source_repeat(2.63))+float2(.37,.59)).rgb;
-  float4 clutter=river_clutter_base_texture.Sample(decal_sampler,frac(world*.5+float2(.23,.41)));
+  float gravel_height,gravel_cavity;
+  float4 clutter=q3_margin_detail(world,gravel_height,gravel_cavity);
   float bank_position=saturate((distance_pixels-water_width)/max(1,bank_width-water_width));
   float sediment=smoothstep(.30,.70,sediment_noise*.52+(noise+.5)*.32+grain*.16);
   float3 textured_sand=lerp(sand,fine_sand,.46);
-  float3 dry_sand=lerp(bed,lerp(textured_sand,float3(.50,.39,.20),.12),.76)
-   *(0.82+(grain-.5)*.26);
-  float3 bank_soil=lerp(bed,float3(.22,.15,.07),.42)*(0.60+(grain-.5)*.18);
+  float3 dry_sand=lerp(bed,textured_sand,.18)*.96;
+  float3 bank_soil=lerp(bed,float3(.22,.18,.12),.15)*.78;
   float sand_patch=saturate(sediment*.86+smoothstep(.48,.94,bank_position)*.24);
   float3 dry=lerp(bank_soil,dry_sand,sand_patch)*lerp(.90,1.08,sediment);
-  float gravel=smoothstep(.49,.76,gravel_noise)*clutter.a
+  dry*=1+material_grain;
+  float gravel=smoothstep(.35,.68,gravel_noise)*clutter.a
    *smoothstep(.10,.58,bank_position);
   dry=lerp(dry,clutter.rgb*.82,gravel*.60);
   float pebble=smoothstep(.68,.84,gravel_noise)*smoothstep(.12,.68,bank_position);
@@ -3207,15 +3278,22 @@ float4 q3_water_material(PixelInput input) {
   dry*=.91+gravel_noise*.16;
   float wet=1-smoothstep(water_width,bank_width-1.0,distance_pixels);
   float damp_breakup=saturate(.72+noise*.38+(gravel_noise-.5)*.20);
-  float3 shore=lerp(dry,dry*lerp(.43,.58,damp_breakup),wet);
+  float3 shore=lerp(dry,dry*lerp(.62,.76,damp_breakup),wet);
   float optical_depth=.10+.32*(1-smoothstep(0,5.5,max(0,distance_pixels)));
   float3 transmitted=bed*exp(-optical_depth*float3(8,4,2));
-  float3 river=lerp(transmitted,float3(.018,.044,.052),1-exp(-optical_depth*5));
+  float3 river=lerp(transmitted,float3(.018,.074,.090),1-exp(-optical_depth*4));
   float2 lean=river_lean0_texture.Sample(material_sampler,
     world*float2(q3_source_repeat(.92),q3_source_repeat(1.27))).rg*2-1;
   float3 river_normal=normalize(float3(-lean*.24,1));
   float3 water_light=q6_receiver_illumination(input,river_normal,1,1);
-  float3 bank_light=q6_receiver_illumination(input,normalize(input.geometry_normal),1,1);
+  // Shade the existing bank grain and authored gravel, not the river surface.
+  float bank_height=grain*.35+material_grain*.38+(gravel_height-.5)*gravel*.40;
+  float mean_grain=river_height_texture.SampleBias(material_sampler,uv,2).r;
+  float cavity=q3_margin_visibility(grain,mean_grain)*
+   lerp(1,gravel_cavity,gravel);
+  shore*=lerp(1,cavity,.65);
+  float3 bank_normal=q3_margin_normal(input,bank_height,.045);
+  float3 bank_light=q6_receiver_illumination(input,bank_normal,1,1);
   return float4(lerp(shore*bank_light,river*water_light,water),bank);
 #elif defined(Q3_STATIC_OPTICS_V2)
   // Keep the captured curve and navigable width. The source river bed remains

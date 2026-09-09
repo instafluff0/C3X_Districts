@@ -20,17 +20,19 @@ struct PCXV {HDC (__fastcall *acquire_dc)(JGL_Image*);void (__fastcall *release_
 struct JGL_Image {PCXV* vtable;};
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
 struct Animation_Info {int* Frame_Counts;};
-struct Summary {int current_anim_type=2,queued_anim_type=0,direction_2=3;};
+struct Summary {int current_anim_type=2,queued_anim_type=0,direction_2=3,pixel_loc_x=640,pixel_loc_y=480;};
 struct Animation {struct {void* Flic_Info;Sprite sprite;} Frame_1;Animation_Info* Animation_Info;Summary summary;int field_FC=7;};
 struct Rect {int left=20,top=30,right=45,bottom=55;};
 struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0;int army_top_defender_id=-1;Animation Animation;} Body;bool army=false,visible=true;};
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
-struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;};
+struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
 struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;int custom_renderer_init_state=1;
  struct {bool enable_custom_rendering=true,enable_custom_rendered_units=true,enable_custom_rendering_zoom=false;int day_night_cycle_mode=0,seasonal_cycle_mode=0;} current_config;
  int custom_renderer_zoom_tile_width=128,custom_renderer_zoom_native_tile_width=128;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
+ int custom_renderer_zoom_unit_tick_delta_x=0,custom_renderer_zoom_unit_tick_delta_y=0;
+ bool custom_renderer_zoom_unit_tick_translated=false;
  bool day_night_cycle_unstarted=false,seasonal_cycle_unstarted=false;int current_day_night_cycle=12,current_seasonal_cycle=0;
  LARGE_INTEGER custom_renderer_qpc_frequency={1000000},custom_renderer_animation_timestamp={},custom_renderer_animation_sample_at={};};
 constexpr int AT_DEFAULT=1,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
@@ -42,10 +44,20 @@ bool QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=qpc;qpc+=6600
 bool Unit_has_ability(Unit* u,int,int){return u->army;}
 bool custom_renderer_zoom_enabled(){return state.current_config.enable_custom_rendering_zoom;}
 void sync_custom_renderer_zoom_to_native(){}
+bool custom_renderer_zoom_transform_active(){
+ return custom_renderer_zoom_enabled() &&
+  (state.custom_renderer_zoom_tile_width!=state.custom_renderer_zoom_native_tile_width ||
+   state.custom_renderer_zoom_translate_x_fp!=0 || state.custom_renderer_zoom_translate_y_fp!=0);
+}
 void custom_renderer_zoom_transform_point(int* x,int* y){
- if(!custom_renderer_zoom_enabled())return;
- *x=*x*state.custom_renderer_zoom_tile_width/state.custom_renderer_zoom_native_tile_width;
- *y=*y*state.custom_renderer_zoom_tile_width/state.custom_renderer_zoom_native_tile_width;
+ if(!custom_renderer_zoom_transform_active())return;
+ auto transform=[](int value,long long translation){
+  long long transformed=(long long)value*state.custom_renderer_zoom_tile_width*65536/
+   state.custom_renderer_zoom_native_tile_width+translation;
+  return (int)(transformed>=0?(transformed+32768)/65536:(transformed-32768)/65536);
+ };
+ *x=transform(*x,state.custom_renderer_zoom_translate_x_fp);
+ *y=transform(*y,state.custom_renderer_zoom_translate_y_fp);
 }
 Unit* army_member=nullptr;Unit* get_unit_ptr(int id){return army_member && army_member->Body.ID==id?army_member:nullptr;}
 HDC __fastcall acquire(JGL_Image* p){if(p==denied_dc)return nullptr;++dc_count;return p;}
@@ -62,13 +74,17 @@ void __fastcall Unit_tick_anim(Unit*,int,PCX_Image*,int,int,bool);
 #include "build/unit_bridge_capture.h"
 #undef this
 void __fastcall Unit_tick_anim(Unit* u,int,PCX_Image* canvas,int x,int y,bool status){
- assert(x==101 && y==202 && status);if(!u->visible)return;
+ if(state.custom_renderer_zoom_unit_tick_translated){assert(x==303 && y==306);}
+ else {assert(x==101 && y==202);}
+ assert(status);if(!u->visible)return;
  u->Body.Rect={};
  calls.push_back(10);
  for(int child=0;child<(u->army && army_member?2:1);++child){
   Unit* body=child?army_member:u;
-  if(fixture_reduced)patch_Sprite_draw_unit_body_reduced(&body->Body.Animation.Frame_1.sprite,0,fixture_background,canvas,11,23,1,1,2,const_cast<char*>("palette"),&fixture_palette);
-  else patch_Sprite_draw_unit_body_normal(&body->Body.Animation.Frame_1.sprite,0,fixture_background,canvas,11,23,const_cast<char*>("palette"),&fixture_palette);
+  int body_x=11+state.custom_renderer_zoom_unit_tick_delta_x;
+  int body_y=23+state.custom_renderer_zoom_unit_tick_delta_y;
+  if(fixture_reduced)patch_Sprite_draw_unit_body_reduced(&body->Body.Animation.Frame_1.sprite,0,fixture_background,canvas,body_x,body_y,1,1,2,const_cast<char*>("palette"),&fixture_palette);
+  else patch_Sprite_draw_unit_body_normal(&body->Body.Animation.Frame_1.sprite,0,fixture_background,canvas,body_x,body_y,const_cast<char*>("palette"),&fixture_palette);
  }
  calls.push_back(40);
 }
@@ -108,9 +124,9 @@ int main(){
  fixture_reduced=false;state.current_config.enable_custom_rendering_zoom=true;
  state.custom_renderer_zoom_tile_width=80;state.custom_renderer_zoom_native_tile_width=128;
  success=true;invoke();assert((calls==std::vector<int>{10,20,40}));
- assert(captured.body_x==6 && captured.body_y==14 && captured.projection_scale_milli==625);
- assert(unit.Body.Rect.left==6 && unit.Body.Rect.top==14);
- assert(unit.Body.Rect.right==6+191*625/1000 && unit.Body.Rect.bottom==14+191*625/1000);
+ assert(captured.body_x==7 && captured.body_y==14 && captured.projection_scale_milli==625);
+ assert(unit.Body.Rect.left==7 && unit.Body.Rect.top==14);
+ assert(unit.Body.Rect.right==7+191*625/1000 && unit.Body.Rect.bottom==14+191*625/1000);
  success=false;invoke();assert((calls==std::vector<int>{10,20,40}));
  state.current_config.enable_custom_rendered_units=false;invoke();assert((calls==std::vector<int>{10,40}));
  state.current_config.enable_custom_rendered_units=true;

@@ -390,7 +390,7 @@ def scene(category, case, destination, *, world_size=32):
                     # with ordinary lowland beach so both joins remain visible.
                     shore = 15 if 7 <= y < 14 else 11 if 23 <= y < 28 else 13
                     if x < shore:
-                        rocky_run = case == "detail" or 8 <= y < 24
+                        rocky_run = case != "lowland" and (case == "detail" or 8 <= y < 24)
                         base, real = 2, 5 if rocky_run and x >= shore - 4 else 2
                     else:
                         depth = x - shore
@@ -436,6 +436,8 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         # The paired views inspect opposite ends of the same watershed instead
         # of wasting both captures on its middle reach.
         center = (8, 14) if case == "detail" else (21, 19)
+    if category == "shorelines" and case == "lowland" and center == (16, 16):
+        center = (10, 18)
     if category == "mountains" and case == "coastal" and center == (16, 16):
         center = (18, 18)
     output.mkdir(parents=True, exist_ok=True)
@@ -771,6 +773,7 @@ def run_tests(category=None, *, integration=False, full=False):
         modules.update(("Renderer.definitions.test_definition_parser",
                         "Renderer.definitions.test_rule_resolver", "Renderer.scenes.test_scene_contract",
                         "Renderer.native.test_native_bridge_contract",
+                        "Renderer.native.test_zoom_mesh_cache",
                         "Renderer.native.test_asset_content_hash"))
         if full:
             modules.update("Renderer.native." + name for name in (

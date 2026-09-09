@@ -12,7 +12,7 @@ inline bool test_source_shadow(ID3D11Device* device,ID3D11DeviceContext* context
   vertices[i].world[2]=vertices[i].world[3]=1;
  }
  unsigned indices[]={0,1,2,0,2,3};
- ID3D11Buffer *vb=nullptr,*ib=nullptr;
+ ID3D11Buffer *vb=nullptr,*ib=nullptr,*ib16=nullptr;
  D3D11_BUFFER_DESC b={};b.ByteWidth=sizeof(vertices);b.Usage=D3D11_USAGE_IMMUTABLE;b.BindFlags=D3D11_BIND_VERTEX_BUFFER;
  D3D11_SUBRESOURCE_DATA data={};data.pSysMem=vertices;
  if(FAILED(device->CreateBuffer(&b,&data,&vb)))return false;
@@ -43,6 +43,7 @@ inline bool test_source_shadow(ID3D11Device* device,ID3D11DeviceContext* context
  d.Width=d.Height=1024;d.Format=DXGI_FORMAT_R32_FLOAT;d.Usage=D3D11_USAGE_STAGING;
  d.BindFlags=0;d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
  if(ok && FAILED(device->CreateTexture2D(&d,nullptr,&readback)))ok=false;
+ std::vector<float> reference(1024*1024);
  if(ok){ID3D11Resource* source=nullptr;shadow.view->GetResource(&source);
   context->CopySubresourceRegion(readback,0,0,0,0,source,0,nullptr);source->Release();
   D3D11_MAPPED_SUBRESOURCE map={};
@@ -51,11 +52,32 @@ inline bool test_source_shadow(ID3D11Device* device,ID3D11DeviceContext* context
    auto sample=[&](float x,float y){auto row=reinterpret_cast<char*>(map.pData)+int(y/6*1024)*map.RowPitch;
     return reinterpret_cast<float*>(row)[int(x/6*1024)];};
    ok=sample(1.5f,1.5f)<-999.f && std::abs(sample(2.5f,2.5f)-1.f)<1e-5f;
+   for(unsigned y=0;y<1024;y++)std::memcpy(reference.data()+y*1024,
+       static_cast<char const*>(map.pData)+y*map.RowPitch,1024*sizeof(float));
    context->Unmap(readback,0);
   }
  }
+ // Index storage is independent of source geometry and alpha coverage. Test
+ // both compact-only and mixed-format draws against the full R32 image.
+ std::uint16_t indices16[]={0,1,2,0,2,3};
+ b.ByteWidth=sizeof(indices16);data.pSysMem=indices16;data.SysMemPitch=0;
+ if(ok && FAILED(device->CreateBuffer(&b,&data,&ib16)))ok=false;
+ auto wide=caster;
+ caster.indices=ib16;caster.index_format=DXGI_FORMAT_R16_UINT;
+ for(unsigned mixed=0;mixed<2 && ok;++mixed){
+  std::vector<Shadow::Caster> input={caster};if(mixed)input.push_back(wide);
+  ok=shadow.prepare(context,basis,receivers,input,cutout,nullptr) && shadow.rebuilt==1 && shadow.draws==mixed+1;
+  if(!ok)break;
+  ID3D11Resource* source=nullptr;shadow.view->GetResource(&source);
+  context->CopySubresourceRegion(readback,0,0,0,0,source,0,nullptr);source->Release();
+  D3D11_MAPPED_SUBRESOURCE map={};
+  if(FAILED(context->Map(readback,0,D3D11_MAP_READ,0,&map))){ok=false;break;}
+  for(unsigned y=0;y<1024;y++)ok=ok && std::memcmp(reference.data()+y*1024,
+      static_cast<char const*>(map.pData)+y*map.RowPitch,1024*sizeof(float))==0;
+  context->Unmap(readback,0);
+ }
  context->ClearState();if(readback)readback->Release();if(alpha_view)alpha_view->Release();if(alpha)alpha->Release();
- vb->Release();ib->Release();
- std::printf("render-core source shadows: %s (warm pages, distant edits, source edit, cutout hole)\n",ok?"pass":"FAIL");
+ vb->Release();ib->Release();if(ib16)ib16->Release();
+ std::printf("render-core source shadows: %s (warm pages, distant edits, source edit, cutout hole, mixed R16/R32 parity)\n",ok?"pass":"FAIL");
  return ok;
 }

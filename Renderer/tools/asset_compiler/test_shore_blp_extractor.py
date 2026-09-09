@@ -27,7 +27,10 @@ class ShorePackTests(unittest.TestCase):
             allocations = [object(), object()]
             stripe_bases = {0: 100, 1: 200}
 
-        def fake_build(_package, _shared, pack, spec, **_options):
+        build_options = {}
+
+        def fake_build(_package, _shared, pack, spec, **options):
+            build_options[spec["source_name"]] = options
             mesh = f"meshes/features/{spec['stem']}.json"
             material = f"materials/features/{spec['stem']}.json"
             (pack / mesh).parent.mkdir(parents=True, exist_ok=True)
@@ -60,6 +63,10 @@ class ShorePackTests(unittest.TestCase):
             self.assertNotIn("TER_", json.dumps(manifest))
             self.assertEqual("passed", result["runtime_independence"])
             self.assertEqual(15, len(result["excluded_source_candidates"]))
+            self.assertTrue(build_options["TER_Cliffs_Rock01"]["use_authored_normals"])
+            self.assertTrue(build_options["TER_Cliffs_RockSmall04"]["use_authored_normals"])
+            self.assertTrue(build_options["TER_Cliffs_RockSmall04"]["drop_degenerate_triangles"])
+            self.assertFalse(build_options["TER_Ice_Chunk_01"]["use_authored_normals"])
 
 
 if __name__ == "__main__":

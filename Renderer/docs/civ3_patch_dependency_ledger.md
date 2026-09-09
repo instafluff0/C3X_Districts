@@ -17,13 +17,28 @@ Existing map and unit boundaries remain unchanged:
   `Sprite_draw_unit_body_normal`, `Sprite_draw_unit_body_reduced`,
   `on_timer_0x9F6500`, `QueryPerformanceCounter`, `OutputDebugStringA`.
 - `audit_candidates: []` for the current renderer work.
-- `required_user_action: []` for the current renderer work.
+- `required_user_action: [Main_Screen_Form_tile_to_screen_coords: define -> inlead]`
+  for native city-HUD anchor alignment; details and fallback are below.
 
 Stepped custom zoom uses the existing `Main_Screen_Form_handle_key_down` inlead
 and consumes `Z` before Civ III's native two-level toggle. Existing
 `Main_Screen_Form_get_tile_coords_under_mouse`, left/right-click wrappers, hover
 wrapper and `Sprite_draw_on_map` inlead provide inverse input and native overlay
-placement. `audit_candidates: []`.
+placement. Native unit health/status alignment uses the existing `Unit_tick_anim`
+inlead. `audit_candidates: []`.
+
+Native city names and state labels calculate their anchor through the already
+recorded `Main_Screen_Form_tile_to_screen_coords` symbol. Change that existing
+row from `define` to `inlead` so the implemented contextual patch can transform
+city-HUD anchors. Signature:
+`void (__fastcall *)(Main_Screen_Form *, int, int, int, int *, int *)`.
+Recorded addresses are GOG `0x4E3B10`, Steam `0x4EC360`, and PCGames.de
+`0x4E3BD0`; these are existing checkout data, not new address claims. Capability:
+native city-HUD anchor transformation during custom zoom. Reason: the native HUD
+calls this function before drawing city text and state icons. Fallback: leave the
+row as `define`; terrain, input and unit-status zoom continue to work, but native
+city HUD remains at its binary native-zoom anchors.
+`required_user_action: [Main_Screen_Form_tile_to_screen_coords: define -> inlead]`.
 
 The experimental `Main_Screen_Form_process_mouse_wheel` row is currently
 `ignore`, so it cannot install the abandoned wheel patch. It may remain ignored

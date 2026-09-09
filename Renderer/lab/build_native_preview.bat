@@ -8,5 +8,5 @@ if not defined C3X_LAB_VS exit /b 1
 call "%C3X_LAB_VS%\VC\Auxiliary\Build\vcvars32.bat" >nul
 if errorlevel 1 exit /b 1
 if not exist ".cache" mkdir ".cache"
-cl /nologo /std:c++17 /EHsc /O2 /W4 /WX native_preview.cpp /Fo:.cache\native_preview.obj /Fe:.cache\native_preview.exe /link gdi32.lib user32.lib
+cl /nologo /std:c++17 /EHsc /O2 /W4 /WX native_preview.cpp /Fo:.cache\native_preview.obj /Fe:.cache\native_preview.exe /link /LARGEADDRESSAWARE gdi32.lib user32.lib
 exit /b %errorlevel%

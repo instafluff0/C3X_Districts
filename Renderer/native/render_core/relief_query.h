@@ -140,9 +140,9 @@ public:
         float signed_shore=float(std::clamp(-hydrology.distance/.65,-1.,1.));
         float coastal=smooth01((-signed_shore-.02f)/.42f);
         float rocky=smooth01((float(hydrology.rocky)-.55f)/.40f);
-        float cliff=smooth01((float(hydrology.distance)-.04f)/.08f);
+        float cliff=smooth01((float(hydrology.distance)-.01f)/.06f);
         float shoulder=1-smooth01((float(hydrology.distance)-.20f)/.65f);
-        result.height=(5.f/12.f)*.5f*112.f*rocky*cliff*shoulder*compatibility;
+        result.height=(5.f/12.f)*112.f*rocky*cliff*shoulder;
         float support=0;
         for(int dy=-1;dy<=1;dy++) for(int dx=-1;dx<=1;dx++) {
             if(lookup(c+dx,r+dy).real!=5) continue;

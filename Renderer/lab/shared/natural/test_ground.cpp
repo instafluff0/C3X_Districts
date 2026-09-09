@@ -13,7 +13,7 @@ int main() {
         GroundProjection project{column,-5,zoom*.5f,zoom*.25f,zoom/224.f*.82f,target};
         for(float u:{0.f,.375f,1.f})for(float v:{0.f,.8125f,1.f})for(float marsh:{0.f,.25f,1.f}) {
             auto height=[](float x,float y,float*support){if(support)*support=.125f;return 2.5f+x*3+y*2;};
-            struct Shore{float distance,beach_width;};
+            struct Shore{float distance,beach_width,rocky=0;};
             auto shore=[](float,float){return Shore{.36f,.2f};};
             auto weights=[&](float,float){return std::array<float,5>{{.1f,.2f,.3f,marsh,.4f}};};
             auto got=ground_surface(project,u,v,height,shore,weights);
@@ -45,6 +45,24 @@ int main() {
             assert(std::memcmp(&got,&expected,sizeof(got))==0);
             comparisons++;
         }
+    }
+    // Supply a coastal rock weight without changing surface coverage. The
+    // shader selects steep faces; ordinary beach and inland markers stay zero.
+    {
+        GroundProjection project{0,0,64,32,1,480};
+        float slope=400,rocky=1,distance=.2f;
+        auto height=[&](float x,float,float*support){if(support)*support=0;return 2.5f+x*slope;};
+        struct Shore{float distance,beach_width,rocky;};
+        auto shore=[&](float,float){return Shore{distance,0,rocky};};
+        auto weights=[](float,float){return std::array<float,5>{{1,0,0,0,0}};};
+        auto sample=[&](){return ground_surface(project,.5f,.5f,height,shore,weights);};
+        assert(sample().material_plains==1.25f);
+        assert(sample().base_terrain>-9.2f);
+        rocky=0;auto beach=sample();assert(beach.base_terrain>-9.2f);
+        assert(beach.material_plains==1);
+        rocky=1;slope=0;assert(sample().base_terrain==beach.base_terrain);
+        slope=400;distance=.6f;assert(sample().base_terrain==-9);
+        assert(sample().material_plains==1);
     }
     unsigned samples=0,rows=0;
     std::vector<MapVertex> mesh;

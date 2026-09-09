@@ -44,6 +44,10 @@ MapVertex ground_surface(GroundProjection const&project,float u,float v,
     float coverage=coast_coverage(float(shore.distance),float(shore.beach_width));
     coverage=coverage*(1-desert_weight)+
         desert_coast_coverage(float(shore.distance))*desert_weight;
+    // Values 1..1.25 remain the ground material class (<1.5), carrying
+    // the rocky-coast weight to the cliff face shader without another stream.
+    out.material_plains=1+.25f*coast_ramp((float(shore.rocky)-.55f)/.4f)*
+        (1-coast_ramp((float(shore.distance)-.25f)/.25f));
     // Preserve a broader inland coordinate for softening only the transition
     // receiver. The visible coverage ramp remains unchanged.
     out.world_valid=1+coast_ramp((float(shore.distance)-float(shore.beach_width)-.10f)/.90f);

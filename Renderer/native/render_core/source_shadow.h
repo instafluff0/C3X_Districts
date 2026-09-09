@@ -31,6 +31,7 @@ public:
     unsigned hits=0,rebuilt=0,draws=0;
     struct Bounds { float low[3]={},high[3]={}; };
     struct Caster {
+        DXGI_FORMAT index_format=DXGI_FORMAT_R32_UINT;
         ID3D11Buffer *vertices=nullptr,*indices=nullptr;
         unsigned count=0,stride=0,layer=0;
         unsigned binding=0xffffffffu;
@@ -135,7 +136,7 @@ public:
             auto mix=[&](std::uint64_t x){hash=(hash^x)*1099511628211ull;};
             for(std::size_t i=0;i<casters.size();++i){auto const& p=caster_bounds[i];
                 if(p[2]<key.first*6 || p[0]>(key.first+1)*6 || p[3]<key.second*6 || p[1]>(key.second+1)*6)continue;
-                selected.push_back(i);mix(casters[i].version);mix(casters[i].layer);
+                selected.push_back(i);mix(casters[i].version);mix(casters[i].layer);mix(casters[i].index_format);
                 if(casters[i].binding!=0xffffffffu)mix(casters[i].binding);
                 for(float f:casters[i].offset){std::uint32_t bits;std::memcpy(&bits,&f,4);mix(bits);}
             }
@@ -159,7 +160,7 @@ public:
                 bool alpha=bind(c.binding==0xffffffffu?c.layer:c.binding);context->PSSetShader(alpha?cutout:opaque,nullptr,0);
                 context->IASetInputLayout(c.stride==76?natural_layout:c.stride==48?feature_layout:layout);
                 UINT stride=c.stride,offset=0;context->IASetVertexBuffers(0,1,&c.vertices,&stride,&offset);
-                context->IASetIndexBuffer(c.indices,DXGI_FORMAT_R32_UINT,0);context->DrawIndexed(c.count,0,0);++draws;
+                context->IASetIndexBuffer(c.indices,c.index_format,0);context->DrawIndexed(c.count,0,0);++draws;
             }
             page={key.first,key.second,hash,epoch};++rebuilt;
         }

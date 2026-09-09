@@ -231,6 +231,9 @@ def build_shore_pack(
             pack,
             spec,
             use_authored_normals=spec["group"] in {"cliff_large", "cliff_small"},
+            # Cliff clutter uses its authored vertical attachment plane.
+            # Rebasing the lowest vertex exposes the buried/submerged skirt.
+            preserve_vertical_origin=spec["group"] in {"cliff_large", "cliff_small"},
             # The two final small cliff bodies contain source-authored
             # zero-area triangles. D3D discards them; remove only those
             # triangles while retaining every usable source vertex and UV.

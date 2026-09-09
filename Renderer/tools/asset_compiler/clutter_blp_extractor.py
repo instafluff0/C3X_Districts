@@ -430,6 +430,7 @@ def normalize_mesh(
     allow_wrapping_uvs: bool = False,
     use_authored_normals: bool = False,
     drop_degenerate_triangles: bool = False,
+    preserve_vertical_origin: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     profile = VERTEX_PROFILES.get(vertex_entry["format"])
     if profile is None or vertex_entry["stride"] != profile["stride"]:
@@ -486,7 +487,7 @@ def normalize_mesh(
         (
             (position[0] - center_x) / SOURCE_UNITS_PER_TILE,
             (position[1] - center_y) / SOURCE_UNITS_PER_TILE,
-            (position[2] - source_min[2]) / SOURCE_UNITS_PER_TILE,
+            (position[2] - (0.0 if preserve_vertical_origin else source_min[2])) / SOURCE_UNITS_PER_TILE,
         )
         for position in source_positions
     ]
@@ -596,7 +597,7 @@ def normalize_mesh(
         "source_bounds": {"minimum": rounded(source_min), "maximum": rounded(source_max)},
         "normalization": {
             "horizontal_center": rounded((center_x, center_y)),
-            "ground_z": source_min[2],
+            "ground_z": 0.0 if preserve_vertical_origin else source_min[2],
             "uniform_scale": 1.0 / SOURCE_UNITS_PER_TILE,
             "source_units_per_tile": SOURCE_UNITS_PER_TILE,
         },
@@ -765,6 +766,7 @@ def build_feature(
     allow_optional_maps: bool = False,
     use_authored_normals: bool = False,
     drop_degenerate_triangles: bool = False,
+    preserve_vertical_origin: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     asset_name = spec["source_name"]
     package.select_direct_string(asset_name)
@@ -827,6 +829,7 @@ def build_feature(
         allow_wrapping_uvs,
         use_authored_normals,
         drop_degenerate_triangles,
+        preserve_vertical_origin,
     )
 
     material_user_data = package.unique_pointer_field(

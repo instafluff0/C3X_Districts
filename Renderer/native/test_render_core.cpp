@@ -238,6 +238,29 @@ int main() {
         for(auto item:tiles)valid=valid && coast_world.world().at(item.first)==item.second;
         assert(!valid);
     }
+    // A rocky coast has a raised rim and a steep face; ordinary beaches
+    // retain zero generated cliff height. Height-only sampling must agree.
+    {
+        float distance=0,rockiness=1;
+        auto land=[](int,int){return port::Tile{2,2,true};};
+        auto zero_source=[](int,unsigned,int,float,float){return 0.f;};
+        auto coast=[&](float,float){return port::ShoreSample{distance,0,rockiness,0};};
+        auto river=[](int,int,float,float){return 1000.f;};
+        auto zero=[](float,float){return 0.f;};
+        auto active=[](int,int){return 1.f;};
+        port::ReliefQuery query(port::World{100,80,true,false},land,zero_source,coast,river,zero,active);
+        float previous=0;
+        for(int i=0;i<=20;i++) {
+            distance=i*.01f;auto h=query.sample(.5f,.5f).height;
+            assert(h>=previous && h<47.f);previous=h;
+            near(h,query.sample(.5f,.5f,false).height,0);
+        }
+        assert(previous>46.f);
+        for(float d:{0.f,.03f,.07f,.2f,.5f,1.f}) {
+            distance=d;rockiness=0;near(query.sample(.5f,.5f).height,0);
+        }
+        rockiness=1;distance=.86f;near(query.sample(.5f,.5f).height,0);
+    }
     int relief_kind=6;
     auto owners=[&](int c,int r){return port::Tile{2,c==0&&r==0 ? relief_kind : 2,true};};
     auto source=[](int kind,unsigned,int,float,float){return kind==5 ? 0.f : 1.f;};

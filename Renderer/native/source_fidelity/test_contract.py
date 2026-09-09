@@ -4,6 +4,84 @@ import hashlib,json,subprocess,tempfile,unittest
 from .prepare import ROOT,HERE,LAB,function,terrain_boundaries
 from Renderer.lab.test_natural import NaturalInputs
 class Contract(unittest.TestCase):
+    def test_coastal_feature_uses_current_shared_material(self):
+        shared=(LAB/'shaders/relief/coast_rocks.hlsl').read_text()
+        runtime=(HERE.parent/'environment_refresh/feature.hlsl').read_text()
+        self.assertEqual(function(shared,'q4_coastal_rock'),function(runtime,'q4_coastal_rock'))
+
+    def test_surface_grain_is_neutral_for_flat_channels_and_bounds_contrast(self):
+        shader=(LAB/'shaders/hydrology/scene_material_v1.hlsl').read_text()
+        source='''
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+float clamp(float x,float low,float high) {return std::clamp(x,low,high);}
+'''+function(shader,'q3_surface_grain')+'''
+int main() {
+    for(int n=0;n<=100;n++) {
+        float mean=n/100.f,previous=-1;
+        assert(q3_surface_grain(mean,mean)==0);
+        for(int d=0;d<=100;d++) {
+            float detail=d/100.f;
+            float grain=q3_surface_grain(detail,mean);
+            assert(grain>=previous && grain>=-.451f && grain<=.801f);
+            assert(1+grain>0);
+            previous=grain;
+        }
+    }
+    assert(q3_surface_grain(.55f,.4f)>0);
+    assert(q3_surface_grain(.25f,.4f)<0);
+    assert(std::abs(q3_surface_grain(.55f,.4f)-q3_surface_grain(.35f,.2f))<.000001f);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp=Path(directory)/'grain.cpp';binary=Path(directory)/'grain'
+            cpp.write_text(source)
+            subprocess.run(['c++','-std=c++17',str(cpp),'-o',str(binary)],
+                           check=True,capture_output=True,text=True)
+            subprocess.run([str(binary)],check=True,capture_output=True,text=True)
+
+    def test_coastal_grain_preserves_solid_land_water_and_coverage_order(self):
+        shader=(LAB/'shaders/relief/beauty_terrain.hlsl').read_text()
+        source='''
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+float saturate(float x) {return std::clamp(x,0.f,1.f);}
+'''+function(shader,'coast_edge_coverage')+'''
+int main() {
+    for(int g=0;g<=100;g++) {
+        float grain=g/100.f,previous=0;
+        assert(coast_edge_coverage(0,grain)==0);
+        assert(coast_edge_coverage(1,grain)==1);
+        for(int c=0;c<=100;c++) {
+            float coverage=c/100.f;
+            float result=coast_edge_coverage(coverage,grain);
+            assert(result>=previous && result>=0 && result<=1);
+            assert(std::abs(coast_edge_coverage(coverage,.5f)-coverage)<.000001f);
+            previous=result;
+        }
+    }
+    assert(coast_edge_coverage(.5f,0)<.5f);
+    assert(coast_edge_coverage(.5f,1)>.5f);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp=Path(directory)/'coast.cpp';binary=Path(directory)/'coast'
+            cpp.write_text(source)
+            subprocess.run(['c++','-std=c++17',str(cpp),'-o',str(binary)],
+                           check=True,capture_output=True,text=True)
+            subprocess.run([str(binary)],check=True,capture_output=True,text=True)
+
+    def test_shore_surface_helpers_survive_runtime_adaptation(self):
+        selected=(LAB/'shaders/hydrology/scene_material_v1.hlsl').read_text()
+        for provider in ('source_fidelity','city_fidelity','environment_refresh'):
+            adapted=(HERE.parent/provider/'hydrology.hlsl').read_text()
+            for helper in ('q3_surface_grain','q3_margin_patch','q3_margin_visibility',
+                           'q3_margin_detail','q3_margin_normal'):
+                self.assertEqual(function(selected,helper),function(adapted,helper),
+                                 provider+': '+helper)
+
     def test_rock_crevices_preserve_flat_material_and_follow_local_depth(self):
         shader=(LAB/'shaders/relief/beauty_mountain.hlsl').read_text()
         source='''

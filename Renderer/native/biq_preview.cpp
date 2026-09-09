@@ -378,7 +378,108 @@ int main(int argc, char ** argv) {
 #ifdef C3X_LAB_PREVIEW
     if(ok)ok=lab_verify_objects(frame,output);
 #endif
-    if(ok && animate) {
+    char zoom_option[16]={};
+    bool zoom_benchmark=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ZOOM",zoom_option,sizeof(zoom_option))!=0;
+    char navigation_option[16]={};
+    bool navigation_benchmark=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_NAVIGATION",navigation_option,sizeof(navigation_option))!=0;
+    char cycle_option[16]={};
+    int camera_cycles=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CYCLES",cycle_option,sizeof(cycle_option))?
+        std::clamp(std::atoi(cycle_option),2,10):2;
+    // Sample outside the timed interaction. Free VA is not free physical RAM;
+    // the largest available region also exposes fragmentation in this x86 host.
+    auto camera_memory = [&]() {
+        MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);
+        if(!GlobalMemoryStatusEx(&memory))return;
+        std::uintptr_t address=0;SIZE_T largest=0;MEMORY_BASIC_INFORMATION region={};
+        while(VirtualQuery(reinterpret_cast<void const*>(address),&region,sizeof(region))){
+            if(region.State==MEM_FREE)largest=(std::max)(largest,region.RegionSize);
+            auto next=reinterpret_cast<std::uintptr_t>(region.BaseAddress)+region.RegionSize;
+            if(next<=address)break;
+            address=next;
+        }
+        std::printf("CAMERA memory available_virtual=%llu largest_free_region=%zu total_virtual=%llu\n",
+            memory.ullAvailVirtual,largest,memory.ullTotalVirtual);
+    };
+    if(ok && zoom_benchmark) {
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        std::vector<std::vector<unsigned char>> reference(5);
+        int levels[]={128,112,96,80,64};
+        for(int cycle=0;cycle<camera_cycles && ok;++cycle)for(int level=0;level<5 && ok;++level){
+            tile_width=levels[level];tile_height=tile_width/2;tiles=capture_view();
+            frame.tile_width=tile_width;frame.tile_height=tile_height;
+            frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
+            ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;
+            std::printf("ZOOM cycle=%d width=%d result=%d tiles=%u built=%u reused=%u cache_bytes=%u recoveries=%u ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f\n",
+                cycle,tile_width,code,output.rendered_tile_count,output.geometry_tiles_built,output.geometry_tiles_reused,
+                output.geometry_cache_bytes,output.device_recoveries,double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(output.geometry_ticks)*1000/frequency.QuadPart,double(output.draw_ticks)*1000/frequency.QuadPart,
+                double(output.readback_ticks)*1000/frequency.QuadPart);
+            camera_memory();std::fflush(stdout);
+            if(!ok)break;
+            auto bytes=static_cast<unsigned char const*>(output.bgra_pixels);
+            std::size_t count=std::size_t(output.stride_bytes)*output.height;
+            if(cycle==0){reference[level].assign(bytes,bytes+count);
+                ok=write_bmp((std::string(argv[5])+".z"+std::to_string(tile_width)+".bmp").c_str(),output);
+            }else{
+                std::size_t changed=0;unsigned long long error=0;
+                for(std::size_t i=0;i<count;i+=4){bool bad=false;for(unsigned c=0;c<4;++c){
+                    unsigned delta=unsigned(std::abs(int(reference[level][i+c])-int(bytes[i+c])));
+                    error+=delta;bad=bad || delta>2;}if(bad)++changed;}
+                ok=changed<=count/4000 && error<=count/100;
+                std::printf("ZOOM parity width=%d changed=%zu error=%llu status=%s\n",tile_width,changed,error,ok?"pass":"FAIL");
+            }
+        }
+    }
+    if(ok && navigation_benchmark) {
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        // Recapture authoritative records at each destination, just as a
+        // minimap move does. Include overlap, distant moves and the wrap seam.
+        int destinations[][2]={{75,39},{79,39},{35,39},{35,69},{1,39},{99,39}};
+        std::vector<std::vector<unsigned char>> reference(6);
+        for(int cycle=0;cycle<camera_cycles && ok;++cycle)for(int step=0;step<6 && ok;++step){
+            center_x=destinations[step][0];center_y=destinations[step][1];
+            LARGE_INTEGER begin={},captured={},end={};QueryPerformanceCounter(&begin);
+            tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            QueryPerformanceCounter(&captured);
+            int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
+            ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;
+            std::printf("NAV cycle=%d step=%d x=%d y=%d width=%d result=%d tiles=%u built=%u reused=%u cache_bytes=%u recoveries=%u ms=%.3f capture_ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f\n",
+                cycle,step,center_x,center_y,tile_width,code,output.rendered_tile_count,output.geometry_tiles_built,output.geometry_tiles_reused,
+                output.geometry_cache_bytes,output.device_recoveries,double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(captured.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(output.geometry_ticks)*1000/frequency.QuadPart,double(output.draw_ticks)*1000/frequency.QuadPart,
+                double(output.readback_ticks)*1000/frequency.QuadPart);
+            camera_memory();std::fflush(stdout);if(!ok)break;
+            auto bytes=static_cast<unsigned char const*>(output.bgra_pixels);
+            std::size_t count=std::size_t(output.stride_bytes)*output.height;
+            if(cycle==0){reference[step].assign(bytes,bytes+count);
+                ok=write_bmp((std::string(argv[5])+".nav"+std::to_string(step)+".bmp").c_str(),output);
+            }else{
+                std::size_t changed=0;unsigned long long error=0;
+                for(std::size_t i=0;i<count;i+=4){bool bad=false;for(unsigned c=0;c<4;++c){
+                    unsigned delta=unsigned(std::abs(int(reference[step][i+c])-int(bytes[i+c])));
+                    error+=delta;bad=bad || delta>2;}if(bad)++changed;}
+                ok=changed<=count/4000 && error<=count/100;
+                std::printf("NAV parity step=%d changed=%zu error=%llu status=%s\n",step,changed,error,ok?"pass":"FAIL");
+            }
+        }
+    }
+    if(ok && animate && !zoom_benchmark && !navigation_benchmark) {
+        // Exercise animation after an immutable viewport LRU restore, not only
+        // after the unchanged-current-view fast path.
+        auto initial=static_cast<unsigned char const*>(output.bgra_pixels);
+        std::vector<unsigned char> initial_pixels(initial,initial+std::size_t(output.stride_bytes)*output.height);
+        int original_width=tile_width;
+        for(int next:{original_width==112?96:112,original_width}) {
+            tile_width=next;tile_height=next/2;tiles=capture_view();
+            frame.tile_width=tile_width;frame.tile_height=tile_height;
+            frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            ok=ok && render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
+        }
+        ok=ok && std::memcmp(output.bgra_pixels,initial_pixels.data(),initial_pixels.size())==0;
+        std::printf("ANIMATION zoom-return parity: %s\n",ok?"pass":"FAIL");
         std::vector<unsigned char> previous;
         unsigned changes=0;
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);

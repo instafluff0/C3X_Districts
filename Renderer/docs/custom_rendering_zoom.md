@@ -1,6 +1,6 @@
 # Custom-rendering stepped zoom
 
-`enable_custom_rendering_zoom = true` adds instant stepped main-map zoom when
+`enable_custom_rendering_zoom = true` adds stepped main-map zoom when
 `enable_custom_rendering = true`. The current levels use Civ III's isometric
 basis at tile widths 64, 80, 96, 112 and 128 pixels. Each `Z` press steps from
 128 toward 64, then wraps from 64 to 128. The projected world point at the
@@ -15,7 +15,10 @@ unit bodies receive an exact numeric projection scale rather than the old
 normal/reduced binary. While this zoom feature is enabled, native FLC unit bodies
 are never shown: if custom units are disabled or a custom body cannot render,
 that body is omitted. Native selection, health, status and unit-HUD overlays keep
-their existing ownership.
+their existing ownership. The unit animation hook shifts its native screen
+offset so the body and status layers share the transformed unit center. The
+native city-HUD pass enables a narrow context in which the existing
+`Main_Screen_Form_tile_to_screen_coords` hook transforms city-label anchors.
 
 Zoom is deliberately main-map-only. It uses the existing patched
 `Main_Screen_Form_handle_key_down` boundary and consumes `Z` before Civ III's
@@ -34,6 +37,41 @@ Zoomed-out capture promotes only complete appearance records that can reach the
 scaled viewport. The outer topology ring remains non-renderable. Intermediate
 levels currently request a full map clip so native retained overlays cannot
 leave stale pixels; narrower damage tracking is a later performance refinement.
+
+The GPU tile cache still includes target size and tile width. Natural terrain
+now has a separate indexed world/material mesh tier: changing zoom can reproject
+its retained vertices without repeating height, coast, relief, decal or forest
+construction. Reuse validates semantic, world-topology and coast dependencies;
+city composition retains its ordinary compiler. Center-prioritized admission
+keeps a useful working set when a wide view exceeds the cache. Natural mesh data
+has a 96 MiB cap and viewport bitmaps a 32 MiB cap, reallocating the former
+128 MiB bitmap allowance without increasing the combined CPU cache budget.
+
+Vertex indexing uses a contiguous lookup table with the same exact byte equality
+and first-occurrence ordering as the earlier node-based hash map. Its final hash
+mix disperses regular float grids across power-of-two buckets. Chunks with at
+most 65,535 vertices use lossless 16-bit triangle indices; larger chunks retain
+32-bit indices. Both map and source-shadow draws honor the stored format.
+Animated views
+can recover an exact cached terrain bitmap; they reassemble current geometry and
+resource anchors before composing poses and rebuilding any missing depth
+backdrops. Posed resource pixels never enter the immutable terrain cache.
+
+Ground passes keep their unique grid corners and triangle indices through GPU
+upload, without expanding and deduplicating the triangle stream again. Mixed
+object-shadow geometry retains its ordinary indexing path. Resource color/depth
+backdrops now have a byte-bounded, complete-static-signature LRU across camera
+views: 32 MiB normally, 160 MiB in the larger-cache benchmark tier. The current
+view's blocks are not evicted by its own scan; over-budget blocks still render
+normally. Only static MSAA background/depth is retained, never posed pixels.
+Cache allocation failure skips admission rather than discarding a valid frame.
+
+This does not yet provide continuous animated zoom: GPU uploads and non-natural
+geometry still depend on the target projection. The next architectural step is
+retaining projection-independent GPU meshes, then presenting a resampled retained
+bitmap immediately while a high-quality target raster completes. Performance and
+pixel parity can be reproduced with `Renderer/native/BENCHMARK_ZOOM.bat` and
+`Renderer/native/compare_zoom_benchmark.py`; see [benchmark notes](zoom_performance.md).
 
 Automated checks cover affine anchor invariance, inverse picking, the five-level
 `Z` cycle, expanded capture, native overlay scaling and numeric unit projection.

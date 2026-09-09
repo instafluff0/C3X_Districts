@@ -63,6 +63,13 @@ class CustomZoomTests(unittest.TestCase):
             "frame.tile_width = custom_renderer_zoom_enabled ()",
             "draw.projection_scale_milli = is->custom_renderer_zoom_tile_width * 1000 / 128",
             "if (custom_renderer_zoom_enabled ()) return 0",
+            "patch_Main_Screen_Form_tile_to_screen_coords",
+            "custom_renderer_zoom_native_hud_context",
+            "custom_renderer_zoom_unit_tick_translated",
+            "offset_x -= is->custom_renderer_zoom_unit_tick_delta_x",
+            "offset_y -= is->custom_renderer_zoom_unit_tick_delta_y",
+            "draw.body_x -= is->custom_renderer_zoom_unit_tick_delta_x",
+            "draw.body_y -= is->custom_renderer_zoom_unit_tick_delta_y",
         ):
             self.assertIn(marker, source)
         self.assertIn("bool enable_custom_rendering_zoom", header)

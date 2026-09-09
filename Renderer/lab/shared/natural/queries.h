@@ -99,8 +99,15 @@ public:
             for(unsigned i=0;i<entry.count;i++)natural.hill_height(entry.bodies[i],x,y,authored,s);
             if(support)*support=s;
         }else authored=natural.height(x,y,[&](int nc,int nr){return natural_tile(nc,nr);},support);
-        float h=std::max(authored,2.5f+pickup_height(x,y));
-        return 2.5f+(h-2.5f)*coast_relief(float(sample.distance),float(sample.beach_width));
+        float pickup=pickup_height(x,y);
+        float coastal=coast_relief(float(sample.distance),float(sample.beach_width));
+        float h=std::max(authored,2.5f+pickup);
+        float rocky=coast_ramp((float(sample.rocky)-.55f)/.4f);
+        // Pickup already shapes the cliff at the waterline. A second beach
+        // envelope flattened it while rock placement retained the full height.
+        if(rocky>0)return 2.5f+std::max((authored-2.5f)*coastal,
+            pickup*(coastal+(1-coastal)*rocky));
+        return 2.5f+(h-2.5f)*coastal;
     }
 };
 }}

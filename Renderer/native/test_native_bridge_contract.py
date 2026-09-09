@@ -362,7 +362,8 @@ int main() {
         ):
             self.assertNotIn(retained_only, signature)
         self.assertIn("viewport_cache_capacity = 32u", renderer)
-        self.assertIn("viewport_cache_budget = 128u * 1024u * 1024u", renderer)
+        self.assertIn("viewport_cache_budget = 32u * 1024u * 1024u", renderer)
+        self.assertIn("natural_mesh_cache_budget = 96u * 1024u * 1024u", renderer)
         self.assertIn("std::vector<CachedViewport> viewport_cache", renderer)
         self.assertIn("output.visible_animation_count = frame.visible_animation_count", renderer)
         self.assertNotIn("frame.visible_animation_count == 0 &&", renderer)
@@ -696,7 +697,7 @@ int main() {
         renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
             encoding="utf-8"
         )
-        self.assertIn("std::vector<Vertex> grid_vertices", renderer)
+        self.assertIn("grid_vertices.resize(static_cast<std::size_t>(row_width) * row_width)", renderer)
         self.assertIn("ground_point_cache.reserve(2048)", renderer)
         self.assertIn("GroundPoint & point = ground_point_at(u, v)", renderer)
         self.assertIn("mix_tile(frame.tile_width)", renderer)

@@ -20,14 +20,30 @@ int main(){using namespace c3x_renderer::render_core;
   for(size_t i=0;i<first.size();i++){
    assert(first[i].position.x==again[i].position.x && first[i].yaw==again[i].yaw);
    assert(first[i].asset<8);
-   if(first[i].asset<4)assert(first[i].scale>=.29 && first[i].scale<=.36);
-   else assert(first[i].scale>=.31 && first[i].scale<=.43);
+   if(first[i].asset<4){
+    assert(first[i].scale>=.34 && first[i].scale<=.42);
+    assert(first[i].z>=2.5/112.);
+    assert(first[i].z+first[i].scale>=(50.+2.5)/112.);
+   } else assert(first[i].scale>=.229 && first[i].scale<=.311);
    all.push_back(first[i]);
   }
  }
  assert(!all.empty());
  for(size_t i=0;i<all.size();i++)for(size_t j=0;j<i;j++){
   if(all[i].asset>=4 || all[j].asset>=4)continue;
-  auto d=all[i].position-all[j].position;assert(dot(d,d)>=.13*.13-1e-7);
+  auto d=all[i].position-all[j].position;assert(dot(d,d)>=.30*.30-1e-7);
  }
+ // An authored recipe overrides hard-coded asset choices and scale ranges.
+ auto recipe=[](bool small,unsigned){return CliffRecipe{small?7u:2u,1.5,0};};
+ bool witnessed=false;
+ for(int y=4;y<20;y++)for(int x=14+(y&1);x<=17;x+=2){
+  auto p=cliff_placements(w,(x+y)/2,(x-y)/2,lookup,index,height,shore,maximum,contour,recipe);
+  for(auto const& a:p){
+   witnessed=true;
+   assert(a.asset==2 || a.asset==7);
+   if(a.asset==2)assert(std::abs(a.scale-.38*1.5)<1e-8);
+   else assert(std::abs(a.scale-.27*1.5)<1e-8);
+  }
+ }
+ assert(witnessed);
 }

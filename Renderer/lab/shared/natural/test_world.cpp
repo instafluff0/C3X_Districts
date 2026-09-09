@@ -44,8 +44,8 @@ template<class A,class B> void equal_pages(A const& a,B const& b) {
     for(unsigned i=0;i<a.river_pages.size();i++) {
         auto const& x=a.river_pages[i];auto const& y=b.river_pages[i];
         assert(x.c==y.c && x.r==y.r && x.used==y.used);
-        assert(x.field.edges.size()==y.field.edges.size());
-        assert(x.field.terminals.size()==y.field.terminals.size());
+        assert(x.field.edges.size()==y.field->edges.size());
+        assert(x.field.terminals.size()==y.field->terminals.size());
     }
 }
 int main() {
@@ -81,9 +81,18 @@ int main() {
             old.update_rivers(world,revision);shared.update_rivers(world,revision);
             assert(shared.river_epoch==epoch && shared.river_pages.size()==count);equal_pages(old,shared);
         }
+        auto held=shared.retain_river_page(8.5,4.5);
+        auto expected=held->sample({8.5,4.5});
+        std::weak_ptr<river::Corridor const> lifetime=held;
+        // More than a full cache turnover while a compiler holds its page.
+        for(int i=0;i<32;i++)shared.river_sample({double(i*8+64),100.5});
+        assert(shared.river_pages.size()==16 && !lifetime.expired());
+        auto actual=held->sample({8.5,4.5});
+        assert(actual.distance==expected.distance && actual.source==expected.source && actual.mouth==expected.mouth);
         auto epoch=shared.river_epoch;shared.reset_world();
         assert(shared.river_pages.empty() && !shared.river_world && shared.river_revision==-1);
         assert(shared.river_epoch==epoch && shared.fields.size()==1);
+        assert(!lifetime.expired());held.reset();assert(lifetime.expired());
     }
     assert(near_rivers>0);
     std::cout<<"PASS shared river world: "<<samples<<" exact samples; wrapped topology, revision invalidation and 16-page LRU\n";

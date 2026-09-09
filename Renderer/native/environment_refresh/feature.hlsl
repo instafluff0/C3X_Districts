@@ -961,6 +961,9 @@ float3 q6_receiver_illumination(FeaturePixelInput input,float3 normal,
 // Per-source-material batch: t25 base, t26 LEAN0, t27 LEAN1, t28 gloss.
 // UV derivatives adapt the source slope channels; this is not a recovered
 // source-engine LEAN equation. The original source channels remain bound.
+// Per-source-material batch: t25 base, t26 LEAN0, t27 LEAN1, t28 gloss.
+// UV derivatives adapt the source slope channels; this is not a recovered
+// source-engine LEAN equation. The original source channels remain bound.
 float4 q4_coastal_rock(FeaturePixelInput input){
  float3 albedo=feature_base_texture_0.Sample(material_sampler,input.uv).rgb;
  float2 lean=feature_base_texture_1.Sample(material_sampler,input.uv).rg*2-1;

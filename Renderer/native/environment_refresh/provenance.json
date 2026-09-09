@@ -2,10 +2,11 @@
   "water": "water-natural-r6",
   "reflection": "water-reflection-r5",
   "source_sha256": {
-    "Renderer/lab/shared/shaders/hydrology/water_natural.hlsl": "c4c06202ff609c3f473cd35faaff7f3250bc727c8849ef51b60e82488e572dc0",
-    "Renderer/native/source_fidelity/hydrology.hlsl": "ab4e6642fc22c952c57049cd9e20850477c83713552be74ed8be2ca8409d83b5",
+    "Renderer/lab/shared/shaders/hydrology/water_natural.hlsl": "5388f4863c286b0221ec5a4dd35d38164ac12e9b1cf552637d062f37396ace1a",
+    "Renderer/native/source_fidelity/hydrology.hlsl": "031b4c7cd7d65a88637054def73c053e8c5439f4c086745799f3de46643f4060",
     "Renderer/native/render_core/terrain_scene.hlsl": "2a5f7e8550f3964b255d34e54f8f6bd4daaff1907715ea44f11a38591ec90067",
-    "Renderer/native/source_fidelity/terrain.hlsl": "576284985362fa64346067bffd4b57a4a0007f5aa64edc55ddbca742718b7fa9",
+    "Renderer/lab/shared/shaders/relief/coast_rocks.hlsl": "959d3de0a7efe2283a5dde0b3db1c9c9d741ef1d989d30c41469723d24e7d03f",
+    "Renderer/native/source_fidelity/terrain.hlsl": "1603e839f570e3297b47b17af1c617ac1c85706890f2574d6f3fcbda310138b5",
     "Renderer/native/source_fidelity/mountain.hlsl": "636ff7618b67392bf15d37ed422eab542cb5be9267f670f69bd8f3d8bb1306a8",
     "Renderer/native/source_fidelity/objects.hlsl": "92d28d19643b27f59fa2472fbb3e17fb92e79a8ff8cfba16ee49f440f70d05a4",
     "Renderer/native/render_core/source_caster.hlsl": "a8c0acb26a60b2cf97fd9c02b6ac51e9848bf15f4060568df89c9e93b5d3ac41"

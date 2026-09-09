@@ -33,7 +33,7 @@ float3 q3_natural_normal(PixelInput input) {
  // Broad calm lanes interrupt the source pattern without per-tile phases.
  float envelope=lerp(.16,1,smoothstep(.20,.78,warp.x+.5));
  float2 slope=(a*.40+b*.38+c*.22)*envelope;
- slope*=lerp(.48,1,smoothstep(.01,.24,input.hydrology_data.w));
+ slope*=lerp(.20,1,smoothstep(.015,.32,input.hydrology_data.w));
  return normalize(float3(-slope,1));
 }
 float4 q3_natural_water(PixelInput input) {
@@ -73,7 +73,7 @@ float4 q3_natural_water(PixelInput input) {
   +environment_moon_color*environment_moon_intensity*pow(saturate(dot(normal,moonhalf)),48))
   *sparkle*.045*environment_water_specular*q6_receiver_visibility(input,normal,1);
  float reflection=saturate(fresnel);
- float coverage=1-exp(-depth*3.2);
+ float coverage=1-exp(-depth*lerp(2.3,3.2,smoothstep(.10,.32,depth)));
  float alpha=coverage+(1-coverage)*reflection;
  float3 premult=body*coverage*(1-reflection)+sky*reflection+glint;
  return float4(premult/max(alpha,.0001),alpha);

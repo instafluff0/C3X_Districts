@@ -2662,13 +2662,17 @@ struct district_button_image_set {
 	int custom_renderer_world_topology_count;
 	long long custom_renderer_world_topology_revision;
 	bool custom_renderer_capture_world_topology;
-	// Main-map wheel zoom is an injected camera transform. Civ III remains the
+	// Main-map stepped zoom is an injected camera transform. Civ III remains the
 	// authoritative camera; these fields scale its captured anchors and invert
 	// mouse coordinates back into the native projection for interaction.
 	int custom_renderer_zoom_tile_width;
 	int custom_renderer_zoom_native_tile_width;
 	long long custom_renderer_zoom_translate_x_fp;
 	long long custom_renderer_zoom_translate_y_fp;
+	bool custom_renderer_zoom_native_hud_context;
+	int custom_renderer_zoom_unit_tick_delta_x;
+	int custom_renderer_zoom_unit_tick_delta_y;
+	bool custom_renderer_zoom_unit_tick_translated;
 	bool custom_renderer_frame_active;
 	bool custom_renderer_capture_failed;
 	bool custom_renderer_composited;

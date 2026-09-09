@@ -39,7 +39,16 @@ float4 PSReflection(PixelInput input):SV_Target {
 }
 '''
     (HERE/'hydrology.hlsl').write_text(hydro+terrain_reflect)
-    feature=read(HERE.parent/'render_core/terrain_scene.hlsl')+FRAME+'''
+    feature=read(HERE.parent/'render_core/terrain_scene.hlsl')
+    # This retained provider predates the shared cliff material. Bind that one
+    # current body explicitly, without changing unrelated feature shaders.
+    cliff=read(LAB/'shaders/relief/coast_rocks.hlsl')
+    start=feature.index('float4 q4_coastal_rock(')
+    end=feature.index('{',start)+1;depth=1
+    while depth:
+        depth+=(feature[end]=='{')-(feature[end]=='}');end+=1
+    feature=feature[:start]+cliff.strip()+feature[end:]
+    feature+=FRAME+'''
 FeaturePixelInput VSReflection(PackedFeatureInput input) {
  FeaturePixelInput o=VSIntegratedFeature(input);
  float h=max(0,input.world.z-NativeReflection.z);

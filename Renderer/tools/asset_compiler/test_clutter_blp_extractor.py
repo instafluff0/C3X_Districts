@@ -61,6 +61,28 @@ class StaticAllocationTableTests(unittest.TestCase):
 
 
 class MeshProfileTests(unittest.TestCase):
+    def test_fixed_height_mesh_keeps_source_vertical_anchor(self) -> None:
+        vertices=bytearray(3*32)
+        positions=((-2.,-1.,-3.),(2.,-1.,-3.),(0.,1.,5.))
+        for i,p in enumerate(positions):
+            struct.pack_into('<eee',vertices,i*32,*p)
+            struct.pack_into('<ee',vertices,i*32+8,0.25*i,0.25*i)
+        args=(bytes(vertices),struct.pack('<3H',0,1,2),
+              {'format':0x6679B170,'stride':32,'count':3},
+              {'bytes_per_index':2,'count':3},
+              {'first_index':0,'index_count':3,'base_vertex':0,'vertex_count':3},
+              'feature.test.anchored')
+        grounded,_=extractor.normalize_mesh(*args)
+        anchored,evidence=extractor.normalize_mesh(*args,preserve_vertical_origin=True)
+        self.assertEqual(evidence['normalization']['ground_z'],0)
+        self.assertAlmostEqual(anchored['bounds']['minimum'][2],-.25)
+        self.assertAlmostEqual(anchored['bounds']['maximum'][2],5/12)
+        for a,b in zip(grounded['vertices'],anchored['vertices']):
+            self.assertEqual(a['uv0'],b['uv0'])
+            self.assertEqual(a['normal'],b['normal'])
+            self.assertEqual(a['position'][:2],b['position'][:2])
+            self.assertAlmostEqual(a['position'][2]-b['position'][2],.25)
+
     def test_decodes_complete_non_degenerate_profile(self) -> None:
         positions = ((-1.0, -1.0, 0.0), (1.0, -1.0, 0.0), (0.0, 1.0, 2.0))
         uvs = ((0.0, 1.0), (1.0, 1.0), (0.5, 0.0))
@@ -147,6 +169,32 @@ class MeshProfileTests(unittest.TestCase):
                 },
                 "feature.test.invalid",
             )
+
+    def test_optional_degenerate_filter_keeps_only_usable_source_geometry(self) -> None:
+        vertex_format = 0x315CFCD9
+        stride = extractor.VERTEX_PROFILES[vertex_format]["stride"]
+        vertices = bytearray(4 * stride)
+        for index, position in enumerate(
+            ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 2.0, 2.0), (4.0, 0.0, 0.0))
+        ):
+            base = index * stride
+            struct.pack_into("<eee", vertices, base, *position)
+            struct.pack_into("<2b", vertices, base + 6, 0, 0)
+            struct.pack_into("<ee", vertices, base + extractor.UV0_OFFSET, index / 4, 0.5)
+        mesh, evidence = extractor.normalize_mesh(
+            bytes(vertices),
+            struct.pack("<6H", 0, 1, 2, 0, 1, 3),
+            {"format": vertex_format, "stride": stride, "count": 4},
+            {"bytes_per_index": 2, "count": 6},
+            {"first_index": 0, "index_count": 6, "base_vertex": 0, "vertex_count": 4},
+            "feature.test.filtered",
+            use_authored_normals=True,
+            drop_degenerate_triangles=True,
+        )
+        self.assertEqual(4, evidence["source_vertices"])
+        self.assertEqual(3, evidence["vertices"])
+        self.assertEqual(1, evidence["dropped_degenerate_triangles"])
+        self.assertEqual([0, 1, 2], mesh["topology"]["indices"])
 
     def test_preserves_intentional_wrapping_uvs_when_enabled(self) -> None:
         vertex_format = 0x315CFCD9

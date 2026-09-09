@@ -31,3 +31,13 @@ and focused regression tests. The current checkout is authoritative.
 Reference captures reproduce production using small synthetic diagnostic scenes;
 they are not claimed to be live Civ III captures. References are optional review
 aids. See `Renderer/docs/visual_fidelity_playbook.md`.
+
+The accepted surface transition uses the river base-color alpha's fine
+pebble pattern for bank contrast, restrained normals and outer coverage breakup.
+The authored river material supplies most bank color; sand and wet-soil blending
+preserve its grain. The clearer teal water response and bank shading remain
+separate, and channel width/topology are unchanged. See
+`Renderer/docs/shore_river_material_findings.md` for the source audit. Matched
+native previews and production-path verification are under
+`lab/out/shorelines/surface-transition/`. The user approved this appearance for
+production; optional fixed comparison references remain unchanged.

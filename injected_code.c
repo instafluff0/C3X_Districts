@@ -23020,6 +23020,14 @@ custom_renderer_zoom_inverse_point (int * x, int * y)
 }
 
 void __fastcall
+patch_Main_Screen_Form_tile_to_screen_coords (Main_Screen_Form * this, int edx, int tile_x, int tile_y, int * out_x, int * out_y)
+{
+	Main_Screen_Form_tile_to_screen_coords (this, __, tile_x, tile_y, out_x, out_y);
+	if (is->custom_renderer_zoom_native_hud_context)
+		custom_renderer_zoom_transform_point (out_x, out_y);
+}
+
+void __fastcall
 patch_Main_Screen_Form_handle_left_click_on_map_1 (Main_Screen_Form * this, int edx, int param_1, int param_2)
 {
 	if (is->sb_activated_by_button == 1)
@@ -26931,6 +26939,12 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (custom_renderer_zoom_enabled ()) {
 		sync_custom_renderer_zoom_to_native ();
 		draw.projection_scale_milli = is->custom_renderer_zoom_tile_width * 1000 / 128;
+		// tick_anim first translates its native body and status layers together.
+		// Recover the original body anchor before applying the full affine zoom.
+		if (is->custom_renderer_zoom_unit_tick_translated) {
+			draw.body_x -= is->custom_renderer_zoom_unit_tick_delta_x;
+			draw.body_y -= is->custom_renderer_zoom_unit_tick_delta_y;
+		}
 		custom_renderer_zoom_transform_point (&draw.body_x, &draw.body_y);
 	}
 	draw.hour = (is->current_config.day_night_cycle_mode != DNCM_OFF && ! is->day_night_cycle_unstarted) ?
@@ -26985,14 +26999,35 @@ patch_Unit_tick_anim (Unit * this, int edx, PCX_Image * canvas, int offset_x, in
 {
 	Unit * previous_unit = is->custom_renderer_unit_context;
 	PCX_Image * previous_canvas = is->custom_renderer_unit_canvas;
+	int previous_delta_x = is->custom_renderer_zoom_unit_tick_delta_x;
+	int previous_delta_y = is->custom_renderer_zoom_unit_tick_delta_y;
+	bool previous_translated = is->custom_renderer_zoom_unit_tick_translated;
 	is->custom_renderer_unit_context = NULL;
 	is->custom_renderer_unit_canvas = canvas;
+	is->custom_renderer_zoom_unit_tick_delta_x = 0;
+	is->custom_renderer_zoom_unit_tick_delta_y = 0;
+	is->custom_renderer_zoom_unit_tick_translated = false;
+	if (custom_renderer_zoom_transform_active ()) {
+		int native_divisor = p_bic_data->is_zoomed_out ? 2 : 1;
+		int center_x = this->Body.Animation.summary.pixel_loc_x / native_divisor - offset_x;
+		int center_y = this->Body.Animation.summary.pixel_loc_y / native_divisor - offset_y;
+		int transformed_x = center_x, transformed_y = center_y;
+		custom_renderer_zoom_transform_point (&transformed_x, &transformed_y);
+		is->custom_renderer_zoom_unit_tick_delta_x = transformed_x - center_x;
+		is->custom_renderer_zoom_unit_tick_delta_y = transformed_y - center_y;
+		offset_x -= is->custom_renderer_zoom_unit_tick_delta_x;
+		offset_y -= is->custom_renderer_zoom_unit_tick_delta_y;
+		is->custom_renderer_zoom_unit_tick_translated = true;
+	}
 	if (is->current_config.enable_custom_rendering && is->current_config.enable_custom_rendered_units &&
 	    is->custom_renderer_unit_draw != NULL && is->custom_renderer_init_state == IS_OK)
 		is->custom_renderer_unit_context = this;
 	Unit_tick_anim (this, __, canvas, offset_x, offset_y, status);
 	is->custom_renderer_unit_context = previous_unit;
 	is->custom_renderer_unit_canvas = previous_canvas;
+	is->custom_renderer_zoom_unit_tick_delta_x = previous_delta_x;
+	is->custom_renderer_zoom_unit_tick_delta_y = previous_delta_y;
+	is->custom_renderer_zoom_unit_tick_translated = previous_translated;
 }
 
 int __fastcall
@@ -30002,7 +30037,10 @@ draw_combat_odds_hud (Main_Screen_Form * main_screen_form, PCX_Image * canvas)
 void __fastcall
 patch_Main_Screen_Form_draw_city_hud (Main_Screen_Form * this, int edx, PCX_Image * canvas)
 {
+	bool previous_hud_context = is->custom_renderer_zoom_native_hud_context;
+	is->custom_renderer_zoom_native_hud_context = custom_renderer_zoom_transform_active ();
 	Main_Screen_Form_draw_city_hud (this, __, canvas);
+	is->custom_renderer_zoom_native_hud_context = previous_hud_context;
 
 	bool draw_natural_wonders = is->current_config.enable_natural_wonders &&
 	                            is->current_config.show_natural_wonder_name_on_map;

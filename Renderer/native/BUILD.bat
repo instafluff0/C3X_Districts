@@ -56,7 +56,7 @@ if errorlevel 1 exit /b 1
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX native_smoke.cpp environment_runtime.cpp /Fo:build\ /Fe:build\native_smoke.exe /link gdi32.lib
 if errorlevel 1 exit /b 1
 
-cl /nologo /std:c++17 /EHsc /O2 /W4 /WX biq_preview.cpp /Fo:build\ /Fe:build\biq_preview.exe /link gdi32.lib
+cl /nologo /std:c++17 /EHsc /O2 /W4 /WX biq_preview.cpp /Fo:build\ /Fe:build\biq_preview.exe /link /LARGEADDRESSAWARE gdi32.lib
 if errorlevel 1 exit /b 1
 
 cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_animation_runtime.cpp /Fo:build\ /Fe:build\test_animation_runtime.exe

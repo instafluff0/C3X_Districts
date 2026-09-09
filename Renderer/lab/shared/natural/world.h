@@ -1,11 +1,12 @@
 #pragma once
 // Production river pages and natural CPU inputs; no graphics API ownership.
 #include "data.h"
+#include <memory>
 #include "../../../native/render_core/world_topology.h"
 #include "../../../native/source_fidelity/river_corridor.h"
 namespace c3x_renderer { namespace fidelity {
 struct NaturalWorld : NaturalData {
-    struct RiverPage {int c=0,r=0;std::uint64_t used=0;river::Corridor field;};
+    struct RiverPage {int c=0,r=0;std::uint64_t used=0;std::shared_ptr<river::Corridor> field;};
     std::vector<RiverPage> river_pages;
     render_core::WorldTopology const*river_world=nullptr;
     std::uint64_t river_epoch=0;
@@ -15,9 +16,9 @@ struct NaturalWorld : NaturalData {
         river_world=&w;
         if(river_revision!=revision){river_pages.clear();river_revision=revision;}
     }
-    river::Corridor const& river_page(double x,double y){
+    RiverPage& river_page_entry(double x,double y){
         int pc=int(std::floor(x/8)),pr=int(std::floor(y/8));++river_epoch;
-        for(auto&p:river_pages)if(p.c==pc && p.r==pr){p.used=river_epoch;return p.field;}
+        for(auto&p:river_pages)if(p.c==pc && p.r==pr){p.used=river_epoch;return p;}
         // Sixteen 8x8 pages, each with a four-cell authoritative support halo.
         // Distant jumps evict LRU fields instead of building the whole map.
         if(river_pages.size()==16){auto it=std::min_element(river_pages.begin(),river_pages.end(),[](auto const&a,auto const&b){return a.used<b.used;});river_pages.erase(it);}
@@ -32,9 +33,15 @@ struct NaturalWorld : NaturalData {
         auto lookup=[&](int c,int r){auto t=w.tile(c,r);int rx=c+r,ry=c-r;
             if(dims.wrap_x)rx=render_core::mod(rx,dims.width);if(dims.wrap_y)ry=render_core::mod(ry,dims.height);
             return Tile{rx,ry,c,r,t.present?t.real:-1};};
-        page.field.build(field,[&](double u,double v){return height(float(u),float(v),lookup);});
-        river_pages.push_back(std::move(page));return river_pages.back().field;
+        page.field=std::make_shared<river::Corridor>();
+        page.field->build(field,[&](double u,double v){return height(float(u),float(v),lookup);});
+        river_pages.push_back(std::move(page));return river_pages.back();
     }
+    river::Corridor const& river_page(double x,double y){return *river_page_entry(x,y).field;}
+    // A tile compiler may query neighboring pages while using its bound field.
+    // Keep that one immutable field alive across vector moves and LRU eviction;
+    // release it when this tile finishes, without growing the 16-page cache.
+    std::shared_ptr<river::Corridor const> retain_river_page(double x,double y){return river_page_entry(x,y).field;}
     river::Sample river_sample(hydro::P p){return river_page(p.x,p.y).sample(p);}
     bool river_affects(int c,int r){return river_page(c+.5,r+.5).affects(c,r);}
 };
