@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import struct
 import sys
 import xml.etree.ElementTree as ET
@@ -73,6 +74,8 @@ def decode(source):
         raise ValueError("Wave vector count disagrees with allocation")
     textures = {}
     for role, pointer in (("crest", atlas), ("auxiliary", auxiliary)):
+        if not 1 <= pointer <= len(package.allocations):
+            raise ValueError("Wave texture pointer escapes allocation graph")
         allocation = package.allocations[pointer - 1]
         parent = allocation["parent_pointer"]
         if package.type_name(pointer) != "BLP::TextureEntry" or not parent:
@@ -102,7 +105,7 @@ def artdef(path):
             continue
         value = {child.tag: child.attrib.get("text", child.text) for child in element
                  if child.tag != "m_ParamName"}
-        values[key.attrib["text"]] = value
+        values.setdefault(key.attrib["text"], []).append(value)
     return values
 
 
@@ -117,6 +120,18 @@ def extract(assets=DEFAULT_ASSETS, output=DEFAULT_OUTPUT):
         metadata[role] = {key: value for key, value in texture.items() if key != "payload"}
         metadata[role].update(texture=role + ".dds", sha256=digest(data))
     (output / "crest-delays.f32").write_bytes(table)
+    # Generic data contract, separate from source-specific audit/provenance.
+    # No runtime behavior is enabled merely by recovering a source texture.
+    normalized = dict(schema="c3x.coastal_wave_assets.v1", enabled=False,
+        atlas=dict(texture="crest.dds", columns=layout["columns"], rows=layout["rows"],
+                   variants=layout["pages"], across_texels=128, along_texels=512),
+        auxiliary=dict(texture="auxiliary.dds"),
+        crest_delays=dict(file="crest-delays.f32", samples_per_variant=layout["delays_per_page"],
+                          encoding="little-endian float32", inactive="FLT_MAX"),
+        channels=dict(crest_rgb="crest intensity; C3X interpretation", crest_alpha="preserved; unresolved",
+                      auxiliary_rgb="fine foam detail; C3X interpretation", auxiliary_alpha="constant one"),
+        animation="absolute presentation time and stable contour instance ID; binding pending")
+    (output / "wave.json").write_text(json.dumps(normalized, indent=2) + "\n")
     delays = struct.unpack("<8192f", table)
     active = [value for value in delays if value < 1e30]
     if any(not 0 <= value <= 1 for value in active):
@@ -136,6 +151,13 @@ def extract(assets=DEFAULT_ASSETS, output=DEFAULT_OUTPUT):
                                      sha256=digest(p.read_bytes()))
         for p in sorted(assets.rglob("*")) if p.is_file()
         and ("wave" in p.name.lower() or "foam" in p.name.lower())]
+    water_relative = Path("Base/Platforms/Windows/BLPs/Water.blp")
+    water_data = (assets / water_relative).read_bytes()
+    names = [s.decode("ascii") for s in re.findall(rb"[ -~]{6,}", water_data)]
+    report["water_package_inventory"] = dict(source=water_relative.as_posix(), sha256=digest(water_data),
+        evidence="printable resource/type inventory only, not parameter decoding",
+        names=[name for name in names if any(token in name for token in
+               ("Water/", "WhiteCap", "LeanMap", "Water_Bumps", "Density_"))])
     (output / "audit.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
 

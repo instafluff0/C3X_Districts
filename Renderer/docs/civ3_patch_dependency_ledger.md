@@ -169,6 +169,25 @@ camp tribe identity is not a civilization tint selector. These data sources do
 not themselves approve art or expand suppression. See the corresponding current
 infrastructure/source findings before extending a category.
 
+## Goody huts and barbarian camps
+
+The existing `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture/insertion hook
+now captures sites through `Tile::m15_Check_Goody_Hut(viewer)` and
+`Tile::m7_Check_Barbarian_Camp(viewer)`. `m44_Get_Barbarian_TribeID` supplies the
+visible camp's stable composition identity. These are existing vtable calls;
+no new address, signature, CSV entry or patch capability is required.
+
+API 17 appends the camp identity and adds explicit site presence/replacement
+flags. Frame, geometry and retained-background signatures observe these values.
+The existing ownership validator rejects missing visible site replacements and
+claims on hidden/absent sites or caster-only tiles. Config-off keeps native m19;
+custom-on frame failure preserves the established exclusive-map policy.
+
+`required_user_action`: none for symbols or patch-table edits. Deploy a matching
+API 17 renderer and rebuild/install injected capture together. The approved
+`TEST_INJECTED_CODE_COMPILE.bat` smoke passes with these additions. The user's
+request to make both sites appear in-game authorizes this integration scope.
+
 ## Installed GOG unit hooks
 
 Current CSV entries use these exact signatures:

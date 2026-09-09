@@ -1,0 +1,46 @@
+{
+  "id": "goody-huts",
+  "title": "Goody huts",
+  "depends_on": [
+    "day-night",
+    "shadows"
+  ],
+  "implementation": [
+    "Renderer/native/c3x_renderer.cpp",
+    "Renderer/native/c3x_renderer_api.h",
+    "Renderer/native/terrain_scene_runtime.cpp",
+    "Renderer/tools/asset_compiler/build_site_runtime.py",
+    "Renderer/native/environment_refresh/prepare.py"
+  ],
+  "recipe": {
+    "terrain": 2,
+    "feature": 2,
+    "objects": false,
+    "hours": [
+      12,
+      18,
+      0,
+      6
+    ],
+    "zooms": [
+      128,
+      64
+    ],
+    "cases": [
+      "detail",
+      "gameplay"
+    ]
+  },
+  "tests": [
+    "Renderer.native.test_scene_lighting",
+    "Renderer.native.test_tile_sites",
+    "Renderer.native.test_native_bridge_contract",
+    "Renderer.native.test_render_core"
+  ],
+  "references": {
+    "d3d11": []
+  },
+  "limitations": [
+    "Native rewards, camp guards and resource visibility remain authoritative. Source ground decals and animated attachments are omitted."
+  ]
+}

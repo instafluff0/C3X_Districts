@@ -21,6 +21,9 @@
     "day-night": "lighting/day-night",
     "shadows": "lighting/shadows",
     "animation": "animation",
-    "huts-camps": "objects/huts-camps"
+    "huts-camps": "objects/huts-camps",
+    "goody-huts": "objects/goody-huts",
+    "barbarian-camps": "objects/barbarian-camps",
+    "ocean-waves": "water/ocean-waves"
   }
 }

@@ -35,6 +35,7 @@
 #include "color_quantization.h"
 #include "render_core/terrain_query.h"
 #include "render_core/world_coast.h"
+#include "render_core/coastal_waves.h"
 #include "render_core/relief_query.h"
 #include "render_core/exact_point_cache.h"
 #include "render_core/cliff_placement.h"
@@ -225,6 +226,7 @@ enum GeometryLayer : std::size_t {
     geometry_river,
     geometry_route,
     geometry_shadow,
+    geometry_wave,
     geometry_feature,
     geometry_city,
     geometry_wall,
@@ -583,7 +585,18 @@ public:
     std::vector<std::uint32_t> resource_pixels;
     std::uint64_t resource_pixel_signature = 0;
     c3x_renderer_i64 resource_pixel_clock = -1;
-    unsigned visible_resource_animations = 0;
+    unsigned visible_resource_animations = 0, visible_wave_animations = 0;
+    bool wave_attempted=false,wave_ready=false;
+    ID3D11PixelShader* wave_shader=nullptr;
+    ID3D11Buffer* wave_frame=nullptr;
+    std::array<ID3D11ShaderResourceView*,3> wave_views={};
+    std::vector<CachedVertexChunk> wave_chunks;
+    std::uint64_t wave_signature=0;
+    unsigned ambient_count() const {return visible_resource_animations+visible_wave_animations;}
+    void reset_waves() {
+        for(auto& c:wave_chunks){release(c.buffer);release(c.indices);}wave_chunks.clear();
+        wave_signature=0;visible_wave_animations=0;
+    }
     c3x_renderer_u32 cached_visible_animation_count = 0;
     c3x_renderer_u32 cached_request_continuous_redraw = 0;
     c3x_renderer_u32 cache_hits = 0;
@@ -786,6 +799,9 @@ public:
         release(feature_pixel_shader);
         release(feature_vertex_shader);
         release(pixel_shader);
+        reset_waves();release(wave_shader);release(wave_frame);
+        for(auto&view:wave_views)release(view);
+        wave_attempted=wave_ready=false;
         release(vertex_shader);
         release(context);
         release(device);
@@ -886,6 +902,13 @@ public:
             hr = device->CreatePixelShader(feature_pixel_blob->GetBufferPointer(),
                                            feature_pixel_blob->GetBufferSize(), nullptr,
                                            &feature_pixel_shader);
+        if(environment_profile && SUCCEEDED(hr)) {
+            ID3DBlob* blob=nullptr;
+            if(!compile_terrain_shader("PSCoastalWave",ps_target,&blob))hr=E_FAIL;
+            else {hr=device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&wave_shader);release(blob);}
+            D3D11_BUFFER_DESC desc={};desc.ByteWidth=16;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+            if(SUCCEEDED(hr))hr=device->CreateBuffer(&desc,nullptr,&wave_frame);
+        }
         D3D11_INPUT_ELEMENT_DESC elements[] = {
             {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
             {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -2225,7 +2248,7 @@ public:
         else if (format == DXGI_FORMAT_R16G16B16A16_UNORM ||
                  format == DXGI_FORMAT_R16G16B16A16_FLOAT)
             bytes_per_pixel = 8u;
-        else if (format == DXGI_FORMAT_R16G16_UNORM)
+        else if (format == DXGI_FORMAT_R16G16_UNORM || format == DXGI_FORMAT_R8G8B8A8_UNORM || format == DXGI_FORMAT_R32_FLOAT)
             bytes_per_pixel = 4u;
         else if (format == DXGI_FORMAT_R8_UNORM)
             bytes_per_pixel = 1u;
@@ -2235,7 +2258,7 @@ public:
             format != DXGI_FORMAT_BC5_UNORM &&
             format != DXGI_FORMAT_R16G16B16A16_UNORM &&
             format != DXGI_FORMAT_R16G16B16A16_FLOAT &&
-            format != DXGI_FORMAT_R16G16_UNORM &&
+            format != DXGI_FORMAT_R16G16_UNORM && format != DXGI_FORMAT_R8G8B8A8_UNORM && format != DXGI_FORMAT_R32_FLOAT &&
             format != DXGI_FORMAT_R8_UNORM)
             return false;
         std::vector<D3D11_SUBRESOURCE_DATA> subresources(mip_count);
@@ -2805,6 +2828,8 @@ public:
     }
 
     bool frame_has_resource_animation(c3x_renderer_frame_v1 const & frame) const {
+        if(wave_ready)for(unsigned i=0;i<frame.tile_count;++i)
+            if((frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER) && frame.tiles[i].terrain_type>=11)return true;
         if (resource_animations.empty()) return false;
         for (unsigned i=0;i<frame.tile_count;++i)
             if ((frame.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER) && resource_animation_for(frame.tiles[i])>=0)
@@ -2816,13 +2841,67 @@ public:
         return frame.presentation_time_ticks/std::max<c3x_renderer_i64>(1,frame.presentation_frequency/15);
     }
 
+    bool prepare_wave_chunks(c3x_renderer_frame_v1 const& frame) {
+        if(wave_signature==cached_signature.complete)return true;
+        reset_waves();wave_signature=cached_signature.complete;
+        if(!wave_ready || !frame.tile_count)return true;
+        using namespace c3x_renderer::render_core;
+        auto const& first=frame.tiles[0];
+        float hw=frame.tile_width*.5f,hh=frame.tile_height*.5f;
+        float cu=(first.tile_x+first.tile_y)*.5f,rv=(first.tile_x-first.tile_y)*.5f;
+        float dx=geometry_viewport_settings.translation[0],dy=geometry_viewport_settings.translation[1];
+        std::map<std::pair<int,int>,bool> cells;
+        for(unsigned i=0;i<frame.tile_count;++i){auto const&t=frame.tiles[i];
+            if(!(t.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
+            int c=(t.tile_x+t.tile_y)/2,r=(t.tile_x-t.tile_y)/2;
+            for(int y=r-1;y<=r+1;++y)for(int x=c-1;x<=c+1;++x)cells[{x,y}]=true;
+        }
+        std::size_t bytes=0;
+        for(auto const& entry:cells){
+            int c=entry.first.first,r=entry.first.second;
+            auto identity=world_coast.world().index(c,r);if(identity==std::size_t(-1))continue;
+            auto hash=c3x_renderer::stable_hash(unsigned(identity)*193u+71u);
+            float seed=c3x_renderer::stable_random(hash),seed2=c3x_renderer::stable_random(hash+23u);
+            auto ribbon=coastal_wave_ribbon(world_coast,c,r,.30f+.70f*seed);if(ribbon.empty())continue;
+            std::vector<Vertex> vertices;vertices.reserve(ribbon.size());
+            CachedVertexChunk chunk;chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
+            for(unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=1e9f;chunk.world_bounds.high[a]=-1e9f;}
+            for(auto const& point:ribbon){
+                float u=float(point.position.x)-cu,v=1-(float(point.position.y)-rv);
+                Vertex out={};out.x=first.anchor_x+hw+(u-v)*hw-dx;
+                out.y=first.anchor_y+(u+v)*hh-dy;out.z=out.y+.08f;
+                out.u=point.distance;out.v=point.along;out.panel=1;out.normal_z=1;
+                out.shadow_visibility=1;out.ambient_visibility=point.coverage;
+                out.base_terrain=seed;out.real_terrain=seed2;out.surface_kind=7;
+                out.world_x=float(point.position.x);out.world_y=float(point.position.y);out.world_z=2.5f/112;out.world_valid=1;
+                out.macro_u=out.world_x*.5f;out.macro_v=out.world_y*.5f;
+                vertices.push_back(out);
+                chunk.bounds.left=std::min(chunk.bounds.left,LONG(std::floor(out.x))-2);chunk.bounds.right=std::max(chunk.bounds.right,LONG(std::ceil(out.x))+2);
+                chunk.bounds.top=std::min(chunk.bounds.top,LONG(std::floor(out.y))-2);chunk.bounds.bottom=std::max(chunk.bounds.bottom,LONG(std::ceil(out.y))+2);
+                float w[]={out.world_x,out.world_y,out.world_z};for(unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=std::min(chunk.world_bounds.low[a],w[a]);chunk.world_bounds.high[a]=std::max(chunk.world_bounds.high[a],w[a]);}
+            }
+            if(chunk.bounds.right+dx<=0 || chunk.bounds.left+dx>=width || chunk.bounds.bottom+dy<=0 || chunk.bounds.top+dy>=height)continue;
+            auto size=unsigned(vertices.size()*sizeof(Vertex));
+            if(bytes+size>16u*1024u*1024u){trace.write("coastal-wave-budget","16 MiB; remaining ribbons omitted",true);break;}
+            D3D11_BUFFER_DESC desc={};desc.ByteWidth=size;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA data={};data.pSysMem=vertices.data();
+            if(FAILED(device->CreateBuffer(&desc,&data,&chunk.buffer))){reset_waves();return false;}
+            std::vector<unsigned> indices(vertices.size());for(unsigned i=0;i<indices.size();++i)indices[i]=i;
+            desc.ByteWidth=unsigned(indices.size()*4);desc.BindFlags=D3D11_BIND_INDEX_BUFFER;data.pSysMem=indices.data();
+            if(FAILED(device->CreateBuffer(&desc,&data,&chunk.indices))){release(chunk.buffer);reset_waves();return false;}
+            chunk.vertex_stride=sizeof(Vertex);chunk.index_count=unsigned(indices.size());chunk.version=cached_signature.complete;
+            wave_chunks.push_back(chunk);bytes+=size;
+        }
+        return true;
+    }
+
     bool compose_resource_animations(c3x_renderer_frame_v1 const & frame) {
         resource_composite_ticks=0;
         if (!frame_has_resource_animation(frame)) {
-            visible_resource_animations=0; resource_pixel_signature=0; return true;
+            visible_resource_animations=visible_wave_animations=0; resource_pixel_signature=0; return true;
         }
         auto clock=resource_clock(frame);
-        if (visible_resource_animations && resource_pixel_signature==cached_signature.complete &&
+        if (ambient_count() && resource_pixel_signature==cached_signature.complete &&
             resource_pixel_clock==clock) return true;
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
         visible_resource_animations=0;
@@ -2960,7 +3039,19 @@ public:
             buffers[geometry_shadow].push_back(shadow_chunk);
             buffers[geometry_feature].push_back(chunk);++visible_resource_animations;
         }
-        if (!visible_resource_animations) {resource_pixel_signature=0;return true;}
+        if(!prepare_wave_chunks(frame))return false;
+        visible_wave_animations=unsigned(wave_chunks.size());
+        buffers[geometry_wave]=wave_chunks;
+        if(visible_wave_animations){
+            float time[]={float(double(ticks)/std::max<c3x_renderer_i64>(1,frame.presentation_frequency)),0,0,0};
+            context->UpdateSubresource(wave_frame,0,nullptr,time,0,0);
+            for(auto const& chunk:wave_chunks){
+                D3D11_RECT visible={std::max<LONG>(0,chunk.bounds.left+dx),std::max<LONG>(0,chunk.bounds.top+dy),std::min<LONG>(width,chunk.bounds.right+dx),std::min<LONG>(height,chunk.bounds.bottom+dy)};
+                for(int y=visible.top/128;y<=(visible.bottom-1)/128;++y)for(int x=visible.left/128;x<=(visible.right-1)/128;++x)
+                    dirty_blocks[std::size_t(y)*((width+127)/128)+x]=1;
+            }
+        }
+        if (!ambient_count()) {resource_pixel_signature=0;return true;}
         for (int y=0;y<(height+127)/128;++y)for(int x=0;x<(width+127)/128;++x)
             if(dirty_blocks[std::size_t(y)*((width+127)/128)+x])
                 rectangles.push_back({x*128,y*128,std::min((x+1)*128,width),std::min((y+1)*128,height)});
@@ -3056,12 +3147,12 @@ public:
         output.rendered_tile_count = cached_rendered_tile_count;
         output.fallback_tile_count = cached_fallback_tile_count;
         if (!compose_resource_animations(frame)) return false;
-        output.bgra_pixels = visible_resource_animations ? resource_pixels.data() : pixels.data();
+        output.bgra_pixels = ambient_count() ? resource_pixels.data() : pixels.data();
         // Terrain is independent of retained native unit/effect animation.  A
         // cache hit must still report the current frame's animation demand so
         // Civ III keeps driving those overlay planes without rerendering the
         // static map underneath them.
-        output.visible_animation_count = frame.visible_animation_count + visible_resource_animations;
+        output.visible_animation_count = frame.visible_animation_count + ambient_count();
         output.request_continuous_redraw = output.visible_animation_count != 0;
         output.renderer_cpu_ticks = renderer_ticks + resource_composite_ticks;
         output.textured_tile_count = cached_textured_tile_count;
@@ -3600,7 +3691,7 @@ public:
         auto draw = [&](GeometryLayer layer) {
             if(reflection_pass){
                 if(layer==geometry_underlay || layer==geometry_bed || layer==geometry_water ||
-                    layer==geometry_river || layer==geometry_route || layer==geometry_shadow)return true;
+                    layer==geometry_river || layer==geometry_route || layer==geometry_shadow || layer==geometry_wave)return true;
                 unsigned provider=layer<geometry_feature?0:layer<geometry_natural_terrain?1:
                     layer<=geometry_natural_decal?2:layer==geometry_natural_mountain?3:4;
                 context->VSSetShader(reflection.vs[provider],nullptr,0);
@@ -3856,6 +3947,14 @@ public:
                 !draw(geometry_shadow) ||
                 !draw(geometry_route)) {
                 return false;
+            }
+            if(!reflection_pass && wave_ready && !buffers[geometry_wave].empty()){
+                context->PSSetShader(wave_shader,nullptr,0);
+                context->PSSetShaderResources(0,3,wave_views.data());context->PSSetConstantBuffers(7,1,&wave_frame);
+                context->OMSetDepthStencilState(natural.decal_depth,0);
+                if(!draw(geometry_wave))return false;
+                context->OMSetDepthStencilState(depth_state,0);
+                context->PSSetShader(pixel_shader,nullptr,0);context->PSSetShaderResources(0,3,views.data());
             }
             if(environment_profile)context->PSSetShaderResources(121,1,views.data()+121);
             if(fidelity_profile){ID3D11SamplerState*retained[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,retained);}
@@ -4290,6 +4389,17 @@ public:
             bool ok=ensure_dds_texture(bytes,view,true,true);
             QueryPerformanceCounter(&end);texture_ticks+=end.QuadPart-begin.QuadPart;return ok;
         };
+        if(environment_profile && !wave_attempted){
+            wave_attempted=true;std::vector<std::uint8_t> header;
+            char const* control=std::getenv("C3X_RENDERER_WAVES");
+            if((!control || std::strcmp(control,"0")) && read_fidelity("Renderer/packs/CoastalWavesRuntime/waves.bin",header) &&
+               header.size()==16 && !std::memcmp(header.data(),"CWV1",4) && read_u32(header,4)==1 && read_u32(header,8)==1){
+                wave_ready=true;char const* files[]={"crest.dds","auxiliary.dds","delays.dds"};
+                for(unsigned i=0;i<3;++i){std::vector<std::uint8_t> bytes;
+                    wave_ready=wave_ready && read_fidelity(std::string("Renderer/packs/CoastalWavesRuntime/")+files[i],bytes) && upload_fidelity(bytes,wave_views[i]);}
+            }
+            trace.write("coastal-wave-pack",wave_ready?"enabled":"disabled or unavailable; terrain retained",true);
+        }
         if(fidelity_profile && !natural.load(device,fidelity_root,read_fidelity,upload_fidelity,city_profile?"city_fidelity":environment_profile?"environment_refresh":"source_fidelity")) {
             trace.write("source-fidelity-failed",natural.failure.c_str(),true);return false;
         }
@@ -4494,7 +4604,7 @@ public:
         std::vector<Vertex> underlay_vertices;
         std::vector<Vertex> land_vertices;
         std::vector<Vertex> bed_vertices;
-        std::vector<Vertex> water_vertices;
+        std::vector<Vertex> water_vertices, wave_vertices;
         std::vector<Vertex> river_vertices;
         std::array<std::vector<UINT>, geometry_river+1> ground_indices;
         std::vector<Vertex> route_vertices;
@@ -4511,7 +4621,7 @@ public:
         std::array<std::vector<UINT>,2> natural_grid_indices;
         std::array<std::vector<Vertex> *, geometry_layer_count> tile_layers = {
             &underlay_vertices, &land_vertices, &bed_vertices, &water_vertices,
-            &river_vertices, &route_vertices, &shadow_vertices, &feature_vertices,
+            &river_vertices, &route_vertices, &shadow_vertices, &wave_vertices, &feature_vertices,
             &city_vertices, &wall_vertices, &mine_vertices, &farm_vertices, &site_vertices,
             &cliff_vertices[0], &cliff_vertices[1], &cliff_vertices[2], &cliff_vertices[3],
             &cliff_vertices[4], &cliff_vertices[5], &cliff_vertices[6], &cliff_vertices[7]};
@@ -5957,6 +6067,9 @@ public:
                 float tile_world_v = static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f;
                 std::array<float, 3> ground_sample = relief_at_world(
                     tile_world_u + local_u, tile_world_v + (1.0f - local_v));
+                if(pickup_profile && &bundle==&site_bundle)
+                    ground_sample[0]=queries.height(natural,pickup_height_at,
+                        tile_world_u+local_u,tile_world_v+1.f-local_v)-2.5f;
                 float center_x = left + half_w + (local_u - local_v) * half_w;
                 float center_y = top + (local_u + local_v) * half_h -
                     ground_sample[0] * relief_projection_scale;
@@ -8065,7 +8178,7 @@ private:
                     }
                 }
             }else {publication.clear();completed_phase_x=completed_phase_y=0;}
-            completed_resources = command==Command::render ? renderer_state.visible_resource_animations : 0;
+            completed_resources = command==Command::render ? renderer_state.ambient_count() : 0;
             completed_resource_clock=command==Command::render ? RendererState::resource_clock(job_frame) : -1;
             completed_output = output;
             completed_scene_signature=command==Command::render && result==C3X_RENDERER_RESULT_OK ?

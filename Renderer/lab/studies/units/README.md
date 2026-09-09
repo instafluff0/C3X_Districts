@@ -208,3 +208,27 @@ the generic maintained pipeline, validate the broader roster, and reconcile the
 larger Spearman/Pikeman animation bounds with native dirty regions. The second
 LEAN/specular pipeline and exact source engine binding remain research limits;
 none is silently represented as solved by these normal/tint comparisons.
+
+## Six-unit extension and independent studio
+
+`material_study.py --roster --render` now extends the private material experiment
+to Warrior, Spearman, Pikeman, Archer, Settler and Worker. The new pack is
+`UnitMaterialRosterStudy`; all three rows use the same corrected anatomy fit and
+2x sampling. `source-roster-frame-pack` preserves 32 recovered components and
+9,716 vertices. All source tangent pairs retain positive-U / negative-V
+orientation; mean derivative agreement stays above 0.80 in magnitude. Tangent
+pair orthogonality, distinct offset selection and source/payload identity are
+validated without forcing authored normals perpendicular to the pair.
+
+All six native roster sheets passed 18 draws. Four dedicated roster tests check
+all generated payloads, native idle/move decoding across all six units, source
+frames, and identical anatomy size/sampling across rows. A build-route error was
+caught before rendering and corrected; two VM dispatch errors were retried only
+after Windows confirmed the preview process was absent. These are still private
+snapshots, not game-dirty-region certification.
+
+The user's subsequent request for an unconstrained reference is implemented in
+[the independent unit studio](STUDIO.md). That experiment is separate from the
+DLL and uses the retained source-family dual-lobe specular evidence. It supplies
+a high-resolution reference and final-reconstruction comparisons, rather than
+assuming that the smaller material differences above establish visual parity.

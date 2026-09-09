@@ -81,7 +81,27 @@ def raster(points,indices,width,height):
         yield tri,x[inside].astype(int),y[inside].astype(int),np.stack((a[inside],b[inside],1-a[inside]-b[inside]),axis=-1)
 
 
-def render(size=1200,elevation=40,yaw=45,source_specular=True,normal_detail=True):
+def shadow_field(parts,light,size=1536):
+    right=normalize(np.cross([0,0,1],light));up=np.cross(light,right);basis=np.stack((right,up,light),axis=1)
+    points=np.concatenate([p['position'] for p in parts]);ground=points-points[:,2,None]/light[2]*light
+    extent=np.concatenate((points,ground))@basis;low=extent[:,:2].min(axis=0)-.08;span=extent[:,:2].max(axis=0)+.08-low
+    depth=np.full((size,size),-np.inf,dtype=np.float32)
+    for p in parts:
+        projected=p['position']@basis;projected[:,:2]=(projected[:,:2]-low)/span*(size-1)
+        for tri,x,y,bary in raster(projected,p['indices'],size,size):
+            z=bary@projected[tri,2];np.maximum.at(depth,(y,x),z)
+    def visibility(points):
+        projected=points@basis;ij=np.floor((projected[:,:2]-low)/span*(size-1)).astype(int);visible=np.zeros(len(points))
+        for dx in (-1,0,1):
+            for dy in (-1,0,1):
+                x,y=ij[:,0]+dx,ij[:,1]+dy;inside=(x>=0)&(x<size)&(y>=0)&(y<size)
+                lit=np.ones(len(points));lit[inside]=(depth[y[inside],x[inside]]<=projected[inside,2]+.0025)
+                visible+=lit/9
+        return visible
+    return visibility
+
+
+def render(size=1200,elevation=40,yaw=45,source_specular=True,normal_detail=True,return_linear=False):
     parts=load_parts();angle=np.radians(elevation);az=np.radians(yaw)
     view=np.array([np.cos(az)*np.cos(angle),np.sin(az)*np.cos(angle),np.sin(angle)])
     right=normalize(np.cross(np.array([0,0,1]),view));up=np.cross(view,right)
@@ -99,6 +119,13 @@ def render(size=1200,elevation=40,yaw=45,source_specular=True,normal_detail=True
     # lighting parameters, not recovered Civ VI time-of-day constants.
     light=normalize(np.array([-.35,-.65,1.0]));key=np.array([3.2,3.05,2.9]);sky=np.array([.42,.50,.66]);ground=np.array([.12,.10,.08])
     rgb=np.full((size,size,3),srgb(np.array([.55,.59,.59])),dtype=np.float32)
+    visibility=shadow_field(parts,light)
+    gy,gx=np.where(ids<0)
+    # Reconstruct a flat receiving plane with the same orthographic camera.
+    screen=np.stack(((gx+.5-center[0])/scale,-(gy+.5-center[1])/scale),axis=-1)
+    xy=screen@np.linalg.inv(np.stack((right[:2],up[:2]),axis=1));ground_points=np.c_[xy,np.zeros(len(xy))]
+    ground_visibility=visibility(ground_points)
+    rgb[gy,gx]*=(.68+.32*ground_visibility[:,None])
     owner=srgb(np.array([.125,.357,.867]))
     for k,p in enumerate(parts):
         y,x=np.where(ids==k);v=g[y,x];uv=v[:,12:14];n=normalize(v[:,3:6]);t=v[:,6:9];bt=v[:,9:12]
@@ -112,7 +139,8 @@ def render(size=1200,elevation=40,yaw=45,source_specular=True,normal_detail=True
         ao=tex('ambient_occlusion',[1,1,1,1])[:,0]
         ndl=np.maximum(n@light,0);hemi=np.clip(n[:,2]*.5+.5,0,1)
         fill=ground+(sky-ground)*hemi[:,None]
-        radiance=albedo*(fill*ao[:,None]+key*ndl[:,None]/np.pi)
+        shadow=visibility(v[:,:3])
+        radiance=albedo*(fill*ao[:,None]+key*(ndl*shadow)[:,None]/np.pi)
         rough=tex('gloss',[.1,.3,.1,1])[:,:3]
         if source_specular:
             geometric=normalize(v[:,3:6]);h=normalize(light+view);hz=geometric@h
@@ -121,20 +149,21 @@ def render(size=1200,elevation=40,yaw=45,source_specular=True,normal_detail=True
             distribution=.25*(rough[:,2]+lobes@np.array([1/3,2/3]))
             f0=.04*(1-np.clip(np.sqrt(np.pi*rough[:,2])-.35,0,1))**2
             fresnel=f0+(1-f0)*(1-np.clip(h@light,0,1))**5
-            radiance+=key*(distribution*fresnel*ndl*(hz>0))[:,None]
+            radiance+=key*(distribution*fresnel*ndl*shadow*(hz>0))[:,None]
         rgb[y,x]=radiance
     # Direct display transfer: no C3X max-channel tone compressor, no sharpening.
     result=Image.fromarray(np.uint8(np.round(display(rgb)*255)))
-    OUT.mkdir(parents=True,exist_ok=True);name=f'warrior-e{elevation}-a{yaw}-s{size}'
+    OUT.mkdir(parents=True,exist_ok=True);name=f'warrior-e{elevation}-a{yaw}-s{size}'+('' if normal_detail else '-flat')+('' if source_specular else '-diffuse')
     result.save(OUT/(name+'.png'))
     (OUT/(name+'.json')).write_text(json.dumps({'size':size,'camera_elevation':elevation,'camera_yaw':yaw,'body_world_height':1,
         'input_components':len(parts),'input_vertices':sum(len(p['position']) for p in parts),'input_triangles':sum(len(p['indices']) for p in parts),
         'source_preserved':['geometry','UVs','authored frames','source first idle pose','base/tint','normal_0','AO','three cooked roughness channels'],
         'inferred':['studio key and hemispherical fill','orthographic camera','direct sRGB display exposure'],
-        'not_implemented':['cast shadows','second LEAN variance constant','source environment cube/SH','metalness extra-slot intake'],
+        'shadow':'1536px source-triangle depth map and shared studio key direction',
+        'not_implemented':['second LEAN variance constant','source environment cube/SH','metalness extra-slot intake'],
         'clipped_display_fraction':float(np.any(rgb[ids>=0]>1,axis=-1).mean())},indent=2)+'\n')
     print('PASS independent studio',name,flush=True)
-    return result
+    return (result,rgb) if return_linear else result
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--size',type=int,default=1200);parser.add_argument('--elevation',type=int,default=40);parser.add_argument('--yaw',type=int,default=45);args=parser.parse_args()

@@ -292,7 +292,7 @@ int main(int argc, char ** argv) {
         if(pickup && (anchor_x+tile_width < -tile_width*4 || anchor_x>target_width+tile_width*4 ||
             anchor_y+tile_height < -tile_height*4 || anchor_y>target_height+tile_height*4))
             tile.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO;
-        tile.resource_id = tile.resource_class = tile.tile_building_id = -1;
+        tile.resource_id = tile.resource_class = tile.tile_building_id = tile.barbarian_tribe_id = -1;
         tile.city_id = tile.city_owner_id = tile.city_size = tile.city_culture_group = tile.city_era = -1;
         tile.unit_type_id = tile.unit_owner_id = tile.unit_class = tile.unit_state = tile.unit_damage = tile.unit_direction = -1;
         tile.territory_owner_id = -1;
@@ -456,6 +456,33 @@ int main(int argc, char ** argv) {
               output.fallback_tile_count == 0 && write_bmp(argv[5], output);
 #ifdef C3X_LAB_PREVIEW
     if(ok)ok=lab_verify_objects(frame,output);
+    char site_study[32]={};GetEnvironmentVariableA("C3X_LAB_OBJECT_STUDY",site_study,sizeof(site_study));
+    if(ok && (std::strcmp(site_study,"huts-camps")==0 || std::strcmp(site_study,"goody-huts")==0 ||
+              std::strcmp(site_study,"barbarian-camps")==0) && frame.hour==12 && frame.tile_width==128) {
+        auto saved=tiles;
+        auto pixels=[&](){auto p=static_cast<unsigned char const*>(output.bgra_pixels);
+            return std::vector<unsigned char>(p,p+output.stride_bytes*output.height);};
+        auto original=pixels();
+        unsigned site_mask=C3X_RENDERER_TILE_CUSTOM_HUT_REPLACED|C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED;
+        for(auto& tile:tiles) {
+            tile.improvement_flags&=~(C3X_RENDERER_IMPROVEMENT_GOODY_HUT|C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP);
+            tile.barbarian_tribe_id=-1;
+        }
+        ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;
+        if(ok) {
+            for(unsigned i=0;i<output.replacement_tile_count;++i)ok=ok && !(output.replacement_tile_flags[i]&site_mask);
+            auto removed=pixels();ok=ok && removed!=original;
+            write_bmp((std::string(argv[5])+".sites-removed.bmp").c_str(),output);
+            reset();
+            ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK &&
+                render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && pixels()==removed;
+            std::printf("%s site removal and cold pixel parity\n",ok?"PASS":"FAIL");
+        }
+        std::copy(saved.begin(),saved.end(),tiles.begin());
+        ok=ok && render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && pixels()==original && lab_verify_objects(frame,output);
+        std::printf("%s site reappearance and stable composition\n",ok?"PASS":"FAIL");
+    }
+
 #endif
     char zoom_option[16]={};
     bool zoom_benchmark=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ZOOM",zoom_option,sizeof(zoom_option))!=0;

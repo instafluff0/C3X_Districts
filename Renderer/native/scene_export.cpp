@@ -253,7 +253,9 @@ bool export_scene(c3x_renderer_frame_v1 const & frame, c3x_renderer_scene_export
             {C3X_RENDERER_IMPROVEMENT_MINE, "mine"},
             {C3X_RENDERER_IMPROVEMENT_TILE_BUILDING, "tile-building"},
             {C3X_RENDERER_IMPROVEMENT_POLLUTION, "pollution"},
-            {C3X_RENDERER_IMPROVEMENT_CRATER, "crater"}
+            {C3X_RENDERER_IMPROVEMENT_CRATER, "crater"},
+            {C3X_RENDERER_IMPROVEMENT_GOODY_HUT, "goody-hut"},
+            {C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP, "barbarian-camp"}
         };
         for (Improvement const & improvement : improvements) {
             if ((tile->improvement_flags & improvement.flag) == 0)
@@ -261,6 +263,8 @@ bool export_scene(c3x_renderer_frame_v1 const & frame, c3x_renderer_scene_export
             std::string fields = ",\"improvement\":" + json_string(improvement.name);
             if (improvement.flag == C3X_RENDERER_IMPROVEMENT_TILE_BUILDING)
                 fields += ",\"tile_building_id\":" + std::to_string(tile->tile_building_id);
+            if (improvement.flag == C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP)
+                fields += ",\"barbarian_tribe_id\":" + std::to_string(tile->barbarian_tribe_id);
             instances.push_back(make_instance("improvement", *tile, improvement_ordinal++, request.world_seed, fields));
         }
         if (tile->resource_id >= 0) {

@@ -103,7 +103,11 @@ def jobs():
         from Renderer.tools.asset_compiler.build_site_runtime import build
         return build(stage / "Renderer/packs/TileSitesRuntime")
 
+    from Renderer.tools.asset_compiler import build_wave_runtime as waves
+
     return (
+        ("coastal-waves", waves.sources, lambda stage: waves.build(stage / "Renderer/packs/CoastalWavesRuntime"),
+         "Renderer/tools/asset_compiler/build_wave_runtime.py"),
         ("tile-sites", site_sources, build_sites, "Renderer/tools/asset_compiler/build_site_runtime.py"),
         ("natural", natural_sources, build_natural, "Renderer/native/source_fidelity/prepare.py"),
         ("hill-cliff", cliff_sources, build_cliffs, "Renderer/native/render_core/prepare_assets.py"),

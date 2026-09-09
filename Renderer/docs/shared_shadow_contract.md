@@ -30,7 +30,7 @@ source-origin meshes must accompany this placement code.
 
 | Content | Casts | Receives | Update ownership |
 | --- | --- | --- | --- |
-| Terrain, relief, static vegetation, buildings, static resources | Actual opaque/cutout geometry into world pages | World shadows on their actual surfaces | Cached world geometry and paged invalidation |
+| Terrain, relief, static vegetation, buildings, static resources, goody huts and barbarian camps | Actual opaque/cutout geometry into world pages | World shadows on their actual surfaces | Cached world geometry and paged invalidation |
 | Animated resources | Posed silhouette onto the local ground plane | Static world field on the body | Existing bounded animation redraw |
 | Units | Pose-local self occlusion and a local ground footprint | Own pose; surrounding world field is not currently supplied by the native sprite API | Native action cursor and bounded sprite cache |
 | Retained native content, fog, labels and HUD | Native behavior | Native behavior | Civ III |
@@ -38,9 +38,9 @@ source-origin meshes must accompany this placement code.
 The unit boundary is deliberate and explicit: these sprites cannot yet receive
 a mountain's shadow or project onto arbitrary neighboring geometry. Adding that
 interaction requires captured receiver placement and environment revisions in
-the unit cache, plus dirty-region proofs. This refactor does not expand live
-ownership or change the native API. Natural wonders, constructed wonders and
-Districts remain deferred.
+the unit cache, plus dirty-region proofs. The subsequent hut/camp integration adds viewer-conditioned site capture in
+API 17 and static world geometry, using the existing map boundary. Natural
+wonders, constructed wonders and Districts remain deferred.
 
 Both dynamic ground paths use `shadow_policy.hlsl` for opacity, with the
 captured environment's shadow strength directly; animated resources do not

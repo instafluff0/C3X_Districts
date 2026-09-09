@@ -380,17 +380,19 @@ def scene(category, case, destination, *, world_size=32):
                     base, real = 2, 7
                 if (x, y) == (20, 10):
                     base, real = 2, 6
+            if category in ("huts-camps", "goody-huts", "barbarian-camps") and case == "gameplay" and (x, y) == ((18, 16) if category == "barbarian-camps" else (14, 16)):
+                base, real = 2, 5
             if category == "transitions":
                 base = real = (2 if x < 16 else 1) if y < 16 else (0 if x < 16 else 3)
-            if category in ("shorelines", "seas-oceans"):
-                if category == "shorelines":
+            if category in ("shorelines", "seas-oceans", "ocean-waves"):
+                if category in ("shorelines", "ocean-waves"):
                     # Exercise the feature this category actually owns: cliffs
                     # occur only where a hill tile meets the shore.  The detail
                     # case keeps a long rocky run in frame; gameplay mixes it
                     # with ordinary lowland beach so both joins remain visible.
                     shore = 15 if 7 <= y < 14 else 11 if 23 <= y < 28 else 13
                     if x < shore:
-                        rocky_run = case != "lowland" and (case == "detail" or 8 <= y < 24)
+                        rocky_run = (case == "rocky-control" or (case == "mixed" and y < 16)) if category == "ocean-waves" else case != "lowland" and (case == "detail" or 8 <= y < 24)
                         base, real = 2, 5 if rocky_run and x >= shore - 4 else 2
                     else:
                         depth = x - shore
@@ -446,7 +448,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         # The paired views inspect opposite ends of the same watershed instead
         # of wasting both captures on its middle reach.
         center = (8, 14) if case == "detail" else (21, 19)
-    if category == "shorelines" and case == "lowland" and center == (16, 16):
+    if ((category == "shorelines" and case == "lowland") or category == "ocean-waves") and center == (16, 16):
         center = (10, 18)
     if category == "mountains" and case == "coastal" and center == (16, 16):
         center = (18, 18)
@@ -474,7 +476,9 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_CITY_LIGHT_CONTROL": "", "C3X_RENDERER_CITY_GLOW_CONTROL": "",
         "C3X_LAB_UNIT_STUDY": "shadows" if category == "shadows" else "1" if category in ("units", "animation") else "",
         "C3X_LAB_ACTION_CURSOR": "0" if category == "animation" and case.endswith("start") else "7",
-        "C3X_LAB_OBJECT_STUDY": category if category in ("resources", "infrastructure", "shadows", "huts-camps") else "",
+        "C3X_LAB_OBJECT_STUDY": category if category in ("resources", "infrastructure", "shadows", "huts-camps", "goody-huts", "barbarian-camps") else "",
+        "C3X_RENDERER_WAVES": "",
+        "C3X_LAB_WAVE_STUDY": case if category == "ocean-waves" else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
     }
     unit_sizing = category == "units" and case in ("sizing", "sizing-gameplay", "sizing-move")
@@ -531,10 +535,16 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         (output / "witness.txt").write_text(result.get("output_tail", ""))
     if result["status"] != "pass" or "0 fallback, output=" not in result.get("output_tail", "") or not image.is_file():
         raise ValueError("Production renderer failed: " + name)
+    if category == "ocean-waves" and "PASS coastal wave lifecycle" not in result.get("output_tail", ""):
+        raise ValueError("Coastal wave lifecycle did not complete")
     if category in ("units", "animation", "shadows") and "PASS category unit study" not in result.get("output_tail", ""):
         raise ValueError("Unit body witness did not complete")
-    if category in ("resources", "infrastructure", "shadows", "huts-camps") and "PASS category object study" not in result.get("output_tail", ""):
+    if category in ("resources", "infrastructure", "shadows", "huts-camps", "goody-huts", "barbarian-camps") and "PASS category object study" not in result.get("output_tail", ""):
         raise ValueError("Category object ownership witness did not complete")
+    if category in ("huts-camps", "goody-huts", "barbarian-camps") and hour == 12 and zoom == 128:
+        for marker in ("PASS site removal and cold pixel parity", "PASS site reappearance and stable composition"):
+            if marker not in result.get("output_tail", ""):
+                raise ValueError("Site lifecycle witness did not complete")
     if behavior:
         verify_behavior_output(behavior, result.get("output_tail", ""))
     return {"image": relative(image), "sha256": checksum(image), "dll_sha256": checksum(dll),
@@ -593,6 +603,8 @@ def integration_replay_cases(category, *, full=False):
     terrain = {"grassland", "plains", "desert", "tundra", "floodplains", "transitions",
                "hills", "mountains", "forests", "jungles", "shorelines", "seas-oceans",
                "rivers", "day-night", "shadows"}
+    if "ocean-waves" in selected:
+        cases.extend((("wave-beach", None, 128, (10, 18), 12), ("wave-rocky", None, 128, (10, 18), 12), ("wave-mixed", None, 64, (10, 18), 0)))
     if selected.intersection(terrain):
         cases.append(("terrain-edit", "edits", 128, (50, 50), 12))
     if selected.intersection(("resources", "animation")):
@@ -600,6 +612,8 @@ def integration_replay_cases(category, *, full=False):
     if selected.intersection(("units", "animation")):
         cases.extend((("unit-actions-day", "units", 128, (50, 50), 12),
                       ("unit-actions-night", "units", 128, (50, 50), 0)))
+    if selected.intersection(("huts-camps", "goody-huts", "barbarian-camps")):
+        cases.append(("site-lifecycle", None, 128, (16, 16), 12))
     return cases
 
 
@@ -615,6 +629,10 @@ def integration_replays(category, *, full=False):
         print("Checking production behavior: " + name, flush=True)
         try:
             scene_category, scene_case = "grassland", "gameplay"
+            if name.startswith("wave-"):
+                scene_category, scene_case = "ocean-waves", {"wave-beach":"beach", "wave-rocky":"rocky-control", "wave-mixed":"mixed"}[name]
+            if name == "site-lifecycle":
+                scene_category, scene_case = (category if category in ("goody-huts", "barbarian-camps") else "huts-camps"), "gameplay"
             if behavior == "edits":
                 # Creating the first coast in an all-land world legitimately
                 # invalidates every empty nearest-coast certificate. Exercise

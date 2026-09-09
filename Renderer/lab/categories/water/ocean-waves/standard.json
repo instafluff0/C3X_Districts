@@ -1,0 +1,46 @@
+{
+  "id": "ocean-waves",
+  "title": "Ocean waves",
+  "depends_on": [
+    "shorelines",
+    "day-night",
+    "shadows"
+  ],
+  "implementation": [
+    "Renderer/lab/shared/shaders/hydrology/coastal_waves.hlsl",
+    "Renderer/native/render_core/coastal_waves.h",
+    "Renderer/native/c3x_renderer.cpp",
+    "Renderer/tools/asset_compiler/wave_blp_extractor.py",
+    "Renderer/tools/asset_compiler/build_wave_runtime.py"
+  ],
+  "recipe": {
+    "terrain": 2,
+    "feature": 2,
+    "objects": false,
+    "hours": [
+      12,
+      0
+    ],
+    "zooms": [
+      128
+    ],
+    "cases": [
+      "beach",
+      "rocky-control",
+      "mixed"
+    ]
+  },
+  "tests": [
+    "Renderer.native.test_coastal_waves",
+    "Renderer.lab.studies.waves.test_source",
+    "Renderer.native.test_render_core",
+    "Renderer.lab.test_natural"
+  ],
+  "references": {
+    "d3d11": []
+  },
+  "limitations": [
+    "C3X-authored timing/shader interpretation; original engine shader unavailable.",
+    "Local licensed prototype pack is optional and must not be redistributed."
+  ]
+}

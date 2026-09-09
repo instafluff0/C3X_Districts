@@ -38,7 +38,7 @@ float4 PSReflection(PixelInput input):SV_Target {
  return PSIntegrated(input);
 }
 '''
-    (HERE/'hydrology.hlsl').write_text(hydro+terrain_reflect)
+    (HERE/'hydrology.hlsl').write_text(hydro+terrain_reflect+read(LAB/'shaders/hydrology/coastal_waves.hlsl'))
     feature=read(HERE.parent/'render_core/terrain_scene.hlsl')
     feature=read(LAB/'shaders/lighting/shadow_policy.hlsl')+'\n'+feature
     old='float alpha = frame_cast_shadow_strength() * 0.22 *'

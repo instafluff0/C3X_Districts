@@ -69,6 +69,12 @@ runtime source-format dependency.
 
 `Water.artdef`, `WaterMaterials.artdef`, and `Wave.artdef` are now parsed structurally for their `BLPEntryValue` bindings. The installed metadata confirms `Water/Coast`, `Water/Deep`, `Water/Lake`, `Water/River`, `Water/RiverSource`, and `WaveTest` entries in the `Water`/`Wave` classes. Exact cooked water shader parameters remain unresolved, so the M6.4 runtime uses its own bounded generic Fresnel/specular model rather than claiming parameter equivalence.
 
+The later [coastal-wave study](ocean_wave_findings.md) decodes `WaveTest` itself:
+16 embedded crest pages, the auxiliary foam texture, complete mip chains and
+8,192 crest-delay samples. This closes that asset-extraction gap, while source
+shader equations, spline generation and production wave scheduling remain
+unresolved. The study is isolated and awaits visual approval.
+
 ### Model-Side Attachments
 
 Printable metadata in landmark packages repeats concrete light/effect instance names:

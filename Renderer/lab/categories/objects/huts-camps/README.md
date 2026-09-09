@@ -15,3 +15,13 @@ site pass. Terrain surface height supplies the object anchor.
 The fixture contains both sites, including a camp sharing a resource tile,
 at four hours and two zooms. Game capture uses the current viewer's visibility
 accessors; no omniscient site bits enter the visible scene.
+
+`integration huts-camps` runs the production site lifecycle witness: removal
+must clear ownership and shadows, match a cold render exactly, and restoration
+must reproduce the original pixels. The fixture also exercises hillside
+grounding and resource coexistence.
+
+The tested API 17 DLL is staged in `Renderer/bin` with the existing 768 MiB
+cache configuration. Run `INSTALL.bat` to update the matching injected game
+executable. Installation and live-game verification are left to the user.
+Individual visual categories are `goody-huts` and `barbarian-camps`.

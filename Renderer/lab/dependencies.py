@@ -10,11 +10,11 @@ import json
 def consumers(entries):
     objects = {key for key, value in entries.items() if value["recipe"].get("objects")}
     return {
-        "natural": set(entries), "hill-cliff": set(entries),
-        "tile-sites": {"huts-camps", "shadows"} & entries.keys(),
+        "coastal-waves": set(entries), "natural": set(entries), "hill-cliff": set(entries),
+        "tile-sites": {"huts-camps", "goody-huts", "barbarian-camps", "shadows"} & entries.keys(),
         "cities": objects | ({"cities"} & entries.keys()),
         "units": {"units", "animation", "shadows"} & entries.keys(),
-        "resources": objects | ({"resources", "animation"} & entries.keys()),
+        "resources": objects | ({"resources", "animation", "huts-camps", "barbarian-camps"} & entries.keys()),
         "resource-animation": objects | ({"resources", "animation"} & entries.keys()),
     }
 
