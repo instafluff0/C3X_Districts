@@ -25,14 +25,15 @@ def read(path):
 
 def poses(blob):
     version, n, ni, nb, nf = struct.unpack_from('<5I', blob, 8)
-    if blob[:8] != b'C3XANM1\0' or version != 1:
+    if version not in (1,2) or blob[:8] != b'C3XANM'+str(version).encode()+b'\0':
         raise ValueError('Unsupported animation payload')
-    rows = [struct.unpack_from('<8f4I4f', blob, 32+i*64) for i in range(n)]
+    stride=88 if version==2 else 64
+    rows = [struct.unpack_from('<8f4I4f', blob, 32+i*stride) for i in range(n)]
     positions = np.array([v[:3]+(1.,) for v in rows])
     joints = np.array([v[8:12] for v in rows])
     weights = np.array([v[12:16] for v in rows])
-    indices = np.frombuffer(blob, dtype='<u4', count=ni, offset=32+n*64)
-    matrices = np.frombuffer(blob, dtype='<f4', offset=32+n*64+ni*4).reshape(nf, nb, 4, 4)
+    indices = np.frombuffer(blob, dtype='<u4', count=ni, offset=32+n*stride)
+    matrices = np.frombuffer(blob, dtype='<f4', offset=32+n*stride+ni*4).reshape(nf, nb, 4, 4)
     for palette in matrices:
         yield sum(weights[:,i,None]*np.einsum('vi,vij->vj', positions, palette[joints[:,i]])
                   for i in range(4))[:,:3], indices

@@ -7,6 +7,26 @@ claiming a capability is available. Agents must not edit that CSV or
 
 ## Current action
 
+Request-scoped retained shadow-caster descriptors reuse the existing map
+submission and resource-animation boundaries. They do not change Civ III tile
+capture, visibility, native ownership, renderer ABI or executable hooks.
+Existing symbols remain `Map_Renderer_m71_Draw_Tiles` and
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`; `required_user_action: []`.
+Exact per-tile height/support reuse and the standalone resident-camera witness
+use these same capture boundaries without ABI or patch changes;
+`required_user_action: []`. The witness does not install hooks or launch Civ III.
+Opt-in guarded dirty-block/reflection clipping also stays within the existing
+off-screen submission and composite boundaries, without new symbols or changed
+native ownership; `required_user_action: []`.
+
+Beach-only coastal waves are DLL-only. They consume the existing captured world
+topology, tile anchors and presentation clock at `Map_Renderer_m71_Draw_Tiles` /
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`, and the existing
+`on_timer_0x9F6500` / `QueryPerformanceCounter` ambient redraw path. The output
+`visible_animation_count` and `request_continuous_redraw` fields already reach
+the injected compositor. No live ownership expansion or new symbol is required:
+`required_user_action: []`.
+
 Lab reorganization, shared CPU geometry/query extraction, asset preparation,
 shaders and off-screen cache/composition work require no new Civ III symbol.
 Existing map and unit boundaries remain unchanged:
@@ -101,13 +121,19 @@ Fog-edge work and wonders/Districts remain deferred.
 
 ## Available boundaries
 
-The candidate unit anatomy/supersampling study uses the existing `Unit_tick_anim`,
-`Sprite_draw_unit_body_normal` and `Sprite_draw_unit_body_reduced` boundaries.
-It does not change their signatures or expand native dirty regions. Long-weapon
-anatomy sizing is restricted to the larger standalone Lab canvas until visible
-bounds and dirty redraws are reconciled with the native Sprite. No concrete new
-symbol is established by that requirement. `required_user_action: []` for this
-study; the separate outstanding requests elsewhere in this ledger are unchanged.
+The approved unit fidelity update uses the existing `Unit_tick_anim`,
+`Sprite_draw_unit_body_normal` and `Sprite_draw_unit_body_reduced` boundaries,
+with unchanged patch capabilities, signatures and supported-build addresses.
+The optional DLL export `c3x_renderer_unit_draw_expanded` returns the complete
+body rectangle after a successful draw. The bridge unions that rectangle into
+the parent display unit's existing `Body.Rect`, including army-member bodies;
+native animation cleanup owns its next erase. Pack-authored minimum canvases
+preserve the original screen anchor and permit anatomy-sized long weapons.
+Legacy DLLs retain the old draw callback and rectangle behavior. Failures retain
+native fallback, and no CSV symbol or patch-table edit is needed.
+`required_user_action: []`. The renderer and updated injected bridge were
+installed together after the user authorized the update and exited Civ III.
+The separate outstanding requests elsewhere in this ledger are unchanged.
 
 | Responsibility | Existing symbol | CSV capability / use |
 | --- | --- | --- |

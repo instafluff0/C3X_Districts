@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[3];PACKS=ROOT/'Renderer/packs'
 def read(p):return json.loads(p.read_text())
 class UnitFidelity(unittest.TestCase):
-    def test_only_normals_and_material_addressing_change(self):
+    def test_source_geometry_palettes_and_materials_preserved(self):
         old=PACKS/'UnitAnimationRuntime';new=PACKS/'UnitAnimationFidelity'
         bound=read(new/'bindings.json')
         a=read(old/'manifest.json');b=read(new/'manifest.json');self.assertEqual(a['units'].keys(),b['units'].keys())
@@ -23,15 +23,16 @@ class UnitFidelity(unittest.TestCase):
                     key=(x['mesh'],y['mesh'])
                     if key not in payloads:
                         original=(old/x['mesh']).read_bytes();fresh=(new/y['mesh']).read_bytes()
-                        self.assertEqual(original[:32],fresh[:32]);count=struct.unpack_from('<I',original,12)[0]
-                        self.assertEqual(original[32+count*64:],fresh[32+count*64:])
+                        self.assertEqual(original[12:32],fresh[12:32]);count=struct.unpack_from('<I',original,12)[0]
+                        stride=88 if fresh[:8]==b'C3XANM2\0' else 64
+                        self.assertEqual(original[32+count*64:],fresh[32+count*stride:])
                         normal_key=unit['source_pack']+'/'+x.get('source_mesh','')
                         source=read(ROOT/authority[normal_key]) if normal_key in authority else None
                         for i in range(count):
-                            start=32+i*64
-                            self.assertEqual(original[start:start+12],fresh[start:start+12])
-                            self.assertEqual(original[start+24:start+64],fresh[start+24:start+64])
-                            if source:self.assertEqual(fresh[start+12:start+24],struct.pack('<3f',*source['normals'][i]))
+                            start=32+i*64;target=32+i*stride
+                            self.assertEqual(original[start:start+12],fresh[target:target+12])
+                            self.assertEqual(original[start+24:start+64],fresh[target+24:target+64])
+                            if source:self.assertEqual(fresh[target+12:target+24],struct.pack('<3f',*source['normals'][i]))
                         payloads.add(key)
                     for channel,d in x['material']['channels'].items():
                         target=y['material']['channels'][channel];pair=d['texture'],target['texture']
@@ -43,8 +44,12 @@ class UnitFidelity(unittest.TestCase):
         self.assertEqual(len(components),375);self.assertIn(('repeat','repeat'),samplers);self.assertIn(('clamp','clamp'),samplers)
         # Transform/fit, native aliases, loop policy, parts and owner colors stay exact.
         a=read(old/'bindings.json');b=read(new/'bindings.json')
+        quality=read(ROOT/'Renderer/native/environment_refresh/unit_quality.json')['units']
         for k,u in b.items():
             if not isinstance(u,dict):continue
+            selected=next((quality[uid] for uid,unit in read(new/'manifest.json')['units'].items() if uid in quality and u.get('key0') in unit['civ3_ids']),None)
+            if selected:
+                for field,value in selected.items():self.assertEqual(u.pop(field),value);a[k].pop(field,None)
             for name,action in u.items():
                 if not isinstance(action,dict) or 'part_count' not in action:continue
                 for i in range(action['part_count']):
@@ -54,6 +59,10 @@ class UnitFidelity(unittest.TestCase):
                     # channels. Compare their payloads before removing the
                     # allowed adapter fields from BOTH identity dictionaries.
                     original_part.pop('address_mode',None)
+                    if selected:
+                        self.assertEqual(part.pop('material_model'),1)
+                        if 'normal_texture' in part:
+                            relative=part.pop('normal_texture');self.assertEqual((old/relative).read_bytes(),(new/relative).read_bytes())
                     for field in ('ao_texture','gloss_texture','emissive_texture'):
                         if field in part:
                             relative=part.pop(field);self.assertEqual((old/relative).read_bytes(),(new/relative).read_bytes())
@@ -74,11 +83,11 @@ class UnitFidelity(unittest.TestCase):
                 for action in ['idle','move','death']:
                     if action not in unit['actions']:continue
                     for part in unit['actions'][action]['parts']:
-                        blob=(root/part['mesh']).read_bytes();_,n,ni,nb,nf,duration=struct.unpack_from('<5If',blob,8)
-                        normal=np.array([struct.unpack_from('<3f',blob,44+i*64) for i in range(n)])
-                        joints=np.array([struct.unpack_from('<4I',blob,64+i*64) for i in range(n)])
-                        weight=np.array([struct.unpack_from('<4f',blob,80+i*64) for i in range(n)])
-                        matrices=np.frombuffer(blob,dtype='<f4',offset=32+n*64+ni*4).reshape(nf,nb,4,4).astype(float)
+                        blob=(root/part['mesh']).read_bytes();version,n,ni,nb,nf,duration=struct.unpack_from('<5If',blob,8);stride=88 if version==2 else 64
+                        normal=np.array([struct.unpack_from('<3f',blob,44+i*stride) for i in range(n)])
+                        joints=np.array([struct.unpack_from('<4I',blob,64+i*stride) for i in range(n)])
+                        weight=np.array([struct.unpack_from('<4f',blob,80+i*stride) for i in range(n)])
+                        matrices=np.frombuffer(blob,dtype='<f4',offset=32+n*stride+ni*4).reshape(nf,nb,4,4).astype(float)
                         for phase in [0,.417,1]:
                             frame=phase*(nf-1);a=int(frame);z=min(nf-1,a+1);t=frame-a
                             palette=matrices[a]+(matrices[z]-matrices[a])*t

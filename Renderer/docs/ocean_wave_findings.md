@@ -158,4 +158,144 @@ See the generated `review.json` for final native image hashes and comparison
 checks. Native samples are synthetic scenes rendered by D3D11, not Civ III
 screenshots. The GIF uses two-second samples played at 4× speed; its loop boundary
 restarts the diagnostic and is not evidence of a seamless global animation cycle.
-Visual approval is pending.
+The study above records the initial isolated experiment. See the production
+follow-up below for the subsequently requested beach-only implementation.
+
+## Beach-only production follow-up
+
+The user subsequently requested ordinary beaches only, a Lab category, and
+production staging. `ocean-waves` now owns beach, rocky-control and mixed coast
+fixtures. `coastal_waves.h` traces connected authoritative contour segments,
+seeds instances by canonical world identity and excludes hill/mountain/cliff
+shoulders conservatively. It rejects ribbon sections crossing land or a second
+shore. Source alpha remains preserved, rather than being mistaken for foam
+opacity. All 16 source variants, auxiliary foam and all 8,192 delay floats are
+available through dedicated generic textures; no LEAN texture slots are reused.
+
+The optional `CoastalWavesRuntime` pack consumes normalized DDS and float data,
+not BLP/ArtDef files. The generic compiler preserves both complete mip chains
+and the exact delay values. The shader uses the recovered ArtDef ranges with
+the experiment's explicitly authored time/distance calibration, not a claim of
+recovered Firaxis shader equations. Other loose water effects remain documented
+source evidence; wake/crater/flood artwork is not a coastline-breaker binding.
+
+The existing ambient compositor now includes waves. Immutable static color and
+depth remain cached, while only affected 128-pixel blocks receive a 15 Hz wave
+pass. Wave geometry is retained for a static scene signature and bounded at
+16 MiB; resource animation and static terrain keep their existing budgets.
+Animation publication counts include visible wave ribbons. Missing/disabled
+packs leave normal terrain intact and a view without eligible ribbons does not
+request continuous wave redraw. Existing injected clock, capture, fog, overlays
+and map composite boundaries remain unchanged; no new patch-table entry.
+
+Reproduce with `python3 Renderer/renderer.py lab ocean-waves`,
+`test ocean-waves`, and `integration ocean-waves --renderer-only`. Generated
+current frames and wave-off/motion controls are in `Renderer/lab/out/`.
+The portable/category integration suite passes 203 tests. Native lifecycle
+checks exercise 1/5/9/13-second phases, repeated timestamps, time return, zoom
+return, cold reconstruction, scrolling and disabling the wave pack. At 128-pixel
+tiles the ordinary beach has 19 visible ribbon instances and the fully rocky
+control has zero. At 64-pixel tiles the wider mixed-coast view has 26 eligible
+instances; playback rebuilds/uploads zero terrain tiles/bytes.
+
+Playback, time return, zoom return and unchanged-view cold reconstruction match
+exactly. Reduced-zoom cold scrolling differed only at two inland grass pixels,
+by one red-channel level each; no wave pixels differed. That is within the
+existing renderer cold-scroll rounding budget. The witness keeps the other
+comparisons exact and limits scroll differences to at most two channel levels
+plus the existing pixel/error bounds.
+
+Concurrent VM preview processes faulted during the expanded gallery/check run.
+The isolated rocky case and reduced-zoom mixed case then passed; final delivery
+verification is run serially. These tests establish correct native rendering and
+cache behavior, not sustained live-game frame rate. Current output receipts under
+`Renderer/lab/out/integration/` and `Renderer/lab/out/ocean-waves/` identify the
+verified/staged build. Civ III has not been launched for this work.
+
+
+The final serial `integration ocean-waves --renderer-only` run passed all three
+production witnesses and 203 tests. The exact verified candidate was copied to
+`Renderer/bin/C3XRenderer.dll`, and the hashes matched. The local generic wave
+pack is enabled. Staging is the user-requested production evaluation; fixed
+visual references were not replaced, and no installation or game launch ran.
+The disposable `Renderer/lab/out/ocean-waves/staged/staging.json` records its
+hash and preserves a copy of the previous production DLL for rollback.
+
+## Wave quality correction
+
+The side-by-side user reference exposed two material errors and a geometry
+problem. The production material saturated the crest into a smooth opaque
+strip, while mapping the entire auxiliary texture across a narrow ribbon
+filtered away its connected foam veins. The new calibration modulates the
+atlas with a smaller footprint of that same embedded auxiliary art, broadens
+the transparent trailing wash and compresses coverage smoothly instead of
+saturating it. It preserves shared lighting and premultiplied compositing.
+
+Closer source inspection also confirms that rows with `FLT_MAX` crest markers
+still contain faint RGB artwork: every page has nonzero values in these rows,
+with maxima no greater than 32/255. They must not be treated as a row-opacity
+mask. The shader retains that feathering; valid markers guide only the crest
+highlight. The exact original marker evaluation remains unconfirmed.
+
+Material correction alone still produced folded rectangular shapes. Computing
+the ribbon direction over a 0.28-world-unit arc rather than a 0.03-unit arc
+softens changes at the polygonal coast edges. The original authoritative shore
+feet, water-distance rejection and beach/rock shoulder eligibility remain in
+force. The result has curved, textured trails without changing water ownership
+or making terrain rebuild for animation. These distances and the foam contrast,
+warping, footprint and motion are C3X calibration, not recovered engine code.
+
+`lab/studies/waves/quality.py` freezes the production DLL, preview, packs and
+shader, then evaluates the current material or an explicitly supplied frozen
+candidate. The local comparison under `lab/out/waves-quality/` separates the
+original material, material-only correction and smoothed geometry. Native
+phase controls use the same 1/5/9/13-second sequence and normal lifecycle
+assertions. This improves the breakers; it does not close the separate gap in
+open-water grain, depth color, shoreline sand and the overall Civ VI lighting.
+
+The corrected category passed 119 category tests and 206 integration tests.
+Serial native beach/rocky/mixed witnesses passed animation, repeat/time-return,
+zoom return, config-off and warm/cold checks, with zero terrain uploads during
+playback. The rocky control contains zero waves. The reduced-zoom night scroll
+retains the existing two-pixel, one-channel-level rounding difference. The
+isolated corrected wave-off image is pixel-identical to the original baseline.
+
+The exact verified quality candidate is staged as the previously requested
+production evaluation update. `lab/out/waves-quality/staging.json` records the
+hash and previous-DLL backup; the category day/night previews use the same
+candidate. Visual acceptance and fixed references remain unchanged.
+
+## Follow-up comparison: retain the baseline
+
+A further comparison against the user's closer Civ VI beach reference retained
+the preceding production appearance. The tested shore-break, longer-front,
+broader-wash and filtered/feathered variants were not visual improvements:
+they tended toward thin continuous outlines or coarse foam instead of the
+baseline's fine tapering streaks. A final enlargement using the baseline
+material also looked coarser. The wave shader and geometry were restored;
+the current renderer is rebuilt rather than replacing unrelated work with an
+old study DLL. No fixed comparison images were replaced.
+
+The isolated study under `lab/out/waves-shoaling/` preserves matched images,
+wave-off controls, shader variants, frozen binaries and 30-second sequences
+(120 quarter-second samples). `reference-comparison.png` uses the supplied
+Civ VI image and explicitly labels its different scene/camera scale. These
+are visual comparisons, not a numerical camera calibration or recovered
+Civ VI animation timing.
+
+Useful source evidence survives the rejected variants: 3,868 of 4,250 active
+crest markers locate the exact maximum-intensity source column; all other
+markers are within seven columns. This strongly supports a spatial crest
+location interpretation, while the original shader's use remains unresolved.
+The original `Wave.artdef` also explicitly sets white `WaveColor` and crash
+distance 8; the tested break curves and texture footprints were authored
+interpretations. Forcing crest mip level zero bypasses normal minification
+filtering, but the combined filtering/material experiment did not establish
+an independently better filter setting. Do not adopt that change on theory
+alone.
+
+The retained tests add curved-cove triangle checks and an optional native motion
+sequence. `C3X_LAB_WAVE_SEQUENCE=N` captures up to 240 quarter-second samples,
+checks that playback builds/uploads no terrain and verifies an exact return to
+the initial frame. Eligibility remains ordinary beaches only, even though the
+Civ VI reference also has breakers beside cliffs.

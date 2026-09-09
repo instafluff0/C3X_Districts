@@ -13,10 +13,10 @@ class UnitBodyRenderer {
 public:
     struct Mesh { AnimationMesh animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
-    struct Part { unsigned mesh=0,texture=0,address=0; unsigned material_textures[3]={UINT32_MAX,UINT32_MAX,UINT32_MAX}; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
+    struct Part { unsigned mesh=0,texture=0,address=0; unsigned material_textures[4]={UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX}; float material_model=0; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
     struct Action { std::string name; bool loop=false,ambient=false,allow_exit_clip=false;
         float duration=0;unsigned frames=0;std::vector<Part> parts; };
-    struct Unit { std::vector<std::string> keys; float scale=1,yaw_offset=0,offset_z=0; int sample_scale=1; std::vector<Action> actions; };
+    struct Unit { std::vector<std::string> keys; float scale=1,yaw_offset=0,offset_z=0; int sample_scale=1,minimum_canvas=0; std::vector<Action> actions; };
     std::vector<Mesh> meshes;
     std::vector<Texture> textures;
     std::vector<Unit> units;
@@ -41,6 +41,31 @@ public:
     }
     ~UnitBodyRenderer() {reset_gpu();reset_blit();}
     void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();resident_bytes=0;payload_serial=0;}
+
+    // Authored tangent sampling. Source vertex directions use the linear
+    // skin matrix, independently normalized as in the inspected object VS.
+    std::vector<std::array<std::array<float,3>,2>> sample_animation_frames(AnimationMesh const& mesh,double phase) {
+        double frame=std::clamp(phase,0.0,1.0)*(mesh.frames-1);
+        unsigned first=std::min(mesh.frames-1,unsigned(frame));
+        unsigned second=std::min(mesh.frames-1,first+1);float fraction=float(frame-first);
+        std::vector<std::array<std::array<float,3>,2>> out(mesh.vertices.size());
+        for(std::size_t i=0;i<mesh.vertices.size();++i) {
+            auto const& v=mesh.vertices[i];
+            for(unsigned basis=0;basis<2;++basis) {
+                auto const& source=basis?v.bitangent:v.tangent;auto & result=out[i][basis];
+                for(unsigned influence=0;influence<4;++influence) {
+                    if(v.weights[influence]==0)continue;
+                    auto a=mesh.palettes.data()+(std::size_t(first)*mesh.bones+v.joints[influence])*16;
+                    auto b=mesh.palettes.data()+(std::size_t(second)*mesh.bones+v.joints[influence])*16;
+                    for(unsigned axis=0;axis<3;++axis)for(unsigned c=0;c<3;++c)
+                        result[axis]+=v.weights[influence]*source[c]*(a[c*4+axis]+(b[c*4+axis]-a[c*4+axis])*fraction);
+                }
+                float length=std::sqrt(result[0]*result[0]+result[1]*result[1]+result[2]*result[2]);
+                for(unsigned axis=0;axis<3;++axis)result[axis]=length>1e-12f?result[axis]/length:source[axis];
+            }
+        }
+        return out;
+    }
 
     template<class Prepare>
     bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare) {
@@ -81,7 +106,7 @@ public:
         }
         int scale_milli=request.projection_scale_milli>0?request.projection_scale_milli:(draw.reduced?500:1000);
         int w=request.sprite_width*scale_milli/1000,h=request.sprite_height*scale_milli/1000;
-        if(w<1 || h<1 || w>512 || h>512)return false;
+        if(w<1 || h<1 || w>1024 || h>1024)return false;
         // Placement and identity are deliberately absent: the same posed body
         // can be reused at a different native anchor or wrapped occurrence.
         Key key={unsigned(found-units.begin()),int(action-found->actions.begin()),request.direction,
@@ -95,7 +120,7 @@ public:
         // Pack-selected material supersampling changes scratch resolution only.
         // Native placement, clipping, readback and cached sprite sizes stay exact.
         int samples=found->sample_scale;
-        if((samples!=1 && samples!=2) || !ensure(device,w,h,samples))return false;
+        if((samples!=1 && samples!=2 && samples!=4) || !ensure(device,w,h,samples,found->minimum_canvas?1536:128))return false;
         auto environment=evaluate_environment(float(request.hour),request.season);
         float cosine=std::cos((found->yaw_offset+float(request.direction%8)*45)*.01745329252f);
         float sine=std::sin((found->yaw_offset+float(request.direction%8)*45)*.01745329252f);
@@ -122,7 +147,7 @@ public:
                 positions[part_index].push_back(point);all_points.push_back(point);
             }
         }
-        UnitShadow shadow;
+        UnitShadow shadow(found->minimum_canvas?1536:128);
         // Selected BeautyStudies response, driven by the same native phase as
         // the existing pose-local caster. No independent sun or animation clock.
         auto noon=evaluate_environment(12,0);
@@ -137,6 +162,7 @@ public:
         }
         beauty[3]=2.05f*(environment.sun_intensity+environment.moon_intensity)/(noon.sun_intensity+noon.moon_intensity);
         beauty[7]=1;beauty[11]=.62f;beauty[12]=.490290f;beauty[13]=-.735435f;beauty[14]=.469979f;
+        beauty[16]=float(shadow.extent);
         context->UpdateSubresource(beauty_frame,0,nullptr,beauty,0,0);
         context->PSSetConstantBuffers(1,1,&beauty_frame);context->PSSetSamplers(1,1,&samplers[3]);
         if(!shadow.fit(all_points,light[0],light[1])){failure_reason="pose-envelope";return false;}
@@ -145,9 +171,9 @@ public:
             for(std::size_t i=0;i<mesh.animation.indices.size();i+=3)
                 shadow.triangle(points[mesh.animation.indices[i]],points[mesh.animation.indices[i+1]],points[mesh.animation.indices[i+2]]);
         }
-        context->UpdateSubresource(shadow_texture,0,nullptr,shadow.heights.data(),UnitShadow::extent*4,0);
+        context->UpdateSubresource(shadow_texture,0,nullptr,shadow.heights.data(),shadow.extent*4,0);
         context->PSSetShaderResources(1,1,&shadow_view);
-        std::vector<std::array<float,11>> upload;
+        std::vector<std::array<float,17>> upload;
         for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
             auto const& part=action->parts[part_index];
             auto const& posed=poses[part_index];
@@ -155,6 +181,8 @@ public:
             if(part.mesh>=meshes.size() || part.texture>=textures.size() || !textures[part.texture].view)return false;
             auto & mesh=meshes[part.mesh];
             upload.resize(posed.size());
+            auto frames=sample_animation_frames(mesh.animation,pose.phase);
+
             for(std::size_t i=0;i<posed.size();++i) {
                 auto const& p=posed[i];
                 float x=(p.position[0]*cosine-p.position[1]*sine)*scale;
@@ -166,6 +194,11 @@ public:
                 upload[i]={2*sx/w-1,1-2*sy/h,.5f-(x+y)*.05f-z*.001f,
                     normal[0],normal[1],normal[2],p.uv[0],p.uv[1],z,
                     (x-shadow.dx*z-shadow.left)/shadow.width,(y-shadow.dy*z-shadow.top)/shadow.height};
+                for(unsigned basis=0;basis<2;++basis) {
+                    auto f=frames[i][basis];
+                    auto direction=lighting::object_normal(f[0]*cosine-f[1]*sine,f[0]*sine+f[1]*cosine,f[2]);
+                    for(unsigned axis=0;axis<3;++axis)upload[i][11+basis*3+axis]=direction[axis];
+                }
             }
             // The ground plane hides buried anatomy/stowed equipment. Bound
             // the visible polygon, including intersections of crossing edges,
@@ -210,21 +243,22 @@ public:
                 values[24+a]=environment.ambient_color[a];
             }
             values[7]=part.strength;values[11]=environment.sun_intensity;values[19]=environment.moon_intensity;values[27]=part.cutout;
-            ID3D11ShaderResourceView* extra[3]={};
-            for(unsigned channel=0;channel<3;++channel)if(part.material_textures[channel]!=UINT32_MAX) {
+            ID3D11ShaderResourceView* extra[4]={};
+            for(unsigned channel=0;channel<4;++channel)if(part.material_textures[channel]!=UINT32_MAX) {
                 unsigned index=part.material_textures[channel];
                 if(index>=textures.size() || !textures[index].view)return false;
                 extra[channel]=textures[index].view;values[28+channel]=1;
             }
-            context->PSSetShaderResources(2,3,extra);
+            context->PSSetShaderResources(2,4,extra);
+            values[23]=part.material_model;
             context->UpdateSubresource(settings,0,nullptr,values,0,0);
-            UINT stride=44,offset=0;context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
+            UINT stride=68,offset=0;context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
             context->IASetIndexBuffer(mesh.indices,DXGI_FORMAT_R32_UINT,0);
             context->PSSetShaderResources(0,1,&textures[part.texture].view);
             context->PSSetSamplers(0,1,&samplers[part.address]);
             context->DrawIndexed(UINT(mesh.animation.indices.size()),0,0);
         }
-        ID3D11ShaderResourceView* empty[5]={};context->PSSetShaderResources(0,5,empty);
+        ID3D11ShaderResourceView* empty[6]={};context->PSSetShaderResources(0,6,empty);
         failure_reason="gpu-body-readback";
         transfer.draw(context,linear,target,environment.exposure,samples);
         context->OMSetRenderTargets(0,nullptr,nullptr);context->CopyResource(readback,output);
@@ -317,7 +351,7 @@ private:
     ID3D11VertexShader *vertex=nullptr;ID3D11PixelShader *pixel=nullptr;ID3D11InputLayout *layout=nullptr;
     ID3D11Buffer *settings=nullptr,*beauty_frame=nullptr,*vertices=nullptr;UINT capacity=0;
     ID3D11SamplerState *samplers[4]={};ID3D11RasterizerState *raster=nullptr;
-    ID3D11Texture2D* shadow_texture=nullptr;ID3D11ShaderResourceView* shadow_view=nullptr;
+    int shadow_size=0;ID3D11Texture2D* shadow_texture=nullptr;ID3D11ShaderResourceView* shadow_view=nullptr;
     render_core::LinearTarget linear;render_core::LinearOutput transfer;
     ID3D11Texture2D *output=nullptr,*readback=nullptr;ID3D11RenderTargetView *target=nullptr;
     int target_width=0,target_height=0;
@@ -332,7 +366,7 @@ private:
         underlay_dc=nullptr;underlay_bitmap=nullptr;underlay_previous=nullptr;underlay_bits=nullptr;
         bits=nullptr;blit_width=blit_height=0;
     }
-    bool ensure(ID3D11Device* device,int w,int h,int samples) {
+    bool ensure(ID3D11Device* device,int w,int h,int samples,int shadow_extent) {
         if(!pixel) {
             char const* source=unit_material_shader();
             ID3DBlob *vs=nullptr,*ps=nullptr,*error=nullptr;
@@ -345,8 +379,10 @@ private:
             D3D11_INPUT_ELEMENT_DESC elements[]={{"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0},
-                {"TEXCOORD",1,DXGI_FORMAT_R32G32B32_FLOAT,0,32,D3D11_INPUT_PER_VERTEX_DATA,0}};
-            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,4,vs->GetBufferPointer(),vs->GetBufferSize(),&layout);
+                {"TEXCOORD",1,DXGI_FORMAT_R32G32B32_FLOAT,0,32,D3D11_INPUT_PER_VERTEX_DATA,0},
+                {"TANGENT",0,DXGI_FORMAT_R32G32B32_FLOAT,0,44,D3D11_INPUT_PER_VERTEX_DATA,0},
+                {"BINORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,56,D3D11_INPUT_PER_VERTEX_DATA,0}};
+            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,6,vs->GetBufferPointer(),vs->GetBufferSize(),&layout);
             release(vs);release(ps);
             D3D11_BUFFER_DESC b={};b.ByteWidth=128;b.Usage=D3D11_USAGE_DEFAULT;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&b,nullptr,&settings);
@@ -364,8 +400,9 @@ private:
             if(SUCCEEDED(hr))hr=device->CreateRasterizerState(&r,&raster);
             if(FAILED(hr)){reset_gpu();return false;}
         }
-        if(!shadow_texture) {
-            D3D11_TEXTURE2D_DESC d={};d.Width=d.Height=UnitShadow::extent;d.MipLevels=d.ArraySize=1;
+        if(!shadow_texture || shadow_size!=shadow_extent) {
+            release(shadow_view);release(shadow_texture);shadow_size=shadow_extent;
+            D3D11_TEXTURE2D_DESC d={};d.Width=d.Height=shadow_extent;d.MipLevels=d.ArraySize=1;
             d.Format=DXGI_FORMAT_R32_FLOAT;d.SampleDesc.Count=1;d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
             HRESULT hr=device->CreateTexture2D(&d,nullptr,&shadow_texture);
             if(SUCCEEDED(hr))hr=device->CreateShaderResourceView(shadow_texture,nullptr,&shadow_view);

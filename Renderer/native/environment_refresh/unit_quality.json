@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "frame_pack": "UnitFrameFidelity",
+  "units": {
+    "unit/archer": {
+      "scale": 3.387749322695444,
+      "offset_z": 0.0013318279236949203,
+      "minimum_canvas": 320,
+      "sample_scale": 4
+    },
+    "unit/pikeman": {
+      "scale": 3.8927208007791863,
+      "offset_z": 0.00034242399841682015,
+      "minimum_canvas": 320,
+      "sample_scale": 4
+    },
+    "unit/settler": {
+      "scale": 3.3982982074251056,
+      "offset_z": 0.0006745556460032486,
+      "minimum_canvas": 320,
+      "sample_scale": 4
+    },
+    "unit/spearman": {
+      "scale": 3.7391019864379578,
+      "offset_z": 0.002403227616867295,
+      "minimum_canvas": 320,
+      "sample_scale": 4
+    },
+    "unit/warrior": {
+      "scale": 4.169029481792745,
+      "offset_z": 0.002265060926481838,
+      "minimum_canvas": 320,
+      "sample_scale": 4
+    },
+    "unit/worker": {
+      "scale": 3.430343342594403,
+      "offset_z": 0.0019597919585011333,
+      "minimum_canvas": 320,
+      "sample_scale": 4
+    }
+  }
+}

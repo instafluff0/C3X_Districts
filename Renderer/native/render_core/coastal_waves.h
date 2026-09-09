@@ -62,7 +62,7 @@ inline std::vector<WavePoint> coastal_wave_ribbon(WorldCoast const& coast,int c,
     for(unsigned row=0;row<=rows;++row){
         double along=double(row)/rows,arc=(along-.5)*2*scale;
         Point foot=walk(arc)+Point{.5,.5};
-        Point tangent=walk(arc+.015)-walk(arc-.015);
+        Point tangent=walk(arc+.14)-walk(arc-.14);
         double len=length(tangent);if(len<1e-8)tangent=chosen->b-chosen->a;
         len=std::max(length(tangent),1e-8);
         Point normal{-tangent.y/len,tangent.x/len};

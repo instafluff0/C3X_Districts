@@ -27,6 +27,7 @@ class PublicationTests(unittest.TestCase):
 #include <vector>
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/environment_runtime.h"
+#include "Renderer/native/unit_animation_runtime.h"
 ''' + body + r'''
 struct Texture {bool configured=true;std::vector<std::uint8_t> dds;};
 void word(std::vector<std::uint8_t>& data,unsigned at,unsigned value){for(unsigned c=0;c<4;++c)data[at+c]=std::uint8_t(value>>(8*c));}
@@ -115,6 +116,7 @@ int main(){
 #include <vector>
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/environment_runtime.h"
+#include "Renderer/native/unit_animation_runtime.h"
 using HDC=void*;
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=std::chrono::steady_clock::now().time_since_epoch().count();}
@@ -129,6 +131,8 @@ Signature terrain_frame_signature(c3x_renderer_frame_v1 const& f,long long,unsig
 struct Trace {int level=0;void write(char const*,char const*,bool=false){} double milliseconds(long long value){return double(value)/1000000;}};
 struct Footprint {int coordinate=0;struct {int left=0,right=0;} bounds;};
 struct Bodies {
+    struct Unit {std::vector<std::string> keys;int minimum_canvas=0;};
+    std::vector<Unit> units;int image_width=191,image_height=191;
     char const* failure_reason="";bool cache_hit=false;std::size_t cache_bytes=0;unsigned keyed_pixels=0,cast_pixels=0;
     template<class F> bool render(int,int,c3x_renderer_unit_v1 const&,F){return true;}
     bool blit(HDC,int,int,HDC){return true;}void reset_gpu(){}
@@ -139,6 +143,7 @@ struct RendererState {
     Trace trace;Bodies unit_bodies;bool unit_rendering_enabled=true,pickup_profile=false,cache_valid=false;
     int device=0,context=0;
     unsigned cache_hits=0,device_recoveries=0,frame_tiles_built=0,prepared_blocks=0,visible_resource_animations=0;
+    unsigned ambient_count() const {return visible_resource_animations;}
     std::size_t prefetched_geometry_bytes=0,tile_geometry_cache_bytes=0;
     std::uint64_t requested_signature=0;
     struct {std::size_t bytes=0;} pixel_blocks;

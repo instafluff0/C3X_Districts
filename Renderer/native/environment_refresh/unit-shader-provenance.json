@@ -1,7 +1,7 @@
 {
   "authority": "Renderer/lab/shared/shaders/objects/beauty_objects.hlsl",
   "source_sha256": "2d4e1dcf6d0f88457a21b7cb35ca4dad277f2fafa19f7afb670b49c2d6b7c0a3",
-  "generated_sha256": "1fa31dc4a136e59263d25f4e12023ecaa333d963c0ea52d56d981bd308ed2586",
+  "generated_sha256": "f54ed821e5a10aa24021d5072bf8be38719d00fb77bf71aacc5c6e3525b5e3c9",
   "ported": [
     "GGX",
     "sky-weighted ambient",
@@ -9,12 +9,17 @@
     "source gloss response",
     "emissive response",
     "rim fill",
-    "multiplicative owner-color response"
+    "legacy multiplicative owner-color response",
+    "positive-alpha modulation",
+    "authored tangent normals",
+    "RGB dual-lobe specular"
   ],
   "adapters": [
     "authoritative native environment and display color",
     "existing pose-local self-shadow visibility",
     "native sprite projection and clipping"
   ],
-  "lean_decode": false
+  "lean_decode": "first map with authored frame; second-map variance constants unresolved",
+  "detail_authority": "Renderer/lab/shared/shaders/objects/unit_microfacet.hlsl",
+  "detail_sha256": "e4b1573d7607a904469eb1ecc3db999bbcb64c75b76c7ff980713b775dbf19d8"
 }

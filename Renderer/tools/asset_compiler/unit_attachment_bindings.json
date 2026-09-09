@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "bindings": {
+    "unit/archer/weapon": {
+      "driver": "unit/archer/armor",
+      "bone": "Inven_L_Hand",
+      "local_root": "Root"
+    },
+    "unit/archer/arrow": {
+      "driver": "unit/archer/armor",
+      "bone": "Inven_R_Hand"
+    }
+  },
+  "evidence": "The archer bow is a separately skinned component. Its local pose must follow the bow hand; source firing clips retain Inven_L_Hand at the bow and animate/hide Inven_R_Hand with the arrow. These bone aliases are an offline binding calibration, not decoded ArtDef engine semantics."
+}

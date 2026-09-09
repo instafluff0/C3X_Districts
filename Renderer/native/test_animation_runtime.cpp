@@ -103,6 +103,14 @@ int main(int argc, char ** argv) {
     { auto bad = data; replace_u32(bad, 224, 3); reject(bad); } // Index outside mesh.
     { auto bad = data; bad.push_back(0); reject(bad); }
     { auto bad = data; replace_u32(bad, 248, 0x3f800000u); reject(bad); } // Non-affine matrix.
+    for(int scale:{250,500,625,1000,1500,2000})for(int width:{127,191,320,401}) {
+        int x=-101,y=63,w=width,h=width+2;
+        int ax=x+w*scale/2000,ay=y+h*scale/2000;
+        assert(expand_unit_canvas(x,y,w,h,scale,320));
+        assert(x+w*scale/2000==ax && y+h*scale/2000==ay);
+        assert(w>=320 && h>=320 && w>=width && h>=width+2);
+    }
+    {int x=INT32_MAX,y=0,w=191,h=191;assert(!expand_unit_canvas(x,y,w,h,2000,320));assert(x==INT32_MAX && w==191);}
     NativeUnitDraw draw;
     draw.expected_sprite = draw.sprite = 17; draw.expected_canvas = draw.canvas = 29;
     draw.unit_id = 5; draw.action = 2; draw.direction = 3;

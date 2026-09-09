@@ -63,3 +63,57 @@ postprocessing in the engine.
 Four analytic checks passed: sRGB roundtrip, texel centers/repeat/clamp sampling,
 triangle barycentrics, and actual-triangle shadow direction. No production files,
 DLLs, fixed references or injected code were changed by the studio experiment.
+
+## Native Lab implementation
+
+The independent studio findings now have an isolated native D3D11 Lab profile:
+
+```sh
+python3 Renderer/renderer.py lab units --case studio
+python3 Renderer/renderer.py lab units --case studio-gameplay
+python3 Renderer/renderer.py lab units --case studio-move
+```
+
+`lab_profile.py` builds a private, hashed source snapshot with guarded adapters
+and a separate `UnitStudioLab` pack. `studio_response.hlsl` implements the studio
+material equations. The pack retains source geometry, animations, UVs and
+recovered tangent frames. The fixture uses anatomy fitting, the studio's physical
+35-degree orthographic camera, positive-alpha tint, first-map normal detail,
+full AO, the RGB dual-lobe specular response, the declared studio key/fill,
+1536px triangle shadows, level-zero bilinear sampling, and direct sRGB output.
+Four-times scratch dimensions plus the existing 4x MSAA resolve retain linear
+color and coverage until final box reconstruction. No sharpening is applied.
+
+Each capture contains all six subjects in three rows:
+
+1. Original Lab fit, projection, lighting, shader, shadow resolution and sampling.
+2. Old material under matched anatomy, studio camera/light, sampling and transfer.
+3. Native studio material under those same matched conditions.
+
+The second row is a material control, not a production screenshot: the old
+material's brighter diffuse response can clip under studio light and direct
+transfer. The first row supplies the actual original-method comparison.
+Rearranged `before-after` and `matched-material` panels preserve captured pixels
+at 1:1. Outputs and a production-isolation receipt live under
+`lab/out/units/studio-native/`; the receipt records the candidate DLL hashes.
+
+This is a port of the material and fidelity findings, not bitwise equivalence to
+the independent rasterizer. Native triangle coverage/4x MSAA, pose-local height
+shadow parameterization and bias differ from the CPU reference. Native ground
+shadows use 0.16 display-space alpha as a neutral-backdrop approximation to the
+CPU studio's 0.68 linear shaded-ground multiplier; terrain backgrounds therefore
+are context checks, not recovered shared-environment lighting. Studio camera and
+light settings remain explicit fixture choices. Missing second-map variance
+constants, source environment illumination and metalness intake remain missing.
+
+The implementation is Lab-only. It does not stage a DLL, modify production unit
+bindings, replace references or alter game ownership/dirty bounds. The large
+spear envelopes and production shared-lighting fit still require integration
+work before any game promotion.
+
+
+After game promotion, `studio` cases retain their pinned pre-promotion private
+snapshot as the historical A/B fixture. Ordinary `detail` and `gameplay` Lab
+cases render the current game implementation. The game adapts the recovered
+material to its shared environment and authoritative map basis, so the fixed
+studio fixture is not presented as a production-lighting baseline.

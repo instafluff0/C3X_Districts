@@ -456,6 +456,77 @@ int main(int argc, char ** argv) {
               output.fallback_tile_count == 0 && write_bmp(argv[5], output);
 #ifdef C3X_LAB_PREVIEW
     if(ok)ok=lab_verify_objects(frame,output);
+    char wave_study[32]={};GetEnvironmentVariableA("C3X_LAB_WAVE_STUDY",wave_study,sizeof(wave_study));
+    if(ok && wave_study[0]) {
+      auto verify_waves=[&](){
+        auto pixels=[&](){auto p=static_cast<unsigned char const*>(output.bgra_pixels);
+            return std::vector<unsigned char>(p,p+output.stride_bytes*output.height);};
+        auto render_wave=[&](){return render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;};
+        auto compare=[&](char const* label,std::vector<unsigned char> const& expected,bool exact=true){
+            auto current=pixels();unsigned changed=0,maximum=0;unsigned long long error=0;
+            for(std::size_t i=0;i<current.size();i+=4){bool bad=false;
+                for(unsigned c=0;c<3;++c){unsigned delta=unsigned(std::abs(int(current[i+c])-int(expected[i+c])));error+=delta;maximum=maximum>delta?maximum:delta;bad=bad || delta!=0;}
+                changed+=bad;}
+            std::printf("WAVE %s changed_pixels=%u max_delta=%u error=%llu\n",label,changed,maximum,error);
+            if(changed)write_bmp((std::string(argv[5])+".wave-"+label+".bmp").c_str(),output);
+            // The existing cold-scroll contract permits final 8-bit rounding.
+            // Keep playback/zoom/time-return exact; allow at most two channel
+            // levels and the ordinary bounded pixel/error budget for scroll.
+            return exact?current==expected:maximum<=2 && changed<=current.size()/4000 && error<=current.size()/100;
+        };
+        bool rocky=std::strcmp(wave_study,"rocky-control")==0;
+        auto original=pixels(),previous=original;
+        if(rocky?output.visible_animation_count!=0:output.visible_animation_count==0)return false;
+        int saved_width=tile_width;
+        for(int next:{saved_width==112?96:112,saved_width}){
+            tile_width=next;tile_height=next/2;tiles=capture_view();
+            frame.tile_width=tile_width;frame.tile_height=tile_height;frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            if(!render_wave())return false;
+        }
+        if(!compare("zoom-return",original))return false;
+        unsigned changed=0;
+        for(int second:{5,9,13}){
+            frame.presentation_time_ticks=second*frame.presentation_frequency;
+            if(!render_wave() || output.geometry_tiles_built || output.geometry_upload_bytes)return false;
+            auto current=pixels();changed+=current!=previous;previous=current;
+            if(rocky?output.request_continuous_redraw:!output.request_continuous_redraw)return false;
+            std::printf("WAVE time=%d visible=%u terrain_built=%u terrain_upload=%u changed=%u\n",second,output.visible_animation_count,output.geometry_tiles_built,output.geometry_upload_bytes,changed);
+            write_bmp((std::string(argv[5])+".wave-"+std::to_string(second)+".bmp").c_str(),output);
+            if(!render_wave() || !compare("repeat",current))return false;
+        }
+        if(rocky?changed!=0:changed==0)return false;
+        frame.presentation_time_ticks=frame.presentation_frequency;
+        if(!render_wave() || !compare("time-return",original))return false;
+        char sequence_setting[16]={};
+        GetEnvironmentVariableA("C3X_LAB_WAVE_SEQUENCE",sequence_setting,sizeof(sequence_setting));
+        int sequence_frames=std::atoi(sequence_setting);
+        sequence_frames=sequence_frames<0?0:sequence_frames>240?240:sequence_frames;
+        for(int sample=0;sample<sequence_frames;++sample){
+            frame.presentation_time_ticks=frame.presentation_frequency+sample*frame.presentation_frequency/4;
+            if(!render_wave() || output.geometry_tiles_built || output.geometry_upload_bytes)return false;
+            char suffix[64];sprintf_s(suffix,".wave-sequence-%03d.bmp",sample);
+            if(!write_bmp((std::string(argv[5])+suffix).c_str(),output))return false;
+        }
+        if(sequence_frames){
+            frame.presentation_time_ticks=frame.presentation_frequency;
+            if(!render_wave() || !compare("sequence-return",original))return false;
+            std::printf("PASS wave sequence: frames=%d step=0.25s cached terrain\n",sequence_frames);
+        }
+        reset();
+        if(set_definitions(argv[2],argv[3],nullptr,custom_path)!=C3X_RENDERER_RESULT_OK || !render_wave() || !compare("cold",original))return false;
+        int saved_center=center_x;center_x+=2;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+        if(!render_wave())return false;
+        auto scrolled=pixels();write_bmp((std::string(argv[5])+".wave-scroll-warm.bmp").c_str(),output);reset();
+        if(set_definitions(argv[2],argv[3],nullptr,custom_path)!=C3X_RENDERER_RESULT_OK || !render_wave() || !compare("scroll-cold",scrolled,false))return false;
+        center_x=saved_center;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+        SetEnvironmentVariableA("C3X_RENDERER_WAVES","0");reset();
+        if(set_definitions(argv[2],argv[3],nullptr,custom_path)!=C3X_RENDERER_RESULT_OK || !render_wave() || output.visible_animation_count || output.request_continuous_redraw)return false;
+        auto off=pixels();write_bmp((std::string(argv[5])+".wave-off.bmp").c_str(),output);
+        return rocky?off==original:off!=original;
+      };
+      ok=verify_waves();SetEnvironmentVariableA("C3X_RENDERER_WAVES",nullptr);
+      std::printf("%s coastal wave lifecycle: %s repeat, time-return, zoom-return, scroll/cold, disabled, cached terrain\n",ok?"PASS":"FAIL",wave_study);
+    }
     char site_study[32]={};GetEnvironmentVariableA("C3X_LAB_OBJECT_STUDY",site_study,sizeof(site_study));
     if(ok && (std::strcmp(site_study,"huts-camps")==0 || std::strcmp(site_study,"goody-huts")==0 ||
               std::strcmp(site_study,"barbarian-camps")==0) && frame.hour==12 && frame.tile_width==128) {
@@ -571,6 +642,51 @@ int main(int argc, char ** argv) {
                 std::printf("NAV parity step=%d changed=%zu error=%llu status=%s\n",step,changed,error,ok?"pass":"FAIL");
             }
         }
+    }
+    char resident_option[8]={};
+    if(ok && navigation_benchmark && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_RESIDENT_SWEEP",resident_option,sizeof(resident_option))) {
+        // The preceding navigation workload loaded the views centered at
+        // (35,39) and (35,69). Exercise NEW intermediate views over their union,
+        // not the six cached screenshots. Report builds/uploads rather than
+        // assuming that resident content implies a cheap draw.
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        char resident_cold_option[8]={};
+        bool resident_cold=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_RESIDENT_COLD",resident_cold_option,sizeof(resident_cold_option)) &&
+            std::strcmp(resident_cold_option,"1")==0;
+        std::printf("RESIDENT_BEGIN mode=%s steps=14 width=%d height=%d tile_width=%d\n",
+            resident_cold?"cold":"retained",target_width,target_height,tile_width);
+        for(int step=0;step<14 && ok;++step) {
+            center_x=35;center_y=41+step*2;
+            // Independent reference pixels: forget renderer caches, but keep
+            // the fixture's authoritative object sites and presentation clock.
+            if(resident_cold){
+                reset();
+                ok=set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK;
+                if(!ok)break;
+            }
+            LARGE_INTEGER begin={},captured={},end={};QueryPerformanceCounter(&begin);
+            tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            QueryPerformanceCounter(&captured);
+            int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
+            ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;
+            std::printf("RESIDENT_NAV step=%d x=%d y=%d result=%d built=%u reused=%u upload_bytes=%llu ms=%.3f capture_ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f\n",
+                step,center_x,center_y,code,output.geometry_tiles_built,output.geometry_tiles_reused,
+                static_cast<unsigned long long>(output.geometry_upload_bytes),
+                double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(captured.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(output.geometry_ticks)*1000/frequency.QuadPart,
+                double(output.draw_ticks)*1000/frequency.QuadPart,double(output.readback_ticks)*1000/frequency.QuadPart);
+            camera_memory();std::fflush(stdout);
+            if(ok){
+                ok=write_bmp((std::string(argv[5])+".resident"+std::to_string(step)+".bmp").c_str(),output);
+                auto data=static_cast<unsigned char const*>(output.bgra_pixels);
+                std::size_t bytes=std::size_t(output.stride_bytes)*output.height;
+                unsigned long long checksum=14695981039346656037ull;
+                for(std::size_t i=0;i<bytes;++i)checksum=(checksum^data[i])*1099511628211ull;
+                std::printf("RESIDENT_IMAGE step=%d bytes=%zu fnv64=%llu saved=%d\n",step,bytes,checksum,int(ok));
+            }
+        }
+        std::printf("RESIDENT_END status=%s\n",ok?"pass":"FAIL");
     }
     if(ok && animate && !zoom_benchmark && !navigation_benchmark) {
         // Exercise animation after an immutable viewport LRU restore, not only
@@ -794,9 +910,14 @@ int main(int argc, char ** argv) {
 }
 
 bool preview_units(HMODULE module,char const* path,int hour) {
-    auto draw=reinterpret_cast<c3x_renderer_unit_draw_fn>(GetProcAddress(module,"c3x_renderer_unit_draw"));
+    auto legacy_draw=reinterpret_cast<c3x_renderer_unit_draw_fn>(GetProcAddress(module,"c3x_renderer_unit_draw"));
+    auto expanded_draw=reinterpret_cast<c3x_renderer_unit_draw_expanded_fn>(GetProcAddress(module,"c3x_renderer_unit_draw_expanded"));
+    int drawn_bounds[4]={};
+    auto draw=[&](c3x_renderer_unit_v1 const* unit,HDC dc){
+        return expanded_draw?expanded_draw(unit,dc,dc,drawn_bounds):legacy_draw(unit,dc);
+    };
     auto configure=reinterpret_cast<c3x_renderer_set_unit_rendering_fn>(GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
-    if(!draw || !configure)return false;
+    if(!legacy_draw || !configure)return false;
     BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
     info.bmiHeader.biWidth=1024;info.bmiHeader.biHeight=-1152;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
     HDC dc=CreateCompatibleDC(nullptr);void* bits=nullptr;
@@ -880,7 +1001,7 @@ bool preview_units(HMODULE module,char const* path,int hour) {
             ok=draw(&unit,dc16)==C3X_RENDERER_RESULT_OK && ok;GdiFlush();
             unsigned changes=0;int extent=191/(zoom?2:1);
             for(int y=0;y<256;++y)for(int x=0;x<384;++x)if(values[y*384+x]!=0x4210) {
-                ++changes;if(x>=unit.body_x+extent || y>=unit.body_y+extent)ok=false;
+                ++changes;if(expanded_draw?(x<drawn_bounds[0] || y<drawn_bounds[1] || x>=drawn_bounds[2] || y>=drawn_bounds[3]):(x>=unit.body_x+extent || y>=unit.body_y+extent))ok=false;
             }
             ok=changes>10 && ok;
             std::printf("UNIT RGB5%d5 clipped zoom=%d changed=%u status=%s\n",green_bits,zoom,changes,ok?"pass":"FAIL");
@@ -895,7 +1016,7 @@ bool preview_units(HMODULE module,char const* path,int hour) {
                     std::fill_n(static_cast<std::uint16_t*>(bg_bits),384*256,std::uint16_t(0x4210));
                     std::uint16_t key=green_bits==5?0x7c1f:0xf81f;
                     std::fill_n(values,384*256,key);
-                    ok=with_background(&unit,dc16,bg16)==C3X_RENDERER_RESULT_OK;GdiFlush();
+                    ok=(expanded_draw?expanded_draw(&unit,dc16,bg16,drawn_bounds):with_background(&unit,dc16,bg16))==C3X_RENDERER_RESULT_OK;GdiFlush();
                     for(int i=0;i<384*256;++i)if((values[i]==key?std::uint16_t(0x4210):values[i])!=reference[i])ok=false;
                 }
                 std::printf("UNIT RGB5%d5 magenta clipped parity zoom=%d status=%s\n",green_bits,zoom,ok?"pass":"FAIL");
@@ -923,7 +1044,7 @@ bool preview_units(HMODULE module,char const* path,int hour) {
             ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK;GdiFlush();
             auto reference=std::vector<std::uint32_t>(canvas,canvas+1024*1152);
             std::fill_n(canvas,1024*1152,0x00ff00ffu);
-            ok=with_background(&unit,dc,background)==C3X_RENDERER_RESULT_OK && ok;GdiFlush();
+            ok=(expanded_draw?expanded_draw(&unit,dc,background,drawn_bounds):with_background(&unit,dc,background))==C3X_RENDERER_RESULT_OK && ok;GdiFlush();
             unsigned changed=0;
             for(int i=0;i<1024*1152;++i) {
                 auto composed=canvas[i]==0x00ff00ffu?ground[i]:canvas[i];

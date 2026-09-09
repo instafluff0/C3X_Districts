@@ -26857,6 +26857,7 @@ unload_custom_renderer ()
 	is->custom_renderer_render = NULL;
 	is->custom_renderer_blit = NULL;
 	is->custom_renderer_unit_draw = NULL;
+	is->custom_renderer_unit_draw_expanded = NULL;
 	is->custom_renderer_unit_context = NULL;
 	is->custom_renderer_unit_canvas = NULL;
 	is->custom_renderer_export_scene = NULL;
@@ -26979,18 +26980,24 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (dc == NULL) return false;
 	JGL_Image * underlay = background->JGL.Image;
 	HDC background_dc = (underlay == image) ? dc : underlay->vtable->acquire_dc (underlay);
-	int result = (background_dc != NULL) ? is->custom_renderer_unit_draw (&draw, dc, background_dc) : C3X_RENDERER_RESULT_ERROR;
+	int body_bounds[4] = {draw.body_x, draw.body_y,
+		draw.body_x + sprite->Width * draw.projection_scale_milli / 1000,
+		draw.body_y + sprite->Height * draw.projection_scale_milli / 1000};
+	int result = C3X_RENDERER_RESULT_ERROR;
+	if (background_dc != NULL) {
+		if (is->custom_renderer_unit_draw_expanded != NULL)
+			result = is->custom_renderer_unit_draw_expanded (&draw, dc, background_dc, body_bounds);
+		else result = is->custom_renderer_unit_draw (&draw, dc, background_dc);
+	}
 	if (background_dc != NULL && underlay != image) underlay->vtable->release_dc (underlay, __, 0);
 	image->vtable->release_dc (image, __, 1);
 	if (result == C3X_RENDERER_RESULT_OK) {
 		// Animator unions this same Rect after tick_anim, then erases it next frame.
 		// Its native FLC crop does not cover the custom body and shadow envelope.
-		int body_width = sprite->Width * draw.projection_scale_milli / 1000;
-		int body_height = sprite->Height * draw.projection_scale_milli / 1000;
-		if (display_unit->Body.Rect.left > draw.body_x) display_unit->Body.Rect.left = draw.body_x;
-		if (display_unit->Body.Rect.top > draw.body_y) display_unit->Body.Rect.top = draw.body_y;
-		if (display_unit->Body.Rect.right < draw.body_x + body_width) display_unit->Body.Rect.right = draw.body_x + body_width;
-		if (display_unit->Body.Rect.bottom < draw.body_y + body_height) display_unit->Body.Rect.bottom = draw.body_y + body_height;
+		if (display_unit->Body.Rect.left > body_bounds[0]) display_unit->Body.Rect.left = body_bounds[0];
+		if (display_unit->Body.Rect.top > body_bounds[1]) display_unit->Body.Rect.top = body_bounds[1];
+		if (display_unit->Body.Rect.right < body_bounds[2]) display_unit->Body.Rect.right = body_bounds[2];
+		if (display_unit->Body.Rect.bottom < body_bounds[3]) display_unit->Body.Rect.bottom = body_bounds[3];
 	}
 	return result == C3X_RENDERER_RESULT_OK;
 }
@@ -27078,6 +27085,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_render = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_render");
 		is->custom_renderer_blit = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_blit");
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
+		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
 		is->custom_renderer_export_scene = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_export_scene");
 		is->custom_renderer_schedule = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_schedule_idle");
 		is->custom_renderer_reset = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_reset");

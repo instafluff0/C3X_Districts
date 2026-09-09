@@ -37,6 +37,36 @@ class SourceTests(unittest.TestCase):
             source.write_bytes(SOURCE.read_bytes()[:-512])
             with self.assertRaises(ValueError):waves.decode(source)
 
+    def test_crest_markers_track_the_spatial_peak(self):
+        # The table locates the crest within each source row; it is not a
+        # sequence of frame numbers. Keep this evidence separate from the
+        # still-unrecovered source shader's use of that location.
+        atlas=self.textures['crest']['payload'];active=exact=0
+        for page in range(16):
+            values=struct.unpack_from('<512f',self.delays,page*512*4)
+            for row,marker in enumerate(values):
+                if marker>1:continue
+                offset=((page//8*512+row)*1024+page%8*128)*4
+                samples=atlas[offset:offset+128*4:4]
+                error=abs(samples.index(max(samples))-marker*128)
+                self.assertLessEqual(error,7)
+                active+=1;exact+=error==0
+        self.assertGreater(exact/active,.90)
+
+    def test_inactive_crest_markers_preserve_faint_art(self):
+        # FLT_MAX is not a row opacity mask. Every page retains low-amplitude
+        # feathering beyond its marked crest; discarding those rows cuts it off.
+        atlas=self.textures['crest']['payload']
+        for page in range(16):
+            values=struct.unpack_from('<512f',self.delays,page*512*4)
+            inactive=[]
+            for row,delay in enumerate(values):
+                if delay<1e30:continue
+                offset=((page//8*512+row)*1024+page%8*128)*4
+                inactive.extend(atlas[offset:offset+128*4:4])
+            self.assertGreater(max(inactive),0)
+            self.assertLessEqual(max(inactive),32)
+
     def test_texture_pointer_cannot_escape_graph(self):
         data=bytearray(SOURCE.read_bytes())
         entry=self.package.unique_allocation("CoastlineWaves::PackageEntry")

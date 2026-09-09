@@ -31,7 +31,8 @@ missing normal authority; that absence is a tracked build dependency.
 ## Rendering contracts
 
 - The shared `lab/shared/shaders/objects/beauty_objects.hlsl` supplies the selected
-  GGX, sky fill, AO, gloss, emission and rim equations. `prepare_unit_shader.py`
+  legacy GGX/sky response; `unit_microfacet.hlsl` supplies the selected studio
+  RGB dual-lobe material, first-map normal detail and positive-alpha tint. `prepare_unit_shader.py`
   generates the embedded native shader; material edits require a candidate build.
 - Preserve source normals under the inverse-transpose skinner, source attachments,
   primitive order, uniform native fit scale and local palette remaps.
@@ -44,9 +45,9 @@ missing normal authority; that absence is a tracked build dependency.
   native sprite resolution and 4x MSAA. Natural-terrain sampling settings do not
   silently replace the unit settings. Sharing a texture does not share its sampler.
 - Native civilization color modulates the source texture without replacing its
-  detail. Optional AO/gloss/emission come from material metadata; the current
-  roster has no emissive maps. Preserve paired LEAN inputs offline; their decode
-  remains unresolved and is not guessed in the runtime shader.
+  detail. Optional AO/gloss/emission come from material metadata. Selected
+  source kits use authored tangent frames and the first normal map. The second
+  LEAN variance constants remain unresolved and are not guessed.
 - Preserve the 96 MiB payload budget, 8 MiB sprite cache, identity/dirty bounds,
   action cursor reuse, clipping, config-off path, separate unit fallback and
   retained terrain. Texture diagnostics use debugger output, not game-file logging.
@@ -67,9 +68,37 @@ sharpening or invented texture detail is introduced by this reorganization.
 Optional visual references live in the units and animation categories. Keep
 current limitations in those category or implementation notes.
 
-The separate `lab/studies/units` candidate adds explicit anatomy-fit comparisons
-and optional per-unit `sample_scale: 2` scratch supersampling. Production bindings
-omit that option and retain scale 1. Its shader-archive probe now confirms the
-object-family LEAN equations; exact unit tangent/binding/constant correspondence
-is still unresolved, so no normal-map behavior changes here. The sizing study
-requires larger native dirty bounds for long weapons before any promotion.
+The user approved putting the latest unit findings into the game. The authored
+`unit_quality.json` selects Warrior, Spearman, Pikeman, Archer, Settler and Worker
+for anatomy fitting, 4x scratch sampling, 1536px pose shadows and the recovered
+material model. Other families retain their existing geometry/material policy.
+The game keeps its authoritative projection, shared sun/moon, exposure and
+native sprite anchors; the independent studio camera/light/transfer are not
+silently installed as a category-specific environment.
+
+Offline `UnitFrameFidelity` preserves the expensive recovered 32-component
+frames and normalized identity inputs. `prepare_units.py` verifies position,
+normal and UV correspondence before emitting generic C3XANM2 payloads: the v1
+32-byte header gains magic/version 2; each vertex retains its original 64 bytes
+and appends float3 tangent plus float3 bitangent. Indices and all animation
+palettes remain exact. V1 decoding remains supported. Runtime code contains no
+source-game dispatch or source-format dependency.
+
+The optional `c3x_renderer_unit_draw_expanded` API reports the complete rectangle
+on success. Pack-authored minimum canvases preserve the native center at odd,
+reduced and custom zoom sizes. The injected bridge unions the returned rectangle
+into the parent display unit's existing dirty region; failed draws leave the
+native fallback and rectangle intact. The renderer permits output up to 1024px
+for the existing maximum 2x projection, with the existing 8 MiB sprite cache.
+No new patch-table entry is required. The updated bridge must be installed
+alongside the staged DLL; an old bridge cannot consume the expanded bounds.
+
+
+Delivery verification: 204 focused regression tests, the approved injected-code
+compile/injection smoke test, native day/night action/compositing checks, and
+six-family moving-pose Lab renders at 128/192 tile widths passed. The exact tested
+DLL and updated injected bridge were installed after the user closed Civ III.
+The installed executable contains the expanded-bounds callback and the staged
+DLL hash matches the tested candidate. Receipt and previous executable/DLL are
+retained locally under `lab/out/units/game-promotion/`. Civ III was not launched;
+no live-game visual acceptance or fixed-reference replacement is claimed.

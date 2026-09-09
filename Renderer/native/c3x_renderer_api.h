@@ -320,6 +320,8 @@ typedef int (*c3x_renderer_blit_fn)(struct c3x_renderer_output_v1 const *, void 
 typedef int (*c3x_renderer_unit_draw_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc);
 /* Optional extension: native underlay resolves color-key canvas antialiasing. */
 typedef int (*c3x_renderer_unit_draw_background_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc, void * background_hdc);
+/* Optional extension; writes drawn left/top/right/bottom only on success. */
+typedef int (*c3x_renderer_unit_draw_expanded_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc, void * background_hdc, int * bounds_ltrb);
 // Optional unit configuration. Set before definition/asset loading; defaults off.
 typedef int (*c3x_renderer_set_unit_rendering_fn)(int enabled);
 typedef int (*c3x_renderer_export_scene_fn)(struct c3x_renderer_frame_v1 const *, struct c3x_renderer_scene_export_v1 const *);

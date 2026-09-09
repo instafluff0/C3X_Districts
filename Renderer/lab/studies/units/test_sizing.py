@@ -35,6 +35,7 @@ class UnitSizingTests(unittest.TestCase):
         root=Path(__file__).resolve().parents[4]
         pack=root/'Renderer/packs/UnitQualityStudy'
         if not pack.exists():self.skipTest('Local study assets not prepared')
+        build() # derive the fixture from current production inputs, not stale ignored output
         original=json.loads((root/'Renderer/packs/UnitAnimationFidelity/bindings.json').read_text())
         study=json.loads((pack/'bindings.json').read_text())
         self.assertEqual(study['unit_count'],18)

@@ -49,6 +49,19 @@ inline char const * native_unit_action(int action) {
     }
 }
 
+// Expand an off-screen body canvas while preserving the exact native anchor.
+// The caller must retain the returned rectangle as its next erase/dirty region.
+inline bool expand_unit_canvas(int& x,int& y,int& width,int& height,int scale_milli,int minimum) {
+    if(width<1 || height<1 || width>4096 || height>4096 || minimum<0 || minimum>512 ||
+       scale_milli<250 || scale_milli>2000)return false;
+    int w=std::max(width,minimum),h=std::max(height,minimum);
+    auto nx=std::int64_t(x)+std::int64_t(width)*scale_milli/2000-std::int64_t(w)*scale_milli/2000;
+    auto ny=std::int64_t(y)+std::int64_t(height)*scale_milli/2000-std::int64_t(h)*scale_milli/2000;
+    if(nx<INT32_MIN || ny<INT32_MIN || nx+std::int64_t(w)*scale_milli/1000>INT32_MAX ||
+       ny+std::int64_t(h)*scale_milli/1000>INT32_MAX)return false;
+    x=int(nx);y=int(ny);width=w;height=h;return true;
+}
+
 inline bool prepare_native_unit_pose(NativeUnitDraw const & draw, bool clip_loops,
                                      UnitAnimationPose & output) {
     char const * action = native_unit_action(draw.action);

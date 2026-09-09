@@ -11,7 +11,12 @@
     "Renderer/native/terrain_scene_runtime.cpp",
     "Renderer/native/animation_runtime.h",
     "Renderer/lab/studies/units/prepare.py",
-    "Renderer/lab/studies/units/sizing.json"
+    "Renderer/lab/studies/units/sizing.json",
+    "Renderer/lab/studies/units/lab_profile.py",
+    "Renderer/lab/studies/units/studio_response.hlsl",
+    "Renderer/lab/studies/units/sample_frame.h",
+    "Renderer/lab/studies/units/material_study.py",
+    "Renderer/lab/studies/units/frame_probe.py"
   ],
   "recipe": {
     "terrain": 2,
@@ -29,7 +34,10 @@
       "gameplay",
       "sizing",
       "sizing-gameplay",
-      "sizing-move"
+      "sizing-move",
+      "studio",
+      "studio-gameplay",
+      "studio-move"
     ]
   },
   "tests": [
@@ -63,6 +71,7 @@
     ]
   },
   "limitations": [
-    "Current diagnostic previews use the production D3D11 renderer."
+    "Current diagnostic previews use the production D3D11 renderer.",
+    "Studio cases build an isolated native Lab profile; their declared studio camera/light/transfer do not alter production or claim Civ VI parity."
   ]
 }

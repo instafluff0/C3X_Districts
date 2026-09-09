@@ -1,5 +1,176 @@
 # Zoom performance verification
 
+## Exact height reuse and new-view witness
+
+The current candidate adds bounded exact-coordinate height/support reuse within
+one tile compilation. All terrain-height consumers in the native natural-mesh,
+cliff-placement and site-placement path use the same sampler. Its table clears
+before each tile, preserving the owner-specific dependency scope; it is not a
+persistent cache of world heights. Capacity is at most 16,384 slots (393,216
+bytes observed). Exhausted admission computes normally, without quantization,
+interpolation, changed mesh density or changed visibility. The same-DLL control
+is `C3X_RENDERER_HEIGHT_CACHE_CONTROL=1` (reuse disabled).
+
+The extracted production sampler passes tests for exact values and support,
+nearby unequal coordinates, source/dependency scope changes, disabled control,
+bounded admission and exhaustion. Together with shared natural-query/relief
+checks, 58 focused tests pass. DLL compilation succeeded; SHA-256:
+`95971dd834166317f6c3559f61665113b3fbc9f2500112acf6bdfddf82160e1f`.
+The 2240x1192 control finished all six destinations and revisits. The enabled
+run completed only four destinations; all four saved BMPs are byte-identical
+to control. Initial compilation recorded 468,223 reused height results, with
+2,356,134 misses. This is evidence of avoided queries, not a speedup claim or
+completed native verification. Cold geometry still takes seconds.
+
+Native verification was interrupted on September 8: Windows Defender reported
+`Trojan:Win32/Bearfoos.B!ml`, threat ID `2147731849`, against
+`native/build/retained-height-samples/biq_preview.exe` and removed that file.
+The enabled replay ended without its completion marker, and Windows confirmed
+no remaining preview process. This is not established as a false positive or
+as a renderer crash. No protection setting was changed and no retry was run
+after identifying the detection until the user explicitly allowed it and
+requested another attempt. Native execution has now resumed; see the paired
+results below. Logs remain in `native/build/retained-height-control/` and
+`native/build/retained-height-candidate/`; the prepared retry folder was not run.
+
+An opt-in `C3X_RENDERER_PREVIEW_RESIDENT_SWEEP` witness has been added to
+`biq_preview.cpp`. After the ordinary navigation warmup it requests fourteen
+new camera positions between the two loaded vertical views, reporting actual
+tile builds, reuse, upload bytes, and phase timings. It does not assume those
+views are cheap or silently count old screenshots as responses. The updated
+witness has now been compiled and run on Windows after the user's allow action.
+No DLL staging, INSTALL, or game launch was performed by this work.
+
+The witness now also supports `C3X_RENDERER_PREVIEW_RESIDENT_COLD=1`, which
+resets renderer state and reloads definitions before each intermediate view to
+produce independent reference pixels. Both modes record viewport/camera identity,
+completed image checksums, builds/uploads and render-plus-capture latency. Image
+writing and checksumming are outside the measured interval. Cold reset/definition
+loading is also outside that interval; cold timings are not launch-time results.
+Run each invocation in a fresh isolated output directory with the same DLL,
+fixture, assets, environment and presentation clock. The read-only verifier is:
+
+```sh
+python3 -m Renderer.native.analyze_resident_navigation \
+  --reference Renderer/native/build/resident-cold \
+  --candidate Renderer/native/build/resident-retained --max-ms 100
+```
+
+Those directory names are illustrative; actual completed outputs are below. The
+verifier requires complete warmup/revisit logs, all fourteen new cameras,
+successful exit receipts, same-DLL identity and matching image receipts. It
+checks exact cold/retained pixels, zero retained builds/uploads, and every
+retained render-plus-capture time against the target. It rejects malformed,
+partial or stale-image evidence and distinguishes incorrect pixels from invalid
+receipts. Its synthetic tests pass; they do not establish native performance.
+This narrow resident-content test cannot certify arbitrary-map navigation,
+cold-region response, or Civ III input-to-display latency.
+
+### Allowed retry: completed native resident/cold comparison
+
+After the user allowed the detected program and requested a retry, Windows
+reported the threat-specific action entry and both benchmark processes completed
+with exit zero. No Defender setting was changed by this work. A default-budget
+build compiled but was not run; the measured candidate uses the previous
+high-memory tier (768 MiB GPU geometry budget). Build and output root:
+`native/build/resident-review-high-20260908/`, with independent `retained/` and
+`cold/` directories. Both use DLL SHA-256
+`708f9bc7da20dc4580a9890209b9e0793b12b8c40c16f999e7c69f425848ff0e`.
+The benchmark executable SHA-256 is
+`ed063f4a138ebb75a0f4c4aa3975aa31300ec3eb476250dcfeddf778e78e6c34`.
+Renderer/benchmark source, fixture, definitions and runtime shader-tree hashes
+were unchanged across the pair. Waves are disabled in both processes; this does
+not qualify wave animation. The 57 cache/publication/bridge tests and two shared
+natural-query/relief tests pass locally.
+
+At 2240x1192, all fourteen new retained views reused 1,057 tiles, built zero
+tiles and uploaded zero geometry bytes. Retained capture-plus-render latency:
+minimum 201.966 ms, median 235.560 ms, maximum 745.483 ms (first new view).
+Median geometry preparation is 31.404 ms, draw submission 60.483 ms and readback
+wait 120.354 ms. Phase medians do not sum to the total median; readback includes
+pending GPU work and is not a pure transfer-time measurement. Later views reuse
+roughly 2.5 million pixels while requesting about 161,280–174,592 new pixels,
+but still issue 72–82 shadow passes across render blocks/reflections. No claim
+that all this work can be removed follows from the pass count alone.
+
+Fresh references build all 1,057 tiles per view and take 7,769.508–9,592.342 ms
+(median 8,527.645 ms), dominated by geometry preparation. Reset/definition loading
+is excluded, as noted above. Both ordinary six-destination/revisit workloads
+also complete with zero pixel errors on revisits, fallback or device recovery.
+Sampled available virtual address space stays above 1,690,443,776 bytes across
+the pair, with a largest free region above 1,597,050,880 bytes. These are sampled
+observations, not hard minimum guarantees for the game or other maps.
+
+The stricter independent comparison **fails**: only the first retained image is
+byte-identical to its cold reference. Other frames differ in 4–180 of 2,670,080
+pixels; four frames each have one pixel with a maximum channel error of four,
+and all remaining differences are at most two. These differences meet the older
+benchmark's tolerance, but the new exact test was not relaxed. The diagnostic
+report is `comparison.json`: residency passes, exact parity and the 100 ms
+latency target fail. Small numerical differences still need explanation; this
+is not an accepted visual change or completion of the performance goal.
+
+Next work should target block/reflection submission and GPU completion for
+resident scrolling, alongside the separate cold tile-preparation cost. Raising
+caps or adding more screenshot-cache hits does not address the measured warm
+bottleneck. No staging, INSTALL or Civ III launch was performed.
+
+## Retained draw-request implementation
+
+The active objective is near-instant navigation anywhere, including new views,
+not only repeat bitmap-cache hits. Civ III's callbacks and supplied anchors
+remain authoritative. This work is not complete and has not been staged.
+
+First implementation: `submit_geometry` now collects static shadow-caster
+descriptors once per outer submission. Its block and reflection passes borrow
+that immutable list while retaining their own receiver selection. Existing GPU
+geometry owners remain pinned; the descriptor list expires before the call
+returns, so later content edits, unit/resource work, resets and evictions cannot
+reuse stale descriptors. This changes neither shaders nor raster quality. It is
+a submission optimization, not a claim that all tile geometry is camera-neutral.
+
+The actual extracted collector passes executable tests for caster selection,
+ground/animated exclusions, order, material bindings, buffer/version identity,
+both wrap axes, empty scenes and subsequent content edits. All 55 focused
+cache/publication/bridge tests pass; the worker mock now implements the current
+ambient-count accessor used by the concurrently updated renderer.
+
+Isolated Windows control/candidate DLLs:
+`native/build/retained-submit-ab-control/` and
+`native/build/retained-submit-ab-candidate/`. SHA-256 respectively:
+`2f253586f6b3390fa3c35a243fe61c37d0f1f24e9796f9febdd152d29b4819f9` and
+`973bb38cf270510efd3ab1d94c3b7f9b938a986a5cb992c5609c4f2ef8366053`.
+Both compile with the existing high-memory tier. The full 2240x1192 navigation
+workload has six destinations and six revisits, all pixel-exact across candidates
+and within each run, with no fallback or device recovery. The candidate builds
+75 caster lists for 1,992 shadow passes; the control rebuilt a list in every
+pass. Runtime shader-tree hashes remained unchanged during the comparison.
+This is a small correctness/performance experiment, not broad navigation proof.
+
+The first control was affected by colder inputs: cold-view median 5,646.428 ms
+versus candidate 4,709.154 ms is not attributable entirely to this change.
+Candidate revisits ranged 9.114–95.147 ms but often reuse complete bitmaps; those
+numbers do not prove cheap new camera views. A fresh-process, warm-input control
+is retained separately at `native/build/retained-submit-ab-control-warm/`.
+It completed with cold-view median 4,850.396 ms versus candidate 4,709.154 ms;
+the candidate was slower at the final wrapped destination and on several
+bitmap revisits. One control/candidate/control sequence is insufficient to
+claim a significant overall speedup. CPU submission and GPU completion overlap,
+so lower draw-submission time alone is not a GPU-speedup measurement. These
+results direct the next work toward geometry preparation and genuine new-view
+reuse, not an assertion that descriptor caching solved the bottleneck.
+The obsolete frozen-input attempt failed before drawing because it lacked
+`PSCoastalWave`; its failure log remains under `native/build/retained-submit-control/`.
+Current-input runs disable waves in both processes to isolate this work from
+concurrent wave development. They do not validate wave rendering.
+
+Remaining: remove screen-dependent reconstruction from other currently owned
+tile components, reduce block/page submission repetition, add many distinct
+camera positions over resident content with rebuild/upload assertions, and
+address genuinely uncached regions. Cold geometry preparation still dominates
+multi-second travel. Broad zoom/edit/wrap/eviction and live bridge timing must
+be verified before declaring the requested outcome achieved.
+
 ## Test handoff
 
 Experiments are paused for the user's in-game evaluation. The verified

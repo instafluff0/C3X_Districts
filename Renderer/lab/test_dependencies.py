@@ -68,14 +68,14 @@ class SelectionTests(unittest.TestCase):
     def test_asset_preparation_is_category_scoped(self):
         with patch.object(renderer, "catalog", return_value=self.entries), \
              patch.object(renderer, "standard", side_effect=self.entries.__getitem__):
-            self.assertEqual(renderer.asset_jobs_for(["grassland"]), {"natural", "hill-cliff"})
-            self.assertEqual(renderer.asset_jobs_for(["units"]), {"natural", "hill-cliff", "units"})
+            self.assertEqual(renderer.asset_jobs_for(["grassland"]), {"natural", "hill-cliff", "coastal-waves"})
+            self.assertEqual(renderer.asset_jobs_for(["units"]), {"natural", "hill-cliff", "coastal-waves", "units"})
 
     def test_asset_preparation_is_category_scoped(self):
         with patch.object(renderer, "catalog", return_value=self.entries), \
              patch.object(renderer, "standard", side_effect=self.entries.__getitem__):
-            self.assertEqual(renderer.asset_jobs_for(["grassland"]), {"natural", "hill-cliff"})
-            self.assertEqual(renderer.asset_jobs_for(["units"]), {"natural", "hill-cliff", "units"})
+            self.assertEqual(renderer.asset_jobs_for(["grassland"]), {"natural", "hill-cliff", "coastal-waves"})
+            self.assertEqual(renderer.asset_jobs_for(["units"]), {"natural", "hill-cliff", "coastal-waves", "units"})
 
 
 if __name__ == "__main__":

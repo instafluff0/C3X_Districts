@@ -9,6 +9,269 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ZoomMeshTests(unittest.TestCase):
+    def test_dirty_block_clip_keeps_glow_and_reflection_sample_coverage(self):
+        compiler = shutil.which("clang++") or shutil.which("g++")
+        if not compiler:
+            self.skipTest("C++ compiler unavailable")
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        method = "    D3D11_RECT guarded_block_rectangle(" + source.split(
+            "    D3D11_RECT guarded_block_rectangle(", 1)[1].split("    void collect_shadow_casters(", 1)[0]
+        program = r'''
+#include <algorithm>
+#include <cassert>
+using LONG=int;struct D3D11_RECT {LONG left,top,right,bottom;};
+''' + method + r'''
+int main(){
+ for(int guard:{0,4})for(int origin:{0,128,2176})for(int l=0;l<128;++l)
+ for(int width:{1,2,7,64,128}){
+  int r=std::min(128,l+width),extent=128+2*guard;
+  auto clip=guarded_block_rectangle({origin+l,origin+l,origin+r,origin+r},guard-origin,guard-origin,guard,extent);
+  assert(clip.left>=0 && clip.top>=0 && clip.right<=extent && clip.bottom<=extent);
+  assert(clip.left<=l+guard && clip.right>=r+guard);
+  // Independent enumeration of every high-resolution glow input used by
+  // the copied output: +/-8 taps around the 2x pixel's second sample.
+  for(int p=l+guard;p<r+guard;++p)for(int tap=-2*guard;tap<=2*guard;++tap){
+   int sample=2*p+1+tap;
+   if(sample>=0 && sample<2*extent)assert(sample>=2*clip.left && sample<2*clip.right);
+  }
+  auto mirror=guarded_block_rectangle(clip,4,4,4,extent+8);
+  // Native-pixel bound includes both high-res distortion and filter taps.
+  for(int p=clip.left;p<clip.right;++p)for(int offset=-2;offset<=2;++offset){
+   int sample=p+4+offset;
+   if(sample>=0 && sample<extent+8)assert(sample>=mirror.left && sample<mirror.right);
+  }
+  auto full=guarded_block_rectangle({0,0,extent,extent},4,4,4,extent+8);
+  assert(full.left==0 && full.top==0 && full.right==extent+8 && full.bottom==extent+8);
+ }
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="c3x-dirty-block-") as directory:
+            cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
+            cpp.write_text(program)
+            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+    def test_resident_navigation_requires_fresh_complete_independent_evidence(self):
+        from Renderer.native.analyze_resident_navigation import analyze, checksum
+        import struct
+
+        def fixture(root, mode):
+            root.mkdir(exist_ok=True)
+            (root / "completion.txt").write_text("0\n")
+            (root / "C3XRenderer.dll").write_bytes(b"synthetic identity only; never executable")
+            lines = []
+            for cycle in range(2):
+                for step in range(6):
+                    lines.append(f"NAV cycle={cycle} step={step} result=1")
+                    if cycle:
+                        lines.append(f"NAV parity step={step} status=pass")
+            lines.append(f"RESIDENT_BEGIN mode={mode} steps=14 width=16 height=8 tile_width=128")
+            for step in range(14):
+                cold = mode == "cold"
+                lines.append(f"RESIDENT_NAV step={step} x=35 y={41 + step*2} result=1 built={3 if cold else 0} reused={0 if cold else 3} upload_bytes={168 if cold else 0} ms=20 capture_ms=1 geometry_ms=5 draw_ms=7 readback_ms=7")
+                body = bytes((step, 100, 200, 255)) * (16 * 8)
+                header = bytearray(54)
+                header[:2] = b"BM"
+                struct.pack_into("<I", header, 2, len(header) + len(body))
+                struct.pack_into("<I", header, 10, len(header))
+                struct.pack_into("<IiiHH", header, 14, 40, 16, -8, 1, 32)
+                (root / f"zoom.bmp.resident{step}.bmp").write_bytes(header + body)
+                lines.append(f"RESIDENT_IMAGE step={step} bytes={len(body)} fnv64={checksum(body)} saved=1")
+            lines.extend(("RESIDENT_END status=pass", "BIQ 16x8 viewport: 3 visible tiles, 0 fallback"))
+            (root / "benchmark.log").write_text("\n".join(lines) + "\n")
+
+        with tempfile.TemporaryDirectory(prefix="c3x-resident-evidence-") as directory:
+            root = Path(directory)
+            cold, warm = root / "cold", root / "warm"
+            fixture(cold, "cold")
+            fixture(warm, "retained")
+            report = analyze(cold, warm)
+            self.assertTrue(report["pass"])
+            self.assertEqual(report["max_ms"], 20)
+            self.assertEqual(len(report["steps"]), 14)
+            good = (warm / "benchmark.log").read_text()
+            # Success markers alone cannot certify missing/duplicated evidence,
+            # camera identity, NaN timings, or stale output files.
+            for old, new in (
+                ("RESIDENT_END status=pass", ""),
+                ("RESIDENT_BEGIN mode=retained", "RESIDENT_BEGIN mode=cold"),
+                ("step=0 x=35 y=41", "step=0 x=35 y=39"),
+                ("ms=20 capture_ms=1", "ms=nan capture_ms=1"),
+                ("ms=20 capture_ms=1", "ms=0 capture_ms=1"),
+                ("upload_bytes=0", "upload_bytes=-1"),
+                ("saved=1", "saved=0"),
+                ("RESIDENT_NAV step=1 ", "RESIDENT_NAV step=0 "),
+                ("width=16 height=8", "width=32 height=8"),
+            ):
+                with self.subTest(new=new):
+                    (warm / "benchmark.log").write_text(good.replace(old, new))
+                    with self.assertRaises(ValueError):
+                        analyze(cold, warm)
+            (warm / "benchmark.log").write_text(good)
+            (warm / "completion.txt").write_text("1\n")
+            with self.assertRaises(ValueError):
+                analyze(cold, warm)
+            (warm / "completion.txt").write_text("0\n")
+            (warm / "C3XRenderer.dll").write_bytes(b"different renderer")
+            with self.assertRaises(ValueError):
+                analyze(cold, warm)
+            fixture(warm, "retained")
+            image = warm / "zoom.bmp.resident0.bmp"
+            damaged = bytearray(image.read_bytes());damaged[-1] ^= 1;image.write_bytes(damaged)
+            with self.assertRaises(ValueError):
+                analyze(cold, warm)
+            # A matching receipt proves which pixels were saved, not that the
+            # renderer produced correct pixels. Independent reference parity
+            # must reject a completed but visually different result too.
+            original_body = bytes((0, 100, 200, 255)) * (16 * 8)
+            (warm / "benchmark.log").write_text(good.replace(
+                f"fnv64={checksum(original_body)}", f"fnv64={checksum(damaged[54:])}"))
+            report = analyze(cold, warm)
+            self.assertFalse(report["pixels_exact"])
+            self.assertFalse(report["pass"])
+            self.assertTrue(report["no_rebuilds_or_uploads"])
+            self.assertTrue(report["latency_target_met"])
+            self.assertFalse(report["steps"][0]["pixel_exact"])
+            self.assertTrue(all(row["pixel_exact"] for row in report["steps"][1:]))
+            image.write_bytes(b"BM")
+            with self.assertRaisesRegex(ValueError, "Truncated resident image header"):
+                analyze(cold, warm)
+            fixture(warm, "retained")
+            for old, new, flag in (("built=0", "built=1", "no_rebuilds_or_uploads"),
+                                   ("upload_bytes=0", "upload_bytes=168", "no_rebuilds_or_uploads"),
+                                   ("ms=20 capture_ms=1", "ms=101 capture_ms=1", "latency_target_met")):
+                (warm / "benchmark.log").write_text(good.replace(old, new))
+                report = analyze(cold, warm)
+                self.assertFalse(report[flag])
+                self.assertFalse(report["pass"])
+            fixture(warm, "retained")
+            cold_log = cold / "benchmark.log"
+            cold_log.write_text(cold_log.read_text().replace("built=3", "built=0"))
+            with self.assertRaises(ValueError):
+                analyze(cold, warm)
+
+    def test_exact_height_cache_keeps_support_dependencies_and_owner_scope(self):
+        compiler = shutil.which("clang++") or shutil.which("g++")
+        if not compiler:
+            self.skipTest("C++ compiler unavailable")
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        body = "auto natural_height_at =" + source.split("auto natural_height_at =", 1)[1].split(
+            "            auto relief_at_world", 1)[0]
+        self.assertIn("natural_height_samples.clear();", source)
+        self.assertIn("return natural_height_at(x,y,support)",
+                      (ROOT / "Renderer/native/source_fidelity/geometry.h").read_text())
+        program = r'''
+#include <array>
+#include <cassert>
+#include <set>
+#include "Renderer/native/render_core/exact_point_cache.h"
+struct Queries {
+ int version=1,calls=0;std::set<int> dependencies;
+ float height(int,int,float u,float v,float* support){
+  ++calls;dependencies.insert(int(u));dependencies.insert(int(v));
+  *support=u*.25f+v*.125f;return u*2.f-v+float(version);
+ }
+};
+int main(){
+ c3x_renderer::render_core::ExactPointCache<std::array<float,2>> natural_height_samples;
+ Queries queries;int natural=0,pickup_height_at=0;bool retain_height_samples=true;
+''' + body + r'''
+ auto verify=[&](float x,float y){
+  float support=-99;float a=natural_height_at(x,y),b=natural_height_at(x,y,&support);
+  assert(a==x*2.f-y+queries.version && b==a && support==x*.25f+y*.125f);
+ };
+ verify(1.5f,2.25f);assert(queries.calls==1);
+ auto dependencies=queries.dependencies;
+ verify(1.5f,2.25f);assert(queries.calls==1 && queries.dependencies==dependencies);
+ verify(1.500001f,2.25f);assert(queries.calls==2); // No quantization.
+ natural_height_samples.clear();queries.version++;queries.dependencies.clear();
+ verify(1.5f,2.25f);assert(queries.calls==3 && queries.dependencies==dependencies);
+ retain_height_samples=false;verify(1.5f,2.25f);assert(queries.calls==5);
+ retain_height_samples=true;
+ for(int i=0;i<20000;++i)verify(float(i),float(i)*.125f);
+ assert(natural_height_samples.bytes()<=16384u*24u);
+ // A point beyond bounded admission still evaluates correctly every time.
+ auto before=queries.calls;verify(30000.f,17.f);assert(queries.calls==before+2);
+ natural_height_samples.clear();queries.version++;verify(30000.f,17.f);
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="c3x-height-samples-") as directory:
+            cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
+            cpp.write_text(program)
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+    def test_submission_casters_preserve_order_wrapping_and_content(self):
+        compiler = shutil.which("clang++") or shutil.which("g++")
+        if not compiler:
+            self.skipTest("C++ compiler unavailable")
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        method = "    void collect_shadow_casters(" + source.split(
+            "    void collect_shadow_casters(", 1)[1].split("    bool submit_geometry(", 1)[0]
+        submission = source.split("    bool submit_geometry(", 1)[1].split("    bool ensure_block_targets", 1)[0]
+        self.assertIn("shadow_buffers_ptr?*shadow_buffers_ptr:buffers,submission_casters", submission)
+        self.assertIn("shadow_buffers_ptr,false,shadow_casters_ptr)", submission)
+        self.assertIn("shadow_buffers_ptr,reflection_pass,shadow_casters_ptr)", submission)
+        self.assertIn("shadow_buffers_ptr,true,shadow_casters_ptr)", submission)
+        self.assertEqual(submission.count("collect_shadow_casters("), 1)
+        program = r'''
+#include <array>
+#include <vector>
+#include <cassert>
+#include <cstdint>
+namespace c3x_renderer {namespace render_core {struct SourceShadow {
+ struct Bounds {float low[3]={1,2,3},high[3]={4,5,6};};
+ struct Caster {int vertices=0,indices=0,count=0,index_format=0,stride=0;
+  unsigned layer=0,version=0,binding=0;Bounds bounds;float offset[2]={};};
+};}}
+enum {geometry_land=1,geometry_feature=2,geometry_natural_decal=3,geometry_layer_count=5};
+struct CachedVertexChunk {
+ int buffer=7,indices=8,index_count=9,index_format=16,vertex_stride=64;
+ unsigned version=10,city_material=0xffffffffu;bool animation_texture=false;
+ c3x_renderer::render_core::SourceShadow::Bounds world_bounds;
+};
+struct State {
+ struct Dims {int width=100,height=80;bool wrap_x=false,wrap_y=false;} dims;
+ struct World {Dims* dims;Dims dimensions()const{return *dims;}} world{&dims};
+ struct Coast {World* value;World const& world()const{return *value;}} world_coast{&world};
+ struct Material {bool ground=false;};
+ struct {struct {std::vector<Material> materials{{true},{false}};} library;} cities;
+''' + method + r'''
+};
+int main(){
+ State s;std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
+ for(unsigned layer=0;layer<geometry_layer_count;++layer){
+  CachedVertexChunk c;c.buffer=100+layer;c.version=200+layer;buffers[layer].push_back(c);
+ }
+ CachedVertexChunk ground;ground.city_material=0;buffers[2].push_back(ground);
+ CachedVertexChunk building;building.city_material=1;building.buffer=500;buffers[2].push_back(building);
+ CachedVertexChunk animated;animated.animation_texture=true;buffers[4].push_back(animated);
+ using C=c3x_renderer::render_core::SourceShadow::Caster;
+ for(bool wx:{false,true})for(bool wy:{false,true}){
+  s.dims.wrap_x=wx;s.dims.wrap_y=wy;std::vector<C> out;s.collect_shadow_casters(buffers,out);
+  int copies=(wx?3:1)*(wy?3:1);assert(out.size()==unsigned(4*copies));
+  unsigned index=0;
+  for(int body:{101,102,500,104})for(int y=wy?-1:0;y<=(wy?1:0);++y)
+   for(int x=wx?-1:0;x<=(wx?1:0);++x){
+    auto const& c=out[index++];assert(c.vertices==body && c.indices==8 && c.count==9);
+    assert(c.index_format==16 && c.stride==64 && c.bounds.low[2]==3 && c.bounds.high[2]==6);
+    assert(c.offset[0]==(x*100+y*80)*.5f && c.offset[1]==(x*100-y*80)*.5f);
+    if(body==500)assert(c.binding==10001 && c.version==10);
+    else assert(c.version==unsigned(body+100));
+   }
+  // A later submission sees content edits; the earlier request remains immutable.
+  buffers[1][0].version++;std::vector<C> next;s.collect_shadow_casters(buffers,next);
+  assert(next[0].version==out[0].version+1);buffers[1][0].version--;
+ }
+ for(auto& layer:buffers)layer.clear();std::vector<C> empty;s.collect_shadow_casters(buffers,empty);assert(empty.empty());
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="c3x-submission-casters-") as directory:
+            cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
+            cpp.write_text(program)
+            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
     def test_retained_ground_dependencies_and_bounded_admission(self):
         compiler = shutil.which("clang++") or shutil.which("g++")
         if not compiler:

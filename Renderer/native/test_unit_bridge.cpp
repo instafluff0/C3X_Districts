@@ -27,7 +27,8 @@ struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0;int army_top_defender_id=-
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
 struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
- c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;int custom_renderer_init_state=1;
+ c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;
+ c3x_renderer_unit_draw_expanded_fn custom_renderer_unit_draw_expanded=nullptr;int custom_renderer_init_state=1;
  struct {bool enable_custom_rendering=true,enable_custom_rendered_units=true,enable_custom_rendering_zoom=false;int day_night_cycle_mode=0,seasonal_cycle_mode=0;} current_config;
  int custom_renderer_zoom_tile_width=128,custom_renderer_zoom_native_tile_width=128;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
@@ -64,6 +65,11 @@ HDC __fastcall acquire(JGL_Image* p){if(p==denied_dc)return nullptr;++dc_count;r
 void __fastcall release_dc(JGL_Image*,int,int){--dc_count;}
 int __fastcall colors(JGL_Color_Table*,int,unsigned char* out,int first,int count){assert(first==6 && count==1);out[0]=12;out[1]=34;out[2]=56;return 0;}
 int capture(c3x_renderer_unit_v1 const* value,void* destination,void* background){assert(destination && background && destination!=background && dc_count==2);captured=*value;calls.push_back(20);return success?1:0;}
+int capture_expanded(c3x_renderer_unit_v1 const* value,void* destination,void* background,int* bounds){
+ int result=capture(value,destination,background);
+ if(result){bounds[0]=-40;bounds[1]=-60;bounds[2]=300;bounds[3]=280;}
+ return result;
+}
 int __fastcall Sprite_draw_unit_body_normal(Sprite*,int,PCX_Image*,PCX_Image*,int x,int y,char* path,PCX_Color_Table* p){assert(x==11 && y==23 && path[0]=='p' && p==&fixture_palette);calls.push_back(30);return 77;}
 int __fastcall original_reduced(Sprite*,int,PCX_Image*,PCX_Image*,int x,int y,int sx,int sy,int divisor,char* path,PCX_Color_Table* p){assert(x==11 && y==23 && sx==1 && sy==1 && divisor==2 && path[0]=='p' && p==&fixture_palette);calls.push_back(30);return 77;}
 // Match the corrected nine-stack-argument native declaration.
@@ -124,6 +130,10 @@ int main(){
   army_member=nullptr;unit.army=false;
   unit.visible=false;invoke();assert(calls.empty());unit.visible=true;
  }
+ state.custom_renderer_unit_draw_expanded=capture_expanded;
+ success=true;invoke();assert(unit.Body.Rect.left==-40 && unit.Body.Rect.top==-60 && unit.Body.Rect.right==300 && unit.Body.Rect.bottom==280);
+ success=false;invoke();assert(unit.Body.Rect.left==20 && unit.Body.Rect.right==45);
+ state.custom_renderer_unit_draw_expanded=nullptr;
  // UI portraits use these same native hooks, outside the map tick's canvas.
  // They must preserve native arguments/return values at every custom zoom.
  state.current_config.enable_custom_rendering_zoom=true;

@@ -18,6 +18,7 @@ class UnitPreparation(unittest.TestCase):
         for name, value in (("ROOT", self.root), ("PACKS", self.packs)):
             replacement = patch.object(units, name, value)
             replacement.start(); self.addCleanup(replacement.stop)
+        self.write(self.root / "Renderer/native/environment_refresh/unit_quality.json", {"frame_pack":"UnitFrameFidelity", "units":{}})
         self.source = self.packs / "UnitAnimationRuntime"
         self.output = self.root / "Renderer/candidate"
         self.mesh = {"vertices": [{"position": [x, y, 0], "normal": [0, 0, 1], "uv0": [x, y]}

@@ -65,6 +65,40 @@ def socket_payload(mesh: dict, driver, bone_name: str, model_scale: float):
     return encode(bound, skeleton, cache)
 
 
+def inverse_transform(matrix):
+    """Invert an affine source transform without imposing a rigid-only rig."""
+    rows=[list(matrix[i*4:i*4+4])+[float(i==j) for j in range(4)] for i in range(4)]
+    for column in range(4):
+        pivot=max(range(column,4),key=lambda row:abs(rows[row][column]))
+        rows[column],rows[pivot]=rows[pivot],rows[column]
+        if abs(rows[column][column])<1e-12:raise ValueError('singular attachment root')
+        factor=rows[column][column];rows[column]=[v/factor for v in rows[column]]
+        for row in range(4):
+            if row!=column:
+                factor=rows[row][column];rows[row]=[a-factor*b for a,b in zip(rows[row],rows[column])]
+    return tuple(v for row in rows for v in row[4:])
+
+
+def parent_skin_cache(child, parent, bone_name, local_root):
+    """Preserve local skin animation while attaching the whole rig to a socket.
+
+    Imported common Root travel is removed before parenting, then the kit's
+    native-anchor normalization removes world travel exactly once.
+    """
+    if child.frame_count!=parent.frame_count or abs(child.duration-parent.duration)>1e-5:
+        raise ValueError('attachment and parent timing differ')
+    root=child.bone_names.index(local_root);socket=parent.bone_names.index(bone_name)
+    values=[]
+    for frame in range(child.frame_count):
+        offset=frame*len(child.bone_names)*16
+        inverse=inverse_transform(child.matrices[offset+root*16:offset+(root+1)*16])
+        target=(frame*len(parent.bone_names)+socket)*16
+        for bone in range(len(child.bone_names)):
+            local=normalized_skin._multiply(child.matrices[offset+bone*16:offset+(bone+1)*16],inverse)
+            values.extend(normalized_skin._multiply(local,parent.matrices[target:target+16]))
+    return normalized_pose_cache.PoseCache(child.duration,child.sample_rate,child.frame_count,child.bone_names,tuple(values))
+
+
 def native_anchor_caches(caches: dict, driver_id: str, skeleton: dict) -> dict:
     """Strip planar root travel once for the whole kit, retaining joint/Z motion."""
     roots = [i for i, bone in enumerate(skeleton["bones"]) if bone["parent"] == -1]
@@ -109,6 +143,7 @@ def fortify_transition(skeleton: dict, idle, target):
 
 
 def build(packs: list[Path], output: Path, standard_roster: bool = False, reuse_source_packs=()) -> dict:
+    attachment_bindings=json.loads(Path(__file__).with_name('unit_attachment_bindings.json').read_text())['bindings']
     source_roots={p.name:p for p in packs}
     if len(source_roots)!=len(packs) or set(reuse_source_packs)-source_roots.keys():
         raise ValueError('source pack names must be unique and reused packs must be present')
@@ -191,6 +226,10 @@ def build(packs: list[Path], output: Path, standard_roster: bool = False, reuse_
                     idle_record = manifest["animations"][recipe["actions"]["idle"]]
                     idle_clip = normalized_animation.load_clip(pack_path(pack, idle_record["clip"]))
                     caches = {asset: fortify_transition(skeleton, idle_clip, clip) for asset,skeleton in skeletons.items()}
+                for asset in components:
+                    binding=attachment_bindings.get(asset)
+                    if binding and 'local_root' in binding:
+                        caches[asset]=parent_skin_cache(caches[asset],caches[binding['driver']],binding['bone'],binding['local_root'])
                 caches = native_anchor_caches(caches, driver_id, skeletons[driver_id])
                 if action == "move" and recipe.get("move_cycle_translation_bone"):
                     # Some locomotion exports put cycle travel on the hips.
@@ -227,9 +266,10 @@ def build(packs: list[Path], output: Path, standard_roster: bool = False, reuse_
                             payload = encode(mesh, skeletons[asset], caches[asset])
                         elif mode == "rigid_attachment":
                             mesh = document(pack, mesh_relative)
-                            local_driver = asset if asset in caches and component.get("rigid_driver_bone") else driver_id
+                            attachment=attachment_bindings.get(asset,{})
+                            local_driver = attachment.get('driver') or (asset if asset in caches and component.get("rigid_driver_bone") else driver_id)
                             payload = socket_payload(mesh, caches[local_driver],
-                                component.get("rigid_driver_bone") or sockets[component["attachment_point"]]["bone"], component["model_scale"])
+                                attachment.get("bone") or component.get("rigid_driver_bone") or sockets[component["attachment_point"]]["bone"], component["model_scale"])
                         else:
                             raise ValueError(f"unsupported complete-kit binding: {asset}")
                         material = document(pack, material_relative)
@@ -237,7 +277,7 @@ def build(packs: list[Path], output: Path, standard_roster: bool = False, reuse_
                         for channel, data in material["channels"].items():
                             channels[channel] = {**data, "texture": publish(
                                 pack_path(pack, data["texture"]).read_bytes(), "textures", "dds")}
-                        parts.append({"asset": asset, "mesh": publish(payload, "clips", "bin"),
+                        parts.append({"asset": asset, **({"attachment_binding":attachment_bindings[asset]} if asset in attachment_bindings else {}), "mesh": publish(payload, "clips", "bin"),
                             "bytes": len(payload), "material": {"alpha_mode": material.get("alpha_mode", "opaque"),
                                 "channels": channels, "source_tint": component.get("tint"),
                                 "tint_rgb": component.get("tint_rgb"),

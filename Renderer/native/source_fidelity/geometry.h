@@ -8,7 +8,7 @@ if(fidelity_profile) {
     };
     Tile owner=lookup_natural(nc,nr);
     auto height_natural=[&](float x,float y,float*support=nullptr){
-        return queries.height(natural,pickup_height_at,x,y,support);
+        return natural_height_at(x,y,support);
     };
     // The page includes the authoritative halo needed by this complete tile
     // and its finite-difference collar. Bind it once: mountain tessellation

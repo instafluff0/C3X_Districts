@@ -1,6 +1,7 @@
 // Standalone category witness using the actual production terrain and unit APIs.
 // Reuse the existing capture/ownership harness; never launch or patch the game.
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <windows.h>
 #include <vector>
 #include "../native/c3x_renderer_api.h"
@@ -106,8 +107,12 @@ bool lab_compose_units(HMODULE module, char const* image_path, int hour, int til
                        c3x_renderer_output_v1 const& terrain) {
     char enabled[32] = {};
     if (!GetEnvironmentVariableA("C3X_LAB_UNIT_STUDY", enabled, sizeof(enabled))) return true;
-    auto draw = reinterpret_cast<c3x_renderer_unit_draw_background_fn>(GetProcAddress(module, "c3x_renderer_unit_draw_background"));
-    bool ok = draw != nullptr;
+    auto legacy_draw = reinterpret_cast<c3x_renderer_unit_draw_background_fn>(GetProcAddress(module, "c3x_renderer_unit_draw_background"));
+    auto expanded_draw = reinterpret_cast<c3x_renderer_unit_draw_expanded_fn>(GetProcAddress(module, "c3x_renderer_unit_draw_expanded"));
+    auto draw=[&](c3x_renderer_unit_v1 const* unit,HDC dc,HDC background){
+        int bounds[4]={};return expanded_draw?expanded_draw(unit,dc,background,bounds):legacy_draw(unit,dc,background);
+    };
+    bool ok = legacy_draw != nullptr;
     HDC dc = CreateCompatibleDC(nullptr);
     BITMAPINFO info = {};
     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);

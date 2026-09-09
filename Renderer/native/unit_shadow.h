@@ -10,8 +10,9 @@ namespace c3x_renderer {
 // Small pose-local directional height map. Translation is deliberately absent.
 // One map supports self-shadow tests and a ground-plane cast footprint.
 struct UnitShadow {
-    static constexpr int extent=128;
-    std::array<float,extent*extent> heights{};
+    int extent;
+    std::vector<float> heights;
+    explicit UnitShadow(int size=128):extent(size),heights(std::size_t(size)*size){}
     float left=0,top=0,width=1,height=1,dx=0,dy=0;
     using Point=std::array<float,3>;
     Point project(Point p) const {return {p[0]-dx*p[2],p[1]-dy*p[2],p[2]};}
@@ -33,7 +34,7 @@ struct UnitShadow {
         if(right<left){left=top=0;right=bottom=1;}
         left-=.025f;top-=.025f;right+=.025f;bottom+=.025f;
         width=std::max(.05f,right-left);height=std::max(.05f,bottom-top);
-        heights.fill(-1.f);return true;
+        std::fill(heights.begin(),heights.end(),-1.f);return true;
     }
     void triangle(Point a,Point b,Point c) {
         a=project(a);b=project(b);c=project(c);

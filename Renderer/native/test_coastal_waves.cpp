@@ -20,5 +20,17 @@ int main(){using namespace c3x_renderer::render_core;
  for(int relief:{5,6}){fill(relief);coast.update(w,data.data(),data.size(),relief);
   for(int y=8;y<24;++y)for(int x=13+(y&1);x<19;x+=2)assert(coastal_wave_ribbon(coast,(x+y)/2,(x-y)/2,.7f).empty());}
  fill(2);coast.update(w,data.data(),data.size(),9);assert(!coastal_wave_ribbon(coast,found_c,found_r,.7f).empty());
+ // Longer fronts must not bridge across dry land inside curved coves.
+ for(int y=0;y<32;++y)for(int x=y&1;x<32;x+=2)
+  data[(y*32+x)/2]=x<16+int(3*std::sin(y*.45))?(2|(2<<8)):(11|(11<<8));
+ coast.update(w,data.data(),data.size(),11);
+ for(int y=8;y<24;++y)for(int x=9+(y&1);x<23;x+=2){
+  auto ribbon=coastal_wave_ribbon(coast,(x+y)/2,(x-y)/2,1.f);
+  for(unsigned i=0;i<ribbon.size();i+=3){
+   if(ribbon[i].coverage<1 || ribbon[i+1].coverage<1 || ribbon[i+2].coverage<1)continue;
+   Point p=(ribbon[i].position+ribbon[i+1].position+ribbon[i+2].position)*(1./3.);
+   auto observe=[](auto...){ };assert(coast.sample(p,observe,observe).distance<=.002);
+  }
+ }
  std::puts("PASS coastal beaches, hill/mountain exclusion, contour determinism, wrap, topology edit");
 }

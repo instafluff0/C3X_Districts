@@ -11,8 +11,8 @@ ROOT=Path(__file__).resolve().parents[3]
 PACKS=ROOT/'Renderer/packs'
 def read(p):return json.loads(p.read_text())
 def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
-def build_pack(target=None):
-    source=PACKS/'UnitAnimationRuntime'
+def build_pack(target=None, source=None):
+    source=Path(source or PACKS/'UnitAnimationRuntime')
     target=Path(target or PACKS/'UnitAnimationFidelity').resolve()
     target.relative_to(ROOT/'Renderer')
     consumed={};copied=set();mesh_cache={}
@@ -33,6 +33,11 @@ def build_pack(target=None):
             raise ValueError('Unit output must not overlap source inputs')
     separate(source);separate(PACKS/'UnitNormalFidelity')
     manifest=read(source/'manifest.json');bindings=read(source/'bindings.json')
+    quality=read(ROOT/'Renderer/native/environment_refresh/unit_quality.json')
+    frame_root=PACKS/quality['frame_pack'];separate(frame_root)
+    frames=read(frame_root/'frames.json')['components'] if quality['units'] else {}
+    frame_manifest=read(frame_root/'manifest.json') if quality['units'] else {}
+
     normal_manifest=read(PACKS/'UnitNormalFidelity/manifest.json');pins={};updates={};modes={};poses=0;normal_cache={}
     for unit in manifest['units'].values():separate(PACKS/unit['source_pack'])
     def payload(root,relative):
@@ -53,6 +58,9 @@ def build_pack(target=None):
                     and set(unit['civ3_ids'])=={b['key'+str(i)] for i in range(b['key_count'])}]
         if len(candidates)!=1:raise ValueError('ambiguous native unit binding '+unit_id)
         bound=candidates[0]
+        selected=quality['units'].get(unit_id)
+        if selected:bound.update(selected)
+
         for action,data in unit['actions'].items():
             for i,part in enumerate(data['parts']):
                 for ch in part['material']['channels'].values():copy_payload(ch['texture'])
@@ -105,6 +113,30 @@ def build_pack(target=None):
                     # an imported component missing its authored normal record.
                     consumed[catalog.relative_to(ROOT).as_posix()]=None
                     copy_payload(relative)
+                if selected:
+                    record=bound[action]['part'+str(i)]
+                    frame=frames[part['asset']]
+                    frame_mesh=read(frame_root/frame['normalized_mesh'])
+                    component=read(frame_root/frame_manifest['assets'][part['asset']]['component'])
+                    local_scale=component['model_scale'] if component['binding_mode']=='rigid_attachment' else 1
+                    old=(target/record['mesh']).read_bytes()
+                    n=struct.unpack_from('<I',old,12)[0]
+                    if len(frame_mesh['vertices'])!=n:raise ValueError('tangent vertex count changed')
+                    new=bytearray(old[:32]);new[:8]=b'C3XANM2\0';struct.pack_into('<I',new,8,2)
+                    for j,v in enumerate(frame_mesh['vertices']):
+                        row=old[32+j*64:32+(j+1)*64];values=struct.unpack_from('<8f',row)
+                        expected=[x*local_scale for x in v['position']]+v['normal']+v['uv0']
+                        if max(abs(a-b) for a,b in zip(values,expected))>1e-6:raise ValueError('tangent/geometry identity mismatch')
+                        new+=row+struct.pack('<6f',*(frame['tangents'][j]+frame['bitangents'][j]))
+                    new+=old[32+n*64:]
+                    relative='clips/'+hashlib.sha256(new).hexdigest()+'.bin'
+                    destination=target/relative
+                    if not destination.exists():destination.write_bytes(new)
+                    elif destination.read_bytes()!=new:raise ValueError('candidate frame payload collision')
+                    record['mesh']=part['mesh']=relative;record['material_model']=1
+                    normal=part['material']['channels'].get('normal_0')
+                    if normal:record['normal_texture']=normal['texture']
+                    part['frame_authority']=str((frame_root/'frames.json').relative_to(ROOT))
                 modes[mode]=modes.get(mode,0)+1
     target.mkdir(parents=True,exist_ok=True)
     for name,data in [('manifest.json',manifest),('bindings.json',bindings)]:
@@ -112,7 +144,7 @@ def build_pack(target=None):
     evidence={'status':'pass','source_manifest_sha256':sha(source/'manifest.json'),'bindings_sha256':digest(target/'bindings.json'),
       'unit_count':len(manifest['units']),'native_keys':sum(v['key_count'] for v in bindings.values() if isinstance(v,dict)),
       'address_mode_parts':modes,'normal_payloads':len(updates),'unchanged_palette_frames':poses,'source_sha256':pins,
-      'settings':{'msaa':4,'anisotropy':16,'mip_bias':0,'render_scale':1},
+      'settings':{'msaa':4,'anisotropy':16,'mip_bias':0,'render_scale':'pack selected 1 or 4'},
       'limits':['Original generic assets preserve their authored normals; imported components use fingerprinted source octahedral normals.',
                 'Native environment, team colors, projection and working self-shadow visibility adapt the selected Lab material response; the isolated witness LUT is not applied to the native sprite.']}
     return evidence,consumed

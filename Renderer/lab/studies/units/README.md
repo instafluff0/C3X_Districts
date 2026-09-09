@@ -232,3 +232,8 @@ The user's subsequent request for an unconstrained reference is implemented in
 DLL and uses the retained source-family dual-lobe specular evidence. It supplies
 a high-resolution reference and final-reconstruction comparisons, rather than
 assuming that the smaller material differences above establish visual parity.
+
+The unconstrained CPU reference and its native Lab port are documented in
+[STUDIO.md](STUDIO.md). Use `lab units --case studio`, `studio-gameplay` or
+`studio-move` for original-method and matched-material comparisons. These cases
+build their own private native candidate and do not stage production assets.

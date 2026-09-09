@@ -16,6 +16,7 @@ namespace c3x_renderer {
 // clocks, or terrain-cache keys belong here. Each payload is one material part.
 struct AnimationVertex {
     FeatureSourceVertex source;
+    std::array<float,3> tangent{},bitangent{};
     std::array<std::uint32_t, 4> joints;
     std::array<float, 4> weights;
 };
@@ -32,7 +33,7 @@ inline bool decode_animation_mesh(std::vector<std::uint8_t> const & data,
                                   AnimationMesh & output) {
     // Validate the complete byte budget before allocating any count-sized array.
     if (data.size() < 32 || data.size() > 64u * 1024u * 1024u ||
-        std::memcmp(data.data(), "C3XANM1\0", 8) != 0) return false;
+        (std::memcmp(data.data(), "C3XANM1\0", 8) != 0 && std::memcmp(data.data(), "C3XANM2\0", 8) != 0)) return false;
     std::size_t cursor = 8;
     auto u32 = [&]() {
         std::uint32_t value = 0;
@@ -40,13 +41,14 @@ inline bool decode_animation_mesh(std::vector<std::uint8_t> const & data,
         return value;
     };
     auto f32 = [&]() { auto bits = u32(); float value; std::memcpy(&value, &bits, 4); return value; };
-    if (u32() != 1) return false;
+    auto version=u32();
+    if ((version!=1 && version!=2) || data[6]!=char('0'+version)) return false;
     auto vertex_count = u32(), index_count = u32(), bones = u32(), frames = u32();
     float duration = f32();
     if (!vertex_count || vertex_count > 65536 || !index_count || index_count > 393216 ||
         index_count % 3 || !bones || bones > 256 || frames < 2 || frames > 4096 ||
         !std::isfinite(duration) || duration <= 0 || duration > 3600) return false;
-    std::uint64_t expected = 32ull + vertex_count * 64ull + index_count * 4ull +
+    std::uint64_t expected = 32ull + vertex_count * (version==2?88ull:64ull) + index_count * 4ull +
         std::uint64_t(bones) * frames * 64ull;
     if (expected != data.size()) return false;
     AnimationMesh decoded;
@@ -64,6 +66,10 @@ inline bool decode_animation_mesh(std::vector<std::uint8_t> const & data,
             w = f32(); if (!std::isfinite(w) || w < 0 || w > 1) return false; sum += w;
         }
         if (std::abs(sum - 1.0f) > 0.00001f) return false;
+        if(version==2) {
+            for(auto &v:vertex.tangent){v=f32();if(!std::isfinite(v))return false;}
+            for(auto &v:vertex.bitangent){v=f32();if(!std::isfinite(v))return false;}
+        }
     }
     for (auto & index : decoded.indices) { index = u32(); if (index >= vertex_count) return false; }
     for (auto & v : decoded.palettes) { v = f32(); if (!std::isfinite(v)) return false; }

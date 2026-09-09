@@ -660,6 +660,10 @@ def render(category, *, selected_case=None):
     value = standard(category)
     if selected_case is not None and selected_case not in value["recipe"]["cases"]:
         raise ValueError("Unknown fixture case for " + category)
+    if category == "units" and selected_case in ("studio", "studio-gameplay", "studio-move"):
+        from Renderer.lab.studies.units.lab_profile import run as render_unit_studio
+        return render_unit_studio(cases=({"studio":"sizing", "studio-gameplay":"sizing-gameplay", "studio-move":"sizing-move"}[selected_case],),
+                                  zooms=tuple(value["recipe"]["zooms"]))
     require_prepared([category])
     ensure_candidate()
     out = LAB / "out" / category
@@ -667,6 +671,12 @@ def render(category, *, selected_case=None):
     signature = category_signatures()[category]
     recipe = value["recipe"]
     for case in ([selected_case] if selected_case else recipe["cases"]):
+        if category == "units" and case.startswith("studio"):
+            from Renderer.lab.studies.units.lab_profile import run as render_unit_studio
+            study=render_unit_studio(cases=({"studio":"sizing", "studio-gameplay":"sizing-gameplay", "studio-move":"sizing-move"}[case],),
+                                    zooms=tuple(recipe["zooms"]))
+            outputs.extend({**entry,"case":case} for entry in study["images"])
+            continue
         for hour in recipe["hours"]:
             for zoom in recipe["zooms"]:
                 outputs.append(native_render(category, case, hour, zoom, out / case))
@@ -1057,6 +1067,8 @@ def main():
             print("\n".join(affected(args.category)))
         elif args.command == "lab":
             selected = affected(args.category) if getattr(args, "affected", False) else [args.category]
+            if "units" in selected:
+                reexec_with_workspace_python(("PIL", "numpy"))
             prepare_sources(selected)
             for key in selected:
                 selected_case = getattr(args, "case", None) if key == args.category else None
