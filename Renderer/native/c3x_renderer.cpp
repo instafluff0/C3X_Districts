@@ -8260,6 +8260,7 @@ struct PublishedMapFrame {
     std::vector<c3x_renderer_tile_v1> occurrences;
     c3x_renderer_frame_v1 frame={};
     c3x_renderer_camera_identity_v1 identity={};
+    std::uint64_t scene_signature=0;
     int phase_x=0,phase_y=0;
     PublishedMapFrame()=default;
     PublishedMapFrame(PublishedMapFrame const&)=delete;
@@ -8268,6 +8269,7 @@ struct PublishedMapFrame {
         std::swap(output,other.output);
         pixels.swap(other.pixels);fallback.swap(other.fallback);replacements.swap(other.replacements);
         occurrences.swap(other.occurrences);std::swap(frame,other.frame);std::swap(identity,other.identity);
+        std::swap(scene_signature,other.scene_signature);
         std::swap(phase_x,other.phase_x);std::swap(phase_y,other.phase_y);
     }
     std::size_t bytes() const {
@@ -8321,7 +8323,7 @@ struct PublishedMapFrame {
         std::vector<std::uint32_t>().swap(fallback);
         std::vector<std::uint32_t>().swap(replacements);
         std::vector<c3x_renderer_tile_v1>().swap(occurrences);frame={};identity={};
-        output={};phase_x=phase_y=0;
+        output={};scene_signature=0;phase_x=phase_y=0;
     }
 };
 
@@ -8455,9 +8457,10 @@ struct CameraTerrainPreview {
 
 // Civ III remains the caller and presenter. One renderer worker owns all
 // renderer-state mutation and D3D work, consuming a deep copy of each captured
-// frame. The synchronous ABI intentionally permits no stale-frame fallback: at
-// most one immutable job is in flight, no backlog is accumulated, and only the
-// result bearing the caller's exact sequence is returned for UI-thread blitting.
+// frame. The default synchronous ABI permits no stale-frame fallback. Its
+// opt-in ambient compatibility mode may retain only an exactly matched static
+// camera/scene front while a newer clock tick is in flight; camera or captured
+// ownership changes still take over synchronously. No backlog is accumulated.
 class RendererWorker {
 public:
     explicit RendererWorker(RendererState & state) : renderer_state(state) {
@@ -8466,6 +8469,11 @@ public:
             std::strcmp(option,"1")==0;
         camera_preview_enabled=GetEnvironmentVariableA("C3X_RENDERER_CAMERA_PREVIEW",option,sizeof(option)) &&
             std::strcmp(option,"1")==0;
+        ambient_async_enabled=GetEnvironmentVariableA("C3X_RENDERER_SYNC_AMBIENT",option,sizeof(option)) &&
+            std::strcmp(option,"1")==0;
+        // The synchronous compatibility path may return its front while the
+        // worker mutates render scratch, so its publication must own pixels.
+        if(ambient_async_enabled)isolated_publication=true;
     }
 
     int set_unit_rendering(int enabled) {
@@ -8515,6 +8523,36 @@ public:
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();
+        if(ambient_async_enabled && completed_result==C3X_RENDERER_RESULT_OK &&
+           completed_resources && publication.output.bgra_pixels) {
+            // Commit a completed ambient result only when the current capture
+            // still describes its exact static view. The active job snapshot
+            // retains topology bytes that are intentionally absent from the
+            // public display metadata.
+            if(camera_ready.output.bgra_pixels && same_ambient_view(frame,job_frame)) {
+                c3x_renderer_output_v1 promoted={};
+                if(camera_poll_locked(camera_ticket,promoted)==C3X_RENDERER_RESULT_OK) {
+                    completed_scene_signature=publication.scene_signature;
+                    completed_resources=renderer_state.ambient_count();
+                    completed_resource_clock=RendererState::resource_clock(publication.frame);
+                }
+            }
+            if(same_ambient_view(frame,job_frame)) {
+                auto clock=RendererState::resource_clock(frame);
+                if(clock!=completed_resource_clock && !camera_active && !camera_pending &&
+                   (camera_result==C3X_RENDERER_RESULT_OK || camera_result==C3X_RENDERER_RESULT_SUPERSEDED)) {
+                    c3x_renderer_i64 ignored=0;
+                    if(enqueue_camera_locked(frame,{},ignored)!=C3X_RENDERER_RESULT_PENDING) {
+                        drain_camera_locked(lock);
+                    }
+                }
+                if(clock==completed_resource_clock || camera_active || camera_pending ||
+                   camera_result==C3X_RENDERER_RESULT_PENDING) {
+                    return_current_bitmap(frame,output,"ambient-front");
+                    return C3X_RENDERER_RESULT_OK;
+                }
+            }
+        }
         drain_camera_locked(lock);
         // Idle geometry/pixel preparation never mutates the published frame
         // bitmap or ownership arrays. An identical authoritative appearance
@@ -8523,21 +8561,7 @@ public:
            (!completed_resources || completed_resource_clock==RendererState::resource_clock(frame)) &&
            c3x_renderer::terrain_frame_signature(frame,completed_output.content_revision,
                 completed_output.device_generation).complete==completed_scene_signature) {
-            if(completed_output.cache_hits!=0xffffffffu)++completed_output.cache_hits;
-            if(fast_cache_hits!=0xffffffffu)++fast_cache_hits;
-            output=completed_output;
-            output.clip_left=frame.clip_left;output.clip_top=frame.clip_top;
-            output.clip_right=frame.clip_right;output.clip_bottom=frame.clip_bottom;
-            output.visible_animation_count=frame.visible_animation_count+completed_resources;
-            output.request_continuous_redraw=output.visible_animation_count!=0;
-            output.frame_invalidation_flags=0;
-            output.geometry_tiles_built=output.geometry_tiles_reused=output.geometry_tiles_evicted=0;
-            output.geometry_upload_bytes=0;output.geometry_ticks=output.draw_ticks=output.readback_ticks=output.renderer_cpu_ticks=0;
-            output.raster_reused_pixels=output.raster_draw_pixels=output.raster_cached_pixels=0;
-            char detail[192];sprintf_s(detail,"tiles=%u pending=%u built=%u cancelled=%u blocks=%u immutable=1",
-                frame.tile_count,output.prefetch_tiles_pending,output.prefetch_tiles_built,
-                output.prefetch_tiles_cancelled,output.prefetch_blocks_built);
-            renderer_state.trace.write("worker-current-bitmap",detail);
+            return_current_bitmap(frame,output,"exact-cache");
             return C3X_RENDERER_RESULT_OK;
         }
         foreground_pending.store(true, std::memory_order_relaxed);
@@ -8590,6 +8614,13 @@ public:
                  same_camera_request(frame,identity,job_frame,job_camera_identity));
             if(same){ticket=camera_ticket;return C3X_RENDERER_RESULT_PENDING;}
         }
+        return enqueue_camera_locked(frame,identity,ticket);
+    }
+
+private:
+    int enqueue_camera_locked(c3x_renderer_frame_v1 const& frame,
+                              c3x_renderer_camera_identity_v1 const& identity,
+                              c3x_renderer_i64& ticket) {
         if(camera_ticket==INT64_MAX)return C3X_RENDERER_RESULT_ERROR;
         // Reject an unsupported publication before copying snapshots or asking
         // D3D for a target. Include worst-case fallback/replacement arrays.
@@ -8628,6 +8659,7 @@ public:
         return C3X_RENDERER_RESULT_PENDING;
     }
 
+public:
     int camera_poll(c3x_renderer_i64 ticket,c3x_renderer_output_v1& output) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::lock_guard<std::mutex> lock(state_mutex);
@@ -8648,6 +8680,42 @@ public:
     }
 
 private:
+    bool same_ambient_view(c3x_renderer_frame_v1 const& current,
+                           c3x_renderer_frame_v1 const& captured)const {
+        if(!captured.api_version || current.tile_count!=captured.tile_count ||
+           current.world_topology_count!=captured.world_topology_count)return false;
+        auto left=current,right=captured;
+        left.tiles=right.tiles=nullptr;left.world_topology=right.world_topology=nullptr;
+        left.presentation_time_ticks=right.presentation_time_ticks=0;
+        left.clip_left=right.clip_left=left.clip_top=right.clip_top=0;
+        left.clip_right=right.clip_right=left.clip_bottom=right.clip_bottom=0;
+        left.visible_animation_count=right.visible_animation_count=0;
+        return !std::memcmp(&left,&right,sizeof(left)) &&
+            (!current.tile_count || !std::memcmp(current.tiles,captured.tiles,
+                std::size_t(current.tile_count)*sizeof(*current.tiles))) &&
+            (!current.world_topology_count || !std::memcmp(current.world_topology,captured.world_topology,
+                std::size_t(current.world_topology_count)*sizeof(*current.world_topology)));
+    }
+
+    void return_current_bitmap(c3x_renderer_frame_v1 const& frame,
+                               c3x_renderer_output_v1& output,char const* reason) {
+        if(completed_output.cache_hits!=0xffffffffu)++completed_output.cache_hits;
+        if(fast_cache_hits!=0xffffffffu)++fast_cache_hits;
+        output=completed_output;
+        output.clip_left=frame.clip_left;output.clip_top=frame.clip_top;
+        output.clip_right=frame.clip_right;output.clip_bottom=frame.clip_bottom;
+        output.visible_animation_count=frame.visible_animation_count+completed_resources;
+        output.request_continuous_redraw=output.visible_animation_count!=0;
+        output.frame_invalidation_flags=0;
+        output.geometry_tiles_built=output.geometry_tiles_reused=output.geometry_tiles_evicted=0;
+        output.geometry_upload_bytes=0;output.geometry_ticks=output.draw_ticks=output.readback_ticks=output.renderer_cpu_ticks=0;
+        output.raster_reused_pixels=output.raster_draw_pixels=output.raster_cached_pixels=0;
+        char detail[224];sprintf_s(detail,"reason=%s tiles=%u pending=%u built=%u cancelled=%u blocks=%u immutable=1",
+            reason,frame.tile_count,output.prefetch_tiles_pending,output.prefetch_tiles_built,
+            output.prefetch_tiles_cancelled,output.prefetch_blocks_built);
+        renderer_state.trace.write("worker-current-bitmap",detail);
+    }
+
     bool same_camera_request(c3x_renderer_frame_v1 const& a,c3x_renderer_camera_identity_v1 const& ai,
                              c3x_renderer_frame_v1 const& b,c3x_renderer_camera_identity_v1 const& bi)const {
         auto left=a,right=b;
@@ -8824,6 +8892,7 @@ private:
     PublishedMapFrame publication;
     PublishedMapFrame camera_ready;
     bool camera_preview_enabled=false;
+    bool ambient_async_enabled=false;
     c3x_renderer_i64 camera_front_ticket=0;
     int camera_ready_result=C3X_RENDERER_RESULT_OK,camera_front_result=C3X_RENDERER_RESULT_PENDING;
     c3x_renderer_frame_v1 camera_pending_frame={};
@@ -9086,6 +9155,8 @@ private:
                     int x=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_x;
                     int y=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_y;
                     if(!finished_frame.capture(output,x,y,&job_frame,job_camera_identity))result=C3X_RENDERER_RESULT_ERROR;
+                    else finished_frame.scene_signature=c3x_renderer::terrain_frame_signature(
+                        job_frame,output.content_revision,output.device_generation).complete;
                 }
                 lock.lock();
                 if(ticket==camera_ticket && camera_result==C3X_RENDERER_RESULT_PENDING &&
@@ -9272,7 +9343,12 @@ private:
                 completed_phase_x=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_x;
                 completed_phase_y=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_y;
                 if(isolated_publication){
-                    if(publication.capture(output,completed_phase_x,completed_phase_y))output=publication.output;
+                    auto captured=ambient_async_enabled?&job_frame:nullptr;
+                    if(publication.capture(output,completed_phase_x,completed_phase_y,captured)){
+                        publication.scene_signature=c3x_renderer::terrain_frame_signature(
+                            job_frame,output.content_revision,output.device_generation).complete;
+                        output=publication.output;
+                    }
                     else {
                         publication.clear();
                         renderer_state.trace.write("publication-unavailable","synchronous exact output retained",true);

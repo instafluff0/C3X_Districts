@@ -361,3 +361,56 @@ then one scroll supersession and one combat action. Only after that small live-
 boundary gate should the remaining serial matrix run. Background production is
 now the primary architecture; guarded wave batching is a later throughput and
 animation-smoothness improvement, not a prerequisite for responsive idle UI.
+
+## Synchronous-boundary ambient gate — 2026-09-10
+
+The DLL now has an opt-in compatibility policy behind the existing synchronous
+render ABI; the injected caller and scene ownership are unchanged. A render call
+may return the immutable last exact bitmap only when the current frame, ordered
+tile payload and topology payload match byte-for-byte after excluding the
+presentation clock, native-unit animation count and dirty rectangle. Any camera,
+visibility, ownership, topology, environment or scene change cancels/takes over
+the background work and uses the existing exact synchronous path. Ambient work
+is single-flight and drops intermediate clock ticks rather than building a
+backlog. Default behavior is unchanged.
+
+At 2240x1192 with retained world caching and the bounded 256 MiB pose option, the
+eight-unit gate (five frozen, selected, worker and combat) passed three stationary
+ticks at 3.376–3.984 ms for the complete unit plane and 1.025 ms maximum per unit.
+The existing synchronous map entry returned in 0.520–0.877 ms while retaining
+the prior exact image. Fresh ambient images differed from that front and matched
+independent synchronous pixel and ownership references exactly after 78–125 ms.
+The in-flight translated-camera takeover returned only its new exact reference
+after 784.048 ms. Fallback and device recovery stayed zero and minimum contiguous
+free VA was 1,781.1 MiB.
+
+The single crowded repeat with 24 units (21 frozen plus the same three active)
+also passed: 9.813–10.021 ms for all units, 1.184 ms maximum per unit,
+0.545–1.051 ms maximum stationary render-entry time, and exact ambient completion
+in 94–125 ms. Its changed camera was exact after 721.890 ms, with zero fallback,
+zero recovery and 1,836.0 MiB minimum contiguous free VA. An intentionally
+minimal-cache diagnostic was not accepted: its 8 MiB pose cache retained only
+about 26 full-size poses, causing active pose misses and 409–502 ms unit planes;
+the retained-world profile reduced the separately isolated map completion from
+about 296–312 ms to the measured range above. This confirms that bounded memory
+retention is part of the viable architecture, not an optional micro-optimization.
+
+The rolling x86 candidate again builds with `/O2 /W4 /WX`. Fifteen focused
+publication, animation-retention, unit-animation, pose-cache and shadow tests
+emitted no assertion failure; ten were subsequently reported as errors only
+because Windows kept their completed temporary `contract.exe` files locked, and
+three optional tests were skipped. The renderer-only animation integration entry
+point was retried with its required Python packages and stopped before compilation
+at the pre-existing generated-source guard for
+`Renderer/native/city_fidelity/shader-provenance.json`; it was not altered and no
+formal category Integration pass is claimed.
+
+**Selected next experiment:** a short 15 Hz cadence soak through this same
+synchronous ABI: 30 stationary ticks with 24 realistic units, accepting only
+monotonic exact completed ticks, measuring dropped/coalesced ticks and UI-call
+p95, then one visibility mutation and one scroll. Gate on zero wrong-view or
+wrong-ownership publication, zero fallback/recovery, unit-plane p95 below 16 ms,
+render-entry p95 below 2 ms and at least 512 MiB contiguous VA. If it passes,
+make the bounded retained/pose policy a documented renderer configuration and
+move to a user-authorized live-game evaluation; guarded wave batching remains
+the next throughput optimization rather than a presentation blocker.

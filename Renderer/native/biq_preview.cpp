@@ -432,6 +432,7 @@ int main(int argc, char ** argv) {
     auto camera_begin_view=reinterpret_cast<c3x_renderer_camera_begin_view_fn>(GetProcAddress(module,"c3x_renderer_camera_begin_view"));
     auto camera_poll_view=reinterpret_cast<c3x_renderer_camera_poll_view_fn>(GetProcAddress(module,"c3x_renderer_camera_poll_view"));
     bool ambient_async=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_AMBIENT_ASYNC",camera_option,sizeof(camera_option))!=0;
+    bool ambient_boundary=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_AMBIENT_BOUNDARY",camera_option,sizeof(camera_option))!=0;
     if(camera_view && (!background_camera || !camera_begin_view || !camera_poll_view)) {
         std::fputs("camera view extension exports missing or queue disabled\n",stderr);return 1;
     }
@@ -729,6 +730,7 @@ int main(int argc, char ** argv) {
         }
 
         reset();
+        if(ambient_boundary)SetEnvironmentVariableA("C3X_RENDERER_SYNC_AMBIENT","1");
         if(ok)ok=set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK;
         center_x=home_x;center_y=home_y;tiles=home_tiles;
         frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
@@ -814,7 +816,7 @@ int main(int argc, char ** argv) {
             max_unit_set_ms=(std::max)(max_unit_set_ms,ms);
             std::printf("AMBIENT_UNITS frame=%d units=%d selected=1 worker=1 combat=1 frozen=%d total_ms=%.3f max_call_ms=%.3f status=%s\n",
                 cursor,idle_unit_count,(std::max)(0,idle_unit_count-3),ms,max_unit_ms,drawn?"pass":"FAIL");
-            return drawn;
+            return drawn && (!ambient_boundary || (ms<16.0 && max_unit_ms<2.0));
         };
         auto sample_memory=[&]() {
             auto values=camera_memory_values();
@@ -853,6 +855,62 @@ int main(int argc, char ** argv) {
             return healthy;
         };
         c3x_renderer_camera_identity_v1 stationary_identity={1,2,3,4};
+        if(ambient_boundary) {
+            auto exact_output=[&](AmbientReference const& expected) {
+                auto pixels=static_cast<unsigned char const*>(output.bgra_pixels);
+                auto bytes=std::size_t(output.stride_bytes)*output.height;
+                return pixels && bytes==expected.pixels.size() &&
+                    !std::memcmp(pixels,expected.pixels.data(),bytes) &&
+                    output.replacement_tile_count==expected.ownership.size() &&
+                    output.replacement_tile_flags && !std::memcmp(output.replacement_tile_flags,
+                        expected.ownership.data(),expected.ownership.size()*sizeof(expected.ownership[0]));
+            };
+            std::printf("AMBIENT_BOUNDARY_BEGIN ticks=3 policy=sync-abi-retain-last-exact camera=stationary floor_mib=512\n");
+            for(int step=1;step<=3 && ok;++step) {
+                frame.presentation_time_ticks=references[step].ticks;
+                LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+                int code=render(&frame,&output);QueryPerformanceCounter(&end);
+                double call_ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
+                max_accept_ms=(std::max)(max_accept_ms,call_ms);
+                auto pixels=static_cast<unsigned char const*>(output.bgra_pixels);
+                auto bytes=std::size_t(output.stride_bytes)*output.height;
+                bool retained=code==C3X_RENDERER_RESULT_OK && pixels && bytes==front.size() &&
+                    !std::memcmp(pixels,front.data(),bytes);
+                std::printf("AMBIENT_BOUNDARY submit=stationary-%d result=%d call_ms=%.3f retained_previous_exact=%u\n",
+                    step,code,call_ms,unsigned(retained));
+                ok=retained && call_ms<16.0 && draw_ambient_set(step) && sample_memory();
+                auto started=GetTickCount64();unsigned calls=1;
+                while(ok && !exact_output(references[step]) && GetTickCount64()-started<120000) {
+                    Sleep(1);QueryPerformanceCounter(&begin);code=render(&frame,&output);QueryPerformanceCounter(&end);
+                    call_ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
+                    max_accept_ms=(std::max)(max_accept_ms,call_ms);++calls;
+                    ok=code==C3X_RENDERER_RESULT_OK && call_ms<16.0 && sample_memory();
+                }
+                bool exact=ok && exact_output(references[step]) && references[step].pixels!=front;
+                std::printf("AMBIENT_BOUNDARY publish=stationary-%d calls=%u exact_ms=%llu exact=%u fallback=%u recoveries=%u largest_free_mib=%.1f\n",
+                    step,calls,static_cast<unsigned long long>(GetTickCount64()-started),unsigned(exact),
+                    output.fallback_tile_count,output.device_recoveries,double(min_largest_free)/(1024.0*1024.0));
+                ok=exact && output.fallback_tile_count==0 && output.device_recoveries==0;
+                if(ok)front=references[step].pixels;
+            }
+            if(ok) {
+                frame.presentation_time_ticks=1000000+c3x_renderer_i64(5)*frame.presentation_frequency/15;
+                ok=render(&frame,&output)==C3X_RENDERER_RESULT_OK;
+                Sleep(5);center_x=home_x+4;center_y=home_y;tiles=changed_tiles;
+                frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());frame.presentation_time_ticks=changed_reference.ticks;
+                LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+                int code=render(&frame,&output);QueryPerformanceCounter(&end);
+                double call_ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
+                bool exact=code==C3X_RENDERER_RESULT_OK && exact_output(changed_reference) &&
+                    output.fallback_tile_count==0 && output.device_recoveries==0 && sample_memory();
+                std::printf("AMBIENT_BOUNDARY camera-change result=%d call_ms=%.3f exact=%u old_camera_rejected=%u fallback=%u recoveries=%u\n",
+                    code,call_ms,unsigned(exact),unsigned(exact),output.fallback_tile_count,output.device_recoveries);
+                ok=exact;
+            }
+            std::printf("AMBIENT_BOUNDARY_END status=%s exact_publications=%u max_sync_call_ms=%.3f min_largest_free_mib=%.1f units=%d unit_draws=%u max_unit_set_ms=%.3f max_unit_call_ms=%.3f\n",
+                ok?"pass":"FAIL",ok?4u:0u,max_accept_ms,double(min_largest_free)/(1024.0*1024.0),
+                idle_unit_count,measured_unit_draws,max_unit_set_ms,max_unit_ms);
+        } else {
         std::printf("AMBIENT_ASYNC_BEGIN ticks=3 policy=retain-last-exact camera=stationary floor_mib=512\n");
         for(int step=1;step<=3 && ok;++step) {
             frame.presentation_time_ticks=references[step].ticks;
@@ -895,6 +953,7 @@ int main(int argc, char ** argv) {
         std::printf("AMBIENT_ASYNC_END status=%s exact_publications=%u no_completed_reuse=%u max_present_ms=%.3f min_largest_free_mib=%.1f stale_camera_rejected=1 units=%d unit_draws=%u max_unit_set_ms=%.3f max_unit_call_ms=%.3f\n",
             ok?"pass":"FAIL",exact_count,no_reuse_count,max_accept_ms,double(min_largest_free)/(1024.0*1024.0),
             idle_unit_count,measured_unit_draws,max_unit_set_ms,max_unit_ms);
+        }
         if(ambient_unit_dc && ambient_unit_old)SelectObject(ambient_unit_dc,ambient_unit_old);
         if(ambient_unit_bitmap)DeleteObject(ambient_unit_bitmap);
         if(ambient_unit_dc)DeleteDC(ambient_unit_dc);
