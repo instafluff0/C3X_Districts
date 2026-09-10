@@ -1,5 +1,11 @@
 ## Objective and scope
 
+The active execution order is maintained in
+[the retained-renderer plan](retained_renderer_plan.md) and
+[the autonomous execution contract](autonomous_renderer_execution.md). This
+document supplies architecture and acceptance criteria; its earlier staged
+experiment ordering is not a command to restart completed work.
+
 Make scrolling, zooming and arbitrary map jumps feel immediate while preserving
 current visual quality and Civ III's simulation, camera, visibility, interaction
 and presentation ownership. Retain reusable scene content, make prepared views
@@ -23,7 +29,8 @@ overlay window, gameplay simulation, source-specific runtime or new visual style
 - [Workstreams](renderer_workstreams.md), [visual fidelity playbook](visual_fidelity_playbook.md),
   [environment contract](environment_lighting_and_ambient_effects.md),
   [shared shadows](shared_shadow_contract.md).
-- [Performance evidence](zoom_performance.md), [custom zoom](custom_rendering_zoom.md),
+- [Current continuation](navigation_continuation.md), [custom zoom](custom_rendering_zoom.md),
+  [performance receipts](zoom_performance.md),
   [render-loop boundaries](civ3_render_loop_viability.md),
   [frame pacing](runtime_animation_and_frame_pacing.md),
   [patch ledger](civ3_patch_dependency_ledger.md).
@@ -55,8 +62,8 @@ readback interval includes pending GPU work; it is not measured transfer cost.
 
 ## Success criteria
 
-Use 2240x1192 as the primary viewport, all five existing zoom levels, and smaller
-diagnostic sizes. Include the widest visible working set, dense relief/forest/
+Use 2240x1192 as the primary viewport, supported zoom levels 128/160/192, and
+smaller diagnostic sizes. Include the widest visible working set, dense relief/forest/
 cities, water, current animated resources, waves and native-directed units.
 Record map dimensions, assets, build flags, hardware/VM and memory tier.
 

@@ -1,10 +1,16 @@
-# Navigation optimization continuation — September 9, 2026
+# Navigation optimization continuation — September 10, 2026
 
 Scope: widths **128/160/192**, current visual quality, native camera/capture,
-visibility, overlays, picking and presentation ownership. The original
-[plan](navigation_implementation_plan.md) is unchanged. Timings here are
+visibility, overlays, picking and presentation ownership. The
+[implementation plan](navigation_implementation_plan.md) is the architecture
+reference; active sequencing is in the retained-renderer plan. Timings here are
 standalone completed rendering (including capture for navigation),
 **not live-game presentation**.
+
+For autonomous continuation, follow the
+[renderer execution contract](autonomous_renderer_execution.md). In particular,
+do not add another cache tier while resident dense-map object composition is the
+measured navigation bottleneck.
 
 ## Wrap-up evidence
 
@@ -363,7 +369,7 @@ pose misses. Fixture contents vary with viewport coverage: at 160 there are
 3 cities, 178 road tiles, 114 farms, 55 mines, 6 camps and 34 resource tiles;
 at 192 there are 3 cities, 125 roads, 77 farms, 41 mines, 4 camps and 22 resources.
 
-The next experiment raises the optional pose-pixel budget to **512 MiB**, retaining
+The optional pose-pixel budget was raised to **512 MiB**, retaining
 the 4,096-entry limit. This is a measured capacity correction, not a quality
 change. `--unit-pose-memory --unit-pose-memory-mib 512` selects it; default behavior
 remains unchanged. Tier reductions evict owners before cache lookup. The approved

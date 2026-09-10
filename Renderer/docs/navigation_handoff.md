@@ -76,7 +76,12 @@ without entering gameplay. No new performance or live-game pass is claimed.
 
 The strongest verified static navigation candidate is staged in `Renderer/bin/C3XRenderer.dll` at the user's explicit request. This is evaluation staging under the Lab rules, not visual acceptance or a live-game performance pass. Neither INSTALL.bat nor Civ III was run during this handoff.
 
-Read this document, [the original implementation plan](navigation_implementation_plan.md), [measured performance](zoom_performance.md), and [the native presentation audit](native_async_presentation_audit.md). The original plan is preserved verbatim; subsequent user instructions narrow custom rendering to **128, 160 and 192 tile widths**, allow higher bounded memory budgets for modern computers, and authorize this staging. References to all five zooms and older budgets in that plan are historical. Config-off preserves native behavior.
+Read this document, [the current continuation](navigation_continuation.md),
+[the retained-renderer plan](retained_renderer_plan.md), and the [native
+presentation audit](native_async_presentation_audit.md). Consult
+[zoom_performance.md](zoom_performance.md) only for receipts referenced by the
+current plan. The supported custom widths are **128, 160 and 192**; config-off
+preserves native behavior.
 
 ## Artifact and activation
 
@@ -120,12 +125,23 @@ The approach is useful for **moving through already prepared nearby content**, n
 | Game-thread bookkeeping ≤2 ms p95 | Standalone camera begin previously 1.175 ms p95; injected bridge remains synchronous |
 | Exact quality and bounded ownership | Focused parity and cache tests pass; full lifecycle, animation, pressure and live-game acceptance remain pending |
 
-## Highest-value next work
+## Current execution priority
 
-1. Reproduce the staged configuration on the destination hardware, then run a same-build independent-render comparison at fixed inputs. Include animated waves and all three supported zooms before changing production defaults. The original host is an 8 GiB, four-processor Windows ARM Parallels VM on Apple Silicon; do not extrapolate its GPU speed to a desktop GPU. D3D timestamp results were implausibly small and cannot support GPU attribution. The readback interval includes queued GPU execution.
-2. Attack repeated dependency-proof construction and scene assembly. Even with almost all images reused, CPU draw/submission costs about 37 ms median and capture-set transitions trigger roughly 37 ms p95 assembly. Measure those portions directly before implementing a bounded retained scene/dependency index. This is likely more valuable than more raster bounds tweaks: cache misses are already rare. The intended game benefit is smoother nearby scrolling and prepared zoom changes. Preserve exact invalidation for visibility, edits, city lights, shadows, reflections, wraps and device changes. The discarded prototype is not evidence of a safe memoization scheme.
-3. Address distant travel separately: compact complete appearance capture, incremental preparation and bounded versioned disk-compiled regions. Current whole-map topology lacks full appearance/visibility authority. Current-capture PREFETCH ring four is legal support; topology-only tiles and old captures are not permission to render. Report map preparation time and disk footprint, not just warm-cache latency.
-4. Complete native asynchronous presentation using the existing queue. Begin/poll/cancel and atomic image/coverage/identity publication already exist; do not rebuild them. The injected bridge does not bind the optional camera exports. The audit identifies m71 capture, m19 composition, the approximately 66 ms native timer, and unresolved completion redraw/pending-display alignment. Native overlays and picking advance with native camera state: blindly retaining an old terrain image is incorrect. Do not invent patch addresses, call native game functions from the worker, add a presenter, or use native-terrain fallback for custom-on failures. Unit action ownership remains native; mixed-unit starvation and cancellation gaps still need work.
+The next implementation target is the dense, no-water resident scroll path.
+Translate the immutable static front, render only newly exposed strips, and
+independently invalidate city, improvement and resource bounds. Require exact
+pixels and ownership, zero fallback/recovery, no completed-map reuse, and first
+less than 100 ms, then less than 33 ms. Do not add another cache tier until this
+gate is met.
+
+After that, complete latest-exact asynchronous publication at the existing Civ
+III map boundary, then build compact complete-appearance regional preparation
+for distant jumps. Keep cold pose preparation and water/reflection throughput as
+separate measurements; neither should displace the resident static/object path
+unless fresh evidence proves it is the dominant cost.
+
+For the detailed operating rules, use
+[the autonomous renderer execution contract](autonomous_renderer_execution.md).
 
 Explain each experiment's expected game benefit and stop condition to the user. Distinguish stationary views, nearby pans, zoom changes and distant jumps. Stop low-impact polishing when measurements point to another architecture layer.
 

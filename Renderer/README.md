@@ -6,6 +6,11 @@ staged at the user’s request, with the previous accepted mountain DLL preserve
 for rollback. Current binary identities, scoped measurements and remaining
 performance/integration requirements are documented there.
 
+For an autonomous continuation, also read the
+[autonomous renderer execution contract](docs/autonomous_renderer_execution.md).
+It makes the active priority explicit: resident dense-map scrolling and
+incremental object composition come before more cache tuning or water polish.
+
 The current C3X checkout is the implementation authority. Lab renders and tests
 that code by category; Integration runs the affected current-code checks. Fixed
 reference images are optional visual comparison aids, not numbered releases or

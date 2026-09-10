@@ -9,6 +9,12 @@ Then read `busy_navigation_session.md`, `live_usage_findings_20260909.md`, and
 `live_usage_logging.md`. Verify the exact evidence filename through the handoff
 if a historical link has changed. Preserve all existing and uncommitted work.
 
+Follow `Renderer/docs/autonomous_renderer_execution.md` as the operating
+contract. Do not pause for approval between ordinary renderer edits, focused
+measurements, isolated builds and evidence updates. Pause only for staging,
+installation, launching Civ III, injected hook/patch changes, visual acceptance,
+reference replacement or another materially external action.
+
 The user asked this agent to wrap up after finishing the continuous busy fixture
 and analyzing their actual game log. Resume optimization, not another handoff.
 Explain every experiment's expected in-game benefit and why it is the highest-value
@@ -17,6 +23,15 @@ visual quality, native camera/capture, visibility, overlays, picking, presentati
 unit movement/direction/combat/interruption, and independently phased idle units.
 Do not synchronize units just to improve cache hit rates. Keep deferred wonders
 and Districts outside current ownership.
+
+Treat the short no-water resident-scroll test as a diagnostic gate only. After
+each meaningful change, report the broader convergence position and exercise the
+next realistic rung: dense resident movement with 24/64 independently acting
+units, then the full busy session with effects, zooms, distant jumps, reversals,
+combat, visibility changes and queued-input accounting. Do not claim progress
+toward the real game workload from a narrow cache-hit or worker-completion test.
+Every update must state the current dominant bottleneck, what remains unmet, and
+the next gate that would change the overall viability assessment.
 
 The best verified performance defaults and timestamped OutputDebugStringA usage
 logging are already staged at the user's explicit request. Current DLL SHA-256:
@@ -27,32 +42,36 @@ No installer/game launch was performed by the finishing agent. Read current loca
 preferences: waves/reflections were off for the supplied real-game log, but on for
 the busy fixtures. Do not silently change those preferences.
 
-First inspect the supplied log's final debugger exception (`0x0000087A`,
-parameters `0x887A0001, 0x00000053`) after thread exits. All 109 render calls had
-completed successfully, but clean shutdown is not established; do not invent a
-cause or call it a confirmed crash without more evidence.
+The supplied log's final debugger exception (`0x0000087A`, parameters
+`0x887A0001, 0x00000053`) is a parallel diagnostic, not a blocker for renderer
+work. All 109 render calls had completed successfully, but clean shutdown is
+not established; do not invent a cause or call it a confirmed crash without
+more evidence.
 
-Prioritize the measured remaining stalls. Actual usage logged approximately 51 ms
-median per uncached unit pose versus 0.5 ms cached, and 39.6 seconds of summed
-pose-miss work. New-region geometry dominated multi-second map stalls. First profile
-and reduce cold pose preparation/readback without altering phase/action semantics;
-then diagnose existing background prewarm (24 interrupted events, zero builds or
-prefetched bytes in the supplied log), prepare reusable world terrain/relief
-structure before camera demand and share
-compact geometry across zooms. Extend existing retained meshes and bounded camera
-queue. Topology alone is insufficient for cities/resources/forest exclusions or
-visibility-dependent appearance. Version and invalidate any compiled regional cache
-by complete immutable inputs, world edits, pack/compiler identity and wrap state.
+Prioritize the measured remaining stalls. The active first target is the dense,
+no-water resident scroll: translate the immutable static front, render only the
+newly exposed strip, and independently invalidate city/improvement/resource
+bounds. Require exact pixels and ownership, zero fallback/recovery, no
+completed-map reuse, and first <100 ms then <33 ms before adding another cache
+tier or returning to water effects. Keep cold pose preparation as a separate
+measurement and preserve native phase/action semantics; cached unit composition
+is already a secondary cost after warm-up. Then complete latest-exact native
+publication, followed by compact complete-appearance regional preparation for
+distant jumps. Topology alone is insufficient for cities/resources/forest
+exclusions or visibility-dependent appearance. Version and invalidate any
+compiled regional cache by complete immutable inputs, world edits, pack/compiler
+identity and wrap state.
 
-Use the completed busy fixture as a regression workload: continuous renderer, waves
-and reflections on, cold startup, no unit warm-up, independently moving/acting units,
-idle → scroll/reverse → all three zooms → two distant jumps/local scrolling → return
-and idle. It retains discrete zoom/minimap clicks while coalescing continuous scroll,
-records queued action delays, and independently replays bounded snapshots after timing.
-Use 24 and 64 units per zone and report actual visibility. Keep initial startup,
-first/repeated zoom, nearby scroll, distant preparation, final idle, unit-body cost,
-input backlog and native presentation separate. Missing continuous phases under
-stalls remain missing; pixel parity does not turn poor performance into a pass.
+Use the completed busy fixture as a later regression workload: continuous renderer,
+waves and reflections on, cold startup, no unit warm-up, independently moving/acting
+units, idle → scroll/reverse → all three zooms → two distant jumps/local scrolling →
+return and idle. First use the short dense no-water resident-scroll gate so the
+fixture does not hide the static-object bottleneck behind water or cold-start cost.
+The busy fixture retains discrete zoom/minimap clicks while coalescing continuous
+scroll, records queued action delays, and independently replays bounded snapshots
+after timing. Use 24 and 64 units per zone and report actual visibility. Keep
+startup, first/repeated zoom, nearby scroll, distant preparation, final idle,
+unit-body cost, input backlog and native presentation separate.
 
 Native asynchronous completion remains unfinished. The current native timer/caller
 is synchronous; standalone queue call timings are not native integration evidence.

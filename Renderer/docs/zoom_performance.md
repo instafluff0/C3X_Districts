@@ -5,6 +5,11 @@ for reproduction on the current VM, exact dependency-cache/control comparisons,
 separate waves-on/zoom/distant measurements, and the actual staged DLL identity.
 The older activation statements and timing runs below are historical evidence.
 
+The active implementation order is defined by
+[the autonomous renderer execution contract](autonomous_renderer_execution.md)
+and the current retained-renderer plan. Use this file for specific evidence
+receipts and measurements, not as a queue of next experiments.
+
 **Animation correctness correction:** a live report revealed that the e25
 candidate's bitmap region hits could leave stale linear color/depth in the
 resource-animation backdrop path. The new staged DLL is `71e969c7…`; it requires
@@ -30,9 +35,10 @@ and widest-64 findings below remain diagnostic history, not new production gates
 This reduces working-set and verification scope; it does not excuse the remaining
 full-view latency at 128 or the cold-destination/native-presentation requirements.
 
-The navigation implementation is in progress. No candidate from this work has
-been staged and Civ III has not been launched. The native boundary is still
-synchronous; [the source audit](native_async_presentation_audit.md) records the
+The navigation implementation remains in progress. The current staged identity
+and latest measured status are in [navigation_continuation.md](navigation_continuation.md);
+the native boundary is still synchronous, and
+[the source audit](native_async_presentation_audit.md) records the remaining
 completion/redraw, displayed-transform and unit-scheduling requirements.
 
 **Architecture assessment:** the latest clean four-tile current-input-ring sweep
@@ -42,9 +48,9 @@ All 100 images exactly match the prior two-tile-ring images (different DLL).
 This is a large reduction in unnecessary raster work, but routine CPU dependency
 work and periodic geometry assembly remain too expensive. Median CPU submission
 is 37.363 ms; geometry assembly p95 is 36.695 ms despite zero static builds/uploads.
-The next high-value targets are retaining prepared scene/dependency calculations
-across unchanged captures and incremental handling of capture-set changes. The
-100 ms p95, continuous 30 FPS and native presentation targets remain unmet.
+That checkpoint established that cache misses were no longer the primary target;
+the current plan therefore moves to retained-front and dirty-object composition.
+The 100 ms p95, continuous 30 FPS and native presentation targets remain unmet.
 
 The preceding receiver-scoped shadow dependency
 experiment completes 100 prepared new views in 56.978 ms median / 197.096 ms p95,
@@ -93,10 +99,8 @@ explicit 256 MiB GPU / 96 MiB metadata / 4,096-entry limits. There are zero
 evictions and rejected admissions. An earlier 32 MiB metadata run had 613 misses
 and eviction pressure; raising the limit removed eviction but barely changed
 misses. **Memory pressure is therefore not the principal explanation for the
-remaining misses.** The next high-value experiment must distinguish previously
-unprepared world regions from changed draw/shadow/capture dependencies. That
-determines whether advance preparation or dependency work will remove scrolling
-hitches. Do not weaken validity keys or keep raising budgets without that evidence.
+remaining misses.** The completed dependency trace below resolved that diagnostic
+question; do not weaken validity keys or keep raising budgets without new evidence.
 
 The first complete dependency trace (`world-region-dependencies-100`) now resolves
 that question: all 593 misses are previously observed world-region occurrences
@@ -379,8 +383,8 @@ invalidate otherwise reusable data in that baseline. Increasing backdrop
 capacity alone cannot fix those camera-invalidated entries. The waves sweep
 has no independent whole-scene cold comparison yet.
 
-The next experiment removes camera anchors from backdrop identity and places
-regions on the world raster grid. It retains conservative whole-capture scene
+That experiment removed camera anchors from backdrop identity and placed regions
+on the world raster grid. It retained conservative whole-capture scene
 and ownership identity, target/zoom, light, wrap, content/device generation and
 the topology revision even when a request carries no new topology payload.
 Negative or overhanging region origins remain intact for caching and rendering;

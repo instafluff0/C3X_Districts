@@ -20,7 +20,15 @@ structure, poses and exact current-view pixels behind those callbacks.
 The later clarification in the analysis governs the plan: initially preserve
 capture and compare its complete records. Do not skip native traversal, publish
 old-camera terrain beneath current overlays, or introduce another presenter.
-Atomic displayed-camera ownership and asynchronous camera refinement are deferred.
+The worker-side latest-exact publication path now exists as a bounded experiment;
+native bridge integration and displayed-transform coordination remain unfinished.
+
+For autonomous continuation, follow
+[the renderer execution contract](autonomous_renderer_execution.md). The current
+priority is no longer general cache expansion: the next useful milestone is a
+dense resident scroll using a translated static front, newly exposed strips and
+dirty static-object bounds. Cache-hit mechanics, water effects and broad cold
+matrices remain secondary until that path is below 100 ms and then 33 ms.
 
 ## Overall goal
 
@@ -29,30 +37,38 @@ jumps by retaining reusable world structure and prepared animation, while preser
 current-camera correctness and existing Civ III ownership. Establish benefits with
 standalone production-renderer replay before changing the injected bridge.
 
-## Plan
+## Current plan
 
 | Step | Work | Evidence required before proceeding |
 | --- | --- | --- |
-| 1. Baseline and perfect preparation | Extend the existing busy-session harness with explicit baseline and oracle modes. Prepare all required structural inputs and exact poses before oracle timing. | Identical deterministic requests, independently verified pixels, preparation cost, coverage, phase timings and memory. Identify the remaining bottleneck. |
-| 2. Exact same-view reuse | After authoritative capture, recognize an identical map view and return its retained bitmap. Keep unit and map animation dependencies separate. | Repeated unchanged map requests perform zero geometry construction, GPU submission and readback. Mutation witnesses invalidate the correct content. |
-| 3. Preparation that survives cancellation | Use bounded immutable jobs keyed by content. Prepare nearby structure and likely next unit/resource frames; retain valid completed entries after camera supersession. | Causal scheduling uses only information available so far. Cancellation preserves reusable work; unexpected actions remain immediately correct. Report misses, useful commits, latency and memory. |
-| 4. World-space regional batching | Prototype one terrain subset in regional material/layer buffers shared across widths 128/160/192. Consider 16×16 or 32×32 regions as experiments. | Exact cold-render parity, fewer draw calls, lower submission time, measured compilation and memory costs. Expand only if benefit justifies complexity. |
-| 5. Readback experiments | Compare immediate Map, staging rings with nonblocking polling, GDI-compatible BGRA surfaces and dirty transfers in the standalone native harness. | Measure total completion and wait time. Discard unhelpful approaches. Delayed animation results must retain the correct camera and scene identity. |
-| 6. Narrow integration checkpoint | Integrate only proven changes at the existing map composition boundary. | Preserve overlay/picking alignment, clipping, wrapping, action ownership, redraw and fallback behavior. Live cadence requires a separately authorized game check. |
+| 1. Resident static/object composition | Translate a valid static front, render exposed strips, and redraw dirty city/improvement/resource bounds. | Dense no-water resident scroll below 100 ms, then 33 ms, with exact pixels/ownership, zero fallback/recovery and no completed-map reuse. |
+| 2. Latest-exact native publication | Connect the existing camera queue and atomic publication to the current Civ III boundary without stale-camera overlays or blocking submission. | Submit/poll below 2 ms p95, correct redraw scheduling, coherent picking/overlays and no native fallback in custom-on mode. |
+| 3. Cold/distant preparation | Prepare camera-independent structure and complete captured appearance in bounded regional storage shared across 128/160/192. | First-use and evicted destinations measured separately, with preparation time, disk footprint, invalidation and memory pressure reported. |
+| 4. Dynamic action workload | Keep units on Civ III's action director and independent dirty cadence while exercising movement, combat, interruption and visibility changes. | No unit/map starvation, no phase synchronization for cache hits, exact bodies/HUD ownership and sustained busy-session evidence. |
+| 5. Water/reflection throughput | Batch depth-aware wave/reflection work only after the no-water core passes. | Exact parity and a measurable cadence improvement without transparent shortcuts or full-view projection changes. |
 
-Start with step 1. If ideally prepared rendering remains slow, prioritize the
-measured submission/readback bottleneck before building a broad preparation
-scheduler. A failed performance hypothesis is a useful result when the experiment
-is valid; it is not permission to hide missing coverage or change visual fidelity.
+This is the active sequence. Do not restart the completed baseline/oracle work or
+add another cache tier unless a fresh measurement changes the bottleneck order.
+Keep failed experiments as evidence only when they still inform a live decision;
+remove abandoned production branches.
 
-## Step 1 experiment protocol
+The short resident-scroll gate is not the finish line. After each meaningful
+optimization, rerun a broader convergence workload: first dense no-water
+resident movement with 24/64 independently acting units, then the full busy
+session with waves/reflections, zooms, distant jumps, reversals, combat,
+visibility changes and queued-input accounting. Follow with cold/evicted,
+edit/reset, memory-pressure and native-presented checks. Report the project
+position at every step: the target, measured change, remaining dominant cost,
+convergence rung reached, and the next gate.
 
-Evaluate **step 1 only** before expanding the architecture.
+## Baseline experiment protocol
 
-**Goal:** produce a reproducible baseline-versus-perfect-preparation experiment
-that determines how much of busy-map latency can be removed by preparing terrain
-structure and unit poses before presentation. Finish with a measured recommendation
-for the next bounded experiment. Do not implement the entire architecture now.
+Use this protocol when reproducing or extending baseline evidence; it is not a
+restriction against implementing the current plan above.
+
+**Goal:** preserve reproducible baseline-versus-preparation evidence and measure
+which phase is currently limiting the active plan. Do not use an oracle speedup
+as a substitute for the resident scroll or native presentation gates.
 
 Read AGENTS.md, Renderer/README.md, Renderer/lab/README.md, the relevant entries in
 Renderer/lab/catalog.json, and Renderer/docs/renderer_workstreams.md. Then inspect
@@ -173,19 +189,6 @@ Unix-only `fcntl`, hard-coded GCC `c++`, Windows executable/file locks and
 platform-dependent generated-provenance paths; no category Integration pass is
 claimed.
 
-**Selected next experiment:** implement a benchmark-only sliding working-set
-oracle that prepares and pins only the current and immediately next logical
-phase/zoom, releases expired geometry and poses at phase boundaries, and reports
-admission usefulness and eviction cause. Require zero timed completed-map reuse,
-exact paired pixels, zero fallback/recovery, at least 512 MiB contiguous VA at
-every sample, and separately zero timed geometry and pose misses for the prepared
-window. This is the shortest test of whether targeted background preparation can
-deliver the retained architecture's benefit inside Civ III's fixed 32-bit address
-space. If one current+next window still cannot meet those conditions, move directly
-to shared world-space regional batching/compact compiled storage before building
-a causal scheduler; the approximately 56 ms readback p95 is secondary to the
-observed 979 ms unit-plane tail and cache thrash.
-
 ## Short-gate refinement — 2026-09-10
 
 Iteration was reduced to a 32-request replay (four samples per phase) at
@@ -229,16 +232,6 @@ frames changed with zero fallback/recovery. First-use unit work was
 were 13.492–28.699 ms, with one 72.175 ms GDI-flush/scheduling outlier. Map work
 remained dominant and variable at 169.902–274.283 ms in that warmed run.
 
-**Selected next experiment:** prototype regional animation compositing. Retain
-the static full map and update only wave regions first; repeat for the remaining
-62 visible animated resources/effects. Also prepare and pin the few active unit
-cycles when Civ III changes their action, leaving frozen poses resident. Gate
-each short step on exact paired pixels, native cursor ownership, zero
-fallback/recovery and >=512 MiB contiguous VA. Target <=16.7 ms for unchanged
-idle frames and report active-region and GDI-flush costs separately. Keep the
-all-mixed replay as the worst-case ceiling; do not return to the full serial
-matrix until these short gates pass.
-
 Two existing controls were rejected as the next idle solution. On the same
 eight-frame frozen-unit fixture, world-aligned backdrop retention measured
 125.200–152.986 ms and water-coverage culling measured 136.562–160.570 ms versus
@@ -276,20 +269,6 @@ animation. The cause is architectural: current retained color/depth and city
 glow are defined in independent guarded block projections, so their depth
 values cannot be pasted into one full-view depth space. Failed full-view code
 was removed rather than retained behind a switch.
-
-**Selected next experiment:** build a small true guarded animation atlas, first
-for a fixed subset of wave blocks. Each 136x136 atlas cell will keep its own
-local projection, 4-pixel city-glow guard, scene-linear MSAA color and depth.
-Attach an atlas-cell transform to each wave draw and render all selected cells
-in one submission, then use the already-proven packed readback. Gate the first
-four-cell version on exact pixels, zero fallback/recovery and at least 512 MiB
-contiguous VA; expand geometrically (4, 16, then all visible wave cells) only
-while those gates pass. Once wave batching is exact, reuse the same path for
-resource bodies and overlap readback with the next 15 Hz animation tick through
-a bounded staging ring. Frozen units remain cached; only native-directed worker,
-selection and combat cursors prepare new poses. This preserves the existing
-Civ III bitmap boundary while adopting the batching and pipelining used by
-modern renderers.
 
 The first four-block shortcut reused the existing 264x264 city-fidelity region
 target. It completed with zero fallback/recovery, no timed geometry build or
@@ -352,16 +331,6 @@ requests returned in 0.606–4.966 ms and completed exact pixels off-thread in
 reported no completed-map publication reuse, fallback or recovery, rejected the
 forced stale camera, and preserved at least 1,824.0 MiB contiguous VA.
 
-**Selected next experiment:** adopt the proven latest-exact asynchronous
-publication policy at the existing Civ III map boundary, without changing scene
-ownership: poll and publish only matching camera/visibility epochs, keep units/UI
-on the current exact front, and allow cold pose misses to use the existing safe
-serialized path. First verify a stationary view with a worker plus selected unit,
-then one scroll supersession and one combat action. Only after that small live-
-boundary gate should the remaining serial matrix run. Background production is
-now the primary architecture; guarded wave batching is a later throughput and
-animation-smoothness improvement, not a prerequisite for responsive idle UI.
-
 ## Synchronous-boundary ambient gate — 2026-09-10
 
 The DLL now has an opt-in compatibility policy behind the existing synchronous
@@ -405,16 +374,6 @@ at the pre-existing generated-source guard for
 `Renderer/native/city_fidelity/shader-provenance.json`; it was not altered and no
 formal category Integration pass is claimed.
 
-**Selected next experiment:** a short 15 Hz cadence soak through this same
-synchronous ABI: 30 stationary ticks with 24 realistic units, accepting only
-monotonic exact completed ticks, measuring dropped/coalesced ticks and UI-call
-p95, then one visibility mutation and one scroll. Gate on zero wrong-view or
-wrong-ownership publication, zero fallback/recovery, unit-plane p95 below 16 ms,
-render-entry p95 below 2 ms and at least 512 MiB contiguous VA. If it passes,
-make the bounded retained/pose policy a documented renderer configuration and
-move to a user-authorized live-game evaluation; guarded wave batching remains
-the next throughput optimization rather than a presentation blocker.
-
 ## Realistic busy-idle cadence and navigation — 2026-09-10
 
 The cadence witness progressed incrementally from 2 seconds to 10 seconds and
@@ -443,18 +402,6 @@ references, every step had zero fallback/recovery, and contiguous VA remained
 well above 512 MiB. Correctness and residency therefore pass, but navigation
 latency fails by roughly one to two orders of magnitude.
 
-**Selected next experiment:** one exact 64-pixel retained scroll at 2240x1192,
-run as a short serial category ablation: static terrain; cities/improvements;
-resources; then waves/reflections. Record total, geometry, draw, readback,
-resource/city composition and pixel-reuse time for each without writing frame
-sets. This will identify the first layer that pushes a resident scroll over the
-interactive budget. Optimize that layer using a translated immutable front plus
-newly exposed strips and bounded asynchronous refinement; do not attempt another
-large navigation matrix until a single resident scroll is below 100 ms, then
-below 33 ms. Distant jumps can initially use an exact low-detail publication
-only if ownership and current-camera coverage are proven; otherwise they remain
-blocking until neighboring/world-region preparation makes them fast.
-
 ## Incremental resident-scroll ablation — 2026-09-10
 
 The first targeted scroll used a four-map-column move (approximately two or
@@ -477,15 +424,6 @@ on warm revisits, but its 1.35–2.67 second warm latency is consistent with
 this ablation and is not acceptable for normal wheel/key movement. Animation
 content is not the first target; the static CPU path must be shortened first,
 then city composition.
-
-**Selected next experiment:** prototype a bounded translated-front plus
-newly-exposed-strip publication for this two-column move, preserving exact
-current-camera ownership while the strip renders asynchronously. Measure the
-existing CPU/composition counter separately from the translated copy and strip
-render. Re-run the four categories only after terrain-only latency is materially
-lower, then isolate city composition as the second stage. Keep ambient
-refinement single-flight behind the retained front; do not hide a camera change
-with an old view or relax ownership checks.
 
 ## Realistic scroll sequence witness — 2026-09-10
 
@@ -690,7 +628,7 @@ current stability gate and shows no memory creep or correctness failure under a
 busy idle screen. It does not yet sustain the full 15 Hz publication cadence;
 that gap is the city/improvement composition budget identified above.
 
-**Selected next experiment:** add a benchmark-only static-object composition
+**Current implementation target:** add a benchmark-only static-object composition
 split for the no-water path. Translate/copy the immutable terrain front, redraw
 only the newly exposed strip, and independently invalidate city/improvement/
 resource bounds. Measure object compilation, strip composition, and publication
