@@ -1,13 +1,13 @@
 {
   "schema": "c3x.visible_scene.v0",
-  "scene_id": "scene:24539718:-3399:-2478:1138x1188:12:summer",
+  "scene_id": "scene:24539718:-1991:-3182:1138x1188:12:summer",
   "profile_id": "default",
   "world": {"seed": 24539718, "width_tiles": 100, "height_tiles": 100, "wrap_x": true, "wrap_y": false},
-  "viewport": {"width_px": 1138, "height_px": 1188, "map_rect_px": {"x": 0, "y": 0, "width": 1138, "height": 1188}, "scroll_px": {"x": -3399, "y": -2478}},
-  "projection": {"type": "civ3-isometric-pixel", "origin_tile": {"x": 64, "y": 12}, "origin_px": {"x": -71, "y": -46}, "tile_x_basis_px": {"x": 64, "y": 32}, "tile_y_basis_px": {"x": -64, "y": 32}, "elevation_basis_px": {"x": 0, "y": -32}},
+  "viewport": {"width_px": 1138, "height_px": 1188, "map_rect_px": {"x": 0, "y": 0, "width": 1138, "height": 1188}, "scroll_px": {"x": -1991, "y": -3182}},
+  "projection": {"type": "civ3-isometric-pixel", "origin_tile": {"x": 64, "y": 34}, "origin_px": {"x": -71, "y": -46}, "tile_x_basis_px": {"x": 64, "y": 32}, "tile_y_basis_px": {"x": -64, "y": 32}, "elevation_basis_px": {"x": 0, "y": -32}},
   "environment": {"id": "earthlike", "hour": 12, "season": "summer"},
   "tiles": [
-    {"id":"tile:64:12","map_x":64,"map_y":12,"anchor_px":{"x":-71,"y":-46},"terrain":{"id":"terrain:64:12:0","variant_seed":1319998146445321040,"resolver_input":{"category":"terrain","map_x":64,"map_y":12,"terrain_type":"ocean","real_terrain_type":"ocean","sprite_index":2083,"visibility_mask":0,"fog_status":0,"territory_owner_id":0}}}
+    {"id":"tile:64:34","map_x":64,"map_y":34,"anchor_px":{"x":-71,"y":-46},"terrain":{"id":"terrain:64:34:0","variant_seed":16651561734608286394,"resolver_input":{"category":"terrain","map_x":64,"map_y":34,"terrain_type":"coast","real_terrain_type":"coast","sprite_index":1546,"visibility_mask":0,"fog_status":0,"territory_owner_id":0}}}
   ],
   "instances": [
   ]

@@ -559,7 +559,8 @@ def verify_behavior_output(behavior, output):
         required = ["UNIT body matrix drawn=288 status=pass", "UNIT cached anchor translation: pass",
                     "UNIT repeated native cursor: pass", "UNIT retained terrain unchanged: pass",
                     "UNIT post-draw terrain parity: pass", "UNIT config-off preserves canvas: pass",
-                    "UNIT action interruption and held endpoint: pass draws=564"]
+                    "UNIT action interruption and held endpoint: pass draws=582",
+                    "UNIT independent ambient phases and exact repeat: pass"]
         for zoom in (0, 1):
             required.append(f"UNIT magenta underlay parity zoom={zoom}")
             for mode in ("RGB555", "RGB565"):

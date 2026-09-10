@@ -16,6 +16,15 @@ synchronous. The opt-in three-zoom memory tier changes existing cache caps only.
 `required_user_action: []` for these changes; the existing city-HUD request below
 remains separate. Candidate replay does not stage or install this code.
 
+The user-authorized navigation production update makes the verified wave,
+backdrop, receiver-index and larger-memory defaults follow the existing injected
+`enable_custom_rendering_cache` → `C3X_RENDERER_WORLD_REGIONS` setting. It adds
+no injected source changes, exported ABI, lifecycle epochs or completion hook.
+The same map capture/composite symbols and native-directed unit draw boundaries
+remain authoritative. `required_user_action: []`; an already installed current
+cache switch needs only the updated DLL on the next game start. Staging status
+and rollback are recorded in `navigation_continuation.md`.
+
 The accepted fine mountain relief is shader-only. It uses the existing
 `Map_Renderer_m71_Draw_Tiles` / `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`
 capture and composite boundaries, with no geometry, indexing, ABI, ownership or

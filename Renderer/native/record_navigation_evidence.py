@@ -66,6 +66,7 @@ def main():
     parser.add_argument("--idle-steps", type=int, choices=range(1,1001), default=100)
     parser.add_argument("--idle-warmup", type=int, choices=range(10,151), default=10)
     parser.add_argument("--unit-pose-memory", action="store_true", help="Opt-in 256 MiB / 4096-entry exact unit-pose retention")
+    parser.add_argument("--unit-pose-memory-mib", type=int, choices=(256,512), default=256, help="Bounded pose-pixel budget when --unit-pose-memory is enabled")
     parser.add_argument("--idle-units", type=int, choices=(0,8,24,64), default=0,
                         help="Draw this many separate native-directed idle unit bodies in a synthetic GDI canvas")
     parser.add_argument("--unit-actions", choices=("idle","mixed"), default="idle",
@@ -104,6 +105,8 @@ def main():
     parser.add_argument("--water-coverage", action="store_true", help="Omit provably empty water/bed passes and unused reflections")
     parser.add_argument("--world-backdrops", action="store_true", help="Retain world-anchored animation backdrops across camera translations")
     parser.add_argument("--backdrop-dependencies", action="store_true", help="Reuse exact static region dependencies for retained linear color/depth backgrounds")
+    parser.add_argument("--composition-receiver-index", action="store_true", help="Use the retained static spatial index for exact animation shadow-receiver selection")
+    parser.add_argument("--production-defaults", action="store_true", help="Exercise new DLL defaults inherited from the existing world-region cache switch")
     parser.add_argument("--backdrop-control", action="store_true", help="Independently redraw every static animation backdrop")
     parser.add_argument("--world-waves", action="store_true", help="Retain immutable coast-cell wave buffers across cameras")
     parser.add_argument("--wave-control", action="store_true", help="Rebuild coast-cell wave buffers for independent comparisons")
@@ -148,6 +151,7 @@ def main():
            "C3X_RENDERER_WATER_COVERAGE": "1" if args.water_coverage else "0",
            "C3X_RENDERER_WORLD_BACKDROPS": "1" if args.world_backdrops else "0",
            "C3X_RENDERER_BACKDROP_DEPENDENCIES": "1" if args.backdrop_dependencies else "0",
+           "C3X_RENDERER_COMPOSITION_RECEIVER_INDEX": "1" if args.composition_receiver_index else "0",
            "C3X_RENDERER_BACKDROP_REUSE_CONTROL": "1" if args.backdrop_control else "0",
            "C3X_RENDERER_WORLD_WAVES": "1" if args.world_waves else "0",
            "C3X_RENDERER_WAVE_REUSE_CONTROL": "1" if args.wave_control else "0",
@@ -162,7 +166,7 @@ def main():
            "C3X_RENDERER_PREVIEW_IDLE_UNITS": str(args.idle_units),
            "C3X_RENDERER_PREVIEW_UNIT_ACTIONS": args.unit_actions,
            "C3X_RENDERER_PREVIEW_IDLE_WARMUP": str(args.idle_warmup),
-           "C3X_RENDERER_UNIT_POSE_MEMORY": "1" if args.unit_pose_memory else "0",
+           "C3X_RENDERER_UNIT_POSE_MEMORY": ("512" if args.unit_pose_memory_mib==512 else "1") if args.unit_pose_memory else "0",
            "C3X_RENDERER_PREVIEW_DENSE_SCENE": "1" if args.dense_scene else "",
            "C3X_RENDERER_PREVIEW_SEASON": "0",
            "C3X_RENDERER_PREVIEW_ANIMATION": "1", "C3X_RENDERER_WAVES": args.waves,
@@ -174,6 +178,10 @@ def main():
     win_out = win_root / str(relative)
     env["C3X_RENDERER_TRACE_FILE"] = str(win_out / "renderer.log")
     env["C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS"] = str(win_root / "Renderer/custom.custom_rendering.txt")
+    if args.production_defaults:
+        for name in ("THREE_ZOOM_MEMORY", "WORLD_BACKDROPS", "WORLD_WAVES",
+                     "BACKDROP_DEPENDENCIES", "COMPOSITION_RECEIVER_INDEX", "UNIT_POSE_MEMORY"):
+            env["C3X_RENDERER_" + name] = ""
     receipt = {"invocation": uuid.uuid4().hex, "endpoint": "standalone capture plus completed render; no native presentation",
                "storage_preflight": storage,
                "quality_mode": "diagnostic_reflections_disabled" if args.reflection_ablation else "current",
@@ -191,10 +199,14 @@ def main():
               str(win_root / "Renderer/lab/.local/verification/world.csv"), str(win_out / "zoom.bmp")]
     if any(any(c in v for c in '"%\r\n') for v in values + list(env.values())):
         raise ValueError("Unsupported cmd characters in configured paths")
-    command = " && ".join(f'set "{k}={v}"' for k, v in env.items()) + " && "
-    command += " ".join(f'"{v}"' for v in values)
+    command = " ".join(f'"{v}"' for v in values)
     command += f' {args.width} {args.height} 75 39 {args.tile_width} 12 >"{win_out / "benchmark.log"}" 2>&1'
-    result = native_command_result("Renderer/native", command)
+    # Match the category dispatcher's short transport command. Passing the
+    # entire environment through prlctl intermittently fails before execution.
+    batch = "@echo off\n" + "\n".join(f'set "{k}={v}"' for k, v in env.items())
+    batch += "\n" + command + "\nexit /b %errorlevel%\n"
+    (out / "run.bat").write_bytes(batch.replace("\n", "\r\n").encode("utf-8"))
+    result = native_command_result("Renderer/native", f'call "{win_out / "run.bat"}"')
     (out / "completion.txt").write_text(str(result["returncode"]) + "\n")
     print("Hashing inputs after execution", flush=True)
     after = inputs()

@@ -2,16 +2,20 @@
 
 Scope: widths **128/160/192**, current visual quality, native camera/capture,
 visibility, overlays, picking and presentation ownership. The original
-[plan](navigation_implementation_plan.md) is unchanged. All timings here are
-standalone capture plus completed rendering, **not live-game presentation**.
+[plan](navigation_implementation_plan.md) is unchanged. Timings here are
+standalone completed rendering (including capture for navigation),
+**not live-game presentation**.
 
 ## Reproduction and evidence
 
 The destination checkout started at `f2696829d9bc549ae01597cf42d25f3ddab736de`.
 An external commit, `d94b46f2` (`mountains looking better`), subsequently included
 the accepted mountain work and the first dependency-cache changes. It was
-preserved. Later queue/memory/witness changes remain in the working tree;
-individual build receipts identify the actual compiled source closure.
+preserved. The later external commit `79307ece` (`updated`) includes the
+queue/memory changes, region-aware backdrops, dense/mixed witnesses and individual
+unit phases. It was preserved as well. Subsequent continuation changes
+remain in the working tree; individual build receipts identify the actual
+compiled source closure.
 Historical handoff build directories were unavailable, so reproduction used a
 fresh MSVC x86 `/O2 /W4 /WX` build of this checkout. The Windows 11 Pro ARM VM
 has approximately 12 GiB RAM, four logical processors and Parallels Display
@@ -227,9 +231,202 @@ dominant warm cost, at 120.443/125.606 ms median/p95.
 
 `--unit-actions mixed` adds separate scripted move, attack, return, fortify and
 idle timelines, including direction reversals and native body-anchor changes.
-Noncombatants use their supported fidget action in place of attack. This
-fixture is being verified; it does not claim native simulation ownership or
-concurrent navigation/presentation coverage.
+Noncombatants use their supported fidget action in place of attack. At width
+128 with waves and 24 units, 100 mixed updates measured **143.037/180.314 ms**
+median/p95 with the larger pose cache, versus **785.725/838.258 ms** with the
+same build and original cache. All 100 images matched exactly. The unit pass
+alone measured 10.204/48.909 ms versus 651.156/708.323 ms; remaining occasional
+pose misses still matter. Measured calls include 969 movement, 361 attack,
+475 fortify and 476 idle draws; remaining noncombatant draws use fidget.
+The 80-frame warmup accumulated 30.321 seconds candidate / 63.180 seconds control,
+excluding the initial map render. Candidate sampled free VA was at least
+1,756,643,328 bytes, with 1,657,798,656 bytes contiguous. Evidence is
+`navigation-dense-mixed-unit-{memory,control}-128`. This is a stationary map with
+moving bodies, not native simulation ownership or concurrent navigation/
+presentation coverage. Other zooms and first-use behavior remain outstanding.
+
+The current rendered unit witnesses also prove three equal-facing warriors at
+one clock have distinct ambient pixels, and that repeated identity/time produces
+exact pixels. Their native action/compositing checks execute 582 action draws.
+The first integration attempt correctly failed because its verifier still
+required the obsolete count of 564, despite passing native runs. The verifier
+now requires 582 and the new phase witness explicitly. The complete current-code
+animation integration rerun passed **221 tests with one skip**, resource playback
+and day/night unit action/compositing witnesses. Its receipt is
+`Renderer/lab/out/integration/animation.json`, DLL SHA-256
+`6ab1a685c703b313a0a7f204b09bfbd6ec6cd107d952bc7ce0d255f58a5ddea9`.
+Both unit runs preserved terrain and matched the cold post-draw map exactly.
+No injected compilation, staging or game launch occurred. The navigation recorder now uses a disposable
+batch file, matching the category dispatcher's short Parallels command, rather
+than transporting its entire environment in one long command argument.
+
+### Animated composition receiver selection
+
+The phase-instrumented build `navigation-animation-phase-build-20260909`
+(DLL SHA-256 `2eb4ba22c435d79c4abb4e6642b2121b0647f26d9b76aee2eff9eb77513395d9`)
+measured the dense width-128 idle scene with waves, 24 individually phased units,
+80 warm-up frames and 100 measured frames. Median resource-pose preparation was
+about 8.4 ms, animated-block submission 36.8 ms and final readback wait 70.0 ms.
+These are CPU submission/Map-wait intervals, **not GPU timestamp durations**;
+GPU execution overlaps submission. Background-copy submission was 0.083 ms and
+CPU image assembly about 1.4 ms. No static geometry was built or uploaded.
+The bounded trace contains only 97 of these measured frames. The analyzer now
+matches idle trace records to measured animation clocks and reports partial
+coverage, rather than filling a last-100 summary with warm-up records. Primary
+benchmark timings and exact saved-image comparisons still cover all 100 frames.
+
+The highest-value bounded CPU experiment reuses the existing conservative
+static contributor index when selecting each animation block's shadow receivers.
+`--composition-receiver-index` enables it; it remains optional. The exact original
+intersection, receiver order and shadow-page preparation remain authoritative.
+Posed/foreign buffers, missing or stale indexes, multiple rectangles, oversized
+queries and allocation failure use the complete original scan. This adds no
+retained owner or memory budget. Production-code tests compare actual collection
+against complete scans over reflected/translated rectangles and fallback cases.
+
+Build `navigation-receiver-index-build-20260909` (DLL SHA-256
+`fa081580878391f5b926af1d263e7f05e7dd8221438547443393f2d7a3b0ac2a`) produced
+**100 exact images** in `navigation-dense-receiver-comparison-128.json`:
+
+| Dense idle, width 128 | Median / p95 ms |
+| --- | --- |
+| Same-build complete receiver scan | 128.155 / 139.476 |
+| Indexed exact receiver selection | 118.240 / 120.413 |
+| Animated-block CPU submission, scan (97 trace-aligned frames) | 36.063 / 37.013 |
+| Animated-block CPU submission, indexed (97 trace-aligned frames) | 27.048 / 27.634 |
+
+The final wait remains about 67 ms median, so this does not meet the 33.4 ms
+frame-interval target. Warm-up is excluded and native presentation remains
+unmeasured. The focused region/analyzer suite passed 17 tests. Broader dense
+160/192 runs are separate capacity measurements, not implied by this pair.
+
+### Supported-width unit-pose capacity
+
+With 24 independently phased idle units, the same indexed build measured
+99.358/101.571 ms at width 160, but **225.661/229.477 ms at width 192**.
+The 192 pose cache reached 268,098,224 bytes and missed on 300 of 2,400 measured
+unit draws; the larger images no longer fit in its 256 MiB budget. The map itself
+took only 68.070/71.714 ms. Width 160 retained 227,772,336 bytes and had no unit
+pose misses. Fixture contents vary with viewport coverage: at 160 there are
+3 cities, 178 road tiles, 114 farms, 55 mines, 6 camps and 34 resource tiles;
+at 192 there are 3 cities, 125 roads, 77 farms, 41 mines, 4 camps and 22 resources.
+
+The next experiment raises the optional pose-pixel budget to **512 MiB**, retaining
+the 4,096-entry limit. This is a measured capacity correction, not a quality
+change. `--unit-pose-memory --unit-pose-memory-mib 512` selects it; default behavior
+remains unchanged. Tier reductions evict owners before cache lookup. The approved
+larger bound has its own unit test and does not reserve the entire budget eagerly.
+
+Build `navigation-unit-512-build-20260909` (DLL SHA-256
+`1f99f1b62e7c31ade3cdbade71b47de99a8e1dd1b754cc2a0a6729ae6c5ae5b7`) produced
+100 exact width-192 images in `navigation-dense-unit-512-comparison-192.json`:
+
+| Dense idle, waves on, width 192 | Total median / p95 ms | Unit plane median / p95 ms |
+| --- | --- | --- |
+| Same-build 256 MiB pose cache | 234.743 / 246.611 | 159.150 / 169.751 |
+| 512 MiB pose cache | 85.577 / 88.322 | 19.049 / 19.990 |
+
+The larger tier retains 328,002,224 pixel-capacity bytes (about 313 MiB) and hits
+all 2,400 measured unit draws. Sampled free address space is at least
+1,692,647,424 bytes, with a 1,626,066,944-byte contiguous region. These are sampled
+standalone values, not peak/live-game memory proof. The 80-frame warm-up took
+26,734.614 ms, excluding initial map rendering; first-use preparation remains
+unfinished. Three simultaneous zoom working sets and mixed actions require
+separate capacity evidence.
+
+The same 512 MiB build also measured 100 dense idle frames with waves disabled
+at each supported width (`navigation-dense-unit-512-no-wave-{128,160,192}`).
+All 2,400 unit draws hit retained poses at each width, all 99 adjacent images
+changed, and static terrain builds/uploads and recovery counts remained zero.
+
+| Dense idle, 24 units, waves off | Total median / p95 ms | Map median / p95 ms | Unit plane median / p95 ms |
+| --- | --- | --- | --- |
+| 128 | 81.796 / 87.132 | 71.293 / 76.497 | 10.111 / 10.486 |
+| 160 | 71.807 / 78.419 | 57.228 / 63.635 | 14.194 / 15.169 |
+| 192 | 65.143 / 71.458 | 45.537 / 51.749 | 19.304 / 20.041 |
+
+These are waves-off **crowded** scenes; the older 34/40 ms waves-off idle witness
+had fewer animated resources and no unit plane. The three crowded warm-ups took
+22,681.653 / 23,525.346 / 25,126.813 ms over 80 frames, excluding initial map
+rendering. The width-192 run had one 116.821 ms outlier. All three remain above
+the 33.4 ms frame target, despite fitting the warm 100 ms p95 completion endpoint.
+The final focused workflow/region/analysis/unit/fixture suite passed 69 tests.
+
+`navigation-dense-mixed-unit-512-wave-192` keeps that crowded map animated while
+24 units move, reverse, attack, fortify, fidget and idle with independent phases.
+Its 100 completed frames measured **90.506/143.658 ms**, split into map
+69.070/74.490 ms and unit plane 19.729/69.951 ms. The action counts are 969 moving,
+361 attacking, 475 fortifying, 476 idling and 119 noncombatant fidgets. There are
+2,371 pose hits and 29 misses; retained pixel capacity reaches 435,058,352 bytes.
+The cache-capacity trace never decreases, so these misses are first encounters,
+not the width-192 idle eviction cycle. The 80-frame warm-up took 31,731.895 ms
+excluding initial map rendering. This identifies preparation of first-use poses
+as the next unit-specific latency target. It is a complete scripted-action
+capacity witness, not an independent-image pair or concurrent camera/presentation
+pass. Earlier same-build unit-cache pairs and native action/phase tests retain
+their separate correctness scope.
+
+The final current-code `renderer.py integration animation --renderer-only`
+passed 221 tests with one skip, resource playback and both day/night unit replays
+(582 directed-action draws and 288 body-matrix draws per unit replay). Independent
+ambient phases, exact repeats, clipping/color-key behavior, retained terrain and
+post-unit cold terrain parity passed. The first attempt had a VM file-access
+dispatch failure for the day replay; it exited, and a complete retry passed.
+Logs are `navigation-animation-final-integration.log` and
+`navigation-animation-final-integration-retry.log`. The final integration receipt
+is `Renderer/lab/out/integration/animation.json`, implementation identity
+`76489df1da0928add1a738ead5a5d542b417c0f1eaedab631bfd265279b8ed09`, DLL SHA-256
+`24876436ba52eb01ab722e13265f5bb94d24d68be7a5abeb0acd299d40a030b2`.
+No injected sources changed, so injected compilation was not needed. No staging,
+installation or live-game launch occurred. Default category replays and opt-in
+dense performance runs retain their distinct scopes.
+
+## Cold and distant-region continuation
+
+The latest warm-path improvements do not resolve cold navigation.
+`navigation-current-distant-128`, using the unit-512 build with retained waves,
+dependency-aware backdrops and indexed receivers, measured **472.243/2812.934 ms**
+over 100 distant destinations. Geometry preparation measured 117.548/2031.977 ms;
+16,789 tiles were built and 1,041,671,130 bytes uploaded. Maximum completion was
+6077.113 ms. All destinations completed without fallback or recovery. This is
+still **unprepared** travel; unique cameras do not imply all their tiles are unseen.
+
+The existing background queue prepares at most 512 nearby PREFETCH records from
+the current captured appearance snapshot. It does not provide arbitrary-map
+preparation. Retained ground samples and world meshes remain the extension points;
+topology alone still cannot supply complete object appearance or visibility.
+
+`navigation-cold-phase-distant-128` is a ten-destination diagnostic using build
+`navigation-cold-phase-build-20260909` (DLL SHA-256
+`f474e5bb35aa4ea7ef697ed659f49883a661049b3851043cacda64103a657c76`). The historical
+`cliffs_ms` field also includes all natural geometry. New profile-only
+`natural-mesh-phases` records separate base ground, surface decals, relief,
+vegetation floor, cities and forests. Base-ground and relief generation dominate
+this fixture; city and forest emission are much smaller. These profile records
+include the initial view separately from the ten jumps and are not a p95 pass.
+
+An experiment reused the mountain halo's exact interior samples during vertex
+emission. Production tests preserved vertex bytes and unique dependency
+observations. The same-build native comparison preserved **all 100 images**, but
+enabled completion was 498.566/2911.667 ms versus 460.215/2821.553 ms disabled.
+It did not establish a navigation benefit and was **removed, not promoted**.
+`navigation-mountain-samples-comparison-128.json` retains the comparison; build
+`navigation-mountain-samples-build-20260909` retains its binaries, source-base
+commit and `experiment.patch` for reconstruction. Its DLL SHA-256 is
+`1f0e4702711cf60a0fcf1451eb5ce5bf9c1cb6f7f3149e93136d26e816f02986`.
+
+A second experiment cached exact material-weight queries within each immutable
+tile compilation, using at most 512 KiB of table storage. Portable tests preserved
+values and dependency observations through edits and wrapping; all 100 native
+distant images matched. Enabled completion was **469.244/2790.818 ms**, versus
+**460.355/2826.376 ms** disabled. The small, mixed timing change does not establish
+a useful improvement. This experiment was also removed. Its exact comparison is
+`navigation-material-samples-comparison-128.json`; binaries, source-base commit
+and reconstruction patch remain in `navigation-material-samples-build-20260909`
+(DLL SHA-256
+`b8abcbe3031d1e82142031059c1acbdb896574faea076442890d4730b1620833`). The analyzer
+continues recognizing these archived controls. Neither experiment reduces the
+remaining need for bounded preparation before travel and exact invalidation.
 
 ## Activation and cleanup
 
@@ -290,6 +487,21 @@ the others. Free disk space increased from approximately 13.9 to 28.0 GiB.
 `Renderer/native/build/navigation-evidence-storage.json` records every shared
 copy. Rejected/incomplete runs and unique evidence were left intact.
 
+The later refresh verified 3,677 completed images and shared 2,183 identical
+copies while preserving every payload and filename. Free space rose from
+approximately 12.9 to 20.3 GiB. This is an additional physical-space observation,
+not a second claim that the older logical duplicate bytes were newly deleted.
+
+A subsequent refresh checked 4,384 completed images and shared 2,588 identical
+copies. Free space rose from 14,015,528,960 to 18,356,551,680 bytes (about 4.0 GiB
+recovered). Later runs consume additional space; this records that cleanup
+observation rather than the current free-space total.
+
+The final refresh checked 4,990 completed images and shared 2,791 identical
+copies. It recovered a further 2,162,221,056 bytes (about 2.0 GiB), leaving
+16,038,711,296 bytes free at completion. All paths and receipt-verified image
+payloads remain intact; required asset packs and unique evidence were preserved.
+
 ## Remaining targets and next work
 
 The user explicitly requires dense mixed scenes at all three supported widths:
@@ -315,10 +527,13 @@ or Districts rendering scope.
 | Unseen/evicted destination after map preparation ≤100 ms p95 | Whole-map preparation/storage is not implemented. Unprepared distant jumps remain slow. |
 | Submission/polling ≤2 ms p95 | The 100-request standalone queue call measurements pass; the synchronous injected game-thread path does not inherit this result. |
 
-The next high-value work is to extend the existing world-anchored animation
-background/wave retention into the measured pan workload, with independent
-controls, then reduce/retain cold region compilation using complete immutable
-appearance inputs. Compact topology alone does not provide appearance or draw
+The next high-value work is to reduce the remaining animated map submission/GPU
+completion cost and prepare first-use unit poses. Dense idle now has waves-off/on
+measurements at all three supported widths. Mixed actions at 160, larger visible
+unit counts, simultaneous three-zoom pose working sets and concurrent navigation
+still need capacity evidence. A large warm cache is insufficient. Reduce/retain
+cold region compilation using complete immutable appearance inputs as well.
+Compact topology alone does not provide appearance or draw
 eligibility. Whole-map preparation and versioned compiled-region storage need
 separate startup, disk-footprint, edit/invalidation and pressure evidence.
 Native async presentation still requires a current-camera compatible image and

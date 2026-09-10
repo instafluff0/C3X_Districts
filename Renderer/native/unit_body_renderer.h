@@ -2,6 +2,7 @@
 #define C3X_UNIT_BODY_RENDERER_H
 
 #include "unit_animation_runtime.h"
+#include "navigation_options.h"
 #include "unit_shadow.h"
 #include "environment_refresh/unit_shader.h"
 
@@ -29,8 +30,8 @@ public:
     std::size_t cache_bytes=0;
     std::size_t pose_cache_budget=8u*1024u*1024u,pose_cache_entries=128;
 
-    void configure_pose_cache(bool larger) {
-        pose_cache_budget=(larger?256u:8u)*1024u*1024u;pose_cache_entries=larger?4096u:128u;
+    void configure_pose_cache(bool larger,bool dense=false) {
+        pose_cache_budget=(larger?(dense?512u:256u):8u)*1024u*1024u;pose_cache_entries=larger?4096u:128u;
         while(!cache.empty() && (cache_bytes>pose_cache_budget || cache.size()>pose_cache_entries)) {
             auto old=std::min_element(cache.begin(),cache.end(),[](Cached const& a,Cached const& b){return a.used<b.used;});
             cache_bytes-=old->pixels.capacity()*4;cache.erase(old);
@@ -123,9 +124,8 @@ public:
         // can be reused at a different native anchor or wrapped occurrence.
         Key key={unsigned(found-units.begin()),int(action-found->actions.begin()),request.direction,
             pose_cursor,pose_frames,w,h,scale_milli,request.hour,request.season,request.display_color_rgb};
-        char memory_option[8]={};
-        configure_pose_cache(GetEnvironmentVariableA("C3X_RENDERER_UNIT_POSE_MEMORY",memory_option,sizeof(memory_option)) &&
-            std::strcmp(memory_option,"1")==0);
+        unsigned pose_memory=NavigationOptions::unit_pose_mib(GetEnvironmentVariableA);
+        configure_pose_cache(pose_memory>=256,pose_memory==512);
         for(auto & saved:cache)if(saved.key==key) {
             saved.used=++serial; pixels=saved.pixels;image_width=w;image_height=h;cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";return true;
         }

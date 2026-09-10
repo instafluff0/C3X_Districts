@@ -487,6 +487,7 @@ public:
     bool world_regions=false,world_regions_control=false;
     bool region_diagnostics=false;
     bool region_receiver_shadows=false;
+    bool composition_receiver_index=false;
     bool tight_natural_bounds=false;
     int region_input_ring=2;
     std::int64_t region_origin_x=0,region_origin_y=0;
@@ -2242,7 +2243,7 @@ public:
         environment_profile=use_environment;
         fidelity_profile = use_fidelity;
         char control[8]={};
-        bool three_zoom_memory=GetEnvironmentVariableA("C3X_RENDERER_THREE_ZOOM_MEMORY",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        bool three_zoom_memory=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_THREE_ZOOM_MEMORY");
         auto viewport_limit=three_zoom_memory?std::max(default_viewport_cache_budget,std::size_t(64u*1024u*1024u)):default_viewport_cache_budget;
         auto backdrop_limit=three_zoom_memory?std::size_t(832u*1024u*1024u):default_resource_backdrop_cache_budget;
         // Budget changes retire optional owners before admitting under the new
@@ -2261,6 +2262,7 @@ public:
         world_regions_control=GetEnvironmentVariableA("C3X_RENDERER_WORLD_REGIONS_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         region_diagnostics=GetEnvironmentVariableA("C3X_RENDERER_REGION_DIAGNOSTICS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         region_receiver_shadows=GetEnvironmentVariableA("C3X_RENDERER_REGION_RECEIVER_SHADOWS",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        composition_receiver_index=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_COMPOSITION_RECEIVER_INDEX");
         tight_natural_bounds=GetEnvironmentVariableA("C3X_RENDERER_TIGHT_NATURAL_BOUNDS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         GetEnvironmentVariableA("C3X_RENDERER_REGION_INPUT_RING",control,sizeof(control));
         region_input_ring=std::strcmp(control,"4")==0?4:2;
@@ -2269,9 +2271,9 @@ public:
         if(render_regions.metadata_limit!=metadata_limit)render_regions.clear();
         render_regions.metadata_limit=metadata_limit;
         cull_empty_water=GetEnvironmentVariableA("C3X_RENDERER_WATER_COVERAGE",control,sizeof(control)) && std::strcmp(control,"1")==0;
-        world_backdrops=world_raster_grid && GetEnvironmentVariableA("C3X_RENDERER_WORLD_BACKDROPS",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        world_backdrops=world_raster_grid && c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_WORLD_BACKDROPS");
         backdrop_reuse_control=GetEnvironmentVariableA("C3X_RENDERER_BACKDROP_REUSE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
-        world_waves=GetEnvironmentVariableA("C3X_RENDERER_WORLD_WAVES",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        world_waves=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_WORLD_WAVES");
         wave_reuse_control=GetEnvironmentVariableA("C3X_RENDERER_WAVE_REUSE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         reflection.enabled=!(GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         fidelity_shadow_control=GetEnvironmentVariableA("C3X_RENDERER_FIDELITY_SHADOW_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
@@ -3320,17 +3322,19 @@ public:
         int backdrop_extent=city_profile?272:fidelity_profile?256:128;
         if(!backdrop.ensure(device,backdrop_extent,backdrop_extent))return false;
         unsigned backdrop_hits=0,backdrop_misses=0;
-        char dependency_option[8]={};
         bool dependency_backdrops=anchored && city_profile && world_regions && animation_prepared_ptr &&
-            GetEnvironmentVariableA("C3X_RENDERER_BACKDROP_DEPENDENCIES",dependency_option,sizeof(dependency_option)) &&
-            std::strcmp(dependency_option,"1")==0;
+            c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_BACKDROP_DEPENDENCIES");
         unsigned backdrop_dependency_hits=0,backdrop_dependency_rejections=0;
         // Geometry identity includes the entire captured semantic/ownership
         // set, target/zoom, light, wrap, content and device generations, but
         // excludes camera anchors. Conservatively miss when that set changes.
         auto backdrop_signature=anchored?c3x_renderer::render_core::static_region_identity(
             cached_signature.geometry,std::uint64_t(geometry_world_revision)):cached_signature.complete;
+        LARGE_INTEGER poses_ready={},background_started={},animation_started={},region_finished={};
+        QueryPerformanceCounter(&poses_ready);
+        LONGLONG background_ticks=0,animation_ticks=0;
         for(auto & rect:rectangles) {
+            QueryPerformanceCounter(&background_started);
             int key_x=rect.left-anchor_x,key_y=rect.top-anchor_y;
             auto found=std::find_if(resource_backdrops.begin(),resource_backdrops.end(),[&](auto const& block){
                 return !backdrop_reuse_control && block.signature==backdrop_signature && block.x==key_x && block.y==key_y;
@@ -3396,6 +3400,8 @@ public:
             }
             // Keep the background depth and linear color intact. Reuse static
             // source casters for lighting; animated bodies never invalidate pages.
+            QueryPerformanceCounter(&animation_started);
+            background_ticks+=animation_started.QuadPart-background_started.QuadPart;
             if(!submit_geometry(buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
                     nullptr,true,true,&geometry_vertex_buffers,false,animation_casters_ptr,animation_prepared_ptr))return false;
             D3D11_RECT clipped={std::max<LONG>(0,rect.left),std::max<LONG>(0,rect.top),
@@ -3404,7 +3410,11 @@ public:
                 unsigned(clipped.right-rect.left),unsigned(clipped.bottom-rect.top),1};
             context->CopySubresourceRegion(render_texture,0,unsigned(clipped.left),unsigned(clipped.top),0,block_texture,0,&box);
             rect=clipped;
+            QueryPerformanceCounter(&region_finished);
+            animation_ticks+=region_finished.QuadPart-animation_started.QuadPart;
         }
+        LARGE_INTEGER readback_started={},readback_submitted={},readback_ready={};
+        QueryPerformanceCounter(&readback_started);
         unsigned dirty_pixels=0;
         for(auto const & rect:rectangles) {
             D3D11_BOX box={unsigned(rect.left),unsigned(rect.top),0,unsigned(rect.right),unsigned(rect.bottom),1};
@@ -3412,7 +3422,9 @@ public:
             dirty_pixels+=unsigned((rect.right-rect.left)*(rect.bottom-rect.top));
         }
         D3D11_MAPPED_SUBRESOURCE mapped={};
+        QueryPerformanceCounter(&readback_submitted);
         if(FAILED(context->Map(readback_texture,0,D3D11_MAP_READ,0,&mapped))) return false;
+        QueryPerformanceCounter(&readback_ready);
         // The immutable base owns every old body position. Never cache posed pixels.
         resource_pixels=pixels;
         for(auto const & rect:rectangles)for(LONG y=rect.top;y<rect.bottom;++y)
@@ -3422,6 +3434,13 @@ public:
         context->Unmap(readback_texture,0);
         resource_pixel_signature=cached_signature.complete;resource_pixel_clock=clock;
         QueryPerformanceCounter(&finished);resource_composite_ticks=finished.QuadPart-started.QuadPart;
+        {
+            char detail[320];sprintf_s(detail,"pose_prepare_ms=%.3f backdrop_submit_ms=%.3f animated_submit_ms=%.3f readback_submit_ms=%.3f readback_wait_ms=%.3f cpu_copy_ms=%.3f",
+                trace.milliseconds(poses_ready.QuadPart-started.QuadPart),trace.milliseconds(background_ticks),
+                trace.milliseconds(animation_ticks),trace.milliseconds(readback_submitted.QuadPart-readback_started.QuadPart),
+                trace.milliseconds(readback_ready.QuadPart-readback_submitted.QuadPart),trace.milliseconds(finished.QuadPart-readback_ready.QuadPart));
+            trace.write("animation-phases",detail);
+        }
         if(dependency_backdrops) {
             char detail[128];sprintf_s(detail,"hits=%u rejections=%u entries=%zu bytes=%zu",
                 backdrop_dependency_hits,backdrop_dependency_rejections,resource_backdrops.size(),resource_backdrop_bytes);
@@ -3945,6 +3964,30 @@ public:
         }catch(...){region_contributors.clear();}
     }
 
+    void collect_region_receivers(std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers,
+            ViewportShaderSettings const& settings,std::vector<D3D11_RECT> const& rectangles,bool reflected,
+            std::vector<c3x_renderer::render_core::SourceShadow::Bounds>& receivers) {
+        // The index borrows only the current static assembly. Posed buffers and
+        // rejected/unavailable indexes retain the original complete scan.
+        std::vector<c3x_renderer::render_core::RegionContributorIndex::Item> candidates;
+        bool indexed=false;
+        if(composition_receiver_index && &buffers==&geometry_vertex_buffers && rectangles.size()==1 &&
+           region_contributors.tile_width==shadow_tile_width && region_contributors.reflection_height==reflection.height_pixels) {
+            auto const& rect=rectangles[0];
+            try {indexed=region_contributors.query(reflected?1u:0u,rect.left-int(settings.translation[0]),
+                rect.top-int(settings.translation[1]),std::max(rect.right-rect.left,rect.bottom-rect.top),candidates);}
+            catch(...) {}
+        }
+        auto append=[&](unsigned layer,CachedVertexChunk const& chunk) {
+            if(layer==geometry_shadow)return;
+            bool visible=false;
+            for(auto const& rect:rectangles)visible=visible || chunk_intersects_region(chunk,settings,rect,reflected);
+            if(visible)receivers.push_back(chunk.world_bounds);
+        };
+        if(indexed)for(auto const& item:candidates)append(item.first,buffers[item.first][item.second]);
+        else for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:buffers[layer])append(layer,chunk);
+    }
+
     bool render_region_key(std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers,
             ViewportShaderSettings const& settings,
             std::vector<c3x_renderer::render_core::SourceShadow::Caster> const& casters,
@@ -4327,11 +4370,7 @@ public:
             std::vector<Shadow::Bounds> receivers;
             auto const & casters=*shadow_casters_ptr;
             auto const & shadow_buffers=shadow_buffers_ptr ? *shadow_buffers_ptr : buffers;
-            for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:shadow_buffers[layer]) {
-                bool visible=false;
-                for(auto const& rect:rectangles)visible=visible || chunk_intersects_region(chunk,settings,rect,reflection_pass);
-                if(visible && layer!=geometry_shadow)receivers.push_back(chunk.world_bounds);
-            }
+            collect_region_receivers(shadow_buffers,settings,rectangles,reflection_pass,receivers);
             std::array<ID3D11ShaderResourceView*,33> alpha{};
             std::copy(feature_texture_views.begin(),feature_texture_views.end(),alpha.begin());
             std::copy(river_rock_texture_views.begin(),river_rock_texture_views.end(),alpha.begin()+8);
@@ -5232,6 +5271,13 @@ public:
         int const base_ground_grid = frame.tile_width >= 96 ?
             (draw_record_count <= 768 ? 16 : 12) : 8;
         c3x_renderer_i64 ground_ticks=0,feature_ticks=0,cliff_ticks=0,upload_ticks=0;
+        std::array<c3x_renderer_i64,6> natural_phase_ticks{};
+        LARGE_INTEGER natural_phase_mark={};
+        auto begin_natural_phase=[&](){if(profiling)QueryPerformanceCounter(&natural_phase_mark);};
+        auto record_natural_phase=[&](unsigned phase){if(profiling){
+            LARGE_INTEGER now={};QueryPerformanceCounter(&now);
+            natural_phase_ticks[phase]+=now.QuadPart-natural_phase_mark.QuadPart;natural_phase_mark=now;
+        }};
         c3x_renderer::render_core::ExactPointCache<c3x_renderer::render_core::ShoreSample> shore_samples;
         c3x_renderer::render_core::ExactPointCache<c3x_renderer::render_core::GroundSample> pickup_ground_samples;
         c3x_renderer::render_core::ExactPointCache<std::array<float,2>> natural_height_samples;
@@ -7727,6 +7773,13 @@ public:
                 frame_tiles_built,frame_tiles_reused,trace.milliseconds(ground_ticks),trace.milliseconds(feature_ticks),
                 trace.milliseconds(cliff_ticks),trace.milliseconds(upload_ticks),static_cast<unsigned long long>(tile_geometry_cache_bytes),frame_natural_hits,natural_mesh_cache_bytes,frame_ground_grid_hits,ground_grid_cache_bytes);
             trace.write("mesh-phases",detail,true);
+            if(profiling){
+                sprintf_s(detail,"ground_ms=%.3f surface_decals_ms=%.3f relief_ms=%.3f vegetation_floor_ms=%.3f city_ms=%.3f forest_ms=%.3f",
+                    trace.milliseconds(natural_phase_ticks[0]),trace.milliseconds(natural_phase_ticks[1]),
+                    trace.milliseconds(natural_phase_ticks[2]),trace.milliseconds(natural_phase_ticks[3]),
+                    trace.milliseconds(natural_phase_ticks[4]),trace.milliseconds(natural_phase_ticks[5]));
+                trace.write("natural-mesh-phases",detail,true);
+            }
             sprintf_s(detail,"shore_hits=%zu shore_misses=%zu material_hits=%zu material_misses=%zu height_queries=%zu scratch_bytes=%zu",
                 shore_samples.hits,shore_samples.misses,pickup_ground_samples.hits,pickup_ground_samples.misses,
                 pickup_height_queries,

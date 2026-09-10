@@ -179,17 +179,46 @@ def inspect(directory):
         report["sampled_address_space_not_peak"] = {k: min(int(r[k]) for r in memory)
                                                    for k in ("available_virtual", "largest_free_region")}
     trace = (directory / "renderer.log").read_text().splitlines()
-    animation = [fields(l) for l in trace if "stage=animation-frame " in l][-count:]
-    if scenario != "animation" and len(animation) == count:
+    measured_sequences=None
+    if scenario=="idle":
+        # The bounded trace may end early. Match actual measured clocks instead
+        # of silently substituting warm-up records from its last N entries.
+        clocks={str(int(r["ticks"])//(1000000//15)) for r in rows}
+        measured_sequences={r["sequence"] for l in trace if "stage=animation-frame " in l
+                            for r in [fields(l)] if r.get("clock") in clocks and "sequence" in r}
+    def stage_rows(stage):
+        selected=[fields(l) for l in trace if f"stage={stage} " in l]
+        return ([r for r in selected if r.get("sequence") in measured_sequences]
+                if measured_sequences is not None else selected[-count:])
+    animation_phases=stage_rows("animation-phases")
+    if scenario!="animation" and animation_phases and (scenario=="idle" or len(animation_phases)==count):
+        report["animation_phases"]={k:distribution([float(r[k]) for r in animation_phases])
+                                    for k in ("pose_prepare_ms","backdrop_submit_ms","animated_submit_ms",
+                                              "readback_submit_ms","readback_wait_ms","cpu_copy_ms")}
+    animation = stage_rows("animation-frame")
+    if scenario != "animation" and animation and (scenario=="idle" or len(animation)==count):
         report["animation"] = {"timing": distribution([float(r["ms"]) for r in animation]),
                                "totals": {k: sum(int(r[k]) for r in animation) for k in
                                           ("wave_upload_bytes", "wave_cells_built", "wave_cells_reused", "backdrop_hits", "backdrop_misses")}}
-    center = [fields(l) for l in trace if "stage=center-shore-cache " in l][-count:]
-    if scenario != "animation" and len(center) == count:
+    if scenario=="idle":
+        report["idle_trace_coverage"]={"measured_frames":count,"animation_frames":len(animation),
+                                      "phase_frames":len(animation_phases),"animation_trace_complete":len(animation)==count}
+        unit_rows=stage_rows("unit-body")
+        unit_count=args.get("idle_units",0)
+        if unit_count:
+            grouped={sequence:[r for r in unit_rows if r.get("sequence")==sequence] for sequence in measured_sequences}
+            complete=[r for group in grouped.values() if len(group)==unit_count for r in group]
+            if complete:
+                report["unit_pose_cache"]={"complete_traced_frames":len(complete)//unit_count,
+                    "hits":sum(r.get("cache_hit")=="1" for r in complete),
+                    "misses":sum(r.get("cache_hit")=="0" for r in complete),
+                    "maximum_sampled_pixel_capacity_bytes":max(int(r["cache_bytes"]) for r in complete)}
+    center = stage_rows("center-shore-cache")
+    if scenario != "animation" and center and (scenario=="idle" or len(center)==count):
         report["center_shore"] = {"timing": distribution([float(r["ms"]) for r in center]),
                                   "maximum_bytes": max(int(r["bytes"]) for r in center)}
-    phases = [fields(l) for l in trace if "stage=navigation-phases " in l][-count:]
-    if scenario != "animation" and len(phases) == count:
+    phases = stage_rows("navigation-phases")
+    if scenario != "animation" and phases and (scenario=="idle" or len(phases)==count):
         report["cpu_phases"] = {k: distribution([float(r[k]) for r in phases])
                                 for k in phases[0] if k.endswith("_ms") and all(k in r for r in phases)}
         report["retained_cpu_bytes"] = {k: max(int(r[k]) for r in phases)
@@ -203,7 +232,7 @@ def compare(reference, candidate):
     if before["binaries"] != after["binaries"] or before["inputs"] != after["inputs"]:
         raise ValueError("Paired evidence requires identical binaries and runtime inputs")
     controls = {"dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view",
-                "backdrop_control", "wave_control", "composition_casters_control", "backdrop_dependencies", "unit_pose_memory"}
+                "backdrop_control", "wave_control", "composition_casters_control", "backdrop_dependencies", "unit_pose_memory", "unit_pose_memory_mib", "composition_receiver_index", "mountain_samples", "material_samples", "production_defaults"}
     ignored = controls | {"out", "binaries"}
     # Receipts made before these opt-in witnesses existed represent their
     # disabled defaults. Nondefault scene/unit settings still must match.
@@ -214,6 +243,10 @@ def compare(reference, candidate):
                     "C3X_RENDERER_CENTER_SHORE_CONTROL", "C3X_RENDERER_WORLD_REGIONS_CONTROL",
                     "C3X_RENDERER_BACKDROP_REUSE_CONTROL", "C3X_RENDERER_WAVE_REUSE_CONTROL",
                     "C3X_RENDERER_BACKDROP_DEPENDENCIES",
+                    "C3X_RENDERER_WORLD_BACKDROPS", "C3X_RENDERER_WORLD_WAVES",
+                    "C3X_RENDERER_COMPOSITION_RECEIVER_INDEX",
+                    "C3X_RENDERER_MOUNTAIN_SAMPLES",
+                    "C3X_RENDERER_MATERIAL_SAMPLES",
                     "C3X_RENDERER_UNIT_POSE_MEMORY",
                     "C3X_RENDERER_COMPOSITION_CASTERS_CONTROL", "C3X_RENDERER_THREE_ZOOM_MEMORY", "C3X_RENDERER_TRACE_FILE",
                     "C3X_RENDERER_PREVIEW_CAMERA_QUEUE", "C3X_RENDERER_PREVIEW_CAMERA_VIEW"}

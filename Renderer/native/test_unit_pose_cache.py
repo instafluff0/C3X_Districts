@@ -67,6 +67,12 @@ int main() {
  state.configure_pose_cache(true);assert(state.cache.size()==2 && state.pose_cache_budget==256*1024*1024);
  for(unsigned key=4;key<=8;++key)state.admit(key);
  assert(state.cache.size()==7 && state.cache_bytes==28*1024*1024);
+ state.configure_pose_cache(true,true);assert(state.pose_cache_budget==512*1024*1024);
+ // A smaller tier must evict existing owners immediately, even when the
+ // following draw is a cache hit and performs no new admission.
+ state.cache.front().pixels.reserve(260*1024*1024/4);
+ state.cache_bytes+=state.cache.front().pixels.capacity()*4-4*1024*1024;
+ state.configure_pose_cache(true);assert(state.cache_bytes<=256*1024*1024 && state.cache.size()==6);
  state.configure_pose_cache(false);
  assert(state.cache.size()==2 && state.cache[0].key==7 && state.cache[1].key==8);
  assert(state.pose_cache_entries==128 && state.cache_bytes==8*1024*1024);

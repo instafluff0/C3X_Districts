@@ -18,6 +18,25 @@ of cache enablement. They do not affect config-off native rendering or units.
 The cache switch selects the existing bounded ring-four world-region method;
 it does not implement instant cold-map jumps or asynchronous native presentation.
 
+The September 9 navigation production candidate also uses this existing switch
+for the verified retained-wave and animation-backdrop paths, exact backdrop
+dependencies, indexed animation receivers and larger bounded cache tiers.
+When `C3X_RENDERER_WORLD_REGIONS=1`, absent newer environment options inherit:
+`THREE_ZOOM_MEMORY=1`, `WORLD_BACKDROPS=1`, `WORLD_WAVES=1`,
+`BACKDROP_DEPENDENCIES=1`, `COMPOSITION_RECEIVER_INDEX=1`, and
+`UNIT_POSE_MEMORY=512` (each with the `C3X_RENDERER_` prefix).
+Explicit standalone overrides still win, including zero. Without the cache
+switch these options retain their smaller/off defaults. The injected bridge's
+existing waves and reflection switches remain authoritative. This DLL policy
+does not require another injected patch or installation when the current cache
+switch is already installed. Staging and verification status are recorded in
+[the continuation](navigation_continuation.md).
+
+The selected ceilings are 64 MiB viewport images, 832 MiB linear/depth animation
+backdrops and 512 MiB unit-pose pixels / 4,096 entries. They are conditional
+retention limits, not upfront reservations or a total process-memory allowance.
+Other owners and the remaining live-game memory verification are described below.
+
 The injected bridge applies these settings through the existing renderer
 environment controls before DLL initialization. They take precedence over the
 evaluation launcher and inherited effect/cache settings, and require a game
@@ -27,8 +46,8 @@ The two effect flags alone do not enable custom rendering.
 
 The user-requested navigation evaluation profile is
 `Renderer/run_navigation_evaluation.cmd`. It scopes experimental environment
-settings to one launched game process; ordinary launches keep the existing
-defaults. It enables world-region reuse, receiver-scoped shadow dependencies,
+settings to one launched game process; ordinary launches use the installed
+cache/effect switches and the DLL defaults above. It enables world-region reuse, receiver-scoped shadow dependencies,
 tighter natural bounds and current-capture ring four, while preserving waves
 and reflections. It does not install C3X or change the configuration format.
 See [the handoff](navigation_handoff.md) for measured coverage and limitations.
@@ -44,7 +63,7 @@ camera levels on repeated `Z` presses when `enable_custom_rendering` is also on.
 It is an integration setting rather than a pack-definition key; see
 [the custom zoom contract](custom_rendering_zoom.md).
 
-The current modern-machine candidate budgets GPU tile geometry at 768 MiB,
+The base modern-machine tier budgets GPU tile geometry at 768 MiB,
 CPU natural/ground retention at 96 MiB, viewport bitmaps at 32 MiB and static
 resource/wave backdrops at 128 MiB. These are separate ceilings, not a total
 process-memory allowance. Shadow atlases, textures, scratch targets, unit data,
@@ -110,6 +129,31 @@ This stabilizes region contributor sets at the cost of preparing and retaining
 more detailed geometry. The runner exposes `--region-input-ring {2,4}`. It adds
 no capture permissions and does not synthesize off-screen appearance.
 
+`C3X_RENDERER_COMPOSITION_RECEIVER_INDEX=1` reuses that current static assembly's
+conservative spatial index for animation shadow-receiver selection. Exact
+intersections and original ordering still determine receivers; foreign/posed
+buffers and unsupported queries use the complete scan. It adds no retained
+owner. The evidence runner exposes `--composition-receiver-index`; it is off
+outside the production cache profile.
+
+For the production cache profile, the default described above is enabled.
+`C3X_RENDERER_BACKDROP_DEPENDENCIES=1` validates retained linear color/depth
+against the exact current static-region dependencies. A bitmap-only region hit
+cannot satisfy a backdrop request. Ordered contributors, lights, reflection,
+content and geometry identities still decide reuse; missing proof redraws the
+original backdrop. It follows the same production cache-profile default.
+
+`C3X_RENDERER_UNIT_POSE_MEMORY=1` selects 256 MiB and at most 4,096 entries in
+the existing exact unit-pixel cache; value `512` selects 512 MiB with the same
+entry cap. Explicit other values keep 8 MiB / 128 entries; an absent option
+follows the production policy above. The runner exposes
+`--unit-pose-memory` and optional `--unit-pose-memory-mib 512`. Budget reductions
+evict least-recently-used owners before lookup. These are cached pixel-capacity
+limits; metadata, current output, temporary admission copies, loaded assets and
+GPU resources are additional owners. Allocation/admission failure retains the
+current completed body. Native directed action cursors, individual ambient
+phases, quality, dimensions and cache keys do not depend on the memory tier.
+
 `C3X_RENDERER_REGION_DIAGNOSTICS=1` emits per-region dependency component
 fingerprints and world/screen rectangles for offline miss analysis. The evidence
 runner exposes `--region-diagnostics`; `analyze_region_dependencies.py` classifies
@@ -145,7 +189,7 @@ topology revision, zoom and device identity still invalidate cached linear
 color/depth. The 128 MiB backdrop cap is unchanged. Set
 `C3X_RENDERER_BACKDROP_REUSE_CONTROL=1` to redraw each region independently
 for pixel comparisons while preserving the same region placement. Both
-diagnostics default off; native presentation is unaffected.
+controls are off outside the production cache profile; native presentation is unaffected.
 
 `C3X_RENDERER_WORLD_WAVES=1` enables a bounded pool of immutable coast-cell
 occurrences, including cached empty cells. Its GPU buffers have a 32 MiB cap;

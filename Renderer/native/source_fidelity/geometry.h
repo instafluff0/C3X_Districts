@@ -1,6 +1,7 @@
 // Included inside the existing tile compiler: observes the same authoritative
 // dependencies and emits into its bounded immutable world-geometry cache.
 if(fidelity_profile) {
+    begin_natural_phase();
     using namespace c3x_renderer::fidelity;
     int nc=(tile.tile_x+tile.tile_y)/2,nr=(tile.tile_x-tile.tile_y)/2;
     auto lookup_natural=[&](int c,int r){
@@ -36,10 +37,15 @@ if(fidelity_profile) {
                              index_natural_grids?&natural_grid_indices[0]:nullptr))return false;
     }
     auto*mountain_indices=index_natural_grids?&natural_grid_indices[1]:nullptr;
+    record_natural_phase(0);
     #include "../../lab/shared/natural/surface_mesh_body.h"
+    record_natural_phase(1);
     #include "../../lab/shared/natural/relief_mesh_body.h"
+    record_natural_phase(2);
     #include "../../lab/shared/natural/vegetation_floor_mesh_body.h"
+    record_natural_phase(3);
     #include "../city_fidelity/geometry.h"
+    record_natural_phase(4);
     if(tile.real_terrain_type==7){
         // Exact current production building meshes/placement, used only as
         // exclusions. City appearance and its geometry path remain unchanged.
@@ -76,4 +82,5 @@ if(fidelity_profile) {
         auto&random=c3x_renderer::stable_random;
         #include "../../lab/shared/natural/forest_mesh_body.h"
     }
+    record_natural_phase(5);
 }

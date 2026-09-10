@@ -303,6 +303,8 @@ struct State{
  struct {float height_pixels=40;bool enabled=true;}reflection;
  int height=1192,shadow_tile_width=128;
  bool region_receiver_shadows=false;
+ bool composition_receiver_index=false;
+ std::array<std::vector<CachedVertexChunk>,geometry_layer_count> geometry_vertex_buffers;
  std::array<double,3> frame_region_phase_ms{};
  c3x_renderer::render_core::RegionContributorIndex region_contributors;
 ''' + methods + r'''
@@ -310,6 +312,34 @@ struct State{
 int main(){
  using Shadow=c3x_renderer::render_core::SourceShadow;using Key=c3x_renderer::render_core::RenderRegionKey;
  State state;ViewportShaderSettings settings{};settings.inverse_size[0]=settings.inverse_size[1]=1.f/136;
+ // Execute the production receiver collector against complete ordered scans,
+ // including reflected bounds, translated narrow rectangles and fallbacks.
+ for(unsigned i=0;i<600;++i){
+  CachedVertexChunk c;int x=int(i*73%1700)-800,y=int(i*131%1400)-700;
+  c.bounds={x,y,x+70,y+160};c.translation_x=int(i%5)*13;c.translation_y=-int(i%3)*17;
+  c.world_bounds={{float(i),0,float(i%3)},{float(i)+1,1,float(i%3)+2}};
+  state.geometry_vertex_buffers[i%geometry_layer_count].push_back(c);
+ }
+ auto check_receivers=[&](auto const& selected,std::vector<D3D11_RECT> rects,bool reflected){
+  std::vector<Shadow::Bounds> indexed,scanned;
+  state.composition_receiver_index=true;state.collect_region_receivers(selected,settings,rects,reflected,indexed);
+  state.composition_receiver_index=false;state.collect_region_receivers(selected,settings,rects,reflected,scanned);
+  assert(indexed.size()==scanned.size());
+  for(std::size_t i=0;i<indexed.size();++i)assert(std::memcmp(&indexed[i],&scanned[i],sizeof(indexed[i]))==0);
+ };
+ state.prepare_region_contributors(state.geometry_vertex_buffers);
+ assert(state.region_contributors.ready);
+ for(int pass=0;pass<2;++pass)for(int x=-900;x<900;x+=79){
+  settings.translation[0]=float(x);settings.translation[1]=float(x/3);
+  check_receivers(state.geometry_vertex_buffers,{{-11,7,125,91}},pass!=0);
+  check_receivers(state.geometry_vertex_buffers,{{0,0,144,144},{-80,-40,30,30}},pass!=0);
+  check_receivers(state.geometry_vertex_buffers,{{0,0,700,700}},pass!=0);
+ }
+ auto foreign=state.geometry_vertex_buffers;
+ foreign[geometry_feature][0].bounds={0,0,50,50};
+ check_receivers(foreign,{{0,0,136,136}},false);
+ state.region_contributors.clear();check_receivers(state.geometry_vertex_buffers,{{0,0,136,136}},false);
+ settings.translation[0]=settings.translation[1]=0;
  std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
  CachedVertexChunk ground;ground.version=11;ground.bounds={0,0,128,128};ground.world_bounds={{0,0,0},{1,1,0}};
  buffers[geometry_underlay].push_back(ground);

@@ -5,6 +5,46 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class EffectConfigTests(unittest.TestCase):
+    def test_production_defaults_and_explicit_pressure_controls(self):
+        run_cpp(r'''
+#include <cassert>
+#include <cstring>
+#include <map>
+#include <string>
+#include "Renderer/native/navigation_options.h"
+std::map<std::string,std::string> values;
+unsigned reader(char const* name,char* buffer,unsigned capacity) {
+ auto it=values.find(name);if(it==values.end())return 0;
+ auto size=unsigned(it->second.size());
+ if(size>=capacity)return size+1;
+ std::memcpy(buffer,it->second.c_str(),size+1);return size;
+}
+int main(){
+ using O=c3x_renderer::NavigationOptions;
+ char const* options[]={"C3X_RENDERER_THREE_ZOOM_MEMORY","C3X_RENDERER_WORLD_BACKDROPS",
+  "C3X_RENDERER_WORLD_WAVES","C3X_RENDERER_BACKDROP_DEPENDENCIES","C3X_RENDERER_COMPOSITION_RECEIVER_INDEX"};
+ for(auto cache:{"0","1"}) {
+  values.clear();values["C3X_RENDERER_WORLD_REGIONS"]=cache;
+  bool on=cache[0]=='1';
+  for(auto name:options) {
+   assert(O::retained(reader,name)==on);
+   for(auto override_value:{"0","1","invalid-value-over-capacity"}) {
+    values[name]=override_value;
+    assert(O::retained(reader,name)==(std::strcmp(override_value,"1")==0));
+   }
+   values.erase(name);assert(O::retained(reader,name)==on);
+  }
+  assert(O::unit_pose_mib(reader)==(on?512u:8u));
+  for(auto setting:{"0","1","512","invalid-value-over-capacity"}) {
+   values["C3X_RENDERER_UNIT_POSE_MEMORY"]=setting;
+   assert(O::unit_pose_mib(reader)==(std::strcmp(setting,"512")==0?512u:std::strcmp(setting,"1")==0?256u:8u));
+  }
+ }
+ values.clear();assert(O::unit_pose_mib(reader)==8u);
+ for(auto name:options)assert(!O::retained(reader,name));
+}
+''')
+
     def test_injected_values_and_failure_propagation(self):
         source = (ROOT / 'injected_code.c').read_text()
         start = source.index('bool\nconfigure_custom_renderer_effects ')

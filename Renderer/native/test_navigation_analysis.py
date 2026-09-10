@@ -123,6 +123,20 @@ class NavigationAnalysisTests(unittest.TestCase):
             self.assertEqual(report["changed_frames"],13)
             self.assertEqual(report["timing"]["ms"]["samples"],14)
             self.assertIsNone(report["native_presented_frames"])
+            phase="pose_prepare_ms=1 backdrop_submit_ms=2 animated_submit_ms=3 readback_submit_ms=4 readback_wait_ms=5 cpu_copy_ms=6"
+            animation="ms=21 wave_upload_bytes=0 wave_cells_built=0 wave_cells_reused=0 backdrop_hits=1 backdrop_misses=0"
+            trace=[]
+            for i in range(20):
+                ticks=1000000+(i+1)*1000000//15
+                trace.extend((f"sequence={i+2} stage=animation-phases {phase}",
+                              f"sequence={i+2} stage=animation-frame clock={ticks//(1000000//15)} {animation}"))
+            (root/"renderer.log").write_text("\n".join(trace))
+            partial=inspect(root)[1]
+            self.assertEqual(partial["idle_trace_coverage"]["animation_frames"],10)
+            self.assertFalse(partial["idle_trace_coverage"]["animation_trace_complete"])
+            self.assertEqual(partial["animation_phases"]["animated_submit_ms"]["samples"],10)
+            self.assertEqual(partial["animation"]["totals"]["backdrop_hits"],10)
+            self.assertEqual(partial["timing"]["ms"]["samples"],14)
             for invalid in (original.replace("ticks=1733333","ticks=1000000"),
                             original.replace("built=0","built=1",1),
                             original.replace("upload_bytes=0","upload_bytes=256",1)):

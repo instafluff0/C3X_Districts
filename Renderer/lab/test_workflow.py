@@ -372,6 +372,24 @@ class BehaviorWitnessTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Incomplete native unit"):
             renderer.verify_behavior_output("units", "BIQ viewport: 0 fallback")
 
+    def test_unit_check_requires_individual_phases_and_expanded_identity_checks(self):
+        lines=["UNIT body matrix drawn=288 status=pass", "UNIT cached anchor translation: pass",
+               "UNIT repeated native cursor: pass", "UNIT retained terrain unchanged: pass",
+               "UNIT post-draw terrain parity: pass", "UNIT config-off preserves canvas: pass",
+               "UNIT action interruption and held endpoint: pass draws=582",
+               "UNIT independent ambient phases and exact repeat: pass"]
+        for zoom in (0,1):
+            lines.append(f"UNIT magenta underlay parity zoom={zoom}")
+            for mode in ("RGB555","RGB565"):
+                lines.extend((f"UNIT {mode} clipped zoom={zoom}",
+                              f"UNIT {mode} magenta clipped parity zoom={zoom} status=pass"))
+        complete="\n".join(lines)
+        renderer.verify_behavior_output("units",complete)
+        for invalid in (complete.replace("draws=582","draws=564"),
+                        complete.replace("UNIT independent ambient phases and exact repeat: pass", "")):
+            with self.assertRaisesRegex(ValueError,"Incomplete native unit"):
+                renderer.verify_behavior_output("units",invalid)
+
     def test_a_failed_replay_does_not_hide_independent_results(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(renderer, "LAB", Path(directory)), \
              patch.object(renderer, "affected", return_value=["animation"]), \
