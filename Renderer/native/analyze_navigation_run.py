@@ -64,13 +64,48 @@ def inspect(directory):
         prefix, end = "RESIDENT_NAV ", "RESIDENT_END status=pass"
         count = int(args["resident_steps"])
         image_names = [f"zoom.bmp.resident{i}.bmp" for i in range(count)]
+    elif scenario == "replay":
+        prefix, end = "REPLAY_FRAME ", None
+        starts = [fields(l) for l in lines if l.startswith("REPLAY_BEGIN ")]
+        prepare_starts = [fields(l) for l in lines if l.startswith("REPLAY_PREPARE_BEGIN ")]
+        prepare_ends = [fields(l) for l in lines if l.startswith("REPLAY_PREPARE_END ")]
+        timed_ends = [fields(l) for l in lines if l.startswith("REPLAY_TIMED_END ")]
+        ends = [fields(l) for l in lines if l.startswith("REPLAY_END ")]
+        parity = [fields(l) for l in lines if l.startswith("REPLAY_PARITY ")]
+        count = int(args.get("replay_samples_per_phase",25))*8
+        mode=args.get("preparation_mode","baseline")
+        if (len(starts)!=1 or len(prepare_starts)!=1 or len(prepare_ends)!=1 or
+                len(timed_ends)!=1 or len(ends)!=1 or
+                any(r.get("status")!="pass" for r in (prepare_ends[0],timed_ends[0],ends[0])) or
+                any(r.get("mode")!=mode for r in (starts[0],prepare_starts[0],prepare_ends[0],timed_ends[0],ends[0])) or
+                starts[0].get("clock")!="logical" or starts[0].get("final_map_cache")!="cleared" or
+                starts[0].get("native_presented")!="0" or int(starts[0].get("requests",0))!=count or
+                int(ends[0].get("coverage_complete",0))!=1 or not parity or
+                any(r.get("status")!="pass" for r in parity) or
+                int(ends[0].get("verified",0))!=len(parity) or int(ends[0].get("snapshots",0))!=len(parity)):
+            raise ValueError("Missing completed deterministic retained-preparation replay")
+        image_names=[f"zoom.bmp.replay-{r['label']}-{r['tile_width']}.bmp" for r in parity]
     elif scenario == "session":
         prefix, end = "SESSION_FRAME ", None
+        mode=args.get("preparation_mode","baseline")
+        prepare_starts = [fields(l) for l in lines if l.startswith("SESSION_PREPARE_BEGIN ")]
+        prepare_ends = [fields(l) for l in lines if l.startswith("SESSION_PREPARE_END ")]
+        preparation_contract="preparation_mode" in args
+        if not preparation_contract and not prepare_starts and not prepare_ends:
+            prepare_starts=[{"mode":"baseline"}]
+            prepare_ends=[{"status":"pass","mode":"baseline","requests":"0","unit_requests":"0","ms":"0",
+                "builds":"0","upload_bytes":"0","cleared_viewport":"0","cleared_regions":"0",
+                "cleared_blocks":"0","cleared_backdrops":"0","cleared_publication":"0",
+                "retained_geometry":"0","retained_natural":"0","retained_ground":"0","retained_waves":"0",
+                "retained_pose":"0","retained_payload":"0","retained_shadow":"0","retained_other":"0",
+                "geometry_entries":"0","pose_entries":"0","wave_entries":"0"}]
         starts = [fields(l) for l in lines if l.startswith("SESSION_BEGIN ")]
         timed_ends = [fields(l) for l in lines if l.startswith("SESSION_TIMED_END ")]
         ends = [fields(l) for l in lines if l.startswith("SESSION_END ")]
         parity = [fields(l) for l in lines if l.startswith("SESSION_PARITY ")]
-        if (len(starts)!=1 or len(timed_ends)!=1 or len(ends)!=1 or
+        if (len(prepare_starts)!=1 or len(prepare_ends)!=1 or len(starts)!=1 or len(timed_ends)!=1 or len(ends)!=1 or
+                prepare_ends[0].get("status")!="pass" or prepare_starts[0].get("mode")!=mode or
+                prepare_ends[0].get("mode")!=mode or (preparation_contract and starts[0].get("preparation_mode")!=mode) or
                 starts[0].get("clock")!="wall" or starts[0].get("unit_warmup")!="0" or
                 starts[0].get("native_presented")!="0" or starts[0].get("dense")!="1" or
                 starts[0].get("units_per_zone")!=str(args.get("idle_units")) or
@@ -78,6 +113,12 @@ def inspect(directory):
                 not parity or any(r.get("status")!="pass" for r in parity) or
                 ends[0].get("verified")!=str(len(parity)) or ends[0].get("snapshots")!=str(len(parity))):
             raise ValueError("Missing completed busy session and independent snapshots")
+        if ((mode=="baseline" and int(prepare_ends[0]["requests"])!=0) or
+                (mode=="oracle" and (not 0<int(prepare_ends[0]["requests"])<=200 or
+                 int(prepare_ends[0].get("requested",0))!=200 or prepare_ends[0].get("memory_safe")!="1" or
+                 sum(int(prepare_ends[0][k]) for k in ("cleared_viewport","cleared_regions","cleared_blocks",
+                                                        "cleared_backdrops","cleared_publication"))<=0))):
+            raise ValueError("Busy-session preparation mode was not honored")
         count=int(ends[0]["frames"])
         if timed_ends[0].get("frames")!=str(count):
             raise ValueError("Busy session frame counts disagree")
@@ -124,6 +165,36 @@ def inspect(directory):
         raise ValueError("Incomplete or failed measured sweep")
     if scenario != "zoom" and [int(r["step"]) for r in rows] != list(range(count)):
         raise ValueError("Reordered or duplicated samples")
+    if scenario == "replay":
+        expected_samples=int(args.get("replay_samples_per_phase",25));phase_counts=[0]*8
+        events=[];previous=-1;zooms=set()
+        for index,row in enumerate(rows):
+            logical=int(row["logical_us"]);phase=int(row["phase"]);event=int(row["event"])
+            if (int(row["step"])!=index or logical<=previous or phase not in range(8) or
+                    int(row["tile_width"]) not in (128,160,192) or
+                    not 0<int(row["units"])<=int(args["idle_units"]) or int(row["fallback"])!=0 or
+                    int(row["recoveries"])!=0 or not row.get("request_hash")):
+                raise ValueError("Deterministic replay order, semantics or completion is invalid")
+            previous=logical;phase_counts[phase]+=1;zooms.add(int(row["tile_width"]))
+            if event>=0:events.append((event,phase,int(row["tile_width"]),logical))
+        expected_events=[(0,2,160,20000000),(1,2,192,22000000),(2,2,160,24000000),
+                         (3,2,128,26000000),(4,3,128,28000000),(5,5,128,40000000),
+                         (6,7,128,50000000)]
+        if phase_counts!=[expected_samples]*8 or events!=expected_events or zooms!={128,160,192}:
+            raise ValueError("Deterministic replay phase, event or zoom coverage is incomplete")
+        if (int(timed_ends[0]["frames"])!=count or int(timed_ends[0]["phase_mask"])!=255 or
+                int(timed_ends[0]["event_mask"])!=127 or int(timed_ends[0]["zoom_mask"])!=7 or
+                int(timed_ends[0]["recoveries"])!=0):
+            raise ValueError("Deterministic replay summary disagrees with frames")
+        if mode=="baseline" and (int(prepare_ends[0]["requests"])!=0 or
+                                  int(prepare_ends[0]["unit_requests"])!=0):
+            raise ValueError("Baseline replay was warmed before timing")
+        if mode=="oracle" and (not 0<int(prepare_ends[0]["requests"])<=count or
+                int(prepare_ends[0].get("requested",0))!=count or prepare_ends[0].get("memory_safe")!="1" or
+                sum(int(prepare_ends[0][k]) for k in ("cleared_viewport","cleared_regions","cleared_blocks",
+                                                       "cleared_backdrops","cleared_publication"))<=0 or
+                int(rows[0]["raster_cached_pixels"])!=0):
+            raise ValueError("Oracle did not prepare all requests or clear completed map images")
     if scenario == "session":
         slot_us=int(starts[0]["input_slot_us"]);duration=int(starts[0]["duration_us"])
         previous_slot=-1;previous_done=0;phase_mask=zoom_mask=0;skipped=0
@@ -185,10 +256,10 @@ def inspect(directory):
     measured = rows[1:] if scenario == "zoom" else rows
     report = {"endpoint": "standalone animation completed render; no native presentation" if scenario in ("animation","idle") else "standalone capture plus completed render; no native presentation",
               "scenario": scenario, "viewport": [args["width"], args["height"]],
-              "waves": args["waves"], "clock": f"unpaced stationary 15 Hz authored pose samples; {args.get('idle_warmup',10)} warmup renders" if scenario == "idle" else "six changing animation clocks" if scenario == "animation" else "fixed replay clock; changing animation is a separate witness",
+              "waves": args["waves"], "clock": f"unpaced stationary 15 Hz authored pose samples; {args.get('idle_warmup',10)} warmup renders" if scenario == "idle" else "six changing animation clocks" if scenario == "animation" else "fixed logical-time busy-session replay" if scenario == "replay" else "fixed replay clock; changing animation is a separate witness",
               "binaries": receipt["binaries"], "images": images,
               "image_receipt_verified": "images" in completion,
-              "camera_requests": [{k: r[k] for k in ("cycle", "step", "x", "y", "pixel_y", "width", "tile_width", "ticks", "dispatch_us", "phase") if k in r} for r in rows],
+              "camera_requests": [{k: r[k] for k in ("cycle", "step", "x", "y", "pixel_y", "width", "tile_width", "ticks", "logical_us", "event", "request_hash", "dispatch_us", "phase") if k in r} for r in rows],
               "timing": {k: distribution([float(r[k]) for r in measured])
                          for k in ("ms", "capture_ms", "geometry_ms", "draw_ms", "readback_ms", "map_ms", "copy_ms", "units_ms")
                          if all(k in r for r in measured)},
@@ -197,6 +268,32 @@ def inspect(directory):
               "upload_bytes": sum(int(r["upload_bytes"]) for r in measured) if all("upload_bytes" in r for r in measured) else None,
               "native_first_response_ms": None, "native_presented_frames": None,
               "map_prepared_before_sweep": False if scenario == "distant" else None}
+    if scenario == "replay":
+        retained_fields=("retained_geometry","retained_natural","retained_ground","retained_waves",
+                         "retained_pose","retained_payload","retained_shadow","retained_other")
+        cleared_fields=("cleared_viewport","cleared_regions","cleared_blocks","cleared_backdrops","cleared_publication")
+        report["endpoint"]="standalone deterministic capture, map rendering and unit/GDI completion; no native presentation"
+        report["preparation"]={"mode":mode,"duration_ms":float(prepare_ends[0]["ms"]),
+            "requests_examined":int(prepare_ends[0]["requests"]),
+            "requests_requested":int(prepare_ends[0].get("requested",prepare_ends[0]["requests"])),
+            "capacity_limited":prepare_ends[0].get("capacity_limited","0")=="1",
+            "unit_requests":int(prepare_ends[0]["unit_requests"]),
+            "unique_views":int(prepare_ends[0]["unique_views"]),
+            "unique_poses":int(prepare_ends[0]["unique_poses"]),
+            "geometry_admissions":int(prepare_ends[0]["geometry_admissions"]),
+            "geometry_evictions":int(prepare_ends[0]["geometry_evictions"]),
+            "capacity_geometry_evictions":int(prepare_ends[0].get("capacity_geometry_evictions",0)),
+            "capacity_pose_evictions":int(prepare_ends[0].get("capacity_pose_evictions",0)),
+            "geometry_upload_bytes":int(prepare_ends[0]["upload_bytes"]),
+            "cleared_bytes":{k:int(prepare_ends[0][k]) for k in cleared_fields},
+            "retained_bytes":{k:int(prepare_ends[0][k]) for k in retained_fields},
+            "retained_entries":{k:int(prepare_ends[0][k]) for k in ("geometry_entries","pose_entries","wave_entries")}}
+        report["replay"]={"samples_per_phase":expected_samples,"phase_counts":phase_counts,
+            "events":events,"observed_zooms":sorted(zooms),"representative_parity_count":len(parity),
+            "structural_builds":int(timed_ends[0]["built"]),
+            "structural_evictions":int(timed_ends[0]["evicted"]),
+            "structural_upload_bytes":int(timed_ends[0]["upload_bytes"]),
+            "structural_preparation_complete":timed_ends[0]["structural_complete"]=="1"}
     if scenario == "session":
         report["clock"]="60-second wall-clock input script; no unit warm-up; post-session snapshot checks excluded"
         report["endpoint"]="standalone capture, map rendering and unit/GDI completion; no native presentation"
@@ -209,6 +306,17 @@ def inspect(directory):
                 "late_camera_completions":sum(r["superseded"]=="1" for r in selected),
                 "input_slots_skipped":sum(int(r["skipped_slots"]) for r in selected)}
         scheduled=math.ceil(duration/slot_us)
+        report["preparation"]={"mode":mode,"duration_ms":float(prepare_ends[0]["ms"]),
+            "requests_examined":int(prepare_ends[0]["requests"]),"unit_requests":int(prepare_ends[0]["unit_requests"]),
+            "requests_requested":int(prepare_ends[0].get("requested",prepare_ends[0]["requests"])),
+            "capacity_limited":prepare_ends[0].get("capacity_limited","0")=="1",
+            "geometry_admissions":int(prepare_ends[0]["builds"]),
+            "capacity_geometry_evictions":int(prepare_ends[0].get("capacity_geometry_evictions",0)),
+            "capacity_pose_evictions":int(prepare_ends[0].get("capacity_pose_evictions",0)),
+            "geometry_upload_bytes":int(prepare_ends[0]["upload_bytes"]),
+            "cleared_bytes":{k:int(prepare_ends[0][k]) for k in ("cleared_viewport","cleared_regions","cleared_blocks","cleared_backdrops","cleared_publication")},
+            "retained_bytes":{k:int(prepare_ends[0][k]) for k in ("retained_geometry","retained_natural","retained_ground","retained_waves","retained_pose","retained_payload","retained_shadow","retained_other")},
+            "retained_entries":{k:int(prepare_ends[0][k]) for k in ("geometry_entries","pose_entries","wave_entries")}}
         report["session"]={"workloads":workloads,"initial_map_render_ms":float(starts[0]["initial_render_ms"]),
             "wall_ms":float(timed_ends[0]["wall_ms"]),"scheduled_input_slots":scheduled,
             "undispatched_input_slots":scheduled-sum(int(r["dispatch_us"])<duration for r in rows),
@@ -267,7 +375,11 @@ def inspect(directory):
         # Initial map render is followed by the timed synchronous calls, then
         # independent snapshot replays. Never use the last N trace records:
         # those may be cold verification work, or an incomplete file prefix.
-        views=[fields(l) for l in trace if "stage=usage-view " in l][1:count+1]
+        session_trace=trace
+        if mode=="oracle":
+            trims=[i for i,l in enumerate(trace) if "stage=oracle-trim " in l]
+            session_trace=trace[trims[-1]+1:] if trims else []
+        views=[fields(l) for l in session_trace if "stage=usage-view " in l][(0 if mode=="oracle" else 1):count+(0 if mode=="oracle" else 1)]
         aligned=[]
         for expected,observed in zip(rows,views):
             if observed.get("clock")!=str(1000000+int(expected["dispatch_us"])):
@@ -283,6 +395,66 @@ def inspect(directory):
                     k:max(int(v.get(k,0)) for v in selected) for k in ("visible","cities","roads","railroads","farms","mines","camps","resources")}
         report["unit_action_draws"]={k:sum(int(r[k]) for r in rows) for k in ("moving","attacking","fortifying","idling")}
         return receipt, report
+    if scenario=="replay":
+        reset_indices=[i for i,l in enumerate(trace) if "stage=reset " in l]
+        trim_indices=[i for i,l in enumerate(trace) if "stage=oracle-trim " in l]
+        timed_trace=[];preparation_trace=[]
+        if mode=="oracle" and trim_indices:
+            trim=trim_indices[-1]
+            before=max((i for i in reset_indices if i<trim),default=-1)
+            after=min((i for i in reset_indices if i>trim),default=len(trace))
+            preparation_trace=trace[before+1:trim]
+            timed_trace=trace[trim+1:after]
+        elif mode=="baseline":
+            segments=[]
+            boundaries=[-1,*reset_indices,len(trace)]
+            for first,last in zip(boundaries,boundaries[1:]):
+                segment=trace[first+1:last]
+                views=sum("stage=usage-view " in line for line in segment)
+                segments.append((views,segment))
+            timed_trace=max(segments,key=lambda item:item[0])[1] if segments else []
+        usage=[fields(l) for l in timed_trace if "stage=usage-view " in l]
+        unit_rows=[fields(l) for l in timed_trace if "stage=unit-body " in l]
+        expected_units=sum(int(r["units"]) for r in rows)
+        pose_hits=sum(r.get("cache_hit")=="1" for r in unit_rows)
+        pose_misses=sum(r.get("cache_hit")=="0" for r in unit_rows)
+        prepare_units=[fields(l) for l in preparation_trace if "stage=unit-body " in l]
+        prepare_misses=sum(r.get("cache_hit")=="0" for r in prepare_units)
+        retained_poses=report["preparation"]["retained_entries"]["pose_entries"]
+        inferred_evictions=max(0,prepare_misses-retained_poses)
+        report["replay_trace_coverage"]={"timed_frames":count,"usage_views":len(usage),
+            "expected_unit_requests":expected_units,"unit_records":len(unit_rows),
+            "complete":len(usage)==count and len(unit_rows)==expected_units,
+            "post_replay_cold_checks_excluded":True}
+        report["unit_pose_cache"]={"hits":pose_hits,"misses":pose_misses,
+            "miss_rate":pose_misses/max(1,pose_hits+pose_misses),"preparation_admissions":prepare_misses,
+            "inferred_minimum_preparation_evictions":inferred_evictions,
+            "maximum_sampled_pixel_capacity_bytes":max((int(r["cache_bytes"]) for r in unit_rows),default=0)}
+        animation_phases=[fields(l) for l in timed_trace if "stage=animation-phases " in l]
+        if len(animation_phases)==count:
+            report["animation_phases"]={k:distribution([float(r[k]) for r in animation_phases])
+                for k in ("pose_prepare_ms","backdrop_submit_ms","animated_submit_ms",
+                          "readback_submit_ms","readback_wait_ms","cpu_copy_ms")}
+        animation=[fields(l) for l in timed_trace if "stage=animation-frame " in l]
+        if len(animation)==count:
+            report["animation"]={"timing":distribution([float(r["ms"]) for r in animation]),
+                "totals":{k:sum(int(r[k]) for r in animation) for k in
+                    ("wave_upload_bytes","wave_cells_built","wave_cells_reused","backdrop_hits","backdrop_misses")}}
+        phases=[fields(l) for l in timed_trace if "stage=navigation-phases " in l]
+        if len(phases)==count:
+            report["cpu_phases"]={k:distribution([float(r[k]) for r in phases])
+                for k in phases[0] if k.endswith("_ms") and all(k in r for r in phases)}
+        wave_misses=report.get("animation",{}).get("totals",{}).get("wave_cells_built",0)
+        missing=[]
+        if report["preparation"]["requests_examined"]!=report["preparation"]["requests_requested"]:
+            missing.append("request_coverage")
+        if not report["replay"]["structural_preparation_complete"]:missing.append("structural_geometry")
+        if pose_misses:missing.append("unit_poses")
+        if wave_misses:missing.append("waves")
+        if not report["replay_trace_coverage"]["complete"]:missing.append("diagnostic_trace_coverage")
+        report["preparation"]["incomplete_owners"]=missing
+        report["preparation"]["coverage"]="perfect" if mode=="oracle" and not missing else "partial" if mode=="oracle" else "baseline"
+        return receipt,report
     measured_sequences=None
     if scenario=="idle":
         # The bounded trace may end early. Match actual measured clocks instead
@@ -335,7 +507,7 @@ def compare(reference, candidate):
     after, new = inspect(candidate)
     if before["binaries"] != after["binaries"] or before["inputs"] != after["inputs"]:
         raise ValueError("Paired evidence requires identical binaries and runtime inputs")
-    controls = {"dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view",
+    controls = {"dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view", "preparation_mode",
                 "backdrop_control", "wave_control", "composition_casters_control", "backdrop_dependencies", "unit_pose_memory", "unit_pose_memory_mib", "composition_receiver_index", "mountain_samples", "material_samples", "production_defaults"}
     ignored = controls | {"out", "binaries"}
     # Receipts made before these opt-in witnesses existed represent their
@@ -353,13 +525,40 @@ def compare(reference, candidate):
                     "C3X_RENDERER_MATERIAL_SAMPLES",
                     "C3X_RENDERER_UNIT_POSE_MEMORY",
                     "C3X_RENDERER_COMPOSITION_CASTERS_CONTROL", "C3X_RENDERER_THREE_ZOOM_MEMORY", "C3X_RENDERER_TRACE_FILE",
-                    "C3X_RENDERER_PREVIEW_CAMERA_QUEUE", "C3X_RENDERER_PREVIEW_CAMERA_VIEW"}
+                    "C3X_RENDERER_PREVIEW_CAMERA_QUEUE", "C3X_RENDERER_PREVIEW_CAMERA_VIEW",
+                    "C3X_RENDERER_PREVIEW_PREPARATION_MODE"}
     env_defaults={"C3X_RENDERER_PREVIEW_IDLE_STEPS":"","C3X_RENDERER_PREVIEW_IDLE_UNITS":"0","C3X_RENDERER_PREVIEW_IDLE_WARMUP":"10","C3X_RENDERER_PREVIEW_DENSE_SCENE":"","C3X_RENDERER_PREVIEW_UNIT_ACTIONS":"idle"}
     if ({k: v for k, v in (env_defaults|before.get("environment", {})).items() if k not in env_controls} !=
             {k: v for k, v in (env_defaults|after.get("environment", {})).items() if k not in env_controls} or
             old["camera_requests"] != new["camera_requests"]):
         raise ValueError("Paired environment or camera requests differ")
-    return {"reference": old, "candidate": new, "all_images_exact": old["images"] == new["images"]}
+    exact=old["images"]==new["images"]
+    result={"reference":old,"candidate":new,"all_images_exact":exact}
+    if old["scenario"]=="replay":
+        baseline,oracle=(old,new) if old["preparation"]["mode"]=="baseline" else (new,old)
+        streams_identical=old["camera_requests"]==new["camera_requests"]
+        valid=(baseline["preparation"]["mode"]=="baseline" and oracle["preparation"]["mode"]=="oracle" and
+               streams_identical and exact and oracle["preparation"]["coverage"] in ("perfect","partial"))
+        baseline_p95=baseline["timing"]["ms"]["p95_ms"];oracle_p95=oracle["timing"]["ms"]["p95_ms"]
+        speedup=baseline_p95/oracle_p95 if oracle_p95 else math.inf
+        components={k:oracle["timing"][k]["p95_ms"] for k in ("geometry_ms","draw_ms","readback_ms","units_ms")
+                    if k in oracle["timing"]}
+        if valid and speedup>=2 and oracle_p95<=125:
+            next_experiment="causal preparation that survives camera cancellation"
+        elif (valid and oracle["replay"]["structural_preparation_complete"] and
+              components.get("draw_ms",0)>10 and components.get("draw_ms",0)==max(components.values(),default=0)):
+            next_experiment="world-space regional batching"
+        elif valid and (components.get("readback_ms",0)>10 or
+                        components.get("readback_ms",0)==max(components.values(),default=-1)):
+            next_experiment="staging-ring and GDI-compatible-surface readback"
+        elif valid and (oracle["unit_pose_cache"]["miss_rate"]>.01 or components.get("units_ms",0)>10):
+            next_experiment="causal unit-pose preparation and capacity"
+        else:
+            next_experiment="do not build a broad preparation scheduler"
+        result["oracle_decision"]={"valid_comparison":valid,"streams_identical":streams_identical,
+            "p95_speedup":speedup,"oracle_p95_ms":oracle_p95,"oracle_component_p95_ms":components,
+            "next_experiment":next_experiment}
+    return result
 
 
 def main():

@@ -25,12 +25,15 @@ if(ok && busy_session) {
         if(placed!=idle_unit_count)ok=false;
     }
     auto unit_draw=reinterpret_cast<c3x_renderer_unit_draw_expanded_fn>(GetProcAddress(module,"c3x_renderer_unit_draw_expanded"));
+    auto session_trim=reinterpret_cast<c3x_renderer_benchmark_trim_to_prepared_v1_fn>(
+        GetProcAddress(module,"c3x_renderer_benchmark_trim_to_prepared_v1"));
     HDC canvas=CreateCompatibleDC(nullptr);HBITMAP bitmap=nullptr;HGDIOBJ old_bitmap=nullptr;void* composed_pixels=nullptr;
     BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=target_width;
     info.bmiHeader.biHeight=-target_height;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
     if(canvas)bitmap=CreateDIBSection(canvas,&info,DIB_RGB_COLORS,&composed_pixels,nullptr,0);
     if(bitmap)old_bitmap=SelectObject(canvas,bitmap);
-    if(!canvas || !bitmap || !composed_pixels || !unit_draw || !idle_unit_count)ok=false;
+    if(!canvas || !bitmap || !composed_pixels || !unit_draw || !idle_unit_count ||
+       (oracle_preparation && !session_trim))ok=false;
     auto check_objects=[&](){
         for(unsigned i=0;i<frame.tile_count;++i) {
             auto const& tile=frame.tiles[i];if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
@@ -74,7 +77,11 @@ if(ok && busy_session) {
         return requests;
     };
     auto draw_bodies=[&](std::vector<c3x_renderer_unit_v1> const& requests){
-        for(auto const& unit:requests){int bounds[4]={};if(unit_draw(&unit,canvas,canvas,bounds)!=C3X_RENDERER_RESULT_OK)return false;}
+        for(auto const& unit:requests){int bounds[4]={};
+            if(unit_draw(&unit,canvas,canvas,bounds)!=C3X_RENDERER_RESULT_OK || bounds[2]<=bounds[0] ||
+               bounds[3]<=bounds[1] || bounds[2]<=0 || bounds[3]<=0 ||
+               bounds[0]>=target_width || bounds[1]>=target_height)return false;
+        }
         return GdiFlush()!=0;
     };
     struct Snapshot {c3x_renderer_frame_v1 frame;std::vector<c3x_renderer_tile_v1> tiles;
@@ -84,11 +91,77 @@ if(ok && busy_session) {
     unsigned snapshot_mask=0,phase_mask=0,zoom_mask=0,frames=0,late_cameras=0,discrete_events=0;
     long long previous_slot=-1,skipped_slots=0;
     double evidence_ms=0;
+    LARGE_INTEGER prepare_frequency={},prepare_started={},prepare_finished={};QueryPerformanceFrequency(&prepare_frequency);
+    c3x_renderer_benchmark_oracle_trim_v1 session_trim_result={C3X_RENDERER_BENCHMARK_ORACLE_VERSION,sizeof(session_trim_result)};
+    unsigned long long preparation_units=0,preparation_builds=0,preparation_upload_bytes=0;
+    unsigned long long session_cleared_viewport=0,session_cleared_regions=0,session_cleared_blocks=0,
+        session_cleared_backdrops=0,session_cleared_publication=0;
+    unsigned long long session_capacity_geometry_evictions=0,session_capacity_pose_evictions=0;
+    std::size_t session_prepare_examined=0;bool session_prepare_capacity_limited=false;
+    auto preparation_requests=c3x_renderer::fixed_busy_replay(plan,25);
+    QueryPerformanceCounter(&prepare_started);
+    std::printf("SESSION_PREPARE_BEGIN mode=%s requests=%zu samples_per_phase=25\n",
+        oracle_preparation?"oracle":"baseline",oracle_preparation?preparation_requests.size():0);
+    if(oracle_preparation)for(auto const& request:preparation_requests) {
+        center_x=request.view.x;center_y=request.view.y;tile_width=request.view.width;tile_height=tile_width/2;
+        tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+        frame.tile_width=tile_width;frame.tile_height=tile_height;
+        frame.presentation_time_ticks=frame.presentation_frequency+
+            request.logical_us*frame.presentation_frequency/1000000;
+        auto units=body_requests();int code=render_checked(&frame,&output);
+        ok=ok && code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 && check_objects();
+        if(ok)std::memcpy(composed_pixels,output.bgra_pixels,std::size_t(output.stride_bytes)*output.height);
+        if(ok)ok=draw_bodies(units);
+        preparation_units+=units.size();preparation_builds+=output.geometry_tiles_built;
+        preparation_upload_bytes+=output.geometry_upload_bytes;
+        ++session_prepare_examined;
+        if(ok && session_prepare_examined%25==0) {
+            c3x_renderer_benchmark_oracle_trim_v1 interim={C3X_RENDERER_BENCHMARK_ORACLE_VERSION,sizeof(interim)};
+            ok=session_trim(&interim)==C3X_RENDERER_RESULT_OK;
+            session_cleared_viewport+=interim.cleared_viewport_bytes;session_cleared_regions+=interim.cleared_region_bytes;
+            session_cleared_blocks+=interim.cleared_pixel_block_bytes;session_cleared_backdrops+=interim.cleared_backdrop_bytes;
+            session_cleared_publication+=interim.cleared_publication_bytes;session_trim_result=interim;
+            session_capacity_geometry_evictions+=interim.capacity_geometry_evictions;
+            session_capacity_pose_evictions+=interim.capacity_pose_evictions;
+            if(camera_memory_values().second<640ull*1024*1024){session_prepare_capacity_limited=true;break;}
+        }
+        if(!ok)break;
+    }
+    if(ok && oracle_preparation) {
+        c3x_renderer_benchmark_oracle_trim_v1 final_trim={C3X_RENDERER_BENCHMARK_ORACLE_VERSION,sizeof(final_trim)};
+        ok=session_trim(&final_trim)==C3X_RENDERER_RESULT_OK;
+        session_cleared_viewport+=final_trim.cleared_viewport_bytes;session_cleared_regions+=final_trim.cleared_region_bytes;
+        session_cleared_blocks+=final_trim.cleared_pixel_block_bytes;session_cleared_backdrops+=final_trim.cleared_backdrop_bytes;
+        session_cleared_publication+=final_trim.cleared_publication_bytes;session_trim_result=final_trim;
+        session_capacity_geometry_evictions+=final_trim.capacity_geometry_evictions;
+        session_capacity_pose_evictions+=final_trim.capacity_pose_evictions;
+    }
+    QueryPerformanceCounter(&prepare_finished);
+    auto session_prepared_memory=camera_memory_values();
+    bool session_memory_safe=!oracle_preparation || session_prepared_memory.second>=512ull*1024*1024;
+    ok=ok && session_memory_safe;
+    std::printf("SESSION_PREPARE_END status=%s mode=%s requests=%zu requested=%zu capacity_limited=%d memory_safe=%d unit_requests=%llu ms=%.3f builds=%llu capacity_geometry_evictions=%llu capacity_pose_evictions=%llu upload_bytes=%llu cleared_viewport=%llu cleared_regions=%llu cleared_blocks=%llu cleared_backdrops=%llu cleared_publication=%llu retained_geometry=%llu retained_natural=%llu retained_ground=%llu retained_waves=%llu retained_pose=%llu retained_payload=%llu retained_shadow=%llu retained_other=%llu geometry_entries=%u pose_entries=%u wave_entries=%u\n",
+        ok?"pass":"FAIL",oracle_preparation?"oracle":"baseline",oracle_preparation?session_prepare_examined:0,
+        preparation_requests.size(),int(session_prepare_capacity_limited),int(session_memory_safe),
+        preparation_units,double(prepare_finished.QuadPart-prepare_started.QuadPart)*1000/prepare_frequency.QuadPart,
+        preparation_builds,session_capacity_geometry_evictions,session_capacity_pose_evictions,
+        preparation_upload_bytes,session_cleared_viewport,
+        session_cleared_regions,session_cleared_blocks,session_cleared_backdrops,session_cleared_publication,
+        session_trim_result.retained_geometry_bytes,session_trim_result.retained_natural_bytes,
+        session_trim_result.retained_ground_bytes,session_trim_result.retained_wave_bytes,
+        session_trim_result.retained_unit_pose_bytes,session_trim_result.retained_unit_payload_bytes,
+        session_trim_result.retained_shadow_bytes,session_trim_result.retained_other_bytes,session_trim_result.retained_geometry_entries,
+        session_trim_result.retained_unit_pose_entries,session_trim_result.retained_wave_entries);
+    center_x=plan.home_x;center_y=plan.home_y;tile_width=128;tile_height=64;
+    tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+    frame.tile_width=tile_width;frame.tile_height=tile_height;
+    camera_memory();std::fflush(stdout);
     LARGE_INTEGER frequency={},session_started={},now={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&session_started);
     auto microseconds=[&](LARGE_INTEGER value){return (value.QuadPart-session_started.QuadPart)*1000000/frequency.QuadPart;};
     BusySessionView current=plan.at(0);
-    std::printf("SESSION_BEGIN duration_us=%lld input_slot_us=%lld clock=wall input_model=queued_discrete_v1 mode=synchronous_completed_render native_presented=0 unit_warmup=0 initial_render_ms=%.3f units_per_zone=%d world_units=%zu dense=%d snapshots_limit=%zu\n",
-        BusySessionPlan::duration_us,BusySessionPlan::slot_us,initial_render_ms,idle_unit_count,actors.size(),int(dense_scene),snapshot_limit);
+    std::printf("SESSION_BEGIN duration_us=%lld input_slot_us=%lld clock=wall input_model=queued_discrete_v1 mode=synchronous_completed_render preparation_mode=%s native_presented=0 unit_warmup=0 initial_render_ms=%.3f units_per_zone=%d world_units=%zu dense=%d snapshots_limit=%zu\n",
+        BusySessionPlan::duration_us,BusySessionPlan::slot_us,oracle_preparation?"oracle":"baseline",
+        initial_render_ms,idle_unit_count,actors.size(),int(dense_scene),snapshot_limit);
     while(ok) {
         QueryPerformanceCounter(&now);long long elapsed=microseconds(now);
         if(inputs.finished(elapsed))break;

@@ -38,6 +38,20 @@ int main(){
  }
  assert(inputs.finished(65000000));
  assert(inputs.select(66000000).event==-1);
+
+ auto replay=fixed_busy_replay(plan,25);
+ assert(replay.size()==200);
+ std::set<int> replay_phases,replay_widths,replay_events;
+ int counts[8]={};long long previous=-1;
+ for(auto const& request:replay){
+  assert(request.logical_us>previous);previous=request.logical_us;
+  replay_phases.insert(request.view.phase);replay_widths.insert(request.view.width);
+  if(request.event>=0)replay_events.insert(request.event);
+  ++counts[request.view.phase];
+ }
+ assert(replay_phases.size()==8 && replay_widths==std::set<int>({128,160,192}));
+ assert(replay_events.size()==7);
+ for(auto count:counts)assert(count==25);
 }
 ''')
 

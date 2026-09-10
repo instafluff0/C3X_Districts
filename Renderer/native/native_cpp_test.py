@@ -12,7 +12,9 @@ from Renderer.lab.platform import ROOT, native_command_result, windows_root
 def run_cpp(program, *, sources=(), timeout=30):
     build = ROOT / "Renderer/native/build"
     build.mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=build, ignore_cleanup_errors=True) as directory:
+    # Python 3.9 is still the system interpreter on the Mac fast path;
+    # ignore_cleanup_errors was only added in 3.10.
+    with tempfile.TemporaryDirectory(dir=build) as directory:
         path = Path(directory)
         cpp = path / "contract.cpp"
         cpp.write_text(program)
@@ -30,8 +32,14 @@ def run_cpp(program, *, sources=(), timeout=30):
             batch.write_text(r'''@echo off
 setlocal
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-for /f "usebackq tokens=*" %%I in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "C3X_TEST_VS=%%I"
+set "C3X_TEST_VS_RECORD=%TEMP%\c3x-renderer-test-vs-path.txt"
+"%VSWHERE%" -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath >"%C3X_TEST_VS_RECORD%"
+set /p C3X_TEST_VS=<"%C3X_TEST_VS_RECORD%"
+if not defined C3X_TEST_VS "%VSWHERE%" -all -products * -property installationPath >"%C3X_TEST_VS_RECORD%"
+if not defined C3X_TEST_VS set /p C3X_TEST_VS=<"%C3X_TEST_VS_RECORD%"
+del "%C3X_TEST_VS_RECORD%" >nul 2>nul
 if not defined C3X_TEST_VS exit /b 2
+if not exist "%C3X_TEST_VS%\VC\Auxiliary\Build\vcvars32.bat" exit /b 2
 call "%C3X_TEST_VS%\VC\Auxiliary\Build\vcvars32.bat" >nul
 if errorlevel 1 exit /b 2
 pushd "%~dp0"

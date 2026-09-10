@@ -4,16 +4,26 @@ rem Isolated build/output: never overwrites the game DLL or another Lab candidat
 if /i not "%~1"=="baseline" if /i not "%~1"=="candidate" exit /b 2
 pushd "%~dp0"
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-for /f "usebackq tokens=*" %%I in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "C3X_VS_PATH=%%I"
+set "C3X_VS_RECORD=%TEMP%\c3x-renderer-vs-path.txt"
+"%VSWHERE%" -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath >"%C3X_VS_RECORD%"
+set /p C3X_VS_PATH=<"%C3X_VS_RECORD%"
+rem Preview Visual Studio channels can have the C++ tools before vswhere's
+rem workload catalogue recognizes their component id. Verify vcvars directly.
+if not defined C3X_VS_PATH "%VSWHERE%" -all -products * -property installationPath >"%C3X_VS_RECORD%"
+if not defined C3X_VS_PATH set /p C3X_VS_PATH=<"%C3X_VS_RECORD%"
+del "%C3X_VS_RECORD%" >nul 2>nul
+if "%C3X_RENDERER_BUILD_DEBUG%"=="1" echo C3X VS path: %C3X_VS_PATH%
 if not defined C3X_VS_PATH exit /b 1
+if not exist "%C3X_VS_PATH%\VC\Auxiliary\Build\vcvars32.bat" exit /b 1
 call "%C3X_VS_PATH%\VC\Auxiliary\Build\vcvars32.bat" >nul
+if "%C3X_RENDERER_BUILD_DEBUG%"=="1" echo vcvars result: %errorlevel%
 if errorlevel 1 exit /b 1
 if not defined C3X_ZOOM_OUT set "C3X_ZOOM_OUT=build\zoom-%~1"
 if not exist "%C3X_ZOOM_OUT%" mkdir "%C3X_ZOOM_OUT%"
-set "C3X_ZOOM_CACHE_FLAGS="
+set "C3X_ZOOM_CACHE_FLAGS=/DC3X_RENDERER_BENCHMARK_ORACLE"
 if not defined C3X_ZOOM_GPU_CACHE_MIB set "C3X_ZOOM_GPU_CACHE_MIB=384"
 if not "%C3X_ZOOM_GPU_CACHE_MIB%"=="384" if not "%C3X_ZOOM_GPU_CACHE_MIB%"=="768" exit /b 2
-if "%C3X_ZOOM_LARGE_CACHE%"=="1" set "C3X_ZOOM_CACHE_FLAGS=/DC3X_RENDERER_BENCHMARK_LARGE_CACHE /DC3X_RENDERER_BENCHMARK_GPU_CACHE_MIB=%C3X_ZOOM_GPU_CACHE_MIB%"
+if "%C3X_ZOOM_LARGE_CACHE%"=="1" set "C3X_ZOOM_CACHE_FLAGS=%C3X_ZOOM_CACHE_FLAGS% /DC3X_RENDERER_BENCHMARK_LARGE_CACHE /DC3X_RENDERER_BENCHMARK_GPU_CACHE_MIB=%C3X_ZOOM_GPU_CACHE_MIB%"
 if /i not "%~2"=="reuse" if /i not "%~2"=="preview-only" (
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /LD %C3X_ZOOM_CACHE_FLAGS% c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:%C3X_ZOOM_OUT%\ /Fe:%C3X_ZOOM_OUT%\C3XRenderer.dll /link /DEF:c3x_renderer.def /MAP:%C3X_ZOOM_OUT%\C3XRenderer.map /IMPLIB:%C3X_ZOOM_OUT%\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
   if errorlevel 1 exit /b 1

@@ -29,9 +29,26 @@ public:
     char const* failure_reason="none";
     std::size_t cache_bytes=0;
     std::size_t pose_cache_budget=8u*1024u*1024u,pose_cache_entries=128;
+    std::size_t cached_pose_entries() const {return cache.size();}
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+    std::size_t benchmark_pose_cache_budget=SIZE_MAX;
+    unsigned benchmark_limit_pose_cache() {
+        benchmark_pose_cache_budget=128u*1024u*1024u;
+        unsigned evicted=0;
+        while(!cache.empty() && cache_bytes>benchmark_pose_cache_budget) {
+            auto old=std::min_element(cache.begin(),cache.end(),[](Cached const& a,Cached const& b){return a.used<b.used;});
+            cache_bytes-=old->pixels.capacity()*4;cache.erase(old);++evicted;
+        }
+        return evicted;
+    }
+    void benchmark_reset_pose_limit(){benchmark_pose_cache_budget=SIZE_MAX;}
+#endif
 
     void configure_pose_cache(bool larger,bool dense=false) {
         pose_cache_budget=(larger?(dense?512u:256u):8u)*1024u*1024u;pose_cache_entries=larger?4096u:128u;
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        pose_cache_budget=(std::min)(pose_cache_budget,benchmark_pose_cache_budget);
+#endif
         while(!cache.empty() && (cache_bytes>pose_cache_budget || cache.size()>pose_cache_entries)) {
             auto old=std::min_element(cache.begin(),cache.end(),[](Cached const& a,Cached const& b){return a.used<b.used;});
             cache_bytes-=old->pixels.capacity()*4;cache.erase(old);

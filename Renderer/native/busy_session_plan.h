@@ -1,4 +1,6 @@
 #pragma once
+#include <algorithm>
+#include <vector>
 
 // Standalone scripted input only. No renderer-owned camera or game simulation.
 namespace c3x_renderer {
@@ -52,4 +54,35 @@ struct BusySessionInputs {
     }
     bool finished(long long now_us) const {return now_us>=BusySessionPlan::duration_us && next_event==7;}
 };
+
+struct BusyReplayRequest {
+    BusySessionView view;
+    long long logical_us=0;
+    int event=-1;
+};
+
+inline std::vector<BusyReplayRequest> fixed_busy_replay(BusySessionPlan const& plan,unsigned samples_per_phase=25) {
+    if(samples_per_phase<1)return {};
+    constexpr long long bounds[]={0,10000000,20000000,28000000,34000000,40000000,44000000,50000000,60000000};
+    constexpr long long events[]={20000000,22000000,24000000,26000000,28000000,40000000,50000000};
+    std::vector<BusyReplayRequest> result;
+    result.reserve(samples_per_phase*8);
+    for(int phase=0;phase<8;++phase) {
+        std::vector<long long> times;
+        for(auto event:events)if(plan.at(event).phase==phase)times.push_back(event);
+        for(unsigned i=0;times.size()<samples_per_phase;++i) {
+            auto value=bounds[phase]+(2*static_cast<long long>(i)+1)*(bounds[phase+1]-bounds[phase])/(2*samples_per_phase);
+            value=(std::min)(value,bounds[phase+1]-1);
+            if(std::find(times.begin(),times.end(),value)==times.end())times.push_back(value);
+        }
+        std::sort(times.begin(),times.end());
+        times.resize(samples_per_phase);
+        for(auto logical:times) {
+            int event=-1;
+            for(unsigned i=0;i<7;++i)if(events[i]==logical)event=int(i);
+            result.push_back({plan.at(logical),logical,event});
+        }
+    }
+    return result;
+}
 }

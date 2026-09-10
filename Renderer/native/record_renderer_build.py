@@ -51,7 +51,7 @@ def main():
     record = {"sources": before, "sources_unchanged": before==after,
               "tier": args.tier, "environment": flags, "command": "BENCHMARK_ZOOM.bat candidate " + mode,
               "preview_only": args.preview_only, "copied_staged_dll_sha256": staged_hash,
-              "flags": "MSVC x86 /std:c++17 /EHsc /O2 /W4 /WX; preview /LARGEADDRESSAWARE",
+              "flags": "MSVC x86 /std:c++17 /EHsc /O2 /W4 /WX /DC3X_RENDERER_BENCHMARK_ORACLE; preview /LARGEADDRESSAWARE",
               "host_os": platform.platform(), "returncode": result["returncode"],
               "output_tail": result.get("output_tail", ""),
               "binaries": {name:digest(out/name) for name in ("C3XRenderer.dll","biq_preview.exe") if (out/name).is_file()}}

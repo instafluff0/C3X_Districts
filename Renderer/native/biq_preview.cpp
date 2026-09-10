@@ -7,10 +7,13 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <set>
+#include <utility>
 #include <vector>
 #include <string>
 
 #include "c3x_renderer_api.h"
+#include "benchmark_oracle.h"
 #include "busy_session_plan.h"
 
 // Mirror the critical production boundary on every render, including warm hits.
@@ -636,14 +639,20 @@ int main(int argc, char ** argv) {
     int idle_warmup=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_IDLE_WARMUP",idle_option,sizeof(idle_option))?std::clamp(std::atoi(idle_option),10,150):10;
     char session_option[8]={};
     bool busy_session=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_BUSY_SESSION",session_option,sizeof(session_option)) && std::strcmp(session_option,"1")==0;
+    char replay_option[8]={};
+    bool retained_replay=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_RETAINED_REPLAY",replay_option,sizeof(replay_option)) && std::strcmp(replay_option,"1")==0;
+    char preparation_option[16]={};GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_PREPARATION_MODE",preparation_option,sizeof(preparation_option));
+    bool oracle_preparation=std::strcmp(preparation_option,"oracle")==0;
+    int replay_samples=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_REPLAY_SAMPLES",replay_option,sizeof(replay_option))?
+        std::clamp(std::atoi(replay_option),1,100):25;
     char cycle_option[16]={};
     int camera_cycles=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CYCLES",cycle_option,sizeof(cycle_option))?
         std::clamp(std::atoi(cycle_option),2,40):2;
     // Sample outside the timed interaction. Free VA is not free physical RAM;
     // the largest available region also exposes fragmentation in this x86 host.
-    auto camera_memory = [&]() {
+    auto camera_memory_values = [&]() {
         MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);
-        if(!GlobalMemoryStatusEx(&memory))return;
+        if(!GlobalMemoryStatusEx(&memory))return std::pair<unsigned long long,SIZE_T>{0,0};
         std::uintptr_t address=0;SIZE_T largest=0;MEMORY_BASIC_INFORMATION region={};
         while(VirtualQuery(reinterpret_cast<void const*>(address),&region,sizeof(region))){
             if(region.State==MEM_FREE)largest=(std::max)(largest,region.RegionSize);
@@ -651,9 +660,15 @@ int main(int argc, char ** argv) {
             if(next<=address)break;
             address=next;
         }
-        std::printf("CAMERA memory available_virtual=%llu largest_free_region=%zu total_virtual=%llu\n",
-            memory.ullAvailVirtual,largest,memory.ullTotalVirtual);
+        return std::pair<unsigned long long,SIZE_T>{memory.ullAvailVirtual,largest};
     };
+    auto camera_memory = [&]() {
+        auto values=camera_memory_values();
+        MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);GlobalMemoryStatusEx(&memory);
+        std::printf("CAMERA memory available_virtual=%llu largest_free_region=%zu total_virtual=%llu\n",
+            values.first,values.second,memory.ullTotalVirtual);
+    };
+    #include "retained_replay_preview.h"
     #include "busy_session_preview.h"
     if(ok && zoom_benchmark) {
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);

@@ -34,7 +34,16 @@ def storage_preflight(root, width, height, samples):
 
 def digest(path):
     with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        result=hashlib.sha256()
+        for chunk in iter(lambda:stream.read(1024*1024),b""):
+            result.update(chunk)
+        return result.hexdigest()
+
+
+def preparation_mode(scenario, requested):
+    if requested is not None and scenario not in ("replay", "session"):
+        raise ValueError("--preparation-mode is valid only for replay or session scenarios")
+    return requested or "baseline"
 
 
 def inputs():
@@ -62,7 +71,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binaries", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "idle", "distant", "session"), default="navigation")
+    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "idle", "distant", "replay", "session"), default="navigation")
+    parser.add_argument("--preparation-mode", choices=("baseline", "oracle"), default=None,
+                        help="Cold baseline or complete untimed retained preparation for replay/session")
+    parser.add_argument("--replay-samples-per-phase", type=int, choices=range(1,101), default=25)
     parser.add_argument("--idle-steps", type=int, choices=range(1,1001), default=100)
     parser.add_argument("--idle-warmup", type=int, choices=range(10,151), default=10)
     parser.add_argument("--unit-pose-memory", action="store_true", help="Opt-in 256 MiB / 4096-entry exact unit-pose retention")
@@ -112,15 +124,21 @@ def main():
     parser.add_argument("--wave-control", action="store_true", help="Rebuild coast-cell wave buffers for independent comparisons")
     parser.add_argument("--composition-casters-control", action="store_true", help="Rebuild caster preparation independently for each animation region")
     args = parser.parse_args()
-    if args.idle_units and args.scenario not in ("idle", "session"):
-        parser.error("--idle-units requires --scenario idle or session")
-    if args.unit_actions=="mixed" and (args.scenario not in ("idle","session") or not args.idle_units):
-        parser.error("--unit-actions mixed requires --scenario idle and --idle-units")
-    if args.scenario=="session" and (not args.idle_units or not args.dense_scene or args.waves!="1" or args.reflection_ablation or args.camera_view or args.tile_width!=128 or args.unit_actions!="mixed"):
-        parser.error("A busy session starts at width 128 and requires units, mixed actions, --dense-scene, waves/reflections on and the synchronous native-compatible render API")
+    try:
+        args.preparation_mode=preparation_mode(args.scenario,args.preparation_mode)
+    except ValueError as error:
+        parser.error(str(error))
+    if args.idle_units and args.scenario not in ("idle", "replay", "session"):
+        parser.error("--idle-units requires --scenario idle, replay or session")
+    if args.unit_actions=="mixed" and (args.scenario not in ("idle","replay","session") or not args.idle_units):
+        parser.error("--unit-actions mixed requires --scenario idle, replay or session and --idle-units")
+    if args.scenario in ("replay","session") and (not args.idle_units or not args.dense_scene or args.waves!="1" or args.reflection_ablation or args.camera_view or args.tile_width!=128 or args.unit_actions!="mixed"):
+        parser.error("A busy replay/session starts at width 128 and requires units, mixed actions, --dense-scene, waves/reflections on and the synchronous native-compatible render API")
     out = args.out.resolve()
     relative = out.relative_to(ROOT)
-    storage = storage_preflight(ROOT, args.width, args.height, args.idle_steps if args.scenario == "idle" else args.distant_steps if args.scenario == "distant" else args.resident_steps if args.resident else 0)
+    samples = (args.idle_steps if args.scenario == "idle" else args.distant_steps if args.scenario == "distant" else
+               15 if args.scenario == "replay" else args.resident_steps if args.resident else 0)
+    storage = storage_preflight(ROOT, args.width, args.height, samples)
     out.mkdir(parents=True, exist_ok=False)
     for name in ("C3XRenderer.dll", "biq_preview.exe"):
         shutil.copy2(args.binaries / name, out / name)
@@ -174,7 +192,10 @@ def main():
            "C3X_RENDERER_PREVIEW_ANIMATION": "1", "C3X_RENDERER_WAVES": args.waves,
            "C3X_RENDERER_PREVIEW_NAVIGATION": "1" if args.scenario == "navigation" else "",
            "C3X_RENDERER_PREVIEW_ZOOM": "1" if args.scenario == "zoom" else "",
+           "C3X_RENDERER_PREVIEW_RETAINED_REPLAY": "1" if args.scenario == "replay" else "",
            "C3X_RENDERER_PREVIEW_BUSY_SESSION": "1" if args.scenario == "session" else "",
+           "C3X_RENDERER_PREVIEW_PREPARATION_MODE": args.preparation_mode,
+           "C3X_RENDERER_PREVIEW_REPLAY_SAMPLES": str(args.replay_samples_per_phase),
            "C3X_RENDERER_PREVIEW_RESIDENT_SWEEP": "1" if args.resident else "",
            "C3X_RENDERER_PREVIEW_RESIDENT_COLD": "1" if args.cold else ""})
     win_root = Path(ROOT) if os.name == "nt" else windows_root()
@@ -192,7 +213,10 @@ def main():
                "environment": env, "inputs": before,
                "host": {"os": platform.platform(), "architecture": platform.machine(), "logical_processors": os.cpu_count()},
                "source_at_run": {p.relative_to(ROOT).as_posix(): digest(p)
-                                 for p in (ROOT / "Renderer/native").glob("*.cpp")},
+                                 for p in [*(ROOT / "Renderer/native").glob("*.cpp"),
+                                           ROOT / "Renderer/native/benchmark_oracle.h",
+                                           ROOT / "Renderer/native/busy_session_plan.h",
+                                           ROOT / "Renderer/native/retained_replay_preview.h"]},
                "binaries": {n: digest(out / n) for n in ("C3XRenderer.dll", "biq_preview.exe")},
                "started_unix": time.time()}
     (out / "inputs.json").write_text(json.dumps(receipt, indent=2))

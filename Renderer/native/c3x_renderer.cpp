@@ -25,6 +25,7 @@
 #include "c3x_renderer_api.h"
 #include "terrain_scene_runtime.h"
 #include "animation_runtime.h"
+#include "benchmark_oracle.h"
 #include "environment_runtime.h"
 #include "terrain_definition_runtime.h"
 #include "renderer_trace.h"
@@ -705,6 +706,7 @@ public:
         geometry_vertex_buffers;
     std::unordered_multimap<std::uint64_t, CachedTileGeometry> tile_geometry_cache;
     std::size_t tile_geometry_cache_bytes = 0, prefetched_geometry_bytes = 0;
+    std::size_t tile_geometry_runtime_budget = tile_geometry_cache_budget;
     std::unordered_map<std::uint64_t,NaturalTile> natural_mesh_cache;
     std::size_t natural_mesh_cache_bytes=0;
     std::unordered_map<std::uint64_t,CachedGroundTile> ground_grid_cache;
@@ -750,6 +752,89 @@ public:
     ~RendererState() {
         reset();
     }
+
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+    void trim_to_prepared(c3x_renderer_benchmark_oracle_trim_v1 & result) {
+        result = {};
+        result.version = C3X_RENDERER_BENCHMARK_ORACLE_VERSION;
+        result.struct_size = sizeof(result);
+        result.cleared_viewport_bytes = viewport_cache_bytes +
+            pixels.capacity() * sizeof(pixels[0]) +
+            resource_pixels.capacity() * sizeof(resource_pixels[0]);
+        result.cleared_region_bytes = render_regions.gpu_bytes + render_regions.metadata_bytes;
+        result.cleared_pixel_block_bytes = pixel_blocks.bytes;
+        result.cleared_backdrop_bytes = resource_backdrop_bytes;
+        result.retained_geometry_bytes = tile_geometry_cache_bytes;
+        result.retained_natural_bytes = natural_mesh_cache_bytes;
+        result.retained_ground_bytes = ground_grid_cache_bytes;
+        result.retained_wave_bytes = wave_geometry_bytes;
+        result.retained_unit_pose_bytes = unit_bodies.cache_bytes;
+        result.retained_unit_payload_bytes = unit_bodies.resident_bytes;
+        result.retained_shadow_bytes = source_shadow.view ? 128u * 1024u * 1024u : 0;
+        result.retained_other_bytes = center_shore_cache.bytes;
+        result.retained_geometry_entries = static_cast<std::uint32_t>(
+            std::min<std::size_t>(tile_geometry_cache.size(), UINT32_MAX));
+        result.retained_unit_pose_entries = static_cast<std::uint32_t>(
+            std::min<std::size_t>(unit_bodies.cached_pose_entries(), UINT32_MAX));
+        result.retained_wave_entries = static_cast<std::uint32_t>(
+            std::min<std::size_t>(retained_wave_cells.size(), UINT32_MAX));
+
+        render_regions.clear();
+        region_context.clear();
+        retained_region_casters = {};
+        viewport_cache.clear();
+        viewport_cache_bytes = 0;
+        cancel_pixel_preparation();
+        pixel_blocks.clear();
+        clear_resource_backdrops();
+        std::fill(resource_pixels.begin(),resource_pixels.end(),0);
+        resource_pixel_signature = 0;
+        resource_pixel_clock = -1;
+        visible_resource_animations = visible_wave_animations = 0;
+        for(auto& chunk:wave_chunks){release(chunk.buffer);release(chunk.indices);}
+        wave_chunks.clear();wave_signature=0;wave_upload_bytes=0;
+        geometry_cache.clear();
+        clear_geometry_vertex_buffers();
+        geometry_footprints.clear();
+        bitmap_footprints.clear();
+        bitmap_footprint_signature = {};
+        cached_tiles.clear();
+        cached_replacement_tile_flags.clear();
+        cached_signature = {};
+        previous_signature = {};
+        cached_rendered_tile_count = cached_fallback_tile_count = cached_textured_tile_count = 0;
+        cached_visible_animation_count = cached_request_continuous_redraw = 0;
+        cache_valid = false;
+        std::fill(pixels.begin(),pixels.end(),0);
+        tile_geometry_runtime_budget=512u*1024u*1024u;
+        while(!tile_geometry_cache.empty() && tile_geometry_cache_bytes>tile_geometry_runtime_budget) {
+            auto oldest=std::min_element(tile_geometry_cache.begin(),tile_geometry_cache.end(),[](auto const& a,auto const& b){
+                return a.second.last_used<b.second.last_used;});
+            tile_geometry_cache_bytes-=oldest->second.byte_count;
+            if(oldest->second.prefetched)prefetched_geometry_bytes-=oldest->second.byte_count;
+            release_geometry_vertex_buffers(oldest->second.buffers);tile_geometry_cache.erase(oldest);
+            ++result.capacity_geometry_evictions;
+        }
+        result.capacity_pose_evictions=unit_bodies.benchmark_limit_pose_cache();
+        result.retained_geometry_bytes=tile_geometry_cache_bytes;
+        result.retained_unit_pose_bytes=unit_bodies.cache_bytes;
+        result.retained_geometry_entries=static_cast<std::uint32_t>(
+            (std::min<std::size_t>)(tile_geometry_cache.size(),UINT32_MAX));
+        result.retained_unit_pose_entries=static_cast<std::uint32_t>(
+            (std::min<std::size_t>)(unit_bodies.cached_pose_entries(),UINT32_MAX));
+        char detail[384];
+        std::snprintf(detail,sizeof(detail),
+            "cleared_viewport=%llu cleared_regions=%llu cleared_blocks=%llu cleared_backdrops=%llu retained_geometry=%llu retained_poses=%llu retained_payloads=%llu",
+            static_cast<unsigned long long>(result.cleared_viewport_bytes),
+            static_cast<unsigned long long>(result.cleared_region_bytes),
+            static_cast<unsigned long long>(result.cleared_pixel_block_bytes),
+            static_cast<unsigned long long>(result.cleared_backdrop_bytes),
+            static_cast<unsigned long long>(result.retained_geometry_bytes),
+            static_cast<unsigned long long>(result.retained_unit_pose_bytes),
+            static_cast<unsigned long long>(result.retained_unit_payload_bytes));
+        trace.write("oracle-trim",detail,true);
+    }
+#endif
 
     template <typename T>
     void release(T *& value) {
@@ -809,6 +894,10 @@ public:
 
     void reset() {
         memory_sample("before-reset");
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        tile_geometry_runtime_budget=tile_geometry_cache_budget;
+        unit_bodies.benchmark_reset_pose_limit();
+#endif
         render_regions.clear();region_context.clear();retained_region_casters={};
         gpu_telemetry.reset();
         sampled_geometry_bucket=~std::size_t(0);
@@ -3585,7 +3674,7 @@ public:
     }
 
     bool make_tile_cache_room(std::size_t bytes) {
-        while (tile_geometry_cache_bytes + bytes > tile_geometry_cache_budget ||
+        while (tile_geometry_cache_bytes + bytes > tile_geometry_runtime_budget ||
                tile_geometry_cache.size() >= tile_geometry_cache_capacity) {
             auto oldest = tile_geometry_cache.end();
             auto animation_priority = [&](CachedTileGeometry const& tile) {
@@ -8619,6 +8708,18 @@ public:
         return result;
     }
 
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+    int benchmark_trim_to_prepared(c3x_renderer_benchmark_oracle_trim_v1 & result) {
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::unique_lock<std::mutex> lock(state_mutex);
+        start_locked();
+        drain_camera_locked(lock);
+        int code=submit_locked(lock,Command::benchmark_trim);
+        result=benchmark_trim_result;
+        return code;
+    }
+#endif
+
     void reset_and_stop() {
         std::unique_lock<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
@@ -8643,6 +8744,9 @@ private:
         configure_definitions,
         render,
         unit,
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        benchmark_trim,
+#endif
         reset
     };
 
@@ -8668,6 +8772,9 @@ private:
     std::condition_variable wake;
     std::condition_variable completed;
     std::thread worker;
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+    c3x_renderer_benchmark_oracle_trim_v1 benchmark_trim_result={};
+#endif
     bool running = false;
     bool stop_requested = false;
     bool has_job = false;
@@ -9046,6 +9153,17 @@ private:
                 result=renderer_state.unit_bodies.render(renderer_state.device,renderer_state.context,job_unit,
                     [&](auto const& action){return renderer_state.prepare_unit_action(action);})
                     ? C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+            } else if(command==Command::benchmark_trim) {
+                auto publication_bytes=publication.bytes()+camera_ready.bytes();
+                publication.clear();camera_ready.clear();
+                renderer_state.trim_to_prepared(benchmark_trim_result);
+                benchmark_trim_result.cleared_publication_bytes=publication_bytes;
+                completed_scene_signature=0;completed_resources=0;completed_resource_clock=-1;
+                completed_output={};completed_result=C3X_RENDERER_RESULT_SUPERSEDED;
+                completed_phase_x=completed_phase_y=0;
+                result=C3X_RENDERER_RESULT_OK;
+#endif
             } else if (command == Command::reset) {
                 renderer_state.trace.write("reset", "device and all caches", true);
             renderer_state.reset();
@@ -9268,6 +9386,16 @@ extern "C" __declspec(dllexport) int c3x_renderer_blit(
 extern "C" __declspec(dllexport) void c3x_renderer_reset(void) {
     destroy_renderer_worker();
 }
+
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+extern "C" __declspec(dllexport) int c3x_renderer_benchmark_trim_to_prepared_v1(
+    c3x_renderer_benchmark_oracle_trim_v1 * result) {
+    if(!result || result->version!=C3X_RENDERER_BENCHMARK_ORACLE_VERSION ||
+       result->struct_size!=sizeof(*result) || !renderer_worker)
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return renderer_worker->benchmark_trim_to_prepared(*result);
+}
+#endif
 
 extern "C" __declspec(dllexport) int c3x_renderer_unit_draw(
     c3x_renderer_unit_v1 const* unit,void* destination_hdc) {
