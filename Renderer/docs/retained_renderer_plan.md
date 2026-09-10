@@ -454,3 +454,248 @@ large navigation matrix until a single resident scroll is below 100 ms, then
 below 33 ms. Distant jumps can initially use an exact low-detail publication
 only if ownership and current-camera coverage are proven; otherwise they remain
 blocking until neighboring/world-region preparation makes them fast.
+
+## Incremental resident-scroll ablation — 2026-09-10
+
+The first targeted scroll used a four-map-column move (approximately two or
+more visible isometric tile widths) from the same 2240x1192 starting view. Each
+case rendered one exact current-camera result with retained world caching,
+recorded no frame-set images, and kept the same ownership/fallback/recovery
+checks. With waves and reflections explicitly disabled, terrain-only took
+207.379 ms total (201.793 ms CPU, 85.009 ms geometry, 16.065 ms draw,
+89.655 ms readback, 2,364,928 reused pixels). Animated resources raised this
+to 303.643 ms (297.555 ms CPU). Waves/reflections raised it to 660.582 ms
+(653.380 ms CPU). The synthetic city/improvement case took 1,081.191 ms
+(1,075.952 ms CPU, 578.285 ms geometry, 213.992 ms draw, 272.383 ms
+readback, 2,037,248 reused pixels). Every case returned zero fallback and zero
+recovery with a largest free region above 2,098 MiB.
+
+The trace explains the blocker: resident terrain is already about 202 ms of
+CPU-side frame/composition work; resources add about 96 ms, waves about 355
+ms, and cities about 874 ms. The broad navigation matrix remains byte-exact
+on warm revisits, but its 1.35–2.67 second warm latency is consistent with
+this ablation and is not acceptable for normal wheel/key movement. Animation
+content is not the first target; the static CPU path must be shortened first,
+then city composition.
+
+**Selected next experiment:** prototype a bounded translated-front plus
+newly-exposed-strip publication for this two-column move, preserving exact
+current-camera ownership while the strip renders asynchronously. Measure the
+existing CPU/composition counter separately from the translated copy and strip
+render. Re-run the four categories only after terrain-only latency is materially
+lower, then isolate city composition as the second stage. Keep ambient
+refinement single-flight behind the retained front; do not hide a camera change
+with an old view or relax ownership checks.
+
+## Realistic scroll sequence witness — 2026-09-10
+
+The next short witness exercised the retained path as an actual input stream:
+one-column, two-column, four-column and eight-column moves, reversal, return to
+the origin, then the same pattern in the opposite direction. It ran at
+2240x1192 with the dense world fixture, retained world regions and no frame-set
+reuse. All eight unique cameras and every warm revisit were byte-exact, passed
+ownership, and reported zero fallback and zero device recovery. The largest
+contiguous free region stayed above 1.69 GiB (well above the 512 MiB floor).
+
+The first visits built 23–94 newly visible geometry records as the jump grew.
+Warm returns built zero records and submitted essentially no draw/readback work,
+with 2.36–2.59 million pixels reused. They still measured 145.6–770.6 ms of
+CPU-side work, so overlap/raster reuse is real but not yet an interactive
+scrolling solution. The dominant remaining cost is full CPU composition and
+object/material preparation repeated for a camera whose retained pixels already
+cover most of the viewport.
+
+**Selected next quick gate:** instrument and isolate that CPU work, then run a
+benchmark-only translated-front plus newly exposed-strip composition that copies
+the retained overlap and prepares only the strip. Require exact current-camera
+pixels/ownership and measure copy, strip preparation, and composition separately.
+Do not add a larger cache or another long navigation matrix until this resident
+path is below 100 ms (then 33 ms); nearby world-region preparation remains the
+right tier for the next uncached scroll once the resident path is fast.
+
+The profiling rerun identifies the first concrete target. On warm returns with
+zero geometry builds and zero draw/readback work, animation composition still
+reported roughly 102–646 ms per frame. Its subphases included backdrop-submit
+about 0–324 ms, animated-submit about 29–197 ms, and GPU readback waits about
+61–498 ms; the visible animation set was about 60–64 resources/waves. This is
+why a resident bitmap can be correct yet still feel slow: the animated overlay
+pipeline is being recomposed even when the static overlap is already retained.
+The next gate should therefore split static-front publication from an
+independently dirty animated overlay (continuous worker actions stay live;
+frozen units do not force redraw), then verify that a camera move with only a
+small animated dirty region meets the 33 ms budget.
+
+The static control confirms the direction: with waves/resources/objects off,
+warm returns in the same sequence were 27.9–30.0 ms with no CPU, geometry, draw,
+or readback work, and remained byte-exact. First visits were 128–276 ms as the
+new strip grew. One reverse cold step missed the retained raster and spiked to
+1,332 ms, so the nearby-region path still needs a bounded directional halo for
+reversals. This is now a focused overlay problem, not evidence that the basic
+translated front is infeasible.
+
+## Animated-overlay translation proof — 2026-09-10
+
+The harness now also compares each new frame's overlap with a pixel-translated
+copy of the immediately preceding frame. The static control produced zero
+overlap mismatches for every move and reversal. The dense mixed scene produced
+752 and 725 mismatched pixels on the first one- and two-column moves, then only
+2–12 mismatches on the remaining moves and returns. These differences are
+small but real; translating the entire animated layer would therefore be an
+incorrect shortcut.
+
+The implementation contract is consequently: translate the immutable static
+front; invalidate animated/object bounds (with a conservative guard); redraw
+the newly exposed strip and those dirty overlay regions; publish only after the
+current-camera ownership and exact-pixel checks pass. Continuous worker/action
+animation remains eligible for its own dirty region, while frozen units do not
+force a full-map redraw. This keeps the modern retained-frame model without
+masking camera changes behind an old image.
+
+## Realistic worker-idle control — 2026-09-10
+
+The standalone idle gate used the normal 2240x1192 map with ten ambient
+resources and eight units for 30 pose steps after a ten-frame warmup. Six units
+remained idle; one was selected, one directed, and one was working, matching the
+game's action ownership rather than animating every unit continuously. It passed
+all 30 frames with zero fallback/recovery and a minimum contiguous free region
+of 1.93 GiB. After warmup, unit drawing was 3.4–6.4 ms, while the map/ambient
+plane remained 78–94 ms per step. The worker-specific unit cost is therefore
+already small; the ambient map compositor is the current idle-frame blocker.
+
+The existing animation readback-atlas and dependency-backed backdrop switches
+were also exercised on the mixed scroll sequence. Both preserved exact pixels
+and ownership but did not materially reduce the 100–700 ms CPU range; the cost
+is pose/overlay submission rather than simply packing a large readback.
+
+The worker-realistic asynchronous boundary then delivered 74 fresh publications
+in each 10-second run (7.40 Hz), with exact stationary/camera-change checks,
+zero fallback/recovery, and 8-unit pose sets at 3.4–5.5 ms. Render-entry p95
+was 2.28 ms without the atlas and 2.01 ms with it, narrowly missing the
+current 2.0 ms standalone threshold. This is functionally responsive but not a
+timing pass yet; the remaining margin is scheduling/overlay work, not unit pose
+generation.
+
+The next implementation should preserve this separation: action-director unit
+poses update independently, while the map front and ambient overlays use their
+own dirty cadence. A one-minute pass at the real 15 Hz caller rate should be
+the acceptance gate after that compositor split, with p95 map-plus-unit work
+under 33 ms and no growth in memory or pending work.
+
+The one-minute worker-realistic async run completed 900 caller ticks and 445
+fresh ambient publications (7.42 Hz). Exact stationary and camera-change
+publications held, fallback/recovery stayed zero, contiguous VA stayed above
+1.75 GiB, and unit-set p95 was 7.84 ms. The strict async render-entry target
+still missed at 2.299 ms p95 (47.278 ms maximum), so this is a functional
+responsiveness pass but not yet a timing pass. The next optimization should
+reduce worker lock/scheduling and ambient publication variance before adding
+more cache tiers; the current UI-facing unit path is not the limiting cost.
+
+The resource-only control (same ten animated resources and eight realistic
+units, waves disabled) delivered 149/150 fresh publications in ten seconds
+(14.90 Hz), with exact boundary/camera checks, zero fallback/recovery, and unit
+set p95 4.74 ms. Render-entry p95 was 4.91 ms, so the strict caller threshold
+still needs tuning, but the cadence result isolates the throughput loss: the
+full mixed scene's 7.42 Hz is primarily the wave/reflection layer. The next
+implementation gate is therefore a retained wave/reflection overlay with
+bounded dirty regions and asynchronous refinement; resources and worker poses
+should remain independent layers rather than being folded into that cache.
+
+The existing bounded block-clip/post and animation-atlas switches were then
+combined with the worker-realistic mixed run. They preserved exact output and
+ownership but remained at 7.40 Hz (10-second sample), so the wave/reflection
+throughput problem is not solved by readback packing or post-guard clipping.
+
+Finally, disabling only reflections while leaving waves enabled also remained
+at 7.40 Hz (10-second sample), with exact boundary/camera checks and zero
+fallback/recovery. Waves alone therefore account for the cadence loss. The
+selected implementation experiment is to retain immutable wave cells but
+decouple their block raster/readback from the main ambient publication, so the
+static/resource/unit layers can continue at the caller cadence while wave
+refinement publishes independently.
+
+## Current continuation checkpoint — 2026-09-10
+
+The current candidate was rechecked with the realistic retained-world sequence:
+all 14 offsets (including reversals and returns) remained exact, with zero
+fallback/recovery and contiguous free VA above 1.8 GiB. A 10-second
+resource-only ambient control delivered 149/150 fresh publications (14.90 Hz),
+with zero fallback/recovery and a 1,949 MiB minimum contiguous region; its
+2.203 ms render-entry p95 is a narrow caller-threshold miss, not a cadence or
+correctness failure. The full mixed case remains wave-limited at about 7.4 Hz.
+
+The renderer-only animation and shadow integration commands were retried with
+the bundled Python runtime, but the Windows harness still fails before replay
+because it invokes the space-containing repository path without quoting. No
+integration pass is claimed and no source or generated provenance file was
+changed.
+
+**Next quick gate:** implement an opt-in independent wave overlay publication
+using the retained immutable cells, then compare 10-second and one-minute
+mixed runs. The gate is exact current-camera pixels/ownership, zero fallback or
+recovery, no completed-map reuse, >=512 MiB contiguous VA throughout, and
+caller render p95 below 2 ms with the resource/unit layers still at their
+existing cadence. Do not add another cache tier until this overlay gate passes.
+
+The first transparent-wave probe was rejected: it kept the same ~7 Hz mixed
+cadence and diverged materially from the reference because wave shading depends
+on the scene/depth backdrop. The probe was removed; the default renderer path
+is unchanged. The follow-on must therefore retain depth-aware wave composition
+and move only its publication/readback boundary, not simply alpha-blend waves
+over the finished CPU bitmap.
+
+A second full-target probe was also removed after an x86 D3D11 access violation
+in the experimental direct-target/resolve path. It produced no valid frame and
+is not evidence against the retained architecture. The next implementation must
+reuse the existing `LinearTarget` ownership and resolve contract end-to-end;
+raw render-target insertion into `submit_geometry` is not an acceptable shortcut.
+
+A third opt-in probe skipped source-shadow preparation for wave-only frames. It
+preserved exact boundary output but regressed fresh mixed publications to 4.5 Hz
+and raised camera completion to about 895 ms. It was removed. Shadow preparation
+therefore remains on the critical path until wave draws can be batched while
+borrowing the existing retained depth/shadow state.
+
+## No-water core focus — 2026-09-10
+
+Water reflections and waves are now deliberately excluded from the active
+optimization target. The retained sequence was rerun with both disabled while
+keeping the dense terrain/city/improvement fixture, retained world regions and
+the exact ownership checks. All eight unique cameras and every revisit were
+byte-exact, with zero fallback/recovery; the largest contiguous free region was
+about 1.80 GiB. First visits for one-, two-, four- and eight-column moves took
+355–641 ms, while warm returns took 67–135 ms. The front is correct and
+resident, but repeated CPU/object composition still makes ordinary scrolling
+too slow.
+
+The realistic no-water async soak makes the cost split unambiguous. With eight
+units (one selected, one directed, one working, five frozen), the small-object
+control delivered 147/150 publications in ten seconds (14.70 Hz), with exact
+camera/ownership publication, zero fallback/recovery and a 1.92 GiB minimum
+contiguous region. The dense city/improvement fixture delivered 78/150
+(7.80 Hz) under the same conditions. Unit drawing remained 3.5–6.4 ms; the
+lost cadence is static object composition, not idle unit animation or water.
+
+A two-cycle distant navigation matrix also passed exact screenshot parity and
+zero fallback/recovery. Cold destinations built 470–940 tiles and took
+3.1–6.0 s; warm revisits built no geometry yet still took 0.47–1.17 s. The
+largest contiguous region remained about 1.48 GiB, above the 512 MiB safety
+floor. This confirms that a larger cache alone is not the answer: the renderer
+needs a retained static front with dirty object bounds and a newly-exposed
+strip, plus directional nearby preparation for uncached jumps.
+
+The one-minute dense no-water soak completed all 900 caller ticks with 488
+exact publications (8.13 Hz), render-entry p95 1.980 ms, zero fallback/recovery,
+and a minimum contiguous free region of about 1.77 GiB. It therefore passes the
+current stability gate and shows no memory creep or correctness failure under a
+busy idle screen. It does not yet sustain the full 15 Hz publication cadence;
+that gap is the city/improvement composition budget identified above.
+
+**Selected next experiment:** add a benchmark-only static-object composition
+split for the no-water path. Translate/copy the immutable terrain front, redraw
+only the newly exposed strip, and independently invalidate city/improvement/
+resource bounds. Measure object compilation, strip composition, and publication
+separately; require exact pixels/ownership, no completed-map reuse, zero
+fallback/recovery, and >=512 MiB contiguous VA. Keep action-driven unit poses
+on their own dirty cadence so frozen units do not trigger a map redraw. Do not
+add another cache tier or resume water-effect optimization until this object
+path is below the 33 ms interactive budget.

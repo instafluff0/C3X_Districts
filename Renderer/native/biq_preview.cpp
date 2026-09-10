@@ -641,6 +641,8 @@ int main(int argc, char ** argv) {
     bool zoom_benchmark=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ZOOM",zoom_option,sizeof(zoom_option))!=0;
     char navigation_option[16]={};
     bool navigation_benchmark=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_NAVIGATION",navigation_option,sizeof(navigation_option))!=0;
+    char scroll_option[64]={};
+    bool scroll_ablation=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SCROLL_ABLATION",scroll_option,sizeof(scroll_option))!=0;
     char distant_option[16]={};
     int distant_steps=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DISTANT_STEPS",distant_option,sizeof(distant_option))?std::clamp(std::atoi(distant_option),0,1000):0;
     char idle_option[16]={};
@@ -1093,6 +1095,83 @@ int main(int argc, char ** argv) {
             }
         }
     }
+    if(ok && scroll_ablation) {
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        auto saved_center_x=center_x,saved_center_y=center_y;
+        auto saved_tiles=tiles;
+        if(std::strcmp(scroll_option,"sequence")==0) {
+            // A short, modern-navigation-shaped trace: small wheel steps,
+            // a two-tile jump, a larger jump, reversal, then a return.  The
+            // first visit to each camera is the authoritative reference; the
+            // later visits must be byte-identical rather than merely cache-hit.
+            std::vector<int> offsets={1,2,4,8,4,2,1,0,-2,-4,-8,-4,-2,0};
+            std::vector<int> reference_offsets;
+            std::vector<std::vector<unsigned char>> references;
+            auto pixels=[&](){auto p=static_cast<unsigned char const*>(output.bgra_pixels);
+                return std::vector<unsigned char>(p,p+std::size_t(output.stride_bytes)*output.height);};
+            reference_offsets.push_back(0);references.push_back(pixels());
+            std::vector<unsigned char> previous=references.front();
+            int previous_offset=0;
+            bool sequence_ok=true;
+            for(std::size_t step=0;step<offsets.size() && sequence_ok;++step) {
+                int offset=offsets[step];
+                center_x=saved_center_x+offset;center_y=saved_center_y;
+                tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+                LARGE_INTEGER begin={},captured={},end={};QueryPerformanceCounter(&begin);
+                QueryPerformanceCounter(&captured);
+                int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
+                auto current=pixels();
+                std::size_t translated_mismatches=0;
+                if(code==C3X_RENDERER_RESULT_OK && !previous.empty()) {
+                    int dx=-(offset-previous_offset)*tile_width/2;
+                    int left=(std::max)(0,dx),right=(std::min)(target_width,target_width+dx);
+                    if(left<right)for(int y=0;y<target_height;++y) {
+                        auto const* old_row=previous.data()+std::size_t(y)*target_width*4;
+                        auto const* new_row=current.data()+std::size_t(y)*target_width*4;
+                        for(int x=left;x<right;++x) {
+                            std::size_t old_index=std::size_t(x-dx)*4,new_index=std::size_t(x)*4;
+                            if(std::memcmp(old_row+old_index,new_row+new_index,4)!=0)++translated_mismatches;
+                        }
+                    }
+                }
+                auto found=std::find(reference_offsets.begin(),reference_offsets.end(),offset);
+                bool exact=true;
+                if(found==reference_offsets.end()) {
+                    reference_offsets.push_back(offset);references.push_back(current);
+                } else exact=current==references[std::size_t(found-reference_offsets.begin())];
+                sequence_ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 &&
+                    output.device_recoveries==0 && preview_ownership(frame,output) && exact;
+                std::printf("SCROLL_SEQUENCE step=%zu offset_columns=%d result=%d exact=%u translated_overlap_mismatches=%zu tiles=%u built=%u reused=%u total_ms=%.3f capture_ms=%.3f cpu_ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f raster_reused=%u raster_draw=%u fallback=%u recoveries=%u\n",
+                    step,offset,code,unsigned(exact),translated_mismatches,output.rendered_tile_count,output.geometry_tiles_built,output.geometry_tiles_reused,
+                    double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                    double(captured.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                    double(output.renderer_cpu_ticks)*1000/frequency.QuadPart,double(output.geometry_ticks)*1000/frequency.QuadPart,
+                    double(output.draw_ticks)*1000/frequency.QuadPart,double(output.readback_ticks)*1000/frequency.QuadPart,
+                    output.raster_reused_pixels,output.raster_draw_pixels,output.fallback_tile_count,output.device_recoveries);
+                camera_memory();std::fflush(stdout);
+                previous=std::move(current);previous_offset=offset;
+            }
+            ok=sequence_ok;
+            std::printf("SCROLL_SEQUENCE_END status=%s unique_cameras=%zu exact_revisits=1\n",ok?"pass":"FAIL",references.size());
+            center_x=saved_center_x;center_y=saved_center_y;tiles=std::move(saved_tiles);
+        } else {
+        // Four map-column coordinates are two ordinary isometric tile widths;
+        // this is a representative wheel/key scroll, not a one-pixel probe.
+        center_x+=4;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+        LARGE_INTEGER begin={},captured={},end={};QueryPerformanceCounter(&begin);
+        QueryPerformanceCounter(&captured);
+        int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
+        ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 && output.device_recoveries==0;
+        std::printf("SCROLL_ABLATION label=%s delta_columns=4 result=%d tiles=%u built=%u reused=%u upload_bytes=%llu total_ms=%.3f capture_ms=%.3f cpu_ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f raster_reused=%u raster_draw=%u fallback=%u recoveries=%u\n",
+            scroll_option,code,output.rendered_tile_count,output.geometry_tiles_built,output.geometry_tiles_reused,
+            static_cast<unsigned long long>(output.geometry_upload_bytes),double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+            double(captured.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,double(output.renderer_cpu_ticks)*1000/frequency.QuadPart,double(output.geometry_ticks)*1000/frequency.QuadPart,
+            double(output.draw_ticks)*1000/frequency.QuadPart,double(output.readback_ticks)*1000/frequency.QuadPart,
+            output.raster_reused_pixels,output.raster_draw_pixels,output.fallback_tile_count,output.device_recoveries);
+        camera_memory();std::fflush(stdout);
+        center_x=saved_center_x;center_y=saved_center_y;tiles=std::move(saved_tiles);
+        }
+    }
     char resident_option[8]={};
     if(ok && navigation_benchmark && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_RESIDENT_SWEEP",resident_option,sizeof(resident_option))) {
         // The preceding navigation workload loaded the views centered at
@@ -1304,7 +1383,7 @@ int main(int argc, char ** argv) {
         ok=ok && (idle_steps==1 || changes>0);
         std::printf("IDLE_END status=%s changed_frames=%u\n",ok?"pass":"FAIL",changes);
     }
-    if(ok && animate && !ambient_async && !zoom_benchmark && !navigation_benchmark && !distant_steps && !idle_steps && !busy_session) {
+    if(ok && animate && !ambient_async && !zoom_benchmark && !navigation_benchmark && !scroll_ablation && !distant_steps && !idle_steps && !busy_session) {
         // Exercise animation after an immutable viewport LRU restore, not only
         // after the unchanged-current-view fast path.
         auto initial=static_cast<unsigned char const*>(output.bgra_pixels);
