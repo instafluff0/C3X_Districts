@@ -8,6 +8,41 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class PublicationTests(unittest.TestCase):
+    def test_memory_tier_shrink_retires_optional_owners(self):
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        body = "bool three_zoom_memory=" + source.split("bool three_zoom_memory=", 1)[1].split("clip_dirty_blocks=", 1)[0]
+        program = r'''
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <cstring>
+#include <vector>
+constexpr std::size_t mib=1024*1024;
+constexpr std::size_t default_viewport_cache_budget=32*mib,default_resource_backdrop_cache_budget=128*mib;
+char const* option="";
+unsigned GetEnvironmentVariableA(char const*,char* out,unsigned size){
+    auto count=std::strlen(option);assert(count<size);std::strcpy(out,option);return unsigned(count);
+}
+struct State {
+    std::size_t viewport_cache_budget=32*mib,resource_backdrop_cache_budget=128*mib,viewport_cache_bytes=1;
+    std::vector<int> viewport_cache{1};unsigned releases=0;
+    void clear_resource_backdrops(){++releases;}
+    void configure(){char control[8]={};
+''' + body + r'''}
+};
+int main(){
+    State state;state.configure();assert(state.viewport_cache.size()==1 && !state.releases);
+    option="1";state.configure();assert(state.viewport_cache.empty() && !state.viewport_cache_bytes && state.releases==1);
+    assert(state.viewport_cache_budget==64*mib && state.resource_backdrop_cache_budget==832*mib);
+    state.viewport_cache.push_back(1);state.viewport_cache_bytes=1;state.configure();
+    assert(state.viewport_cache.size()==1 && state.releases==1);
+    option="999999";state.configure(); // Unrecognized values cannot request unbounded storage.
+    assert(state.viewport_cache.empty() && !state.viewport_cache_bytes && state.releases==2);
+    assert(state.viewport_cache_budget==32*mib && state.resource_backdrop_cache_budget==128*mib);
+}
+'''
+        run_cpp(program)
+
     def test_terrain_preview_anchors_ownership_and_input_bounds(self):
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         body = "struct PublishedMapFrame {" + source.split("struct PublishedMapFrame {", 1)[1].split("// Civ III remains", 1)[0]
@@ -88,6 +123,8 @@ int main(){
     def test_actual_worker_camera_supersession_and_takeover(self):
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         publication = "struct PublishedMapFrame {" + source.split("struct PublishedMapFrame {", 1)[1].split("// Civ III remains", 1)[0]
+        publication = publication.replace("auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);",
+                                          "publication_checkpoint(); auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);")
         worker = "class RendererWorker {" + source.split("class RendererWorker {", 1)[1].split("RendererWorker * renderer_worker", 1)[0]
         program = r'''
 #include <algorithm>
@@ -121,6 +158,9 @@ Signature terrain_frame_signature(c3x_renderer_frame_v1 const& f,long long,unsig
     return {std::uint64_t(f.presentation_time_ticks)+1};
 }
 }
+std::atomic<bool> hold_publication{false};
+std::atomic<unsigned> publication_entered{0};
+void publication_checkpoint(){++publication_entered;while(hold_publication.load())std::this_thread::yield();}
 struct Trace {int level=0;void write(char const*,char const*,bool=false){} double milliseconds(long long value){return double(value)/1000000;}};
 struct Footprint {int coordinate=0;struct {int left=0,right=0;} bounds;};
 struct Bodies {
@@ -198,13 +238,24 @@ int main(){
     c3x_renderer_i64 first=0,last=0;
     assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
     until([&]{return worker.camera_poll(last,out)==C3X_RENDERER_RESULT_OK;});
+    c3x_renderer_i64 duplicate=0;
+    auto published_entries=state.entered.load();
+    assert(worker.camera_begin(f,duplicate)==C3X_RENDERER_RESULT_PENDING && duplicate==last);
+    assert(worker.camera_poll(duplicate,out)==C3X_RENDERER_RESULT_OK && state.entered.load()==published_entries);
     auto old=out;auto old_value=7u^42u;
     state.hold=true;auto entered=state.entered.load();
+    ++f.presentation_time_ticks;
     assert(worker.camera_begin(f,first)==C3X_RENDERER_RESULT_PENDING);
     until([&]{return state.entered.load()>entered;});
+    // Same content at different caller addresses keeps the active request.
+    auto copy_tile=tile;auto copy_topology=topology;auto copy_frame=f;
+    copy_frame.tiles=&copy_tile;copy_frame.world_topology=&copy_topology;
+    for(int repeat=0;repeat<30;++repeat)
+        assert(worker.camera_begin(copy_frame,duplicate)==C3X_RENDERER_RESULT_PENDING && duplicate==first);
     // Latest-wins under actual worker contention, not a detached queue model.
     for(unsigned i=0;i<30;++i){tile.anchor_x=int(100+i);topology=1000+i;++f.presentation_time_ticks;
-        assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);}
+        assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
+        assert(worker.camera_begin(f,duplicate)==C3X_RENDERER_RESULT_PENDING && duplicate==last);}
     auto expected=unsigned(tile.anchor_x)^topology;
     tile.anchor_x=-999;topology=0; // Caller may immediately reuse capture storage.
     assert(worker.camera_poll(first,out)==C3X_RENDERER_RESULT_SUPERSEDED);
@@ -236,6 +287,7 @@ int main(){
     assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==(unsigned(tile.anchor_x)^topology));
     // Even rejected unit requests release the pause and resume the map.
     state.hold=true;entered=state.entered.load();
+    ++f.presentation_time_ticks;
     assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
     until([&]{return state.entered.load()>entered;});
     state.unit_rendering_enabled=false;
@@ -278,6 +330,31 @@ int main(){
     state.hold=false;
     until([&]{return worker.camera_poll_view(last,view)==C3X_RENDERER_RESULT_OK;});
     assert(view.identity.visibility_epoch==34 && view.frame.tiles[0].anchor_x==99);
+    // Every identity/visibility/topology/time change still replaces the request.
+    auto replace=[&](){
+        auto previous=last;
+        assert(worker.camera_begin(f,last,identity)==C3X_RENDERER_RESULT_PENDING && last>previous);
+        assert(worker.camera_begin(f,duplicate,identity)==C3X_RENDERER_RESULT_PENDING && duplicate==last);
+    };
+    ++identity.map_epoch;replace();++identity.viewer_epoch;replace();++identity.visibility_epoch;replace();++identity.scene_epoch;replace();
+    ++f.presentation_time_ticks;replace();++f.world_topology_revision;replace();
+    ++topology;replace();++captured[0].visibility_mask;replace();
+    std::swap(captured[0],captured[1]);replace();f.tile_width=160;f.tile_height=80;replace();
+    f.tile_width=192;f.tile_height=96;replace();++f.dirty_flags;replace();
+    until([&]{return worker.camera_poll_view(last,view)==C3X_RENDERER_RESULT_OK;});
+    // A stalled completion copy cannot block identical begin, newer input or
+    // polling; its obsolete output must never become the new publication.
+    hold_publication=true;auto copying=publication_entered.load();++f.presentation_time_ticks;
+    assert(worker.camera_begin(f,last,identity)==C3X_RENDERER_RESULT_PENDING);
+    until([&]{return publication_entered.load()>copying;});
+    assert(worker.camera_begin(f,duplicate,identity)==C3X_RENDERER_RESULT_PENDING && duplicate==last);
+    auto superseded=last;++identity.visibility_epoch;
+    assert(worker.camera_begin(f,last,identity)==C3X_RENDERER_RESULT_PENDING && last>superseded);
+    assert(worker.camera_poll(superseded,out)==C3X_RENDERER_RESULT_SUPERSEDED);
+    assert(worker.camera_poll(last,out)==C3X_RENDERER_RESULT_PENDING);
+    hold_publication=false;
+    until([&]{return worker.camera_poll_view(last,view)==C3X_RENDERER_RESULT_OK;});
+    assert(view.identity.visibility_epoch==identity.visibility_epoch && view.ticket==last);
     // Reset also joins an active cancellation, and never hangs on a pending job.
     state.hold=true;entered=state.entered.load();assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
     until([&]{return state.entered.load()>entered;});

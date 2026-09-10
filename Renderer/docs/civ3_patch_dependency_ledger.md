@@ -10,8 +10,9 @@ claiming a capability is available. Agents must not edit that CSV or
 Navigation dependency/scene optimization remains renderer-only. Retained caster
 proofs, region contributor selection and dependency-replayed shoreline centers
 consume the existing `Map_Renderer_m71_Draw_Tiles` /
-`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture contract. The native camera
-queue and synchronous injected presentation boundary are unchanged.
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture contract. The existing optional
+DLL camera queue coalesces byte-identical requests; the injected bridge remains
+synchronous. The opt-in three-zoom memory tier changes existing cache caps only.
 `required_user_action: []` for these changes; the existing city-HUD request below
 remains separate. Candidate replay does not stage or install this code.
 

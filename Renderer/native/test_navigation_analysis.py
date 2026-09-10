@@ -77,6 +77,81 @@ class NavigationAnalysisTests(unittest.TestCase):
         for values in ([], [float("nan")], [-1]):
             with self.assertRaises(ValueError):distribution(values)
 
+    def test_dense_scene_settings_cannot_disappear_in_comparisons(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            a=self.fixture(Path(temporary)/"a");b=self.fixture(Path(temporary)/"b")
+            data=json.loads((b/"inputs.json").read_text())
+            data["args"].update(idle_steps=100,idle_units=0,dense_scene=False)
+            data["environment"].update(C3X_RENDERER_PREVIEW_IDLE_UNITS="0",C3X_RENDERER_PREVIEW_DENSE_SCENE="")
+            (b/"inputs.json").write_text(json.dumps(data))
+            self.assertTrue(compare(a,b)["all_images_exact"])
+            data["args"]["dense_scene"]=True
+            (b/"inputs.json").write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError,"quality"):compare(a,b)
+
+    def test_camera_call_times_require_verified_coalescing_and_are_not_presentation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=self.fixture(Path(temporary)/"run")
+            receipt=json.loads((root/"inputs.json").read_text());receipt["args"]["camera_view"]=True
+            (root/"inputs.json").write_text(json.dumps(receipt))
+            with self.assertRaisesRegex(ValueError,"camera completion"):inspect(root)
+            log=root/"benchmark.log";original=log.read_text()
+            calls="\n".join(f"CAMERA ticket={i+1} accepted_ms=1 final_ms=9 poll_max_ms=0.5 repeat_max_ms=0.2 identical_coalesced=1 stale_rejected=1 result=1" for i in range(14))
+            log.write_text(calls+"\n"+original)
+            report=inspect(root)[1]
+            self.assertEqual(report["standalone_queue"]["accepted_ms"]["p95_ms"],1)
+            self.assertIsNone(report["native_presented_frames"])
+            log.write_text(calls.replace("identical_coalesced=1","identical_coalesced=0",1)+"\n"+original)
+            with self.assertRaisesRegex(ValueError,"camera completion"):inspect(root)
+
+    def test_idle_requires_advancing_clocks_retained_geometry_and_changed_images(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=self.fixture(Path(temporary)/"run")
+            receipt=json.loads((root/"inputs.json").read_text())
+            receipt["args"].update(scenario="idle",idle_steps=14)
+            (root/"inputs.json").write_text(json.dumps(receipt))
+            for i in range(14):
+                (root/f"zoom.bmp.idle{i}.bmp").write_bytes((root/f"zoom.bmp.resident{i}.bmp").read_bytes())
+            completion=json.loads((root/"evidence.json").read_text())
+            completion["images"]={p.name:digest(p) for p in root.glob("*.bmp")}
+            (root/"evidence.json").write_text(json.dumps(completion))
+            lines=["IDLE_BEGIN steps=14 warmup=10 pose_hz=15 paced=0 x=75 y=39 tile_width=128 units=0"]
+            lines += [f"IDLE_FRAME step={i} ticks={1000000+(i+11)*1000000//15} result=1 visible=3 built=0 reused=10 upload_bytes=0 changed=1 ms=10 recoveries=0" for i in range(14)]
+            lines += ["IDLE_END status=pass changed_frames=13", "BIQ viewport: 0 fallback"]
+            log=root/"benchmark.log";original="\n".join(lines);log.write_text(original)
+            report=inspect(root)[1]
+            self.assertEqual(report["changed_frames"],13)
+            self.assertEqual(report["timing"]["ms"]["samples"],14)
+            self.assertIsNone(report["native_presented_frames"])
+            for invalid in (original.replace("ticks=1733333","ticks=1000000"),
+                            original.replace("built=0","built=1",1),
+                            original.replace("upload_bytes=0","upload_bytes=256",1)):
+                log.write_text(invalid)
+                with self.assertRaisesRegex(ValueError,"Idle clocks"):inspect(root)
+            log.write_text(original.replace("changed_frames=13","changed_frames=0"))
+            with self.assertRaisesRegex(ValueError,"pose changes"):inspect(root)
+
+    def test_animation_requires_exact_scroll_and_removal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=self.fixture(Path(temporary)/"run")
+            receipt=json.loads((root/"inputs.json").read_text());receipt["args"]["scenario"]="animation"
+            (root/"inputs.json").write_text(json.dumps(receipt))
+            for i in range(6):
+                (root/f"zoom.bmp.animation-{i}.bmp").write_bytes((root/f"zoom.bmp.resident{i}.bmp").read_bytes())
+            (root/"zoom.bmp").write_bytes((root/"zoom.bmp.resident0.bmp").read_bytes())
+            completion=json.loads((root/"evidence.json").read_text())
+            completion["images"]={p.name:digest(p) for p in root.glob("*.bmp")}
+            (root/"evidence.json").write_text(json.dumps(completion))
+            lines=["ANIMATION zoom-return parity: pass"]
+            lines += [f"ANIMATION temporal frame={i} visible=3 terrain_built=0 terrain_upload=0 ms=10" for i in range(6)]
+            lines += ["ANIMATION temporal: pass changed_frames=5", "ANIMATION scroll parity: pass changed=0 error=0", "ANIMATION removal parity: pass changed=0 error=0", "BIQ viewport: 0 fallback"]
+            log=root/"benchmark.log";log.write_text("\n".join(lines))
+            report=inspect(root)[1]
+            self.assertEqual(report["timing"]["ms"]["samples"],6)
+            self.assertFalse(report["timing"]["ms"]["hundred_sample_requirement_met"])
+            log.write_text(log.read_text().replace("error=0","error=1",1))
+            with self.assertRaisesRegex(ValueError,"exact animation"):inspect(root)
+
 
 if __name__ == "__main__":
     unittest.main()

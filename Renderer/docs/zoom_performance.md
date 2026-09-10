@@ -1,5 +1,10 @@
 # Zoom performance verification
 
+**Current destination continuation:** see [navigation_continuation.md](navigation_continuation.md)
+for reproduction on the current VM, exact dependency-cache/control comparisons,
+separate waves-on/zoom/distant measurements, and the actual staged DLL identity.
+The older activation statements and timing runs below are historical evidence.
+
 **Animation correctness correction:** a live report revealed that the e25
 candidate's bitmap region hits could leave stale linear color/depth in the
 resource-animation backdrop path. The new staged DLL is `71e969c7…`; it requires

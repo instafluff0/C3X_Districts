@@ -65,6 +65,48 @@ must consume compatible output without repeatedly submitting identical work.
 
 ## Worker and memory constraints
 
+The navigation continuation adds exact duplicate coalescing to this existing
+queue. Repeated begin calls preserve the latest pending, active or completed
+ticket and its ready publication when every frame field, ordered tile/topology
+byte and lifecycle epoch matches. Caller pointer addresses are excluded;
+padding differences can only decline reuse. A different clock, visibility,
+order, world revision, camera or epoch still supersedes work. Comparison borrows
+the existing immutable snapshots under the state lock and adds no snapshot
+owner. Configuration, synchronous rendering, cancellation and reset still
+invalidate reuse. Begin returns `PENDING`; poll consumes the preserved result.
+The actual worker test exercises duplicates, content changes, unit takeover and
+reset. The standalone camera witness now repeats begin during polling and records
+submission and per-request maximum poll/duplicate-call times. These are DLL call
+measurements, not game-thread scheduling or input-to-presentation measurements.
+
+This resolves the duplicate-resubmission hazard inside the optional DLL queue.
+It does not bind the extension in injected code, provide lifecycle epochs, add
+a native completion callback, or solve the no-ready-image constraint above.
+
+The first 100-request Windows queue run matched the synchronous images exactly.
+Submission p95 was 0.507 ms and the per-request maximum poll-call p95 was
+0.402 ms. Duplicate begin maxima had a 2.102 ms p95, narrowly missing the 2 ms
+bookkeeping target. Completion copied its pixel/occurrence payload while holding
+the state lock. The follow-up moves this copy and obsolete-owner reclamation
+outside that lock, while `camera_active` still protects borrowed render scratch.
+Only the final swap is published under the lock after rechecking the current
+ticket, cancellation and pending result. A deterministic worker test stalls the
+copy while identical begin, supersession and polling proceed; stale completion
+cannot overwrite the new visibility epoch. The existing 32 MiB publication cap
+and temporary-copy owner remain in force. With the disabled experimental preview
+enabled, its ready preview can overlap the final temporary owner until the swap;
+include both in the existing per-owner memory accounting.
+
+The follow-up `navigation-completion-queue` ran 100 requests on Windows and
+matched all synchronous images from the same build exactly. Submission p95 was
+0.505 ms, per-request maximum poll-call p95 0.430 ms, and per-request maximum
+duplicate-begin p95 0.276 ms (maximum 0.349 ms). The stressed accepted-to-complete
+distribution remained 69.590 ms median / 114.569 ms p95. Its harness deliberately
+starts and supersedes an obsolete environment request before each current
+request and polls using `Sleep(1)`; total capture-plus-harness time includes that
+extra work. This validates bounded call latency and exact completion, not an
+ordinary game navigation latency or a native-presented-frame target.
+
 At the audit baseline, `draw_unit` called `drain_camera_locked`, discarding
 pending map work. The candidate now pauses camera dispatch, interrupts active
 map work at its existing cancellation boundaries, preserves the latest immutable

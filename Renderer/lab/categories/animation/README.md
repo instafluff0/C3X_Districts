@@ -9,6 +9,12 @@ the guard is bypassed immediately when Civ III reports a selected-unit map/
 pathfinder hold. Other clicks and the release interval remain guarded, without
 a separate timer or input hook.
 
+Ambient unit loops have a stable phase derived from the native unit identity;
+nearby units do not share a zero-offset loop. Camera, zoom and callback order
+leave that phase unchanged. Movement, combat and explicitly native-directed
+fidget clips retain their authoritative native cursors. Exact posed-image reuse
+keys the resulting frame, so reuse cannot synchronize different unit phases.
+
 The `OutputDebugStringA` test stream emits one `scheduler-callback` record per
 eligible Civ III timer callback. Its callback/presentation gaps, mouse-button
 mask and hold time, authoritative pathfinder state, pre/post-guard decisions and reason correlate

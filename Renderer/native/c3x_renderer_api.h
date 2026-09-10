@@ -333,6 +333,9 @@ typedef int (*c3x_renderer_render_fn)(struct c3x_renderer_frame_v1 const *, stru
 // Continue polling after PREVIEW; its pointers have the same publication lifetime.
 // PENDING/error/superseded leave its output untouched. Poll does not advance the
 // captured presentation clock. This interface supplies no redraw scheduling.
+// Repeating byte-identical scalar fields and ordered payloads (at any caller
+// address), with identical view epochs, may return the existing ticket. Begin
+// still returns PENDING; poll that ticket to consume its preserved completion.
 // Begin expires earlier synchronous borrowed outputs. Poll's borrowed publication
 // survives background work, but expires at the next successful publication poll,
 // synchronous render, pack/definition change or reset. Copy it for longer use.

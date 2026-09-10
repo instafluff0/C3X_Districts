@@ -1,6 +1,17 @@
 # Navigation renderer handoff — 2026-09-09
 
-## Current staged correction: animation background corruption
+## Current continuation
+
+Read [the destination reproduction and ongoing optimization evidence](navigation_continuation.md)
+before using the historical activation or timing statements below. The current
+staged DLL is the separately accepted mountain-shader promotion, not the new
+navigation candidate. This continuation has not staged, installed or launched
+the game. The fresh nearby waves-off cache/control pair matches all 100 images;
+its candidate median/p95 is 27.401/87.631 ms. Waves-on, zoom, distant preparation
+and native presentation have separate evidence and must not inherit that pass.
+The original plan and historical records below remain intact.
+
+## Historical staged correction: animation background corruption
 
 The staged DLL is now `navigation-linear-backdrop-fix-20260909`, SHA-256
 `71e969c7d2321ad90b084c5da622546eee896589dd9bd08a99dd6a6d21dc057f`.

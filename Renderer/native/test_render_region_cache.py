@@ -5,6 +5,53 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class RenderRegionTests(unittest.TestCase):
+    def test_linear_backdrop_lookup_requires_complete_dependencies_and_preserves_fast_hits(self):
+        source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
+        lookup="int key_x=rect.left-anchor_x,key_y=rect.top-anchor_y;"+source.split("int key_x=rect.left-anchor_x,key_y=rect.top-anchor_y;",1)[1].split("            context->OMSetRenderTargets",1)[0]
+        run_cpp(r'''
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <vector>
+#include <stdexcept>
+namespace c3x_renderer {namespace render_core {using RenderRegionKey=std::vector<std::uint64_t>;}}
+using Key=c3x_renderer::render_core::RenderRegionKey;
+struct ViewportShaderSettings {float translation[2]={},inverse_size[2]={};};
+struct Block {int x=0,y=0;std::uint64_t signature=1;Key dependencies;};
+struct State {
+ std::vector<Block> resource_backdrops={{0,0,1,{10,20,30}}};
+ std::uint64_t backdrop_signature=2;
+ bool backdrop_reuse_control=false,dependency_backdrops=true;
+ unsigned backdrop_dependency_hits=0,backdrop_dependency_rejections=0,calls=0;
+ int anchor_x=64,anchor_y=32,geometry_vertex_buffers=0,casters=0,prepared=0;
+ int *animation_casters_ptr=&casters,*animation_prepared_ptr=&prepared;
+ ViewportShaderSettings geometry_viewport_settings{{64,32},{}};
+ Key next_key={10,20,30};int key_result=1;
+ bool render_region_key(int,ViewportShaderSettings settings,int,int*,Key& key) {
+  ++calls;assert(settings.translation[0]==4 && settings.translation[1]==4);
+  assert(settings.inverse_size[0]==1.f/136 && settings.inverse_size[1]==1.f/136);
+  key=next_key;if(key_result<0)throw std::bad_alloc();return key_result!=0;
+ }
+ bool lookup() {
+  struct {int left=64,top=32;}rect;
+''' + lookup + r'''
+  return found!=resource_backdrops.end();
+ }
+};
+int main() {
+ State state;assert(state.lookup() && state.calls==1 && state.backdrop_dependency_hits==1);
+ state.next_key={10,20};assert(!state.lookup()); // A matching prefix is insufficient.
+ state.next_key={10,20,31};assert(!state.lookup()); // A local edit must miss.
+ state.next_key={10,20,30};state.key_result=0;assert(!state.lookup() && state.backdrop_dependency_rejections==1);
+ state.key_result=-1;assert(!state.lookup() && state.backdrop_dependency_rejections==2);
+ state.key_result=1;state.backdrop_reuse_control=true;auto calls=state.calls;
+ assert(!state.lookup() && state.calls==calls);
+ state.backdrop_reuse_control=false;state.dependency_backdrops=false;assert(!state.lookup());
+ state.backdrop_signature=1;assert(state.lookup() && state.calls==calls); // Existing unchanged-view fast path.
+ state.resource_backdrops.clear();state.dependency_backdrops=true;assert(!state.lookup());
+}
+''')
+
     def test_center_samples_replay_dependencies_and_reject_edits(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/center_shore_cache.h"

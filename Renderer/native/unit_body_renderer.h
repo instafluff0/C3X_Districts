@@ -27,6 +27,15 @@ public:
     bool cache_hit=false;
     char const* failure_reason="none";
     std::size_t cache_bytes=0;
+    std::size_t pose_cache_budget=8u*1024u*1024u,pose_cache_entries=128;
+
+    void configure_pose_cache(bool larger) {
+        pose_cache_budget=(larger?256u:8u)*1024u*1024u;pose_cache_entries=larger?4096u:128u;
+        while(!cache.empty() && (cache_bytes>pose_cache_budget || cache.size()>pose_cache_entries)) {
+            auto old=std::min_element(cache.begin(),cache.end(),[](Cached const& a,Cached const& b){return a.used<b.used;});
+            cache_bytes-=old->pixels.capacity()*4;cache.erase(old);
+        }
+    }
 
     template<class T> void release(T*& p) { if(p) {p->Release();p=nullptr;} }
     void reset_gpu() {
@@ -100,7 +109,10 @@ public:
                action->duration<=0 || action->frames<2)return false;
             pose_cursor=int(ambient_animation_frame(request.presentation_time_ticks,
                 request.presentation_frequency,action->duration,action->frames,
-                0));
+                std::uint32_t(request.unit_id)*2654435761u));
+            // A stable per-unit phase prevents neighboring ambient loops from
+            // marching in lockstep. Camera, zoom and callback order cannot
+            // restart it. Directed actions retain their native cursor above.
             pose_frames=int(action->frames);
             pose.phase=double(pose_cursor)/(action->frames-1);
         }
@@ -111,6 +123,9 @@ public:
         // can be reused at a different native anchor or wrapped occurrence.
         Key key={unsigned(found-units.begin()),int(action-found->actions.begin()),request.direction,
             pose_cursor,pose_frames,w,h,scale_milli,request.hour,request.season,request.display_color_rgb};
+        char memory_option[8]={};
+        configure_pose_cache(GetEnvironmentVariableA("C3X_RENDERER_UNIT_POSE_MEMORY",memory_option,sizeof(memory_option)) &&
+            std::strcmp(memory_option,"1")==0);
         for(auto & saved:cache)if(saved.key==key) {
             saved.used=++serial; pixels=saved.pixels;image_width=w;image_height=h;cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";return true;
         }
@@ -278,12 +293,20 @@ public:
             pixels[std::size_t(y)*w+x]=(combined<<24)|(((p[2]*alpha+127)/255)<<16)|(((p[1]*alpha+127)/255)<<8)|((p[0]*alpha+127)/255);
         }
         context->Unmap(readback,0);image_width=w;image_height=h;
-        std::size_t size=pixels.size()*4;
-        while(!cache.empty() && (cache_bytes+size>8u*1024u*1024u || cache.size()>=128)) {
-            auto old=std::min_element(cache.begin(),cache.end(),[](Cached const& a,Cached const& b){return a.used<b.used;});
-            cache_bytes-=old->pixels.size()*4;cache.erase(old);
-        }
-        cache.push_back({key,++serial,pixels,cast_pixels});cache_bytes+=size;
+        // This optional owner retains exact posed pixels across native anchors
+        // and repeated authored loops. Admission failure leaves this completed
+        // body available for the current draw; it never drops a visible unit.
+        try {
+            Cached saved={key,++serial,pixels,cast_pixels};
+            std::size_t size=saved.pixels.capacity()*4;
+            if(size<=pose_cache_budget) {
+                while(!cache.empty() && (cache_bytes>pose_cache_budget-size || cache.size()>=pose_cache_entries)) {
+                    auto old=std::min_element(cache.begin(),cache.end(),[](Cached const& a,Cached const& b){return a.used<b.used;});
+                    cache_bytes-=old->pixels.capacity()*4;cache.erase(old);
+                }
+                cache.push_back(std::move(saved));cache_bytes+=size;
+            }
+        }catch(...) {} // Cache growth is optional; current pixels are complete.
         failure_reason="none";return true;
     }
 

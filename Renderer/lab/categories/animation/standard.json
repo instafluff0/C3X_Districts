@@ -29,7 +29,8 @@
   },
   "tests": [
     "Renderer.native.test_animation_runtime",
-    "Renderer.native.test_unit_animation_runtime"
+    "Renderer.native.test_unit_animation_runtime",
+    "Renderer.native.test_unit_pose_cache"
   ],
   "references": {
     "d3d11": [

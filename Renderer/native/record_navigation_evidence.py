@@ -62,7 +62,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binaries", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "distant"), default="navigation")
+    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "idle", "distant"), default="navigation")
+    parser.add_argument("--idle-steps", type=int, choices=range(1,1001), default=100)
+    parser.add_argument("--idle-warmup", type=int, choices=range(10,151), default=10)
+    parser.add_argument("--unit-pose-memory", action="store_true", help="Opt-in 256 MiB / 4096-entry exact unit-pose retention")
+    parser.add_argument("--idle-units", type=int, choices=(0,8,24,64), default=0,
+                        help="Draw this many separate native-directed idle unit bodies in a synthetic GDI canvas")
+    parser.add_argument("--unit-actions", choices=("idle","mixed"), default="idle",
+                        help="Script separate per-unit native move, attack, return, fortify and idle timelines")
+    parser.add_argument("--dense-scene", action="store_true", help="Stable synthetic cities, infrastructure, camps and supported resources on the captured world")
     parser.add_argument("--width", type=int, default=2240)
     parser.add_argument("--height", type=int, default=1192)
     parser.add_argument("--distant-steps", type=int, choices=range(1,1001), default=100)
@@ -92,16 +100,22 @@ def main():
     parser.add_argument("--region-input-ring", type=int, choices=(2,4), default=2, help="Use this many tiles of current captured appearance support")
     parser.add_argument("--world-regions-control", action="store_true", help="Draw identical full regions independently without caching")
     parser.add_argument("--camera-view", action="store_true", help="Exercise the versioned camera queue and exact publication identity")
+    parser.add_argument("--three-zoom-memory", action="store_true", help="Opt-in bounded 64 MiB viewport / 832 MiB MSAA backdrop retention experiment")
     parser.add_argument("--water-coverage", action="store_true", help="Omit provably empty water/bed passes and unused reflections")
     parser.add_argument("--world-backdrops", action="store_true", help="Retain world-anchored animation backdrops across camera translations")
+    parser.add_argument("--backdrop-dependencies", action="store_true", help="Reuse exact static region dependencies for retained linear color/depth backgrounds")
     parser.add_argument("--backdrop-control", action="store_true", help="Independently redraw every static animation backdrop")
     parser.add_argument("--world-waves", action="store_true", help="Retain immutable coast-cell wave buffers across cameras")
     parser.add_argument("--wave-control", action="store_true", help="Rebuild coast-cell wave buffers for independent comparisons")
     parser.add_argument("--composition-casters-control", action="store_true", help="Rebuild caster preparation independently for each animation region")
     args = parser.parse_args()
+    if args.idle_units and args.scenario != "idle":
+        parser.error("--idle-units requires --scenario idle")
+    if args.unit_actions=="mixed" and (args.scenario!="idle" or not args.idle_units):
+        parser.error("--unit-actions mixed requires --scenario idle and --idle-units")
     out = args.out.resolve()
     relative = out.relative_to(ROOT)
-    storage = storage_preflight(ROOT, args.width, args.height, args.distant_steps if args.scenario == "distant" else args.resident_steps if args.resident else 0)
+    storage = storage_preflight(ROOT, args.width, args.height, args.idle_steps if args.scenario == "idle" else args.distant_steps if args.scenario == "distant" else args.resident_steps if args.resident else 0)
     out.mkdir(parents=True, exist_ok=False)
     for name in ("C3XRenderer.dll", "biq_preview.exe"):
         shutil.copy2(args.binaries / name, out / name)
@@ -121,6 +135,7 @@ def main():
            "C3X_RENDERER_REFLECTION_CONTROL": "1" if args.reflection_ablation else "0",
            "C3X_RENDERER_WORLD_RASTER_GRID": "1" if args.world_grid else "0",
            "C3X_RENDERER_WORLD_REGIONS": "1" if args.world_regions else "0",
+           "C3X_RENDERER_THREE_ZOOM_MEMORY": "1" if args.three_zoom_memory else "0",
            "C3X_RENDERER_CENTER_SHORE_CONTROL": "1" if args.center_shore_control else "0",
            "C3X_RENDERER_REGION_INDEX_CONTROL": "1" if args.index_control else "0",
            "C3X_RENDERER_REGION_DEPENDENCY_CONTROL": "1" if args.dependency_control else "0",
@@ -132,6 +147,7 @@ def main():
            "C3X_RENDERER_WORLD_REGIONS_CONTROL": "1" if args.world_regions_control else "0",
            "C3X_RENDERER_WATER_COVERAGE": "1" if args.water_coverage else "0",
            "C3X_RENDERER_WORLD_BACKDROPS": "1" if args.world_backdrops else "0",
+           "C3X_RENDERER_BACKDROP_DEPENDENCIES": "1" if args.backdrop_dependencies else "0",
            "C3X_RENDERER_BACKDROP_REUSE_CONTROL": "1" if args.backdrop_control else "0",
            "C3X_RENDERER_WORLD_WAVES": "1" if args.world_waves else "0",
            "C3X_RENDERER_WAVE_REUSE_CONTROL": "1" if args.wave_control else "0",
@@ -142,6 +158,12 @@ def main():
            "C3X_RENDERER_PREVIEW_SUPPORTED_ZOOMS": "1" if args.scenario == "zoom" else "",
            "C3X_RENDERER_PREVIEW_CYCLES": str(args.cycles),
            "C3X_RENDERER_PREVIEW_DISTANT_STEPS": str(args.distant_steps) if args.scenario == "distant" else "",
+           "C3X_RENDERER_PREVIEW_IDLE_STEPS": str(args.idle_steps) if args.scenario == "idle" else "",
+           "C3X_RENDERER_PREVIEW_IDLE_UNITS": str(args.idle_units),
+           "C3X_RENDERER_PREVIEW_UNIT_ACTIONS": args.unit_actions,
+           "C3X_RENDERER_PREVIEW_IDLE_WARMUP": str(args.idle_warmup),
+           "C3X_RENDERER_UNIT_POSE_MEMORY": "1" if args.unit_pose_memory else "0",
+           "C3X_RENDERER_PREVIEW_DENSE_SCENE": "1" if args.dense_scene else "",
            "C3X_RENDERER_PREVIEW_SEASON": "0",
            "C3X_RENDERER_PREVIEW_ANIMATION": "1", "C3X_RENDERER_WAVES": args.waves,
            "C3X_RENDERER_PREVIEW_NAVIGATION": "1" if args.scenario == "navigation" else "",

@@ -244,10 +244,16 @@ int main(int argc, char ** argv) {
         GetProcAddress(module,"c3x_renderer_set_unit_rendering"));
     char unit_preview[8]={};
     bool enable_unit_preview=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_UNITS",unit_preview,sizeof(unit_preview))!=0;
+    char idle_units_option[16]={};
+    int idle_unit_count=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_IDLE_UNITS",idle_units_option,sizeof(idle_units_option))?
+        std::clamp(std::atoi(idle_units_option),0,64):0;
+    char unit_actions_option[16]={};
+    bool mixed_unit_actions=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_UNIT_ACTIONS",unit_actions_option,sizeof(unit_actions_option)) &&
+        std::strcmp(unit_actions_option,"mixed")==0;
 #ifdef C3X_LAB_PREVIEW
     enable_unit_preview=enable_unit_preview || GetEnvironmentVariableA("C3X_LAB_UNIT_STUDY",unit_preview,sizeof(unit_preview))!=0;
 #endif
-    if(enable_unit_preview &&
+    if((enable_unit_preview || idle_unit_count) &&
        (!set_units || set_units(1)!=C3X_RENDERER_RESULT_OK))return 1;
     if (set_definitions == nullptr || render == nullptr || reset == nullptr ||
         set_definitions(argv[2], argv[3], nullptr, custom_path) != C3X_RENDERER_RESULT_OK)
@@ -255,6 +261,7 @@ int main(int argc, char ** argv) {
 
     char object_option[8]={};bool objects=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_OBJECTS",object_option,sizeof(object_option))!=0;
     char animation_option[8]={};bool animate=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ANIMATION",animation_option,sizeof(animation_option))!=0;
+    char dense_option[8]={};bool dense_scene=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DENSE_SCENE",dense_option,sizeof(dense_option))!=0;
     std::vector<std::array<int,2>> resource_sites;
     std::vector<std::array<int,2>> city_object_sites;
     auto capture_view = [&]() {
@@ -347,7 +354,32 @@ int main(int argc, char ** argv) {
             auto& rail=tiles[candidates[5]];rail.road_mask=15;rail.railroad_mask=15;rail.route_style=3;
         }
     }
-    if (animate) {
+    if(dense_scene)for(auto & tile:tiles) {
+        // Synthetic stress inputs remain world-fixed across capture changes.
+        // Fill ordinary supported objects only; draw eligibility stays native.
+        int x=((tile.tile_x%map_width)+map_width)%map_width,y=tile.tile_y;
+        auto seed=preview_seed(x,y);
+        bool land=tile.real_terrain_type>=0 && tile.real_terrain_type<=4;
+        if(land) {
+            tile.road_mask=15;tile.route_style=2;
+            if(y%8<2){tile.railroad_mask=15;tile.route_style=3;}
+            if(x%12==3 && y%12==3) {
+                tile.city_id=1+(y*map_width+x)/2;tile.city_owner_id=1;
+                tile.city_size=int(seed%3);tile.city_population=8+int(seed%12);
+                tile.city_culture_group=0;tile.city_era=2;
+            } else if(seed%41==0) {
+                tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;
+                tile.barbarian_tribe_id=7;
+            } else if(seed%3==0)tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;
+            else {tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_IRRIGATION;tile.irrigation_mask=15;}
+        }
+        if(seed%11==0 && tile.city_id<0) {
+            char const* land_names[]={"Iron","Cattle","Horses","Wheat","Gold","Dyes"};
+            char const* name=land?land_names[(seed/11)%6]:tile.real_terrain_type>=11?(seed&1?"Fish":"Whales"):nullptr;
+            if(name){tile.resource_id=100+int((seed/11)%6);tile.resource_class=0;strcpy_s(tile.resource_name,name);}
+        }
+    }
+    if (animate && !dense_scene) {
         char const * names[]={"Horses","Cattle","Wheat","Fish","Whales","Game","Furs","Ivory","Bananas","Rubber"};
         if (resource_sites.empty())
             for (auto const & tile:tiles)
@@ -420,8 +452,15 @@ int main(int argc, char ** argv) {
             if(code!=C3X_RENDERER_RESULT_PENDING || camera_poll(obsolete,result)!=C3X_RENDERER_RESULT_SUPERSEDED)
                 return int(C3X_RENDERER_RESULT_ERROR);
             auto start=GetTickCount64();unsigned polls=0;bool first_image=false;
+            double poll_max_ms=0,repeat_max_ms=0;
             ++camera_case;
             while(code==C3X_RENDERER_RESULT_PENDING && GetTickCount64()-start<120000) {
+                LARGE_INTEGER repeat_begin={},poll_begin={},poll_end={};QueryPerformanceCounter(&repeat_begin);
+                c3x_renderer_i64 repeated=0;
+                int repeated_code=camera_view?camera_begin_view(&request,&repeated):camera_begin(input,&repeated);
+                QueryPerformanceCounter(&poll_begin);
+                if(repeated_code!=C3X_RENDERER_RESULT_PENDING || repeated!=ticket)return int(C3X_RENDERER_RESULT_ERROR);
+                repeat_max_ms=(std::max)(repeat_max_ms,double(poll_begin.QuadPart-repeat_begin.QuadPart)*1000/frequency.QuadPart);
                 if(camera_view){
                     c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
                     code=camera_poll_view(ticket,&view);
@@ -435,6 +474,8 @@ int main(int argc, char ** argv) {
                         *result=view.output;
                     }
                 }else code=camera_poll(ticket,result);
+                QueryPerformanceCounter(&poll_end);
+                poll_max_ms=(std::max)(poll_max_ms,double(poll_end.QuadPart-poll_begin.QuadPart)*1000/frequency.QuadPart);
                 ++polls;
                 if(code==C3X_RENDERER_RESULT_PREVIEW) {
                     if(!first_image) {
@@ -460,9 +501,9 @@ int main(int argc, char ** argv) {
             if(!first_image && code==C3X_RENDERER_RESULT_OK)
                 std::printf("CAMERA first_image ticket=%lld ms=%.3f terrain_only=0\n",static_cast<long long>(ticket),
                     double(finished.QuadPart-begin.QuadPart)*1000/frequency.QuadPart);
-            std::printf("CAMERA ticket=%lld accepted_ms=%.3f final_ms=%.3f polls=%u stale_rejected=1 result=%d\n",
+            std::printf("CAMERA ticket=%lld accepted_ms=%.3f final_ms=%.3f polls=%u poll_max_ms=%.3f repeat_max_ms=%.3f identical_coalesced=1 stale_rejected=1 result=%d\n",
                 static_cast<long long>(ticket),double(accepted.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
-                double(finished.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,polls,code);
+                double(finished.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,polls,poll_max_ms,repeat_max_ms,code);
             if(camera_view && code==C3X_RENDERER_RESULT_OK)std::printf("CAMERA_IDENTITY ticket=%lld occurrences=%u visibility_epoch=%lld scene_epoch=%lld exact=1\n",
                 static_cast<long long>(ticket),input->tile_count,static_cast<long long>(identity.visibility_epoch),static_cast<long long>(identity.scene_epoch));
             std::fflush(stdout);
@@ -585,6 +626,9 @@ int main(int argc, char ** argv) {
     bool navigation_benchmark=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_NAVIGATION",navigation_option,sizeof(navigation_option))!=0;
     char distant_option[16]={};
     int distant_steps=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DISTANT_STEPS",distant_option,sizeof(distant_option))?std::clamp(std::atoi(distant_option),0,1000):0;
+    char idle_option[16]={};
+    int idle_steps=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_IDLE_STEPS",idle_option,sizeof(idle_option))?std::clamp(std::atoi(idle_option),0,1000):0;
+    int idle_warmup=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_IDLE_WARMUP",idle_option,sizeof(idle_option))?std::clamp(std::atoi(idle_option),10,150):10;
     char cycle_option[16]={};
     int camera_cycles=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CYCLES",cycle_option,sizeof(cycle_option))?
         std::clamp(std::atoi(cycle_option),2,40):2;
@@ -757,7 +801,126 @@ int main(int argc, char ** argv) {
         }
         std::printf("DISTANT_END status=%s\n",ok?"pass":"FAIL");
     }
-    if(ok && animate && !zoom_benchmark && !navigation_benchmark && !distant_steps) {
+    if(ok && idle_steps) {
+        // Every sample requires a new authored pose bucket. Run unpaced: disk
+        // evidence, memory queries and pixel comparisons are outside timing.
+        // This measures completion capacity, never native delivered frame rate.
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        unsigned changes=0;
+        std::vector<unsigned char> previous;
+        std::vector<c3x_renderer_tile_v1 const*> unit_sites;
+        unsigned cities_count=0,roads_count=0,farms_count=0,mines_count=0,camps_count=0,resources_count=0;
+        for(auto const& tile:tiles)if(tile.tile_flags&C3X_RENDERER_TILE_RENDER) {
+            cities_count+=tile.city_id>=0;roads_count+=tile.road_mask!=0;
+            farms_count+=(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)!=0;
+            mines_count+=(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE)!=0;
+            camps_count+=(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP)!=0;
+            resources_count+=tile.resource_id>=0;
+            if(tile.real_terrain_type<=4 && tile.city_id<0 && tile.anchor_x>tile_width &&
+               tile.anchor_x<target_width-tile_width*2 && tile.anchor_y>tile_height*2 &&
+               tile.anchor_y<target_height-tile_height*3)unit_sites.push_back(&tile);
+        }
+        std::sort(unit_sites.begin(),unit_sites.end(),[](auto a,auto b){return a->variant_seed<b->variant_seed;});
+        if(unit_sites.size()<std::size_t(idle_unit_count))ok=false;
+        else unit_sites.resize(idle_unit_count);
+        std::sort(unit_sites.begin(),unit_sites.end(),[](auto a,auto b){return a->anchor_y==b->anchor_y?a->anchor_x<b->anchor_x:a->anchor_y<b->anchor_y;});
+        auto unit_draw=reinterpret_cast<c3x_renderer_unit_draw_expanded_fn>(GetProcAddress(module,"c3x_renderer_unit_draw_expanded"));
+        HDC unit_dc=nullptr;HBITMAP unit_bitmap=nullptr;HGDIOBJ old_bitmap=nullptr;void* unit_pixels=nullptr;
+        if(idle_unit_count && ok) {
+            BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+            info.bmiHeader.biWidth=target_width;info.bmiHeader.biHeight=-target_height;
+            info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
+            unit_dc=CreateCompatibleDC(nullptr);
+            if(unit_dc)unit_bitmap=CreateDIBSection(unit_dc,&info,DIB_RGB_COLORS,&unit_pixels,nullptr,0);
+            if(!unit_draw || !unit_dc || !unit_bitmap || !unit_pixels)ok=false;
+            if(unit_bitmap)old_bitmap=SelectObject(unit_dc,unit_bitmap);
+        }
+        double warmup_ms=0;
+        std::printf("IDLE_BEGIN steps=%d warmup=%d pose_hz=15 paced=0 x=%d y=%d tile_width=%d units=%d dense=%d cities=%u roads=%u farms=%u mines=%u camps=%u resources=%u unit_actions=%s\n",
+            idle_steps,idle_warmup,center_x,center_y,tile_width,idle_unit_count,int(dense_scene),cities_count,roads_count,
+            farms_count,mines_count,camps_count,resources_count,mixed_unit_actions?"mixed":"idle");
+        for(int step=-idle_warmup;step<idle_steps && ok;++step) {
+            frame.presentation_time_ticks=1000000+c3x_renderer_i64(step+idle_warmup+1)*frame.presentation_frequency/15;
+            LARGE_INTEGER begin={},map_end={},copy_end={},end={};QueryPerformanceCounter(&begin);
+            int code=render_checked(&frame,&output);QueryPerformanceCounter(&map_end);
+            ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 &&
+                output.visible_animation_count>0 && output.request_continuous_redraw &&
+                output.geometry_tiles_built==0 && output.geometry_upload_bytes==0;
+            if(ok && idle_unit_count)std::memcpy(unit_pixels,output.bgra_pixels,std::size_t(output.stride_bytes)*output.height);
+            QueryPerformanceCounter(&copy_end);
+            unsigned moving_units=0,attacking_units=0,fortifying_units=0,idling_units=0;
+            for(int i=0;i<idle_unit_count && ok;++i) {
+                char const* names[]={"Archer","Swordsman","Infantry","Warrior","Scout","Settler","Worker"};
+                auto site=unit_sites[i];c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);
+                unit.unit_id=10000+i;unit.action=1;unit.direction=1+i%8;unit.frame_count=16;
+                unit.presentation_frequency=frame.presentation_frequency;unit.presentation_time_ticks=frame.presentation_time_ticks;
+                unit.sprite_width=unit.sprite_height=191;unit.projection_scale_milli=tile_width*1000/128;
+                unit.body_x=site->anchor_x+tile_width/2-191*unit.projection_scale_milli/2000;
+                unit.body_y=site->anchor_y+tile_height/2-191*unit.projection_scale_milli/2000;
+                if(mixed_unit_actions) {
+                    // These are scripted native inputs, not renderer-owned
+                    // simulation. Timelines are offset per identity. Every
+                    // period returns to its original anchor without a jump.
+                    int timeline=(step+idle_warmup+i*7)%80,phase=timeline%16;
+                    bool combatant=i%std::size(names)<5;
+                    int travel=0;
+                    if(timeline<16){unit.action=2;unit.direction=3;travel=phase+1;}
+                    else if(timeline<32){unit.action=combatant?3:8;unit.direction=3;travel=16;}
+                    else if(timeline<48){unit.action=2;unit.direction=7;travel=15-phase;}
+                    else if(timeline<64){unit.action=7;unit.direction=7;}
+                    unit.action_cursor=phase;
+                    unit.body_x+=travel*tile_width/32;unit.body_y+=travel*tile_height/32;
+                }
+                moving_units+=unit.action==2;attacking_units+=unit.action==3;
+                fortifying_units+=unit.action==7;idling_units+=unit.action==1;
+                unit.hour=frame.hour;unit.season=frame.season;unit.display_color_rgb=0x205bdd;
+                sprintf_s(unit.unit_key,"PRTO_%s",names[i%std::size(names)]);
+                int bounds[4]={};ok=unit_draw(&unit,unit_dc,unit_dc,bounds)==C3X_RENDERER_RESULT_OK;
+            }
+            if(idle_unit_count)GdiFlush();
+            QueryPerformanceCounter(&end);
+            if(ok && dense_scene)for(unsigned i=0;i<frame.tile_count;++i) {
+                auto const& tile=frame.tiles[i];if(!(tile.tile_flags&C3X_RENDERER_TILE_RENDER))continue;
+                unsigned required=0;
+                if(tile.city_id>=0)required|=C3X_RENDERER_TILE_CUSTOM_CITY_REPLACED;
+                if(tile.road_mask)required|=C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED;
+                if(tile.railroad_mask)required|=C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED;
+                if(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_MINE)required|=C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED;
+                if(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_IRRIGATION)required|=C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED;
+                if(tile.improvement_flags&C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP)required|=C3X_RENDERER_TILE_CUSTOM_CAMP_REPLACED;
+                if(tile.resource_id>=0)required|=C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
+                if(i>=output.replacement_tile_count || (output.replacement_tile_flags[i]&required)!=required) {
+                    std::printf("IDLE ownership FAIL tile=%u required=%u actual=%u\n",i,required,
+                        i<output.replacement_tile_count?output.replacement_tile_flags[i]:0u);ok=false;break;
+                }
+            }
+            if(step<0){warmup_ms+=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;continue;}
+            auto composed=output;if(idle_unit_count)composed.bgra_pixels=unit_pixels;
+            auto data=static_cast<unsigned char const*>(composed.bgra_pixels);
+            std::size_t bytes=std::size_t(output.stride_bytes)*output.height;
+            bool changed=previous.empty() || previous.size()!=bytes || std::memcmp(previous.data(),data,bytes)!=0;
+            if(step>0 && changed)++changes;
+            previous.assign(data,data+bytes);
+            std::printf("IDLE_FRAME step=%d ticks=%lld result=%d visible=%u built=%u reused=%u upload_bytes=%u changed=%d ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f recoveries=%u map_ms=%.3f copy_ms=%.3f units_ms=%.3f units=%d moving=%u attacking=%u fortifying=%u idling=%u\n",
+                step,frame.presentation_time_ticks,code,output.visible_animation_count,output.geometry_tiles_built,
+                output.geometry_tiles_reused,output.geometry_upload_bytes,int(changed),
+                double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(output.geometry_ticks)*1000/frequency.QuadPart,double(output.draw_ticks)*1000/frequency.QuadPart,
+                double(output.readback_ticks)*1000/frequency.QuadPart,output.device_recoveries,
+                double(map_end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(copy_end.QuadPart-map_end.QuadPart)*1000/frequency.QuadPart,
+                double(end.QuadPart-copy_end.QuadPart)*1000/frequency.QuadPart,idle_unit_count,moving_units,attacking_units,fortifying_units,idling_units);
+            camera_memory();std::fflush(stdout);
+            if(ok)ok=write_bmp((std::string(argv[5])+".idle"+std::to_string(step)+".bmp").c_str(),composed);
+        }
+        if(unit_dc && old_bitmap)SelectObject(unit_dc,old_bitmap);
+        if(unit_bitmap)DeleteObject(unit_bitmap);
+        if(unit_dc)DeleteDC(unit_dc);
+        std::printf("IDLE_WARMUP frames=%d ms=%.3f includes_first_unit_poses=1 map_initial_render_excluded=1\n",idle_warmup,warmup_ms);
+        ok=ok && (idle_steps==1 || changes>0);
+        std::printf("IDLE_END status=%s changed_frames=%u\n",ok?"pass":"FAIL",changes);
+    }
+    if(ok && animate && !zoom_benchmark && !navigation_benchmark && !distant_steps && !idle_steps) {
         // Exercise animation after an immutable viewport LRU restore, not only
         // after the unchanged-current-view fast path.
         auto initial=static_cast<unsigned char const*>(output.bgra_pixels);
@@ -809,7 +972,8 @@ int main(int argc, char ** argv) {
             for(std::size_t i=0;i<cached.size();i+=4){bool bad=false;
                 for(unsigned c=0;c<4;++c){unsigned delta=unsigned(std::abs(int(cached[i+c])-int(fresh[i+c])));
                     error+=delta;bad=bad || delta>2;}if(bad)++changed;}
-            bool same=changed<=cached.size()/4000 && error<=cached.size()/100;
+            bool supported=frame.tile_width==128 || frame.tile_width==160 || frame.tile_width==192;
+            bool same=supported?error==0:changed<=cached.size()/4000 && error<=cached.size()/100;
             std::printf("ANIMATION %s parity: %s changed=%zu error=%llu bytes=%zu\n",label,same?"pass":"FAIL",changed,error,cached.size());
             return same;
         };
@@ -819,8 +983,14 @@ int main(int argc, char ** argv) {
             if(ok)ok=compare_cold("scroll");
         }
         if(ok) {
+            auto before_removal=output.visible_animation_count;
             for(auto & tile:tiles){tile.resource_id=-1;tile.resource_name[0]='\0';}
-            ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.visible_animation_count==0 && !output.request_continuous_redraw;
+            ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.visible_animation_count<before_removal &&
+                bool(output.request_continuous_redraw)==(output.visible_animation_count!=0);
+            // Waves may still animate after resources are removed. Their
+            // redraw ownership must survive, while resource replacement ends.
+            for(unsigned i=0;i<output.replacement_tile_count;++i)
+                ok=ok && !(output.replacement_tile_flags[i]&C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED);
             if(ok)ok=compare_cold("removal");
         }
     }
@@ -993,6 +1163,32 @@ bool preview_units(HMODULE module,char const* path,int hour) {
     HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&bits,nullptr,0);
     if(!dc || !bitmap){if(bitmap)DeleteObject(bitmap);if(dc)DeleteDC(dc);return false;}
     auto old=SelectObject(dc,bitmap);bool ok=true;unsigned drawn=0;
+    // Three equal-facing warriors at one clock must have distinct ambient
+    // poses. A repeated identity/time must reproduce its exact pixels.
+    std::vector<std::uint32_t> ambient_sheet(573*191,0xff565b62u);
+    std::vector<std::vector<std::uint32_t>> ambient_images;
+    for(int i=0;i<3 && ok;++i) {
+        std::fill_n(static_cast<std::uint32_t*>(bits),1024*1152,0xff565b62u);
+        c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Warrior");
+        unit.unit_id=10000+i;unit.action=1;unit.direction=3;unit.frame_count=16;
+        unit.sprite_width=unit.sprite_height=191;unit.body_x=unit.body_y=100;
+        unit.presentation_frequency=1000000;unit.presentation_time_ticks=1000000;unit.hour=hour;
+        unit.display_color_rgb=0x205bdd;ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK;GdiFlush();
+        auto values=static_cast<std::uint32_t*>(bits);
+        std::vector<std::uint32_t> current(values,values+1024*1152);
+        for(auto const& prior:ambient_images)ok=ok && current!=prior;
+        for(int y=0;y<191;++y)for(int x=0;x<191;++x)ambient_sheet[y*573+i*191+x]=values[(y+100)*1024+x+100];
+        std::fill_n(values,1024*1152,0xff565b62u);
+        ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK && ok;GdiFlush();
+        ok=ok && std::memcmp(current.data(),bits,current.size()*4)==0;
+        ambient_images.push_back(std::move(current));
+    }
+    std::printf("UNIT independent ambient phases and exact repeat: %s\n",ok?"pass":"FAIL");
+    if(ok) {
+        c3x_renderer_output_v1 sheet={};sheet.width=573;sheet.height=191;sheet.stride_bytes=573*4;sheet.bgra_pixels=ambient_sheet.data();
+        ok=write_bmp((std::string(path)+".ambient-phases.bmp").c_str(),sheet);
+    }
+    ambient_images.clear();ambient_sheet.clear();
     char const* names[]={"Archer","Swordsman","Infantry","Fighter","Galley","Warrior","Scout","Settler","Worker"};
     std::vector<std::uint32_t> first;
     for(int zoom=0;zoom<2 && ok;++zoom)for(int phase=0;phase<2 && ok;++phase) {
@@ -1177,6 +1373,8 @@ bool preview_units(HMODULE module,char const* path,int hour) {
             auto death=std::vector<std::uint32_t>(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*1152);
             ok=pose(held_action,1000,1) && std::memcmp(death.data(),bits,death.size()*4)==0 && ok;
             unit.unit_id+=100; // Fresh identity with a queued attack still uses current idle.
+            ok=pose(1,5,0) && ok;
+            idle.assign(static_cast<std::uint32_t*>(bits),static_cast<std::uint32_t*>(bits)+1024*1152);
             ok=pose(1,5,3) && std::memcmp(idle.data(),bits,idle.size()*4)==0 && ok;
             if(row>=7) {
                 unit.action=3;

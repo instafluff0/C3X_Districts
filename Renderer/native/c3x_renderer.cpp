@@ -65,19 +65,19 @@ namespace {
 constexpr c3x_renderer_u32 viewport_cache_capacity = 32u;
 // Isolated benchmark experiment only; normal/game builds retain their budgets.
 #ifdef C3X_RENDERER_BENCHMARK_LARGE_CACHE
-constexpr std::size_t viewport_cache_budget = 128u * 1024u * 1024u;
+constexpr std::size_t default_viewport_cache_budget = 128u * 1024u * 1024u;
 constexpr std::size_t natural_mesh_cache_budget = 192u * 1024u * 1024u;
 constexpr std::size_t natural_mesh_cache_capacity = 2048u;
-constexpr std::size_t resource_backdrop_cache_budget = 288u * 1024u * 1024u;
+constexpr std::size_t default_resource_backdrop_cache_budget = 288u * 1024u * 1024u;
 constexpr std::size_t tile_geometry_cache_budget = C3X_RENDERER_BENCHMARK_GPU_CACHE_MIB * 1024u * 1024u;
 constexpr std::size_t tile_geometry_cache_capacity = C3X_RENDERER_BENCHMARK_GPU_CACHE_MIB / 192u * 4096u;
 #else
 // Reassign 96 MiB of the former bitmap budget to reusable world mesh data.
-constexpr std::size_t viewport_cache_budget = 32u * 1024u * 1024u;
+constexpr std::size_t default_viewport_cache_budget = 32u * 1024u * 1024u;
 constexpr std::size_t natural_mesh_cache_budget = 96u * 1024u * 1024u;
 constexpr std::size_t natural_mesh_cache_capacity = 1024u;
-constexpr std::size_t resource_backdrop_cache_budget = 128u * 1024u * 1024u;
-static_assert(viewport_cache_budget+natural_mesh_cache_budget==128u*1024u*1024u,
+constexpr std::size_t default_resource_backdrop_cache_budget = 128u * 1024u * 1024u;
+static_assert(default_viewport_cache_budget+natural_mesh_cache_budget==128u*1024u*1024u,
     "World mesh reuse must not increase the combined CPU cache budget");
 // Includes active buffers: a frame pins its entries, never a second copy.
 // The 2240x1192 witness exceeds the old 192 MiB cap in its first view.
@@ -244,6 +244,7 @@ struct ResourceBackdrop {
     ID3D11Texture2D * color=nullptr,* depth=nullptr;
     std::uint64_t signature=0,used=0;
     std::size_t bytes=0;
+    c3x_renderer::render_core::RenderRegionKey dependencies;
 };
 struct ResourceBuffer {
     ID3D11Buffer * vertices = nullptr;
@@ -468,6 +469,8 @@ std::size_t json_member_position(std::vector<std::uint8_t> const& data,
 
 class RendererState {
 public:
+    std::size_t viewport_cache_budget=default_viewport_cache_budget;
+    std::size_t resource_backdrop_cache_budget=default_resource_backdrop_cache_budget;
     c3x_renderer::UnitBodyRenderer unit_bodies;
     bool unit_rendering_enabled=false;
     bool fidelity_profile = false, fidelity_shadow_control = false;
@@ -2239,6 +2242,14 @@ public:
         environment_profile=use_environment;
         fidelity_profile = use_fidelity;
         char control[8]={};
+        bool three_zoom_memory=GetEnvironmentVariableA("C3X_RENDERER_THREE_ZOOM_MEMORY",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        auto viewport_limit=three_zoom_memory?std::max(default_viewport_cache_budget,std::size_t(64u*1024u*1024u)):default_viewport_cache_budget;
+        auto backdrop_limit=three_zoom_memory?std::size_t(832u*1024u*1024u):default_resource_backdrop_cache_budget;
+        // Budget changes retire optional owners before admitting under the new
+        // bound. They never change target resolution, MSAA or retained depth.
+        if(viewport_cache_budget!=viewport_limit){viewport_cache.clear();viewport_cache_bytes=0;}
+        if(resource_backdrop_cache_budget!=backdrop_limit)clear_resource_backdrops();
+        viewport_cache_budget=viewport_limit;resource_backdrop_cache_budget=backdrop_limit;
         clip_dirty_blocks=GetEnvironmentVariableA("C3X_RENDERER_BLOCK_CLIP",control,sizeof(control)) && std::strcmp(control,"1")==0;
         bounded_post=GetEnvironmentVariableA("C3X_RENDERER_BOUNDED_POST",control,sizeof(control)) && std::strcmp(control,"1")==0;
         GetEnvironmentVariableA("C3X_RENDERER_REGION_SIZE",control,sizeof(control));
@@ -3309,6 +3320,11 @@ public:
         int backdrop_extent=city_profile?272:fidelity_profile?256:128;
         if(!backdrop.ensure(device,backdrop_extent,backdrop_extent))return false;
         unsigned backdrop_hits=0,backdrop_misses=0;
+        char dependency_option[8]={};
+        bool dependency_backdrops=anchored && city_profile && world_regions && animation_prepared_ptr &&
+            GetEnvironmentVariableA("C3X_RENDERER_BACKDROP_DEPENDENCIES",dependency_option,sizeof(dependency_option)) &&
+            std::strcmp(dependency_option,"1")==0;
+        unsigned backdrop_dependency_hits=0,backdrop_dependency_rejections=0;
         // Geometry identity includes the entire captured semantic/ownership
         // set, target/zoom, light, wrap, content and device generations, but
         // excludes camera anchors. Conservatively miss when that set changes.
@@ -3322,9 +3338,32 @@ public:
             ViewportShaderSettings settings=geometry_viewport_settings;
             settings.translation[0]-=float(rect.left);settings.translation[1]-=float(rect.top);
             settings.inverse_size[0]=settings.inverse_size[1]=1.f/128;
+            c3x_renderer::render_core::RenderRegionKey backdrop_dependencies;
+            if(dependency_backdrops && !backdrop_reuse_control && found==resource_backdrops.end()) {
+                // Reuse the existing completed-region dependency contract, but
+                // retain BOTH unresolved scene-linear color and depth here.
+                // submit_geometry applies this same four-pixel city guard to
+                // the 128-pixel animation background before its static draw.
+                auto guarded=settings;
+                guarded.translation[0]+=4;guarded.translation[1]+=4;
+                guarded.inverse_size[0]=guarded.inverse_size[1]=1.f/136;
+                bool valid=false;
+                try { valid=render_region_key(geometry_vertex_buffers,guarded,*animation_casters_ptr,
+                            animation_prepared_ptr,backdrop_dependencies); }
+                catch(...) {}
+                if(valid) {
+                    found=std::find_if(resource_backdrops.begin(),resource_backdrops.end(),[&](auto const& block){
+                        return !block.dependencies.empty() && block.dependencies==backdrop_dependencies;
+                    });
+                    if(found!=resource_backdrops.end())++backdrop_dependency_hits;
+                } else {backdrop_dependencies={};++backdrop_dependency_rejections;}
+            }
             context->OMSetRenderTargets(0,nullptr,nullptr);
             if(found!=resource_backdrops.end()) {
                 found->used=resource_backdrop_epoch;
+                // Pin a dependency hit to the current view for the existing
+                // bounded eviction policy and its cheap unchanged-view lookup.
+                found->signature=backdrop_signature;found->x=key_x;found->y=key_y;
                 context->CopyResource(backdrop.color,found->color);
                 context->CopyResource(backdrop.depth_texture,found->depth);++backdrop_hits;
             } else {
@@ -3334,11 +3373,13 @@ public:
                 // RGBA16F + D24S8, both MSAA4. Cache immutable scene-linear
                 // background/depth by static inputs and the region's relative
                 // world placement. Animation time and poses never enter it.
-                std::size_t bytes=std::size_t(backdrop_extent)*backdrop_extent*48u;
+                std::size_t bytes=std::size_t(backdrop_extent)*backdrop_extent*48u+
+                    backdrop_dependencies.capacity()*sizeof(backdrop_dependencies[0])+sizeof(ResourceBackdrop);
                 if(!backdrop_reuse_control && make_resource_backdrop_room(bytes,backdrop_signature)) {
                     resource_backdrops.reserve(resource_backdrops.size()+1);
                     ResourceBackdrop block;block.x=key_x;block.y=key_y;block.bytes=bytes;
                     block.signature=backdrop_signature;block.used=resource_backdrop_epoch;
+                    block.dependencies=std::move(backdrop_dependencies);
                     D3D11_TEXTURE2D_DESC desc={};backdrop.color->GetDesc(&desc);
                     bool allocated=SUCCEEDED(device->CreateTexture2D(&desc,nullptr,&block.color));
                     backdrop.depth_texture->GetDesc(&desc);
@@ -3346,7 +3387,7 @@ public:
                     if(allocated){
                         context->CopyResource(block.color,backdrop.color);
                         context->CopyResource(block.depth,backdrop.depth_texture);
-                        resource_backdrops.push_back(block);resource_backdrop_bytes+=bytes;
+                        resource_backdrops.push_back(std::move(block));resource_backdrop_bytes+=bytes;
                     }else{
                         release(block.color);release(block.depth);
                         trace.write("animation-backdrop","cache allocation skipped; current backdrop remains valid",true);
@@ -3381,6 +3422,11 @@ public:
         context->Unmap(readback_texture,0);
         resource_pixel_signature=cached_signature.complete;resource_pixel_clock=clock;
         QueryPerformanceCounter(&finished);resource_composite_ticks=finished.QuadPart-started.QuadPart;
+        if(dependency_backdrops) {
+            char detail[128];sprintf_s(detail,"hits=%u rejections=%u entries=%zu bytes=%zu",
+                backdrop_dependency_hits,backdrop_dependency_rejections,resource_backdrops.size(),resource_backdrop_bytes);
+            trace.write("animation-backdrop-dependencies",detail);
+        }
         char detail[544];sprintf_s(detail,"visible=%u waves=%u facing=SE clock=%lld rects=%zu pixels=%u upload_bytes=%zu pool_bytes=%zu backdrop_hits=%u backdrop_misses=%u backdrop_bytes=%zu terrain_built=%u ms=%.3f wave_upload_bytes=%zu wave_geometry_bytes=%zu wave_cells_built=%u wave_cells_reused=%u wave_cell_entries=%zu caster_preparations=%u",
             visible_resource_animations,visible_wave_animations,clock,rectangles.size(),dirty_pixels,uploaded,pool_bytes,backdrop_hits,backdrop_misses,
             resource_backdrop_bytes,frame_tiles_built,
@@ -8353,6 +8399,16 @@ public:
                      c3x_renderer_camera_identity_v1 const& identity={}) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
+        // Completion redraws may submit the same immutable request again. Keep
+        // its ticket and ready publication instead of restarting useful work.
+        // Compare complete inputs, including time, visibility, order and epochs;
+        // no scene hash or old-camera image is sufficient for this decision.
+        if(camera_ticket>0 && (camera_result==C3X_RENDERER_RESULT_PENDING || camera_result==C3X_RENDERER_RESULT_OK)) {
+            bool same=camera_pending?same_camera_request(frame,identity,camera_pending_frame,camera_pending_identity):
+                (job_camera_ticket==camera_ticket && !camera_cancelled.load(std::memory_order_relaxed) &&
+                 same_camera_request(frame,identity,job_frame,job_camera_identity));
+            if(same){ticket=camera_ticket;return C3X_RENDERER_RESULT_PENDING;}
+        }
         if(camera_ticket==INT64_MAX)return C3X_RENDERER_RESULT_ERROR;
         // Reject an unsupported publication before copying snapshots or asking
         // D3D for a target. Include worst-case fallback/replacement arrays.
@@ -8411,6 +8467,17 @@ public:
     }
 
 private:
+    bool same_camera_request(c3x_renderer_frame_v1 const& a,c3x_renderer_camera_identity_v1 const& ai,
+                             c3x_renderer_frame_v1 const& b,c3x_renderer_camera_identity_v1 const& bi)const {
+        auto left=a,right=b;
+        left.tiles=right.tiles=nullptr;left.world_topology=right.world_topology=nullptr;
+        // Padding differences can only decline optional reuse. The ordered
+        // payloads have no pointers; equal bytes include every semantic field.
+        return !std::memcmp(&ai,&bi,sizeof(ai)) && !std::memcmp(&left,&right,sizeof(left)) &&
+            (!a.tile_count || !std::memcmp(a.tiles,b.tiles,std::size_t(a.tile_count)*sizeof(*a.tiles))) &&
+            (!a.world_topology_count || !std::memcmp(a.world_topology,b.world_topology,std::size_t(a.world_topology_count)*sizeof(*a.world_topology)));
+    }
+
     int camera_poll_locked(c3x_renderer_i64 ticket,c3x_renderer_output_v1& output) {
         if(ticket<=0 || ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
         if(camera_result!=C3X_RENDERER_RESULT_OK && camera_result!=C3X_RENDERER_RESULT_PENDING)return camera_result;
@@ -8537,7 +8604,7 @@ private:
     c3x_renderer_camera_identity_v1 camera_pending_identity={},job_camera_identity={};
     std::vector<c3x_renderer_tile_v1> camera_pending_tiles;
     std::vector<c3x_renderer_u32> camera_pending_topology;
-    c3x_renderer_i64 camera_ticket=0;
+    c3x_renderer_i64 camera_ticket=0,job_camera_ticket=0;
     int camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
     bool camera_active=false,camera_pending=false,camera_paused=false;
     std::atomic<bool> camera_cancelled{false};
@@ -8731,6 +8798,7 @@ private:
         for (;;) {
             if(!has_job && !stop_requested && camera_pending && !camera_paused) {
                 auto const ticket=camera_ticket;
+                job_camera_ticket=ticket;
                 job_frame=camera_pending_frame;
                 job_camera_identity=camera_pending_identity;
                 job_tiles.swap(camera_pending_tiles);job_world_topology.swap(camera_pending_topology);
@@ -8780,14 +8848,21 @@ private:
                     renderer_state.reset();
                     result=C3X_RENDERER_RESULT_ERROR;
                 }
+                // Copy the immutable completed payload while the worker still
+                // owns renderer scratch, without excluding begin/poll. Native
+                // takeover waits for camera_active; newer input may supersede
+                // this result during the copy and is checked again below.
+                PublishedMapFrame finished_frame;
+                if(result==C3X_RENDERER_RESULT_OK && !camera_cancelled.load(std::memory_order_relaxed)) {
+                    int x=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_x;
+                    int y=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_y;
+                    if(!finished_frame.capture(output,x,y,&job_frame,job_camera_identity))result=C3X_RENDERER_RESULT_ERROR;
+                }
                 lock.lock();
                 if(ticket==camera_ticket && camera_result==C3X_RENDERER_RESULT_PENDING &&
                    !camera_cancelled.load(std::memory_order_relaxed)) {
                     if(result==C3X_RENDERER_RESULT_OK) {
-                        int x=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_x;
-                        int y=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_y;
-                        camera_ready.clear();camera_ready_result=C3X_RENDERER_RESULT_OK;
-                        if(!camera_ready.capture(output,x,y,&job_frame,job_camera_identity))result=C3X_RENDERER_RESULT_ERROR;
+                        camera_ready.swap(finished_frame);camera_ready_result=C3X_RENDERER_RESULT_OK;
                     }
                     camera_result=result;
                 }
@@ -8798,6 +8873,8 @@ private:
                 snapshot_memory("camera-complete");
                 foreground_pending.store(camera_pending,std::memory_order_relaxed);
                 completed.notify_all();
+                // Reclaim an obsolete result/preview outside the queue lock too.
+                lock.unlock();finished_frame.clear();lock.lock();
                 continue;
             }
             if (!has_job && !stop_requested && !camera_paused && warm_cursor < warm_order.size()) {
