@@ -9180,6 +9180,19 @@ extern "C" __declspec(dllexport) int c3x_renderer_set_definition_paths(
     char const * mod_root, char const * default_path, char const * scenario_path, char const * custom_path) {
     int result = get_renderer_worker().configure_definitions(
         mod_root, default_path, scenario_path, custom_path);
+    if(renderer.trace.level) {
+        char effect[16]={};
+        GetEnvironmentVariableA("C3X_RENDERER_WAVES",effect,sizeof(effect));
+        char detail[384];
+        std::snprintf(detail,sizeof(detail),
+            "result=%d waves=%u reflections=%u world_regions=%u world_waves=%u world_backdrops=%u receiver_index=%u "
+            "viewport_limit=%zu backdrop_limit=%zu unit_pose_limit_mib=%u",
+            result,unsigned(std::strcmp(effect,"0")!=0),unsigned(renderer.reflection.enabled),unsigned(renderer.world_regions),
+            unsigned(renderer.world_waves),unsigned(renderer.world_backdrops),unsigned(renderer.composition_receiver_index),
+            renderer.viewport_cache_budget,renderer.resource_backdrop_cache_budget,
+            c3x_renderer::NavigationOptions::unit_pose_mib(GetEnvironmentVariableA));
+        renderer.trace.write("usage-settings",detail,true);
+    }
     if (result != C3X_RENDERER_RESULT_OK)
         destroy_renderer_worker();
     return result;
@@ -9189,7 +9202,15 @@ extern "C" __declspec(dllexport) int c3x_renderer_render(
     c3x_renderer_frame_v1 const * frame, c3x_renderer_output_v1 * output) {
     if (!valid_frame(frame, output))
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-    return get_renderer_worker().render(*frame, *output);
+    auto request=renderer.trace.usage_view(*frame);
+    LARGE_INTEGER started={},finished={};
+    if(request)QueryPerformanceCounter(&started);
+    int result=get_renderer_worker().render(*frame,*output);
+    if(request) {
+        QueryPerformanceCounter(&finished);
+        renderer.trace.usage_result(request,result,finished.QuadPart-started.QuadPart,*output);
+    }
+    return result;
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_camera_begin(

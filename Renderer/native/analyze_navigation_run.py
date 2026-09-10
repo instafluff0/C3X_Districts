@@ -63,6 +63,24 @@ def inspect(directory):
         prefix, end = "RESIDENT_NAV ", "RESIDENT_END status=pass"
         count = int(args["resident_steps"])
         image_names = [f"zoom.bmp.resident{i}.bmp" for i in range(count)]
+    elif scenario == "session":
+        prefix, end = "SESSION_FRAME ", None
+        starts = [fields(l) for l in lines if l.startswith("SESSION_BEGIN ")]
+        timed_ends = [fields(l) for l in lines if l.startswith("SESSION_TIMED_END ")]
+        ends = [fields(l) for l in lines if l.startswith("SESSION_END ")]
+        parity = [fields(l) for l in lines if l.startswith("SESSION_PARITY ")]
+        if (len(starts)!=1 or len(timed_ends)!=1 or len(ends)!=1 or
+                starts[0].get("clock")!="wall" or starts[0].get("unit_warmup")!="0" or
+                starts[0].get("native_presented")!="0" or starts[0].get("dense")!="1" or
+                starts[0].get("units_per_zone")!=str(args.get("idle_units")) or
+                timed_ends[0].get("status")!="pass" or ends[0].get("status")!="pass" or
+                not parity or any(r.get("status")!="pass" for r in parity) or
+                ends[0].get("verified")!=str(len(parity)) or ends[0].get("snapshots")!=str(len(parity))):
+            raise ValueError("Missing completed busy session and independent snapshots")
+        count=int(ends[0]["frames"])
+        if timed_ends[0].get("frames")!=str(count):
+            raise ValueError("Busy session frame counts disagree")
+        image_names=["zoom.bmp"]+[f"zoom.bmp.session-{r['phase']}-{r['tile_width']}.bmp" for r in parity]
     elif scenario == "distant":
         prefix, end = "DISTANT_NAV ", "DISTANT_END status=pass"
         count = int(args["distant_steps"])
@@ -99,10 +117,33 @@ def inspect(directory):
     rows = [fields(line) for line in lines if line.startswith(prefix)]
     if scenario == "animation":
         rows = [dict(r, step=r["frame"], built=r["terrain_built"], upload_bytes=r["terrain_upload"], result="1") for r in rows]
+    elif scenario == "session":
+        rows = [dict(r,step=r["frame"]) for r in rows]
     if count < 1 or len(rows) != count or (end and lines.count(end) != 1) or any(r["result"] != "1" for r in rows):
         raise ValueError("Incomplete or failed measured sweep")
     if scenario != "zoom" and [int(r["step"]) for r in rows] != list(range(count)):
         raise ValueError("Reordered or duplicated samples")
+    if scenario == "session":
+        slot_us=int(starts[0]["input_slot_us"]);duration=int(starts[0]["duration_us"])
+        previous_slot=-1;previous_done=0;phase_mask=zoom_mask=0;skipped=0
+        if slot_us!=33333 or duration!=60000000:
+            raise ValueError("Unexpected busy-session input schedule")
+        for row in rows:
+            dispatch,done=int(row["dispatch_us"]),int(row["done_us"])
+            slot=dispatch//slot_us;phase=int(row["phase"]);width=int(row["tile_width"])
+            if (not 0<=dispatch<duration or dispatch<previous_done or done<dispatch or
+                    int(row["requested_us"])!=slot*slot_us or
+                    int(row["skipped_slots"])!=slot-previous_slot-1 or slot<=previous_slot or
+                    phase not in range(8) or width not in (128,160,192) or int(row["recoveries"])!=0):
+                raise ValueError("Busy-session clock, camera, or completion order is invalid")
+            previous_slot,previous_done=slot,done;skipped+=int(row["skipped_slots"])
+            phase_mask|=1<<phase;zoom_mask|={128:1,160:2,192:4}[width]
+        coverage=int(phase_mask==255 and zoom_mask==7)
+        if (int(timed_ends[0]["skipped_slots"])!=skipped or int(timed_ends[0]["phase_mask"])!=phase_mask or
+                int(timed_ends[0]["zoom_mask"])!=zoom_mask or
+                any(r.get("coverage_complete")!=str(coverage) for r in (timed_ends[0],ends[0])) or
+                float(timed_ends[0]["wall_ms"])<duration/1000):
+            raise ValueError("Busy-session schedule coverage is inconsistent")
     if scenario == "idle":
         if any(int(r["ticks"])!=1000000+(i+args.get("idle_warmup",10)+1)*1000000//15 or int(r["visible"])<1 or
                int(r["built"])!=0 or int(r["upload_bytes"])!=0 or int(r["recoveries"])!=0 for i,r in enumerate(rows)):
@@ -131,7 +172,7 @@ def inspect(directory):
               "waves": args["waves"], "clock": f"unpaced stationary 15 Hz authored pose samples; {args.get('idle_warmup',10)} warmup renders" if scenario == "idle" else "six changing animation clocks" if scenario == "animation" else "fixed replay clock; changing animation is a separate witness",
               "binaries": receipt["binaries"], "images": images,
               "image_receipt_verified": "images" in completion,
-              "camera_requests": [{k: r[k] for k in ("cycle", "step", "x", "y", "pixel_y", "width", "ticks") if k in r} for r in rows],
+              "camera_requests": [{k: r[k] for k in ("cycle", "step", "x", "y", "pixel_y", "width", "tile_width", "ticks", "dispatch_us", "phase") if k in r} for r in rows],
               "timing": {k: distribution([float(r[k]) for r in measured])
                          for k in ("ms", "capture_ms", "geometry_ms", "draw_ms", "readback_ms", "map_ms", "copy_ms", "units_ms")
                          if all(k in r for r in measured)},
@@ -140,6 +181,27 @@ def inspect(directory):
               "upload_bytes": sum(int(r["upload_bytes"]) for r in measured) if all("upload_bytes" in r for r in measured) else None,
               "native_first_response_ms": None, "native_presented_frames": None,
               "map_prepared_before_sweep": False if scenario == "distant" else None}
+    if scenario == "session":
+        report["clock"]="60-second wall-clock input script; no unit warm-up; post-session snapshot checks excluded"
+        report["endpoint"]="standalone capture, map rendering and unit/GDI completion; no native presentation"
+        workloads={}
+        for phase in sorted({r["phase"] for r in rows},key=int):
+            selected=[r for r in rows if r["phase"]==phase]
+            workloads[selected[0]["label"]]={
+                "timing":{k:distribution([float(r[k]) for r in selected]) for k in ("ms","capture_ms","map_ms","copy_ms","units_ms")},
+                "visible_unit_occurrences":{"min":min(int(r["units"]) for r in selected),"max":max(int(r["units"]) for r in selected)},
+                "late_camera_completions":sum(r["superseded"]=="1" for r in selected),
+                "input_slots_skipped":sum(int(r["skipped_slots"]) for r in selected)}
+        scheduled=math.ceil(duration/slot_us)
+        report["session"]={"workloads":workloads,"initial_map_render_ms":float(starts[0]["initial_render_ms"]),
+            "wall_ms":float(timed_ends[0]["wall_ms"]),"scheduled_input_slots":scheduled,
+            "undispatched_input_slots":scheduled-count,"schedule_coverage_complete":bool(coverage),
+            "missing_phases":[i for i in range(8) if not phase_mask&(1<<i)],
+            "observed_zooms":sorted({int(r["tile_width"]) for r in rows}),
+            "snapshot_parity_count":len(parity),"snapshot_pixel_bytes":int(timed_ends[0]["snapshot_bytes"]),
+            "evidence_overhead_ms":float(timed_ends[0]["evidence_ms"]),
+            "completed_updates_per_second":count*1000/float(timed_ends[0]["wall_ms"]),
+            "note":"The scripted producer advances while synchronous rendering blocks. Undispatched slots model latest-input coalescing, not native input handling. Missing phases remain missing; independent snapshot checks cannot turn them into a workload pass. Initial DLL load/configuration precedes the separately timed initial map render."}
     if scenario == "idle":
         observed_changes=sum(images[image_names[i]]!=images[image_names[i-1]] for i in range(1,count))
         if observed_changes!=int(ends[0]["changed_frames"]) or (count>1 and observed_changes==0):

@@ -11,6 +11,7 @@
 #include <string>
 
 #include "c3x_renderer_api.h"
+#include "busy_session_plan.h"
 
 // Mirror the critical production boundary on every render, including warm hits.
 bool preview_ownership(c3x_renderer_frame_v1 const& frame, c3x_renderer_output_v1 const& output) {
@@ -511,7 +512,11 @@ int main(int argc, char ** argv) {
         return code==C3X_RENDERER_RESULT_OK && !preview_ownership(*input,*result)
             ? int(C3X_RENDERER_RESULT_ERROR) : code;
     };
+    LARGE_INTEGER initial_begin={},initial_done={},initial_frequency={};QueryPerformanceFrequency(&initial_frequency);
+    QueryPerformanceCounter(&initial_begin);
     int result = render_checked(&frame, &output);
+    QueryPerformanceCounter(&initial_done);
+    double initial_render_ms=double(initial_done.QuadPart-initial_begin.QuadPart)*1000/initial_frequency.QuadPart;
     std::size_t expected_rendered = 0;
     for (c3x_renderer_tile_v1 const & tile : tiles)
         if ((tile.tile_flags & C3X_RENDERER_TILE_RENDER) != 0)
@@ -629,6 +634,8 @@ int main(int argc, char ** argv) {
     char idle_option[16]={};
     int idle_steps=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_IDLE_STEPS",idle_option,sizeof(idle_option))?std::clamp(std::atoi(idle_option),0,1000):0;
     int idle_warmup=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_IDLE_WARMUP",idle_option,sizeof(idle_option))?std::clamp(std::atoi(idle_option),10,150):10;
+    char session_option[8]={};
+    bool busy_session=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_BUSY_SESSION",session_option,sizeof(session_option)) && std::strcmp(session_option,"1")==0;
     char cycle_option[16]={};
     int camera_cycles=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CYCLES",cycle_option,sizeof(cycle_option))?
         std::clamp(std::atoi(cycle_option),2,40):2;
@@ -647,6 +654,7 @@ int main(int argc, char ** argv) {
         std::printf("CAMERA memory available_virtual=%llu largest_free_region=%zu total_virtual=%llu\n",
             memory.ullAvailVirtual,largest,memory.ullTotalVirtual);
     };
+    #include "busy_session_preview.h"
     if(ok && zoom_benchmark) {
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
         char supported_option[8]={};
@@ -920,7 +928,7 @@ int main(int argc, char ** argv) {
         ok=ok && (idle_steps==1 || changes>0);
         std::printf("IDLE_END status=%s changed_frames=%u\n",ok?"pass":"FAIL",changes);
     }
-    if(ok && animate && !zoom_benchmark && !navigation_benchmark && !distant_steps && !idle_steps) {
+    if(ok && animate && !zoom_benchmark && !navigation_benchmark && !distant_steps && !idle_steps && !busy_session) {
         // Exercise animation after an immutable viewport LRU restore, not only
         // after the unchanged-current-view fast path.
         auto initial=static_cast<unsigned char const*>(output.bgra_pixels);

@@ -62,7 +62,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binaries", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "idle", "distant"), default="navigation")
+    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "idle", "distant", "session"), default="navigation")
     parser.add_argument("--idle-steps", type=int, choices=range(1,1001), default=100)
     parser.add_argument("--idle-warmup", type=int, choices=range(10,151), default=10)
     parser.add_argument("--unit-pose-memory", action="store_true", help="Opt-in 256 MiB / 4096-entry exact unit-pose retention")
@@ -112,10 +112,12 @@ def main():
     parser.add_argument("--wave-control", action="store_true", help="Rebuild coast-cell wave buffers for independent comparisons")
     parser.add_argument("--composition-casters-control", action="store_true", help="Rebuild caster preparation independently for each animation region")
     args = parser.parse_args()
-    if args.idle_units and args.scenario != "idle":
-        parser.error("--idle-units requires --scenario idle")
-    if args.unit_actions=="mixed" and (args.scenario!="idle" or not args.idle_units):
+    if args.idle_units and args.scenario not in ("idle", "session"):
+        parser.error("--idle-units requires --scenario idle or session")
+    if args.unit_actions=="mixed" and (args.scenario not in ("idle","session") or not args.idle_units):
         parser.error("--unit-actions mixed requires --scenario idle and --idle-units")
+    if args.scenario=="session" and (not args.idle_units or not args.dense_scene or args.waves!="1" or args.reflection_ablation or args.camera_view):
+        parser.error("A busy session requires units, --dense-scene, waves/reflections on and the synchronous native-compatible render API")
     out = args.out.resolve()
     relative = out.relative_to(ROOT)
     storage = storage_preflight(ROOT, args.width, args.height, args.idle_steps if args.scenario == "idle" else args.distant_steps if args.scenario == "distant" else args.resident_steps if args.resident else 0)
@@ -172,6 +174,7 @@ def main():
            "C3X_RENDERER_PREVIEW_ANIMATION": "1", "C3X_RENDERER_WAVES": args.waves,
            "C3X_RENDERER_PREVIEW_NAVIGATION": "1" if args.scenario == "navigation" else "",
            "C3X_RENDERER_PREVIEW_ZOOM": "1" if args.scenario == "zoom" else "",
+           "C3X_RENDERER_PREVIEW_BUSY_SESSION": "1" if args.scenario == "session" else "",
            "C3X_RENDERER_PREVIEW_RESIDENT_SWEEP": "1" if args.resident else "",
            "C3X_RENDERER_PREVIEW_RESIDENT_COLD": "1" if args.cold else ""})
     win_root = Path(ROOT) if os.name == "nt" else windows_root()

@@ -17,6 +17,7 @@ class PublicationTests(unittest.TestCase):
 #include <cstddef>
 #include <cstring>
 #include <vector>
+#include "Renderer/native/navigation_options.h"
 constexpr std::size_t mib=1024*1024;
 constexpr std::size_t default_viewport_cache_budget=32*mib,default_resource_backdrop_cache_budget=128*mib;
 char const* option="";

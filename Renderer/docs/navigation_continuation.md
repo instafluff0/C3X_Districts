@@ -6,6 +6,48 @@ visibility, overlays, picking and presentation ownership. The original
 standalone completed rendering (including capture for navigation),
 **not live-game presentation**.
 
+## Current production activation
+
+The user subsequently requested putting the best verified approaches in production
+before resuming experiments. `Renderer/bin/C3XRenderer.dll` is now the normal-tier
+`navigation-usage-build-20260909` DLL, SHA-256
+`c2b3a2e8cf5ebfc8c32c185ea411cb68062a2683fbacead9660ad592d18b8af9`.
+The existing cache switch now supplies the previously measured wave/backdrop,
+exact dependency, receiver-index and larger-memory defaults. Explicit standalone
+controls still override them; waves/reflection preferences are unchanged.
+
+Before staging, current core integration passed 247 tests with one skip, terrain
+edit/resource playback and day/night unit-action checks. The small default-policy
+change then passed 11 focused option/pose/analyzer tests and a normal MSVC build.
+Same-build explicit/default pairs at 128/160/192 matched all 21 saved images;
+each passed exact zoom return, changing animation, scroll/cold and removal/cold.
+These six-frame temporal checks are correctness evidence, not performance tails.
+Compiled source closure, runtime inputs and DLL hashes were rechecked before
+the atomic replacement. The installed GOG executable is Large Address Aware;
+live peak/contiguous-memory verification remains pending.
+
+The logging follow-up uses the existing `OutputDebugStringA` path; see
+[live usage logging](live_usage_logging.md). Current integration passed 249 tests
+with one skip and the terrain/resource/day-night unit witnesses. Native log
+verification matched 40 calls, 480 unit draws and 24 identities without missing
+or invalid pairs. All seven width-128 animated images matched the preceding
+production DLL exactly. This is logging verification, not a busy-session pass.
+The performance-only DLL is also preserved as `previous-performance-C3XRenderer.dll`
+(SHA-256 `ef1d63ff1c652c01fbc1804dbcc5c8576d6dbfa078e6663395dbcf5907ff209a`).
+
+The receipt and rollback are under `Renderer/lab/out/navigation/promotion/`.
+Restore `previous-C3XRenderer.dll` to `Renderer/bin/C3XRenderer.dll` to return to
+the accepted mountain DLL, SHA-256
+`ccd8e9f76d06e0c66c6cdc5f1d400713772c72c113d6ad8d114dcf59ec18e82f`;
+`previous-run_navigation_evaluation.cmd` preserves the prior launcher as well.
+Restart the game to load either DLL. No installer or game launch occurred.
+The cache switch is enabled locally; waves and reflections are currently disabled
+in the user's local configuration. Verification explicitly enabled both.
+
+The next test is a [continuous busy-map session](busy_navigation_session.md),
+including cold startup, idle animations, scrolling, all three zooms, distant jumps
+and return travel without cache resets. Isolated warm tests do not establish it.
+
 ## Reproduction and evidence
 
 The destination checkout started at `f2696829d9bc549ae01597cf42d25f3ddab736de`.
@@ -459,8 +501,9 @@ candidate DLL hash is
 its independent receipt is `Renderer/lab/out/integration/shadows.json`.
 No injected compilation was requested because injected sources were unchanged.
 
-This continuation has not staged a navigation DLL, run `INSTALL.bat`, or
-launched Civ III. The separate mountain task staged DLL SHA-256
+Before the later user-authorized production activation above, this continuation
+had not staged a navigation DLL, run `INSTALL.bat`, or launched Civ III.
+The separate mountain task had staged DLL SHA-256
 `ccd8e9f76d06e0c66c6cdc5f1d400713772c72c113d6ad8d114dcf59ec18e82f`
 from `f2696829` native code plus the accepted shaders; it excludes this
 continuation's native C++ changes. Its rollback is

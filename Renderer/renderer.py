@@ -859,6 +859,7 @@ def run_tests(category=None, *, integration=False, full=False):
                         "Renderer.native.test_zoom_mesh_cache",
                         "Renderer.native.test_frame_publication",
                         "Renderer.native.test_frame_telemetry",
+                        "Renderer.native.test_renderer_trace",
                         "Renderer.native.test_water_coverage",
                         "Renderer.native.test_animation_retention",
                         "Renderer.native.test_render_region_cache",

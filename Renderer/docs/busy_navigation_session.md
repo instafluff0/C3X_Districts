@@ -66,3 +66,24 @@ do not yet implement this continuous session. Implement and run it after the
 authorized production staging, then use its slowest phases to select further
 optimization. Preserve [the original targets](navigation_implementation_plan.md)
 and [native presentation constraints](native_async_presentation_audit.md).
+
+## Structural preparation after measurement
+
+Global basic caches are a concrete next direction for cold jumps. Compact map
+topology and coastline structures already exist, as do bounded retained ground
+samples and world meshes. The missing step is preparing structural content before
+the camera first needs it and retaining it beyond GPU eviction.
+
+Prioritize camera-independent ground/relief inputs and reusable grid/index
+templates, then versioned compiled structural regions with bounded disk storage.
+Share them across 128/160/192 rather than storing three copies of identical world
+data. Preserve exact projected vertices/materials and dependency observations;
+the recent small per-tile query caches did not establish a speed benefit.
+
+Topology-only inputs can support pure terrain structure, not arbitrary cities,
+resources, forest exclusions, ownership or visibility. Complete immutable regional
+appearance must be captured before preparing those consumers. Pack/compiler
+identity, map changes, local edits, wrapping and corruption must invalidate or
+reject stored data. Report preparation time, disk footprint, pressure/eviction,
+and first-use/revisit latency separately. No global compiled-region cache is
+implemented or claimed complete yet.

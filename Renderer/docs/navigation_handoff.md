@@ -3,12 +3,18 @@
 ## Current continuation
 
 Read [the destination reproduction and ongoing optimization evidence](navigation_continuation.md)
-before using the historical activation or timing statements below. The current
-staged DLL is the separately accepted mountain-shader promotion, not the new
-navigation candidate. This continuation has not staged, installed or launched
-the game. The fresh nearby waves-off cache/control pair matches all 100 images;
-its candidate median/p95 is 27.401/87.631 ms. Waves-on, zoom, distant preparation
-and native presentation have separate evidence and must not inherit that pass.
+before using the historical activation or timing statements below. At the user's
+explicit request, the verified navigation DLL is now staged: SHA-256
+`c2b3a2e8cf5ebfc8c32c185ea411cb68062a2683fbacead9660ad592d18b8af9`.
+The existing cache switch enables the verified larger-memory, wave/backdrop and
+receiver-index defaults. All 21 animated verification images match the explicit
+settings at 128/160/192. No installer or game launch was performed; restart the
+game to load the DLL. Rollback is
+`Renderer/lab/out/navigation/promotion/previous-C3XRenderer.dll` (the prior
+accepted mountain DLL). This is not a live-game performance pass.
+Waves-on, zoom, distant preparation and native presentation have separate evidence.
+Timestamped [usage logging](live_usage_logging.md) is included.
+The next [busy continuous session](busy_navigation_session.md) is being implemented.
 The original plan and historical records below remain intact.
 
 ## Historical staged correction: animation background corruption
