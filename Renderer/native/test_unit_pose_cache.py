@@ -6,7 +6,7 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class UnitPoseCacheTests(unittest.TestCase):
-    def test_ambient_units_have_stable_offsets_without_changing_directed_cursors(self):
+    def test_all_unit_actions_follow_the_native_cursor(self):
         source=(ROOT/"Renderer/native/unit_body_renderer.h").read_text()
         body="NativeUnitDraw draw;"+source.split("NativeUnitDraw draw;",1)[1].split("        int scale_milli=",1)[0]
         run_cpp(r'''
@@ -27,7 +27,7 @@ int main(){
  request.presentation_time_ticks=1000000;request.presentation_frequency=1000000;
  Action ambient;int a,b,c;double phase=0;
  assert(sample(request,&ambient,a,phase));request.unit_id++;assert(sample(request,&ambient,b,phase));
- request.unit_id++;assert(sample(request,&ambient,c,phase));assert(a!=b && a!=c && b!=c);
+ request.unit_id++;assert(sample(request,&ambient,c,phase));assert(a==7 && a==b && b==c && phase==7.0/16);
  request.unit_id=10000;request.body_x=400;request.body_y=-100;request.projection_scale_milli=1500;
  assert(sample(request,&ambient,b,phase) && a==b);
  request.presentation_time_ticks+=8000000;assert(sample(request,&ambient,b,phase) && a==b);

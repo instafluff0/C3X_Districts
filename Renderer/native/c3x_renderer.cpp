@@ -484,6 +484,7 @@ public:
     bool cull_empty_water=false;
     bool world_backdrops=false,backdrop_reuse_control=false;
     bool world_waves=false,wave_reuse_control=false;
+    bool animation_readback_atlas=false;
     bool world_raster_grid=false;
     bool world_regions=false,world_regions_control=false;
     bool region_diagnostics=false;
@@ -569,6 +570,8 @@ public:
     ID3D11Texture2D * depth_texture = nullptr;
     ID3D11DepthStencilView * depth_target = nullptr;
     ID3D11Texture2D * readback_texture = nullptr;
+    ID3D11Texture2D * animation_readback_texture = nullptr;
+    unsigned animation_readback_width=0,animation_readback_height=0;
     int width = 0;
     int height = 0;
     std::vector<std::uint32_t> pixels;
@@ -851,6 +854,8 @@ public:
         release(block_readback); release(block_depth); release(block_depth_texture);
         release(block_target); release(block_texture);
         release(readback_texture);
+        release(animation_readback_texture);
+        animation_readback_width=animation_readback_height=0;
         release(depth_target);
         release(depth_texture);
         release(render_target);
@@ -2364,6 +2369,7 @@ public:
         backdrop_reuse_control=GetEnvironmentVariableA("C3X_RENDERER_BACKDROP_REUSE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         world_waves=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_WORLD_WAVES");
         wave_reuse_control=GetEnvironmentVariableA("C3X_RENDERER_WAVE_REUSE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        animation_readback_atlas=GetEnvironmentVariableA("C3X_RENDERER_ANIMATION_READBACK_ATLAS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         reflection.enabled=!(GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         fidelity_shadow_control=GetEnvironmentVariableA("C3X_RENDERER_FIDELITY_SHADOW_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         fidelity_root = mod_root ? mod_root : "";
@@ -3422,6 +3428,22 @@ public:
         LARGE_INTEGER poses_ready={},background_started={},animation_started={},region_finished={};
         QueryPerformanceCounter(&poses_ready);
         LONGLONG background_ticks=0,animation_ticks=0;
+        unsigned atlas_columns=0,atlas_rows=0;
+        if(animation_readback_atlas && !rectangles.empty()) {
+            while(atlas_columns*atlas_columns<rectangles.size())++atlas_columns;
+            atlas_rows=unsigned((rectangles.size()+atlas_columns-1)/atlas_columns);
+            unsigned atlas_width=atlas_columns*128,atlas_height=atlas_rows*128;
+            if(!animation_readback_texture || animation_readback_width!=atlas_width || animation_readback_height!=atlas_height) {
+                release(animation_readback_texture);
+                D3D11_TEXTURE2D_DESC desc={};desc.Width=atlas_width;desc.Height=atlas_height;
+                desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+                desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.Usage=D3D11_USAGE_STAGING;
+                desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+                if(FAILED(device->CreateTexture2D(&desc,nullptr,&animation_readback_texture)))return false;
+                animation_readback_width=atlas_width;animation_readback_height=atlas_height;
+            }
+        }
+        std::size_t rectangle_index=0;
         for(auto & rect:rectangles) {
             QueryPerformanceCounter(&background_started);
             int key_x=rect.left-anchor_x,key_y=rect.top-anchor_y;
@@ -3491,14 +3513,21 @@ public:
             // source casters for lighting; animated bodies never invalidate pages.
             QueryPerformanceCounter(&animation_started);
             background_ticks+=animation_started.QuadPart-background_started.QuadPart;
-            if(!submit_geometry(buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
-                    nullptr,true,true,&geometry_vertex_buffers,false,animation_casters_ptr,animation_prepared_ptr))return false;
             D3D11_RECT clipped={std::max<LONG>(0,rect.left),std::max<LONG>(0,rect.top),
                 std::min<LONG>(width,rect.right),std::min<LONG>(height,rect.bottom)};
+            if(!submit_geometry(buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
+                    nullptr,true,true,&geometry_vertex_buffers,false,animation_casters_ptr,animation_prepared_ptr))return false;
             D3D11_BOX box={unsigned(clipped.left-rect.left),unsigned(clipped.top-rect.top),0,
                 unsigned(clipped.right-rect.left),unsigned(clipped.bottom-rect.top),1};
-            context->CopySubresourceRegion(render_texture,0,unsigned(clipped.left),unsigned(clipped.top),0,block_texture,0,&box);
+            if(animation_readback_atlas) {
+                unsigned atlas_x=unsigned(rectangle_index%atlas_columns)*128;
+                unsigned atlas_y=unsigned(rectangle_index/atlas_columns)*128;
+                context->CopySubresourceRegion(animation_readback_texture,0,atlas_x,atlas_y,0,block_texture,0,&box);
+            } else {
+                context->CopySubresourceRegion(render_texture,0,unsigned(clipped.left),unsigned(clipped.top),0,block_texture,0,&box);
+            }
             rect=clipped;
+            ++rectangle_index;
             QueryPerformanceCounter(&region_finished);
             animation_ticks+=region_finished.QuadPart-animation_started.QuadPart;
         }
@@ -3506,21 +3535,30 @@ public:
         QueryPerformanceCounter(&readback_started);
         unsigned dirty_pixels=0;
         for(auto const & rect:rectangles) {
-            D3D11_BOX box={unsigned(rect.left),unsigned(rect.top),0,unsigned(rect.right),unsigned(rect.bottom),1};
-            context->CopySubresourceRegion(readback_texture,0,box.left,box.top,0,render_texture,0,&box);
+            if(!animation_readback_atlas) {
+                D3D11_BOX box={unsigned(rect.left),unsigned(rect.top),0,unsigned(rect.right),unsigned(rect.bottom),1};
+                context->CopySubresourceRegion(readback_texture,0,box.left,box.top,0,render_texture,0,&box);
+            }
             dirty_pixels+=unsigned((rect.right-rect.left)*(rect.bottom-rect.top));
         }
         D3D11_MAPPED_SUBRESOURCE mapped={};
         QueryPerformanceCounter(&readback_submitted);
-        if(FAILED(context->Map(readback_texture,0,D3D11_MAP_READ,0,&mapped))) return false;
+        auto mapped_texture=animation_readback_atlas?animation_readback_texture:readback_texture;
+        if(FAILED(context->Map(mapped_texture,0,D3D11_MAP_READ,0,&mapped))) return false;
         QueryPerformanceCounter(&readback_ready);
         // The immutable base owns every old body position. Never cache posed pixels.
         resource_pixels=pixels;
-        for(auto const & rect:rectangles)for(LONG y=rect.top;y<rect.bottom;++y)
-            std::memcpy(resource_pixels.data()+std::size_t(y)*width+rect.left,
-                static_cast<std::uint8_t const*>(mapped.pData)+std::size_t(y)*mapped.RowPitch+std::size_t(rect.left)*4,
-                std::size_t(rect.right-rect.left)*4);
-        context->Unmap(readback_texture,0);
+        rectangle_index=0;
+        for(auto const & rect:rectangles) {
+            unsigned source_x=animation_readback_atlas?unsigned(rectangle_index%atlas_columns)*128:unsigned(rect.left);
+            unsigned source_y=animation_readback_atlas?unsigned(rectangle_index/atlas_columns)*128:unsigned(rect.top);
+            for(LONG y=rect.top;y<rect.bottom;++y)
+                std::memcpy(resource_pixels.data()+std::size_t(y)*width+rect.left,
+                    static_cast<std::uint8_t const*>(mapped.pData)+std::size_t(source_y+y-rect.top)*mapped.RowPitch+std::size_t(source_x)*4,
+                    std::size_t(rect.right-rect.left)*4);
+            ++rectangle_index;
+        }
+        context->Unmap(mapped_texture,0);
         resource_pixel_signature=cached_signature.complete;resource_pixel_clock=clock;
         QueryPerformanceCounter(&finished);resource_composite_ticks=finished.QuadPart-started.QuadPart;
         {
@@ -3535,10 +3573,11 @@ public:
                 backdrop_dependency_hits,backdrop_dependency_rejections,resource_backdrops.size(),resource_backdrop_bytes);
             trace.write("animation-backdrop-dependencies",detail);
         }
-        char detail[544];sprintf_s(detail,"visible=%u waves=%u facing=SE clock=%lld rects=%zu pixels=%u upload_bytes=%zu pool_bytes=%zu backdrop_hits=%u backdrop_misses=%u backdrop_bytes=%zu terrain_built=%u ms=%.3f wave_upload_bytes=%zu wave_geometry_bytes=%zu wave_cells_built=%u wave_cells_reused=%u wave_cell_entries=%zu caster_preparations=%u",
+        char detail[640];sprintf_s(detail,"visible=%u waves=%u facing=SE clock=%lld rects=%zu pixels=%u upload_bytes=%zu pool_bytes=%zu backdrop_hits=%u backdrop_misses=%u backdrop_bytes=%zu terrain_built=%u ms=%.3f wave_upload_bytes=%zu wave_geometry_bytes=%zu wave_cells_built=%u wave_cells_reused=%u wave_cell_entries=%zu caster_preparations=%u readback=%s readback_width=%u readback_height=%u",
             visible_resource_animations,visible_wave_animations,clock,rectangles.size(),dirty_pixels,uploaded,pool_bytes,backdrop_hits,backdrop_misses,
             resource_backdrop_bytes,frame_tiles_built,
-            trace.milliseconds(resource_composite_ticks),wave_upload_bytes,wave_geometry_bytes,wave_cells_built,wave_cells_reused,retained_wave_cells.size(),frame_caster_preparations);trace.write("animation-frame",detail);
+            trace.milliseconds(resource_composite_ticks),wave_upload_bytes,wave_geometry_bytes,wave_cells_built,wave_cells_reused,retained_wave_cells.size(),frame_caster_preparations,
+            animation_readback_atlas?"atlas":"full",animation_readback_atlas?animation_readback_width:unsigned(width),animation_readback_atlas?animation_readback_height:unsigned(height));trace.write("animation-frame",detail);
         return true;
     }
 
@@ -8674,7 +8713,6 @@ public:
     int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr,int* bounds=nullptr) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
-        UnitCameraPause pause(*this,lock);
         if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
         start_locked();job_unit=request;
         if(bounds) {
@@ -8687,6 +8725,37 @@ public:
                                    projection,found->minimum_canvas))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         }
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
+        // Cached unit pixels are an independent CPU publication. Do not cancel
+        // an exact ambient map render merely to copy a pose already in memory.
+        if(renderer_state.unit_bodies.restore_cached(job_unit)) {
+            int result=renderer_state.unit_bodies.blit(destination,job_unit.body_x,job_unit.body_y,background)
+                ? C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+            if(result!=C3X_RENDERER_RESULT_OK)renderer_state.unit_bodies.failure_reason="native-canvas-blit";
+            if(result==C3X_RENDERER_RESULT_OK && bounds) {
+                bounds[0]=job_unit.body_x;bounds[1]=job_unit.body_y;
+                bounds[2]=job_unit.body_x+renderer_state.unit_bodies.image_width;
+                bounds[3]=job_unit.body_y+renderer_state.unit_bodies.image_height;
+            }
+            QueryPerformanceCounter(&finished);
+            char detail[384];std::snprintf(detail,sizeof(detail),
+                "id=%d key=%.63s action=%d queued=%d cursor=%d/%d dir=%d xy=%d,%d reduced=%d color=%06x result=%d reason=%s cache_hit=1 cache_only=1 cache_bytes=%zu keyed=%u shadow_pixels=%u ms=%.3f",
+                request.unit_id,request.unit_key,request.action,request.queued_action,request.action_cursor,request.frame_count,
+                request.direction,request.body_x,request.body_y,request.reduced,request.display_color_rgb,result,
+                renderer_state.unit_bodies.failure_reason,renderer_state.unit_bodies.cache_bytes,
+                renderer_state.unit_bodies.keyed_pixels,renderer_state.unit_bodies.cast_pixels,
+                renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart));
+            renderer_state.trace.write("unit-body",detail,true);
+            return result;
+        }
+        {
+            char detail[256];std::snprintf(detail,sizeof(detail),
+                "id=%d key=%.63s action=%d cursor=%d/%d dir=%d reason=%s entries=%zu bytes=%zu",
+                request.unit_id,request.unit_key,request.action,request.action_cursor,request.frame_count,
+                request.direction,renderer_state.unit_bodies.failure_reason,
+                renderer_state.unit_bodies.cached_pose_entries(),renderer_state.unit_bodies.cache_bytes);
+            renderer_state.trace.write("unit-cache-only-miss",detail,true);
+        }
+        UnitCameraPause pause(*this,lock);
         int result=submit_locked(lock,Command::unit);
         lock.unlock();
         if(result==C3X_RENDERER_RESULT_OK && !renderer_state.unit_bodies.blit(destination,job_unit.body_x,job_unit.body_y,background)) {

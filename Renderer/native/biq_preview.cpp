@@ -254,6 +254,7 @@ int main(int argc, char ** argv) {
     char unit_actions_option[16]={};
     bool mixed_unit_actions=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_UNIT_ACTIONS",unit_actions_option,sizeof(unit_actions_option)) &&
         std::strcmp(unit_actions_option,"mixed")==0;
+    bool realistic_unit_actions=std::strcmp(unit_actions_option,"realistic")==0;
 #ifdef C3X_LAB_PREVIEW
     enable_unit_preview=enable_unit_preview || GetEnvironmentVariableA("C3X_LAB_UNIT_STUDY",unit_preview,sizeof(unit_preview))!=0;
 #endif
@@ -430,11 +431,15 @@ int main(int argc, char ** argv) {
     bool camera_view=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CAMERA_VIEW",camera_option,sizeof(camera_option))!=0;
     auto camera_begin_view=reinterpret_cast<c3x_renderer_camera_begin_view_fn>(GetProcAddress(module,"c3x_renderer_camera_begin_view"));
     auto camera_poll_view=reinterpret_cast<c3x_renderer_camera_poll_view_fn>(GetProcAddress(module,"c3x_renderer_camera_poll_view"));
+    bool ambient_async=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_AMBIENT_ASYNC",camera_option,sizeof(camera_option))!=0;
     if(camera_view && (!background_camera || !camera_begin_view || !camera_poll_view)) {
         std::fputs("camera view extension exports missing or queue disabled\n",stderr);return 1;
     }
     if(background_camera && (!camera_begin || !camera_poll)) {
         std::fputs("camera extension exports missing\n",stderr);return 1;
+    }
+    if(ambient_async && (!camera_begin_view || !camera_poll_view)) {
+        std::fputs("ambient async requires camera view extension exports\n",stderr);return 1;
     }
     unsigned camera_case=0;
     auto render_checked = [&](c3x_renderer_frame_v1 const* input, c3x_renderer_output_v1* result) {
@@ -670,6 +675,230 @@ int main(int argc, char ** argv) {
     };
     #include "retained_replay_preview.h"
     #include "busy_session_preview.h"
+    if(ok && ambient_async) {
+        // Small architectural gate: the consumer retains the last exact bitmap
+        // for this camera while the renderer prepares a newer ambient clock on
+        // its worker. Publication is accepted only as one exact pixel/ownership
+        // transaction. A changed camera supersedes the old request.
+        struct AmbientReference {
+            std::vector<unsigned char> pixels;
+            std::vector<c3x_renderer_u32> ownership;
+            c3x_renderer_i64 ticks=0;
+        };
+        auto reference_from = [&](c3x_renderer_i64 ticks) {
+            AmbientReference value;value.ticks=ticks;
+            auto pixels=static_cast<unsigned char const*>(output.bgra_pixels);
+            value.pixels.assign(pixels,pixels+std::size_t(output.stride_bytes)*output.height);
+            value.ownership.assign(output.replacement_tile_flags,
+                output.replacement_tile_flags+output.replacement_tile_count);
+            return value;
+        };
+        auto exact_publication = [&](c3x_renderer_camera_view_v1 const& view,AmbientReference const& expected) {
+            auto const& rendered=view.output;
+            auto pixels=static_cast<unsigned char const*>(rendered.bgra_pixels);
+            std::size_t bytes=std::size_t(rendered.stride_bytes)*rendered.height;
+            return rendered.width==target_width && rendered.height==target_height &&
+                bytes==expected.pixels.size() && pixels &&
+                std::memcmp(pixels,expected.pixels.data(),bytes)==0 &&
+                rendered.replacement_tile_count==expected.ownership.size() &&
+                rendered.replacement_tile_flags &&
+                std::memcmp(rendered.replacement_tile_flags,expected.ownership.data(),
+                    expected.ownership.size()*sizeof(expected.ownership[0]))==0;
+        };
+        std::vector<AmbientReference> references;
+        references.push_back(reference_from(frame.presentation_time_ticks));
+        for(int step=1;step<=3 && ok;++step) {
+            frame.presentation_time_ticks=1000000+c3x_renderer_i64(step)*frame.presentation_frequency/15;
+            int code=render(&frame,&output);
+            ok=code==C3X_RENDERER_RESULT_OK && preview_ownership(frame,output) &&
+                output.visible_animation_count>0 && output.fallback_tile_count==0 && output.device_recoveries==0;
+            if(ok)references.push_back(reference_from(frame.presentation_time_ticks));
+        }
+        int const home_x=center_x,home_y=center_y;
+        auto home_tiles=tiles;
+        center_x+=4;
+        auto changed_tiles=capture_view();
+        frame.tiles=changed_tiles.data();frame.tile_count=unsigned(changed_tiles.size());
+        frame.presentation_time_ticks=1000000+c3x_renderer_i64(4)*frame.presentation_frequency/15;
+        AmbientReference changed_reference;
+        if(ok) {
+            int code=render(&frame,&output);
+            ok=code==C3X_RENDERER_RESULT_OK && preview_ownership(frame,output) &&
+                output.visible_animation_count>0 && output.fallback_tile_count==0 && output.device_recoveries==0;
+            if(ok)changed_reference=reference_from(frame.presentation_time_ticks);
+        }
+
+        reset();
+        if(ok)ok=set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK;
+        center_x=home_x;center_y=home_y;tiles=home_tiles;
+        frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+        frame.presentation_time_ticks=references.front().ticks;
+        if(ok)ok=render(&frame,&output)==C3X_RENDERER_RESULT_OK && preview_ownership(frame,output);
+        std::vector<unsigned char> front;
+        if(ok) {
+            auto pixels=static_cast<unsigned char const*>(output.bgra_pixels);
+            front.assign(pixels,pixels+std::size_t(output.stride_bytes)*output.height);
+            ok=front==references.front().pixels;
+        }
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        SIZE_T min_largest_free=SIZE_MAX;unsigned exact_count=0,no_reuse_count=0;
+        double max_accept_ms=0,max_unit_set_ms=0,max_unit_ms=0;unsigned measured_unit_draws=0;
+        auto ambient_unit_draw=reinterpret_cast<c3x_renderer_unit_draw_expanded_fn>(
+            GetProcAddress(module,"c3x_renderer_unit_draw_expanded"));
+        std::vector<c3x_renderer_tile_v1 const*> ambient_unit_sites;
+        HDC ambient_unit_dc=nullptr;HBITMAP ambient_unit_bitmap=nullptr;HGDIOBJ ambient_unit_old=nullptr;
+        void* ambient_unit_pixels=nullptr;
+        if(ok && idle_unit_count) {
+            for(auto const& tile:tiles)if(tile.real_terrain_type<=4 && tile.city_id<0 &&
+               (tile.tile_flags&C3X_RENDERER_TILE_RENDER) && tile.anchor_x>tile_width &&
+               tile.anchor_x<target_width-tile_width*2 && tile.anchor_y>tile_height*2 &&
+               tile.anchor_y<target_height-tile_height*3)ambient_unit_sites.push_back(&tile);
+            std::sort(ambient_unit_sites.begin(),ambient_unit_sites.end(),[](auto a,auto b){
+                return a->anchor_y==b->anchor_y?a->anchor_x<b->anchor_x:a->anchor_y<b->anchor_y;});
+            if(ambient_unit_sites.size()<std::size_t(idle_unit_count) || !ambient_unit_draw)ok=false;
+            else ambient_unit_sites.resize(idle_unit_count);
+            BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+            info.bmiHeader.biWidth=target_width;info.bmiHeader.biHeight=-target_height;
+            info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
+            ambient_unit_dc=CreateCompatibleDC(nullptr);
+            if(ambient_unit_dc)ambient_unit_bitmap=CreateDIBSection(ambient_unit_dc,&info,DIB_RGB_COLORS,
+                &ambient_unit_pixels,nullptr,0);
+            if(!ambient_unit_dc || !ambient_unit_bitmap || !ambient_unit_pixels)ok=false;
+            if(ambient_unit_bitmap)ambient_unit_old=SelectObject(ambient_unit_dc,ambient_unit_bitmap);
+        }
+        auto make_ambient_unit=[&](int index,int cursor) {
+            char const* names[]={"Archer","Swordsman","Infantry","Warrior","Scout","Settler","Worker"};
+            auto site=ambient_unit_sites[index];c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);
+            unit.unit_id=20000+index;unit.action=1;unit.direction=1+index%8;unit.frame_count=16;
+            unit.action_cursor=0;unit.presentation_frequency=frame.presentation_frequency;
+            unit.presentation_time_ticks=frame.presentation_time_ticks;unit.sprite_width=unit.sprite_height=191;
+            unit.projection_scale_milli=tile_width*1000/128;
+            unit.body_x=site->anchor_x+tile_width/2-191*unit.projection_scale_milli/2000;
+            unit.body_y=site->anchor_y+tile_height/2-191*unit.projection_scale_milli/2000;
+            if(index==0)unit.action_cursor=cursor;           // selected idle loop
+            else if(index==1){unit.action=3;unit.action_cursor=cursor;} // directed combat
+            else if(index==6){unit.action=8;unit.action_cursor=cursor;} // worker task
+            unit.hour=frame.hour;unit.season=frame.season;unit.display_color_rgb=0x205bdd;
+            sprintf_s(unit.unit_key,"PRTO_%s",names[index%std::size(names)]);return unit;
+        };
+        auto draw_one_ambient_unit=[&](int index,int cursor,bool measured) {
+            auto unit=make_ambient_unit(index,cursor);int bounds[4]={};
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            int code=ambient_unit_draw(&unit,ambient_unit_dc,ambient_unit_dc,bounds);
+            QueryPerformanceCounter(&end);
+            double ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
+            if(measured){max_unit_ms=(std::max)(max_unit_ms,ms);++measured_unit_draws;}
+            return code==C3X_RENDERER_RESULT_OK;
+        };
+        if(ok && idle_unit_count) {
+            // Warm only the three active cycles plus one pose for each frozen
+            // unit. Pose creation is deliberately outside measured UI work.
+            std::memcpy(ambient_unit_pixels,front.data(),front.size());
+            for(int cursor=0;cursor<16 && ok;++cursor)
+                for(int index:{0,1,6})if(index<idle_unit_count)
+                    ok=draw_one_ambient_unit(index,cursor,false) && ok;
+            for(int index=0;index<idle_unit_count && ok;++index)
+                if(index!=0 && index!=1 && index!=6)ok=draw_one_ambient_unit(index,0,false) && ok;
+            GdiFlush();
+            std::printf("AMBIENT_UNITS_WARM units=%d active_cycles=3 frozen=%d status=%s\n",
+                idle_unit_count,(std::max)(0,idle_unit_count-3),ok?"pass":"FAIL");
+        }
+        auto draw_ambient_set=[&](int cursor) {
+            if(!idle_unit_count)return true;
+            std::memcpy(ambient_unit_pixels,front.data(),front.size());
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            bool drawn=true;
+            for(int index=0;index<idle_unit_count;++index)drawn=draw_one_ambient_unit(index,cursor,true) && drawn;
+            GdiFlush();QueryPerformanceCounter(&end);
+            double ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
+            max_unit_set_ms=(std::max)(max_unit_set_ms,ms);
+            std::printf("AMBIENT_UNITS frame=%d units=%d selected=1 worker=1 combat=1 frozen=%d total_ms=%.3f max_call_ms=%.3f status=%s\n",
+                cursor,idle_unit_count,(std::max)(0,idle_unit_count-3),ms,max_unit_ms,drawn?"pass":"FAIL");
+            return drawn;
+        };
+        auto sample_memory=[&]() {
+            auto values=camera_memory_values();
+            min_largest_free=(std::min)(min_largest_free,values.second);
+            return values.second>=SIZE_T(512)*1024*1024;
+        };
+        auto await_exact = [&](c3x_renderer_i64 ticket,AmbientReference const& expected,
+                               c3x_renderer_camera_identity_v1 const& identity,char const* label,bool stationary) {
+            auto started=GetTickCount64();unsigned polls=0;int code=C3X_RENDERER_RESULT_PENDING;
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+            bool memory_ok=sample_memory();
+            while(code==C3X_RENDERER_RESULT_PENDING && GetTickCount64()-started<120000) {
+                code=camera_poll_view(ticket,&view);++polls;
+                memory_ok=sample_memory() && memory_ok;
+                if(code==C3X_RENDERER_RESULT_PENDING)Sleep(1);
+            }
+            QueryPerformanceCounter(&end);
+            bool exact=code==C3X_RENDERER_RESULT_OK && view.ticket==ticket &&
+                std::memcmp(&view.identity,&identity,sizeof(identity))==0 && exact_publication(view,expected);
+            // Reusing the immutable terrain base is desirable. The forbidden
+            // shortcut is publishing the already completed ambient bitmap.
+            bool no_reuse=exact && expected.pixels!=front && view.output.renderer_cpu_ticks>0 &&
+                (!stationary || (view.output.geometry_tiles_built==0 && view.output.geometry_upload_bytes==0));
+            bool healthy=exact && no_reuse && view.output.fallback_tile_count==0 &&
+                view.output.device_recoveries==0 && view.output.visible_animation_count>0 && memory_ok;
+            std::printf("AMBIENT_ASYNC publish=%s ticket=%lld result=%d polls=%u final_ms=%.3f exact=%u no_completed_reuse=%u fallback=%u recoveries=%u largest_free_mib=%.1f\n",
+                label,static_cast<long long>(ticket),code,polls,
+                double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,unsigned(exact),unsigned(no_reuse),
+                view.output.fallback_tile_count,view.output.device_recoveries,double(min_largest_free)/(1024.0*1024.0));
+            if(healthy) {
+                auto pixels=static_cast<unsigned char const*>(view.output.bgra_pixels);
+                front.assign(pixels,pixels+std::size_t(view.output.stride_bytes)*view.output.height);
+                output=view.output;++exact_count;++no_reuse_count;
+            }
+            return healthy;
+        };
+        c3x_renderer_camera_identity_v1 stationary_identity={1,2,3,4};
+        std::printf("AMBIENT_ASYNC_BEGIN ticks=3 policy=retain-last-exact camera=stationary floor_mib=512\n");
+        for(int step=1;step<=3 && ok;++step) {
+            frame.presentation_time_ticks=references[step].ticks;
+            c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame,stationary_identity};
+            c3x_renderer_i64 ticket=0;LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            int code=camera_begin_view(&request,&ticket);QueryPerformanceCounter(&end);
+            double accept_ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
+            max_accept_ms=(std::max)(max_accept_ms,accept_ms);
+            bool retained=front==references[step-1].pixels;
+            std::printf("AMBIENT_ASYNC accept=stationary-%d ticket=%lld result=%d present_ms=%.3f retained_previous_exact=%u\n",
+                step,static_cast<long long>(ticket),code,accept_ms,unsigned(retained));
+            ok=code==C3X_RENDERER_RESULT_PENDING && retained && draw_ambient_set(step) && sample_memory() &&
+                await_exact(ticket,references[step],stationary_identity,"stationary",true);
+        }
+        if(ok) {
+            // Make the obsolete request genuinely eligible to start, then
+            // replace it with a translated camera and stricter scene epochs.
+            frame.presentation_time_ticks=1000000+c3x_renderer_i64(5)*frame.presentation_frequency/15;
+            c3x_renderer_camera_request_v1 obsolete_request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(obsolete_request),&frame,stationary_identity};
+            c3x_renderer_i64 obsolete=0;
+            ok=camera_begin_view(&obsolete_request,&obsolete)==C3X_RENDERER_RESULT_PENDING;
+            Sleep(5);
+            center_x=home_x+4;center_y=home_y;tiles=changed_tiles;
+            frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());frame.presentation_time_ticks=changed_reference.ticks;
+            c3x_renderer_camera_identity_v1 changed_identity={1,2,4,5};
+            c3x_renderer_camera_request_v1 changed_request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(changed_request),&frame,changed_identity};
+            c3x_renderer_i64 changed_ticket=0;LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            int code=camera_begin_view(&changed_request,&changed_ticket);QueryPerformanceCounter(&end);
+            double accept_ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
+            max_accept_ms=(std::max)(max_accept_ms,accept_ms);
+            c3x_renderer_camera_view_v1 stale_view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(stale_view)};
+            int stale=camera_poll_view(obsolete,&stale_view);
+            bool retained=front==references.back().pixels;
+            std::printf("AMBIENT_ASYNC accept=camera-change ticket=%lld result=%d present_ms=%.3f retained_previous_exact=%u stale_ticket=%lld stale_result=%d\n",
+                static_cast<long long>(changed_ticket),code,accept_ms,unsigned(retained),static_cast<long long>(obsolete),stale);
+            ok=code==C3X_RENDERER_RESULT_PENDING && stale==C3X_RENDERER_RESULT_SUPERSEDED && retained &&
+                sample_memory() && await_exact(changed_ticket,changed_reference,changed_identity,"camera-change",false);
+        }
+        ok=ok && exact_count==4 && no_reuse_count==4 && min_largest_free>=SIZE_T(512)*1024*1024;
+        std::printf("AMBIENT_ASYNC_END status=%s exact_publications=%u no_completed_reuse=%u max_present_ms=%.3f min_largest_free_mib=%.1f stale_camera_rejected=1 units=%d unit_draws=%u max_unit_set_ms=%.3f max_unit_call_ms=%.3f\n",
+            ok?"pass":"FAIL",exact_count,no_reuse_count,max_accept_ms,double(min_largest_free)/(1024.0*1024.0),
+            idle_unit_count,measured_unit_draws,max_unit_set_ms,max_unit_ms);
+        if(ambient_unit_dc && ambient_unit_old)SelectObject(ambient_unit_dc,ambient_unit_old);
+        if(ambient_unit_bitmap)DeleteObject(ambient_unit_bitmap);
+        if(ambient_unit_dc)DeleteDC(ambient_unit_dc);
+    }
     if(ok && zoom_benchmark) {
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
         char supported_option[8]={};
@@ -861,7 +1090,8 @@ int main(int argc, char ** argv) {
         double warmup_ms=0;
         std::printf("IDLE_BEGIN steps=%d warmup=%d pose_hz=15 paced=0 x=%d y=%d tile_width=%d units=%d dense=%d cities=%u roads=%u farms=%u mines=%u camps=%u resources=%u unit_actions=%s\n",
             idle_steps,idle_warmup,center_x,center_y,tile_width,idle_unit_count,int(dense_scene),cities_count,roads_count,
-            farms_count,mines_count,camps_count,resources_count,mixed_unit_actions?"mixed":"idle");
+            farms_count,mines_count,camps_count,resources_count,
+            mixed_unit_actions?"mixed":realistic_unit_actions?"realistic":"idle");
         for(int step=-idle_warmup;step<idle_steps && ok;++step) {
             frame.presentation_time_ticks=1000000+c3x_renderer_i64(step+idle_warmup+1)*frame.presentation_frequency/15;
             LARGE_INTEGER begin={},map_end={},copy_end={},end={};QueryPerformanceCounter(&begin);
@@ -872,6 +1102,7 @@ int main(int argc, char ** argv) {
             if(ok && idle_unit_count)std::memcpy(unit_pixels,output.bgra_pixels,std::size_t(output.stride_bytes)*output.height);
             QueryPerformanceCounter(&copy_end);
             unsigned moving_units=0,attacking_units=0,fortifying_units=0,idling_units=0;
+            unsigned selected_units=0,working_units=0,directed_units=0;
             for(int i=0;i<idle_unit_count && ok;++i) {
                 char const* names[]={"Archer","Swordsman","Infantry","Warrior","Scout","Settler","Worker"};
                 auto site=unit_sites[i];c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);
@@ -893,6 +1124,11 @@ int main(int argc, char ** argv) {
                     else if(timeline<64){unit.action=7;unit.direction=7;}
                     unit.action_cursor=phase;
                     unit.body_x+=travel*tile_width/32;unit.body_y+=travel*tile_height/32;
+                } else if(realistic_unit_actions) {
+                    int phase=(step+idle_warmup)%16;
+                    if(i==0){unit.action_cursor=phase;++selected_units;}
+                    else if(i==1){unit.action=3;unit.action_cursor=phase;++directed_units;}
+                    else if(i==6){unit.action=8;unit.action_cursor=phase;++working_units;}
                 }
                 moving_units+=unit.action==2;attacking_units+=unit.action==3;
                 fortifying_units+=unit.action==7;idling_units+=unit.action==1;
@@ -924,7 +1160,7 @@ int main(int argc, char ** argv) {
             bool changed=previous.empty() || previous.size()!=bytes || std::memcmp(previous.data(),data,bytes)!=0;
             if(step>0 && changed)++changes;
             previous.assign(data,data+bytes);
-            std::printf("IDLE_FRAME step=%d ticks=%lld result=%d visible=%u built=%u reused=%u upload_bytes=%u changed=%d ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f recoveries=%u map_ms=%.3f copy_ms=%.3f units_ms=%.3f units=%d moving=%u attacking=%u fortifying=%u idling=%u\n",
+            std::printf("IDLE_FRAME step=%d ticks=%lld result=%d visible=%u built=%u reused=%u upload_bytes=%u changed=%d ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f recoveries=%u map_ms=%.3f copy_ms=%.3f units_ms=%.3f units=%d moving=%u attacking=%u fortifying=%u idling=%u selected=%u working=%u directed=%u\n",
                 step,frame.presentation_time_ticks,code,output.visible_animation_count,output.geometry_tiles_built,
                 output.geometry_tiles_reused,output.geometry_upload_bytes,int(changed),
                 double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
@@ -932,7 +1168,8 @@ int main(int argc, char ** argv) {
                 double(output.readback_ticks)*1000/frequency.QuadPart,output.device_recoveries,
                 double(map_end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
                 double(copy_end.QuadPart-map_end.QuadPart)*1000/frequency.QuadPart,
-                double(end.QuadPart-copy_end.QuadPart)*1000/frequency.QuadPart,idle_unit_count,moving_units,attacking_units,fortifying_units,idling_units);
+                double(end.QuadPart-copy_end.QuadPart)*1000/frequency.QuadPart,idle_unit_count,moving_units,attacking_units,fortifying_units,idling_units,
+                selected_units,working_units,directed_units);
             camera_memory();std::fflush(stdout);
             if(ok)ok=write_bmp((std::string(argv[5])+".idle"+std::to_string(step)+".bmp").c_str(),composed);
         }
@@ -943,7 +1180,7 @@ int main(int argc, char ** argv) {
         ok=ok && (idle_steps==1 || changes>0);
         std::printf("IDLE_END status=%s changed_frames=%u\n",ok?"pass":"FAIL",changes);
     }
-    if(ok && animate && !zoom_benchmark && !navigation_benchmark && !distant_steps && !idle_steps && !busy_session) {
+    if(ok && animate && !ambient_async && !zoom_benchmark && !navigation_benchmark && !distant_steps && !idle_steps && !busy_session) {
         // Exercise animation after an immutable viewport LRU restore, not only
         // after the unchanged-current-view fast path.
         auto initial=static_cast<unsigned char const*>(output.bgra_pixels);

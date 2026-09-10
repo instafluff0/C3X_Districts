@@ -71,7 +71,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binaries", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "idle", "distant", "replay", "session"), default="navigation")
+    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "ambient", "idle", "distant", "replay", "session"), default="navigation")
     parser.add_argument("--preparation-mode", choices=("baseline", "oracle"), default=None,
                         help="Cold baseline or complete untimed retained preparation for replay/session")
     parser.add_argument("--replay-samples-per-phase", type=int, choices=range(1,101), default=25)
@@ -81,8 +81,8 @@ def main():
     parser.add_argument("--unit-pose-memory-mib", type=int, choices=(256,512), default=256, help="Bounded pose-pixel budget when --unit-pose-memory is enabled")
     parser.add_argument("--idle-units", type=int, choices=(0,8,24,64), default=0,
                         help="Draw this many separate native-directed idle unit bodies in a synthetic GDI canvas")
-    parser.add_argument("--unit-actions", choices=("idle","mixed"), default="idle",
-                        help="Script separate per-unit native move, attack, return, fortify and idle timelines")
+    parser.add_argument("--unit-actions", choices=("idle","realistic","mixed"), default="idle",
+                        help="Use frozen idle units, a realistic active subset, or worst-case mixed native timelines")
     parser.add_argument("--dense-scene", action="store_true", help="Stable synthetic cities, infrastructure, camps and supported resources on the captured world")
     parser.add_argument("--width", type=int, default=2240)
     parser.add_argument("--height", type=int, default=1192)
@@ -123,15 +123,18 @@ def main():
     parser.add_argument("--world-waves", action="store_true", help="Retain immutable coast-cell wave buffers across cameras")
     parser.add_argument("--wave-control", action="store_true", help="Rebuild coast-cell wave buffers for independent comparisons")
     parser.add_argument("--composition-casters-control", action="store_true", help="Rebuild caster preparation independently for each animation region")
+    parser.add_argument("--animation-readback-atlas", action="store_true", help="Pack exact animated blocks into a compact staging atlas before CPU readback")
     args = parser.parse_args()
     try:
         args.preparation_mode=preparation_mode(args.scenario,args.preparation_mode)
     except ValueError as error:
         parser.error(str(error))
-    if args.idle_units and args.scenario not in ("idle", "replay", "session"):
-        parser.error("--idle-units requires --scenario idle, replay or session")
+    if args.idle_units and args.scenario not in ("ambient", "idle", "replay", "session"):
+        parser.error("--idle-units requires --scenario ambient, idle, replay or session")
     if args.unit_actions=="mixed" and (args.scenario not in ("idle","replay","session") or not args.idle_units):
         parser.error("--unit-actions mixed requires --scenario idle, replay or session and --idle-units")
+    if args.unit_actions=="realistic" and (args.scenario not in ("ambient","idle") or not args.idle_units):
+        parser.error("--unit-actions realistic requires --scenario ambient or idle and --idle-units")
     if args.scenario in ("replay","session") and (not args.idle_units or not args.dense_scene or args.waves!="1" or args.reflection_ablation or args.camera_view or args.tile_width!=128 or args.unit_actions!="mixed"):
         parser.error("A busy replay/session starts at width 128 and requires units, mixed actions, --dense-scene, waves/reflections on and the synchronous native-compatible render API")
     out = args.out.resolve()
@@ -176,9 +179,11 @@ def main():
            "C3X_RENDERER_WORLD_WAVES": "1" if args.world_waves else "0",
            "C3X_RENDERER_WAVE_REUSE_CONTROL": "1" if args.wave_control else "0",
            "C3X_RENDERER_COMPOSITION_CASTERS_CONTROL": "1" if args.composition_casters_control else "0",
+           "C3X_RENDERER_ANIMATION_READBACK_ATLAS": "1" if args.animation_readback_atlas else "0",
            "C3X_RENDERER_PREVIEW_RESIDENT_STEPS": str(args.resident_steps),
            "C3X_RENDERER_CAMERA_PREVIEW": "0", "C3X_RENDERER_PREVIEW_CAMERA_QUEUE": "1" if args.camera_view else "",
            "C3X_RENDERER_PREVIEW_CAMERA_VIEW": "1" if args.camera_view else "",
+           "C3X_RENDERER_PREVIEW_AMBIENT_ASYNC": "1" if args.scenario == "ambient" else "",
            "C3X_RENDERER_PREVIEW_SUPPORTED_ZOOMS": "1" if args.scenario == "zoom" else "",
            "C3X_RENDERER_PREVIEW_CYCLES": str(args.cycles),
            "C3X_RENDERER_PREVIEW_DISTANT_STEPS": str(args.distant_steps) if args.scenario == "distant" else "",

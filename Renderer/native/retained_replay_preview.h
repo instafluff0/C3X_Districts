@@ -57,7 +57,11 @@ if(ok && retained_replay) {
             else if(timeline<64){unit.action=7;unit.direction=7;}
             unit.action_cursor=phase;unit.body_x+=travel*captured.tile_width/32;unit.body_y+=travel*captured.tile_height/32;
             unit.hour=captured.hour;unit.season=captured.season;unit.display_color_rgb=0x205bdd;
-            sprintf_s(unit.unit_key,"PRTO_%s",names[index%7]);requests.push_back(unit);
+            sprintf_s(unit.unit_key,"PRTO_%s",names[index%7]);
+            int projected_size=unit.sprite_width*unit.projection_scale_milli/1000;
+            if(unit.body_x+projected_size<=0 || unit.body_y+projected_size<=0 ||
+               unit.body_x>=target_width || unit.body_y>=target_height)continue;
+            requests.push_back(unit);
         }
         std::sort(requests.begin(),requests.end(),[](auto const& a,auto const& b){
             return a.body_y==b.body_y?(a.body_x==b.body_x?a.unit_id<b.unit_id:a.body_x<b.body_x):a.body_y<b.body_y;});

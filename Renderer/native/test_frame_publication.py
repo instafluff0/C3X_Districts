@@ -167,7 +167,9 @@ struct Footprint {int coordinate=0;struct {int left=0,right=0;} bounds;};
 struct Bodies {
     struct Unit {std::vector<std::string> keys;int minimum_canvas=0;};
     std::vector<Unit> units;int image_width=191,image_height=191;
-    char const* failure_reason="";bool cache_hit=false;std::size_t cache_bytes=0;unsigned keyed_pixels=0,cast_pixels=0;
+    char const* failure_reason="";bool cache_hit=false,cached=false;std::size_t cache_bytes=0;unsigned keyed_pixels=0,cast_pixels=0;
+    bool restore_cached(c3x_renderer_unit_v1 const&){cache_hit=cached;return cached;}
+    std::size_t cached_pose_entries()const{return cached?1u:0u;}
     template<class F> bool render(int,int,c3x_renderer_unit_v1 const&,F){return true;}
     bool blit(HDC,int,int,HDC){return true;}void reset_gpu(){}
 };
@@ -270,11 +272,20 @@ int main(){
     for(std::size_t i=0;i<2240u*1192u;++i)assert(pixels[i]==expected);
     assert(out.replacement_tile_count==1 && out.replacement_tile_flags[0]==C3X_RENDERER_TILE_RENDER);
     assert(state.cancelled>0 && state.resets==0); // Supersession is not device recovery.
-    // Unit takeover interrupts active work but preserves the latest immutable request.
-    state.hold=true;entered=state.entered.load();
+    // A cached CPU-owned pose never interrupts the independent map worker.
+    state.hold=true;entered=state.entered.load();++f.presentation_time_ticks;
     assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
     until([&]{return state.entered.load()>entered;});
-    c3x_renderer_unit_v1 unit={};
+    auto cancellations=state.cancelled.load();
+    c3x_renderer_unit_v1 unit={};state.unit_bodies.cached=true;
+    assert(worker.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
+    assert(state.cancelled.load()==cancellations && worker.camera_poll(last,out)==C3X_RENDERER_RESULT_PENDING);
+    state.unit_bodies.cached=false;state.hold=false;
+    until([&]{return worker.camera_poll(last,out)==C3X_RENDERER_RESULT_OK;});
+    // Unit takeover interrupts active work but preserves the latest immutable request.
+    state.hold=true;entered=state.entered.load();++f.presentation_time_ticks;
+    assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
+    until([&]{return state.entered.load()>entered;});
     assert(worker.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
     assert(worker.camera_poll(last,out)==C3X_RENDERER_RESULT_PENDING);
     assert(state.cache_valid); // Interruption before pixel mutation preserves the donor bitmap.

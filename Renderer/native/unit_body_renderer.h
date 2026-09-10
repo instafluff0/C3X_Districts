@@ -33,7 +33,7 @@ public:
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
     std::size_t benchmark_pose_cache_budget=SIZE_MAX;
     unsigned benchmark_limit_pose_cache() {
-        benchmark_pose_cache_budget=128u*1024u*1024u;
+        benchmark_pose_cache_budget=256u*1024u*1024u;
         unsigned evicted=0;
         while(!cache.empty() && cache_bytes>benchmark_pose_cache_budget) {
             auto old=std::min_element(cache.begin(),cache.end(),[](Cached const& a,Cached const& b){return a.used<b.used;});
@@ -69,6 +69,56 @@ public:
     ~UnitBodyRenderer() {reset_gpu();reset_blit();}
     void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();resident_bytes=0;payload_serial=0;}
 
+    // A completed pose is CPU-owned and needs neither the D3D context nor a
+    // map-worker takeover. The caller serializes this unit sub-owner while a
+    // camera render may continue on the independent terrain/map state.
+    bool restore_cached(c3x_renderer_unit_v1 const& request) {
+        cache_hit=false;keyed_pixels=cast_pixels=0;failure_reason="cache-miss";
+        if(request.struct_size!=sizeof(request) || request.unit_key[63]!=0 ||
+           request.hour<0 || request.hour>23 || (request.reduced!=0 && request.reduced!=1) ||
+           (request.projection_scale_milli!=0 &&
+            (request.projection_scale_milli<250 || request.projection_scale_milli>2000)))return false;
+        auto found=std::find_if(units.begin(),units.end(),[&](Unit const& unit){
+            return std::find(unit.keys.begin(),unit.keys.end(),request.unit_key)!=unit.keys.end();});
+        auto name=native_unit_action(request.action);
+        if(found==units.end() || !name)return false;
+        auto action=std::find_if(found->actions.begin(),found->actions.end(),[&](Action const& a){return a.name==name;});
+        if(action==found->actions.end() || action->parts.empty())return false;
+        NativeUnitDraw draw;draw.sprite=draw.expected_sprite=draw.canvas=draw.expected_canvas=1;
+        draw.unit_id=request.unit_id;draw.action=request.action;draw.direction=request.direction;
+        draw.action_cursor=request.action_cursor;draw.frame_count=request.frame_count;
+        draw.body_x=request.body_x;draw.body_y=request.body_y;
+        draw.sprite_width=request.sprite_width;draw.sprite_height=request.sprite_height;draw.reduced=request.reduced!=0;
+        draw.projection_scale_milli=request.projection_scale_milli;
+        UnitAnimationPose pose;
+        if(!prepare_native_unit_pose(draw,action->loop,pose))return false;
+        int pose_cursor=action->loop?request.action_cursor%request.frame_count:
+            std::min(request.action_cursor,request.frame_count-1);
+        int scale_milli=request.projection_scale_milli>0?request.projection_scale_milli:(draw.reduced?500:1000);
+        int w=request.sprite_width*scale_milli/1000,h=request.sprite_height*scale_milli/1000;
+        if(w<1 || h<1 || w>1024 || h>1024)return false;
+        Key key={unsigned(found-units.begin()),int(action-found->actions.begin()),request.direction,
+            pose_cursor,request.frame_count,w,h,scale_milli,request.hour,request.season,request.display_color_rgb};
+        unsigned pose_memory=NavigationOptions::unit_pose_mib(GetEnvironmentVariableA);
+        configure_pose_cache(pose_memory>=256,pose_memory==512);
+        for(auto& saved:cache)if(saved.key==key) {
+            saved.used=++serial;pixels=saved.pixels;image_width=w;image_height=h;
+            cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";return true;
+        }
+        for(auto const& saved:cache)if(saved.key.unit==key.unit && saved.key.action==key.action &&
+           saved.key.cursor==key.cursor) {
+            if(saved.key.direction!=key.direction)failure_reason="cache-miss-direction";
+            else if(saved.key.frames!=key.frames)failure_reason="cache-miss-frame-count";
+            else if(saved.key.width!=key.width || saved.key.height!=key.height)failure_reason="cache-miss-size";
+            else if(saved.key.scale_milli!=key.scale_milli)failure_reason="cache-miss-scale";
+            else if(saved.key.hour!=key.hour)failure_reason="cache-miss-hour";
+            else if(saved.key.season!=key.season)failure_reason="cache-miss-season";
+            else if(saved.key.color!=key.color)failure_reason="cache-miss-color";
+            break;
+        }
+        return false;
+    }
+
     // Authored tangent sampling. Source vertex directions use the linear
     // skin matrix, independently normalized as in the inspected object VS.
     std::vector<std::array<std::array<float,3>,2>> sample_animation_frames(AnimationMesh const& mesh,double phase) {
@@ -96,6 +146,7 @@ public:
 
     template<class Prepare>
     bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare) {
+        if(restore_cached(request))return true;
         cache_hit=false;keyed_pixels=cast_pixels=0;failure_reason="invalid-request-or-device";
         if(!device || !context || request.struct_size!=sizeof(request) ||
            request.unit_key[63]!=0 || request.hour<0 || request.hour>23 ||
@@ -122,18 +173,9 @@ public:
         int pose_cursor=action->loop?request.action_cursor%request.frame_count:
             std::min(request.action_cursor,request.frame_count-1);
         int pose_frames=request.frame_count;
-        if(action->ambient) {
-            if(request.presentation_time_ticks<0 || request.presentation_frequency<=0 ||
-               action->duration<=0 || action->frames<2)return false;
-            pose_cursor=int(ambient_animation_frame(request.presentation_time_ticks,
-                request.presentation_frequency,action->duration,action->frames,
-                std::uint32_t(request.unit_id)*2654435761u));
-            // A stable per-unit phase prevents neighboring ambient loops from
-            // marching in lockstep. Camera, zoom and callback order cannot
-            // restart it. Directed actions retain their native cursor above.
-            pose_frames=int(action->frames);
-            pose.phase=double(pose_cursor)/(action->frames-1);
-        }
+        // Civ III's action director owns whether a unit advances. Ordinary
+        // unselected units keep a fixed native cursor; workers, selected units
+        // and directed actions advance it through the existing bridge.
         int scale_milli=request.projection_scale_milli>0?request.projection_scale_milli:(draw.reduced?500:1000);
         int w=request.sprite_width*scale_milli/1000,h=request.sprite_height*scale_milli/1000;
         if(w<1 || h<1 || w>1024 || h>1024)return false;
