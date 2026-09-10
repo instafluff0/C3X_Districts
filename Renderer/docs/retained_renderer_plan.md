@@ -414,3 +414,43 @@ render-entry p95 below 2 ms and at least 512 MiB contiguous VA. If it passes,
 make the bounded retained/pose policy a documented renderer configuration and
 move to a user-authorized live-game evaluation; guarded wave batching remains
 the next throughput optimization rather than a presentation blocker.
+
+## Realistic busy-idle cadence and navigation — 2026-09-10
+
+The cadence witness progressed incrementally from 2 seconds to 10 seconds and
+then 60 seconds at the actual 15 Hz caller rate. The 2240x1192 dense scene used
+frequent cities, roads/rails, mines/irrigation, animated resources, waves and
+reflections plus 24 units: 21 frozen ordinary units, one selected, one working
+and one in combat. The full minute completed all 900 caller ticks and delivered
+445 fresh atomic map publications (7.42 Hz). Synchronous render-entry p95 was
+1.720 ms and the complete 24-unit-plane p95 was 12.074 ms. Rare scheduling
+outliers reached 22.476 ms and 36.615 ms respectively, without an accumulating
+slowdown. Available virtual memory changed by +0.6 MiB, the minimum contiguous
+free region was 1,744.4 MiB, and fallback and device recovery remained zero.
+The preceding exact-reference checks again matched all four pixel/ownership
+publications and rejected the old camera. This is a standalone boundary pass,
+not yet a live Civ III presentation pass.
+
+Navigation is not yet viable for normal play. In the same dense retained-world
+profile, a four-tile overlapping move took 1,261.780 ms. First visits to distant
+map areas took 4,073.237–8,949.875 ms while constructing 490–940 visible tile
+records. Exact warm revisits still took 1,355.235–2,665.543 ms even with
+1,042–1,057 of 1,057 geometries reused. Fourteen smaller retained scroll steps
+took 745.284–1,814.641 ms; they reused about 2.24–2.51 million of 2.67 million
+pixels but continued to pay substantial draw/readback and unreported dense
+object/composition time. All warm revisit pixels matched their first-visit
+references, every step had zero fallback/recovery, and contiguous VA remained
+well above 512 MiB. Correctness and residency therefore pass, but navigation
+latency fails by roughly one to two orders of magnitude.
+
+**Selected next experiment:** one exact 64-pixel retained scroll at 2240x1192,
+run as a short serial category ablation: static terrain; cities/improvements;
+resources; then waves/reflections. Record total, geometry, draw, readback,
+resource/city composition and pixel-reuse time for each without writing frame
+sets. This will identify the first layer that pushes a resident scroll over the
+interactive budget. Optimize that layer using a translated immutable front plus
+newly exposed strips and bounded asynchronous refinement; do not attempt another
+large navigation matrix until a single resident scroll is below 100 ms, then
+below 33 ms. Distant jumps can initially use an exact low-detail publication
+only if ownership and current-camera coverage are proven; otherwise they remain
+blocking until neighboring/world-region preparation makes them fast.

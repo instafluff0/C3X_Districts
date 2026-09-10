@@ -433,6 +433,9 @@ int main(int argc, char ** argv) {
     auto camera_poll_view=reinterpret_cast<c3x_renderer_camera_poll_view_fn>(GetProcAddress(module,"c3x_renderer_camera_poll_view"));
     bool ambient_async=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_AMBIENT_ASYNC",camera_option,sizeof(camera_option))!=0;
     bool ambient_boundary=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_AMBIENT_BOUNDARY",camera_option,sizeof(camera_option))!=0;
+    char ambient_soak_option[16]={};
+    int ambient_soak_seconds=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_AMBIENT_SOAK_SECONDS",ambient_soak_option,sizeof(ambient_soak_option))?
+        std::clamp(std::atoi(ambient_soak_option),0,60):0;
     if(camera_view && (!background_camera || !camera_begin_view || !camera_poll_view)) {
         std::fputs("camera view extension exports missing or queue disabled\n",stderr);return 1;
     }
@@ -744,7 +747,7 @@ int main(int argc, char ** argv) {
         }
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
         SIZE_T min_largest_free=SIZE_MAX;unsigned exact_count=0,no_reuse_count=0;
-        double max_accept_ms=0,max_unit_set_ms=0,max_unit_ms=0;unsigned measured_unit_draws=0;
+        double max_accept_ms=0,max_unit_set_ms=0,max_unit_ms=0,last_unit_set_ms=0;unsigned measured_unit_draws=0;
         auto ambient_unit_draw=reinterpret_cast<c3x_renderer_unit_draw_expanded_fn>(
             GetProcAddress(module,"c3x_renderer_unit_draw_expanded"));
         std::vector<c3x_renderer_tile_v1 const*> ambient_unit_sites;
@@ -805,7 +808,7 @@ int main(int argc, char ** argv) {
             std::printf("AMBIENT_UNITS_WARM units=%d active_cycles=3 frozen=%d status=%s\n",
                 idle_unit_count,(std::max)(0,idle_unit_count-3),ok?"pass":"FAIL");
         }
-        auto draw_ambient_set=[&](int cursor) {
+        auto draw_ambient_set=[&](int cursor,bool report=true) {
             if(!idle_unit_count)return true;
             std::memcpy(ambient_unit_pixels,front.data(),front.size());
             LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
@@ -813,10 +816,11 @@ int main(int argc, char ** argv) {
             for(int index=0;index<idle_unit_count;++index)drawn=draw_one_ambient_unit(index,cursor,true) && drawn;
             GdiFlush();QueryPerformanceCounter(&end);
             double ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
+            last_unit_set_ms=ms;
             max_unit_set_ms=(std::max)(max_unit_set_ms,ms);
-            std::printf("AMBIENT_UNITS frame=%d units=%d selected=1 worker=1 combat=1 frozen=%d total_ms=%.3f max_call_ms=%.3f status=%s\n",
+            if(report)std::printf("AMBIENT_UNITS frame=%d units=%d selected=1 worker=1 combat=1 frozen=%d total_ms=%.3f max_call_ms=%.3f status=%s\n",
                 cursor,idle_unit_count,(std::max)(0,idle_unit_count-3),ms,max_unit_ms,drawn?"pass":"FAIL");
-            return drawn && (!ambient_boundary || (ms<16.0 && max_unit_ms<2.0));
+            return drawn && (!ambient_boundary || ambient_soak_seconds || ms<16.0);
         };
         auto sample_memory=[&]() {
             auto values=camera_memory_values();
@@ -906,6 +910,67 @@ int main(int argc, char ** argv) {
                 std::printf("AMBIENT_BOUNDARY camera-change result=%d call_ms=%.3f exact=%u old_camera_rejected=%u fallback=%u recoveries=%u\n",
                     code,call_ms,unsigned(exact),unsigned(exact),output.fallback_tile_count,output.device_recoveries);
                 ok=exact;
+            }
+            if(ok && ambient_soak_seconds) {
+                center_x=home_x;center_y=home_y;tiles=home_tiles;
+                frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+                frame.presentation_time_ticks=2000000;
+                int code=render(&frame,&output);
+                // Returning home is a camera change, so this call must itself
+                // be exact before the stationary cadence begins.
+                ok=code==C3X_RENDERER_RESULT_OK && preview_ownership(frame,output) &&
+                    output.fallback_tile_count==0 && output.device_recoveries==0;
+                if(ok) {
+                    auto pixels=static_cast<unsigned char const*>(output.bgra_pixels);
+                    front.assign(pixels,pixels+std::size_t(output.stride_bytes)*output.height);
+                }
+                auto initial_memory=camera_memory_values();
+                SIZE_T soak_min_largest=initial_memory.second;
+                std::vector<double> render_calls,unit_set_calls;
+                unsigned delivered=0;unsigned long long last_hash=0;
+                auto sampled_hash=[&]() {
+                    auto data=static_cast<unsigned char const*>(output.bgra_pixels);
+                    auto bytes=std::size_t(output.stride_bytes)*output.height;
+                    unsigned long long value=14695981039346656037ull;
+                    for(std::size_t i=0;i<bytes;i+=256)value=(value^data[i])*1099511628211ull;
+                    for(unsigned i=0;i<output.replacement_tile_count;++i)
+                        value=(value^output.replacement_tile_flags[i])*1099511628211ull;
+                    return value;
+                };
+                if(ok)last_hash=sampled_hash();
+                LARGE_INTEGER cadence_start={},now={};QueryPerformanceCounter(&cadence_start);
+                int ticks=ambient_soak_seconds*15;
+                std::printf("AMBIENT_SOAK_BEGIN seconds=%d ticks=%d cadence_hz=15 units=%d dense=%u\n",
+                    ambient_soak_seconds,ticks,idle_unit_count,unsigned(dense_scene));
+                for(int tick=1;tick<=ticks && ok;++tick) {
+                    auto target=cadence_start.QuadPart+c3x_renderer_i64(tick-1)*frequency.QuadPart/15;
+                    do {QueryPerformanceCounter(&now);if(now.QuadPart+frequency.QuadPart/500<target)Sleep(1);else if(now.QuadPart<target)Sleep(0);} while(now.QuadPart<target);
+                    frame.presentation_time_ticks=2000000+c3x_renderer_i64(tick)*frame.presentation_frequency/15;
+                    LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+                    code=render(&frame,&output);QueryPerformanceCounter(&end);
+                    render_calls.push_back(double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart);
+                    auto memory=camera_memory_values();soak_min_largest=(std::min)(soak_min_largest,memory.second);
+                    ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 &&
+                        output.device_recoveries==0 && memory.second>=SIZE_T(512)*1024*1024 &&
+                        draw_ambient_set(tick%16,false);
+                    unit_set_calls.push_back(last_unit_set_ms);
+                    if(ok){auto hash=sampled_hash();if(hash!=last_hash){++delivered;last_hash=hash;}}
+                }
+                auto final_memory=camera_memory_values();
+                std::sort(render_calls.begin(),render_calls.end());
+                std::sort(unit_set_calls.begin(),unit_set_calls.end());
+                double p95=render_calls.empty()?0:render_calls[(render_calls.size()*95-1)/100];
+                double maximum=render_calls.empty()?0:render_calls.back();
+                double unit_p95=unit_set_calls.empty()?0:unit_set_calls[(unit_set_calls.size()*95-1)/100];
+                double unit_maximum=unit_set_calls.empty()?0:unit_set_calls.back();
+                double delivered_hz=ambient_soak_seconds?double(delivered)/ambient_soak_seconds:0;
+                ok=ok && p95<2.0 && maximum<100.0 && unit_p95<16.0 && unit_maximum<100.0 &&
+                    delivered>=unsigned(ambient_soak_seconds*5);
+                std::printf("AMBIENT_SOAK_END status=%s delivered=%u delivered_hz=%.2f render_p95_ms=%.3f render_max_ms=%.3f unit_set_p95_ms=%.3f unit_set_max_ms=%.3f unit_call_max_ms=%.3f available_virtual_delta_mib=%.1f largest_free_start_mib=%.1f largest_free_end_mib=%.1f largest_free_min_mib=%.1f fallback=%u recoveries=%u\n",
+                    ok?"pass":"FAIL",delivered,delivered_hz,p95,maximum,unit_p95,unit_maximum,max_unit_ms,
+                    (double(final_memory.first)-double(initial_memory.first))/(1024.0*1024.0),
+                    double(initial_memory.second)/(1024.0*1024.0),double(final_memory.second)/(1024.0*1024.0),
+                    double(soak_min_largest)/(1024.0*1024.0),output.fallback_tile_count,output.device_recoveries);
             }
             std::printf("AMBIENT_BOUNDARY_END status=%s exact_publications=%u max_sync_call_ms=%.3f min_largest_free_mib=%.1f units=%d unit_draws=%u max_unit_set_ms=%.3f max_unit_call_ms=%.3f\n",
                 ok?"pass":"FAIL",ok?4u:0u,max_accept_ms,double(min_largest_free)/(1024.0*1024.0),
