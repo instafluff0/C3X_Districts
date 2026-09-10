@@ -1,5 +1,6 @@
 #pragma once
 #include <set>
+#include <map>
 #include "shader_cache.h"
 #include <array>
 #include <atomic>
@@ -131,7 +132,39 @@ public:
         Caster const* owner=nullptr;
         std::array<Entry,128> selections{};
         std::size_t selection_bytes=0;
-        bool build(std::vector<Caster> const& casters,std::array<float,12> const& projection) {
+        using ReceiverKey=std::vector<std::uint32_t>;
+        using ReceiverProof=std::vector<std::uint64_t>;
+        std::vector<std::uint64_t> retained_inputs;
+        std::map<ReceiverKey,ReceiverProof> receiver_proofs;
+        std::size_t receiver_bytes=0;
+        std::uint64_t receiver_hits=0,receiver_misses=0;
+        bool retained=false;
+        static constexpr std::size_t receiver_budget=32u*1024u*1024u;
+        static constexpr std::size_t receiver_limit=1024;
+        // Exact value comparison, once per outer submission. No captured pointer
+        // or hash alone authorizes reuse across requests. Pointer values below
+        // describe GPU allocations and are never dereferenced by the proof cache.
+        bool build(std::vector<Caster> const& casters,std::array<float,12> const& projection,bool retain=false) {
+            std::vector<std::uint64_t> inputs;
+            constexpr std::size_t input_cap=8u*1024u*1024u;
+            if(retain && casters.size()<=input_cap/(18*sizeof(std::uint64_t)))try {
+                inputs.reserve(casters.size()*18);
+                for(auto const& c:casters){
+                    for(auto value:{c.version,std::uint64_t(c.layer),std::uint64_t(c.index_format),std::uint64_t(c.binding),
+                        std::uint64_t(c.count),std::uint64_t(c.stride),std::uint64_t(reinterpret_cast<std::uintptr_t>(c.vertices)),
+                        std::uint64_t(reinterpret_cast<std::uintptr_t>(c.indices))})inputs.push_back(value);
+                    for(auto values:{c.bounds.low,c.bounds.high,c.offset})for(unsigned j=0;j<3;++j){
+                        std::uint32_t bits;std::memcpy(&bits,values+j,4);inputs.push_back(bits);
+                    }
+                }
+                if(inputs.capacity()*sizeof(inputs[0])>input_cap)retain=false;
+            }catch(...){retain=false;}
+            else retain=false;
+            receiver_hits=receiver_misses=0;
+            if(retain && retained && inputs==retained_inputs && basis==projection && bounds.size()==casters.size()){
+                owner=casters.data();return true;
+            }
+            retained=false;retained_inputs.clear();receiver_proofs.clear();receiver_bytes=0;
             owner=nullptr;bounds.clear();selections={};selection_bytes=0;
             constexpr std::size_t cap=8u*1024u*1024u;
             if(casters.size()>cap/sizeof(bounds[0]))return false;
@@ -139,8 +172,33 @@ public:
                 std::vector<std::array<float,4>> next;next.reserve(casters.size());
                 if(next.capacity()>cap/sizeof(next[0]))return false;
                 for(auto const& c:casters)next.push_back(project(c.bounds,c.offset,projection));
-                bounds.swap(next);basis=projection;owner=casters.data();return true;
+                bounds.swap(next);basis=projection;owner=casters.data();
+                if(retain){retained_inputs=std::move(inputs);retained=true;}return true;
             }catch(...){return false;}
+        }
+        ReceiverKey receiver_key(std::vector<Bounds> const& receivers,bool narrowed)const {
+            ReceiverKey key;
+            // Oversized requests use ordinary validation without admission.
+            if(!retained || receivers.size()>16384/6)return key;
+            key.reserve(1+receivers.size()*6);key.push_back(narrowed?1u:0u);
+            for(auto const& receiver:receivers)for(auto values:{receiver.low,receiver.high})
+                for(unsigned j=0;j<3;++j){std::uint32_t bits;std::memcpy(&bits,values+j,4);key.push_back(bits);}
+            return key;
+        }
+        ReceiverProof const* find_receiver(ReceiverKey const& key) {
+            if(key.empty())return nullptr;
+            auto found=receiver_proofs.find(key);
+            if(found==receiver_proofs.end()){++receiver_misses;return nullptr;}
+            ++receiver_hits;return &found->second;
+        }
+        void admit_receiver(ReceiverKey key,ReceiverProof proof) {
+            if(key.empty() || proof.empty())return;
+            auto bytes=key.capacity()*sizeof(key[0])+proof.capacity()*sizeof(proof[0])+sizeof(key)+sizeof(proof)+96;
+            if(bytes>receiver_budget)return;
+            // Optional CPU proofs may be discarded wholesale under pressure;
+            // rendering and completed image ownership remain independent.
+            if(receiver_proofs.size()>=receiver_limit || receiver_bytes>receiver_budget-bytes){receiver_proofs.clear();receiver_bytes=0;}
+            if(receiver_proofs.emplace(std::move(key),std::move(proof)).second)receiver_bytes+=bytes;
         }
         bool matches(std::vector<Caster> const& casters,std::array<float,12> const& projection)const {
             return owner==casters.data() && bounds.size()==casters.size() && basis==projection;

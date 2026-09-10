@@ -271,13 +271,13 @@ int main(){
             self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         method = "    void collect_shadow_casters(" + source.split(
-            "    void collect_shadow_casters(", 1)[1].split("    bool submit_geometry(", 1)[0]
+            "    void collect_shadow_casters(", 1)[1].split("    c3x_renderer::render_core::SourceShadow::PreparedCasters* prepare_shadow_submission(", 1)[0]
         submission = source.split("    bool submit_geometry(", 1)[1].split("    bool ensure_block_targets", 1)[0]
         self.assertIn("shadow_buffers_ptr?*shadow_buffers_ptr:buffers,submission_casters", submission)
-        self.assertIn("shadow_buffers_ptr,false,shadow_casters_ptr)", submission)
-        self.assertIn("shadow_buffers_ptr,reflection_pass,shadow_casters_ptr)", submission)
-        self.assertIn("shadow_buffers_ptr,true,shadow_casters_ptr)", submission)
-        self.assertEqual(submission.count("collect_shadow_casters("), 1)
+        self.assertIn("shadow_buffers_ptr,false,shadow_casters_ptr,prepared_casters_ptr", submission)
+        self.assertIn("shadow_buffers_ptr,reflection_pass,shadow_casters_ptr,prepared_casters_ptr", submission)
+        self.assertIn("shadow_buffers_ptr,true,shadow_casters_ptr,prepared_casters_ptr", submission)
+        self.assertEqual(submission.count("prepare_shadow_submission("), 1)
         program = r'''
 #include <array>
 #include <vector>
@@ -471,7 +471,7 @@ int main(){
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         caches = "struct CachedViewport {" + source.split("struct CachedViewport {", 1)[1].split("struct CachedVertexChunk", 1)[0]
         restore = "    bool restore_viewport_geometry(" + source.split(
-            "    bool restore_viewport_geometry(", 1)[1].split("    bool draw_cached_geometry(", 1)[0]
+            "    bool restore_viewport_geometry(", 1)[1].split("    static bool append_region_bytes(", 1)[0]
         program = r'''
 #include <cassert>
 #include <cstdint>
@@ -663,14 +663,16 @@ int main(){
 #include <cassert>
 #include <climits>
 #include "Renderer/lab/shared/natural/ground.h"
+#include "Renderer/native/render_core/projected_mesh_bounds.h"
 using LONG=long;
 struct c3x_renderer_tile_v1 {int tile_x,tile_y;};
 struct CachedVertexChunk {
+ c3x_renderer::render_core::ProjectedMeshBounds projected_bounds;
  float natural_projection[4]={};
  struct {float low[3],high[3];} world_bounds;
  struct {LONG left,top,right,bottom;} bounds;
 };
-struct State {int shadow_tile_width=128,shadow_tile_height=64,height=1192;
+struct State {int shadow_tile_width=128,shadow_tile_height=64,height=1192;bool tight_natural_bounds=false;
 ''' + project + r'''
 };
 int main(){

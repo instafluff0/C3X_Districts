@@ -33,6 +33,8 @@
 #include "river_node_locality.h"
 #include "pixel_block_cache.h"
 #include "render_core/render_region_cache.h"
+#include "render_core/region_contributor_index.h"
+#include "render_core/center_shore_cache.h"
 #include "render_core/projected_mesh_bounds.h"
 #include "color_quantization.h"
 #include "render_core/terrain_query.h"
@@ -487,7 +489,13 @@ public:
     std::int64_t region_origin_x=0,region_origin_y=0;
     c3x_renderer::render_core::RenderRegionCache<ID3D11Texture2D> render_regions;
     c3x_renderer::render_core::RenderRegionKey region_context;
+    c3x_renderer::render_core::SourceShadow::PreparedCasters retained_region_casters;
+    c3x_renderer::render_core::RegionContributorIndex region_contributors;
+    c3x_renderer::render_core::CenterShoreCache center_shore_cache;
+    double frame_center_shore_ms=0;
     std::size_t frame_region_hits=0,frame_region_misses=0,frame_region_hit_pixels=0,frame_region_rejected=0;
+    std::array<double,3> frame_region_phase_ms{}; // contributors, lights, shadow dependencies
+    double frame_tile_validation_ms=0,frame_tile_append_ms=0,frame_topology_ms=0;
 
     c3x_renderer::city_fidelity::Gpu cities;
     c3x_renderer::city_fidelity::Glow city_glow;
@@ -797,7 +805,7 @@ public:
 
     void reset() {
         memory_sample("before-reset");
-        render_regions.clear();region_context.clear();
+        render_regions.clear();region_context.clear();retained_region_casters={};
         gpu_telemetry.reset();
         sampled_geometry_bucket=~std::size_t(0);
         unit_bodies.reset_gpu();
@@ -805,7 +813,7 @@ public:
         if (context != nullptr)
             context->ClearState();
         reset_targets();
-        world_coast.clear(); geometry_world_revision = -1; source_shadow.clear(); natural.reset(); reflection.reset();cities.reset();city_glow.reset();
+        world_coast.clear();center_shore_cache.clear(); geometry_world_revision = -1; source_shadow.clear(); natural.reset(); reflection.reset();cities.reset();city_glow.reset();
         region_reflection.reset();region_glow.reset();
         for (TerrainTexture & texture : terrain_textures)
         {
@@ -3400,6 +3408,15 @@ public:
                 frame_region_hits,frame_region_misses,frame_region_hit_pixels,render_regions.gpu_bytes,render_regions.metadata_bytes,
                 render_regions.entries.size(),frame_region_rejected,render_regions.evictions,render_regions.metadata_limit);trace.write("render-region-cache",detail,false);
         }
+        if(world_regions){
+            char detail[320];sprintf_s(detail,"contributors_ms=%.3f lights_ms=%.3f shadows_ms=%.3f tile_validation_ms=%.3f tile_append_ms=%.3f topology_ms=%.3f shadow_proof_hits=%llu shadow_proof_misses=%llu shadow_proof_bytes=%zu contributor_index_bytes=%zu",
+                frame_region_phase_ms[0],frame_region_phase_ms[1],frame_region_phase_ms[2],frame_tile_validation_ms,frame_tile_append_ms,frame_topology_ms,
+                retained_region_casters.receiver_hits,retained_region_casters.receiver_misses,retained_region_casters.receiver_bytes,region_contributors.bytes);
+            trace.write("navigation-phases",detail,false);
+            sprintf_s(detail,"ms=%.3f hits=%zu misses=%zu bytes=%zu entries=%zu",frame_center_shore_ms,
+                center_shore_cache.hits,center_shore_cache.misses,center_shore_cache.bytes,center_shore_cache.entries.size());
+            trace.write("center-shore-cache",detail,false);
+        }
         output.bgra_pixels = ambient_count() ? resource_pixels.data() : pixels.data();
         // Terrain is independent of retained native unit/effect animation.  A
         // cache hit must still report the current frame's animation demand so
@@ -3482,6 +3499,7 @@ public:
     }
 
     void clear_geometry_vertex_buffers() {
+        region_contributors.clear();
         resource_anchors.clear();
         geometry_footprints.clear();
         release_geometry_vertex_buffers(geometry_vertex_buffers);
@@ -3859,6 +3877,28 @@ public:
                  chunk.bounds.bottom+dy+high+radius<=rect.top || chunk.bounds.top+dy+low-radius>=rect.bottom);
     }
 
+    void prepare_region_contributors(std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers) {
+        if(region_contributors.ready && region_contributors.tile_width==shadow_tile_width &&
+           region_contributors.reflection_height==reflection.height_pixels)return;
+        region_contributors.clear();
+        try {
+            for(unsigned pass=0;pass<2;++pass)for(unsigned layer=0;layer<geometry_layer_count;++layer)
+                for(unsigned i=0;i<buffers[layer].size();++i){auto const& chunk=buffers[layer][i];
+                    int radius=layer==geometry_city && chunk.city_lighting?int(std::ceil(shadow_tile_width*.85f))+8:0;
+                    float low=pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.low[2]-2.5f/112.f):0;
+                    float high=pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f):0;
+                    if(!region_contributors.add(pass,{layer,i},double(chunk.bounds.left)+chunk.translation_x-radius,
+                        double(chunk.bounds.top)+chunk.translation_y+low-radius,
+                        double(chunk.bounds.right)+chunk.translation_x+radius,
+                        double(chunk.bounds.bottom)+chunk.translation_y+high+radius)){
+                        region_contributors.clear();return;
+                    }
+                }
+            region_contributors.tile_width=shadow_tile_width;
+            region_contributors.reflection_height=reflection.height_pixels;region_contributors.ready=true;
+        }catch(...){region_contributors.clear();}
+    }
+
     bool render_region_key(std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers,
             ViewportShaderSettings const& settings,
             std::vector<c3x_renderer::render_core::SourceShadow::Caster> const& casters,
@@ -3866,6 +3906,9 @@ public:
             c3x_renderer::render_core::RenderRegionKey& key,std::vector<std::size_t>* sections=nullptr) {
         using Shadow=c3x_renderer::render_core::SourceShadow;
         if(region_context.empty() || !prepared || !prepared->matches(casters,shadow_basis))return false;
+        auto phase_started=std::chrono::steady_clock::now();
+        auto phase=[&](unsigned index){auto now=std::chrono::steady_clock::now();
+            frame_region_phase_ms[index]+=std::chrono::duration<double,std::milli>(now-phase_started).count();phase_started=now;};
         key=region_context;
         if(sections){sections->clear();sections->push_back(key.size());}
         for(unsigned pass=0;pass<(reflection.enabled?2u:1u);++pass){
@@ -3876,13 +3919,16 @@ public:
             std::vector<Shadow::Bounds> receivers;
             std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
             key.push_back(0x726567696f6e0000ull+pass);
-            for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:buffers[layer]){
+            std::vector<c3x_renderer::render_core::RegionContributorIndex::Item> candidates;
+            bool indexed=false;
+            try{indexed=region_contributors.query(pass,-int(local.translation[0]),-int(local.translation[1]),extent,candidates);}catch(...){}
+            auto contribute=[&](unsigned layer,CachedVertexChunk const& chunk){
                 if(layer==geometry_city && chunk.city_lighting &&
                    chunk_intersects_region(chunk,local,rect,pass!=0,int(std::ceil(shadow_tile_width*.85f))+8)){
                     auto light=chunk.city_lighting.get();
                     if(std::find(lights.begin(),lights.end(),light)==lights.end())lights.push_back(light);
                 }
-                if(!chunk_intersects_region(chunk,local,rect,pass!=0))continue;
+                if(!chunk_intersects_region(chunk,local,rect,pass!=0))return true;
                 if(chunk.animation_texture)return false; // Posed pixels never enter this static cache.
                 if(layer!=geometry_shadow)receivers.push_back(chunk.world_bounds);
                 std::uint64_t identity[]={layer,chunk.version,chunk.index_count,std::uint64_t(chunk.index_format),
@@ -3895,14 +3941,26 @@ public:
                 effective.depth_translation=-effective.translation[1]/height;
                 if(!append_region_bytes(key,&effective,sizeof(effective)) ||
                    !append_region_bytes(key,chunk.city_atlas,sizeof(chunk.city_atlas)))return false;
-            }
+                return true;
+            };
+            if(indexed){for(auto const& candidate:candidates)
+                if(!contribute(candidate.first,buffers[candidate.first][candidate.second]))return false;
+            }else for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:buffers[layer])
+                if(!contribute(layer,chunk))return false;
             if(sections)sections->push_back(key.size());
+            phase(0);
             key.push_back(0x6c69676874730000ull);key.push_back(lights.size());
             for(auto light:lights){
                 if(!append_region_bytes(key,light->lights.data(),light->lights.size()*sizeof(light->lights[0])) ||
                    !append_region_bytes(key,light->blockers.data(),light->blockers.size()*sizeof(light->blockers[0])))return false;
             }
             if(sections)sections->push_back(key.size());
+            phase(1);
+            auto proof_start=key.size();
+            auto receiver_key=prepared->receiver_key(receivers,region_receiver_shadows);
+            auto proof=prepared->find_receiver(receiver_key);
+            if(proof)key.insert(key.end(),proof->begin(),proof->end());
+            else {
             auto pages=Shadow::required_pages(receivers,shadow_basis);
             if(pages.size()>32)return false;
             key.push_back(0x736861646f770000ull);key.push_back(pages.size());
@@ -3921,7 +3979,10 @@ public:
                 std::uint64_t identity[]={std::uint64_t(page.first),std::uint64_t(page.second),selection->hash,std::uint64_t(selection->indices.size())};
                 if(!append_region_bytes(key,identity,sizeof(identity)))return false;
             }
+            try{prepared->admit_receiver(std::move(receiver_key),{key.begin()+std::ptrdiff_t(proof_start),key.end()});}catch(...){}
+            }
             if(sections)sections->push_back(key.size());
+            phase(2);
         }
         return key.size()<=c3x_renderer::render_core::RenderRegionCache<ID3D11Texture2D>::key_words_limit;
     }
@@ -4023,7 +4084,15 @@ public:
         collect_shadow_casters(buffers,casters);
         char control[8]={};
         bool reuse=!(GetEnvironmentVariableA("C3X_RENDERER_CASTER_BOUNDS_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
-        auto result=reuse && prepared.build(casters,shadow_basis)?&prepared:nullptr;
+        char dependency_control[8]={};
+        bool retain=world_regions && &buffers==&geometry_vertex_buffers &&
+            !(GetEnvironmentVariableA("C3X_RENDERER_REGION_DEPENDENCY_CONTROL",dependency_control,sizeof(dependency_control)) && std::strcmp(dependency_control,"1")==0);
+        char index_control[8]={};
+        bool index=world_regions && &buffers==&geometry_vertex_buffers &&
+            !(GetEnvironmentVariableA("C3X_RENDERER_REGION_INDEX_CONTROL",index_control,sizeof(index_control)) && std::strcmp(index_control,"1")==0);
+        if(index)prepare_region_contributors(buffers);else region_contributors.clear();
+        auto& selected=retain?retained_region_casters:prepared;
+        auto result=reuse && selected.build(casters,shadow_basis,retain)?&selected:nullptr;
         char detail[160];sprintf_s(detail,"casters=%zu descriptor_bytes=%zu dirty_block_clip=%u",casters.size(),
             casters.capacity()*sizeof(casters[0]),unsigned(clip_dirty_blocks));
         trace.write("submission-casters",detail,false);
@@ -4832,6 +4901,8 @@ public:
         frame_draw_calls=frame_parameter_updates=frame_bounds_tests=0;
         frame_caster_preparations=0;frame_post_lanes=0;
         frame_region_hits=frame_region_misses=frame_region_hit_pixels=frame_region_rejected=0;
+        frame_region_phase_ms={};frame_tile_validation_ms=frame_tile_append_ms=frame_topology_ms=0;
+        frame_center_shore_ms=0;center_shore_cache.hits=center_shore_cache.misses=0;
         memory_sample("frame-start");
         trace.write("render-begin", "", false);
         LARGE_INTEGER load_mark={};QueryPerformanceCounter(&load_mark);
@@ -4959,6 +5030,9 @@ public:
         char flat_shore_control[8]={};
         bool const skip_flat_shore=!(GetEnvironmentVariableA("C3X_RENDERER_FLAT_SHORE_CONTROL",flat_shore_control,sizeof(flat_shore_control)) &&
             std::strcmp(flat_shore_control,"1")==0);
+        char center_control[8]={};
+        bool const retain_center_shore=world_regions &&
+            !(GetEnvironmentVariableA("C3X_RENDERER_CENTER_SHORE_CONTROL",center_control,sizeof(center_control)) && std::strcmp(center_control,"1")==0);
         char height_cache_control[8]={};
         bool const retain_height_samples=!(GetEnvironmentVariableA("C3X_RENDERER_HEIGHT_CACHE_CONTROL",height_cache_control,sizeof(height_cache_control)) &&
             std::strcmp(height_cache_control,"1")==0);
@@ -5271,6 +5345,7 @@ public:
         // foreground job vector, which the caller may overwrite during idle work.
         // A full content key is still required when a vector reuses its address.
         if (topology_cache.signature != topology_signature || topology_cache.records != frame.tiles) {
+        auto topology_started=std::chrono::steady_clock::now();
         topology_cache.signature = 0; topology_cache.records = nullptr;
         ground_by_coordinate.clear(); real_by_coordinate.clear(); relief_by_coordinate.clear();
         surface_by_coordinate.clear(); tile_by_coordinate.clear(); semantic_by_coordinate.clear(); river_nodes.clear();
@@ -5353,6 +5428,7 @@ public:
             }
         }
         topology_cache.signature = topology_signature; topology_cache.records = frame.tiles;
+        frame_topology_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-topology_started).count();
         }
         c3x_renderer::FeatureGroup broadleaf_forest;
         c3x_renderer::FeatureGroup const * forest_group =
@@ -5567,8 +5643,17 @@ public:
             int const tile_ground_grid = pickup_profile ?
                 (relief_neighborhood ? (frame.tile_width>=96?24:12) : (frame.tile_width>=96?12:8)) :
                 relief_neighborhood ? relief_grid : base_ground_grid;
-            bool coast_detail = pickup_profile && std::abs(shore_sample_at(
-                float(tile.tile_x+tile.tile_y)*.5f+.5f,float(tile.tile_x-tile.tile_y)*.5f+.5f).distance)<1.5;
+            bool coast_detail=false;
+            if(pickup_profile){
+                auto shore_started=std::chrono::steady_clock::now();
+                c3x_renderer::render_core::ShoreSample center;
+                if(retain_center_shore){
+                    try{center=center_shore_cache.get(world_coast,tile.tile_x,tile.tile_y,observe_world,observe_coast);queries.prime_center(center);}
+                    catch(...){center=shore_sample_at(queries.center_u,queries.center_v);}
+                }else center=shore_sample_at(queries.center_u,queries.center_v);
+                coast_detail=std::abs(center.distance)<1.5;
+                frame_center_shore_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-shore_started).count();
+            }
             int const flat_grid=pickup_profile ? (coast_detail && frame.tile_width>=96?16:8) : tile_ground_grid;
             int const shadow_grid = frame.tile_width >= 96 && draw_record_count <= 512
                 ? 16 : 8;
@@ -5611,6 +5696,7 @@ public:
                     mix_tile(node->degree); mix_tile(node->touches_water);
                 }
             }
+            auto validation_started=std::chrono::steady_clock::now();
             auto candidates = tile_geometry_cache.equal_range(tile_signature);
             bool reused_tile = false;
             for (auto cached_tile = candidates.first; cached_tile != candidates.second; ++cached_tile) {
@@ -5636,6 +5722,8 @@ public:
                         current->second->anchor_y - tile.anchor_y != dependency.second[1]) valid = false;
                 }
                 if (valid) {
+                    auto append_started=std::chrono::steady_clock::now();
+                    frame_tile_validation_ms+=std::chrono::duration<double,std::milli>(append_started-validation_started).count();
                     if (prewarming) {
                         cached_tile->second.last_used = std::max(cached_tile->second.last_used, tile_geometry_epoch-1);
                         prepared_footprint = tile_footprint(cached_tile->second, tile);
@@ -5644,12 +5732,14 @@ public:
                     if (cached_tile->second.replaces_resource) build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
                     geometry_cache.tile_keys[index]={tile_signature,cached_tile->second.version};
                     append_tile_geometry(cached_tile->second, tile, animated_view);
+                    frame_tile_append_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-append_started).count();
                     ++frame_tiles_reused;
                     reused_tile = true;
                     break;
                 }
             }
             if (reused_tile) continue;
+            frame_tile_validation_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-validation_started).count();
             ++frame_tiles_built;
             std::vector<ResourceAnchor> tile_resource_anchors;
             // Thousands of height/material/shadow samples revisit a tiny

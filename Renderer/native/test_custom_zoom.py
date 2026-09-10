@@ -144,6 +144,26 @@ int main(){
         program = "#include <initializer_list>\n" + program
         run_cpp(program)
 
+    def test_supported_zoom_evidence_rejects_reordering_and_inexact_repeats(self):
+        import tempfile
+        from pathlib import Path
+        from Renderer.native.compare_zoom_benchmark import run
+        with tempfile.TemporaryDirectory() as temporary:
+            folder=Path(temporary)
+            lines=[]
+            for cycle in range(2):
+                for width in (128,192,160):
+                    lines.append(f"ZOOM cycle={cycle} width={width} result=1")
+                    if cycle:lines.append(f"ZOOM parity width={width} changed=0 error=0 status=pass")
+            lines.append("BIQ 100x100 viewport: 0 fallback")
+            log=folder/"benchmark.log"
+            log.write_text("\n".join(lines))
+            self.assertEqual(len(run("supported",folder,"zoom")[1]),6)
+            log.write_text("\n".join(lines).replace("cycle=1 width=192", "cycle=1 width=160"))
+            with self.assertRaisesRegex(ValueError,"sequence"):run("reordered",folder,"zoom")
+            log.write_text("\n".join(lines).replace("error=0", "error=1",1))
+            with self.assertRaisesRegex(ValueError,"exact"):run("inexact",folder,"zoom")
+
     def test_key_handler_queues_native_redraw_without_indirect_dispatch(self) -> None:
         source = (ROOT / "injected_code.c").read_text()
         handler = source.split("advance_custom_renderer_zoom_from_key", 1)[1]

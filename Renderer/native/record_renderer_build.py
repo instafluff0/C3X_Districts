@@ -40,6 +40,7 @@ def main():
               "tier": args.tier, "environment": flags, "command": "BENCHMARK_ZOOM.bat candidate build-only",
               "flags": "MSVC x86 /std:c++17 /EHsc /O2 /W4 /WX; preview /LARGEADDRESSAWARE",
               "host_os": platform.platform(), "returncode": result["returncode"],
+              "output_tail": result.get("output_tail", ""),
               "binaries": {name:digest(out/name) for name in ("C3XRenderer.dll","biq_preview.exe") if (out/name).is_file()}}
     (out/"build-evidence.json").write_text(json.dumps(record,indent=2))
     print(json.dumps({"out":str(out),"returncode":record["returncode"],"sources_unchanged":record["sources_unchanged"]}))

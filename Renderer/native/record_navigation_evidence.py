@@ -62,9 +62,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binaries", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation"), default="navigation")
+    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "distant"), default="navigation")
     parser.add_argument("--width", type=int, default=2240)
     parser.add_argument("--height", type=int, default=1192)
+    parser.add_argument("--distant-steps", type=int, choices=range(1,1001), default=100)
+    parser.add_argument("--cycles", type=int, choices=range(2,41), default=2)
     parser.add_argument("--resident", action="store_true")
     parser.add_argument("--cold", action="store_true")
     parser.add_argument("--waves", choices=("0", "1"), default="1")
@@ -81,6 +83,9 @@ def main():
     parser.add_argument("--world-grid", action="store_true")
     parser.add_argument("--world-regions", action="store_true", help="Reuse completed static world-grid render regions")
     parser.add_argument("--region-metadata-mib", type=int, choices=(32,96), default=96)
+    parser.add_argument("--center-shore-control", action="store_true", help="Independently recompute tile-center shoreline samples")
+    parser.add_argument("--index-control", action="store_true", help="Scan every chunk independently for each region")
+    parser.add_argument("--dependency-control", action="store_true", help="Recompute shadow dependency proofs each request")
     parser.add_argument("--region-diagnostics", action="store_true", help="Trace component fingerprints; diagnostic timings are not performance evidence")
     parser.add_argument("--region-receiver-shadows", action="store_true", help="Limit completed-region shadow dependencies to receiver reach")
     parser.add_argument("--tight-natural-bounds", action="store_true", help="Use actual projected natural mesh extrema for culling")
@@ -96,7 +101,7 @@ def main():
     args = parser.parse_args()
     out = args.out.resolve()
     relative = out.relative_to(ROOT)
-    storage = storage_preflight(ROOT, args.width, args.height, args.resident_steps if args.resident else 0)
+    storage = storage_preflight(ROOT, args.width, args.height, args.distant_steps if args.scenario == "distant" else args.resident_steps if args.resident else 0)
     out.mkdir(parents=True, exist_ok=False)
     for name in ("C3XRenderer.dll", "biq_preview.exe"):
         shutil.copy2(args.binaries / name, out / name)
@@ -116,6 +121,9 @@ def main():
            "C3X_RENDERER_REFLECTION_CONTROL": "1" if args.reflection_ablation else "0",
            "C3X_RENDERER_WORLD_RASTER_GRID": "1" if args.world_grid else "0",
            "C3X_RENDERER_WORLD_REGIONS": "1" if args.world_regions else "0",
+           "C3X_RENDERER_CENTER_SHORE_CONTROL": "1" if args.center_shore_control else "0",
+           "C3X_RENDERER_REGION_INDEX_CONTROL": "1" if args.index_control else "0",
+           "C3X_RENDERER_REGION_DEPENDENCY_CONTROL": "1" if args.dependency_control else "0",
            "C3X_RENDERER_REGION_DIAGNOSTICS": "1" if args.region_diagnostics else "0",
            "C3X_RENDERER_REGION_RECEIVER_SHADOWS": "1" if args.region_receiver_shadows else "0",
            "C3X_RENDERER_TIGHT_NATURAL_BOUNDS": "1" if args.tight_natural_bounds else "0",
@@ -131,6 +139,9 @@ def main():
            "C3X_RENDERER_PREVIEW_RESIDENT_STEPS": str(args.resident_steps),
            "C3X_RENDERER_CAMERA_PREVIEW": "0", "C3X_RENDERER_PREVIEW_CAMERA_QUEUE": "1" if args.camera_view else "",
            "C3X_RENDERER_PREVIEW_CAMERA_VIEW": "1" if args.camera_view else "",
+           "C3X_RENDERER_PREVIEW_SUPPORTED_ZOOMS": "1" if args.scenario == "zoom" else "",
+           "C3X_RENDERER_PREVIEW_CYCLES": str(args.cycles),
+           "C3X_RENDERER_PREVIEW_DISTANT_STEPS": str(args.distant_steps) if args.scenario == "distant" else "",
            "C3X_RENDERER_PREVIEW_SEASON": "0",
            "C3X_RENDERER_PREVIEW_ANIMATION": "1", "C3X_RENDERER_WAVES": args.waves,
            "C3X_RENDERER_PREVIEW_NAVIGATION": "1" if args.scenario == "navigation" else "",
@@ -170,6 +181,7 @@ def main():
                   "returncode": result["returncode"], "changed_inputs": changed,
                   "inputs_unchanged": not changed}
     completion["binaries_unchanged"] = all(digest(out / name)==value for name,value in receipt["binaries"].items())
+    completion["images"] = {p.name: digest(p) for p in sorted(out.glob("*.bmp")) if p.is_file()}
     (out / "evidence.json").write_text(json.dumps(completion, indent=2))
     print(json.dumps(completion), flush=True)
     raise SystemExit(0 if result["returncode"] == 0 and not changed and completion["binaries_unchanged"] else 1)

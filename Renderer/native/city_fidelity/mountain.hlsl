@@ -226,6 +226,30 @@ float3 detail_normal(float3 geometric, float3 world, float detail, float strengt
     return normalize(geometric - gradient * strength);
 }
 
+// Differentiate each height projection before blending it.
+// Differentiating the blended height also differentiates projection weights,
+// so unrelated texture values can introduce false gradients as a face turns.
+float2 triplanar_height_derivatives(Texture2D texture_map, float3 p, float3 n) {
+    float3 weight = pow(abs(n), 5);
+    weight /= max(dot(weight, 1), 0.00001);
+    p *= Quality.y;
+    float x = texture_map.Sample(Wrap, p.yz).r;
+    float y = texture_map.Sample(Wrap, p.xz).r;
+    float z = texture_map.Sample(Wrap, p.xy).r;
+    return float2(ddx(x), ddy(x)) * weight.x +
+           float2(ddx(y), ddy(y)) * weight.y +
+           float2(ddx(z), ddy(z)) * weight.z;
+}
+
+float3 height_derivative_normal(float3 geometric, float3 world, float2 detail, float strength) {
+    float3 dx = ddx(world), dy = ddy(world);
+    float3 r1 = cross(dy, geometric), r2 = cross(geometric, dx);
+    float determinant = dot(dx, r1);
+    float3 gradient = (detail.x * r1 + detail.y * r2) *
+        sign(determinant) / max(abs(determinant), 0.000001);
+    return normalize(geometric - gradient * strength);
+}
+
 float ggx(float3 n, float3 light, float3 view, float roughness, float f0) {
     float3 halfway = normalize(light + view);
     float ndl = saturate(dot(n, light));
@@ -401,6 +425,7 @@ Output shade(P input) {
     float3 albedo;
     float height_detail;
     float rock_crevice = 1;
+    float2 rock_derivatives = 0;
     float specular_map;
 #ifdef BEAUTY_TERRAIN_TRANSITIONS
     float mountain_rise = max(0, input.world.z - input.base_relief - 2.5 / 112.0);
@@ -441,10 +466,11 @@ Output shade(P input) {
         specular_map = lerp(ground_specular, 0.0, rock_detail_coverage);
     } else {
         float height = input.material.x;
-        float snow = smoothstep(0.79, 0.94, height) * smoothstep(0.24, 0.72, geometric.z);
-        // Select the rock treatment from the final composed rise, not the
-        // dominant source patch's height (which can understate a joined face).
-        float top = smoothstep(0.08, 0.62, mountain_rise) * (1 - snow);
+        float snow = smoothstep(0.62, 0.78, height) * smoothstep(0.02, 0.25, geometric.z);
+        // The top material contains patchy snow, not plain upper rock. Keep
+        // both authored snow layers near the summit; ground coverage remains
+        // tied to final rise independently of these source-height masks.
+        float top = smoothstep(0.52, 0.68, height) * (1 - snow);
         float base = 1 - top - snow;
         float3 rock_albedo = triplanar(RockColor, input.world, geometric);
         float3 mountain_albedo = rock_albedo * base +
@@ -457,11 +483,19 @@ Output shade(P input) {
         // Snow softens the rock relief. Preserve other packs' authored upper
         // height channel; the local base/upper height pair happens to be equal.
         float mountain_detail = lerp(layered_detail, rock_detail, snow * 0.60);
-        // Keep the existing weak fine bump contribution. Actual crevice fill
-        // comes from local concavity rather than stronger normal perturbation.
+        // Retain the fine source-height contribution without amplifying the
+        // broad material plateaus into horizontal ledges. Crevice fill stays
+        // independent of light direction and separate from normal strength.
         float3 fine_world = input.world * 3.7 + float3(0.31, 0.17, 0.43);
         float fine_rock = triplanar_scalar(RockHeight,
             fine_world, geometric);
+        float2 rock_gradient = triplanar_height_derivatives(RockHeight, input.world, geometric);
+        float2 layered_gradient = rock_gradient * base +
+            triplanar_height_derivatives(TopHeight, input.world, geometric) * top +
+            triplanar_height_derivatives(SnowHeight, input.world, geometric) * snow;
+        rock_derivatives = lerp(layered_gradient, rock_gradient, snow * 0.60) * 0.04;
+        rock_derivatives += triplanar_height_derivatives(RockHeight, fine_world, geometric) * 0.12 * (1-snow);
+
         mountain_detail += (fine_rock - 0.5) * 0.12 * (1 - snow);
         float neighborhood = triplanar_neighborhood(RockHeight,
             input.world, geometric).r;
@@ -495,12 +529,10 @@ Output shade(P input) {
         float3 graded = lerp(albedo, rock_luma.xxx, 0.28) * float3(0.96, 1.0, 1.07);
         albedo = lerp(albedo, graded, rock_albedo_coverage);
     }
-    // The source frame's restrained value is appropriate for terrain at the
-    // unified foot, but under-resolves the authored rock height at gameplay
-    // scale. Strengthen only covered stone; this remains direction-neutral.
+    // Apply the retained normal gain to separately calibrated broad/fine
+    // gradients. This changes shading only, never the geometric surface.
     float rock_normal_strength = Quality.z * lerp(1.0, 1.60, rock_detail_coverage);
-    float3 normal = Quality.x > 0.5 ? detail_normal(geometric, input.world,
-                                                    height_detail, rock_normal_strength) : geometric;
+    float3 normal = Quality.x > 0.5 ? height_derivative_normal(geometric, input.world, lerp(float2(ddx(ground_height), ddy(ground_height)), rock_derivatives, rock_detail_coverage), rock_normal_strength) : geometric;
 #ifdef BEAUTY_COMPOSED_SHADOWS
     // The shared shadow-frame light is authoritative for both the BRDF and
     // projection, so every mountain face and cast shadow agrees in direction.

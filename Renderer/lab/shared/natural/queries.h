@@ -55,6 +55,10 @@ public:
         if(i!=std::size_t(-1))observe_world(i,topology.at(i));
         auto value=topology.tile(c,r);far_tiles.emplace(key,value);return value;
     }
+    void prime_center(render_core::ShoreSample const& value) {
+        center=value;center_ready=true;
+        samples.get(center_u,center_v,[&](){return value;});
+    }
     render_core::ShoreSample shore(float u,float v) {
         // Preserve the production center certificate and exact query cache.
         if(center_ready && center.distance>1.5+std::hypot(u-center_u,v-center_v))

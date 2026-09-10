@@ -86,10 +86,11 @@ int main(){
 #include <cstring>
 #include <utility>
 #include <set>
+#include <map>
 #include <cmath>
 struct Shadow {
     struct Bounds{float low[3]={},high[3]={};};
-    struct Caster{Bounds bounds;float offset[3]={};std::uint64_t version=1;unsigned layer=0,index_format=42,binding=0xffffffffu;};
+    struct Caster{void *vertices=nullptr,*indices=nullptr;unsigned count=0,stride=0;Bounds bounds;float offset[3]={};std::uint64_t version=1;unsigned layer=0,index_format=42,binding=0xffffffffu;};
     std::array<float,12> basis{};
     static std::array<float,4> project(''' + body + r'''
 };
@@ -130,6 +131,32 @@ int main(){
     casters.resize(8u*1024u*1024u/sizeof(std::array<float,4>)+1);
     assert(!prepared.build(casters,basis));assert(!prepared.matches(casters,basis));
     casters.clear();assert(prepared.build(casters,basis));assert(prepared.bounds.empty());
+    casters.resize(1);assert(prepared.build(casters,basis,true));
+    std::vector<Shadow::Bounds> receivers(1);
+    auto receiver=prepared.receiver_key(receivers,true);
+    prepared.admit_receiver(receiver,{1,2,3});assert(prepared.find_receiver(receiver));
+    auto copied=casters;assert(prepared.build(copied,basis,true));
+    assert(prepared.find_receiver(receiver)); // Equal content in a new immutable request.
+    receivers[0].high[0]=1;assert(!prepared.find_receiver(prepared.receiver_key(receivers,true)));
+    assert(!prepared.find_receiver(prepared.receiver_key(receivers,false)));
+    auto changed_input=[&](){assert(prepared.build(copied,basis,true));assert(!prepared.find_receiver(receiver));
+        prepared.admit_receiver(receiver,{1,2,3});};
+    copied[0].bounds.high[0]+=1;changed_input();
+    copied[0].offset[1]+=1;changed_input();
+    copied[0].binding=3;changed_input();
+    copied[0].version++;changed_input();
+    copied[0].layer++;changed_input();
+    copied[0].index_format++;changed_input();
+    copied[0].stride++;changed_input();
+    copied[0].count++;changed_input();
+    copied[0].vertices=reinterpret_cast<void*>(1);changed_input();
+    basis[0]+=1;changed_input();
+    copied.push_back(copied[0]);changed_input();
+    copied[0].version++;std::swap(copied[0],copied[1]);changed_input();
+    for(unsigned i=0;i<1100;++i)prepared.admit_receiver({i},{i});
+    assert(prepared.receiver_proofs.size()<=1024 && prepared.receiver_bytes<=prepared.receiver_budget);
+    assert(prepared.build(copied,basis,false));assert(prepared.receiver_proofs.empty() && !prepared.retained);
+
 }
 '''
         self.run_program(program)

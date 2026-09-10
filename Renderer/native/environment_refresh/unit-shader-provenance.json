@@ -1,7 +1,7 @@
 {
-  "authority": "Renderer\\lab\\shared\\shaders\\objects\\beauty_objects.hlsl",
-  "source_sha256": "a1b0ae9cdde5e865331c7cebd591740f5eac5c47397c714ac15edc9beb96adff",
-  "generated_sha256": "889e5113fbf504031f28205099de65548b1484b914c214efc5c29f202bfef695",
+  "authority": "Renderer/lab/shared/shaders/objects/beauty_objects.hlsl",
+  "source_sha256": "2d4e1dcf6d0f88457a21b7cb35ca4dad277f2fafa19f7afb670b49c2d6b7c0a3",
+  "generated_sha256": "f54ed821e5a10aa24021d5072bf8be38719d00fb77bf71aacc5c6e3525b5e3c9",
   "ported": [
     "GGX",
     "sky-weighted ambient",
@@ -20,6 +20,6 @@
     "native sprite projection and clipping"
   ],
   "lean_decode": "first map with authored frame; second-map variance constants unresolved",
-  "detail_authority": "Renderer\\lab\\shared\\shaders\\objects\\unit_microfacet.hlsl",
-  "detail_sha256": "2106d6282c0f3211ffe3a83c7eed1a20e644cd54123fabee60ef1f73e07468a5"
+  "detail_authority": "Renderer/lab/shared/shaders/objects/unit_microfacet.hlsl",
+  "detail_sha256": "e4b1573d7607a904469eb1ecc3db999bbcb64c75b76c7ff980713b775dbf19d8"
 }

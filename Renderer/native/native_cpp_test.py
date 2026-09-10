@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-from Renderer.lab.platform import ROOT, native_command_result
+from Renderer.lab.platform import ROOT, native_command_result, windows_root
 
 
 def run_cpp(program, *, sources=(), timeout=30):
@@ -16,10 +16,13 @@ def run_cpp(program, *, sources=(), timeout=30):
         path = Path(directory)
         cpp = path / "contract.cpp"
         cpp.write_text(program)
-        if os.name == "nt":
+        needs_windows = any('#include <windows.h>' in (ROOT / source).read_text()
+                            for source in sources)
+        if os.name == "nt" or needs_windows:
+            target_root = ROOT if os.name == "nt" else windows_root()
             # Keep generated paths as quoted batch arguments; no shell expansion
             # is allowed in caller-provided source names.
-            paths = [str(ROOT), *(str(ROOT / source) for source in sources)]
+            paths = [str(target_root), *(str(target_root / source) for source in sources)]
             if any(any(char in value for char in '\"%\r\n') for value in paths):
                 raise ValueError("Unsupported native test path")
             additional = " ".join(f'"{value}"' for value in paths[1:])
@@ -31,10 +34,11 @@ for /f "usebackq tokens=*" %%I in (`"%VSWHERE%" -latest -products * -requires Mi
 if not defined C3X_TEST_VS exit /b 2
 call "%C3X_TEST_VS%\VC\Auxiliary\Build\vcvars32.bat" >nul
 if errorlevel 1 exit /b 2
-cd /d "%~dp0"
-''' + f'cl /nologo /std:c++17 /EHsc /O1 /W3 /I "{ROOT}" contract.cpp {additional} /Fe:contract.exe /link /LARGEADDRESSAWARE\n'
+pushd "%~dp0"
+''' + f'cl /nologo /std:c++17 /EHsc /O1 /W3 /I "{target_root}" contract.cpp {additional} /Fe:contract.exe /link /LARGEADDRESSAWARE\n'
                 + 'if errorlevel 1 exit /b 1\ncontract.exe\nexit /b %errorlevel%\n')
-            result = native_command_result("Renderer/native", f'call "{batch}"', timeout_seconds=timeout+60)
+            target_batch = target_root / batch.relative_to(ROOT).as_posix()
+            result = native_command_result("Renderer/native", f'call "{target_batch}"', timeout_seconds=timeout+60)
             if result["returncode"] != 0:
                 raise AssertionError(result["output_tail"])
         else:

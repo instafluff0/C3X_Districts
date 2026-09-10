@@ -16,6 +16,11 @@ def run(label, directory, scenario):
     steps = 6 if scenario == "navigation" else 5
     lines = (directory / "benchmark.log").read_text().splitlines()
     rows = [dict(re.findall(r"(\w+)=([^ ]+)", line)) for line in lines if line.startswith(prefix + " cycle=")]
+    if scenario == "zoom":
+        ladder = [int(row["width"]) for row in rows if row["cycle"] == "0"]
+        if ladder not in ([128,112,96,80,64], [128,96,64,192,160], [128,192,160]):
+            raise ValueError(f"{label}: unexpected zoom ladder")
+        steps = len(ladder)
     cycles = len(rows) // steps
     if cycles < 2 or len(rows) != steps * cycles or any(row["result"] != "1" for row in rows):
         raise ValueError(f"{label}: incomplete or failed camera cycle")
@@ -25,9 +30,12 @@ def run(label, directory, scenario):
     if not lines[-1].startswith("BIQ ") or "0 fallback" not in lines[-1]:
         raise ValueError(f"{label}: missing successful completion marker")
     # Keep old receipts readable, but reject arbitrary/reordered zoom ladders.
-    ids = range(6) if scenario == "navigation" else tuple(int(row["width"]) for row in rows[:5])
-    if scenario != "navigation" and ids not in ((128,112,96,80,64), (128,96,64,192,160)):
-        raise ValueError(f"{label}: unexpected zoom ladder")
+    ids = range(6) if scenario == "navigation" else ladder
+    if scenario == "zoom" and len(ladder) == 3:
+        for line in parity:
+            values = dict(re.findall(r"(\w+)=([^ ]+)", line))
+            if values.get("changed") != "0" or values.get("error") != "0":
+                raise ValueError(f"{label}: supported zoom parity must be exact")
     field = "step" if scenario == "navigation" else "width"
     if [(int(row["cycle"]),int(row[field])) for row in rows] != [(cycle,step) for cycle in range(cycles) for step in ids]:
         raise ValueError(f"{label}: unexpected camera sequence")
@@ -79,10 +87,12 @@ def main():
     candidate, after = run("candidate", args.candidate, args.scenario)
     if len(before) != len(after):
         raise ValueError("Benchmark cycle counts differ")
-    if args.scenario == "zoom" and [row["width"] for row in before[:5]] != [row["width"] for row in after[:5]]:
+    first_before=[row for row in before if row["cycle"]=="0"]
+    first_after=[row for row in after if row["cycle"]=="0"]
+    if args.scenario == "zoom" and [row["width"] for row in first_before] != [row["width"] for row in first_after]:
         raise ValueError("Benchmark zoom ladders differ")
     comparisons = []
-    variants = [(f"z{row['width']}", {"width": int(row["width"])}) for row in before[:5]] if args.scenario == "zoom" else [(f"nav{step}", {"step": step}) for step in range(6)]
+    variants = [(f"z{row['width']}", {"width": int(row["width"])}) for row in first_before] if args.scenario == "zoom" else [(f"nav{step}", {"step": step}) for step in range(6)]
     for suffix, identity in variants:
         size, old = pixels(baseline / f"zoom.bmp.{suffix}.bmp")
         other_size, new = pixels(candidate / f"zoom.bmp.{suffix}.bmp")

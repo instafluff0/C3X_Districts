@@ -5,6 +5,70 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class RenderRegionTests(unittest.TestCase):
+    def test_center_samples_replay_dependencies_and_reject_edits(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/center_shore_cache.h"
+#include "Renderer/lab/shared/natural/queries.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+int main(){
+ std::vector<std::uint32_t> values(32*24/2);
+ for(int y=0;y<24;++y)for(int x=y&1;x<32;x+=2){unsigned t=((x/8+y/6)%3)==0?11:2;values[(y*32+x)/2]=t|(t<<8);}
+ WorldCoast coast;coast.update({32,24,true,true},values.data(),values.size(),1);
+ CenterShoreCache cache;
+ auto equal=[](ShoreSample a,ShoreSample b){assert(a.distance==b.distance && a.rocky==b.rocky && a.beach_width==b.beach_width && a.depth==b.depth);};
+ for(int revision=1;revision<=3;++revision){
+  if(revision>1){values[revision*3]=2u|(5u<<8);coast.update({32,24,true,true},values.data(),values.size(),revision);}
+  for(int repeat=0;repeat<2;++repeat)for(int x=-4;x<36;x+=2){int y=8;
+   std::map<std::size_t,std::uint32_t> observed_world,expected_world;
+   std::map<std::uint64_t,std::uint64_t> observed_coast,expected_coast;
+   auto w=[&](auto i,auto value){observed_world[i]=value;};auto c=[&](auto i,auto value){observed_coast[i]=value;};
+   auto ew=[&](auto i,auto value){expected_world[i]=value;};auto ec=[&](auto i,auto value){expected_coast[i]=value;};
+   auto result=cache.get(coast,x,y,w,c);
+   equal(result,coast.sample({float(x+y)*.5f+.5f,float(x-y)*.5f+.5f},ec,ew));
+   assert(observed_world==expected_world && observed_coast==expected_coast);
+   ExactPointCache<ShoreSample> scratch_a,scratch_b;
+   c3x_renderer::fidelity::SurfaceQueries a(coast,scratch_a,x,y,ew,ec);
+   c3x_renderer::fidelity::SurfaceQueries b(coast,scratch_b,x,y,w,c);
+   equal(a.shore(a.center_u,a.center_v),result);b.prime_center(result);
+   for(float dx:{-.45f,0.f,.45f})for(float dy:{-.3f,0.f,.3f})equal(a.shore(a.center_u+dx,a.center_v+dy),b.shore(b.center_u+dx,b.center_v+dy));
+  }
+ }
+ assert(cache.hits>0 && cache.bytes<=cache.budget && cache.entries.size()<=cache.entry_limit);
+ cache.clear();assert(cache.bytes==0 && cache.entries.empty());
+}
+''')
+
+    def test_region_index_is_conservative_ordered_and_bounded(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/region_contributor_index.h"
+#include <cassert>
+using Index=c3x_renderer::render_core::RegionContributorIndex;
+int main(){
+ for(int width:{128,160,192}){
+  Index index;std::vector<std::array<double,4>> bounds;
+  for(unsigned i=0;i<200;++i){
+   double x=int(i%17)*width/2.-700,y=int(i/17)*width/4.-400;
+   bounds.push_back({x,y-.03125,x+width+3.25,y+width*1.3});
+   assert(index.add(i%2,{i%7,i},bounds.back()[0],bounds.back()[1],bounds.back()[2],bounds.back()[3]));
+  }
+  index.ready=true;
+  for(unsigned pass=0;pass<2;++pass)for(int y=-520;y<650;y+=73)for(int x=-810;x<1000;x+=97){
+   std::vector<Index::Item> found;assert(index.query(pass,x,y,144,found));
+   assert(std::is_sorted(found.begin(),found.end()));
+   assert(std::adjacent_find(found.begin(),found.end())==found.end());
+   for(unsigned i=pass;i<bounds.size();i+=2){auto b=bounds[i];
+    if(!(b[2]<=x || b[0]>=x+144 || b[3]<=y || b[1]>=y+144))
+     assert(std::binary_search(found.begin(),found.end(),Index::Item{i%7,i}));
+   }
+  }
+  assert(index.bytes<=Index::budget);index.clear();assert(!index.ready && index.bytes==0 && index.count==0);
+  assert(!index.add(0,{0,0},0,0,1e8,1e8));
+  std::vector<Index::Item> found;assert(!index.query(0,0,0,144,found));
+ }
+}
+''')
+
     def test_animation_backdrop_cannot_hit_bitmap_only_cache(self):
         source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
         predicate=source.split("bool const region_path=",1)[1].split(";",1)[0]
@@ -117,6 +181,7 @@ int main(){
     def test_budgets_eviction_and_queued_copy_lifetime(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/render_region_cache.h"
+#include "Renderer/native/render_core/region_contributor_index.h"
 #include "Renderer/native/render_core/projected_mesh_bounds.h"
 #include <cassert>
 #include <deque>
@@ -159,12 +224,15 @@ int main(){
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <memory>
 #include <set>
+#include <map>
 #include <vector>
 #include "Renderer/native/render_core/render_region_cache.h"
+#include "Renderer/native/render_core/region_contributor_index.h"
 #include "Renderer/native/render_core/projected_mesh_bounds.h"
 using UINT=unsigned;using DXGI_FORMAT=unsigned;constexpr unsigned DXGI_FORMAT_R32_UINT=42;
 struct ID3D11Buffer{};struct ID3D11ShaderResourceView{};struct ID3D11Texture2D{void Release(){}};
@@ -177,7 +245,7 @@ struct Lighting {
 } namespace render_core {
 struct SourceShadow {
  struct Bounds{float low[3]={},high[3]={};};
- struct Caster{Bounds bounds;float offset[3]={};std::uint64_t version=1;unsigned layer=0,index_format=42,binding=0xffffffffu;};
+ struct Caster{void *vertices=nullptr,*indices=nullptr;unsigned count=0,stride=0;Bounds bounds;float offset[3]={};std::uint64_t version=1;unsigned layer=0,index_format=42,binding=0xffffffffu;};
  std::array<float,12> basis{};
 ''' + preparation + r'''
 };}}
@@ -188,6 +256,8 @@ struct State{
  struct {float height_pixels=40;bool enabled=true;}reflection;
  int height=1192,shadow_tile_width=128;
  bool region_receiver_shadows=false;
+ std::array<double,3> frame_region_phase_ms{};
+ c3x_renderer::render_core::RegionContributorIndex region_contributors;
 ''' + methods + r'''
 };
 int main(){
@@ -200,9 +270,14 @@ int main(){
  buffers[geometry_feature].push_back(distant);
  std::vector<Shadow::Caster> casters(1);casters[0].version=77;casters[0].bounds={{0,0,1},{1,1,2}};
  Shadow::PreparedCasters prepared;
- auto key=[&](){Key result;assert(prepared.build(casters,state.shadow_basis));
-   assert(state.render_region_key(buffers,settings,casters,&prepared,result));return result;};
- auto original=key();
+ auto key=[&](){Key result;assert(prepared.build(casters,state.shadow_basis,true));
+   state.region_contributors.clear();state.prepare_region_contributors(buffers);assert(state.region_contributors.ready);
+   assert(state.render_region_key(buffers,settings,casters,&prepared,result));
+   Shadow::PreparedCasters independent;assert(independent.build(casters,state.shadow_basis));
+   state.region_contributors.clear();
+   Key expected;assert(state.render_region_key(buffers,settings,casters,&independent,expected));
+   assert(result==expected);return result;};
+ auto original=key();assert(key()==original);assert(prepared.receiver_hits>0);
  Key diagnostic;std::vector<std::size_t> sections;
  assert(state.render_region_key(buffers,settings,casters,&prepared,diagnostic,&sections));
  assert(diagnostic==original && sections.size()==7 && sections.front()==state.region_context.size() && sections.back()==original.size());

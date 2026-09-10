@@ -4,115 +4,115 @@
   "files": [
     {
       "path": "generated/shaders/common/hdr_glow_tiled.hlsl",
-      "sha256": "cfdb75536a61017b14108767428ca7f0f2a3dbab86819b7c773d1d012b20ab38"
+      "sha256": "37495420a08faecabe803eae68302a831de663e01e7e0e1a8686aabab7d8af32"
     },
     {
       "path": "generated/shaders/hydrology/coastal_waves.hlsl",
-      "sha256": "df13331d2f1c7ece88209aa6877609f9855f4166d98c1cf19a76dcd5aa091909"
+      "sha256": "7dff9e6e6720024555e7ea9e9497178f4974de56fdb6638fb8de0df9457e27db"
     },
     {
       "path": "generated/shaders/hydrology/scene_linear.hlsl",
-      "sha256": "fb0c65dc0b9fe9862a071b0e0f3d6febb70b2025fe6309e8f4da89f7a45c044f"
+      "sha256": "a98ae01f56dbbc4e64c342118e7715110e06bcd6b777507317ef141f9b98a45d"
     },
     {
       "path": "generated/shaders/hydrology/scene_material_v1.hlsl",
-      "sha256": "233c6be45ccfc4658ff350a8502f1e3d7669bbc6addac0eb42a550d7633bd006"
+      "sha256": "5fb886d62d96502a150c1d862d750f4b4c956d47f92b6477f199dcf78bfb1cbb"
     },
     {
       "path": "generated/shaders/hydrology/water_effects.hlsl",
-      "sha256": "018b17acee62ffabdc298873864f118362e363713ec4fd050d5a4e3d5059b328"
+      "sha256": "54a457d90dc0f0a36f733c58d2c5cecc3a5804fd76eb99bded1d8675f0bf90e7"
     },
     {
       "path": "generated/shaders/hydrology/water_natural.hlsl",
-      "sha256": "771c285bfa11800ebfd11f6705b7143a248cbd246411727e8d9931594c753e09"
+      "sha256": "5388f4863c286b0221ec5a4dd35d38164ac12e9b1cf552637d062f37396ace1a"
     },
     {
       "path": "generated/shaders/lighting/city_environment.hlsl",
-      "sha256": "a965e6daf86ec97adf576d6f83b4b585613be7631f1e5de46c8d191ecd00c6b7"
+      "sha256": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9"
     },
     {
       "path": "generated/shaders/lighting/frame_shadow_v1.hlsl",
-      "sha256": "30de3b0373b1ab17444db3f17f73cd66b1885bb0f66091418cf3a54408da7795"
+      "sha256": "184121f1f913df3640ebdbed446e33b881d7f1b78d65089c8e1e365e6e2b0f07"
     },
     {
       "path": "generated/shaders/lighting/generated/scene_linear_v1.hlsl",
-      "sha256": "5b21286091e25194823045ba0b332d9107be8c4e31e513ea4d0ed9407eb58e26"
+      "sha256": "05e32f4ac0e2362bbb642725fa0280b9c334011bc0bc7625a34c915d8cb75e85"
     },
     {
       "path": "generated/shaders/lighting/local_facade_lights.hlsl",
-      "sha256": "5ccf8cf0803303131985d1e0a28cf8c4b3f14e9442b72fe8570a40ef46e7e9eb"
+      "sha256": "264bd350d639f897924489c2773434b2f9e0af5cf37e8f3c7034764ae47bb2c3"
     },
     {
       "path": "generated/shaders/lighting/paged_shadow_v1.hlsl",
-      "sha256": "8ab2c3b5e29158caf0b58bea5b07c3deb32ebd3f19483bfa29d52131952d4660"
+      "sha256": "0314e3cadc09dab8d6098f6158e97e4da269afde783d8477722a7f3be70c495f"
     },
     {
       "path": "generated/shaders/lighting/scene_shadow_v1.hlsl",
-      "sha256": "08a96a8755c7447b590226b50a44f50ab9b3053afbf37adf0718f558b2a12f0a"
+      "sha256": "bdb07dce1be952c994fbdba07cbcc8bd5fd3f373314df90edc7eecf4f4878c17"
     },
     {
       "path": "generated/shaders/lighting/shadow_policy.hlsl",
-      "sha256": "843418be892f05d7ee8c1c0e8ccdf106220b810e26d7c83c3a1b39150062bfb7"
+      "sha256": "4be97debb20a78e7b7c8735365d51472b00bc05a63a992f0ae73604d42a60c1a"
     },
     {
       "path": "generated/shaders/lighting/shadow_visibility_v1.hlsl",
-      "sha256": "535076d5df76a00af945e328dc630b96bc672731ccc9b6df882f217eb7e0150f"
+      "sha256": "28e26fbac28780d60ae54d586420456104f0a3916a0546a25d7d9537e0d8b7c4"
     },
     {
       "path": "generated/shaders/objects/beauty_objects.hlsl",
-      "sha256": "a1b0ae9cdde5e865331c7cebd591740f5eac5c47397c714ac15edc9beb96adff"
+      "sha256": "2d4e1dcf6d0f88457a21b7cb35ca4dad277f2fafa19f7afb670b49c2d6b7c0a3"
     },
     {
       "path": "generated/shaders/objects/city_scene_material.hlsl",
-      "sha256": "0f51580a13ead285c423d78db24c41584441c2fefb65d13f774889bd9003bef0"
+      "sha256": "75923e050f689869868b2eaebd21a7f71ea951e6e8091b9fbdc9610b36c24eaa"
     },
     {
       "path": "generated/shaders/objects/settlement_ground.hlsl",
-      "sha256": "e4e2954de982b8da7b651bf1e6ba04328f17bd30c48e18691cc8e0146877cef9"
+      "sha256": "a21447d01e7b1b9738cfbb766b5173778c0bea8d2a7e87a3cec3c02f94ceca31"
     },
     {
       "path": "generated/shaders/objects/unit_microfacet.hlsl",
-      "sha256": "2106d6282c0f3211ffe3a83c7eed1a20e644cd54123fabee60ef1f73e07468a5"
+      "sha256": "e4b1573d7607a904469eb1ecc3db999bbcb64c75b76c7ff980713b775dbf19d8"
     },
     {
       "path": "generated/shaders/relief/beauty_mountain.hlsl",
-      "sha256": "6dd263265a84c613fd96be969448a7d7358cd1fb534751571e1e5b447fe795e3"
+      "sha256": "2f5651d6a479e76c1ed8fcaf66e99fc0b7cd1f787de0b6e07f4fe8e55d29e27a"
     },
     {
       "path": "generated/shaders/relief/beauty_terrain.hlsl",
-      "sha256": "9081e6e3b7bdcf585f1913da1b7ab4c39169e7337ff07637753ec380a9278914"
+      "sha256": "b492f55875ccfa64a74ec799662759ad7b13cccd039d2ee7cf4a1e8996282141"
     },
     {
       "path": "generated/shaders/relief/coast_rocks.hlsl",
-      "sha256": "fe684e29caef021d079932290f827cbfde7fdae19a8669d8cdf0615ed0170e59"
+      "sha256": "39ba4ada0ad6567b0fb75827495b55f727a98c563f13d4a762f087deba2a9398"
     },
     {
       "path": "generated/shaders/relief/combined_material.hlsl",
-      "sha256": "4ac0da2d648a36f34ad3115a3fe7393678fd1495d32f99952f7f5ca01f8da523"
+      "sha256": "8b34697690ebf237484b657a17926b8155e3961ff45e05c16aa0c53b2fcdbf08"
     },
     {
       "path": "generated/shaders/sampling/reconstruction_v1.hlsl",
-      "sha256": "d8861cd934cbc75316ad050241f1bb03ff462d966361e2bd734952c30b622483"
+      "sha256": "00eb9245631bc22c04072622e577192cc0cb01ae83863cedaf1e86a5a75d8460"
     },
     {
       "path": "generated/shaders/terrain/cached_normal.hlsl",
-      "sha256": "10ae6ce6068e2e700aef096cedc6454c477dc7a52f5035e525be1fbe679c4861"
+      "sha256": "4e62f034c32dd70341774e46af5974a283ed4ec58270733e8cf43a45ac492303"
     },
     {
       "path": "generated/shaders/terrain/continental_material.hlsl",
-      "sha256": "880fb46399ee01707028dfec709a3ac04cbf13d56ac48c6fbbedce3b9b8d9e85"
+      "sha256": "fe0c3bd2271a0dbc17344983834b4e03069c41e5235778519523658d95617300"
     },
     {
       "path": "generated/shaders/terrain/ground_decals.hlsl",
-      "sha256": "df9609bb6d7d3013636bce3fe4d58cfd4d3a7c6a2a55332f5da5b50364665547"
+      "sha256": "2a4162b11c0b71f0dcee1e41c3b206d99d768bdde81bb372b2703ea3b0c85a16"
     },
     {
       "path": "generated/shaders/terrain/scene_material_v1.hlsl",
-      "sha256": "d91d792617f43090e754f5eb28d4652b81a6ae4fef5d434dc879c4a91282c437"
+      "sha256": "1f0676aca47be63570550dd7d65aeb19ad22055e1a60e0b33b73e2a5ab3aea12"
     },
     {
       "path": "generated/shaders/terrain/source_blend.hlsl",
-      "sha256": "663c5a513fdac6f7ff879b387894735e69951dd59d7930d06d203fc42e71ba1e"
+      "sha256": "b0504b75dd4b0fa1cb977111f6c70d1c36b10e467d24cfdaa691f1767e1a113c"
     },
     {
       "path": "hydrology.hlsl",

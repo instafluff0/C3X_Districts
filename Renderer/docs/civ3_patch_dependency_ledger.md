@@ -7,6 +7,19 @@ claiming a capability is available. Agents must not edit that CSV or
 
 ## Current action
 
+Navigation dependency/scene optimization remains renderer-only. Retained caster
+proofs, region contributor selection and dependency-replayed shoreline centers
+consume the existing `Map_Renderer_m71_Draw_Tiles` /
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture contract. The native camera
+queue and synchronous injected presentation boundary are unchanged.
+`required_user_action: []` for these changes; the existing city-HUD request below
+remains separate. Candidate replay does not stage or install this code.
+
+The accepted fine mountain relief is shader-only. It uses the existing
+`Map_Renderer_m71_Draw_Tiles` / `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`
+capture and composite boundaries, with no geometry, indexing, ABI, ownership or
+patch-table changes. `required_user_action: []`; no executable symbol is added.
+
 Request-scoped retained shadow-caster descriptors reuse the existing map
 submission and resource-animation boundaries. They do not change Civ III tile
 capture, visibility, native ownership, renderer ABI or executable hooks.

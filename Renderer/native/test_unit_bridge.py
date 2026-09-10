@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def prepare():
     source = (ROOT/"injected_code.c").read_bytes().decode()
     start = source.index("bool\nforward_custom_unit_body")
-    end = source.index("bool\nensure_custom_renderer_loaded", start)
+    end = source.index("bool\nconfigure_custom_renderer_effects", start)
     output = ROOT/"Renderer/native/build/unit_bridge_capture.h"
     output.parent.mkdir(exist_ok=True)
     output.write_text(source[start:end])

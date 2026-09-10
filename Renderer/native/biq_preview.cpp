@@ -583,9 +583,11 @@ int main(int argc, char ** argv) {
     bool zoom_benchmark=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ZOOM",zoom_option,sizeof(zoom_option))!=0;
     char navigation_option[16]={};
     bool navigation_benchmark=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_NAVIGATION",navigation_option,sizeof(navigation_option))!=0;
+    char distant_option[16]={};
+    int distant_steps=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DISTANT_STEPS",distant_option,sizeof(distant_option))?std::clamp(std::atoi(distant_option),0,1000):0;
     char cycle_option[16]={};
     int camera_cycles=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CYCLES",cycle_option,sizeof(cycle_option))?
-        std::clamp(std::atoi(cycle_option),2,10):2;
+        std::clamp(std::atoi(cycle_option),2,40):2;
     // Sample outside the timed interaction. Free VA is not free physical RAM;
     // the largest available region also exposes fragmentation in this x86 host.
     auto camera_memory = [&]() {
@@ -603,18 +605,22 @@ int main(int argc, char ** argv) {
     };
     if(ok && zoom_benchmark) {
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
-        std::vector<std::vector<unsigned char>> reference(5);
-        int levels[]={128,96,64,192,160}; // Native Z cycle, normal in the middle.
-        for(int cycle=0;cycle<camera_cycles && ok;++cycle)for(int level=0;level<5 && ok;++level){
+        char supported_option[8]={};
+        bool supported=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SUPPORTED_ZOOMS",supported_option,sizeof(supported_option)) && std::strcmp(supported_option,"1")==0;
+        std::vector<int> levels=supported?std::vector<int>{128,192,160}:std::vector<int>{128,96,64,192,160};
+        std::vector<std::vector<unsigned char>> reference(levels.size());
+        for(int cycle=0;cycle<camera_cycles && ok;++cycle)for(std::size_t level=0;level<levels.size() && ok;++level){
+            LARGE_INTEGER begin={},captured={},end={};QueryPerformanceCounter(&begin);
             tile_width=levels[level];tile_height=tile_width/2;tiles=capture_view();
             frame.tile_width=tile_width;frame.tile_height=tile_height;
             frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
-            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            QueryPerformanceCounter(&captured);
             int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
             ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;
-            std::printf("ZOOM cycle=%d width=%d result=%d tiles=%u built=%u reused=%u cache_bytes=%u recoveries=%u ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f\n",
+            std::printf("ZOOM cycle=%d width=%d result=%d tiles=%u built=%u reused=%u cache_bytes=%u recoveries=%u ms=%.3f capture_ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f\n",
                 cycle,tile_width,code,output.rendered_tile_count,output.geometry_tiles_built,output.geometry_tiles_reused,
                 output.geometry_cache_bytes,output.device_recoveries,double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(captured.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
                 double(output.geometry_ticks)*1000/frequency.QuadPart,double(output.draw_ticks)*1000/frequency.QuadPart,
                 double(output.readback_ticks)*1000/frequency.QuadPart);
             camera_memory();std::fflush(stdout);
@@ -628,7 +634,7 @@ int main(int argc, char ** argv) {
                 for(std::size_t i=0;i<count;i+=4){bool bad=false;for(unsigned c=0;c<4;++c){
                     unsigned delta=unsigned(std::abs(int(reference[level][i+c])-int(bytes[i+c])));
                     error+=delta;bad=bad || delta>2;}if(bad)++changed;}
-                ok=changed<=count/4000 && error<=count/100;
+                ok=supported?error==0:changed<=count/4000 && error<=count/100;
                 std::printf("ZOOM parity width=%d changed=%zu error=%llu status=%s\n",tile_width,changed,error,ok?"pass":"FAIL");
             }
         }
@@ -720,13 +726,44 @@ int main(int argc, char ** argv) {
         }
         std::printf("RESIDENT_END status=%s\n",ok?"pass":"FAIL");
     }
-    if(ok && animate && !zoom_benchmark && !navigation_benchmark) {
+    if(ok && distant_steps){
+        LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
+        std::uint32_t random=0x433358u;
+        auto next=[&](){random=random*1664525u+1013904223u;return random;};
+        std::vector<std::pair<int,int>> visited{{center_x,center_y}};
+        std::printf("DISTANT_BEGIN steps=%d width=%d height=%d tile_width=%d map_prepared=0 pattern=lcg-v1\n",distant_steps,target_width,target_height,tile_width);
+        for(int step=0;step<distant_steps && ok;++step){
+            int x=0,y=0;bool selected=false;
+            for(unsigned attempt=0;attempt<10000 && !selected;++attempt){
+                x=int((next()>>8)%unsigned(map_width/2))*2+1;y=int((next()>>8)%unsigned(map_height/2))*2+1;
+                int dx=std::abs(x-center_x),dy=std::abs(y-center_y);
+                if(frame.world_wrap_x)dx=(std::min)(dx,map_width-dx);
+                if(frame.world_wrap_y)dy=(std::min)(dy,map_height-dy);
+                selected=dx+dy>=(std::min)(map_width,map_height)/3 && std::find(visited.begin(),visited.end(),std::make_pair(x,y))==visited.end();
+            }
+            if(!selected){ok=false;break;}
+            center_x=x;center_y=y;visited.emplace_back(x,y);
+            LARGE_INTEGER begin={},captured={},end={};QueryPerformanceCounter(&begin);
+            tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());QueryPerformanceCounter(&captured);
+            int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
+            ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;
+            std::printf("DISTANT_NAV step=%d x=%d y=%d result=%d built=%u reused=%u upload_bytes=%u ms=%.3f capture_ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f recoveries=%u\n",
+                step,x,y,code,output.geometry_tiles_built,output.geometry_tiles_reused,output.geometry_upload_bytes,
+                double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,double(captured.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(output.geometry_ticks)*1000/frequency.QuadPart,double(output.draw_ticks)*1000/frequency.QuadPart,
+                double(output.readback_ticks)*1000/frequency.QuadPart,output.device_recoveries);
+            camera_memory();std::fflush(stdout);
+            if(ok)ok=write_bmp((std::string(argv[5])+".distant"+std::to_string(step)+".bmp").c_str(),output);
+        }
+        std::printf("DISTANT_END status=%s\n",ok?"pass":"FAIL");
+    }
+    if(ok && animate && !zoom_benchmark && !navigation_benchmark && !distant_steps) {
         // Exercise animation after an immutable viewport LRU restore, not only
         // after the unchanged-current-view fast path.
         auto initial=static_cast<unsigned char const*>(output.bgra_pixels);
         std::vector<unsigned char> initial_pixels(initial,initial+std::size_t(output.stride_bytes)*output.height);
         int original_width=tile_width;
-        for(int next:{original_width==112?96:112,original_width}) {
+        for(int next:{original_width==128?192:128,original_width}) {
             tile_width=next;tile_height=next/2;tiles=capture_view();
             frame.tile_width=tile_width;frame.tile_height=tile_height;
             frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
