@@ -1,9 +1,9 @@
 # C3X renderer
 
 For the current navigation optimization continuation, start with the
-[2026-09-09 handoff](docs/navigation_handoff.md). The navigation continuation is
-not staged; the separate mountain evaluation has its own verified DLL and
-rollback. Current binary identities, scoped measurements and remaining
+[2026-09-09 handoff](docs/navigation_handoff.md). The verified navigation improvements and timestamped usage logging are
+staged at the user’s request, with the previous accepted mountain DLL preserved
+for rollback. Current binary identities, scoped measurements and remaining
 performance/integration requirements are documented there.
 
 The current C3X checkout is the implementation authority. Lab renders and tests

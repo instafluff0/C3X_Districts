@@ -53,3 +53,7 @@ Explicit standalone `C3X_RENDERER_TRACE_FILE` output remains capped at 8 MiB
 that cap. Do not use a truncated standalone trace as a full usage session.
 Logging has some cost, particularly with an attached collector; the new code
 adds no GPU wait, per-tile I/O, asset loading or game-state mutation.
+
+The first user-supplied capture is analyzed in
+[September 9 live usage findings](live_usage_findings_20260909.md). The analyzer
+excludes `map-complete.animation_ms`, an animation clock, from latency statistics.

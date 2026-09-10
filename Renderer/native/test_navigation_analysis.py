@@ -1,5 +1,6 @@
 """Evidence must reject stale, partial, changed-quality and changed-camera runs."""
 import json
+import gzip
 from pathlib import Path
 import struct
 import tempfile
@@ -9,6 +10,75 @@ from Renderer.native.analyze_navigation_run import compare, digest, distribution
 
 
 class NavigationAnalysisTests(unittest.TestCase):
+    def test_busy_session_reports_skipped_phases_and_excludes_cold_verification(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=self.fixture(Path(temporary)/"run")
+            receipt=json.loads((root/"inputs.json").read_text())
+            receipt["args"].update(scenario="session",waves="1",idle_units=24,dense_scene=True,unit_actions="mixed")
+            (root/"inputs.json").write_text(json.dumps(receipt))
+            schedule=[(0,900,0,"idle"),(10000000,10000900,1,"scroll"),(59000000,60001000,7,"return_idle")]
+            lines=["SESSION_BEGIN duration_us=60000000 input_slot_us=33333 clock=wall unit_warmup=0 native_presented=0 dense=1 units_per_zone=24 initial_render_ms=100"]
+            trace=["[C3X renderer] stage=usage-view clock=1000000"]
+            previous=-1;skipped=0
+            for i,(dispatch,done,phase,label) in enumerate(schedule):
+                slot=dispatch//33333;gap=slot-previous-1;skipped+=gap;previous=slot
+                lines.append(f"SESSION_FRAME frame={i} phase={phase} label={label} dispatch_us={dispatch} done_us={done} requested_us={slot*33333} skipped_slots={gap} superseded=0 tile_width=128 x=75 y=39 units=24 moving=6 attacking=6 fortifying=6 idling=6 result=1 ms={(done-dispatch)/1000} capture_ms=0 map_ms=0 copy_ms=0 units_ms=0 built=0 reused=1 upload_bytes=0 recoveries=0")
+                trace.append(f"[C3X renderer] stage=usage-view clock={1000000+dispatch} cities=3")
+            lines.extend([f"SESSION_TIMED_END status=pass frames=3 wall_ms=60001.1 skipped_slots={skipped} phase_mask=131 zoom_mask=1 coverage_complete=0 snapshot_bytes=64 evidence_ms=1",
+                          "SESSION_PARITY phase=0 tile_width=128 status=pass",
+                          "SESSION_END status=pass frames=3 snapshots=1 verified=1 coverage_complete=0",
+                          "BIQ 100x100 viewport: 0 fallback"])
+            trace.extend(["[C3X renderer] stage=usage-view clock=1000000 cities=99",
+                          "[C3X renderer] stage=animation-phases pose_prepare_ms=99999"])
+            (root/"renderer.log").write_text("\n".join(trace))
+            (root/"benchmark.log").write_text("\n".join(lines))
+            data=(root/"zoom.bmp.resident0.bmp").read_bytes()
+            for name in ("zoom.bmp","zoom.bmp.session-0-128.bmp"):(root/name).write_bytes(data)
+            completion=json.loads((root/"evidence.json").read_text())
+            completion["images"]={p.name:digest(p) for p in root.glob("*.bmp")}
+            (root/"evidence.json").write_text(json.dumps(completion))
+            archived=root/"zoom.bmp.session-0-128.bmp"
+            archived.with_suffix(".bmp.gz").write_bytes(gzip.compress(archived.read_bytes()))
+            archived.unlink()
+            _,report=inspect(root)
+            self.assertFalse(report["session"]["schedule_coverage_complete"])
+            self.assertEqual([2,3,4,5,6],report["session"]["missing_phases"])
+            self.assertEqual(3,report["session_trace_coverage"]["aligned_views"])
+            self.assertEqual(3,report["session"]["workloads"]["idle"]["maximum_logged_objects"]["cities"])
+            self.assertNotIn("animation_phases",report)
+            (root/"benchmark.log").write_text("\n".join(lines).replace("coverage_complete=0","coverage_complete=1"))
+            with self.assertRaisesRegex(ValueError,"coverage"):inspect(root)
+
+    def test_busy_session_preserves_delayed_discrete_events(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=self.fixture(Path(temporary)/"run")
+            receipt=json.loads((root/"inputs.json").read_text())
+            receipt["args"].update(scenario="session",waves="1",idle_units=24,dense_scene=True,unit_actions="mixed")
+            (root/"inputs.json").write_text(json.dumps(receipt))
+            events=[20000000,22000000,24000000,26000000,28000000,40000000,50000000]
+            widths=[160,192,160,128,128,128,128];phases=[2,2,2,2,3,5,7]
+            lines=["SESSION_BEGIN duration_us=60000000 input_slot_us=33333 clock=wall input_model=queued_discrete_v1 unit_warmup=0 native_presented=0 dense=1 units_per_zone=24 initial_render_ms=100"]
+            previous=-1;skipped=0
+            for i,event in enumerate(events):
+                dispatch=65000000+i*100000;slot=dispatch//33333;gap=slot-previous-1;skipped+=gap;previous=slot
+                lines.append(f"SESSION_FRAME frame={i} phase={phases[i]} label=queued dispatch_us={dispatch} done_us={dispatch+1000} requested_us={event} input_event={i} dispatch_delay_us={dispatch-event} skipped_slots={gap} superseded=0 tile_width={widths[i]} x=75 y=39 units=24 moving=6 attacking=6 fortifying=6 idling=6 result=1 ms=1 capture_ms=0 map_ms=0 copy_ms=0 units_ms=0 built=0 reused=1 upload_bytes=0 recoveries=0")
+            lines.extend([f"SESSION_TIMED_END status=pass frames=7 wall_ms=65602 skipped_slots={skipped} phase_mask=172 zoom_mask=7 discrete_events=7 coverage_complete=0 snapshot_bytes=64 evidence_ms=1",
+                          "SESSION_PARITY phase=0 tile_width=128 status=pass",
+                          "SESSION_END status=pass frames=7 snapshots=1 verified=1 coverage_complete=0",
+                          "BIQ 100x100 viewport: 0 fallback"])
+            (root/"benchmark.log").write_text("\n".join(lines))
+            data=(root/"zoom.bmp.resident0.bmp").read_bytes()
+            for name in ("zoom.bmp","zoom.bmp.session-0-128.bmp"):(root/name).write_bytes(data)
+            completion=json.loads((root/"evidence.json").read_text());completion["images"]={p.name:digest(p) for p in root.glob("*.bmp")}
+            (root/"evidence.json").write_text(json.dumps(completion))
+            (root/"renderer.log").write_text("")
+            _,report=inspect(root)
+            self.assertEqual(7,len(report["session"]["discrete_events"]))
+            self.assertEqual(45000,report["session"]["discrete_events"][0]["dispatch_delay_ms"])
+            self.assertEqual(5602,report["session"]["post_input_settle_ms"])
+            (root/"benchmark.log").write_text("\n".join(lines).replace("input_event=1","input_event=2"))
+            with self.assertRaisesRegex(ValueError,"event order"):inspect(root)
+
     def fixture(self, root):
         root.mkdir()
         for name in ("C3XRenderer.dll", "biq_preview.exe"):

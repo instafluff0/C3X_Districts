@@ -116,8 +116,8 @@ def main():
         parser.error("--idle-units requires --scenario idle or session")
     if args.unit_actions=="mixed" and (args.scenario not in ("idle","session") or not args.idle_units):
         parser.error("--unit-actions mixed requires --scenario idle and --idle-units")
-    if args.scenario=="session" and (not args.idle_units or not args.dense_scene or args.waves!="1" or args.reflection_ablation or args.camera_view):
-        parser.error("A busy session requires units, --dense-scene, waves/reflections on and the synchronous native-compatible render API")
+    if args.scenario=="session" and (not args.idle_units or not args.dense_scene or args.waves!="1" or args.reflection_ablation or args.camera_view or args.tile_width!=128 or args.unit_actions!="mixed"):
+        parser.error("A busy session starts at width 128 and requires units, mixed actions, --dense-scene, waves/reflections on and the synchronous native-compatible render API")
     out = args.out.resolve()
     relative = out.relative_to(ROOT)
     storage = storage_preflight(ROOT, args.width, args.height, args.idle_steps if args.scenario == "idle" else args.distant_steps if args.scenario == "distant" else args.resident_steps if args.resident else 0)

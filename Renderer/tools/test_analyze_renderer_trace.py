@@ -39,6 +39,11 @@ class TraceTests(unittest.TestCase):
         self.assertEqual(1,usage["invalid_records"])
         self.assertEqual(1,usage["failed_calls"])
 
+    def test_native_animation_clock_is_not_render_duration(self):
+        report=analyze("[C3X renderer] stage=map-complete total_ms=50 animation_ms=59000")
+        self.assertNotIn("map-complete.animation_ms",report["timings"])
+        self.assertEqual(50,report["timings"]["map-complete.total_ms"]["p50_ms"])
+
     def test_idle_work_cumulative_time_is_not_a_latency_sample(self):
         report = analyze("""[C3X renderer] stage=prewarm cumulative_ms=800
 [C3X renderer] stage=worker-complete wait_ms=3 cumulative_prewarm_ms=900

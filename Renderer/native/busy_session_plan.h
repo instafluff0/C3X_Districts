@@ -37,4 +37,19 @@ struct BusySessionPlan {
         view.phase=7;view.name="return_idle";return view;
     }
 };
+struct BusySessionInputs {
+    BusySessionPlan plan;
+    unsigned next_event=0;
+    struct Request {BusySessionView view;long long requested_us;int event=-1;};
+    // Discrete zoom and minimap clicks stay queued. Mouse/edge-scroll positions
+    // may coalesce while the synchronous renderer blocks the simulated pump.
+    Request select(long long now_us) {
+        constexpr long long events[]={20000000,22000000,24000000,26000000,28000000,40000000,50000000};
+        if(next_event<7 && events[next_event]<=now_us) {
+            auto event=next_event++;return {plan.at(events[event]),events[event],int(event)};
+        }
+        return {plan.at(now_us),now_us/BusySessionPlan::slot_us*BusySessionPlan::slot_us,-1};
+    }
+    bool finished(long long now_us) const {return now_us>=BusySessionPlan::duration_us && next_event==7;}
+};
 }

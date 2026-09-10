@@ -3,6 +3,7 @@ if(ok && busy_session) {
     using c3x_renderer::BusySessionPlan;
     using c3x_renderer::BusySessionView;
     BusySessionPlan plan{center_x,center_y,map_width,map_height};
+    c3x_renderer::BusySessionInputs inputs{plan};
     struct Actor {int x,y,id;};
     std::vector<Actor> actors;
     for(long long location:{0ll,28000000ll,40000000ll}) {
@@ -80,21 +81,23 @@ if(ok && busy_session) {
         std::vector<c3x_renderer_unit_v1> units;std::vector<unsigned char> pixels;int phase,width;};
     std::vector<Snapshot> snapshots;std::size_t snapshot_bytes=0;
     constexpr std::size_t snapshot_limit=96u*1024u*1024u;
-    unsigned snapshot_mask=0,phase_mask=0,zoom_mask=0,frames=0,late_cameras=0;
+    unsigned snapshot_mask=0,phase_mask=0,zoom_mask=0,frames=0,late_cameras=0,discrete_events=0;
     long long previous_slot=-1,skipped_slots=0;
     double evidence_ms=0;
     LARGE_INTEGER frequency={},session_started={},now={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&session_started);
     auto microseconds=[&](LARGE_INTEGER value){return (value.QuadPart-session_started.QuadPart)*1000000/frequency.QuadPart;};
     BusySessionView current=plan.at(0);
-    std::printf("SESSION_BEGIN duration_us=%lld input_slot_us=%lld clock=wall mode=synchronous_completed_render native_presented=0 unit_warmup=0 initial_render_ms=%.3f units_per_zone=%d world_units=%zu dense=%d snapshots_limit=%zu\n",
+    std::printf("SESSION_BEGIN duration_us=%lld input_slot_us=%lld clock=wall input_model=queued_discrete_v1 mode=synchronous_completed_render native_presented=0 unit_warmup=0 initial_render_ms=%.3f units_per_zone=%d world_units=%zu dense=%d snapshots_limit=%zu\n",
         BusySessionPlan::duration_us,BusySessionPlan::slot_us,initial_render_ms,idle_unit_count,actors.size(),int(dense_scene),snapshot_limit);
     while(ok) {
         QueryPerformanceCounter(&now);long long elapsed=microseconds(now);
-        if(elapsed>=BusySessionPlan::duration_us)break;
+        if(inputs.finished(elapsed))break;
+        if(elapsed>=BusySessionPlan::duration_us*3){ok=false;break;} // Bounded backlog drain.
         long long slot=elapsed/BusySessionPlan::slot_us;
         if(slot==previous_slot){Sleep(1);continue;}
         long long skipped=slot-previous_slot-1;skipped_slots+=skipped;previous_slot=slot;
-        auto requested=plan.at(elapsed);phase_mask|=1u<<requested.phase;
+        auto input=inputs.select(elapsed);auto requested=input.view;
+        discrete_events+=input.event>=0;phase_mask|=1u<<requested.phase;
         zoom_mask|=requested.width==128?1u:requested.width==160?2u:4u;
         LARGE_INTEGER begin={},captured={},map_done={},copy_done={},finished={},evidence_done={};QueryPerformanceCounter(&begin);
         if(!requested.same_camera(current)) {
@@ -115,8 +118,8 @@ if(ok && busy_session) {
         unsigned moving=0,attacking=0,fortifying=0,idling=0;
         for(auto const& unit:units){moving+=unit.action==2;attacking+=unit.action==3;fortifying+=unit.action==7;idling+=unit.action==1;}
         double scale=1000.0/frequency.QuadPart;
-        std::printf("SESSION_FRAME frame=%u phase=%d label=%s requested_us=%lld dispatch_us=%lld done_us=%lld skipped_slots=%lld superseded=%d x=%d y=%d tile_width=%d units=%zu moving=%u attacking=%u fortifying=%u idling=%u result=%d ms=%.3f capture_ms=%.3f map_ms=%.3f copy_ms=%.3f units_ms=%.3f built=%u reused=%u upload_bytes=%u recoveries=%u\n",
-            frames,requested.phase,requested.name,slot*BusySessionPlan::slot_us,elapsed,done,skipped,int(superseded),center_x,center_y,tile_width,units.size(),moving,attacking,fortifying,idling,code,
+        std::printf("SESSION_FRAME frame=%u phase=%d label=%s requested_us=%lld dispatch_us=%lld done_us=%lld input_event=%d dispatch_delay_us=%lld skipped_slots=%lld superseded=%d x=%d y=%d tile_width=%d units=%zu moving=%u attacking=%u fortifying=%u idling=%u result=%d ms=%.3f capture_ms=%.3f map_ms=%.3f copy_ms=%.3f units_ms=%.3f built=%u reused=%u upload_bytes=%u recoveries=%u\n",
+            frames,requested.phase,requested.name,input.requested_us,elapsed,done,input.event,elapsed-input.requested_us,skipped,int(superseded),center_x,center_y,tile_width,units.size(),moving,attacking,fortifying,idling,code,
             (finished.QuadPart-begin.QuadPart)*scale,(captured.QuadPart-begin.QuadPart)*scale,(map_done.QuadPart-captured.QuadPart)*scale,
             (copy_done.QuadPart-map_done.QuadPart)*scale,(finished.QuadPart-copy_done.QuadPart)*scale,
             output.geometry_tiles_built,output.geometry_tiles_reused,output.geometry_upload_bytes,output.device_recoveries);
@@ -132,9 +135,9 @@ if(ok && busy_session) {
         evidence_ms+=(evidence_done.QuadPart-finished.QuadPart)*scale;
     }
     QueryPerformanceCounter(&now);
-    std::printf("SESSION_TIMED_END status=%s frames=%u wall_ms=%.3f skipped_slots=%lld late_cameras=%u phase_mask=%u zoom_mask=%u coverage_complete=%d evidence_ms=%.3f snapshot_bytes=%zu\n",
-        ok?"pass":"FAIL",frames,double(microseconds(now))/1000,skipped_slots,late_cameras,phase_mask,zoom_mask,
-        int(phase_mask==255 && zoom_mask==7),evidence_ms,snapshot_bytes);
+    std::printf("SESSION_TIMED_END status=%s frames=%u wall_ms=%.3f skipped_slots=%lld late_cameras=%u phase_mask=%u zoom_mask=%u discrete_events=%u coverage_complete=%d evidence_ms=%.3f snapshot_bytes=%zu\n",
+        ok?"pass":"FAIL",frames,double(microseconds(now))/1000,skipped_slots,late_cameras,phase_mask,zoom_mask,discrete_events,
+        int(phase_mask==255 && zoom_mask==7 && discrete_events==7),evidence_ms,snapshot_bytes);
     // Replay recorded snapshots only after timing. No verification resets can
     // warm, evict or stall the measured continuous session.
     unsigned verified=0;
@@ -154,5 +157,5 @@ if(ok && busy_session) {
     }
     if(canvas && old_bitmap)SelectObject(canvas,old_bitmap);
     if(bitmap)DeleteObject(bitmap);if(canvas)DeleteDC(canvas);
-    std::printf("SESSION_END status=%s frames=%u snapshots=%zu verified=%u coverage_complete=%d\n",ok?"pass":"FAIL",frames,snapshots.size(),verified,int(phase_mask==255 && zoom_mask==7));
+    std::printf("SESSION_END status=%s frames=%u snapshots=%zu verified=%u coverage_complete=%d\n",ok?"pass":"FAIL",frames,snapshots.size(),verified,int(phase_mask==255 && zoom_mask==7 && discrete_events==7));
 }

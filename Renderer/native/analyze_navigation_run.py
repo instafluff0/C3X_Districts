@@ -5,6 +5,7 @@ and quality settings. Only explicit cache-control switches may differ.
 """
 import argparse
 import hashlib
+import gzip
 import json
 import math
 from pathlib import Path
@@ -20,7 +21,7 @@ def fields(line):
 
 def digest(path):
     result = hashlib.sha256()
-    with path.open("rb") as stream:
+    with (path.open("rb") if path.exists() or path.suffix!=".bmp" else gzip.open(path.with_suffix(".bmp.gz"),"rb")) as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             result.update(chunk)
     return result.hexdigest()
@@ -126,23 +127,38 @@ def inspect(directory):
     if scenario == "session":
         slot_us=int(starts[0]["input_slot_us"]);duration=int(starts[0]["duration_us"])
         previous_slot=-1;previous_done=0;phase_mask=zoom_mask=0;skipped=0
-        if slot_us!=33333 or duration!=60000000:
+        queued=starts[0].get("input_model")=="queued_discrete_v1"
+        event_times=[20000000,22000000,24000000,26000000,28000000,40000000,50000000]
+        next_event=0
+        if slot_us!=33333 or duration!=60000000 or starts[0].get("input_model","latest_state_v1") not in ("latest_state_v1","queued_discrete_v1"):
             raise ValueError("Unexpected busy-session input schedule")
         for row in rows:
             dispatch,done=int(row["dispatch_us"]),int(row["done_us"])
             slot=dispatch//slot_us;phase=int(row["phase"]);width=int(row["tile_width"])
-            if (not 0<=dispatch<duration or dispatch<previous_done or done<dispatch or
-                    int(row["requested_us"])!=slot*slot_us or
+            event=int(row.get("input_event",-1));requested=slot*slot_us
+            if queued and event>=0:
+                if event!=next_event or event>=len(event_times):
+                    raise ValueError("Busy-session discrete event order is invalid")
+                requested=event_times[event];next_event+=1
+                if (phase,width)!=[(2,160),(2,192),(2,160),(2,128),(3,128),(5,128),(7,128)][event]:
+                    raise ValueError("Busy-session discrete camera event is invalid")
+            if queued and (int(row["dispatch_delay_us"])!=dispatch-requested or dispatch<requested or
+                           (event<0 and next_event<len(event_times) and dispatch>=event_times[next_event])):
+                raise ValueError("Busy-session queued input delay is invalid")
+            if (not 0<=dispatch<(duration*3 if queued and event>=0 else duration) or dispatch<previous_done or done<dispatch or
+                    int(row["requested_us"])!=requested or
                     int(row["skipped_slots"])!=slot-previous_slot-1 or slot<=previous_slot or
                     phase not in range(8) or width not in (128,160,192) or int(row["recoveries"])!=0):
                 raise ValueError("Busy-session clock, camera, or completion order is invalid")
             previous_slot,previous_done=slot,done;skipped+=int(row["skipped_slots"])
             phase_mask|=1<<phase;zoom_mask|={128:1,160:2,192:4}[width]
+        if queued and (next_event!=7 or int(timed_ends[0].get("discrete_events",0))!=7):
+            raise ValueError("Busy-session discrete events are incomplete")
         coverage=int(phase_mask==255 and zoom_mask==7)
         if (int(timed_ends[0]["skipped_slots"])!=skipped or int(timed_ends[0]["phase_mask"])!=phase_mask or
                 int(timed_ends[0]["zoom_mask"])!=zoom_mask or
                 any(r.get("coverage_complete")!=str(coverage) for r in (timed_ends[0],ends[0])) or
-                float(timed_ends[0]["wall_ms"])<duration/1000):
+                float(timed_ends[0]["wall_ms"])<max(duration,previous_done)/1000):
             raise ValueError("Busy-session schedule coverage is inconsistent")
     if scenario == "idle":
         if any(int(r["ticks"])!=1000000+(i+args.get("idle_warmup",10)+1)*1000000//15 or int(r["visible"])<1 or
@@ -195,13 +211,19 @@ def inspect(directory):
         scheduled=math.ceil(duration/slot_us)
         report["session"]={"workloads":workloads,"initial_map_render_ms":float(starts[0]["initial_render_ms"]),
             "wall_ms":float(timed_ends[0]["wall_ms"]),"scheduled_input_slots":scheduled,
-            "undispatched_input_slots":scheduled-count,"schedule_coverage_complete":bool(coverage),
+            "undispatched_input_slots":scheduled-sum(int(r["dispatch_us"])<duration for r in rows),
+            "input_model":starts[0].get("input_model","latest_state_v1"),
+            "discrete_events":[{"event":int(r["input_event"]),"phase":r["label"],"tile_width":int(r["tile_width"]),
+                "dispatch_delay_ms":int(r["dispatch_delay_us"])/1000,
+                "requested_to_completion_ms":(int(r["done_us"])-int(r["requested_us"]))/1000}
+                for r in rows if int(r.get("input_event",-1))>=0],
+            "post_input_settle_ms":max(0,float(timed_ends[0]["wall_ms"])-duration/1000),"schedule_coverage_complete":bool(coverage),
             "missing_phases":[i for i in range(8) if not phase_mask&(1<<i)],
             "observed_zooms":sorted({int(r["tile_width"]) for r in rows}),
             "snapshot_parity_count":len(parity),"snapshot_pixel_bytes":int(timed_ends[0]["snapshot_bytes"]),
             "evidence_overhead_ms":float(timed_ends[0]["evidence_ms"]),
             "completed_updates_per_second":count*1000/float(timed_ends[0]["wall_ms"]),
-            "note":"The scripted producer advances while synchronous rendering blocks. Undispatched slots model latest-input coalescing, not native input handling. Missing phases remain missing; independent snapshot checks cannot turn them into a workload pass. Initial DLL load/configuration precedes the separately timed initial map render."}
+            "note":"The scripted producer advances while synchronous rendering blocks. Continuous slots coalesce; queued_discrete_v1 retains ordered zoom/minimap actions and reports their delay. This is a simulated input model, not native input handling. Missing phases remain missing; independent snapshot checks cannot turn them into a workload pass. Initial DLL load/configuration precedes the separately timed initial map render."}
     if scenario == "idle":
         observed_changes=sum(images[image_names[i]]!=images[image_names[i-1]] for i in range(1,count))
         if observed_changes!=int(ends[0]["changed_frames"]) or (count>1 and observed_changes==0):
@@ -241,6 +263,26 @@ def inspect(directory):
         report["sampled_address_space_not_peak"] = {k: min(int(r[k]) for r in memory)
                                                    for k in ("available_virtual", "largest_free_region")}
     trace = (directory / "renderer.log").read_text().splitlines()
+    if scenario=="session":
+        # Initial map render is followed by the timed synchronous calls, then
+        # independent snapshot replays. Never use the last N trace records:
+        # those may be cold verification work, or an incomplete file prefix.
+        views=[fields(l) for l in trace if "stage=usage-view " in l][1:count+1]
+        aligned=[]
+        for expected,observed in zip(rows,views):
+            if observed.get("clock")!=str(1000000+int(expected["dispatch_us"])):
+                break
+            aligned.append((expected,observed))
+        report["session_trace_coverage"]={"timed_frames":count,"aligned_views":len(aligned),
+            "complete":len(aligned)==count,"post_session_replays_excluded":True}
+        for phase in report["session"]["workloads"]:
+            selected=[view for row,view in aligned if row["label"]==phase]
+            report["session"]["workloads"][phase]["logged_object_count_samples"]=len(selected)
+            if selected:
+                report["session"]["workloads"][phase]["maximum_logged_objects"]={
+                    k:max(int(v.get(k,0)) for v in selected) for k in ("visible","cities","roads","railroads","farms","mines","camps","resources")}
+        report["unit_action_draws"]={k:sum(int(r[k]) for r in rows) for k in ("moving","attacking","fortifying","idling")}
+        return receipt, report
     measured_sequences=None
     if scenario=="idle":
         # The bounded trace may end early. Match actual measured clocks instead

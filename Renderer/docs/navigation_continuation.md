@@ -6,6 +6,16 @@ visibility, overlays, picking and presentation ownership. The original
 standalone completed rendering (including capture for navigation),
 **not live-game presentation**.
 
+## Wrap-up evidence
+
+The completed [busy-session fixture](busy_navigation_session.md) exercises continuous
+waves-on idle, scrolling, all supported zooms, distant jumps and independently
+acting units. It keeps discrete input queued through stalls and checks independent
+snapshots after timing. Its results remain separate from the user's
+[actual game log](live_usage_findings_20260909.md), which covers width128 with waves
+and reflections off. Neither is a native-presented-frame acceptance pass.
+The [next-agent prompt](navigation_next_agent_prompt.md) records remaining work.
+
 ## Current production activation
 
 The user subsequently requested putting the best verified approaches in production

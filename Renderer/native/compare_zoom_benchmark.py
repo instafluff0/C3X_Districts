@@ -2,6 +2,7 @@
 from pathlib import Path
 import argparse
 import hashlib
+import gzip
 import json
 import math
 import re
@@ -63,7 +64,7 @@ def memory_samples(directory):
 
 
 def pixels(path):
-    data = path.read_bytes()
+    data = path.read_bytes() if path.exists() else gzip.decompress(path.with_suffix(path.suffix+".gz").read_bytes())
     if data[:2] != b"BM":
         raise ValueError(f"Invalid BMP: {path.name}")
     offset = struct.unpack_from("<I", data, 10)[0]

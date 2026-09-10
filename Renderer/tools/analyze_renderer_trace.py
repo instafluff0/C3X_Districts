@@ -116,7 +116,7 @@ def analyze(text: str) -> dict:
                 except ValueError:
                     pass
         for name, value in fields.items():
-            if name.endswith("_ms") and name != "utc_unix_ms" and not name.startswith(("max_", "cumulative_")):
+            if name.endswith("_ms") and name not in ("utc_unix_ms", "animation_ms") and not name.startswith(("max_", "cumulative_")):
                 try:
                     sample = float(value)
                 except ValueError:

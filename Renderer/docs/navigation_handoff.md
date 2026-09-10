@@ -14,7 +14,12 @@ game to load the DLL. Rollback is
 accepted mountain DLL). This is not a live-game performance pass.
 Waves-on, zoom, distant preparation and native presentation have separate evidence.
 Timestamped [usage logging](live_usage_logging.md) is included.
-The next [busy continuous session](busy_navigation_session.md) is being implemented.
+The [busy continuous session](busy_navigation_session.md) is implemented with
+queued discrete input and independent post-session images. Read its final evidence
+before claiming a workload pass. The user's [actual game log analysis](live_usage_findings_20260909.md)
+shows cold geometry and unit-pose stalls, limited idle cadence, and a final debugger
+exception whose disposition is unknown. A [ready-to-paste next-agent prompt](navigation_next_agent_prompt.md)
+contains priorities, reproduction, storage and compiler-environment instructions.
 The original plan and historical records below remain intact.
 
 ## Historical staged correction: animation background corruption

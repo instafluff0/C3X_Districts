@@ -28,6 +28,16 @@ int main(){
  auto before=plan.at(27000000),after=plan.at(35000000);
  assert(!before.same_camera(after) && after.phase==4);
  assert(35000000/BusySessionPlan::slot_us-27000000/BusySessionPlan::slot_us-1>200);
+ BusySessionInputs inputs{plan};
+ assert(inputs.select(19000000).event==-1);
+ int expected[]={160,192,160,128,128,128,128};
+ for(int i=0;i<7;++i){
+  assert(!inputs.finished(65000000));
+  auto request=inputs.select(65000000);
+  assert(request.event==i && request.view.width==expected[i] && request.requested_us<=50000000);
+ }
+ assert(inputs.finished(65000000));
+ assert(inputs.select(66000000).event==-1);
 }
 ''')
 
