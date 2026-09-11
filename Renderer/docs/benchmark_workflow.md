@@ -2,19 +2,22 @@
 
 ## Status and authority
 
-This is the active benchmark engineering sequence. The user requested groundwork,
-not another test campaign. This change defines the work; it does not implement a
+This document defines measurement, bounded tooling deliverables and validation
+for the renderer. The user requested groundwork, not another test campaign.
+This change defines the work; it does not implement a
 persistent runner, correct timers, run benchmarks, or establish new performance.
 
-Read this with [the execution contract](autonomous_renderer_execution.md) and the
-current status at the top of [the retained plan](retained_renderer_plan.md).
+Read this with [the architecture](renderer_architecture.md) for the destination
+and [the execution contract](autonomous_renderer_execution.md) for bounded decisions.
+[The retained plan](retained_renderer_plan.md) alone records current status and the
+single next task; the deliverable order below supports that task sequence.
 Older handoffs and the retained plan's experiment history preserve evidence;
 their embedded "next" instructions are superseded. AGENTS.md and the Lab's
 ownership, category verification and visual-acceptance rules still apply.
 
-The next implementation task is benchmark tooling, starting with timing and
-correctness accounting in the existing harness. Do not begin by rerunning an
-oracle, broad baseline, cold matrix, idle soak or failed rendering experiment.
+The tooling phase starts with timing and correctness accounting in the existing
+harness and ends at the three validated deliverables below. Do not begin by
+rerunning an oracle, broad baseline, cold matrix, idle soak or failed rendering experiment.
 When implementation resumes, validate each tooling increment only as needed;
 the groundwork request itself does not call for those runs.
 
@@ -56,7 +59,11 @@ These reject specific implementations/hypotheses, not all batching or retained
 rendering. Reopen one only with a changed mechanism and a stated reason; do not
 repeat it because an older note still calls it the next experiment.
 
-## Implement in this order
+## Tooling deliverables and rendering handoff
+
+Implement the unfinished tooling deliverables in order, recording completion in
+the retained plan. These are bounded prerequisites for the selected rendering
+capability, not a recurring baseline campaign.
 
 ### 1. Make measurements explain their endpoints
 
@@ -154,6 +161,22 @@ differences within repeat variation are inconclusive, not wins.
 changes, correctness classifications and retain/reject/inconclusive decisions.
 Do not keep running the batch once it cannot change the next decision.
 
+### Tooling completion boundary
+
+The tooling phase is complete when the endpoint report accounts for setup/capture,
+repeated session cases show reset/warmup accounting and measured setup reduction
+with one-shot output reproduction, and one invocation produces the diagnostic
+batch's evidence and decisions. Use each deliverable's specified validation;
+full gameplay performance is not a prerequisite for finishing tooling.
+
+Mark these deliverables complete in the retained plan and replace its single next
+task with one bounded scene/rendering implementation selected by the evidence.
+The current migration step is the retained route/object path below. If the batch
+rejects its causal premise, record the finding and select one evidence-backed
+component instead. Do not repeat completed tooling or expand the harness without
+a named missing measurement/correctness check that can change the implementation
+decision. The architecture document adds no separate implementation queue.
+
 ### 4. Prove one retained route/object implementation
 
 Before another full-scene projection experiment, add a tiny production-renderer
@@ -169,11 +192,15 @@ full-target/transparent composition shortcuts. Exact pixels are required for
 an optimization claiming unchanged output; a deliberate appearance change follows
 the separate Lab review process, not a weakened performance comparison.
 
-Implement one coherent path: translate the immutable static front, compose only
-exposed strips and dirty route/object bounds, keep ambient/unit updates independent,
+The current migration step is one coherent path: translate the immutable static
+front, compose only exposed strips and dirty route/object bounds, keep ambient/unit updates independent,
 then publish a correct current-camera result. Use the diagnostic report to decide
 where preparation or regional mesh batching belongs. Do not add an LRU tier,
 speculative disk format or second presenter as a substitute for this path.
+Advance persistent route/object content, local dependency tracking and reusable
+draw preparation through existing owners where they eliminate measured work.
+This step does not make the current cache layout or raster blocks the permanent
+architecture, nor require every preferred mechanism to be implemented at once.
 
 **Deliverable:** tiny independent parity, then the fixed short dense sequence.
 Only a useful, correct short result advances to sustained validation.
@@ -183,6 +210,14 @@ Only a useful, correct short result advances to sustained validation.
 These are test scopes, not a new release ladder. Use the category dispatcher for
 affected formal checks; integrate the batch entry point with that workflow rather
 than establishing a separate release gate.
+
+Test observable contracts: pixels, depth, ownership, visibility, captured anchors,
+action timing, cancellation/recovery and memory limits. Structural tests may evolve
+when their implementation assumptions change, with equivalent behavioral coverage
+and an explanation of the replaced assumption. Do not retain obsolete internals
+solely to satisfy structural assertions, or weaken correctness for a speedup.
+For the selected capability, verify bounded effects of view movement, local edits
+and dynamic updates; do not build an unrelated architecture test matrix.
 
 | Scope | Trigger and bounded purpose |
 | --- | --- |
@@ -222,7 +257,9 @@ Extend existing JSON receipts with these fields rather than another status diary
 - Correctness/capacity: independent comparison, ownership, fallback/recovery,
   memory observations, missing measurements and incomplete scenarios.
 - Decision: targeted benefit, observed whole-workload benefit, retain/reject/
-  inconclusive, current dominant cost and exactly one next unresolved question.
+  inconclusive, architectural component/owner, capability gained, current dominant
+  cost and exactly one next unresolved question. Before another experiment, state
+  whether its outcomes can change the implementation decision; stop if they cannot.
 
 Update the short current status in the retained plan. A failed experiment may
 close a hypothesis but does not pass a gameplay target. A new benchmark runner

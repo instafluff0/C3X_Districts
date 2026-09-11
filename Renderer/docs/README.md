@@ -2,9 +2,10 @@
 
 ## Start here
 
-- [Benchmark workflow](benchmark_workflow.md): one active engineering sequence.
-- [Current capability status](retained_renderer_plan.md): achieved and unmet targets.
-- [Execution contract](autonomous_renderer_execution.md): scope, evidence and stopping rules.
+- [Architectural destination](renderer_architecture.md): firm principles, preferred mechanisms and choices requiring evidence; not a task queue.
+- [Current capability status](retained_renderer_plan.md): achieved/unmet targets and the single next task.
+- [Execution contract](autonomous_renderer_execution.md): bounded implementation decisions, scope and stopping rules.
+- [Benchmark workflow](benchmark_workflow.md): measurement, bounded tooling deliverables and validation.
 - [Lab workbench](../lab/README.md): current category rendering and verification.
 - [Storage retention](storage_retention.md): preview-first maintenance and restoration.
 

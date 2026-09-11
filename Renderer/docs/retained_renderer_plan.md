@@ -3,18 +3,38 @@
 Current status and preserved evidence for the retained renderer. Planned work
 is not evidence that implementation or performance targets pass.
 
-## Current status — benchmark workflow transition
+## Current status — bounded tooling before scene/rendering implementation
 
 The user requested groundwork for faster, systematic development while preserving
 progress, and explicitly did not request restarting tests. No new benchmark,
 compile, installation, staging or gameplay measurement accompanies this update.
 
-The active engineering sequence is [the benchmark workflow](benchmark_workflow.md).
-[The execution contract](autonomous_renderer_execution.md) governs continuation.
-The next implementation is timing/correctness accounting in the existing harness,
-then amortized session setup and one automatic route/object diagnostic batch.
-Only after those bounded tooling steps should the retained route/object rendering
-change resume. Do not rerun the baseline/oracle program to begin this transition.
+[The architecture](renderer_architecture.md) defines the destination;
+[the execution contract](autonomous_renderer_execution.md) governs continuation;
+[the benchmark workflow](benchmark_workflow.md) specifies measurement, tooling
+deliverables and validation. This status is the single active task record.
+
+**Next task:** implement timing/correctness accounting in the existing harness
+(workflow deliverable 1). It must separate setup/playback and correct capture
+endpoints, validated by timestamp ordering and one existing short workload when
+implementation is authorized. This documentation update does not run that workload.
+Do not rerun the baseline/oracle program to begin the transition.
+
+**Tooling phase: specified, not complete.** After the next task, finish amortized
+session setup and the automatic route/object diagnostic batch in the workflow's
+order. When all three reusable deliverables meet their specified validation,
+record tooling complete here and replace the next task with the selected bounded
+scene/rendering capability. Do not leave "improve the harness" as an indefinite
+task. Additional tooling requires a named missing measurement/correctness check
+that can change the implementation decision.
+
+The selected rendering migration remains retained route/object composition:
+translate the valid static front, compose exposed strips/dirty bounds and keep
+ambient/unit invalidation independent. Extend persistent content and local
+dependencies where the diagnostics justify them. This is a step toward the
+architecture, not its permanent definition. If evidence rejects the selected
+causal target, replace this record's next task with one supported alternative;
+do not start a competing sequence or the architecture's entire mechanism list.
 
 | Capability / target | Evidence carried forward | Remaining limit |
 | --- | --- | --- |

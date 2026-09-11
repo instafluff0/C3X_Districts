@@ -4,12 +4,13 @@ The [documentation index](docs/README.md) separates active work from preserved
 contracts and history. Use [storage retention](docs/storage_retention.md) for
 generated-output maintenance; ignored assets are not automatically disposable.
 
-For renderer optimization, start with the
-[benchmark workflow](docs/benchmark_workflow.md), the short current status in
-[the retained plan](docs/retained_renderer_plan.md), and
-[the execution contract](docs/autonomous_renderer_execution.md).
-The immediate engineering task is to improve measurement and iteration in the
-existing harness before resuming the retained route/object composition change.
+For renderer optimization, read [the architecture](docs/renderer_architecture.md)
+for the destination and firm principles, [the execution contract](docs/autonomous_renderer_execution.md)
+for bounded decisions, and [the benchmark workflow](docs/benchmark_workflow.md)
+for measurement, tooling deliverables and validation. [The retained plan](docs/retained_renderer_plan.md)
+alone records current status and the single next task. Its bounded tooling phase
+precedes the selected retained route/object capability; completion moves the task
+back to scene/rendering implementation instead of open-ended harness expansion.
 Do not restart baseline/oracle runs or old "next step" experiments from handoffs.
 
 The [navigation handoff](docs/navigation_handoff.md) preserves historical staged
@@ -54,6 +55,11 @@ Retired milestone trees, release ledgers, cross-backend scene-parity experiments
 and generated preview/verification archives have been removed.
 
 ## Architectural boundaries
+
+The destination is persistent scene identity, shared assets/world content, local
+invalidation and spatially selected passes. Translating the static front and
+composing exposed strips/dirty bounds remains the current migration step, not the
+permanent architecture. Mechanisms and tuning choices require measured evidence.
 
 Civ III/C3X owns game state, visibility, tile/object screen anchors, time and
 seasons. The renderer produces an off-screen map bitmap and inserts it at the
