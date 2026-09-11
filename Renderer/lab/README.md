@@ -4,6 +4,11 @@ Renderer Lab operates on the current C3X checkout. Category definitions live
 under `categories/`; `catalog.json` is their index. There are no Lab or
 Integration release numbers and no pending/integrated category ledger.
 
+For renderer performance engineering, follow the
+[benchmark workflow](../docs/benchmark_workflow.md). It extends the existing
+harness and preserves the category verification rules below. Its tooling-first
+sequence supersedes old performance handoffs, not ordinary category art work.
+
 Current commands from the repository root:
 
 ```sh

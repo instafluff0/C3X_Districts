@@ -1,93 +1,52 @@
 # Prompt for the next agent
 
-Continue the Civ III renderer navigation optimization from the current checkout.
-Read `AGENTS.md`, `Renderer/README.md`, `Renderer/lab/README.md`, the affected
-catalog/category recipes, and `Renderer/docs/navigation_handoff.md`. Follow its
-links to `navigation_continuation.md`, `navigation_implementation_plan.md`,
-`zoom_performance.md`, and `native_async_presentation_audit.md`.
-Then read `busy_navigation_session.md`, `live_usage_findings_20260909.md`, and
-`live_usage_logging.md`. Verify the exact evidence filename through the handoff
-if a historical link has changed. Preserve all existing and uncommitted work.
+Continue renderer benchmark engineering from the current checkout, preserving all
+existing and uncommitted work. Read AGENTS.md, Renderer/README.md,
+Renderer/lab/README.md and the relevant catalog/category, then:
 
-Follow `Renderer/docs/autonomous_renderer_execution.md` as the operating
-contract. Do not pause for approval between ordinary renderer edits, focused
-measurements, isolated builds and evidence updates. Pause only for staging,
-installation, launching Civ III, injected hook/patch changes, visual acceptance,
-reference replacement or another materially external action.
+- `Renderer/docs/benchmark_workflow.md` for the one active implementation sequence;
+- `Renderer/docs/retained_renderer_plan.md` for the short current capability status;
+- `Renderer/docs/autonomous_renderer_execution.md` for scope and reporting rules.
 
-The user asked this agent to wrap up after finishing the continuous busy fixture
-and analyzing their actual game log. Resume optimization, not another handoff.
-Explain every experiment's expected in-game benefit and why it is the highest-value
-next step. Support custom widths 128/160/192 and higher bounded memory. Preserve
-visual quality, native camera/capture, visibility, overlays, picking, presentation,
-unit movement/direction/combat/interruption, and independently phased idle units.
-Do not synchronize units just to improve cache hit rates. Keep deferred wonders
-and Districts outside current ownership.
+The user requested groundwork, not restarting tests. The groundwork has specified
+the workflow; persistent sessions, corrected timing endpoints and automatic batch
+decisions are not yet implemented. If asked only to review/continue groundwork,
+keep the work read-only or documentary. When asked to implement, start with the
+next unfinished tooling deliverable, not another baseline/oracle or busy-session
+run. Validate changed tooling narrowly; do not confuse this with rendering gains.
 
-Treat the short no-water resident-scroll test as a diagnostic gate only. After
-each meaningful change, report the broader convergence position and exercise the
-next realistic rung: dense resident movement with 24/64 independently acting
-units, then the full busy session with effects, zooms, distant jumps, reversals,
-combat, visibility changes and queued-input accounting. Do not claim progress
-toward the real game workload from a narrow cache-hit or worker-completion test.
-Every update must state the current dominant bottleneck, what remains unmet, and
-the next gate that would change the overall viability assessment.
+Extend the existing preview, evidence runner, build scripts and analyzer. First
+account for setup/playback and fix the short scroll capture timing. Then amortize
+setup with explicit reset/residency and immutable session inputs. Next add one
+controlled route/object diagnostic batch with matched repetitions and automatic
+retain/reject/inconclusive decisions. Finally prove the retained route/object
+change on a tiny boundary/depth fixture before the fixed dense navigation sequence.
+Do not implement a second simulator, change production rendering defaults, stage
+binaries or modify injected hooks as part of this tooling sequence.
 
-The best verified performance defaults and timestamped OutputDebugStringA usage
-logging are already staged at the user's explicit request. Current DLL SHA-256:
-`c2b3a2e8cf5ebfc8c32c185ea411cb68062a2683fbacead9660ad592d18b8af9`.
-Rollback and verification limits are in the handoff and promotion receipt. Do not
-replace it with a benchmark variant or assume that staging proves native performance.
-No installer/game launch was performed by the finishing agent. Read current local
-preferences: waves/reflections were off for the supplied real-game log, but on for
-the busy fixtures. Do not silently change those preferences.
+Keep the current immutable front, cached unit-pose composition, camera queue,
+geometry/backdrop retention, cancellation safeguards and useful preparation.
+The selected rendering bottleneck is route/object composition and synchronous
+completion during dense navigation; the below-100 ms gate is still unmet.
+Stationary standalone gains do not prove native gameplay or 30 Hz. Preserve
+128/160/192, action-director phases, visibility/ownership, off-screen presentation,
+config-off and separate unit fallback. Wonders and Districts remain deferred.
 
-The supplied log's final debugger exception (`0x0000087A`, parameters
-`0x887A0001, 0x00000053`) is a parallel diagnostic, not a blocker for renderer
-work. All 109 render calls had completed successfully, but clean shutdown is
-not established; do not invent a cause or call it a confirmed crash without
-more evidence.
+Use older handoffs only to retrieve needed evidence and operating details.
+Their embedded "next" instructions are superseded. Do not repeat abandoned
+projection/transparent-wave/index experiments without a new causal reason.
+Preserve staged/rollback artifacts and all ignored licensed assets. Current binary
+identity and toolchain availability must be checked when relevant; old hashes,
+compiler environment and approvals do not automatically apply to a new candidate.
 
-Prioritize the measured remaining stalls. The active first target is the dense,
-no-water resident scroll: translate the immutable static front, render only the
-newly exposed strip, and independently invalidate city/improvement/resource
-bounds. Require exact pixels and ownership, zero fallback/recovery, no
-completed-map reuse, and first <100 ms then <33 ms before adding another cache
-tier or returning to water effects. Keep cold pose preparation as a separate
-measurement and preserve native phase/action semantics; cached unit composition
-is already a secondary cost after warm-up. Then complete latest-exact native
-publication, followed by compact complete-appearance regional preparation for
-distant jumps. Topology alone is insufficient for cities/resources/forest
-exclusions or visibility-dependent appearance. Version and invalidate any
-compiled regional cache by complete immutable inputs, world edits, pack/compiler
-identity and wrap state.
+Report the deliverable, validation actually performed, dominant remaining cost,
+strongest validated workload and one next action. Update current status in place.
+No renderer performance gain is implied by a successful tooling change.
 
-Use the completed busy fixture as a later regression workload: continuous renderer,
-waves and reflections on, cold startup, no unit warm-up, independently moving/acting
-units, idle → scroll/reverse → all three zooms → two distant jumps/local scrolling →
-return and idle. First use the short dense no-water resident-scroll gate so the
-fixture does not hide the static-object bottleneck behind water or cold-start cost.
-The busy fixture retains discrete zoom/minimap clicks while coalescing continuous
-scroll, records queued action delays, and independently replays bounded snapshots
-after timing. Use 24 and 64 units per zone and report actual visibility. Keep
-startup, first/repeated zoom, nearby scroll, distant preparation, final idle,
-unit-body cost, input backlog and native presentation separate.
+The notes below preserve environment/storage findings; they are historical and
+must not override the active workflow or current tool discovery.
 
-Native asynchronous completion remains unfinished. The current native timer/caller
-is synchronous; standalone queue call timings are not native integration evidence.
-Never display an old-camera bitmap beneath current-camera overlays or picking. Preserve
-native fallback and exact publication identity. Record required_user_action in the patch
-ledger; do not edit the address CSV or add speculative hooks.
-
-Report against the original targets: first correct response ≤50 ms p95; warm final and
-prepared unseen/evicted regions ≤100 ms p95; game-thread submit/poll ≤2 ms p95; native
-30 presented FPS with p95 interval ≤33.4 ms and p99 ≤50 ms over 1,000 frames; live VA
-headroom ≥512 MiB or twice the largest transient, with adequate contiguous allocation.
-The old 60/138 ms standalone resident, waves-off result is not an all-workload pass.
-Neither is the supplied 109-call game log: only width128, limited density, no physical
-presentation/input timestamps and no waves-on coverage.
-
-## Operating notes
+## Preserved operating notes from the earlier handoff
 
 - Use Python 3.12 and run repository modules from the root (`python -m Renderer...`).
   The bundled runtime can be located through Codex's workspace dependency tool; system

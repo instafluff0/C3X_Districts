@@ -5,13 +5,14 @@ set "C3X_RENDERER_VISUAL_PROFILE=frozen"
 set "C3X_RENDERER_TRACE=0"
 pushd "%~dp0"
 
-set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-if not exist "%VSWHERE%" (
-  echo Visual Studio Installer's vswhere.exe was not found. 1>&2
-  exit /b 1
+if not defined C3X_VS_PATH (
+  set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+  if not exist "%VSWHERE%" (
+    echo Visual Studio Installer's vswhere.exe was not found. 1>&2
+    exit /b 1
+  )
+  for /f "usebackq tokens=*" %%I in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "C3X_VS_PATH=%%I"
 )
-
-for /f "usebackq tokens=*" %%I in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "C3X_VS_PATH=%%I"
 if not defined C3X_VS_PATH (
   echo A Visual Studio installation with the x86 C++ toolchain was not found. 1>&2
   exit /b 1

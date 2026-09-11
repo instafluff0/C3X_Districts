@@ -1,7 +1,8 @@
 ## Objective and scope
 
 The active execution order is maintained in
-[the retained-renderer plan](retained_renderer_plan.md) and
+[the benchmark workflow](benchmark_workflow.md), with current status in
+[the retained-renderer plan](retained_renderer_plan.md) and operating rules in
 [the autonomous execution contract](autonomous_renderer_execution.md). This
 document supplies architecture and acceptance criteria; its earlier staged
 experiment ordering is not a command to restart completed work.

@@ -1,5 +1,12 @@
 # Navigation renderer handoff — 2026-09-09
 
+> Historical evidence and activation record. For current work, use the
+> [benchmark workflow](benchmark_workflow.md) and current status at the top of
+> [the retained plan](retained_renderer_plan.md). Embedded "next" instructions
+> below are superseded; historical hashes and timings require matching receipts
+> before being used as current evidence. Do not rerun these workloads merely
+> to start the tooling transition.
+
 ## Current continuation
 
 Read [the destination reproduction and ongoing optimization evidence](navigation_continuation.md)

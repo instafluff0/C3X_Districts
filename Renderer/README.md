@@ -1,15 +1,21 @@
 # C3X renderer
 
-For the current navigation optimization continuation, start with the
-[2026-09-09 handoff](docs/navigation_handoff.md). The verified navigation improvements and timestamped usage logging are
-staged at the user’s request, with the previous accepted mountain DLL preserved
-for rollback. Current binary identities, scoped measurements and remaining
-performance/integration requirements are documented there.
+The [documentation index](docs/README.md) separates active work from preserved
+contracts and history. Use [storage retention](docs/storage_retention.md) for
+generated-output maintenance; ignored assets are not automatically disposable.
 
-For an autonomous continuation, also read the
-[autonomous renderer execution contract](docs/autonomous_renderer_execution.md).
-It makes the active priority explicit: resident dense-map scrolling and
-incremental object composition come before more cache tuning or water polish.
+For renderer optimization, start with the
+[benchmark workflow](docs/benchmark_workflow.md), the short current status in
+[the retained plan](docs/retained_renderer_plan.md), and
+[the execution contract](docs/autonomous_renderer_execution.md).
+The immediate engineering task is to improve measurement and iteration in the
+existing harness before resuming the retained route/object composition change.
+Do not restart baseline/oracle runs or old "next step" experiments from handoffs.
+
+The [navigation handoff](docs/navigation_handoff.md) preserves historical staged
+binary identities, rollback and measurements. It does not select new work or
+certify that the current checkout is the staged DLL. Preserve the staged result,
+source findings and existing renderer improvements throughout the tooling work.
 
 The current C3X checkout is the implementation authority. Lab renders and tests
 that code by category; Integration runs the affected current-code checks. Fixed

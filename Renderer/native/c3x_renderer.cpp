@@ -5738,11 +5738,23 @@ public:
             shadow_vertices.insert(shadow_vertices.end(),
                                    std::begin(triangles), std::end(triangles));
         };
+        char prefetch_foreground_control[8]={};
+        bool const offload_prefetch=pickup_profile && !prewarming &&
+            GetEnvironmentVariableA("C3X_RENDERER_PREFETCH_FOREGROUND_CONTROL",
+                                   prefetch_foreground_control,sizeof(prefetch_foreground_control)) &&
+            (std::strcmp(prefetch_foreground_control,"1")==0 ||
+             std::strcmp(prefetch_foreground_control,"2")==0);
+        int const prefetch_guard_tiles=std::strcmp(prefetch_foreground_control,"2")==0?2:0;
         for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
+            bool const guarded_prefetch=prefetch_guard_tiles!=0 &&
+                tile.anchor_x+frame.tile_width>=-prefetch_guard_tiles*frame.tile_width &&
+                tile.anchor_x<=frame.target_width+prefetch_guard_tiles*frame.tile_width &&
+                tile.anchor_y+frame.tile_height>=-prefetch_guard_tiles*frame.tile_height &&
+                tile.anchor_y<=frame.target_height+prefetch_guard_tiles*frame.tile_height;
             if (prewarming ? static_cast<int>(index) != prewarm_index :
                 (tile.tile_flags & (C3X_RENDERER_TILE_RENDER |
-                    (pickup_profile ? C3X_RENDERER_TILE_PREFETCH : 0))) == 0) continue;
+                    (pickup_profile && (!offload_prefetch || guarded_prefetch) ? C3X_RENDERER_TILE_PREFETCH : 0))) == 0) continue;
             if(!prewarming && pickup_profile && (tile.tile_flags&C3X_RENDERER_TILE_RENDER)==0) {
                 // Only currently captured full-appearance records are eligible.
                 // The optional wider ring stabilizes prepared region inputs;
