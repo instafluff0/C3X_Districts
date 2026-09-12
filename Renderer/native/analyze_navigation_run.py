@@ -765,9 +765,11 @@ def compare_session_reference(reference, candidate):
     return report
 
 
-def read_dense_diagnostic_case(folder, offsets):
+def read_dense_diagnostic_case(folder, offsets, *, profiled=True):
     receipt = json.loads((folder / "inputs.json").read_text())
     evidence = json.loads((folder / "evidence.json").read_text())
+    if receipt["args"].get("profile", False) != profiled:
+        raise ValueError("Unexpected diagnostic profiling configuration")
     exclusivity = json.loads((folder / "exclusivity.json").read_text(encoding="utf-8-sig"))
     if exclusivity["checks"] < 2 or exclusivity["conflicts"]:
         raise ValueError("Concurrent renderer/compiler observed")
@@ -807,10 +809,15 @@ def read_dense_diagnostic_case(folder, offsets):
               ("zoom.bmp.case0.bmp", "zoom.bmp.case0.bmp.result.bmp")}
     trace = (folder / "renderer.log").read_text().splitlines()
     budgets = [fields(l) for l in trace if "gpu_geometry_cap=" in l]
-    if not budgets:
+    if not budgets and profiled:
         raise ValueError("Missing cache budget receipt")
     memory.extend(int(b["largest_free_region"]) for b in budgets)
-    caps = {k: v for k, v in budgets[-1].items() if k.endswith("_cap")}
+    settings = [fields(l) for l in trace if "stage=usage-settings " in l]
+    if not profiled and (not settings or any(k not in settings[0] for k in
+                            ("viewport_limit", "backdrop_limit", "unit_pose_limit_mib"))):
+        raise ValueError("Missing constructor budget receipt")
+    caps = ({k: v for k, v in budgets[-1].items() if k.endswith("_cap")} if budgets else
+            {k: v for k, v in settings[0].items() if k.endswith("_limit") or k.endswith("_limit_mib")})
     if any({k: v for k, v in b.items() if k.endswith("_cap")} != caps for b in budgets):
         raise ValueError("Budgets changed inside diagnostic case")
     return {"folder": folder.relative_to(ROOT).as_posix(), "samples": samples,
@@ -821,6 +828,8 @@ def read_dense_diagnostic_case(folder, offsets):
             "initial_preparation_ms": case["endpoints"]["setup_ms"]["initial_render_preparation"],
             "warmup_ms": case.get("warmup_endpoints", {}).get("host_span_through_last_check_ms"),
             "resets": case["resets"], "fixture": fixture[-1], "budgets": caps,
+            "memory_coverage": "profiled_frame_and_host" if profiled else "host_request_boundaries_only",
+            "budget_coverage": "profiled_caps" if profiled else "constructor_limits_only; remaining caps unmeasured",
             "exclusivity": exclusivity,
             "min_largest_free_bytes": min(memory), "headroom_pass": min(memory) >= 512 * 1024**2,
             "images": images, "wrapper_total_ms": evidence["wrapper_total_ms"],

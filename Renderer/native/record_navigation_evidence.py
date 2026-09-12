@@ -100,6 +100,8 @@ def main(argv=None):
     parser.add_argument("--unit-actions", choices=("idle","realistic","mixed"), default="idle",
                         help="Use frozen idle units, a realistic active subset, or worst-case mixed native timelines")
     parser.add_argument("--dense-scene", action="store_true", help="Stable synthetic cities, infrastructure, camps and supported resources on the captured world")
+    parser.add_argument("--boundary-fixture", action="store_true", help="Small guarded-region correctness witness with independent full redraws")
+    parser.add_argument("--prepared-resource-pass", action="store_true", help="Use the explicit animated body/shadow binding contract")
     parser.add_argument("--width", type=int, default=2240)
     parser.add_argument("--height", type=int, default=1192)
     parser.add_argument("--distant-steps", type=int, choices=range(1,1001), default=100)
@@ -173,6 +175,9 @@ def main(argv=None):
         parser.error("Process-cold cases require a fresh process per case")
     if args.exclusive_gpu and not args.case_repeats:
         parser.error("--exclusive-gpu requires the bounded session watchdog")
+    if args.boundary_fixture and (args.case_repeats or args.dense_scene or args.scenario!="scroll" or
+                                 (args.width,args.height,args.tile_width)!=(384,256,128)):
+        parser.error("Boundary fixture requires one-shot scroll, 384x256, tile width 128, without dense population")
     out = args.out.resolve()
     relative = out.relative_to(ROOT)
     samples = (args.idle_steps if args.scenario == "idle" else args.distant_steps if args.scenario == "distant" else
@@ -203,6 +208,8 @@ def main(argv=None):
            "C3X_RENDERER_REFLECTION_CONTROL": "1" if args.reflection_ablation else "0",
            "C3X_RENDERER_DIAGNOSTIC_ROUTES": args.diagnostic_routes,
            "C3X_RENDERER_DIAGNOSTIC_HALF_PIXELS": "1" if args.diagnostic_half_pixels else "0",
+           "C3X_RENDERER_PREVIEW_RETAINED_BOUNDARY": "1" if args.boundary_fixture else "",
+           "C3X_RENDERER_PREPARED_RESOURCE_PASS": "1" if args.prepared_resource_pass else "0",
            "C3X_RENDERER_WORLD_RASTER_GRID": "1" if args.world_grid else "0",
            "C3X_RENDERER_WORLD_REGIONS": "1" if args.world_regions else "0",
            "C3X_RENDERER_THREE_ZOOM_MEMORY": "1" if args.three_zoom_memory else "0",
@@ -376,6 +383,10 @@ exit $childCode
     completion["sources_unchanged"]=all((ROOT/name).is_file() and digest(ROOT/name)==value for name,value in source_before.items())
     completion["binaries_unchanged"] = all(digest(out / name)==value for name,value in receipt["binaries"].items())
     completion["images"] = {p.name: digest(p) for p in sorted(out.glob("*.bmp")) if p.is_file()}
+    if args.boundary_fixture:
+        log=(out/"benchmark.log").read_text(errors="replace")
+        completion["boundary_correctness_pass"]=bool(re.search(r"^RETAINED_BOUNDARY_END status=pass checks=6 independent_full_redraw=1$",log,re.M))
+        if not completion["boundary_correctness_pass"]:completion["returncode"]=1;result["returncode"]=1
     phase("binary_image_verification_ms")
     from Renderer.native.analyze_navigation_run import endpoint_accounting, session_accounting
     try:

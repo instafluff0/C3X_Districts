@@ -234,10 +234,17 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         return 2;
 
     int map_width = 0, map_height = 0;
+    char boundary_option[8]={};
+    bool retained_boundary=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_RETAINED_BOUNDARY",boundary_option,sizeof(boundary_option))!=0;
+    bool boundary_resource=true,boundary_mine=true;
+    int boundary_x=center_x,boundary_y=center_y;
     std::vector<CsvTile> source_tiles;
     if (!read_scene(argv[4], map_width, map_height, source_tiles)) {
         std::fprintf(stderr, "error: could not read BIQ terrain scene\n");
         return 1;
+    }
+    if(retained_boundary)for(auto& tile:source_tiles){
+        tile.base=tile.real=2;tile.bonus=tile.overlays=tile.river=0;
     }
     char profile[64]={};GetEnvironmentVariableA("C3X_RENDERER_VISUAL_PROFILE",profile,sizeof(profile));
     bool pickup=std::strcmp(profile,"frozen")!=0;
@@ -402,7 +409,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             if(name){tile.resource_id=100+int((seed/11)%6);tile.resource_class=0;strcpy_s(tile.resource_name,name);}
         }
     }
-    if (animate && !dense_scene) {
+    if (animate && !dense_scene && !retained_boundary) {
         char const * names[]={"Horses","Cattle","Wheat","Fish","Whales","Game","Furs","Ivory","Bananas","Rubber"};
         if (resource_sites.empty())
             for (auto const & tile:tiles)
@@ -418,6 +425,13 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
 #ifdef C3X_LAB_PREVIEW
     lab_place_objects(tiles,center_x,center_y,map_width);
 #endif
+    if(retained_boundary)for(auto& tile:tiles){
+        if(boundary_resource && tile.tile_x==boundary_x && tile.tile_y==boundary_y){
+            tile.resource_id=1;tile.resource_class=0;strcpy_s(tile.resource_name,"Horses");
+        }
+        if(boundary_mine && tile.tile_x==boundary_x && tile.tile_y==boundary_y-2)
+            tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_MINE;
+    }
     if(timing_enabled){QueryPerformanceCounter(&capture_end);fresh_capture=true;}
     return tiles;
     };
@@ -1499,6 +1513,50 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                 ok=ok && !(output.replacement_tile_flags[i]&C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED);
             if(ok)ok=compare_cold("removal");
         }
+    }
+    if(ok && retained_boundary) {
+        // The fixed objects straddle the world-anchored 128-pixel region edge.
+        // Each reference starts from reset state and ordinary independent draws.
+        auto pixels=[&](){auto p=static_cast<unsigned char const*>(output.bgra_pixels);
+            return std::vector<unsigned char>(p,p+std::size_t(output.stride_bytes)*output.height);};
+        auto flags=[&](){return std::vector<unsigned>(output.replacement_tile_flags,
+            output.replacement_tile_flags+output.replacement_tile_count);};
+        auto draw=[&](){return render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK &&
+            output.fallback_tile_count==0 && output.device_recoveries==0;};
+        auto cold=[&](){
+            char prepared[8]={};GetEnvironmentVariableA("C3X_RENDERER_PREPARED_RESOURCE_PASS",prepared,sizeof(prepared));
+            SetEnvironmentVariableA("C3X_RENDERER_PREPARED_RESOURCE_PASS","0");reset();
+            bool result=set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw();
+            SetEnvironmentVariableA("C3X_RENDERER_PREPARED_RESOURCE_PASS",prepared[0]?prepared:nullptr);return result;
+        };
+        std::vector<unsigned char> preceding;
+        unsigned checks=0;
+        for(unsigned step=0;ok && step<6;++step) {
+            center_x=boundary_x+(step<2?1:0);center_y=boundary_y;
+            boundary_resource=step!=3;boundary_mine=step!=4;
+            frame.presentation_time_ticks=1000000+(step?100000:0);
+            tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            ok=draw();if(!ok)break;
+            auto candidate=pixels();auto ownership=flags();auto animations=output.visible_animation_count;
+            unsigned combined=0;for(auto value:ownership)combined|=value;
+            ok=bool(combined&C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED)==boundary_resource &&
+                bool(combined&C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED)==boundary_mine &&
+                bool(animations)==boundary_resource;
+            // Advancing pose/removing/reappearing must affect actual pixels.
+            if(step==1 || step==3 || step==4 || step==5)ok=ok && candidate!=preceding;
+            auto warm_output=output;warm_output.bgra_pixels=candidate.data();
+            if(ok)ok=cold();
+            bool exact=ok && pixels()==candidate && flags()==ownership && output.visible_animation_count==animations;
+            std::printf("RETAINED_BOUNDARY step=%u exact=%u animations=%u ownership=%u clock=%lld\n",
+                step,unsigned(exact),animations,combined,frame.presentation_time_ticks);
+            if(!exact){
+                write_bmp((std::string(argv[5])+".boundary-candidate.bmp").c_str(),warm_output);
+                write_bmp((std::string(argv[5])+".boundary-reference.bmp").c_str(),output);
+                ok=false;break;
+            }
+            ++checks;preceding=std::move(candidate);
+        }
+        std::printf("RETAINED_BOUNDARY_END status=%s checks=%u independent_full_redraw=1\n",ok?"pass":"FAIL",checks);
     }
     char color_option[8]={};
     if(ok && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_COLOR",color_option,sizeof(color_option)))

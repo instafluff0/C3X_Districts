@@ -6,10 +6,19 @@ import struct
 import tempfile
 import unittest
 
-from Renderer.native.analyze_navigation_run import compare, digest, distribution, inspect, endpoint_accounting, session_accounting
+from Renderer.native.analyze_navigation_run import compare, digest, distribution, inspect, endpoint_accounting, session_accounting, read_dense_diagnostic_case
 
 
 class NavigationAnalysisTests(unittest.TestCase):
+    def test_dense_reader_does_not_mix_profiling_modes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            (folder / "evidence.json").write_text("{}")
+            for actual in (False, True):
+                (folder / "inputs.json").write_text(json.dumps({"args": {"profile": actual}}))
+                with self.assertRaisesRegex(ValueError, "profiling configuration"):
+                    read_dense_diagnostic_case(folder, [4], profiled=not actual)
+
     def test_endpoint_accounting_orders_and_excludes_preparation(self):
         lines=["TIMING_SETUP schema=1 frequency=1000 process_enter=0 source_done=10 dll_done=20 definitions_done=30 initial_begin=40 initial_done=100 dropped=0",
                "TIMING_REQUEST id=0 capture_begin=30 capture_end=35 caller_enter=40 caller_return=99 correct_done=100 geometry_ticks=20 draw_ticks=10 readback_ticks=5 result=1 tiles=12",

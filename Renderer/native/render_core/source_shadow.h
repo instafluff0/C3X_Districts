@@ -254,10 +254,14 @@ public:
     template<class Bind>
     bool prepare(ID3D11DeviceContext* context,std::array<float,12> const& next_basis,
                  std::vector<Bounds> const& receivers,std::vector<Caster> const& casters,
-                 Bind bind,std::atomic<bool> const* cancellation,PreparedCasters* prepared=nullptr) {
+                 Bind bind,std::atomic<bool> const* cancellation,PreparedCasters* prepared=nullptr,
+                 std::set<std::pair<int,int>> const* selected_pages=nullptr) {
         hits=rebuilt=draws=0;++epoch;
         if(basis!=next_basis){basis=next_basis;pages={};}
-        auto needed=required_pages(receivers,basis);
+        // A prepared pass may share the exact receiver-page union across regions.
+        // The ordinary receiver query and the same 32-page residency cap remain.
+        auto local_pages=selected_pages?std::set<std::pair<int,int>>{}:required_pages(receivers,basis);
+        auto const& needed=selected_pages?*selected_pages:local_pages;
         if(needed.size()>32)return false;
         for(auto& p:pages)if(p.hash && needed.count({p.x,p.y}))p.used=epoch;
         std::vector<std::array<float,4>> local_bounds;

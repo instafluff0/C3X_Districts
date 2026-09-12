@@ -3439,6 +3439,78 @@ public:
         bool dependency_backdrops=anchored && city_profile && world_regions && animation_prepared_ptr &&
             c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_BACKDROP_DEPENDENCIES");
         unsigned backdrop_dependency_hits=0,backdrop_dependency_rejections=0;
+        // Posed bodies and their projected shadows have one explicit binding
+        // contract. Wave shading continues through its existing scene pass.
+        bool prepared_resource_pass=city_profile && !visible_wave_animations &&
+            c3x_renderer::NavigationOptions::enabled(GetEnvironmentVariableA,"C3X_RENDERER_PREPARED_RESOURCE_PASS");
+        struct PreparedResourceRegion {
+            ViewportShaderSettings settings;
+            std::array<std::vector<CachedVertexChunk>,geometry_layer_count> draws;
+            std::size_t shadow_batch=0;
+        };
+        using ShadowPages=std::set<std::pair<int,int>>;
+        std::vector<PreparedResourceRegion> prepared_regions;
+        std::vector<ShadowPages> shadow_batches;
+        std::size_t prepared_bytes=0;
+        constexpr std::size_t prepared_cap=4u*1024u*1024u;
+        // Account conservatively for set links/alignment in the x86 allocator.
+        constexpr std::size_t shadow_batch_bytes=sizeof(ShadowPages)+32u*64u;
+        prepared_resource_pass=prepared_resource_pass && animation_casters_ptr && !clip_dirty_blocks &&
+            rectangles.size()<=prepared_cap/(sizeof(PreparedResourceRegion)+shadow_batch_bytes);
+        if(prepared_resource_pass) {
+            // Borrow pinned pose buffers, preserving exact guarded eligibility
+            // and per-layer order. Consecutive regions share a bounded union of
+            // required shadow pages; no new atlas or longer resource lifetime.
+            try {
+                prepared_regions.reserve(rectangles.size());
+                shadow_batches.reserve(rectangles.size());
+                prepared_bytes=prepared_regions.capacity()*sizeof(PreparedResourceRegion)+
+                    shadow_batches.capacity()*shadow_batch_bytes;
+                std::vector<Shadow::Bounds> receivers;
+                for(auto const& rect:rectangles) {
+                    prepared_regions.emplace_back();auto& region=prepared_regions.back();
+                    region.settings=geometry_viewport_settings;
+                    region.settings.translation[0]+=4-float(rect.left);
+                    region.settings.translation[1]+=4-float(rect.top);
+                    region.settings.inverse_size[0]=region.settings.inverse_size[1]=1.f/136;
+                    D3D11_RECT guard={0,0,136,136};
+                    for(auto layer:{geometry_shadow,geometry_feature}) {
+                        std::size_t count=0;
+                        for(auto const& chunk:buffers[layer])
+                            if(chunk_intersects_region(chunk,region.settings,guard,false))++count;
+                        if(count>(prepared_cap-std::min(prepared_cap,prepared_bytes))/sizeof(CachedVertexChunk)) {
+                            prepared_resource_pass=false;break;
+                        }
+                        region.draws[layer].reserve(count);
+                        prepared_bytes+=region.draws[layer].capacity()*sizeof(CachedVertexChunk);
+                        for(auto const& chunk:buffers[layer])
+                            if(chunk_intersects_region(chunk,region.settings,guard,false))region.draws[layer].push_back(chunk);
+                    }
+                    if(!prepared_resource_pass)break;
+                    receivers.clear();
+                    collect_region_receivers(geometry_vertex_buffers,region.settings,{guard},false,receivers);
+                    auto pages=Shadow::required_pages(receivers,shadow_basis);
+                    if(pages.size()>32){prepared_resource_pass=false;break;}
+                    std::size_t additional=pages.size();
+                    if(!shadow_batches.empty()) {
+                        additional=0;
+                        for(auto const& page:pages)if(!shadow_batches.back().count(page))++additional;
+                    }
+                    if(shadow_batches.empty() || shadow_batches.back().size()+additional>32)
+                        shadow_batches.emplace_back();
+                    shadow_batches.back().insert(pages.begin(),pages.end());
+                    region.shadow_batch=shadow_batches.size()-1;
+                }
+                if(prepared_bytes>prepared_cap)prepared_resource_pass=false;
+            } catch(...) {prepared_resource_pass=false;}
+            if(!prepared_resource_pass) {
+                std::vector<PreparedResourceRegion>().swap(prepared_regions);
+                std::vector<ShadowPages>().swap(shadow_batches);prepared_bytes=0;
+            }
+        }
+        if(prepared_bytes){char detail[160];sprintf_s(detail,"regions=%zu shadow_batches=%zu metadata_bytes=%zu metadata_cap=4194304",
+                prepared_regions.size(),shadow_batches.size(),prepared_bytes);
+            trace.write("prepared-resource-pass",detail);}
         // Geometry identity includes the entire captured semantic/ownership
         // set, target/zoom, light, wrap, content and device generations, but
         // excludes camera anchors. Conservatively miss when that set changes.
@@ -3462,7 +3534,7 @@ public:
                 animation_readback_width=atlas_width;animation_readback_height=atlas_height;
             }
         }
-        std::size_t rectangle_index=0;
+        std::size_t rectangle_index=0,active_shadow_batch=std::size_t(-1);
         for(auto & rect:rectangles) {
             QueryPerformanceCounter(&background_started);
             int key_x=rect.left-anchor_x,key_y=rect.top-anchor_y;
@@ -3503,6 +3575,8 @@ public:
             } else {
                 if(!submit_geometry(geometry_vertex_buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
                     nullptr,false,true,nullptr,false,animation_casters_ptr,animation_prepared_ptr,128,0,0,true))return false;
+                // Static submission can replace the page table or atlas slots.
+                active_shadow_batch=std::size_t(-1);
                 ++backdrop_misses;
                 // RGBA16F + D24S8, both MSAA4. Cache immutable scene-linear
                 // background/depth by static inputs and the region's relative
@@ -3534,7 +3608,15 @@ public:
             background_ticks+=animation_started.QuadPart-background_started.QuadPart;
             D3D11_RECT clipped={std::max<LONG>(0,rect.left),std::max<LONG>(0,rect.top),
                 std::min<LONG>(width,rect.right),std::min<LONG>(height,rect.bottom)};
-            if(!submit_geometry(buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
+            if(prepared_resource_pass) {
+                auto const& region=prepared_regions[rectangle_index];
+                if(active_shadow_batch!=region.shadow_batch) {
+                    if(!prepare_receiver_shadows(geometry_vertex_buffers,region.settings,{{0,0,136,136}},false,
+                            *animation_casters_ptr,animation_prepared_ptr,nullptr,&shadow_batches[region.shadow_batch]))return false;
+                    active_shadow_batch=region.shadow_batch;
+                }
+                if(!submit_prepared_resource_region(region.draws,region.settings))return false;
+            } else if(!submit_geometry(buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
                     nullptr,true,true,&geometry_vertex_buffers,false,animation_casters_ptr,animation_prepared_ptr))return false;
             D3D11_BOX box={unsigned(clipped.left-rect.left),unsigned(clipped.top-rect.top),0,
                 unsigned(clipped.right-rect.left),unsigned(clipped.bottom-rect.top),1};
@@ -4348,6 +4430,100 @@ public:
         return result;
     }
 
+    bool prepare_receiver_shadows(
+            std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& shadow_buffers,
+            ViewportShaderSettings const& settings,std::vector<D3D11_RECT> const& rectangles,bool reflection_pass,
+            std::vector<c3x_renderer::render_core::SourceShadow::Caster> const& casters,
+            c3x_renderer::render_core::SourceShadow::PreparedCasters* prepared_casters_ptr,
+            std::atomic<bool> const* cancellation,
+            std::set<std::pair<int,int>> const* selected_pages=nullptr) {
+        using Shadow=c3x_renderer::render_core::SourceShadow;
+        std::vector<Shadow::Bounds> receivers;
+        if(!selected_pages)collect_region_receivers(shadow_buffers,settings,rectangles,reflection_pass,receivers);
+        std::array<ID3D11ShaderResourceView*,33> alpha{};
+        std::copy(feature_texture_views.begin(),feature_texture_views.end(),alpha.begin());
+        std::copy(river_rock_texture_views.begin(),river_rock_texture_views.end(),alpha.begin()+8);
+        std::copy(bridge_texture_views.begin(),bridge_texture_views.end(),alpha.begin()+13);
+        std::copy(resource_texture_views.begin(),resource_texture_views.end(),alpha.begin()+21);
+        std::copy(city_base_views.begin(),city_base_views.end(),alpha.begin()+29);
+        auto bind=[&](unsigned layer) {
+            if(layer>=10000){
+                auto material=layer-10000;auto mask=cities.materials[material][6];
+                context->PSSetShaderResources(34,1,&mask);return mask!=nullptr;
+            }
+            if(layer==geometry_land)return false;
+            if(layer==geometry_natural_terrain || layer==geometry_natural_mountain)return true;
+            if(layer>=geometry_natural_forest0){
+                auto const&m=natural.materials[natural.bodies[layer-geometry_natural_forest0].material];
+                ID3D11ShaderResourceView*mask=m.channels[6]==0xffffffffu?nullptr:natural.textures[m.channels[6]];
+                context->PSSetShaderResources(33,1,&mask);return mask!=nullptr;
+            }
+            auto views=alpha;
+            if(layer==geometry_city)std::copy(city_base_views.begin(),city_base_views.end(),views.begin()+29);
+            if(layer==geometry_wall)views[29]=views[30]=views[31]=views[32]=wall_texture_view;
+            if(layer==geometry_site)std::copy(site_views.begin(),site_views.end(),views.begin()+21);
+            if(layer==geometry_mine)std::copy(mine_base_views.begin(),mine_base_views.end(),views.begin()+21);
+            if(layer==geometry_farm)std::copy(farm_base_views.begin(),farm_base_views.end(),views.begin()+21);
+            if(layer>=geometry_cliff0 && layer<geometry_natural_terrain) {
+                auto const & asset=cliff_bundle.assets[layer-geometry_cliff0];
+                views[0]=cliff_views[asset.texture_index];
+            }
+            context->PSSetShaderResources(0,33,views.data());return true;
+        };
+        LARGE_INTEGER start={},end={};QueryPerformanceCounter(&start);
+        if(!source_shadow.prepare(context,shadow_basis,receivers,casters,bind,cancellation,prepared_casters_ptr,selected_pages)) {
+            trace.write("source-shadow-failed","caster pages exceeded budget or preparation interrupted",true);return false;
+        }
+        QueryPerformanceCounter(&end);
+        char message[256];sprintf_s(message,"pages_hit=%u pages_built=%u source_draws=%u casters=%u bytes_cap=134217728 ticks=%lld",
+            source_shadow.hits,source_shadow.rebuilt,source_shadow.draws,unsigned(casters.size()),end.QuadPart-start.QuadPart);
+        trace.write("source-shadow",message,false);
+        return true;
+    }
+
+    bool submit_prepared_resource_region(
+            std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers,
+            ViewportShaderSettings const& settings) {
+        std::vector<D3D11_RECT> rectangles={{0,0,136,136}};
+        auto& linear=city_glow.linear;
+        context->OMSetRenderTargets(1,&linear.target,linear.depth);
+        context->OMSetDepthStencilState(depth_state,0);
+        context->OMSetBlendState(blend_state,nullptr,0xffffffffu);
+        context->RSSetState(rasterizer_state);
+        D3D11_VIEWPORT viewport={0,0,272,272,0,1};context->RSSetViewports(1,&viewport);
+        if(!cities.lights(context,{}))return false;
+        // Reuse the same shaders, sample order and guarded depth target.
+        // Only body/shadow resources are consumed: no terrain table,
+        // natural-provider transitions, cliff bindings or empty layer draws.
+        context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        context->PSSetConstantBuffers(0,1,&terrain_settings_buffer);
+        context->VSSetConstantBuffers(1,1,&viewport_settings_buffer);
+        context->PSSetConstantBuffers(2,1,&shadow_settings_buffer);
+        context->PSSetConstantBuffers(3,1,&world_settings_buffer);
+        context->PSSetConstantBuffers(4,1,&source_shadow.table);
+        context->PSSetShaderResources(17,1,&source_shadow.view);
+        context->PSSetShaderResources(25,1,&source_shadow.view);
+        context->PSSetShaderResources(116,8,resource_texture_views.data());
+        ID3D11SamplerState* shadow_samplers[]={natural_wrap,natural_clamp};
+        context->PSSetSamplers(0,2,shadow_samplers);
+        context->VSSetShader(vertex_shader,nullptr,0);
+        context->PSSetShader(pixel_shader,nullptr,0);
+        if(!draw_cached_geometry(geometry_shadow,buffers,rectangles,settings,nullptr))return false;
+        ID3D11SamplerState* body_samplers[]={terrain_sampler,decal_sampler};
+        context->PSSetSamplers(0,2,body_samplers);
+        context->PSSetShaderResources(25,4,feature_texture_views.data());
+        context->PSSetShaderResources(94,4,feature_texture_views.data()+4);
+        context->VSSetShader(feature_vertex_shader,nullptr,0);
+        context->PSSetShader(feature_pixel_shader,nullptr,0);
+        if(!draw_cached_geometry(geometry_feature,buffers,rectangles,settings,nullptr))return false;
+        frame_post_lanes+=city_glow.reconstruct(context);
+        linear_output.draw(context,linear,city_glow.target,display_exposure,1,city_glow.view,136,136);
+        context->OMSetRenderTargets(0,nullptr,nullptr);
+        D3D11_BOX box={4,4,0,132,132,1};
+        context->CopySubresourceRegion(block_texture,0,0,0,0,city_glow.native,0,&box);
+        return true;
+    }
+
     bool submit_geometry(std::array<std::vector<CachedVertexChunk>, geometry_layer_count> const & buffers,
                          std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & settings,
                          ID3D11RenderTargetView * target, ID3D11DepthStencilView * depth,
@@ -4523,51 +4699,8 @@ public:
             if(!submit_geometry(buffers,reflected_rects,reflected,destination,depth,reflected_extent,reflected_height,
                 cancellation,false,true,shadow_buffers_ptr,true,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y))return false;
         }
-        if (pickup_profile) {
-            using Shadow=c3x_renderer::render_core::SourceShadow;
-            std::vector<Shadow::Bounds> receivers;
-            auto const & casters=*shadow_casters_ptr;
-            auto const & shadow_buffers=shadow_buffers_ptr ? *shadow_buffers_ptr : buffers;
-            collect_region_receivers(shadow_buffers,settings,rectangles,reflection_pass,receivers);
-            std::array<ID3D11ShaderResourceView*,33> alpha{};
-            std::copy(feature_texture_views.begin(),feature_texture_views.end(),alpha.begin());
-            std::copy(river_rock_texture_views.begin(),river_rock_texture_views.end(),alpha.begin()+8);
-            std::copy(bridge_texture_views.begin(),bridge_texture_views.end(),alpha.begin()+13);
-            std::copy(resource_texture_views.begin(),resource_texture_views.end(),alpha.begin()+21);
-            std::copy(city_base_views.begin(),city_base_views.end(),alpha.begin()+29);
-            auto bind=[&](unsigned layer) {
-                if(layer>=10000){
-                    auto material=layer-10000;auto mask=cities.materials[material][6];
-                    context->PSSetShaderResources(34,1,&mask);return mask!=nullptr;
-                }
-                if(layer==geometry_land)return false;
-                if(layer==geometry_natural_terrain || layer==geometry_natural_mountain)return true;
-                if(layer>=geometry_natural_forest0){
-                    auto const&m=natural.materials[natural.bodies[layer-geometry_natural_forest0].material];
-                    ID3D11ShaderResourceView*mask=m.channels[6]==0xffffffffu?nullptr:natural.textures[m.channels[6]];
-                    context->PSSetShaderResources(33,1,&mask);return mask!=nullptr;
-                }
-                auto views=alpha;
-                if(layer==geometry_city)std::copy(city_base_views.begin(),city_base_views.end(),views.begin()+29);
-                if(layer==geometry_wall)views[29]=views[30]=views[31]=views[32]=wall_texture_view;
-                if(layer==geometry_site)std::copy(site_views.begin(),site_views.end(),views.begin()+21);
-                if(layer==geometry_mine)std::copy(mine_base_views.begin(),mine_base_views.end(),views.begin()+21);
-                if(layer==geometry_farm)std::copy(farm_base_views.begin(),farm_base_views.end(),views.begin()+21);
-                if(layer>=geometry_cliff0 && layer<geometry_natural_terrain) {
-                    auto const & asset=cliff_bundle.assets[layer-geometry_cliff0];
-                    views[0]=cliff_views[asset.texture_index];
-                }
-                context->PSSetShaderResources(0,33,views.data());return true;
-            };
-            LARGE_INTEGER start={},end={};QueryPerformanceCounter(&start);
-            if(!source_shadow.prepare(context,shadow_basis,receivers,casters,bind,cancellation,prepared_casters_ptr)) {
-                trace.write("source-shadow-failed","caster pages exceeded budget or preparation interrupted",true);return false;
-            }
-            QueryPerformanceCounter(&end);
-            char message[256];sprintf_s(message,"pages_hit=%u pages_built=%u source_draws=%u casters=%u bytes_cap=134217728 ticks=%lld",
-                source_shadow.hits,source_shadow.rebuilt,source_shadow.draws,unsigned(casters.size()),end.QuadPart-start.QuadPart);
-            trace.write("source-shadow",message,false);
-        }
+        if(pickup_profile && !prepare_receiver_shadows(shadow_buffers_ptr?*shadow_buffers_ptr:buffers,
+                settings,rectangles,reflection_pass,*shadow_casters_ptr,prepared_casters_ptr,cancellation))return false;
         float clear[4] = {0, 0, 0, 0};
         if(!accumulate) {
             context->ClearRenderTargetView(target, clear);
