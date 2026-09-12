@@ -134,3 +134,10 @@ Run `compare.py` for `lab/out/volcanoes/lava-shadow-comparison.png`; the default
 comparison now keeps the accepted mountain context on both sides. The final
 shadow/lava controls reported zero fallback tiles. They remain diagnostic only;
 general material and caster ownership are still required for runtime staging.
+
+## Production follow-through
+
+The user subsequently accepted the static-lava/shadow result and requested
+production staging. The general implementation and current checks are described
+in `lab/categories/relief/volcanoes/README.md`. These fixed-coordinate probes remain
+preserved diagnosis evidence; they are not the staged runtime implementation.

@@ -18,7 +18,12 @@
     "Renderer/native/source_fidelity/geometry.h",
     "Renderer/lab/shared/natural/relief_mesh_body.h",
     "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
-    "Renderer/lab/shared/shaders/relief/beauty_mountain.hlsl"
+    "Renderer/lab/shared/shaders/relief/beauty_mountain.hlsl",
+    "Renderer/lab/shared/shaders/relief/volcano_material.hlsl",
+    "Renderer/native/source_fidelity/runtime.h",
+    "Renderer/native/render_core/source_caster.hlsl",
+    "Renderer/native/render_core/source_shadow.h",
+    "Renderer/lab/volcano_witness.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -35,7 +40,8 @@
       "detail",
       "active",
       "gameplay",
-      "coastal"
+      "coastal",
+      "isolated"
     ]
   },
   "tests": [
@@ -48,7 +54,7 @@
     "d3d11": []
   },
   "limitations": [
-    "User accepted skin-probe gameplay appearance on 2026-09-12; general runtime material routing and crater lava remain pending. No fixed reference replaced.",
+    "User accepted the static lava and shadow appearance on 2026-09-12. Existing shape and inherited relief detail are preserved; no fixed reference replaced.",
     "Ordinary terrain volcanoes only. Static crater lava; emissive glow, smoke and particles excluded.",
     "BC5 material-channel interpretation remains unresolved; see category notes."
   ]

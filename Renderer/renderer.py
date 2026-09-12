@@ -364,7 +364,8 @@ def scene(category, case, destination, *, world_size=32):
                         real = 7
                 # Keep the accepted mountain pair in every review view so
                 # scale, material and cast shadows can be judged together.
-                if (x, y) in ((15, 15), (14, 14)):
+                mountain_pair = ((13, 13), (12, 12)) if case == "isolated" else ((15, 15), (14, 14))
+                if (x, y) in mountain_pair:
                     real = 6
             if category == "mountains":
                 c, r = (x + y) // 2, (x - y) // 2
@@ -496,6 +497,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_LAB_ACTION_CURSOR": "0" if category == "animation" and case.endswith("start") else "7",
         "C3X_LAB_OBJECT_STUDY": category if category in ("resources", "infrastructure", "shadows", "huts-camps", "goody-huts", "barbarian-camps") else "",
         "C3X_RENDERER_WAVES": "",
+        "C3X_LAB_VOLCANO_STUDY": "1" if category == "volcanoes" and case == "lifecycle" else "",
         "C3X_LAB_WAVE_STUDY": case if category == "ocean-waves" else "",
         "C3X_LAB_WATER_STUDY": "1" if case.startswith("water-") else "",
     }
@@ -563,6 +565,12 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         for marker in ("PASS site removal and cold pixel parity", "PASS site reappearance and stable composition"):
             if marker not in result.get("output_tail", ""):
                 raise ValueError("Site lifecycle witness did not complete")
+    if category == "volcanoes" and case == "lifecycle":
+        for marker in ("PASS volcano removal and exact cold parity", "PASS volcano placement and exact cold parity",
+                       "PASS volcano reappearance and cached repeat", "PASS multiple volcanoes and exact cold parity",
+                       "PASS volcano scroll and wrapped occurrence cold parity", "PASS volcano lifecycle"):
+            if marker not in result.get("output_tail", ""):
+                raise ValueError("Volcano lifecycle witness did not complete")
     if behavior:
         verify_behavior_output(behavior, result.get("output_tail", ""))
     return {"image": relative(image), "sha256": checksum(image), "dll_sha256": checksum(dll),
@@ -622,6 +630,8 @@ def integration_replay_cases(category, *, full=False):
     terrain = {"grassland", "plains", "desert", "tundra", "floodplains", "transitions",
                "hills", "mountains", "volcanoes", "forests", "jungles", "shorelines", "seas-oceans",
                "rivers", "day-night", "shadows"}
+    if "volcanoes" in selected:
+        cases.append(("volcano-lifecycle", None, 128, (16, 16), 12))
     if "ocean-waves" in selected:
         cases.extend((("wave-beach", None, 128, (10, 18), 12), ("wave-rocky", None, 128, (10, 18), 12), ("wave-mixed", None, 64, (10, 18), 0)))
     if selected.intersection(terrain):
@@ -648,6 +658,8 @@ def integration_replays(category, *, full=False):
         print("Checking production behavior: " + name, flush=True)
         try:
             scene_category, scene_case = "grassland", "gameplay"
+            if name == "volcano-lifecycle":
+                scene_category, scene_case = "volcanoes", "lifecycle"
             if name.startswith("wave-"):
                 scene_category, scene_case = "ocean-waves", {"wave-beach":"beach", "wave-rocky":"rocky-control", "wave-mixed":"mixed"}[name]
             if name == "site-lifecycle":
@@ -1037,6 +1049,10 @@ def approve(category, note):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     commands = p.add_subparsers(dest="command", required=True)
+    diagnostic = commands.add_parser("diagnose-navigation", help="Run the fixed dense-map causal batch without staging")
+    diagnostic.add_argument("--binaries", required=True)
+    diagnostic.add_argument("--out", required=True)
+    diagnostic.add_argument("--repetitions", type=int, choices=(2, 3), default=2)
     commands.add_parser("list")
     commands.add_parser("prepare", help="Refresh shader bindings and changed category assets without staging")
     gallery_parser = commands.add_parser("gallery")
@@ -1064,7 +1080,11 @@ def main():
             parser.add_argument("--case", help="One fixture case listed by show CATEGORY")
     args = p.parse_args()
     try:
-        if args.command == "list":
+        if args.command == "diagnose-navigation":
+            from Renderer.native.diagnose_dense_navigation import main as diagnose
+            return diagnose(["--binaries", args.binaries, "--out", args.out,
+                             "--repetitions", str(args.repetitions)])
+        elif args.command == "list":
             for key in catalog():
                 value = standard(key)
                 print(f'{key:18} {value["title"]}')

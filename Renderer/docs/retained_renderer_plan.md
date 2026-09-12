@@ -3,7 +3,7 @@
 Current status and preserved evidence for the retained renderer. Planned work
 is not evidence that implementation or performance targets pass.
 
-## Current status — timing accounting complete; amortized setup next
+## Current status — timing and session tooling complete; dense-map diagnosis next
 
 Implementation resumed on 2026-09-12. The first bounded tooling deliverable is
 complete: the existing preview/evidence/analyzer now separates initial preparation
@@ -18,44 +18,86 @@ preview compilation from wrapper time. No rendering policy or cache budget chang
 [the benchmark workflow](benchmark_workflow.md) specifies measurement, tooling
 deliverables and validation. This status is the single active task record.
 
-**Next task:** implement amortized session setup in the existing `biq_preview.cpp`
-and build/evidence owners (workflow deliverable 2). Repeated short cases must share
-verified assets/device while resetting equivalent renderer state and preparation;
-record reset/warmup coverage, quick versus acceptance verification, and incremental
-compilation. Stop this task when repeated cases show measured setup reduction and
-an independent fresh one-shot reproduces their output. Do not expand the workload.
+**Next task:** finish the fixed dense-map route/object diagnostic batch
+(workflow deliverable 3), through the existing preview/evidence owners and category
+dispatcher. Use the existing world fixture at 2240×1192, tile width 128, fixed
+camera/clock, dense cities/routes/improvements/resources, waves/reflections off,
+the four-column move and 14-offset reversal. Record capture counts and unchanged
+budgets; distinguish cold exposure, prepared exposure and revisits. Compare the
+specified causal controls with matched serial repetitions and equivalent state.
+The unresolved decision is whether persistent route/object preparation or reduced
+regional submission/composition removes the dominant whole-transition cost.
+Treat at least 10% and 20 ms whole-transition reduction, outside repeat variation,
+as useful initial evidence; diagnostics that omit pixels cannot pass correctness.
+The batch entry point and controls are implemented; finish matched validation in
+one stable-input interval with exclusive VM rendering. Concurrent Lab shader
+edits and native previews interrupted the attempted batch, so restart its fixed
+matrix against one current input identity once that work is paused or complete.
+Do not retry while the competing work remains active. Stop when the batch selects or rejects that causal target, then replace this single
+next task with one bounded retained-scene implementation. Do not extend tooling
+without a missing measurement that could change that decision.
 
-**Tooling phase: deliverable 1 complete; deliverables 2–3 unfinished.** Complete the
-session prerequisite and automatic route/object diagnostic batch in order, then
-replace the next task with the evidence-selected retained scene implementation.
-Additional harness work requires a named missing measurement that changes that
-implementation decision.
+**Tooling phase: deliverables 1–2 complete; deliverable 3 unfinished.** The recent
+640×480 runs validate measurement and setup only. Realistic dense navigation below
+100 ms, independent full-redraw parity for the migration, and live presentation
+remain unmet. The next workload is a standalone populated world fixture; it does
+not establish saved-game capture or live Civ III performance.
 
-### Session tooling progress (deliverable 2 remains open)
+### Session tooling evidence (deliverable 2 complete)
 
 Per-translation-unit include hashing and compiler/SDK stamps now reuse intact
 objects. `session-incremental-seed-retry-20260912` compiled seven units in 37.345 s
 wrapper time; `session-incremental-warm-20260912` compiled none in 3.108 s. Changing
-only the preview compiled that unit alone. Recipe, tier, dependency and object
-changes reject reuse. A long VM command failure was corrected with a short batch
-transport after confirming that no compiler/linker remained running.
+only the preview compiled that unit alone. Recipe, dependency and object changes
+reject reuse.
 
-A bounded same-configuration process loop retains assets/device, distinguishes
-process-cold, assets-loaded and explicitly warmed resident policies, and uses a
-new benchmark-only reset that preserves cache budgets. `session-two-case-20260912`
-passed two assets-loaded cases with identical initial/final pixels and full input
-verification. Its 30.655 s wrapper time did not establish worthwhile amortization.
-The four-case follow-up generated all images but failed during/after teardown and
-entered Windows Error Reporting; it was dumped and only that owned process/tree
-was terminated after exceeding its limit. That run is invalid performance evidence.
-The wrapper now retains invalid receipts and bounds the actual child process,
-including teardown; a checkpointed preview is being validated to locate the fault.
-Do not mark session tooling complete or use its failed timing as a rendering win.
+`session-four-verified-20260912/comparison.json` records four assets-loaded cases:
+39.943 s wrapper total, 9.986 s per case versus 14.285 s for the matched fresh
+one-shot. All initial/final images exactly match that independent fresh process;
+full inputs, sources and binaries verified unchanged. This is about 30% less
+iteration wait in this short comparison, not a renderer speedup or tail estimate.
+Resets preserve budgets and clear mutable content/publication while retaining
+assets/device. `session-prepared-verified-20260912/comparison.json` independently
+matches the same fresh images after explicit warmup (5.056 s through its final
+check), retaining 84.174 MB geometry and 30.628 MB ground content with no evictions.
+Its single 146.326 ms small-view transition is not a navigation performance pass.
+
+An earlier four-case run failed at teardown and entered Windows Error Reporting;
+it remains invalid evidence. A subsequent watchdog exit-code reporting fault was
+fixed and verified against success, nonzero exit and owned-process timeout cases.
+The accepted runs above completed teardown under the bounded watchdog. The initial
+transient teardown fault was not reproduced or localized; preserve that limitation
+without reopening completed session validation as an unbounded investigation.
 
 ### Current evidence and limits
 
 Ignored evidence under `Renderer/native/build/`:
 
+- `dense-route-quiet-20260912`: two uncontested, fully verified four-column cases
+  completed on the 2240×1192 dense fixture, tile width 128, waves/reflections off,
+  existing retained defaults and normal budgets. The 100×100 world supplied 1,921
+  captured occurrences: 5 cities, 349 roads, 80 rails, 344 improvements and 150
+  resources. Full rendering took 398.012 ms; route surface draws omitted took
+  395.704 ms. Their pixels differ as intended. These are single samples, not a
+  matched-repeat decision: route drawing showed no large effect in this pair.
+  Full-render phases were geometry 114.525, submission 31.905, readback 71.509
+  and animation composition 150.163 ms; sampled contiguous headroom exceeded
+  1.8 GiB. Initial setup remains separately recorded. Runtime shader changes and
+  another `native_preview` interrupted the third arm; it was rejected, and no
+  performance conclusion is drawn from that arm or the incomplete matrix.
+- `dense-route-diag2-20260912` contains the earlier overlapping batch, explicitly
+  invalid for causal timing. The overlap watchdog was then added and correctly
+  rejected `dense-route-serial-20260912` before rendering. It monitors known Lab
+  renderer/compiler processes once per second, records conflicts and terminates
+  only its own child. All diagnostic children are terminal. An initial startup
+  exit in `dense-route-diagnostic-20260912` was not reproduced; the preview now
+  reports the exact setup precondition on any recurrence.
+- `dense-diag-setup-20260912`: isolated x86 build passed, with benchmark-only route
+  surface and half-pixel controls. The category dispatcher exposes the fixed
+  batch and the existing analyzer owns its comparisons. Focused causal/endpoint/
+  build/damage tests passed (19); fixture/trace/worker checks passed (8).
+  `test infrastructure` passed 123 tests with one existing skip. No injected edit,
+  staged binary, reference replacement, installation or game launch.
 - `endpoint-short-20260912`: 640×480, width 128, waves off, fixed-clock 14-offset
   reversal. All 14 requests and exact revisits passed, with zero fallback/recovery.
   Capture median 0.371 ms; request-to-checked-result median 164.303 ms, range
@@ -79,11 +121,12 @@ Ignored evidence under `Renderer/native/build/`:
   system Python 3.9 cannot run the telemetry test's newer tempfile option; the
   bundled workspace Python ran it successfully without changing that test.
 
-**Dominant measured costs:** small-view first-exposure geometry and cold setup;
-input hashing and compilation also dominate iteration wait. These are scoped
-measurement findings, not dense-navigation speedup claims. The next capability
-eliminates repeated setup so the fixed dense diagnostic can resolve route/object
-work without another baseline campaign. Remaining process-spawn/driver setup and
+**Dominant measured costs:** the first uncontested dense four-column sample is
+dominated by animation composition and geometry preparation. Omitting route draws
+showed only a 2.308 ms difference in one pair; no architectural choice is justified
+until the matched preparation/pixel controls finish. Repeated setup has been
+reduced. These findings neither pass the 100 ms navigation target nor certify
+the subsequently edited runtime shaders. Remaining process-spawn/driver setup and
 unretired GPU queries are explicitly unmeasured, not zero.
 
 The selected rendering migration remains retained route/object composition:
@@ -101,7 +144,7 @@ do not start a competing sequence or the architecture's entire mechanism list.
 | Dense resident navigation | Retained overlap and bounded working sets already exist; preserve them. | Below-100 ms gate unmet; route/object composition and synchronous completion remain the selected causal target. |
 | Regional geometry / zoom | Some structural sharing exists. | General regional batching shared across 128/160/192 is unfinished. |
 | Native asynchronous presentation | Versioned publication and stale-ticket rejection exist in the DLL. | Native coordination, current-camera presentation and input-to-visible performance remain unverified. |
-| Iteration tooling | Timing endpoints, buffered diagnostics and wrapper/build accounting validated on short production-DLL workloads. | Persistent sessions and automatic diagnostic decisions remain unimplemented. |
+| Iteration tooling | Timing endpoints, buffered diagnostics, incremental compilation and persistent sessions validated on short production-DLL workloads. | The fixed dense diagnostic batch remains unfinished. |
 
 The preparation receipt is under `Renderer/native/build/`; older stationary
 measurements are preserved in the linked experiment archive. These are scoped inherited

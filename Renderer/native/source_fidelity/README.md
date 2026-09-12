@@ -75,8 +75,9 @@ removes the raised dune rims exposed by the earlier alpha-only shoreline fade.
 An executable contract checks variable beach widths, flat fade coverage,
 monotonic height, endpoint slopes and exact inland preservation.
 
-Natural geometry remains in the existing 76-byte packed vertex buffers. The
-added terrain weights reuse existing fields. Texture sampling is 16x anisotropic
+Natural geometry uses 92-byte packed vertex buffers. The existing terrain
+weights retain their fields; four additional floats preserve local volcano
+material ownership through GPU indexing and the bounded CPU mesh cache. Texture sampling is 16x anisotropic
 with -1 mip bias. Natural composition uses 4x MSAA at 2x render scale, in aligned
 128-native-pixel blocks, with one equal-area scene-linear reconstruction before
 existing exposure and transfer. The scratch target is at most 3,670,016 bytes.

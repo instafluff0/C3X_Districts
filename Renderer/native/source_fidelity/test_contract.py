@@ -168,6 +168,67 @@ int main() {
                            check=True,capture_output=True,text=True)
             subprocess.run([str(binary)],check=True,capture_output=True,text=True)
 
+    def test_mountain_projection_preserves_ground_and_tracks_local_volcano_ownership(self):
+        shader=(LAB/'shaders/relief/beauty_mountain.hlsl').read_text()
+        source='''
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+float max(float a,float b) {return std::max(a,b);}
+using std::abs;
+float saturate(float x) {return std::clamp(x,0.f,1.f);}
+float smoothstep(float a,float b,float x) {
+    float t=saturate((x-a)/(b-a));return t*t*(3-2*t);
+}
+struct float4 {float x=0,y=0,z=0,w=0;};
+float4 normalize(float4 n) {
+    float length=std::sqrt(n.x*n.x+n.y*n.y+n.z*n.z);
+    return {n.x/length,n.y/length,n.z/length,0};
+}
+struct P {float4 world,normal,volcano_owner;float base_relief=0;};
+'''+function(shader,'mountain_material_weight')+function(shader,'ground_side_projection')+'''
+int main() {
+    P p{};p.world.z=.5f;p.normal={1,0,0,0};
+    assert(mountain_material_weight(p)==1);
+    assert(ground_side_projection(p)>.99f);
+    p.normal={0,0,1,0};
+    assert(ground_side_projection(p)==0); // flat terrain keeps its exact mapping
+    p.normal={1,0,0,0};p.world.z=2.5f/112;
+    assert(ground_side_projection(p)==0); // rising surface meets unchanged ground
+    for(float base:{0.f,.25f,1.f}) {
+        p.base_relief=base;float previous=-1;
+        for(int step=0;step<100;++step) {
+            p.world.z=base+2.5f/112+step*.005f;
+            float weight=ground_side_projection(p);
+            assert(weight>=0 && weight<=1 && weight>=previous);
+            previous=weight;
+        }
+    }
+    p.base_relief=0;p.world.z=.5f;p.volcano_owner={0,0,1,0};
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    assert(mountain_material_weight(p)==0 && ground_side_projection(p)==0);
+    p.volcano_owner.x=.7f;
+    float edge=mountain_material_weight(p);assert(edge>0 && edge<1);
+    // Captured local offsets survive relocation and world-wrap occurrences.
+    for(float shift:{-1000.f,0.f,37.f,1000.f}) {
+        p.world.x=shift;p.world.y=-shift;
+        assert(mountain_material_weight(p)==edge);
+    }
+    p.volcano_owner.x=2;assert(mountain_material_weight(p)==1);
+    p.volcano_owner={0,0,0,0};assert(mountain_material_weight(p)==1);
+#else
+    assert(mountain_material_weight(p)==1 && ground_side_projection(p)>.99f);
+#endif
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            cpp=Path(directory)/'projection.cpp';binary=Path(directory)/'projection'
+            cpp.write_text(source)
+            for defines in ([],['-DBEAUTY_VOLCANO_MATERIAL=1']):
+                subprocess.run(['c++','-std=c++17',*defines,str(cpp),'-o',str(binary)],
+                               check=True,capture_output=True,text=True)
+                subprocess.run([str(binary)],check=True,capture_output=True,text=True)
+
     def test_selected_provider_equations(self):
         for name,category in [('terrain','relief'),('mountain','relief'),('objects','objects')]:
             selected=(LAB/f'shaders/{category}/beauty_{name}.hlsl').read_text()

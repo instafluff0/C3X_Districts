@@ -310,7 +310,7 @@ struct CachedTileGeometry {
 // indexed material/world data across zoom levels; only their three projected
 // coordinates need rebuilding. This CPU tier has its own strict memory cap.
 struct NaturalMesh {
-    std::vector<std::array<float,19>> vertices;
+    std::vector<std::array<float,23>> vertices;
     std::vector<UINT> indices;
 };
 struct NaturalTile {
@@ -478,6 +478,10 @@ public:
     bool environment_profile = false;
     bool city_profile=false;
     bool clip_dirty_blocks=false;
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+    unsigned diagnostic_routes=0; // 1: omit surface draws; 2: also omit surface construction.
+    bool diagnostic_half_pixels=false;
+#endif
     bool bounded_post=false;
     int scene_region_size=128;
     int scene_region_height=128;
@@ -2381,6 +2385,11 @@ public:
         wave_reuse_control=GetEnvironmentVariableA("C3X_RENDERER_WAVE_REUSE_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         animation_readback_atlas=GetEnvironmentVariableA("C3X_RENDERER_ANIMATION_READBACK_ATLAS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         reflection.enabled=!(GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        GetEnvironmentVariableA("C3X_RENDERER_DIAGNOSTIC_ROUTES",control,sizeof(control));
+        diagnostic_routes=std::strcmp(control,"draw")==0?1u:std::strcmp(control,"all")==0?2u:0u;
+        diagnostic_half_pixels=GetEnvironmentVariableA("C3X_RENDERER_DIAGNOSTIC_HALF_PIXELS",control,sizeof(control)) && std::strcmp(control,"1")==0;
+#endif
         fidelity_shadow_control=GetEnvironmentVariableA("C3X_RENDERER_FIDELITY_SHADOW_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         fidelity_root = mod_root ? mod_root : "";
         bool use_pickup = std::strcmp(requested_profile, "frozen") != 0;
@@ -3769,7 +3778,7 @@ public:
                               c3x_renderer::fidelity::GroundProjection const* projection=nullptr,
                               std::vector<UINT> const* grid_indices=nullptr) {
         if (vertices.empty() && (!cached || cached->vertices.empty())) return true;
-        std::size_t vertex_stride = pickup_profile ? (natural_vertex?76u:compact_feature?48u:sizeof(Vertex)) : 120u;
+        std::size_t vertex_stride = pickup_profile ? (natural_vertex?92u:compact_feature?48u:sizeof(Vertex)) : 120u;
         std::size_t hash_stride = pickup_profile ? sizeof(Vertex) : 120u;
         std::vector<Vertex> packed;
         std::vector<UINT> indices;
@@ -3781,6 +3790,7 @@ public:
                 v.normal_x=p[7];v.normal_y=p[8];v.normal_z=p[9];v.u=p[10];v.v=p[11];
                 v.material_grass=p[12];v.material_plains=p[13];v.material_desert=p[14];v.material_marsh=p[15];
                 v.authored_relief_height=p[16];v.authored_relief_blend=p[17];v.base_terrain=p[18];
+                v.relief_owner_u=p[19];v.relief_owner_v=p[20];v.relief_owner_coverage=p[21];v.relief_owner_state=p[22];
                 if(projection){auto projected=(*projection)(v.world_x,v.world_y,v.world_z*112.f);
                     v.x=projected.x;v.y=projected.y;v.z=projected.z;}
             }
@@ -3865,13 +3875,14 @@ public:
         std::vector<std::uint8_t> frozen_vertices;
         initial.pSysMem = packed.data();
         if(natural_vertex) {
-            frozen_vertices.resize(packed.size()*76);
+            frozen_vertices.resize(packed.size()*92);
             for(std::size_t i=0;i<packed.size();++i){auto const&v=packed[i];
                 float data[]={v.x,v.y,v.z,v.world_x,v.world_y,v.world_z,v.world_valid,
                     v.normal_x,v.normal_y,v.normal_z,v.u,v.v,
                     v.material_grass,v.material_plains,v.material_desert,v.material_marsh,
-                    v.authored_relief_height,v.authored_relief_blend,v.base_terrain};
-                std::memcpy(frozen_vertices.data()+i*76,data,76);
+                    v.authored_relief_height,v.authored_relief_blend,v.base_terrain,
+                    v.relief_owner_u,v.relief_owner_v,v.relief_owner_coverage,v.relief_owner_state};
+                std::memcpy(frozen_vertices.data()+i*92,data,92);
             }
             initial.pSysMem=frozen_vertices.data();
             if(record){record->vertices.resize(packed.size());record->indices=indices;
@@ -4218,12 +4229,21 @@ public:
             std::array<std::vector<CachedVertexChunk>, geometry_layer_count> const & buffers,
             std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & viewport_settings,
             std::atomic<bool> const * cancellation, bool reflection_pass=false) {
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        if(diagnostic_routes && layer==geometry_route)return true;
+#endif
         if(pickup_profile && layer<geometry_natural_terrain)context->IASetInputLayout(layer>=geometry_feature?feature_input_layout:input_layout);
         ViewportShaderSettings previous = {};
         bool first = true;
         for (D3D11_RECT const & rect : rectangles) {
         D3D11_RECT scaled=rect;
         if(fidelity_profile){scaled.left*=2;scaled.top*=2;scaled.right*=2;scaled.bottom*=2;}
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        // Keep candidate selection, geometry, projection and draw submission intact.
+        // Only main/reflection geometry pixel coverage is reduced; shadow pages,
+        // finishing and readback retain their ordinary sizes and responsibilities.
+        if(diagnostic_half_pixels)scaled.right=scaled.left+(scaled.right-scaled.left+1)/2;
+#endif
         context->RSSetScissorRects(1, &scaled);
         for (CachedVertexChunk const & chunk : buffers[layer]) {
             ++frame_bounds_tests;
@@ -7162,6 +7182,9 @@ public:
                         base_world_v);
                     unsigned style = railroad ? 4u : static_cast<unsigned>(
                         std::clamp(tile.route_style, 0, 3));
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+                    if(diagnostic_routes!=2)
+#endif
                     append_route_segment(0.5f, 0.5f, end_u, end_v, style, railroad);
                     bool bridge = river_edge_bits[direction] != 0 &&
                         (((tile.river_code & river_edge_bits[direction]) != 0) ||

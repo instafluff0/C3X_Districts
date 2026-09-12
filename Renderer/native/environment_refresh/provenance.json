@@ -10,9 +10,9 @@
     "Renderer/native/render_core/shadow_receiver.hlsl": "927b58bc3a77f8d947b54a279b1b2183ef52b01caddaf8e7d60d2484e37d9436",
     "Renderer/lab/shared/shaders/lighting/paged_shadow_v1.hlsl": "0314e3cadc09dab8d6098f6158e97e4da269afde783d8477722a7f3be70c495f",
     "Renderer/lab/shared/shaders/relief/coast_rocks.hlsl": "39ba4ada0ad6567b0fb75827495b55f727a98c563f13d4a762f087deba2a9398",
-    "Renderer/native/source_fidelity/terrain.hlsl": "3f60d64dd072168015e073276ef3f0706ba52945daa4efeb784ed6013579bf53",
-    "Renderer/native/source_fidelity/mountain.hlsl": "5c5bf7a0e0cb30313a6e1588b8d170ab037ccd822f76001f5fa2e7df8b58b5fc",
+    "Renderer/native/source_fidelity/terrain.hlsl": "1c7cf61d6eff8013caadf8696424a7c5c535ef0bdfc3a02bb4327df7e952138b",
+    "Renderer/native/source_fidelity/mountain.hlsl": "4fe72f6d642f65be03ae3da08908d026c109bd1ac14db97c5caa9abf70150cc4",
     "Renderer/native/source_fidelity/objects.hlsl": "56c454cf19a468da78b0b89993d2805d8b0f733a1303b43cec7d2d75fa2dd268",
-    "Renderer/native/render_core/source_caster.hlsl": "a8c0acb26a60b2cf97fd9c02b6ac51e9848bf15f4060568df89c9e93b5d3ac41"
+    "Renderer/native/render_core/source_caster.hlsl": "00ebc017793b7674d30c92ec7bd57ce9541d90e7b8a412134ba80da305cb1bee"
   }
 }

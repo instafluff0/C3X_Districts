@@ -139,7 +139,7 @@ int main(){assert(eligible(false));assert(!eligible(true));}
 #include "Renderer/native/c3x_renderer_api.h"
 #include <vector>
 #include <cassert>
-std::vector<unsigned> select(c3x_renderer_frame_v1 const& frame,int region_input_ring,bool prewarming=false,int prewarm_index=-1){
+std::vector<unsigned> select(c3x_renderer_frame_v1 const& frame,int region_input_ring,bool prewarming=false,int prewarm_index=-1,bool offload_prefetch=false,bool guarded_prefetch=false){
  bool pickup_profile=true;std::vector<unsigned> result;
  for(c3x_renderer_u32 index=0;index<frame.tile_count;++index){
   auto const& tile=frame.tiles[index];
@@ -159,6 +159,8 @@ int main(){
  assert((select(frame,2)==std::vector<unsigned>{0,4}));
  assert((select(frame,4)==std::vector<unsigned>{0,1,4}));
  assert((select(frame,2,true,1)==std::vector<unsigned>{1}));
+ assert((select(frame,2,false,-1,true,false)==std::vector<unsigned>{0}));
+ assert((select(frame,2,false,-1,true,true)==std::vector<unsigned>{0,4}));
  assert(tiles[1].tile_flags==C3X_RENDERER_TILE_PREFETCH && tiles[3].tile_flags==C3X_RENDERER_TILE_TOPOLOGY_HALO);
 }
 ''')

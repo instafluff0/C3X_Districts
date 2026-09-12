@@ -76,11 +76,11 @@
     },
     {
       "path": "generated/shaders/relief/beauty_mountain.hlsl",
-      "sha256": "2f5651d6a479e76c1ed8fcaf66e99fc0b7cd1f787de0b6e07f4fe8e55d29e27a"
+      "sha256": "822c6a2755e1a1a2af6001aadc2c8fad709607f85064ea510e1f8c89f4f367d5"
     },
     {
       "path": "generated/shaders/relief/beauty_terrain.hlsl",
-      "sha256": "b492f55875ccfa64a74ec799662759ad7b13cccd039d2ee7cf4a1e8996282141"
+      "sha256": "4ac6c43b785f73f8bd5916afe76bb0f9d9efba87c9718a734ba0f4fa17c83eeb"
     },
     {
       "path": "generated/shaders/relief/coast_rocks.hlsl",
@@ -89,6 +89,10 @@
     {
       "path": "generated/shaders/relief/combined_material.hlsl",
       "sha256": "8b34697690ebf237484b657a17926b8155e3961ff45e05c16aa0c53b2fcdbf08"
+    },
+    {
+      "path": "generated/shaders/relief/volcano_material.hlsl",
+      "sha256": "45c75ca4044a7b6eb70964b00c612060f4cb8cb3d7250e70e65195b46000ecaa"
     },
     {
       "path": "generated/shaders/sampling/reconstruction_v1.hlsl",

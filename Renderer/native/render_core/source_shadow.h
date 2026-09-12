@@ -65,14 +65,17 @@ public:
                 {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,12, D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"TEXCOORD",1,DXGI_FORMAT_R32_FLOAT,0,60,D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"TEXCOORD",2,DXGI_FORMAT_R32G32B32A32_FLOAT,0,120,D3D11_INPUT_PER_VERTEX_DATA,0},
-                {"TEXCOORD",3,DXGI_FORMAT_R32_FLOAT,0,76,D3D11_INPUT_PER_VERTEX_DATA,0}};
-            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,4,code->GetBufferPointer(),code->GetBufferSize(),&layout);
+                {"TEXCOORD",3,DXGI_FORMAT_R32_FLOAT,0,76,D3D11_INPUT_PER_VERTEX_DATA,0},
+                {"TEXCOORD",4,DXGI_FORMAT_R32G32B32A32_FLOAT,0,152,D3D11_INPUT_PER_VERTEX_DATA,0}};
+            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&layout);
+            elements[4].AlignedByteOffset=0;
             elements[3].AlignedByteOffset=32;elements[1].AlignedByteOffset=32;elements[2].AlignedByteOffset=36;
             elements[2].Format=DXGI_FORMAT_R32G32B32_FLOAT;
-            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,4,code->GetBufferPointer(),code->GetBufferSize(),&feature_layout);
+            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&feature_layout);
+            elements[4].AlignedByteOffset=76;
             elements[3].AlignedByteOffset=56;elements[0].AlignedByteOffset=40;elements[1].AlignedByteOffset=72;
             elements[2].AlignedByteOffset=12;elements[2].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
-            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,4,code->GetBufferPointer(),code->GetBufferSize(),&natural_layout);
+            if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_layout);
         }
         if(SUCCEEDED(hr) && compile("PSOpaque","ps_5_0"))
             hr=device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&opaque);
@@ -303,7 +306,7 @@ public:
                 std::copy(c.offset,c.offset+3,settings+16);
                 context->UpdateSubresource(caster_settings,0,nullptr,settings,0,0);
                 bool alpha=bind(c.binding==0xffffffffu?c.layer:c.binding);context->PSSetShader(alpha?cutout:opaque,nullptr,0);
-                context->IASetInputLayout(c.stride==76?natural_layout:c.stride==48?feature_layout:layout);
+                context->IASetInputLayout(c.stride==92?natural_layout:c.stride==48?feature_layout:layout);
                 UINT stride=c.stride,offset=0;context->IASetVertexBuffers(0,1,&c.vertices,&stride,&offset);
                 context->IASetIndexBuffer(c.indices,c.index_format,0);context->DrawIndexed(c.count,0,0);++draws;
             }

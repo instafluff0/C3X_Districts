@@ -51,12 +51,18 @@ Texture2D DesertDuneHeight : register(t29);
 Texture2D SurfaceDetail : register(t30);
 SamplerState Wrap : register(s0);
 SamplerState Clamp : register(s1);
+#ifdef BEAUTY_VOLCANO_MATERIAL
+#include "volcano_material.hlsl"
+#endif
 
 struct V {
     float3 position : POSITION;
     float3 world : TEXCOORD0;
     float3 normal : NORMAL;
     float2 uv : TEXCOORD1;
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    float4 volcano_owner : TEXCOORD6;
+#endif
     float4 material : TEXCOORD2;
 };
 struct P {
@@ -64,6 +70,9 @@ struct P {
     float3 world : TEXCOORD0;
     float3 normal : NORMAL;
     float2 uv : TEXCOORD1;
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    float4 volcano_owner : TEXCOORD6;
+#endif
     float4 material : TEXCOORD2;
 };
 struct Output { float4 color : SV_Target0; float validity : SV_Target1; };
@@ -74,6 +83,9 @@ P VSMain(V input) {
     output.world = input.world;
     output.normal = input.normal;
     output.uv = input.uv;
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    output.volcano_owner = input.volcano_owner;
+#endif
     output.material = input.material;
     return output;
 }
@@ -299,6 +311,9 @@ Output shade(P input) {
         albedo=lerp(albedo,rock*(.9+height*.2),exposure);
         geometric=normalize(lerp(geometric,face,exposure));
     }
+#endif
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    albedo = volcano_albedo(albedo, input.volcano_owner, input.world.z);
 #endif
     float ndl = saturate(dot(geometric, light_direction));
     float wrap = saturate((dot(geometric, light_direction) + 0.20) / 1.20);

@@ -1,5 +1,6 @@
 #define BEAUTY_COMPOSED_SHADOWS 1
 #define BEAUTY_TERRAIN_TRANSITIONS 1
+#define BEAUTY_VOLCANO_MATERIAL 1
 // One material and lighting implementation is compiled to both Metal and D3D11.
 cbuffer Frame : register(b0) {
     float4 Sun;
@@ -108,6 +109,23 @@ float q6_shadow_visibility(Texture2DArray field,float3 world,float3 normal,float
 #endif
 SamplerState Wrap : register(s0);
 SamplerState Clamp : register(s1);
+#ifdef BEAUTY_VOLCANO_MATERIAL
+// Dedicated rock and static crater art share the ordinary scene lighting.
+// Local offsets follow captured volcano tiles, including wrapped placements.
+Texture2D VolcanoColor : register(t69);
+Texture2D VolcanoLavaColor : register(t71);
+float3 volcano_albedo(float3 albedo, float4 owner, float height) {
+    float coverage=owner.z*smoothstep(.025,.20,height)*
+        (1-smoothstep(.60,.78,max(abs(owner.x),abs(owner.y))));
+    float2 uv=.5+float2(owner.x,-owner.y)*.3875;
+    albedo=lerp(albedo,VolcanoColor.Sample(Clamp,uv).rgb,coverage);
+    // Measured local art registration; not a recovered source-engine transform.
+    float4 lava=VolcanoLavaColor.Sample(Clamp,uv+float2(.015,-.002));
+    float mask=smoothstep(.16,.52,max(lava.r,max(lava.g,lava.b)))*lava.a;
+    return lerp(albedo,lava.rgb,mask*coverage);
+}
+
+#endif
 
 struct V {
     float3 position : POSITION;
@@ -118,6 +136,9 @@ struct V {
 #endif
     float3 normal : NORMAL;
     float2 uv : TEXCOORD1;
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    float4 volcano_owner : TEXCOORD6;
+#endif
 #ifdef BEAUTY_TERRAIN_TRANSITIONS
     float4 material : TEXCOORD2;
     float2 biome : TEXCOORD3;
@@ -131,6 +152,9 @@ struct P {
     float3 world : TEXCOORD0;
     float3 normal : NORMAL;
     float2 uv : TEXCOORD1;
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    float4 volcano_owner : TEXCOORD6;
+#endif
 #ifdef BEAUTY_TERRAIN_TRANSITIONS
     float4 material : TEXCOORD2;
     float2 biome : TEXCOORD3;
@@ -148,6 +172,9 @@ P VSMain(V input) {
     output.world = input.world.xyz;
     output.normal = input.normal;
     output.uv = input.uv;
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    output.volcano_owner = input.volcano_owner;
+#endif
     output.material = input.material;
 #ifdef BEAUTY_TERRAIN_TRANSITIONS
     output.biome = input.biome;
@@ -276,39 +303,67 @@ float3 atmosphere(float y) {
            float3(0.12, 0.085, 0.045) * horizon * 0.17;
 }
 
+
+// Relief surfaces can contain captured volcanoes beside ordinary mountains.
+// Use their material coverage, never fixture coordinates, for both calibrations.
+float mountain_material_weight(P input) {
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    float4 owner = input.volcano_owner;
+    return 1 - owner.z * smoothstep(.025,.20,input.world.z) *
+        (1-smoothstep(.60,.78,max(abs(owner.x),abs(owner.y))));
+#else
+    return 1;
+#endif
+}
+
+#ifdef BEAUTY_TERRAIN_TRANSITIONS
+float ground_side_projection(P input) {
+    float rise = max(0, input.world.z - input.base_relief - 2.5/112.0);
+    float slope = 1-saturate(normalize(input.normal).z);
+    return mountain_material_weight(input) * smoothstep(.01,.12,rise) * smoothstep(.16,.48,slope);
+}
+float4 ground_surface_sample(Texture2D tex, P input, float scale, float2 offset, bool rotated) {
+    float3 p=input.world;
+    float3 n=normalize(input.normal);
+    if(rotated) { p=float3(p.y,-p.x,p.z); n=float3(n.y,-n.x,n.z); }
+    float3 w=pow(abs(n),5); w/=max(dot(w,1),.00001);
+    float4 top=tex.Sample(Wrap,p.xy*scale+offset);
+    float4 sides=tex.Sample(Wrap,p.yz*scale+offset)*w.x +
+                 tex.Sample(Wrap,p.xz*scale+offset)*w.y + top*w.z;
+    return lerp(top,sides,ground_side_projection(input));
+}
+
+#endif
+
 void ground_material(P input, out float3 albedo, out float height_detail,
                      out float specular_map) {
 #ifdef BEAUTY_TERRAIN_TRANSITIONS
-    // Use the terrain provider's world-aligned sampling and normalized BIQ
-    // family weights so the mountain collar is the terrain beneath it, not a
-    // second grass-only surface. The broad authored modulation also matches.
-    float2 uv0 = input.world.xy * 0.43 + float2(0.31, 0.17);
-    float2 uv1 = float2(input.world.y, -input.world.x) * (0.43 * 0.91) +
-                 float2(0.63, 0.29);
-    float2 tundra_uv = input.world.xy * (0.43 * 0.84) + float2(0.19, 0.71);
+    // Preserve the terrain family's scale, rotation and offsets on flat ground.
+    // On rising steep slopes use side projections to avoid vertical stretching;
+    // color, height and specular retain one mapping and unchanged biome weights.
     float desert_weight = saturate(input.biome.y);
     float tundra_weight = saturate(input.material.w /
         max(1 - desert_weight, 0.00001));
     float plains_weight = saturate(input.biome.x /
         max(1 - desert_weight - input.material.w, 0.00001));
-    float3 grass = GrassColor.Sample(Wrap, uv0).rgb;
-    float3 plains = PlainsColor.Sample(Wrap, uv1).rgb;
-    float3 tundra = TundraColor.Sample(Wrap, tundra_uv).rgb;
+    float3 grass = ground_surface_sample(GrassColor, input, 0.43, float2(.31,.17), false).rgb;
+    float3 plains = ground_surface_sample(PlainsColor, input, 0.43*.91, float2(.63,.29), true).rgb;
+    float3 tundra = ground_surface_sample(TundraColor, input, 0.43*.84, float2(.19,.71), false).rgb;
     albedo = lerp(lerp(grass, plains, plains_weight), tundra, tundra_weight);
-    height_detail = lerp(lerp(GrassHeight.Sample(Wrap, uv0).r,
-                                      PlainsHeight.Sample(Wrap, uv1).r,
+    height_detail = lerp(lerp(ground_surface_sample(GrassHeight, input, 0.43, float2(.31,.17), false).r,
+                                      ground_surface_sample(PlainsHeight, input, 0.43*.91, float2(.63,.29), true).r,
                                       plains_weight),
-                               TundraHeight.Sample(Wrap, tundra_uv).r,
+                               ground_surface_sample(TundraHeight, input, 0.43*.84, float2(.19,.71), false).r,
                                tundra_weight);
-    specular_map = lerp(lerp(GrassSpecular.Sample(Wrap, uv0).r,
-                                    PlainsSpecular.Sample(Wrap, uv1).r,
+    specular_map = lerp(lerp(ground_surface_sample(GrassSpecular, input, 0.43, float2(.31,.17), false).r,
+                                    ground_surface_sample(PlainsSpecular, input, 0.43*.91, float2(.63,.29), true).r,
                                     plains_weight),
-                             TundraSpecular.Sample(Wrap, tundra_uv).r,
+                             ground_surface_sample(TundraSpecular, input, 0.43*.84, float2(.19,.71), false).r,
                              tundra_weight);
-    albedo = lerp(albedo, DesertColor.Sample(Wrap, uv0).rgb, desert_weight);
-    height_detail = lerp(height_detail, DesertHeight.Sample(Wrap, uv0).r,
+    albedo = lerp(albedo, ground_surface_sample(DesertColor, input, 0.43, float2(.31,.17), false).rgb, desert_weight);
+    height_detail = lerp(height_detail, ground_surface_sample(DesertHeight, input, 0.43, float2(.31,.17), false).r,
                          desert_weight);
-    specular_map = lerp(specular_map, DesertSpecular.Sample(Wrap, uv0).r,
+    specular_map = lerp(specular_map, ground_surface_sample(DesertSpecular, input, 0.43, float2(.31,.17), false).r,
                         desert_weight);
     // The fourth world component carries only the underlying authored relief.
     // Reconstruct the same hill-top family response at the mountain collar so
@@ -316,19 +371,19 @@ void ground_material(P input, out float3 albedo, out float height_detail,
     float slope = 1 - saturate(normalize(input.normal).z);
     float hill_weight = smoothstep(0.008, 0.18, input.base_relief) *
                         saturate(0.42 + slope * 2.2) * (1 - tundra_weight);
-    float3 hill = lerp(GrassHillColor.Sample(Wrap, uv0 * 1.08).rgb,
-                       PlainsHillColor.Sample(Wrap, uv1 * 1.08).rgb,
+    float3 hill = lerp(ground_surface_sample(GrassHillColor, input, (0.43)*1.08, float2(.31,.17)*1.08, false).rgb,
+                       ground_surface_sample(PlainsHillColor, input, (0.43*.91)*1.08, float2(.63,.29)*1.08, true).rgb,
                        plains_weight);
     hill = lerp(hill, tundra, tundra_weight);
-    float hill_h = lerp(GrassHillHeight.Sample(Wrap, uv0 * 1.08).r,
-                        PlainsHillHeight.Sample(Wrap, uv1 * 1.08).r,
+    float hill_h = lerp(ground_surface_sample(GrassHillHeight, input, (0.43)*1.08, float2(.31,.17)*1.08, false).r,
+                        ground_surface_sample(PlainsHillHeight, input, (0.43*.91)*1.08, float2(.63,.29)*1.08, true).r,
                         plains_weight);
-    hill_h = lerp(hill_h, TundraHeight.Sample(Wrap, tundra_uv).r,
+    hill_h = lerp(hill_h, ground_surface_sample(TundraHeight, input, 0.43*.84, float2(.19,.71), false).r,
                   tundra_weight);
-    float hill_s = lerp(GrassHillSpecular.Sample(Wrap, uv0 * 1.08).r,
-                        PlainsHillSpecular.Sample(Wrap, uv1 * 1.08).r,
+    float hill_s = lerp(ground_surface_sample(GrassHillSpecular, input, (0.43)*1.08, float2(.31,.17)*1.08, false).r,
+                        ground_surface_sample(PlainsHillSpecular, input, (0.43*.91)*1.08, float2(.63,.29)*1.08, true).r,
                         plains_weight);
-    hill_s = lerp(hill_s, TundraSpecular.Sample(Wrap, tundra_uv).r,
+    hill_s = lerp(hill_s, ground_surface_sample(TundraSpecular, input, 0.43*.84, float2(.19,.71), false).r,
                   tundra_weight);
     albedo = lerp(albedo, hill, hill_weight * 0.90);
     height_detail = lerp(height_detail, hill_h, hill_weight);
@@ -472,6 +527,9 @@ Output shade(P input) {
         // tied to final rise independently of these source-height masks.
         float top = smoothstep(0.52, 0.68, height) * (1 - snow);
         float base = 1 - top - snow;
+        // Retain rocky feet; reduce added contrast continuously above them.
+        // Captured volcanic material keeps its accepted inherited response.
+        float upper_rock = smoothstep(.38,.75,mountain_rise) * mountain_material_weight(input);
         float3 rock_albedo = triplanar(RockColor, input.world, geometric);
         float3 mountain_albedo = rock_albedo * base +
                                  triplanar(TopColor, input.world, geometric) * top +
@@ -511,8 +569,9 @@ Output shade(P input) {
         float mean_luma = dot(mean_color, float3(0.2126, 0.7152, 0.0722));
         float grain = clamp(1 + 2.0 * (fine_luma - mean_luma) / max(mean_luma, 0.02), 0.50, 1.18);
         float rock_micro_relief = smoothstep(0.16, 0.84, rock_detail);
-        mountain_albedo *= lerp(0.82, 1.06, rock_micro_relief);
-        mountain_albedo *= lerp(1.0, grain, 1 - snow);
+        mountain_albedo *= lerp(lerp(0.82, 1.06, rock_micro_relief), 1.0, (upper_rock * .92) * (1-snow));
+        mountain_albedo *= lerp(1.0, grain, (1 - snow) * (1-(upper_rock * .92)));
+        rock_crevice = lerp(rock_crevice, 1.0, (upper_rock * .92));
         albedo = lerp(ground_albedo, mountain_albedo, rock_albedo_coverage);
         height_detail = lerp(ground_height, mountain_detail, rock_detail_coverage);
         float mountain_specular = triplanar_scalar(RockSpecular, input.world, geometric) * base +
@@ -551,6 +610,9 @@ Output shade(P input) {
 #else
     float3 light_direction = Sun.xyz;
     float shadow = horizon_visibility(input.world);
+#endif
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    albedo = volcano_albedo(albedo, input.volcano_owner, input.world.z);
 #endif
     float ndl = saturate(dot(normal, light_direction));
     float wrap_bias = lerp(0.20, 0.18, rock_albedo_coverage);

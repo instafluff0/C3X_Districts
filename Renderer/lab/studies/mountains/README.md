@@ -1,5 +1,75 @@
 # Mountain material diagnosis
 
+## Current body-grain study (2026-09-12)
+
+The user subsequently accepted the final `collar-triplanar` result and requested
+production use. The shared mountain shader now contains that treatment with
+ordinary captured volcano ownership replacing the study's fixed coordinates.
+The frozen experiment below remains reproducible. `verify_body.py` compares the
+current production candidate against its four accepted views; technical/staging
+receipts and rollback inputs live in `lab/out/mountains/body-promotion/`.
+
+`body_study.py` isolates added rock contrast using the frozen volcano Lab
+candidate and shaders behind the user's comparison image. Its control reproduces
+the earlier `skin-lava-shadow-probe` gameplay image exactly. Concurrent volcano
+runtime work is excluded. This is a visual experiment, not current-code runtime
+verification or staging. The frozen candidate differs from the turn-start
+checkout in renderer/shadow compiled inputs; every comparison uses that same DLL.
+
+The `balanced-rock` trial retains 28% of the extra grain/crevice contrast on the
+body, but restores the old response near the snow line. The user's follow-up
+requested the original rocky base and less upper grain. `slope-rock` therefore
+preserves the response below 0.38 world units of rise and smoothly reduces added
+contrast through 0.75 units, retaining 8% above that. It does not restore the
+extra contrast at the upper snow transition. Full snow's color multiplier,
+snow masks, source textures, broad/fine normals, geometry, lighting and terrain
+coverage remain unchanged. These are C3X artistic controls, not source-engine
+equations. Normal-only reduction did little to remove the grain; added color
+and crevice contrast dominate it. Full removal looked too smooth in the first
+body-only control.
+
+With a Python containing Pillow, reproduce and arrange the actual D3D frames:
+
+```sh
+python3 Renderer/lab/studies/mountains/body_study.py --variants current balanced-rock slope-rock
+python3 Renderer/lab/studies/mountains/body_study.py --category mountains --cases coastal detail --variants current balanced-rock slope-rock
+python3 Renderer/lab/studies/mountains/body_study.py --variants current slope-rock --hour 8
+python3 Renderer/lab/studies/mountains/body_study.py --variants current slope-rock --zoom 128
+python3 Renderer/lab/studies/mountains/body_compare.py
+```
+
+All output and frozen provenance live in `lab/out/mountains/body-study/`.
+The seed is the retained `lab/out/volcanoes/material-study/`; preserve it to
+reproduce this exact comparison. Ordinary mountain cases strip the fixed volcano
+probe; volcano-context cases preserve it. Linked asset files remain read-only.
+The script never writes production shaders, stages a DLL or replaces references.
+
+### Lower-slope texture projection
+
+The user liked `slope-rock` but identified the vertically stretched base in the
+morning view. `ground_material` samples all grass/plains/tundra/desert color,
+height and specular channels in world XY, even as the unified mountain surface
+rises steeply. The `collar-no-bump` control leaves the curtain visible, whereas
+`collar-triplanar` substantially removes it. This confirms a material-projection
+problem rather than a stretched mountain mesh.
+
+`collar-triplanar` retains `slope-rock`, all existing terrain coverage and source
+texture scales/rotations/offsets. It blends the 20 fine terrain/hill material
+lookups toward three-axis projection on rising, steep ground portions. Flat
+ground keeps its original XY samples and the broad terrain color field remains
+world aligned. All color/height/specular channels use the same mapping; the
+upper rock and snow path is unchanged. The diagnostic volcano footprint remains
+protected. This is a Lab proposal, not a recovered source shader.
+
+```sh
+python3 Renderer/lab/studies/mountains/body_study.py --variants collar-no-bump collar-triplanar --hour 8
+python3 Renderer/lab/studies/mountains/body_study.py --variants collar-triplanar --category mountains --cases coastal detail
+python3 Renderer/lab/studies/mountains/body_study.py --variants collar-triplanar --zoom 128
+python3 Renderer/lab/studies/mountains/body_compare.py
+```
+
+## Earlier snow and banding study
+
 Lab-only comparison of the current Civ V Environment Skin mountains. Run with a
 Python containing Pillow:
 

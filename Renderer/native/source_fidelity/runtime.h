@@ -36,8 +36,9 @@ struct Natural : NaturalWorld {
                 {"TEXCOORD",1,DXGI_FORMAT_R32G32_FLOAT,0,40,D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"TEXCOORD",2,DXGI_FORMAT_R32G32B32A32_FLOAT,0,48,D3D11_INPUT_PER_VERTEX_DATA,0},
                 {"TEXCOORD",3,DXGI_FORMAT_R32G32_FLOAT,0,64,D3D11_INPUT_PER_VERTEX_DATA,0},
-                {"TEXCOORD",4,DXGI_FORMAT_R32_FLOAT,0,72,D3D11_INPUT_PER_VERTEX_DATA,0}};
-            if(SUCCEEDED(hr))hr=device->CreateInputLayout(e,i<2?7:6,v->GetBufferPointer(),v->GetBufferSize(),&layout[i]);
+                {"TEXCOORD",4,DXGI_FORMAT_R32_FLOAT,0,72,D3D11_INPUT_PER_VERTEX_DATA,0},
+                {"TEXCOORD",6,DXGI_FORMAT_R32G32B32A32_FLOAT,0,76,D3D11_INPUT_PER_VERTEX_DATA,0}};
+            if(SUCCEEDED(hr))hr=device->CreateInputLayout(e,i<2?8:6,v->GetBufferPointer(),v->GetBufferSize(),&layout[i]);
             drop(v);drop(p);D3D11_BUFFER_DESC desc={};desc.ByteWidth=96;desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
             if(SUCCEEDED(hr))hr=device->CreateBuffer(&desc,nullptr,&frames[i]);
             if(FAILED(hr))return false;

@@ -30,6 +30,7 @@ existing owners expose these bounded commands (all outputs below are ignored):
 python3 -m Renderer.native.record_renderer_build --out Renderer/native/build/example-build --tier normal --reuse-from Renderer/native/build/previous-build
 python3 -m Renderer.native.record_navigation_evidence --binaries Renderer/native/build/example-build --out Renderer/native/build/example-cases --tier normal --scenario scroll --case-repeats 4 --case-reset assets_loaded --waves 0 --width 640 --height 480 --profile
 python3 -m Renderer.native.analyze_navigation_run Renderer/native/build/example-cases --case-reference Renderer/native/build/fresh-one-shot --out Renderer/native/build/example-cases/comparison.json
+python3 Renderer/renderer.py diagnose-navigation --binaries Renderer/native/build/example-build --out Renderer/native/build/example-dense-diagnostic
 ```
 
 Omit `--case-repeats` for the existing one-shot interface. Add `--scroll-sequence`
@@ -49,6 +50,21 @@ Acceptance performs full before/after input verification. The session checks
 file metadata between cases and stops on changes. Build reuse checks transitive
 local includes, recipe/tier, intact objects and the compiler/SDK stamp. Neither
 command stages the DLL or launches Civ III.
+
+`diagnose-navigation` freezes the deliverable-3 world fixture, viewport, clocks,
+normal retained budgets, two camera workloads and five arms. It alternates arm
+order over two repetitions and uses the existing endpoint analyzer for causal
+decisions. Road/rail surface controls preserve bridges and other objects. The
+prepared arm retains all scene content, including route buffers; it does not
+establish route-only attribution. The reduced-pixel arm halves geometry scissor
+coverage with identical captured geometry and candidate selection; shadow pages,
+finishing and readback remain ordinary. Pixel ablations cannot pass production
+correctness. Saved receipts separate first exposure, revisits, setup and warmup.
+The opt-in `--exclusive-gpu` watchdog rejects observed competing Lab renderer or
+compiler processes before/during each case, sampling every second and terminating
+only its own child on a conflict. A rejected/conflicted invocation is preserved,
+never used as performance evidence. Batch completion remains recorded solely in
+the retained plan; implementing this entry point does not itself close the task.
 
 ## Preserve the investment
 

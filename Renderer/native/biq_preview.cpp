@@ -422,6 +422,13 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     return tiles;
     };
     auto tiles=capture_view();
+    if(dense_scene && timing_enabled) {
+        unsigned cities=0,roads=0,rails=0,improvements=0,resources=0;
+        for(auto const& tile:tiles){cities+=tile.city_id>=0;roads+=tile.road_mask!=0;
+            rails+=tile.railroad_mask!=0;improvements+=tile.improvement_flags!=0;resources+=tile.resource_id>=0;}
+        std::printf("DENSE_FIXTURE world_width=%d world_height=%d captured=%zu cities=%u roads=%u rails=%u improvements=%u resources=%u\n",
+            map_width,map_height,tiles.size(),cities,roads,rails,improvements,resources);
+    }
     c3x_renderer_frame_v1 frame = {};
     frame.api_version = C3X_RENDERER_API_VERSION;
     frame.struct_size = sizeof(frame);
@@ -1517,6 +1524,9 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     }
     std::printf("BIQ %dx%d viewport: %u visible tiles, %u fallback, output=%s\n",
                 map_width, map_height, output.rendered_tile_count, output.fallback_tile_count, argv[5]);
+#ifdef C3X_LAB_PREVIEW
+    #include "../lab/volcano_witness.h"
+#endif
     char edit_option[8]={};
     if(ok && pickup && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_EDITS",edit_option,sizeof(edit_option))) {
         auto changed=std::find_if(tiles.begin(),tiles.end(),[&](auto const& tile){
@@ -1661,11 +1671,12 @@ int main(int argc,char** argv) {
     char session_path[4*MAX_PATH]={};
     if(!GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SESSION",session_path,sizeof(session_path)))
         return run_preview_case(argc,argv);
-    if(argc!=12)return 2;
+    auto invalid=[](char const* reason){std::fprintf(stderr,"CASE_SETUP_FAILED reason=%s error=%lu\n",reason,GetLastError());return 2;};
+    if(argc!=12)return invalid("argument_count");
     SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX);
     SetUnhandledExceptionFilter(preview_unhandled_exception);
     FILE* file=nullptr;
-    if(fopen_s(&file,session_path,"rb") || !file)return 2;
+    if(fopen_s(&file,session_path,"rb") || !file)return invalid("manifest_open");
     char line[512]={},schema[40]={},case_id[65]={},config[65]={},digest[65]={},policy[24]={},warmup[24]={},extra[2]={};
     unsigned repeats=0,limit_ms=0;
     bool read=std::fgets(line,sizeof(line),file)!=nullptr;
@@ -1674,29 +1685,29 @@ int main(int argc,char** argv) {
         schema,unsigned(sizeof(schema)),case_id,unsigned(sizeof(case_id)),config,unsigned(sizeof(config)),
         digest,unsigned(sizeof(digest)),policy,unsigned(sizeof(policy)),warmup,unsigned(sizeof(warmup)),
         &repeats,&limit_ms,extra,unsigned(sizeof(extra)))!=8 || std::strcmp(schema,"C3X_PREVIEW_CASES_V1") ||
-        repeats<1 || repeats>16 || limit_ms<1000 || limit_ms>600000)return 2;
+        repeats<1 || repeats>16 || limit_ms<1000 || limit_ms>600000)return invalid("manifest_fields");
     bool resident=std::strcmp(policy,"prepared_resident")==0;
     bool cold=std::strcmp(policy,"process_cold")==0;
     if((!resident && !cold && std::strcmp(policy,"assets_loaded")) ||
-       std::strcmp(warmup,resident?"sequence":"initial") || (cold && repeats!=1))return 2;
+       std::strcmp(warmup,resident?"sequence":"initial") || (cold && repeats!=1))return invalid("reset_policy");
     char scroll[64]={};
-    if(!GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SCROLL_ABLATION",scroll,sizeof(scroll)))return 2;
+    if(!GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SCROLL_ABLATION",scroll,sizeof(scroll)))return invalid("scroll_environment");
     // One constructor configuration per process. The wrapper freezes all input
     // and environment values; changed configurations use fresh processes.
     char inputs_path[4*MAX_PATH]={};
-    if(!GetEnvironmentVariableA("C3X_RENDERER_SESSION_INPUTS",inputs_path,sizeof(inputs_path)))return 2;
-    if(fopen_s(&file,inputs_path,"rb") || !file)return 2;
+    if(!GetEnvironmentVariableA("C3X_RENDERER_SESSION_INPUTS",inputs_path,sizeof(inputs_path)))return invalid("inputs_environment");
+    if(fopen_s(&file,inputs_path,"rb") || !file)return invalid("inputs_open");
     std::vector<std::pair<std::string,WIN32_FILE_ATTRIBUTE_DATA>> input_stamps;
     char input_path[4*MAX_PATH]={};
     while(std::fgets(input_path,sizeof(input_path),file)) {
         auto length=std::strlen(input_path);
-        if(!length || input_path[length-1]!='\n' || input_stamps.size()>=16384){std::fclose(file);return 2;}
+        if(!length || input_path[length-1]!='\n' || input_stamps.size()>=16384){std::fclose(file);return invalid("input_line");}
         input_path[--length]=0;if(length && input_path[length-1]=='\r')input_path[--length]=0;
         WIN32_FILE_ATTRIBUTE_DATA stamp={};
-        if(!length || !GetFileAttributesExA(input_path,GetFileExInfoStandard,&stamp)){std::fclose(file);return 2;}
+        if(!length || !GetFileAttributesExA(input_path,GetFileExInfoStandard,&stamp)){std::fclose(file);return invalid("input_attributes");}
         input_stamps.emplace_back(input_path,stamp);
     }
-    std::fclose(file);if(input_stamps.empty())return 2;
+    std::fclose(file);if(input_stamps.empty())return invalid("inputs_empty");
     auto verify_inputs=[&](){
         auto begin=GetTickCount64();bool unchanged=true;
         for(auto const& input:input_stamps) {
@@ -1712,7 +1723,7 @@ int main(int argc,char** argv) {
     auto reset=reinterpret_cast<c3x_renderer_reset_fn>(GetProcAddress(module,"c3x_renderer_reset"));
     auto reset_case=reinterpret_cast<c3x_renderer_benchmark_session_reset_v1_fn>(
         GetProcAddress(module,"c3x_renderer_benchmark_session_reset_v1"));
-    if(!reset || !reset_case){FreeLibrary(module);return 2;}
+    if(!reset || !reset_case){FreeLibrary(module);return invalid("reset_exports");}
     auto checkpoint=[&](char const* phase){
         FILE* state=nullptr;
         if(!fopen_s(&state,(std::string(argv[5])+".state.txt").c_str(),"wb") && state){

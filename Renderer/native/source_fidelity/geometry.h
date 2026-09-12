@@ -41,6 +41,26 @@ if(fidelity_profile) {
     #include "../../lab/shared/natural/surface_mesh_body.h"
     record_natural_phase(1);
     #include "../../lab/shared/natural/relief_mesh_body.h"
+    // Carry local volcano ownership on both replacement surface families.
+    // Lookup uses the authoritative dependency observer, including wrapped tiles.
+    // Geometry and inherited relief normals remain unchanged.
+    std::vector<std::array<float,2>> volcano_centers;
+    for(int dr=-1;dr<=1;dr++)for(int dc=-1;dc<=1;dc++)
+        if(lookup_natural(nc+dc,nr+dr).real==10)
+            volcano_centers.push_back({float(nc+dc)+.5f,float(nr+dr)+.5f});
+    if(!volcano_centers.empty())for(unsigned layer:{0u,2u})
+        for(auto&v:natural_vertices[layer]) {
+            float nearest=1e9f;
+            for(auto const&center:volcano_centers) {
+                float dx=v.world_x-center[0],dy=v.world_y-center[1];
+                float distance=dx*dx+dy*dy;
+                if(distance<nearest) {
+                    nearest=distance;
+                    v.relief_owner_u=dx;v.relief_owner_v=dy;
+                    v.relief_owner_coverage=1;v.relief_owner_state=0;
+                }
+            }
+        }
     record_natural_phase(2);
     #include "../../lab/shared/natural/vegetation_floor_mesh_body.h"
     record_natural_phase(3);

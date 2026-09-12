@@ -7,6 +7,13 @@ claiming a capability is available. Agents must not edit that CSV or
 
 ## Current action
 
+Ordinary volcano material ownership, static crater lava and caster coverage are
+renderer-only. They consume captured terrain identity and topology through
+`Map_Renderer_m71_Draw_Tiles` / `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`
+and preserve the existing map insertion/compositing boundary.
+`required_user_action: []`; no injected source, patch-table symbol, signature or
+supported-build address changes are required.
+
 Navigation dependency/scene optimization remains renderer-only. Retained caster
 proofs, region contributor selection and dependency-replayed shoreline centers
 consume the existing `Map_Renderer_m71_Draw_Tiles` /
@@ -25,7 +32,9 @@ remain authoritative. `required_user_action: []`; an already installed current
 cache switch needs only the updated DLL on the next game start. Staging status
 and rollback are recorded in `navigation_continuation.md`.
 
-The accepted fine mountain relief is shader-only. It uses the existing
+The accepted mountain body contrast and slope-aware ground projection are
+shader-only. They use captured ordinary-volcano coverage to preserve volcanic
+material within shared relief surfaces and the existing
 `Map_Renderer_m71_Draw_Tiles` / `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`
 capture and composite boundaries, with no geometry, indexing, ABI, ownership or
 patch-table changes. `required_user_action: []`; no executable symbol is added.

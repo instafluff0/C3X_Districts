@@ -892,7 +892,7 @@ struct State {
     struct Trace {void write(char const*,char const*,bool){}} trace;
     std::unordered_map<int,Item> tile_geometry_cache;
     std::size_t tile_geometry_cache_bytes=60,prefetched_geometry_bytes=10;
-    std::size_t tile_geometry_cache_budget=100,tile_geometry_cache_capacity=2048;
+    std::size_t tile_geometry_runtime_budget=100,tile_geometry_cache_capacity=2048;
     unsigned tile_geometry_epoch=3,frame_tiles_evicted=0,cache_evictions=0;
     void release_geometry_vertex_buffers(int&){}
 ''' + eviction + r'''

@@ -13,6 +13,7 @@ import re
 import statistics
 
 from Renderer.native.compare_zoom_benchmark import pixels, run
+from Renderer.lab.platform import ROOT
 
 
 def fields(line):
@@ -762,6 +763,119 @@ def compare_session_reference(reference, candidate):
         "scope":"iteration wait amortization; not renderer or native presentation speedup"}
     report["all_images_exact"]=exact
     return report
+
+
+def read_dense_diagnostic_case(folder, offsets):
+    receipt = json.loads((folder / "inputs.json").read_text())
+    evidence = json.loads((folder / "evidence.json").read_text())
+    exclusivity = json.loads((folder / "exclusivity.json").read_text(encoding="utf-8-sig"))
+    if exclusivity["checks"] < 2 or exclusivity["conflicts"]:
+        raise ValueError("Concurrent renderer/compiler observed")
+    if (evidence["returncode"] != 0 or evidence["invocation"] != receipt["invocation"] or
+            not all(evidence.get(k) is True for k in
+                    ("inputs_unchanged", "sources_unchanged", "binaries_unchanged")) or
+            evidence.get("provisional") or evidence["endpoints"]["status"] == "invalid"):
+        raise ValueError("Invalid diagnostic invocation: " + str(folder.relative_to(ROOT)))
+    for name, expected in receipt["binaries"].items():
+        if digest(folder / name) != expected:
+            raise ValueError("Diagnostic binary changed")
+    cases = evidence["endpoints"]["cases"]
+    if len(cases) != 1 or cases[0]["request_offsets"] != offsets:
+        raise ValueError("Diagnostic camera sequence differs")
+    case = cases[0]
+    requests = [r for r in case["endpoints"]["requests"] if r["role"] == "playback"]
+    if len(requests) != len(offsets) or any(r["status"] != "success_ownership_checked" or
+                                            not r["cpu_phase_accounting_valid"] for r in requests):
+        raise ValueError("Missing diagnostic endpoint or ownership coverage")
+    lines = (folder / "benchmark.log").read_text().splitlines()
+    fixture = [fields(l) for l in lines if l.startswith("DENSE_FIXTURE ")]
+    if not fixture or any(int(fixture[-1][k]) <= 0 for k in ("cities", "roads", "rails", "improvements", "resources")):
+        raise ValueError("Dense fixture does not exercise all requested content")
+    memory = [int(fields(l)["largest_free_region"]) for l in lines if l.startswith("CAMERA memory ")]
+    if not memory:
+        raise ValueError("Missing address-space samples")
+    # Warmup and initial preparation stay out of the transition measurements.
+    seen = {0}
+    samples = []
+    for offset, request in zip(offsets, requests):
+        samples.append({"offset": offset, "kind": "revisit" if offset in seen else "first_exposure",
+                        "captured_tiles": request["captured_tiles"],
+                        "total_ms": request["request_to_checked_result_ms"],
+                        **request["renderer_cpu_spans_ms"]})
+        seen.add(offset)
+    images = {name: evidence["images"][name] for name in
+              ("zoom.bmp.case0.bmp", "zoom.bmp.case0.bmp.result.bmp")}
+    trace = (folder / "renderer.log").read_text().splitlines()
+    budgets = [fields(l) for l in trace if "gpu_geometry_cap=" in l]
+    if not budgets:
+        raise ValueError("Missing cache budget receipt")
+    memory.extend(int(b["largest_free_region"]) for b in budgets)
+    caps = {k: v for k, v in budgets[-1].items() if k.endswith("_cap")}
+    if any({k: v for k, v in b.items() if k.endswith("_cap")} != caps for b in budgets):
+        raise ValueError("Budgets changed inside diagnostic case")
+    return {"folder": folder.relative_to(ROOT).as_posix(), "samples": samples,
+            "mean_transition_ms": statistics.mean(s["total_ms"] for s in samples),
+            "whole_trace_ms": sum(s["total_ms"] for s in samples),
+            "phase_mean_ms": {k: statistics.mean(s[k] for s in samples)
+                              for k in requests[0]["renderer_cpu_spans_ms"]},
+            "initial_preparation_ms": case["endpoints"]["setup_ms"]["initial_render_preparation"],
+            "warmup_ms": case.get("warmup_endpoints", {}).get("host_span_through_last_check_ms"),
+            "resets": case["resets"], "fixture": fixture[-1], "budgets": caps,
+            "exclusivity": exclusivity,
+            "min_largest_free_bytes": min(memory), "headroom_pass": min(memory) >= 512 * 1024**2,
+            "images": images, "wrapper_total_ms": evidence["wrapper_total_ms"],
+            "identity": {k: receipt[k] for k in ("binaries", "inputs", "source_at_run")}}
+
+
+def compare_dense_diagnostic_runs(baseline, candidate):
+    """Few matched pairs reject large effects; overlap remains inconclusive."""
+    b = [r["mean_transition_ms"] for r in baseline]
+    c = [r["mean_transition_ms"] for r in candidate]
+    savings = [x-y for x, y in zip(b, c)]
+    useful = max(20.0, .1 * statistics.median(b))
+    if len(b) < 2:
+        decision = "inconclusive_insufficient_repetitions"
+    elif min(savings) >= useful and max(c) < min(b):
+        decision = "useful_causal_effect"
+    elif max(savings) < useful:
+        decision = "reject_as_primary_target"
+    else:
+        decision = "inconclusive_repeat_variation"
+    return {"decision": decision, "baseline_ms": b, "candidate_ms": c,
+            "paired_savings_ms": savings, "minimum_useful_ms": useful,
+            "phase_savings_ms": {k: [x["phase_mean_ms"][k]-y["phase_mean_ms"][k]
+                                     for x, y in zip(baseline, candidate)]
+                                 for k in baseline[0]["phase_mean_ms"]}}
+
+
+def summarize_dense_diagnostic(runs, arms=("full", "route_draws_omitted", "route_surfaces_omitted", "prepared_content", "half_geometry_pixels")):
+    comparisons = {}
+    for workload in ("four_columns", "reversal"):
+        selected = {arm: [r for r in runs if r["workload"] == workload and r["arm"] == arm]
+                    for arm in arms}
+        # Restore repetition order after alternating the actual dispatch order.
+        for values in selected.values():
+            values.sort(key=lambda r: r["repeat"])
+        base = selected["full"]
+        if not base:
+            continue
+        for arm, values in selected.items():
+            if len(values) != len(base):
+                continue
+            if any(r["images"] != values[0]["images"] for r in values):
+                raise ValueError("Repeated diagnostic images differ: " + arm)
+            if arm == "prepared_content" and any(r["images"] != b["images"] for r, b in zip(values, base)):
+                raise ValueError("Prepared content differs from fresh content rendering")
+            if arm != "full":
+                comparisons[workload + "/" + arm] = {
+                    **compare_dense_diagnostic_runs(base, values),
+                    "correctness": "fresh-content endpoint pixels exact; intermediate full-redraw parity unmeasured"
+                    if arm == "prepared_content" else "intentional pixel ablation; cannot pass production correctness",
+                }
+        if selected["route_draws_omitted"] and len(selected["route_surfaces_omitted"]) == len(selected["route_draws_omitted"]):
+            comparisons[workload + "/route_construction_only"] = compare_dense_diagnostic_runs(
+                selected["route_draws_omitted"], selected["route_surfaces_omitted"])
+    return comparisons
 
 
 def main():

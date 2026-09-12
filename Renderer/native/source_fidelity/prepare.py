@@ -76,6 +76,9 @@ def shaders():
         p=LAB/f'shaders/{category}/beauty_{name}.hlsl'
         s=p.read_text()
         if name=='terrain':s=terrain_boundaries(s)
+        if name in ('terrain','mountain'):
+            s='#define BEAUTY_VOLCANO_MATERIAL 1\n'+s
+            s=s.replace('#include "volcano_material.hlsl"',(LAB/'shaders/relief/volcano_material.hlsl').read_text())
         # Pixel equations remain selected source text. Only native register and
         # receiver storage ABI are adapted; never overwrite the Lab provider.
         s=s.replace('Texture2D ShadowField : register(t17);','Texture2DArray ShadowField : register(t17);')

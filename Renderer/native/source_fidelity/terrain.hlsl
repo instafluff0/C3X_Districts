@@ -1,4 +1,5 @@
 #define BEAUTY_COMPOSED_SHADOWS 1
+#define BEAUTY_VOLCANO_MATERIAL 1
 #define BEAUTY_COAST_CLIFF 1
 cbuffer Frame : register(b0) {
     float4 Sun;
@@ -110,12 +111,32 @@ Texture2D DesertHeight : register(t20);
 Texture2D DesertSpecular : register(t21);
 SamplerState Wrap : register(s0);
 SamplerState Clamp : register(s1);
+#ifdef BEAUTY_VOLCANO_MATERIAL
+// Dedicated rock and static crater art share the ordinary scene lighting.
+// Local offsets follow captured volcano tiles, including wrapped placements.
+Texture2D VolcanoColor : register(t69);
+Texture2D VolcanoLavaColor : register(t71);
+float3 volcano_albedo(float3 albedo, float4 owner, float height) {
+    float coverage=owner.z*smoothstep(.025,.20,height)*
+        (1-smoothstep(.60,.78,max(abs(owner.x),abs(owner.y))));
+    float2 uv=.5+float2(owner.x,-owner.y)*.3875;
+    albedo=lerp(albedo,VolcanoColor.Sample(Clamp,uv).rgb,coverage);
+    // Measured local art registration; not a recovered source-engine transform.
+    float4 lava=VolcanoLavaColor.Sample(Clamp,uv+float2(.015,-.002));
+    float mask=smoothstep(.16,.52,max(lava.r,max(lava.g,lava.b)))*lava.a;
+    return lerp(albedo,lava.rgb,mask*coverage);
+}
+
+#endif
 
 struct V {
     float3 position : POSITION;
     float4 world : TEXCOORD0;
     float3 normal : NORMAL;
     float2 uv : TEXCOORD1;
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    float4 volcano_owner : TEXCOORD6;
+#endif
     float4 material : TEXCOORD2;
     float2 biome : TEXCOORD3;
     float coast_coverage : TEXCOORD4;
@@ -125,6 +146,9 @@ struct P {
     float3 world : TEXCOORD0;
     float3 normal : NORMAL;
     float2 uv : TEXCOORD1;
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    float4 volcano_owner : TEXCOORD6;
+#endif
     float4 material : TEXCOORD2;
     float2 biome : TEXCOORD3;
     float coast_coverage : TEXCOORD4;
@@ -138,6 +162,9 @@ P VSMain(V input) {
     output.world = input.world.xyz;
     output.normal = input.normal;
     output.uv = input.uv;
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    output.volcano_owner = input.volcano_owner;
+#endif
     output.material = input.material;
     output.biome = input.biome;
     output.coast_coverage = input.coast_coverage;
@@ -380,6 +407,9 @@ Output shade(P input) {
         albedo=lerp(albedo,rock*(.9+height*.2),exposure);
         geometric=normalize(lerp(geometric,face,exposure));
     }
+#endif
+#ifdef BEAUTY_VOLCANO_MATERIAL
+    albedo = volcano_albedo(albedo, input.volcano_owner, input.world.z);
 #endif
     float ndl = saturate(dot(geometric, light_direction));
     float wrap = saturate((dot(geometric, light_direction) + 0.20) / 1.20);

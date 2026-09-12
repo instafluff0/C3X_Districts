@@ -77,7 +77,7 @@ def metadata_snapshot(paths):
     return result
 
 
-def main():
+def main(argv=None):
     wrapper_started=time.perf_counter()
     timing={}
     phase_started=wrapper_started
@@ -114,6 +114,8 @@ def main():
     parser.add_argument("--case-repeats", type=int, choices=range(1,17), help="Bounded same-config persistent scroll cases")
     parser.add_argument("--case-reset", choices=("process_cold","assets_loaded","prepared_resident"), default="assets_loaded")
     parser.add_argument("--case-time-limit", type=int, choices=range(1,601), default=60)
+    parser.add_argument("--exclusive-gpu", action="store_true",
+                        help="Reject a case if another Lab renderer/compiler is observed by the child watchdog")
     parser.add_argument("--verification", choices=("acceptance","quick"), default="acceptance",
                         help="Quick checks are provisional; acceptance hashes inputs before and after")
     parser.add_argument("--scroll-sequence", action="store_true", help="Use the existing 14-offset reversal instead of one four-column move")
@@ -125,6 +127,10 @@ def main():
     parser.add_argument("--region-size", type=int, choices=(128,256,512,2240), default=128)
     parser.add_argument("--bounded-post", action="store_true", help="Limit experimental strip reconstruction to guarded output regions")
     parser.add_argument("--reflection-ablation", action="store_true", help="Diagnostic only: omit reflections to estimate their cost; images are not current quality")
+    parser.add_argument("--diagnostic-routes", choices=("full", "draw", "all"), default="full",
+                        help="Benchmark only: omit route surface draws or also construction; bridge objects remain")
+    parser.add_argument("--diagnostic-half-pixels", action="store_true",
+                        help="Benchmark only: halve geometry scissor coverage with unchanged scene and draw candidates")
     parser.add_argument("--world-grid", action="store_true")
     parser.add_argument("--world-regions", action="store_true", help="Reuse completed static world-grid render regions")
     parser.add_argument("--region-metadata-mib", type=int, choices=(32,96), default=96)
@@ -148,7 +154,7 @@ def main():
     parser.add_argument("--wave-control", action="store_true", help="Rebuild coast-cell wave buffers for independent comparisons")
     parser.add_argument("--composition-casters-control", action="store_true", help="Rebuild caster preparation independently for each animation region")
     parser.add_argument("--animation-readback-atlas", action="store_true", help="Pack exact animated blocks into a compact staging atlas before CPU readback")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         args.preparation_mode=preparation_mode(args.scenario,args.preparation_mode)
     except ValueError as error:
@@ -165,6 +171,8 @@ def main():
         parser.error("Persistent cases currently cover synchronous scroll with one fixed constructor configuration")
     if args.case_repeats and args.case_reset=="process_cold" and args.case_repeats!=1:
         parser.error("Process-cold cases require a fresh process per case")
+    if args.exclusive_gpu and not args.case_repeats:
+        parser.error("--exclusive-gpu requires the bounded session watchdog")
     out = args.out.resolve()
     relative = out.relative_to(ROOT)
     samples = (args.idle_steps if args.scenario == "idle" else args.distant_steps if args.scenario == "distant" else
@@ -193,6 +201,8 @@ def main():
            "C3X_RENDERER_REGION_SIZE": str(args.region_size),
            "C3X_RENDERER_BOUNDED_POST": "1" if args.bounded_post else "0",
            "C3X_RENDERER_REFLECTION_CONTROL": "1" if args.reflection_ablation else "0",
+           "C3X_RENDERER_DIAGNOSTIC_ROUTES": args.diagnostic_routes,
+           "C3X_RENDERER_DIAGNOSTIC_HALF_PIXELS": "1" if args.diagnostic_half_pixels else "0",
            "C3X_RENDERER_WORLD_RASTER_GRID": "1" if args.world_grid else "0",
            "C3X_RENDERER_WORLD_REGIONS": "1" if args.world_regions else "0",
            "C3X_RENDERER_THREE_ZOOM_MEMORY": "1" if args.three_zoom_memory else "0",
@@ -277,7 +287,7 @@ def main():
     receipt = {"case_manifest":case_manifest,"verification":args.verification,
                "input_metadata":before_metadata,"invocation": uuid.uuid4().hex, "endpoint": "standalone capture plus completed render; no native presentation",
                "storage_preflight": storage,
-               "quality_mode": "diagnostic_reflections_disabled" if args.reflection_ablation else "current",
+               "quality_mode": "diagnostic_pixel_ablation" if args.diagnostic_routes!="full" or args.diagnostic_half_pixels else "diagnostic_reflections_disabled" if args.reflection_ablation else "current",
                "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
                "environment": env, "inputs": before,
                "host": {"os": platform.platform(), "architecture": platform.machine(), "logical_processors": os.cpu_count()},
@@ -304,14 +314,36 @@ def main():
         quote=lambda value:"'"+str(value).replace("'","''")+"'"
         child_args=" ".join(f'"{v}"' for v in values[1:])+f" {args.width} {args.height} 75 39 {args.tile_width} 12"
         script=f"""$ErrorActionPreference='Stop'
+$exclusive=${str(args.exclusive_gpu).lower()}
+$checks=0
+$conflicts=@()
+function Other-Workloads($owned) {{
+ @(Get-Process biq_preview,native_preview,cl,link -ErrorAction SilentlyContinue | Where-Object {{$_.Id -ne $owned}} | Select-Object ProcessName,Id)
+}}
+if($exclusive) {{
+ $checks++;$conflicts=@(Other-Workloads 0)
+ if($conflicts.Count) {{
+  @{{checks=$checks;conflicts=$conflicts;interval_ms=1000}} | ConvertTo-Json -Depth 4 | Set-Content {quote(win_out/'exclusivity.json')}
+  [IO.File]::WriteAllText({quote(win_out/'child-completion.txt')},'{receipt['invocation']} 126')
+  exit 126
+ }}
+}}
 $child=Start-Process -FilePath {quote(values[0])} -ArgumentList {quote(child_args)} -RedirectStandardOutput {quote(win_out/'benchmark.log')} -RedirectStandardError {quote(win_out/'error.log')} -PassThru
 $childHandle=$child.Handle
 [IO.File]::WriteAllText({quote(win_out/'process.txt')},'{receipt['invocation']} '+$child.Id)
-$exited=$child.WaitForExit({args.case_time_limit*1000+10000})
+$deadline=[DateTime]::UtcNow.AddMilliseconds({args.case_time_limit*1000+10000})
+do {{
+ $exited=$child.WaitForExit(1000)
+ if($exclusive) {{$checks++;$conflicts+=@(Other-Workloads $child.Id)}}
+}} while(-not $exited -and -not $conflicts.Count -and [DateTime]::UtcNow -lt $deadline)
 if($exited) {{$child.WaitForExit();$childCode=$child.ExitCode;if($null -eq $childCode){{$childCode=125}}}}
 else {{
  $null=& taskkill.exe /PID $child.Id /T /F 2>&1
  $childCode=124
+}}
+if($exclusive) {{
+ @{{checks=$checks;conflicts=$conflicts;interval_ms=1000}} | ConvertTo-Json -Depth 4 | Set-Content {quote(win_out/'exclusivity.json')}
+ if($conflicts.Count) {{$childCode=126}}
 }}
 [IO.File]::WriteAllText({quote(win_out/'child-completion.txt')},'{receipt['invocation']} '+$childCode)
 exit $childCode
