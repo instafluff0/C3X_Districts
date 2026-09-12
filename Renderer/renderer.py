@@ -348,6 +348,24 @@ def scene(category, case, destination, *, world_size=32):
                                       (16, 16), (18, 16), (16, 18))
                 if (x, y) in feature_points:
                     real = recipe["feature"]
+            if category == "volcanoes":
+                # Matched dormant/active body; context cases add real adjacent
+                # terrain without stamping volcanoes over the entire world.
+                c, r = (x + y) // 2, (x - y) // 2
+                base = real = recipe["terrain"]
+                if (x, y) == (16, 16):
+                    real = 10
+                if case == "coastal" and c >= 18:
+                    base = real = 11 if c == 18 else 12 if c <= 20 else 13
+                if case == "gameplay":
+                    base = 1 if c <= 15 else 3 if r >= 2 else 0 if c >= 18 else 2
+                    real = 10 if (x, y) == (16, 16) else base
+                    if (x, y) in ((17, 19), (19, 17)):
+                        real = 7
+                # Keep the accepted mountain pair in every review view so
+                # scale, material and cast shadows can be judged together.
+                if (x, y) in ((15, 15), (14, 14)):
+                    real = 6
             if category == "mountains":
                 c, r = (x + y) // 2, (x - y) // 2
                 if case == "coastal":
@@ -471,7 +489,7 @@ def native_render(category, case, hour, zoom, output, *, behavior=None, center=(
         "C3X_RENDERER_PREVIEW_EDITS": "", "C3X_RENDERER_PREVIEW_ANIMATION": "",
         "C3X_RENDERER_PREVIEW_UNITS": "", "C3X_RENDERER_PREVIEW_SEASON": "0",
         "C3X_RENDERER_UNIT_CASES": "", "C3X_RENDERER_UNIT_PACK": "",
-        "C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO": "",
+        "C3X_RENDERER_PREVIEW_ACTIVE_VOLCANO": "1" if category == "volcanoes" and case == "active" else "",
         "C3X_RENDERER_FIDELITY_SHADOW_CONTROL": "", "C3X_RENDERER_REFLECTION_CONTROL": "",
         "C3X_RENDERER_CITY_LIGHT_CONTROL": "", "C3X_RENDERER_CITY_GLOW_CONTROL": "",
         "C3X_LAB_UNIT_STUDY": "shadows" if category == "shadows" else "1" if category in ("units", "animation") else "",
@@ -602,7 +620,7 @@ def integration_replay_cases(category, *, full=False):
                       ("world-wrap", "replay", 128, (0, 50), 12)))
         selected = set(affected(category))
     terrain = {"grassland", "plains", "desert", "tundra", "floodplains", "transitions",
-               "hills", "mountains", "forests", "jungles", "shorelines", "seas-oceans",
+               "hills", "mountains", "volcanoes", "forests", "jungles", "shorelines", "seas-oceans",
                "rivers", "day-night", "shadows"}
     if "ocean-waves" in selected:
         cases.extend((("wave-beach", None, 128, (10, 18), 12), ("wave-rocky", None, 128, (10, 18), 12), ("wave-mixed", None, 64, (10, 18), 0)))
@@ -870,7 +888,7 @@ def run_tests(category=None, *, integration=False, full=False):
                 "test_unit_shadow", "test_unit_animation_runtime", "test_animation_runtime"))
         else:
             terrain = {"grassland", "plains", "desert", "tundra", "floodplains", "transitions",
-                       "hills", "mountains", "forests", "jungles", "shorelines", "seas-oceans",
+                       "hills", "mountains", "volcanoes", "forests", "jungles", "shorelines", "seas-oceans",
                        "rivers", "day-night", "shadows"}
             if category in terrain:
                 modules.add("Renderer.native.test_scroll_damage")

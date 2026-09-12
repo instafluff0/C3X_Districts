@@ -21,6 +21,35 @@ rerunning an oracle, broad baseline, cold matrix, idle soak or failed rendering 
 When implementation resumes, validate each tooling increment only as needed;
 the groundwork request itself does not call for those runs.
 
+## Implemented harness entry points
+
+The retained plan records which deliverables and evidence are complete. The
+existing owners expose these bounded commands (all outputs below are ignored):
+
+```sh
+python3 -m Renderer.native.record_renderer_build --out Renderer/native/build/example-build --tier normal --reuse-from Renderer/native/build/previous-build
+python3 -m Renderer.native.record_navigation_evidence --binaries Renderer/native/build/example-build --out Renderer/native/build/example-cases --tier normal --scenario scroll --case-repeats 4 --case-reset assets_loaded --waves 0 --width 640 --height 480 --profile
+python3 -m Renderer.native.analyze_navigation_run Renderer/native/build/example-cases --case-reference Renderer/native/build/fresh-one-shot --out Renderer/native/build/example-cases/comparison.json
+```
+
+Omit `--case-repeats` for the existing one-shot interface. Add `--scroll-sequence`
+for the fixed 14-offset reversal. Persistent cases currently share one immutable
+constructor configuration and synchronous scroll workload; a changed configuration
+uses another process. `process_cold` permits one case in a fresh process;
+`assets_loaded` clears scene content while retaining assets/device;
+`prepared_resident` performs the same untimed sequence before clearing completed
+images and measuring. Reset receipts expose actual retained content and unchanged
+budgets. `--case-time-limit` bounds the session; an external watchdog covers a
+stuck child/teardown and only terminates that invocation's process tree.
+
+`--instrumentation timing` disables detailed traces; diagnostic mode buffers them
+until teardown. Missing internal/GPU coverage is explicit. `--verification quick`
+uses provisional metadata checks after initial hashing and cannot pass acceptance.
+Acceptance performs full before/after input verification. The session checks
+file metadata between cases and stops on changes. Build reuse checks transitive
+local includes, recipe/tier, intact objects and the compiler/SDK stamp. Neither
+command stages the DLL or launches Civ III.
+
 ## Preserve the investment
 
 Keep the current renderer, source findings, runtime packs, optional reference

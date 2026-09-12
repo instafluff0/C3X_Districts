@@ -43,10 +43,11 @@ public:
     SourceShadow()=default;
     SourceShadow(SourceShadow const&)=delete;
     ~SourceShadow(){clear();}
+    void clear_cached_pages(){pages={};basis={};epoch=0;}
     void clear(){
         drop(view);drop(texture);for(auto& t:targets)drop(t);
         drop(vertex);drop(opaque);drop(cutout);drop(layout);drop(feature_layout);drop(natural_layout);drop(caster_settings);
-        drop(table);drop(raster);drop(maximum);pages={};basis={};epoch=0;
+        drop(table);drop(raster);drop(maximum);clear_cached_pages();
     }
     bool ensure(ID3D11Device* device,wchar_t const* path) {
         if(view)return true;

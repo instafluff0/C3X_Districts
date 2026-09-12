@@ -38,12 +38,157 @@ def distribution(values):
             "hundred_sample_requirement_met": len(values) >= 100}
 
 
+def endpoint_accounting(lines, trace_lines=()):
+    """Account disjoint host spans; never add overlapping CPU/GPU intervals.
+
+    Endpoints certify API success/ownership, not independent full-redraw parity.
+    Missing trace/query coverage stays explicit, including the final delayed GPU
+    sample. A cold first render includes lazy loading and is preparation, not playback.
+    """
+    setup = [fields(l) for l in lines if l.startswith("TIMING_SETUP ")]
+    if len(setup) != 1:
+        return {"status":"unmeasured", "reason":"missing unique versioned endpoint record"}
+    setup=setup[0]
+    if setup.get("schema")!="1" or int(setup["frequency"])<=0:
+        raise ValueError("Invalid timing schema/frequency")
+    scale=1000/int(setup["frequency"])
+    def ordered(row, names):
+        values=[int(row[n]) for n in names]
+        if values!=sorted(values) or values[0]<0:
+            raise ValueError("Invalid timing endpoint order")
+        return values
+    marks=ordered(setup,("process_enter","source_done","dll_done","definitions_done","initial_begin","initial_done"))
+    trace=[fields(l) for l in trace_lines if "qpc=" in l and "stage=" in l]
+    requests=[]
+    for line in lines:
+        if not line.startswith("TIMING_REQUEST "):continue
+        row=fields(line)
+        if int(row["id"])!=len(requests):raise ValueError("Missing or duplicate timing request")
+        a,b,c,d,e=ordered(row,("capture_begin","capture_end","caller_enter","caller_return","correct_done"))
+        phases={n: int(row[n+"_ticks"])*scale for n in ("geometry","draw","readback")}
+        if any(v<0 for v in phases.values()):raise ValueError("Negative renderer phase")
+        call=(d-c)*scale
+        known=sum(phases.values())
+        matching=[r for r in trace if c<=int(r["qpc"])<=d]
+        render=[r for r in matching if r["stage"]=="render-begin"]
+        sequence=render[0].get("sequence") if len(render)==1 else None
+        gpu=[r for r in trace if r["stage"]=="gpu-timing" and r.get("sample_sequence")==sequence] if sequence else []
+        submission=[r for r in matching if r["stage"]=="submission-phases"]
+        animation=[r for r in matching if r["stage"]=="animation-frame"]
+        if len(animation)==1:
+            phases["animation_composition"]=float(animation[0]["ms"])
+            known=sum(phases.values())
+        # Report nested diagnostics separately: they are contained by caller and
+        # readback, and cannot be added to their parent intervals.
+        nested={"blocking_map_wait_ms":None,"cpu_bitmap_copy_ms":None,
+                "gpu_execution_ms":None,"gpu_copy_ms":None}
+        if len(submission)==1:
+            nested.update(blocking_map_wait_ms=float(submission[0]["map_wait_ms"]),
+                          cpu_bitmap_copy_ms=float(submission[0]["cpu_copy_ms"]))
+        if len(gpu)==1 and gpu[0].get("valid")=="1":
+            nested.update(gpu_execution_ms=float(gpu[0]["gpu_draw_ms"]),gpu_copy_ms=float(gpu[0]["gpu_copy_ms"]))
+        request={"id":int(row["id"]),"role":"initial_preparation" if not requests else "playback",
+                 "status":"success_ownership_checked" if row["result"]=="1" else "failed",
+                 "captured_tiles":int(row["tiles"]), "renderer_sequence":sequence,
+                 "capture_ms":(b-a)*scale,"capture_to_caller_ms":(c-b)*scale,
+                 "caller_ms":call,"ownership_check_ms":(e-d)*scale,
+                 "request_to_result_ms":(d-a)*scale,"request_to_checked_result_ms":(e-a)*scale,
+                 "renderer_cpu_spans_ms":phases,"nested_diagnostics":nested,
+                 "unexplained_caller_ms":max(0,call-known),
+                 "cpu_phase_accounting_valid":known<=call+0.01,
+                 "independent_pixel_parity":"unmeasured"}
+        calls=[r for r in matching if r["stage"]=="call-endpoints"]
+        request["caller_cpu_spans_ms"]=None
+        if len(calls)==1:
+            callrow=calls[0]
+            names=("entered","locked","submitted","worker_begin","worker_rendered","worker_published","returned") if callrow["queued"]=="1" else ("entered","locked","returned")
+            values=ordered(callrow,names)
+            if values[0]<c or values[-1]>d:raise ValueError("Caller trace outside request")
+            labels=("lock_wait","snapshot_and_camera_drain","queue_wait","worker_render",
+                    "worker_publication_and_preparation","completion_wakeup") if callrow["queued"]=="1" else ("lock_wait","retained_result")
+            spans=dict(zip(labels,[(y-x)*scale for x,y in zip(values,values[1:])]))
+            spans["api_entry_and_return"]=(values[0]-c+d-values[-1])*scale
+            request["caller_cpu_spans_ms"]=spans
+            request["unexplained_caller_ms"]=max(0,call-sum(spans.values()))
+            request["unexplained_worker_render_ms"]=max(0,spans.get("worker_render",0)-known) if callrow["queued"]=="1" else None
+        request["missing_measurements"]=[k for k,v in nested.items() if v is None]
+        if not calls:request["missing_measurements"] += ["caller_lock_wait", "worker_queue_wait", "publication_cpu"]
+        request["accounting_complete"]=not request["missing_measurements"] and request["cpu_phase_accounting_valid"] and max(
+            request["unexplained_caller_ms"], request.get("unexplained_worker_render_ms") or 0)<=max(1,call*.05)
+        requests.append(request)
+    dropped=int(setup["dropped"])
+    setup_trace=[r for r in trace if marks[0]<=int(r["qpc"])<=marks[-1]]
+    return {"status":"measured_with_gaps", "schema":1,"requests":requests,"dropped_requests":dropped,
+            "host_span_through_last_check_ms":(e-marks[0])*scale if requests else None,
+            "setup_ms":dict(zip(("source_fixture_and_host_startup","dll_load","definition_configuration",
+                                  "initial_capture_and_host_setup","initial_render_preparation"),
+                                 [(b-a)*scale for a,b in zip(marks,marks[1:])])),
+            "load_diagnostics":[r for r in setup_trace if r["stage"].startswith("load-")],
+            "setup_nested_diagnostics":[r for r in setup_trace if r["stage"] in ("setup-device","setup-shader")],
+            "missing_setup_measurements":["process_spawn_before_main", "shader_setup_outside_primary_material_entries"]+
+                ([] if any(r["stage"]=="setup-device" for r in trace) else ["device_creation_not_observed_in_this_case"]),
+            "trace_dropped":next((int(fields(l)["dropped"]) for l in trace_lines if l.startswith("TRACE_BUFFER ")),None),
+            "playback_samples":max(0,len(requests)-1),
+            "performance_claim":"endpoint accounting only; no optimization or native presentation pass"}
+
+
+def session_accounting(lines, trace_lines=()):
+    """Separate untimed bootstrap/reset/warmup from each bounded case."""
+    cases=[];current=None;playback=None;warmup_start=None
+    ends=[fields(l) for l in lines if l.startswith("CASE_SESSION_END ")]
+    for i,line in enumerate(lines):
+        if line.startswith("CASE_BEGIN "):
+            if current is not None:raise ValueError("Overlapping persistent cases")
+            current={"identity":fields(line),"resets":[],"warmup_ran":False};playback=None
+        elif current is not None and line.startswith("CASE_RESET "):
+            reset=fields(line)
+            if reset["result"]!="1" or reset["budgets"]!="unchanged" or int(reset["geometry_evictions"]) or int(reset["pose_evictions"]):
+                raise ValueError("Persistent reset changed budgets or failed")
+            if reset["mode"]=="1" and any(int(reset[k]) for k in ("retained_geometry","retained_natural","retained_ground","geometry_entries")):
+                raise ValueError("Scene content survived assets-loaded reset")
+            current["resets"].append(reset)
+        elif current is not None and line=="CASE_WARMUP_BEGIN":warmup_start=i+1
+        elif current is not None and line.startswith("CASE_WARMUP_END "):
+            if fields(line)["result"]!="0" or warmup_start is None:raise ValueError("Failed persistent warmup")
+            current["warmup_ran"]=True
+            current["warmup_endpoints"]=endpoint_accounting(lines[warmup_start:i],trace_lines)
+            warmup_start=None
+        elif current is not None and line=="CASE_PLAYBACK_BEGIN":playback=i+1
+        elif line.startswith("CASE_END "):
+            end=fields(line)
+            if current is None or playback is None or end["id"]!=current["identity"]["id"] or end["result"]!="0":
+                raise ValueError("Failed/missing persistent case")
+            body=lines[playback:i]
+            current["endpoints"]=endpoint_accounting(body,trace_lines)
+            if current["endpoints"]["status"]=="unmeasured" or not current["endpoints"]["playback_samples"] or any(r["status"]!="success_ownership_checked" for r in current["endpoints"]["requests"]):
+                raise ValueError("Missing persistent timing/ownership")
+            offsets=[fields(l) for l in body if l.startswith("SCROLL_SEQUENCE ")]
+            current["request_offsets"]=[int(r["offset_columns"]) for r in offsets] if offsets else [int(fields(l)["delta_columns"]) for l in body if l.startswith("SCROLL_ABLATION ")]
+            if offsets and (any(r["exact"]!="1" for r in offsets) or not any(l.startswith("SCROLL_SEQUENCE_END status=pass") for l in body)):
+                raise ValueError("Persistent reversal parity failed")
+            modes=[r["mode"] for r in current["resets"]]
+            policy=current["identity"]["reset"]
+            if modes!=({"process_cold":[],"assets_loaded":["1"],"prepared_resident":["1","2"]}.get(policy)) or current["warmup_ran"]!=(policy=="prepared_resident"):
+                raise ValueError("Persistent reset/warmup coverage mismatch")
+            cases.append(current);current=None
+    if current is not None or len(ends)!=1 or ends[0]["result"]!="0" or ends[0]["time_limit_exceeded"]!="0" or not cases or int(ends[0]["completed"])!=len(cases) or int(ends[0]["requested"])!=len(cases):
+        raise ValueError("Incomplete/timed-out persistent session")
+    checks=[fields(l) for l in lines if l.startswith("CASE_INPUT_CHECK ")]
+    if len(checks)!=len(cases)+1 or any(r.get("unchanged")!="1" for r in checks):
+        raise ValueError("Persistent session inputs changed or were not checked between cases")
+    return {"schema":1,"status":"measured_with_gaps","cases":cases,"session":ends[0],
+            "input_checks":checks,
+            "bootstrap":[fields(l) for l in lines if l.startswith("CASE_BOOTSTRAP_END ")],
+            "performance_claim":"setup amortization only; no gameplay performance pass"}
+
+
 def inspect(directory):
     receipt = json.loads((directory / "inputs.json").read_text())
     completion = json.loads((directory / "evidence.json").read_text())
     if ((directory / "completion.txt").read_text().strip() != "0" or
             completion.get("returncode") != 0 or completion.get("invocation") != receipt.get("invocation") or
-            completion.get("inputs_unchanged") is not True or completion.get("binaries_unchanged") is not True):
+            completion.get("inputs_unchanged") is not True or completion.get("binaries_unchanged") is not True or
+            completion.get("sources_unchanged",True) is not True or completion.get("provisional",False)):
         raise ValueError("Unverified invocation or modified inputs/binaries")
     if set(receipt["binaries"]) != {"C3XRenderer.dll", "biq_preview.exe"}:
         raise ValueError("Incomplete binary identities")
@@ -56,6 +201,24 @@ def inspect(directory):
             env.get("C3X_RENDERER_REGION_DIAGNOSTICS") == "1" or env.get("C3X_RENDERER_REFLECTION_CONTROL") == "1"):
         raise ValueError("Diagnostic ablation/logging is not performance evidence")
     lines = (directory / "benchmark.log").read_text().splitlines()
+    if receipt.get("case_manifest"):
+        report=session_accounting(lines,(directory/"renderer.log").read_text().splitlines() if (directory/"renderer.log").exists() else [])
+        manifest=receipt["case_manifest"]
+        if len(report["cases"])!=manifest["repeats"]:raise ValueError("Changed case count")
+        for i,case in enumerate(report["cases"]):
+            if case["request_offsets"]!=manifest["request"]["offsets"] or case["endpoints"]["playback_samples"]!=len(case["request_offsets"]):
+                raise ValueError("Changed persistent request sequence")
+            if case["identity"]!={"id":manifest["case_id"]+f"-{i}","config":manifest["config_id"],
+                                  "request_digest":manifest["request_digest"],"reset":manifest["reset"],"warmup":manifest["warmup"]}:
+                raise ValueError("Changed persistent case identity")
+        names=[f"zoom.bmp.case{i}.bmp{suffix}" for i in range(manifest["repeats"]) for suffix in ("",".result.bmp")]
+        if any(completion.get("images",{}).get(n)!=digest(directory/n) for n in names):
+            raise ValueError("Changed persistent case image")
+        report["images"]={n:completion["images"][n] for n in names}
+        report["repeated_images_exact"]=all(report["images"][n]==report["images"]["zoom.bmp.case0.bmp"+(".result.bmp" if n.endswith(".result.bmp") else "")] for n in names)
+        report["wrapper_timing_ms"]=completion.get("wrapper_timing_ms")
+        report["timing"]={"ms":distribution([r["request_to_checked_result_ms"] for c in report["cases"] for r in c["endpoints"]["requests"][1:]])}
+        return receipt,report
     if not lines or not lines[-1].startswith("BIQ ") or "0 fallback" not in lines[-1]:
         raise ValueError("Missing completed zero-fallback witness")
     scenario = args["scenario"]
@@ -139,6 +302,12 @@ def inspect(directory):
                 starts[0].get("units")!=str(args.get("idle_units",0)) or starts[0].get("tile_width")!=str(args["tile_width"]) or
                 (starts[0].get("x"),starts[0].get("y"))!=("75","39")):
             raise ValueError("Missing stationary animation contract")
+    elif scenario == "scroll":
+        sequence=args.get("scroll_sequence",False)
+        prefix="SCROLL_SEQUENCE " if sequence else "SCROLL_ABLATION "
+        end="SCROLL_SEQUENCE_END status=pass unique_cameras=8 exact_revisits=1" if sequence else None
+        count=14 if sequence else 1
+        image_names=["zoom.bmp"]
     elif scenario == "zoom":
         _, all_rows = run("zoom", directory, "zoom")
         prefix, end = "ZOOM cycle=", None
@@ -157,6 +326,12 @@ def inspect(directory):
     else:
         raise ValueError("Select a resident pan, zoom, distant, or animation sweep")
     rows = [fields(line) for line in lines if line.startswith(prefix)]
+    if scenario == "scroll":
+        rows=[dict(r,step=r.get("step",str(i)),ms=r["total_ms"]) for i,r in enumerate(rows)]
+        if any(int(r["fallback"]) or int(r["recoveries"]) or r.get("exact","1")!="1" for r in rows):
+            raise ValueError("Failed scroll correctness/ownership witness")
+        if args.get("scroll_sequence") and [int(r["offset_columns"]) for r in rows]!=[1,2,4,8,4,2,1,0,-2,-4,-8,-4,-2,0]:
+            raise ValueError("Changed scroll request sequence")
     if scenario == "animation":
         rows = [dict(r, step=r["frame"], built=r["terrain_built"], upload_bytes=r["terrain_upload"], result="1") for r in rows]
     elif scenario == "session":
@@ -255,6 +430,8 @@ def inspect(directory):
         images[name] = hashlib.sha256(body).hexdigest()
     measured = rows[1:] if scenario == "zoom" else rows
     report = {"endpoint": "standalone animation completed render; no native presentation" if scenario in ("animation","idle") else "standalone capture plus completed render; no native presentation",
+              "endpoint_accounting": endpoint_accounting(lines,(directory/"renderer.log").read_text().splitlines() if (directory/"renderer.log").exists() else []),
+              "wrapper_timing_ms":completion.get("wrapper_timing_ms"),
               "scenario": scenario, "viewport": [args["width"], args["height"]],
               "waves": args["waves"], "clock": f"unpaced stationary 15 Hz authored pose samples; {args.get('idle_warmup',10)} warmup renders" if scenario == "idle" else "six changing animation clocks" if scenario == "animation" else "fixed logical-time busy-session replay" if scenario == "replay" else "fixed replay clock; changing animation is a separate witness",
               "binaries": receipt["binaries"], "images": images,
@@ -561,13 +738,40 @@ def compare(reference, candidate):
     return result
 
 
+def compare_session_reference(reference, candidate):
+    original,base=inspect(reference);receipt,report=inspect(candidate)
+    if not receipt.get("case_manifest") or original.get("case_manifest"):
+        raise ValueError("Use a persistent candidate and fresh one-shot reference")
+    if receipt["inputs"]!=original["inputs"] or receipt["binaries"]!=original["binaries"]:
+        raise ValueError("Session reference inputs/binaries differ")
+    ignored={"out","binaries","case_repeats","case_reset","case_time_limit"}
+    if {k:v for k,v in receipt["args"].items() if k not in ignored}!={k:v for k,v in original["args"].items() if k not in ignored}:
+        raise ValueError("Session reference workload/config differs")
+    completion=json.loads((reference/"evidence.json").read_text())
+    exact=True
+    for suffix in ("",".result.bmp"):
+        name="zoom.bmp"+suffix
+        expected=digest(reference/name)
+        if completion.get("images",{}).get(name)!=expected:raise ValueError("Unverified fresh reference image")
+        exact=exact and all(report["images"][f"zoom.bmp.case{i}.bmp"+suffix]==expected for i in range(len(report["cases"])))
+    report["fresh_one_shot_images_exact"]=exact
+    candidate_completion=json.loads((candidate/"evidence.json").read_text())
+    report["setup_comparison"]={"one_shot_wrapper_ms":completion.get("wrapper_total_ms"),
+        "session_wrapper_ms":candidate_completion.get("wrapper_total_ms"),"cases":len(report["cases"]),
+        "session_wrapper_per_case_ms":candidate_completion["wrapper_total_ms"]/len(report["cases"]),
+        "scope":"iteration wait amortization; not renderer or native presentation speedup"}
+    report["all_images_exact"]=exact
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("candidate", type=Path)
     parser.add_argument("--reference", type=Path)
+    parser.add_argument("--case-reference", type=Path, help="Independent fresh process for persistent case output reproduction")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    result = compare(args.reference, args.candidate) if args.reference else inspect(args.candidate)[1]
+    result = compare_session_reference(args.case_reference,args.candidate) if args.case_reference else compare(args.reference, args.candidate) if args.reference else inspect(args.candidate)[1]
     args.out.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({"report": str(args.out), "all_images_exact": result.get("all_images_exact"),
                       "timing": result.get("candidate", result)["timing"]["ms"]}))

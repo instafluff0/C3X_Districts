@@ -67,11 +67,27 @@ def inputs():
             for p in sorted(paths)}
 
 
+def metadata_snapshot(paths):
+    result={}
+    for relative in paths:
+        try:
+            info=(ROOT/relative).stat()
+            result[relative]={"bytes":info.st_size,"mtime_ns":info.st_mtime_ns}
+        except FileNotFoundError:result[relative]=None
+    return result
+
+
 def main():
+    wrapper_started=time.perf_counter()
+    timing={}
+    phase_started=wrapper_started
+    def phase(name):
+        nonlocal phase_started
+        now=time.perf_counter();timing[name]=(now-phase_started)*1000;phase_started=now
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binaries", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "ambient", "idle", "distant", "replay", "session"), default="navigation")
+    parser.add_argument("--scenario", choices=("navigation", "zoom", "animation", "ambient", "idle", "distant", "replay", "session", "scroll"), default="navigation")
     parser.add_argument("--preparation-mode", choices=("baseline", "oracle"), default=None,
                         help="Cold baseline or complete untimed retained preparation for replay/session")
     parser.add_argument("--replay-samples-per-phase", type=int, choices=range(1,101), default=25)
@@ -93,6 +109,14 @@ def main():
     parser.add_argument("--waves", choices=("0", "1"), default="1")
     parser.add_argument("--tier", choices=("normal", "384", "768"), required=True)
     parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--instrumentation", choices=("diagnostic", "timing"), default="diagnostic",
+                        help="Buffered detailed traces or low-overhead endpoints with unmeasured internal phases")
+    parser.add_argument("--case-repeats", type=int, choices=range(1,17), help="Bounded same-config persistent scroll cases")
+    parser.add_argument("--case-reset", choices=("process_cold","assets_loaded","prepared_resident"), default="assets_loaded")
+    parser.add_argument("--case-time-limit", type=int, choices=range(1,601), default=60)
+    parser.add_argument("--verification", choices=("acceptance","quick"), default="acceptance",
+                        help="Quick checks are provisional; acceptance hashes inputs before and after")
+    parser.add_argument("--scroll-sequence", action="store_true", help="Use the existing 14-offset reversal instead of one four-column move")
     parser.add_argument("--block-clip", choices=("0", "1"), default="0")
     parser.add_argument("--resident-steps", type=int, default=14)
     parser.add_argument("--tile-width", type=int, choices=(64,96,128,160,192), default=128)
@@ -137,6 +161,10 @@ def main():
         parser.error("--unit-actions realistic requires --scenario ambient or idle and --idle-units")
     if args.scenario in ("replay","session") and (not args.idle_units or not args.dense_scene or args.waves!="1" or args.reflection_ablation or args.camera_view or args.tile_width!=128 or args.unit_actions!="mixed"):
         parser.error("A busy replay/session starts at width 128 and requires units, mixed actions, --dense-scene, waves/reflections on and the synchronous native-compatible render API")
+    if args.case_repeats and (args.scenario!="scroll" or args.idle_units or args.camera_view):
+        parser.error("Persistent cases currently cover synchronous scroll with one fixed constructor configuration")
+    if args.case_repeats and args.case_reset=="process_cold" and args.case_repeats!=1:
+        parser.error("Process-cold cases require a fresh process per case")
     out = args.out.resolve()
     relative = out.relative_to(ROOT)
     samples = (args.idle_steps if args.scenario == "idle" else args.distant_steps if args.scenario == "distant" else
@@ -148,10 +176,16 @@ def main():
     build_record=args.binaries / "build-evidence.json"
     if build_record.is_file():
         shutil.copy2(build_record,out / "build-evidence.json")
+    phase("arguments_storage_binary_copy_ms")
     print("Hashing current runtime inputs before execution", flush=True)
     before = inputs()
+    before_metadata=metadata_snapshot(before)
+    phase("input_verification_before_ms")
     env = {key: "" for key in os.environ if key.startswith(("C3X_RENDERER_", "C3X_LAB_"))}
-    env.update({"C3X_RENDERER_VISUAL_PROFILE": "", "C3X_RENDERER_TRACE": "2",
+    env.update({"C3X_RENDERER_VISUAL_PROFILE": "", "C3X_RENDERER_TRACE": "2" if args.instrumentation=="diagnostic" else "0",
+           "C3X_RENDERER_TRACE_BUFFERED": "1" if args.instrumentation=="diagnostic" else "0",
+           "C3X_RENDERER_PREVIEW_TIMING": "1",
+           "C3X_RENDERER_PREVIEW_SCROLL_ABLATION": ("sequence" if args.scroll_sequence else "full") if args.scenario=="scroll" else "",
            "C3X_RENDERER_PROFILE": "1" if args.profile else "0",
            "C3X_RENDERER_BLOCK_CLIP": args.block_clip,
            "C3X_RENDERER_CASTER_BOUNDS_CONTROL": "1" if args.caster_control else "0",
@@ -211,19 +245,47 @@ def main():
         for name in ("THREE_ZOOM_MEMORY", "WORLD_BACKDROPS", "WORLD_WAVES",
                      "BACKDROP_DEPENDENCIES", "COMPOSITION_RECEIVER_INDEX", "UNIT_POSE_MEMORY"):
             env["C3X_RENDERER_" + name] = ""
-    receipt = {"invocation": uuid.uuid4().hex, "endpoint": "standalone capture plus completed render; no native presentation",
+    case_manifest=None
+    if args.case_repeats:
+        request={"schema":1,"offsets":[1,2,4,8,4,2,1,0,-2,-4,-8,-4,-2,0] if args.scroll_sequence else [4],
+                 "width":args.width,"height":args.height,"center":[75,39],"tile_width":args.tile_width,"hour":12,"clock":1000000}
+        request_digest=hashlib.sha256(json.dumps(request,sort_keys=True).encode()).hexdigest()
+        config_digest=hashlib.sha256(json.dumps({k:v for k,v in env.items() if k!="C3X_RENDERER_TRACE_FILE"},sort_keys=True).encode()).hexdigest()
+        warmup="sequence" if args.case_reset=="prepared_resident" else "initial"
+        case_manifest={"schema":1,"case_id":"scroll","config_id":config_digest,"request":request,
+                       "request_digest":request_digest,"reset":args.case_reset,"warmup":warmup,
+                       "repeats":args.case_repeats,"time_limit_ms":args.case_time_limit*1000,
+                       "environment_policy":"one immutable constructor configuration per process"}
+        (out/"cases.json").write_text(json.dumps(case_manifest,indent=2))
+        (out/"cases.txt").write_text(f"C3X_PREVIEW_CASES_V1 scroll {config_digest} {request_digest} {args.case_reset} {warmup} {args.case_repeats} {args.case_time_limit*1000}\n")
+        env["C3X_RENDERER_PREVIEW_SESSION"]=str(win_out/"cases.txt")
+        watched=set(before)
+        if build_record.is_file():watched.update(json.loads(build_record.read_text()).get("sources",{}))
+        native_paths=[str(win_root/name) for name in sorted(watched)]
+        native_paths += [str(win_out/name) for name in ("C3XRenderer.dll","biq_preview.exe","cases.txt")]
+        (out/"session-inputs.txt").write_text("\n".join(native_paths)+"\n")
+        env["C3X_RENDERER_SESSION_INPUTS"]=str(win_out/"session-inputs.txt")
+    source_paths={p for p in (ROOT/"Renderer/native").glob("*.cpp")}
+    if build_record.is_file():
+        build=json.loads(build_record.read_text())
+        for closure in build.get("unit_inputs",{}).values():
+            for name,expected in closure.items():
+                path=ROOT/name
+                if digest(path)!=expected:raise ValueError("Build inputs changed; end session and rebuild before running")
+                source_paths.add(path)
+    source_before={p.relative_to(ROOT).as_posix():digest(p) for p in sorted(source_paths)}
+    receipt = {"case_manifest":case_manifest,"verification":args.verification,
+               "input_metadata":before_metadata,"invocation": uuid.uuid4().hex, "endpoint": "standalone capture plus completed render; no native presentation",
                "storage_preflight": storage,
                "quality_mode": "diagnostic_reflections_disabled" if args.reflection_ablation else "current",
                "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
                "environment": env, "inputs": before,
                "host": {"os": platform.platform(), "architecture": platform.machine(), "logical_processors": os.cpu_count()},
-               "source_at_run": {p.relative_to(ROOT).as_posix(): digest(p)
-                                 for p in [*(ROOT / "Renderer/native").glob("*.cpp"),
-                                           ROOT / "Renderer/native/benchmark_oracle.h",
-                                           ROOT / "Renderer/native/busy_session_plan.h",
-                                           ROOT / "Renderer/native/retained_replay_preview.h"]},
+               "source_at_run":source_before,
                "binaries": {n: digest(out / n) for n in ("C3XRenderer.dll", "biq_preview.exe")},
                "started_unix": time.time()}
+    phase("source_binary_verification_and_configuration_ms")
+    receipt["instrumentation_mode"]=args.instrumentation
     (out / "inputs.json").write_text(json.dumps(receipt, indent=2))
     # Every path is quoted for cmd, and generated/configured values may not inject commands.
     values = [str(win_out / "biq_preview.exe"), str(win_out / "C3XRenderer.dll"), str(win_root),
@@ -236,21 +298,74 @@ def main():
     # Match the category dispatcher's short transport command. Passing the
     # entire environment through prlctl intermittently fails before execution.
     batch = "@echo off\n" + "\n".join(f'set "{k}={v}"' for k, v in env.items())
+    if args.case_repeats:
+        # Bound the owned process itself, including driver/DLL teardown and WER,
+        # rather than timing out a transport that can leave an orphaned render.
+        quote=lambda value:"'"+str(value).replace("'","''")+"'"
+        child_args=" ".join(f'"{v}"' for v in values[1:])+f" {args.width} {args.height} 75 39 {args.tile_width} 12"
+        script=f"""$ErrorActionPreference='Stop'
+$child=Start-Process -FilePath {quote(values[0])} -ArgumentList {quote(child_args)} -RedirectStandardOutput {quote(win_out/'benchmark.log')} -RedirectStandardError {quote(win_out/'error.log')} -PassThru
+$childHandle=$child.Handle
+[IO.File]::WriteAllText({quote(win_out/'process.txt')},'{receipt['invocation']} '+$child.Id)
+$exited=$child.WaitForExit({args.case_time_limit*1000+10000})
+if($exited) {{$child.WaitForExit();$childCode=$child.ExitCode;if($null -eq $childCode){{$childCode=125}}}}
+else {{
+ $null=& taskkill.exe /PID $child.Id /T /F 2>&1
+ $childCode=124
+}}
+[IO.File]::WriteAllText({quote(win_out/'child-completion.txt')},'{receipt['invocation']} '+$childCode)
+exit $childCode
+"""
+        (out/'watch.ps1').write_text(script)
+        command=f'powershell -NoProfile -ExecutionPolicy Bypass -File "{win_out / "watch.ps1"}"'
     batch += "\n" + command + "\nexit /b %errorlevel%\n"
     (out / "run.bat").write_bytes(batch.replace("\n", "\r\n").encode("utf-8"))
+    phase("dispatch_preparation_and_receipt_ms")
     result = native_command_result("Renderer/native", f'call "{win_out / "run.bat"}"')
+    if args.case_repeats:
+        child=(out/'child-completion.txt').read_text().split() if (out/'child-completion.txt').exists() else []
+        if len(child)==2 and child[0]==receipt['invocation']:
+            result['returncode']=int(child[1])
+        else:
+            result['returncode']=None
+            result['status']='unconfirmed_child; inspect published PID before retry'
+    phase("dispatch_process_playback_ms")
     (out / "completion.txt").write_text(str(result["returncode"]) + "\n")
     print("Hashing inputs after execution", flush=True)
-    after = inputs()
-    changed = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
+    after_metadata=metadata_snapshot(before)
+    after=inputs() if args.verification=="acceptance" else None
+    phase("input_verification_after_ms")
+    changed = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k)) if after is not None else [k for k in before_metadata if before_metadata[k]!=after_metadata[k]]
     completion = {"invocation": receipt["invocation"], "finished_unix": time.time(),
                   "returncode": result["returncode"], "changed_inputs": changed,
-                  "inputs_unchanged": not changed}
+                  "inputs_unchanged":not changed if after is not None else None,
+                  "metadata_unchanged":before_metadata==after_metadata,
+                  "verification":args.verification,"provisional":args.verification=="quick"}
+    completion["sources_unchanged"]=all((ROOT/name).is_file() and digest(ROOT/name)==value for name,value in source_before.items())
     completion["binaries_unchanged"] = all(digest(out / name)==value for name,value in receipt["binaries"].items())
     completion["images"] = {p.name: digest(p) for p in sorted(out.glob("*.bmp")) if p.is_file()}
+    phase("binary_image_verification_ms")
+    from Renderer.native.analyze_navigation_run import endpoint_accounting, session_accounting
+    try:
+        completion["endpoints"]=(session_accounting if args.case_repeats else endpoint_accounting)(
+            (out/"benchmark.log").read_text(errors="replace").splitlines(),
+            (out/"renderer.log").read_text(errors="replace").splitlines() if (out/"renderer.log").exists() else [])
+    except (OSError,ValueError) as error:
+        completion["endpoints"]={"status":"invalid", "reason":str(error)}
+    phase("endpoint_analysis_ms")
+    completion["wrapper_timing_ms"]=timing
+    completion["compile_link"]={"status":"not_run", "reason":"uses supplied isolated binaries",
+                                "build_timing_ms":json.loads(build_record.read_text()).get("timing_ms") if build_record.is_file() else None}
     (out / "evidence.json").write_text(json.dumps(completion, indent=2))
-    print(json.dumps(completion), flush=True)
-    raise SystemExit(0 if result["returncode"] == 0 and not changed and completion["binaries_unchanged"] else 1)
+    phase("evidence_output_ms")
+    completion["wrapper_total_ms"]=(time.perf_counter()-wrapper_started)*1000
+    completion["wrapper_endpoint"]="before final receipt rewrite and console output"
+    (out / "evidence.json").write_text(json.dumps(completion, indent=2))
+    print(json.dumps({"out":str(out),"returncode":completion["returncode"],
+        "verification":completion["verification"],"inputs_unchanged":completion["inputs_unchanged"],
+        "sources_unchanged":completion["sources_unchanged"],"binaries_unchanged":completion["binaries_unchanged"],
+        "endpoints":completion["endpoints"]["status"],"wrapper_total_ms":completion["wrapper_total_ms"]}),flush=True)
+    raise SystemExit(0 if result["returncode"] == 0 and not changed and completion["binaries_unchanged"] and completion["sources_unchanged"] and completion["endpoints"]["status"]!="invalid" else 1)
 
 
 if __name__ == "__main__":

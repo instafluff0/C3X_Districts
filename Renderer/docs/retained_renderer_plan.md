@@ -3,30 +3,88 @@
 Current status and preserved evidence for the retained renderer. Planned work
 is not evidence that implementation or performance targets pass.
 
-## Current status — bounded tooling before scene/rendering implementation
+## Current status — timing accounting complete; amortized setup next
 
-The user requested groundwork for faster, systematic development while preserving
-progress, and explicitly did not request restarting tests. No new benchmark,
-compile, installation, staging or gameplay measurement accompanies this update.
+Implementation resumed on 2026-09-12. The first bounded tooling deliverable is
+complete: the existing preview/evidence/analyzer now separates initial preparation
+from requests, measures capture before rendering, records disjoint caller/worker
+endpoints, associates delayed GPU queries by renderer sequence and flags missing
+coverage. Diagnostic traces are bounded and buffered until teardown; low-overhead
+mode omits detailed traces. Build receipts distinguish compiler setup, DLL and
+preview compilation from wrapper time. No rendering policy or cache budget changed.
 
 [The architecture](renderer_architecture.md) defines the destination;
 [the execution contract](autonomous_renderer_execution.md) governs continuation;
 [the benchmark workflow](benchmark_workflow.md) specifies measurement, tooling
 deliverables and validation. This status is the single active task record.
 
-**Next task:** implement timing/correctness accounting in the existing harness
-(workflow deliverable 1). It must separate setup/playback and correct capture
-endpoints, validated by timestamp ordering and one existing short workload when
-implementation is authorized. This documentation update does not run that workload.
-Do not rerun the baseline/oracle program to begin the transition.
+**Next task:** implement amortized session setup in the existing `biq_preview.cpp`
+and build/evidence owners (workflow deliverable 2). Repeated short cases must share
+verified assets/device while resetting equivalent renderer state and preparation;
+record reset/warmup coverage, quick versus acceptance verification, and incremental
+compilation. Stop this task when repeated cases show measured setup reduction and
+an independent fresh one-shot reproduces their output. Do not expand the workload.
 
-**Tooling phase: specified, not complete.** After the next task, finish amortized
-session setup and the automatic route/object diagnostic batch in the workflow's
-order. When all three reusable deliverables meet their specified validation,
-record tooling complete here and replace the next task with the selected bounded
-scene/rendering capability. Do not leave "improve the harness" as an indefinite
-task. Additional tooling requires a named missing measurement/correctness check
-that can change the implementation decision.
+**Tooling phase: deliverable 1 complete; deliverables 2–3 unfinished.** Complete the
+session prerequisite and automatic route/object diagnostic batch in order, then
+replace the next task with the evidence-selected retained scene implementation.
+Additional harness work requires a named missing measurement that changes that
+implementation decision.
+
+### Session tooling progress (deliverable 2 remains open)
+
+Per-translation-unit include hashing and compiler/SDK stamps now reuse intact
+objects. `session-incremental-seed-retry-20260912` compiled seven units in 37.345 s
+wrapper time; `session-incremental-warm-20260912` compiled none in 3.108 s. Changing
+only the preview compiled that unit alone. Recipe, tier, dependency and object
+changes reject reuse. A long VM command failure was corrected with a short batch
+transport after confirming that no compiler/linker remained running.
+
+A bounded same-configuration process loop retains assets/device, distinguishes
+process-cold, assets-loaded and explicitly warmed resident policies, and uses a
+new benchmark-only reset that preserves cache budgets. `session-two-case-20260912`
+passed two assets-loaded cases with identical initial/final pixels and full input
+verification. Its 30.655 s wrapper time did not establish worthwhile amortization.
+The four-case follow-up generated all images but failed during/after teardown and
+entered Windows Error Reporting; it was dumped and only that owned process/tree
+was terminated after exceeding its limit. That run is invalid performance evidence.
+The wrapper now retains invalid receipts and bounds the actual child process,
+including teardown; a checkpointed preview is being validated to locate the fault.
+Do not mark session tooling complete or use its failed timing as a rendering win.
+
+### Current evidence and limits
+
+Ignored evidence under `Renderer/native/build/`:
+
+- `endpoint-short-20260912`: 640×480, width 128, waves off, fixed-clock 14-offset
+  reversal. All 14 requests and exact revisits passed, with zero fallback/recovery.
+  Capture median 0.371 ms; request-to-checked-result median 164.303 ms, range
+  31.628–858.733 ms. Initial render 5.550 s; before/after input verification 7.010 s;
+  wrapper total 18.389 s. Revisit equality is repeatability, not full-redraw parity.
+- `endpoint-four-column-20260912/analysis.json`: completed final endpoint layout,
+  same small viewport and one four-column move. 759 captured occurrences, 728.304 ms
+  request-to-checked-result: capture 0.447, worker rendering 725.935, queue 0.053,
+  snapshot/drain 0.773, publication/preparation 0.905 ms. Within worker rendering,
+  geometry 607.059, submission 14.240, readback 57.834, animation composition 39.297,
+  unaccounted remainder 7.505 ms. The final delayed GPU sample is unmeasured; no
+  blocking query was added. Native capture/presentation and independent pixel
+  parity remain outside this tooling check. Full runtime input/binary verification
+  passed; both builds produced the same initial image hash.
+- `endpoint-accounting-complete-20260912/build-evidence.json`: isolated x86 `/O2`
+  build passed. Compiler setup 2.110 s, DLL compile/link 22.620 s, preview 4.860 s;
+  outer compile/dispatch 30.462 s. No staging, install, game launch or injected edit.
+- Endpoint ordering/missing-query/invalid-span analysis, bounded trace behavior,
+  dense fixture identity and delayed GPU telemetry tests pass (15 tests). Category
+  dispatcher `test infrastructure`: 123 tests passed, one existing skip. The
+  system Python 3.9 cannot run the telemetry test's newer tempfile option; the
+  bundled workspace Python ran it successfully without changing that test.
+
+**Dominant measured costs:** small-view first-exposure geometry and cold setup;
+input hashing and compilation also dominate iteration wait. These are scoped
+measurement findings, not dense-navigation speedup claims. The next capability
+eliminates repeated setup so the fixed dense diagnostic can resolve route/object
+work without another baseline campaign. Remaining process-spawn/driver setup and
+unretired GPU queries are explicitly unmeasured, not zero.
 
 The selected rendering migration remains retained route/object composition:
 translate the valid static front, compose exposed strips/dirty bounds and keep
@@ -43,7 +101,7 @@ do not start a competing sequence or the architecture's entire mechanism list.
 | Dense resident navigation | Retained overlap and bounded working sets already exist; preserve them. | Below-100 ms gate unmet; route/object composition and synchronous completion remain the selected causal target. |
 | Regional geometry / zoom | Some structural sharing exists. | General regional batching shared across 128/160/192 is unfinished. |
 | Native asynchronous presentation | Versioned publication and stale-ticket rejection exist in the DLL. | Native coordination, current-camera presentation and input-to-visible performance remain unverified. |
-| Iteration tooling | Existing preview, evidence runner, analyzer and delayed GPU telemetry are reusable. | Persistent sessions, revised timing endpoints and automatic diagnostic decisions are specified, not implemented. |
+| Iteration tooling | Timing endpoints, buffered diagnostics and wrapper/build accounting validated on short production-DLL workloads. | Persistent sessions and automatic diagnostic decisions remain unimplemented. |
 
 The preparation receipt is under `Renderer/native/build/`; older stationary
 measurements are preserved in the linked experiment archive. These are scoped inherited

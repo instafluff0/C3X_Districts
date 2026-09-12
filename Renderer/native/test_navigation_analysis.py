@@ -6,10 +6,69 @@ import struct
 import tempfile
 import unittest
 
-from Renderer.native.analyze_navigation_run import compare, digest, distribution, inspect
+from Renderer.native.analyze_navigation_run import compare, digest, distribution, inspect, endpoint_accounting, session_accounting
 
 
 class NavigationAnalysisTests(unittest.TestCase):
+    def test_endpoint_accounting_orders_and_excludes_preparation(self):
+        lines=["TIMING_SETUP schema=1 frequency=1000 process_enter=0 source_done=10 dll_done=20 definitions_done=30 initial_begin=40 initial_done=100 dropped=0",
+               "TIMING_REQUEST id=0 capture_begin=30 capture_end=35 caller_enter=40 caller_return=99 correct_done=100 geometry_ticks=20 draw_ticks=10 readback_ticks=5 result=1 tiles=12",
+               "TIMING_REQUEST id=1 capture_begin=110 capture_end=115 caller_enter=116 caller_return=140 correct_done=141 geometry_ticks=5 draw_ticks=6 readback_ticks=10 result=1 tiles=12"]
+        trace=["qpc=117 sequence=2 stage=render-begin",
+               "qpc=139 sequence=2 stage=submission-phases map_wait_ms=8 cpu_copy_ms=1",
+               "qpc=200 sequence=3 stage=gpu-timing sample_sequence=2 valid=1 gpu_draw_ms=12 gpu_copy_ms=1"]
+        report=endpoint_accounting(lines,trace)
+        self.assertEqual(1,report["playback_samples"])
+        r=report["requests"][1]
+        self.assertEqual(5,r["capture_ms"])
+        self.assertEqual(31,r["request_to_checked_result_ms"])
+        self.assertEqual(3,r["unexplained_caller_ms"])
+        self.assertEqual(12,r["nested_diagnostics"]["gpu_execution_ms"])
+        self.assertFalse(r["accounting_complete"])
+        self.assertEqual("initial_preparation",report["requests"][0]["role"])
+        with self.assertRaisesRegex(ValueError,"order"):
+            endpoint_accounting([l.replace("capture_end=115","capture_end=150") for l in lines])
+        with self.assertRaisesRegex(ValueError,"duplicate"):
+            endpoint_accounting(lines+[lines[-1]])
+        call="qpc=140 stage=call-endpoints entered=116 locked=117 submitted=118 worker_begin=119 worker_rendered=138 worker_published=139 returned=140 queued=1"
+        complete=endpoint_accounting(lines,trace+[call])["requests"][1]
+        self.assertEqual(0,complete["unexplained_caller_ms"])
+        self.assertEqual(1,complete["caller_cpu_spans_ms"]["lock_wait"])
+        self.assertEqual(1,complete["caller_cpu_spans_ms"]["worker_publication_and_preparation"])
+        self.assertTrue(complete["accounting_complete"])
+        with self.assertRaisesRegex(ValueError,"order"):
+            endpoint_accounting(lines,trace+[call.replace("worker_begin=119","worker_begin=141")])
+        missing=endpoint_accounting(lines)["requests"][1]
+        self.assertIsNone(missing["nested_diagnostics"]["gpu_execution_ms"])
+        self.assertEqual("unmeasured",endpoint_accounting([])["status"])
+
+    def test_persistent_cases_require_reset_and_input_checks(self):
+        body=["TIMING_SETUP schema=1 frequency=1000 process_enter=0 source_done=10 dll_done=20 definitions_done=30 initial_begin=40 initial_done=100 dropped=0",
+              "TIMING_REQUEST id=0 capture_begin=30 capture_end=35 caller_enter=40 caller_return=99 correct_done=100 geometry_ticks=20 draw_ticks=10 readback_ticks=5 result=1 tiles=12",
+              "TIMING_REQUEST id=1 capture_begin=110 capture_end=115 caller_enter=116 caller_return=140 correct_done=141 geometry_ticks=5 draw_ticks=6 readback_ticks=10 result=1 tiles=12",
+              "SCROLL_ABLATION delta_columns=4"]
+        reset="CASE_RESET mode=1 result=1 ms=2 budgets=unchanged geometry_evictions=0 pose_evictions=0 retained_geometry=0 retained_natural=0 retained_ground=0 geometry_entries=0"
+        check="CASE_INPUT_CHECK unchanged=1 paths=2 ms=1"
+        lines=[check,"CASE_BEGIN id=scroll-0 config=config request_digest=digest reset=assets_loaded warmup=initial",reset,
+               "CASE_PLAYBACK_BEGIN",*body,"CASE_END id=scroll-0 result=0",check,
+               "CASE_SESSION_END result=0 completed=1 requested=1 elapsed_ms=200 time_limit_exceeded=0"]
+        report=session_accounting(lines)
+        self.assertEqual([4],report["cases"][0]["request_offsets"])
+        self.assertEqual(1,report["cases"][0]["endpoints"]["playback_samples"])
+        for before,after in (("unchanged=1","unchanged=0"),("retained_geometry=0","retained_geometry=1"),
+                             ("time_limit_exceeded=0","time_limit_exceeded=1"),("mode=1","mode=2")):
+            with self.assertRaises(ValueError):session_accounting([l.replace(before,after) for l in lines])
+        with self.assertRaisesRegex(ValueError,"not checked"):
+            session_accounting([l for l in lines if l!=check])
+
+    def test_quick_or_changed_source_receipts_cannot_pass_acceptance(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=self.fixture(Path(temporary)/"run")
+            original=json.loads((root/"evidence.json").read_text())
+            for change in ({"provisional":True},{"sources_unchanged":False}):
+                (root/"evidence.json").write_text(json.dumps(dict(original,**change)))
+                with self.assertRaisesRegex(ValueError,"Unverified"):inspect(root)
+
     def test_busy_session_reports_skipped_phases_and_excludes_cold_verification(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=self.fixture(Path(temporary)/"run")

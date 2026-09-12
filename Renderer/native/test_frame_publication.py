@@ -162,7 +162,8 @@ Signature terrain_frame_signature(c3x_renderer_frame_v1 const& f,long long,unsig
 std::atomic<bool> hold_publication{false};
 std::atomic<unsigned> publication_entered{0};
 void publication_checkpoint(){++publication_entered;while(hold_publication.load())std::this_thread::yield();}
-struct Trace {int level=0;void write(char const*,char const*,bool=false){} double milliseconds(long long value){return double(value)/1000000;}};
+struct Trace {int level=0;bool buffered=false;void write(char const*,char const*,bool=false){} double milliseconds(long long value){return double(value)/1000000;}};
+using RendererTrace=Trace;
 struct Footprint {int coordinate=0;struct {int left=0,right=0;} bounds;};
 struct Bodies {
     struct Unit {std::vector<std::string> keys;int minimum_canvas=0;};

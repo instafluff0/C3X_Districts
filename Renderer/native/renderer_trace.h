@@ -11,6 +11,9 @@ struct RendererTrace {
     int level = 2;
     FILE * file = nullptr;
     std::size_t bytes = 0;
+    bool buffered = false;
+    std::string pending;
+    std::size_t dropped = 0;
     std::size_t file_limit = 8u * 1024u * 1024u;
     std::atomic<std::uint64_t> sequence{0};
     std::atomic<std::uint64_t> usage_sequence{0};
@@ -23,6 +26,8 @@ struct RendererTrace {
             level = std::clamp(std::atoi(value), 0, 2);
         if (GetEnvironmentVariableA("C3X_RENDERER_REGION_DIAGNOSTICS", value, sizeof(value)) && std::strcmp(value,"1")==0)
             file_limit = 32u * 1024u * 1024u;
+        buffered=GetEnvironmentVariableA("C3X_RENDERER_TRACE_BUFFERED",value,sizeof(value)) && std::strcmp(value,"1")==0;
+        if(buffered)pending.reserve(file_limit);
         QueryPerformanceFrequency(&frequency);
         char path[MAX_PATH] = {};
         DWORD length = GetEnvironmentVariableA("C3X_RENDERER_TRACE_FILE", path, sizeof(path));
@@ -39,7 +44,13 @@ struct RendererTrace {
         }
     }
 
-    ~RendererTrace() { if (file) std::fclose(file); }
+    ~RendererTrace() {
+        if(file) {
+            if(buffered){std::fwrite(pending.data(),1,pending.size(),file);
+                std::fprintf(file,"TRACE_BUFFER dropped=%zu\n",dropped);}
+            std::fclose(file);
+        }
+    }
 
     double milliseconds(c3x_renderer_i64 ticks) const {
         return frequency.QuadPart > 0 ? 1000.0 * ticks / frequency.QuadPart : 0.0;
@@ -60,6 +71,11 @@ struct RendererTrace {
             GetCurrentProcessId(),GetCurrentThreadId(), static_cast<unsigned long long>(sequence.load(std::memory_order_relaxed)), stage, detail);
         if (count <= 0) return;
         std::size_t size = std::min(static_cast<std::size_t>(count), sizeof(line) - 1u);
+        if(buffered) {
+            if(pending.size()+size<=file_limit)pending.append(line,size);
+            else ++dropped;
+            return;
+        }
         OutputDebugStringA(line);
         // Stop at 8 MiB (32 MiB for explicit region diagnostics); debugger output remains available. No
         // unbounded file growth, per-line flush, path disclosure, or rotation I/O.

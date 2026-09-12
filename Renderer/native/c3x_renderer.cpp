@@ -757,7 +757,7 @@ public:
     }
 
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
-    void trim_to_prepared(c3x_renderer_benchmark_oracle_trim_v1 & result) {
+    void trim_to_prepared(c3x_renderer_benchmark_oracle_trim_v1 & result, bool oracle_limits=true) {
         result = {};
         result.version = C3X_RENDERER_BENCHMARK_ORACLE_VERSION;
         result.struct_size = sizeof(result);
@@ -809,7 +809,7 @@ public:
         cached_visible_animation_count = cached_request_continuous_redraw = 0;
         cache_valid = false;
         std::fill(pixels.begin(),pixels.end(),0);
-        tile_geometry_runtime_budget=512u*1024u*1024u;
+        if(oracle_limits)tile_geometry_runtime_budget=512u*1024u*1024u;
         while(!tile_geometry_cache.empty() && tile_geometry_cache_bytes>tile_geometry_runtime_budget) {
             auto oldest=std::min_element(tile_geometry_cache.begin(),tile_geometry_cache.end(),[](auto const& a,auto const& b){
                 return a.second.last_used<b.second.last_used;});
@@ -818,7 +818,7 @@ public:
             release_geometry_vertex_buffers(oldest->second.buffers);tile_geometry_cache.erase(oldest);
             ++result.capacity_geometry_evictions;
         }
-        result.capacity_pose_evictions=unit_bodies.benchmark_limit_pose_cache();
+        if(oracle_limits)result.capacity_pose_evictions=unit_bodies.benchmark_limit_pose_cache();
         result.retained_geometry_bytes=tile_geometry_cache_bytes;
         result.retained_unit_pose_bytes=unit_bodies.cache_bytes;
         result.retained_geometry_entries=static_cast<std::uint32_t>(
@@ -1014,6 +1014,8 @@ public:
             tile_geometry_cache_budget,natural_mesh_cache_budget,viewport_cache_budget,resource_backdrop_cache_budget,scene_region_size);
         trace.write("cache-budgets",budget_detail,true);
 
+        LARGE_INTEGER device_begin={},device_end={};
+        if(trace.buffered)QueryPerformanceCounter(&device_begin);
         UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
         D3D_FEATURE_LEVEL levels[] = {
             D3D_FEATURE_LEVEL_11_0,
@@ -1036,6 +1038,9 @@ public:
             return false;
         }
 
+        if(trace.buffered){QueryPerformanceCounter(&device_end);char detail[128];
+            sprintf_s(detail,"begin=%lld end=%lld elapsed_ms=%.3f",device_begin.QuadPart,device_end.QuadPart,
+                trace.milliseconds(device_end.QuadPart-device_begin.QuadPart));trace.write("setup-device",detail,true);}
         if (pickup_profile && selected < D3D_FEATURE_LEVEL_11_0) {
             trace.write("profile-unavailable", "pickup-r1 requires D3D feature level 11", true);
             reset(); return false;
@@ -1055,10 +1060,15 @@ public:
             MultiByteToWideChar(CP_UTF8, 0, selected_shader.c_str(), -1,
                                 wide_path.data(), count);
             ID3DBlob * errors = nullptr;
+            LARGE_INTEGER shader_begin={},shader_end={};
+            if(trace.buffered)QueryPerformanceCounter(&shader_begin);
             HRESULT result = pickup_profile ? c3x_renderer::render_core::compile_cached(
                 wide_path.c_str(),entry,target,blob,&errors) : D3DCompileFromFile(
                 wide_path.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE,
                 entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, blob, &errors);
+            if(trace.buffered){QueryPerformanceCounter(&shader_end);char detail[192];
+                sprintf_s(detail,"entry=%s begin=%lld end=%lld elapsed_ms=%.3f",entry,shader_begin.QuadPart,shader_end.QuadPart,
+                    trace.milliseconds(shader_end.QuadPart-shader_begin.QuadPart));trace.write("setup-shader",detail,true);}
             if (errors != nullptr) {
                 trace.write("shader-compile",static_cast<char const *>(errors->GetBufferPointer()),true);
                 errors->Release();
@@ -8532,8 +8542,25 @@ public:
     }
 
     int render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output) {
+        // Diagnostic-only disjoint caller/worker endpoints. The destructor runs
+        // after both call locks release, and buffered traces flush at DLL teardown.
+        struct CallTiming {
+            RendererTrace& trace;
+            LARGE_INTEGER entered={},locked={},submitted={},worker_begin={},worker_rendered={},worker_published={};
+            bool queued=false;
+            CallTiming(RendererTrace& t):trace(t){if(trace.buffered)QueryPerformanceCounter(&entered);}
+            ~CallTiming(){if(trace.buffered){
+                LARGE_INTEGER returned={};QueryPerformanceCounter(&returned);
+                char detail[512];std::snprintf(detail,sizeof(detail),
+                    "entered=%lld locked=%lld submitted=%lld worker_begin=%lld worker_rendered=%lld worker_published=%lld returned=%lld queued=%u",
+                    entered.QuadPart,locked.QuadPart,submitted.QuadPart,worker_begin.QuadPart,
+                    worker_rendered.QuadPart,worker_published.QuadPart,returned.QuadPart,unsigned(queued));
+                trace.write("call-endpoints",detail,true);
+            }}
+        } timing(renderer_state.trace);
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
+        if(renderer_state.trace.buffered)QueryPerformanceCounter(&timing.locked);
         start_locked();
         if(ambient_async_enabled && completed_result==C3X_RENDERER_RESULT_OK &&
            completed_resources && publication.output.bgra_pixels) {
@@ -8593,7 +8620,10 @@ public:
         job_frame.world_topology = job_world_topology.empty() ? nullptr : job_world_topology.data();
         LARGE_INTEGER submitted = {}, returned = {};
         QueryPerformanceCounter(&submitted);
+        if(renderer_state.trace.buffered){timing.submitted=submitted;timing.queued=true;}
         int result = submit_locked(lock, Command::render);
+        if(renderer_state.trace.buffered){timing.worker_begin=job_timing_begin;
+            timing.worker_rendered=job_timing_rendered;timing.worker_published=job_timing_published;}
         QueryPerformanceCounter(&returned);
         if (renderer_state.trace.level) {
             char detail[480];
@@ -8858,11 +8888,12 @@ public:
     }
 
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
-    int benchmark_trim_to_prepared(c3x_renderer_benchmark_oracle_trim_v1 & result) {
+    int benchmark_trim_to_prepared(c3x_renderer_benchmark_oracle_trim_v1 & result,unsigned mode=0) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();
         drain_camera_locked(lock);
+        benchmark_reset_mode=mode;
         int code=submit_locked(lock,Command::benchmark_trim);
         result=benchmark_trim_result;
         return code;
@@ -8900,6 +8931,7 @@ private:
     };
 
     RendererState & renderer_state;
+    LARGE_INTEGER job_timing_begin={},job_timing_rendered={},job_timing_published={};
     MapBlitter map_blitter;
     PublishedMapFrame publication;
     PublishedMapFrame camera_ready;
@@ -8924,6 +8956,7 @@ private:
     std::thread worker;
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
     c3x_renderer_benchmark_oracle_trim_v1 benchmark_trim_result={};
+    unsigned benchmark_reset_mode=0;
 #endif
     bool running = false;
     bool stop_requested = false;
@@ -9271,6 +9304,7 @@ private:
             if (stop_requested && !has_job)
                 break;
             Command command = job_command;
+            if(renderer_state.trace.buffered)QueryPerformanceCounter(&job_timing_begin);
             std::uint64_t sequence = latest_job_sequence;
             renderer_state.cache_hits=static_cast<unsigned>(std::min<std::uint64_t>(0xffffffffu,
                 std::uint64_t(renderer_state.cache_hits)+fast_cache_hits));fast_cache_hits=0;
@@ -9309,7 +9343,24 @@ private:
             } else if(command==Command::benchmark_trim) {
                 auto publication_bytes=publication.bytes()+camera_ready.bytes();
                 publication.clear();camera_ready.clear();
-                renderer_state.trim_to_prepared(benchmark_trim_result);
+                renderer_state.trim_to_prepared(benchmark_trim_result,benchmark_reset_mode==0);
+                if(benchmark_reset_mode==1) {
+                    // Retire all scene-dependent content through its current
+                    // owners. Keep immutable assets, shader objects and device.
+                    renderer_state.clear_tile_geometry_cache();
+                    renderer_state.reset_resource_buffers();
+                    renderer_state.reset_waves();
+                    renderer_state.world_coast.clear();renderer_state.center_shore_cache.clear();
+                    renderer_state.geometry_world_revision=-1;renderer_state.natural.reset_world();
+                    renderer_state.source_shadow.clear_cached_pages();
+                    benchmark_trim_result.retained_geometry_bytes=0;
+                    benchmark_trim_result.retained_natural_bytes=0;
+                    benchmark_trim_result.retained_ground_bytes=0;
+                    benchmark_trim_result.retained_wave_bytes=0;
+                    benchmark_trim_result.retained_other_bytes=0;
+                    benchmark_trim_result.retained_geometry_entries=0;
+                    benchmark_trim_result.retained_wave_entries=0;
+                }
                 benchmark_trim_result.cleared_publication_bytes=publication_bytes;
                 completed_scene_signature=0;completed_resources=0;completed_resource_clock=-1;
                 completed_output={};completed_result=C3X_RENDERER_RESULT_SUPERSEDED;
@@ -9328,6 +9379,7 @@ private:
                 output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
                 result = C3X_RENDERER_RESULT_ERROR;
             }
+            if(renderer_state.trace.buffered)QueryPerformanceCounter(&job_timing_rendered);
             lock.lock();
             if (command == Command::render && result == C3X_RENDERER_RESULT_OK) {
                 try { prepare_neighborhood(); }
@@ -9379,6 +9431,7 @@ private:
             job_command = Command::none;
             has_job = false;
             foreground_pending.store(false, std::memory_order_relaxed);
+            if(renderer_state.trace.buffered)QueryPerformanceCounter(&job_timing_published);
             completed.notify_all();
         }
     }
@@ -9545,6 +9598,14 @@ extern "C" __declspec(dllexport) void c3x_renderer_reset(void) {
 }
 
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
+extern "C" __declspec(dllexport) int c3x_renderer_benchmark_session_reset_v1(
+    std::uint32_t mode,c3x_renderer_benchmark_oracle_trim_v1* result) {
+    if(!renderer_worker || !result || (mode!=1 && mode!=2) ||
+       result->version!=C3X_RENDERER_BENCHMARK_ORACLE_VERSION || result->struct_size!=sizeof(*result))
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return renderer_worker->benchmark_trim_to_prepared(*result,mode);
+}
+
 extern "C" __declspec(dllexport) int c3x_renderer_benchmark_trim_to_prepared_v1(
     c3x_renderer_benchmark_oracle_trim_v1 * result) {
     if(!result || result->version!=C3X_RENDERER_BENCHMARK_ORACLE_VERSION ||

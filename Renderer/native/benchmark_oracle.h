@@ -36,4 +36,9 @@ struct c3x_renderer_benchmark_oracle_trim_v1 {
 using c3x_renderer_benchmark_trim_to_prepared_v1_fn = int (*) (
     c3x_renderer_benchmark_oracle_trim_v1 *);
 
+// Separate from the legacy budget-changing oracle: 1 clears scene/content with
+// assets/device retained; 2 retains prepared content but clears completed images.
+using c3x_renderer_benchmark_session_reset_v1_fn = int (*) (
+    std::uint32_t, c3x_renderer_benchmark_oracle_trim_v1 *);
+
 #endif

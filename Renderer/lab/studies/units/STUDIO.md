@@ -117,3 +117,42 @@ snapshot as the historical A/B fixture. Ordinary `detail` and `gameplay` Lab
 cases render the current game implementation. The game adapts the recovered
 material to its shared environment and authoritative map basis, so the fixed
 studio fixture is not presented as a production-lighting baseline.
+
+## Installed game close-up comparison
+
+`python3 -m Renderer.lab.studies.units.game_closeup` renders the staged
+`Renderer/bin/C3XRenderer.dll` directly with a private magnified Warrior pack.
+It does not rebuild or replace the DLL or production assets. The private pack
+uniformly scales vertex positions and palette translations by four, the authored
+fit by 1.25, and uses the native 2x projection with a 512px base canvas. This
+produces 10x geometric magnification, beyond the playable camera range, while
+retaining texture bytes, normals, tangents, skinning, materials, 4x scratch
+sampling, noon lighting and display transfer. Reversing the power-of-two
+geometry scaling must reproduce the original payload bytes exactly.
+
+Eight native headings pass the body-boundary guard. The comparison uses the
+front view at heading 5 and the retained original studio image, reduced in
+linear light to the same approximate colored-subject height. Game pixels are
+neither enlarged nor sharpened. Their differing projection, viewpoint and
+lighting remain visible; this is not a controlled material-only comparison or
+a screenshot from a playable 10x zoom. Uniform world-size magnification also
+retains the game's existing world-space shadow bias, rather than asserting
+pixel equivalence to a hypothetical new camera implementation.
+
+Outputs and hash receipts are under `lab/out/units/game-closeup/`.
+The comparison resolves cloth, leather and weapon detail in the game path,
+with visibly darker shading and less prominent highlights than the studio.
+It supports investigating lighting/display response next; it does not prove
+that any one shading parameter alone explains the difference. Production input
+hashes are checked before and after rendering.
+
+Lighting follow-up: `unit_body_renderer.h` takes the shared key direction but
+normalizes color, intensity and ambient changes against noon, then applies
+unit-side base coefficients. A global multiplicative sun adjustment can
+therefore cancel in the unit's noon ratio. The native `LinearOutput` also
+compresses linear RGB by `1 + max(R,G,B)` before display encoding; the retained
+studio uses direct display encoding. The comparison does not isolate these
+effects, but it establishes why simply increasing global ambient brightness
+is not a reliable match. Calibrate shared key/fill/exposure and display response
+with units, terrain and cities together while preserving the shared shadow
+direction and day/night cycle.

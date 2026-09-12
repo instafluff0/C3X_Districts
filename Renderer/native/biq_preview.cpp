@@ -203,7 +203,21 @@ LONG WINAPI preview_unhandled_exception(EXCEPTION_POINTERS* fault) {
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-int main(int argc, char ** argv) {
+int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool configure=true, bool bootstrap=false) {
+    LARGE_INTEGER timing_frequency={},process_enter={},source_done={},dll_done={},definitions_done={};
+    QueryPerformanceFrequency(&timing_frequency);QueryPerformanceCounter(&process_enter);
+    char timing_option[8]={};
+    bool timing_enabled=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_TIMING",timing_option,sizeof(timing_option))!=0;
+    struct TimingRequest {
+        long long capture_begin,capture_end,caller_enter,caller_return,correct_done;
+        long long geometry,draw,readback;
+        int result;unsigned tiles;
+    };
+    std::vector<TimingRequest> timing_requests;
+    if(timing_enabled)timing_requests.reserve(4096);
+    unsigned timing_dropped=0;
+    LARGE_INTEGER capture_begin={},capture_end={};
+    bool fresh_capture=false;
     SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX);
     SetUnhandledExceptionFilter(preview_unhandled_exception);
     if (argc != 11 && argc != 12) {
@@ -234,7 +248,9 @@ int main(int argc, char ** argv) {
     std::vector<unsigned> world(std::size_t(map_width)*map_height/2,0);
     if(pickup)for(auto const& t:source_tiles)world[(std::size_t(t.y)*map_width+t.x)/2]=
         unsigned(t.base)|(unsigned(t.real)<<8)|(t.river<<16)|(active && t.real==10 ? 1u<<24 : 0);
-    HMODULE module = LoadLibraryA(argv[1]);
+    QueryPerformanceCounter(&source_done);
+    HMODULE module = shared_module ? shared_module : LoadLibraryA(argv[1]);
+    QueryPerformanceCounter(&dll_done);
     if (module == nullptr)
         return 1;
     auto set_definitions = reinterpret_cast<c3x_renderer_set_definition_paths_fn>(
@@ -261,15 +277,17 @@ int main(int argc, char ** argv) {
     if((enable_unit_preview || idle_unit_count) &&
        (!set_units || set_units(1)!=C3X_RENDERER_RESULT_OK))return 1;
     if (set_definitions == nullptr || render == nullptr || reset == nullptr ||
-        set_definitions(argv[2], argv[3], nullptr, custom_path) != C3X_RENDERER_RESULT_OK)
+        (configure && set_definitions(argv[2], argv[3], nullptr, custom_path) != C3X_RENDERER_RESULT_OK))
         return 1;
 
+    QueryPerformanceCounter(&definitions_done);
     char object_option[8]={};bool objects=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_OBJECTS",object_option,sizeof(object_option))!=0;
     char animation_option[8]={};bool animate=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ANIMATION",animation_option,sizeof(animation_option))!=0;
     char dense_option[8]={};bool dense_scene=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DENSE_SCENE",dense_option,sizeof(dense_option))!=0;
     std::vector<std::array<int,2>> resource_sites;
     std::vector<std::array<int,2>> city_object_sites;
     auto capture_view = [&]() {
+    if(timing_enabled)QueryPerformanceCounter(&capture_begin);
     int center_raw_x = center_x * tile_width / 2;
     int center_raw_y = center_y * tile_height / 2;
     int shift_x = target_width / 2 - tile_width / 2 - center_raw_x;
@@ -400,6 +418,7 @@ int main(int argc, char ** argv) {
 #ifdef C3X_LAB_PREVIEW
     lab_place_objects(tiles,center_x,center_y,map_width);
 #endif
+    if(timing_enabled){QueryPerformanceCounter(&capture_end);fresh_capture=true;}
     return tiles;
     };
     auto tiles=capture_view();
@@ -447,6 +466,8 @@ int main(int argc, char ** argv) {
     }
     unsigned camera_case=0;
     auto render_checked = [&](c3x_renderer_frame_v1 const* input, c3x_renderer_output_v1* result) {
+        LARGE_INTEGER caller_enter={},caller_return={},correct_done={};
+        if(timing_enabled)QueryPerformanceCounter(&caller_enter);
         int code=C3X_RENDERER_RESULT_ERROR;
         if(background_camera) {
             LARGE_INTEGER begin={},accepted={},finished={},frequency={};QueryPerformanceFrequency(&frequency);
@@ -521,8 +542,19 @@ int main(int argc, char ** argv) {
                 static_cast<long long>(ticket),input->tile_count,static_cast<long long>(identity.visibility_epoch),static_cast<long long>(identity.scene_epoch));
             std::fflush(stdout);
         }else code=render(input,result);
-        return code==C3X_RENDERER_RESULT_OK && !preview_ownership(*input,*result)
-            ? int(C3X_RENDERER_RESULT_ERROR) : code;
+        if(timing_enabled)QueryPerformanceCounter(&caller_return);
+        if(code==C3X_RENDERER_RESULT_OK && !preview_ownership(*input,*result))code=C3X_RENDERER_RESULT_ERROR;
+        if(timing_enabled) {
+            QueryPerformanceCounter(&correct_done);
+            if(timing_requests.size()<4096)timing_requests.push_back({
+                fresh_capture?capture_begin.QuadPart:caller_enter.QuadPart,
+                fresh_capture?capture_end.QuadPart:caller_enter.QuadPart,
+                caller_enter.QuadPart,caller_return.QuadPart,correct_done.QuadPart,
+                result->geometry_ticks,result->draw_ticks,result->readback_ticks,code,input->tile_count});
+            else ++timing_dropped;
+            fresh_capture=false;
+        }
+        return code;
     };
     LARGE_INTEGER initial_begin={},initial_done={},initial_frequency={};QueryPerformanceFrequency(&initial_frequency);
     QueryPerformanceCounter(&initial_begin);
@@ -536,6 +568,10 @@ int main(int argc, char ** argv) {
     bool ok = result == C3X_RENDERER_RESULT_OK &&
               (pickup ? output.rendered_tile_count >= expected_rendered : output.rendered_tile_count == expected_rendered) &&
               output.fallback_tile_count == 0 && write_bmp(argv[5], output);
+    if(bootstrap){
+        std::printf("CASE_ASSETS_READY result=%d initial_render_ms=%.3f\n",ok?0:1,initial_render_ms);
+        return ok?0:1;
+    }
 #ifdef C3X_LAB_PREVIEW
     if(ok)ok=lab_verify_objects(frame,output);
     char wave_study[32]={};GetEnvironmentVariableA("C3X_LAB_WAVE_STUDY",wave_study,sizeof(wave_study));
@@ -1116,8 +1152,8 @@ int main(int argc, char ** argv) {
             for(std::size_t step=0;step<offsets.size() && sequence_ok;++step) {
                 int offset=offsets[step];
                 center_x=saved_center_x+offset;center_y=saved_center_y;
-                tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
                 LARGE_INTEGER begin={},captured={},end={};QueryPerformanceCounter(&begin);
+                tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
                 QueryPerformanceCounter(&captured);
                 int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
                 auto current=pixels();
@@ -1157,8 +1193,8 @@ int main(int argc, char ** argv) {
         } else {
         // Four map-column coordinates are two ordinary isometric tile widths;
         // this is a representative wheel/key scroll, not a one-pixel probe.
-        center_x+=4;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
         LARGE_INTEGER begin={},captured={},end={};QueryPerformanceCounter(&begin);
+        center_x+=4;tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
         QueryPerformanceCounter(&captured);
         int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
         ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 && output.device_recoveries==0;
@@ -1468,6 +1504,17 @@ int main(int argc, char ** argv) {
         ok=(ownership&expected)==expected;
         std::printf("PICKUP synthetic objects: %s ownership=%u\n",ok?"pass":"FAIL",ownership);
     }
+    if(timing_enabled && ok)ok=write_bmp((std::string(argv[5])+".result.bmp").c_str(),output);
+    if(timing_enabled) {
+        std::printf("TIMING_SETUP schema=1 frequency=%lld process_enter=%lld source_done=%lld dll_done=%lld definitions_done=%lld initial_begin=%lld initial_done=%lld dropped=%u\n",
+            timing_frequency.QuadPart,process_enter.QuadPart,source_done.QuadPart,dll_done.QuadPart,
+            definitions_done.QuadPart,initial_begin.QuadPart,initial_done.QuadPart,timing_dropped);
+        for(std::size_t i=0;i<timing_requests.size();++i) {
+            auto const& r=timing_requests[i];
+            std::printf("TIMING_REQUEST id=%zu capture_begin=%lld capture_end=%lld caller_enter=%lld caller_return=%lld correct_done=%lld geometry_ticks=%lld draw_ticks=%lld readback_ticks=%lld result=%d tiles=%u\n",
+                i,r.capture_begin,r.capture_end,r.caller_enter,r.caller_return,r.correct_done,r.geometry,r.draw,r.readback,r.result,r.tiles);
+        }
+    }
     std::printf("BIQ %dx%d viewport: %u visible tiles, %u fallback, output=%s\n",
                 map_width, map_height, output.rendered_tile_count, output.fallback_tile_count, argv[5]);
     char edit_option[8]={};
@@ -1606,9 +1653,118 @@ int main(int argc, char ** argv) {
 #ifdef C3X_LAB_PREVIEW
     if(ok)ok=lab_compose_units(module,argv[5],frame.hour,tile_width,output);
 #endif
-    reset();
-    FreeLibrary(module);
+    if(!shared_module){reset();FreeLibrary(module);}
     return ok ? 0 : 1;
+}
+
+int main(int argc,char** argv) {
+    char session_path[4*MAX_PATH]={};
+    if(!GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SESSION",session_path,sizeof(session_path)))
+        return run_preview_case(argc,argv);
+    if(argc!=12)return 2;
+    SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX);
+    SetUnhandledExceptionFilter(preview_unhandled_exception);
+    FILE* file=nullptr;
+    if(fopen_s(&file,session_path,"rb") || !file)return 2;
+    char line[512]={},schema[40]={},case_id[65]={},config[65]={},digest[65]={},policy[24]={},warmup[24]={},extra[2]={};
+    unsigned repeats=0,limit_ms=0;
+    bool read=std::fgets(line,sizeof(line),file)!=nullptr;
+    bool trailing=std::fgetc(file)!=EOF;std::fclose(file);
+    if(!read || trailing || sscanf_s(line,"%39s %64s %64s %64s %23s %23s %u %u %1s",
+        schema,unsigned(sizeof(schema)),case_id,unsigned(sizeof(case_id)),config,unsigned(sizeof(config)),
+        digest,unsigned(sizeof(digest)),policy,unsigned(sizeof(policy)),warmup,unsigned(sizeof(warmup)),
+        &repeats,&limit_ms,extra,unsigned(sizeof(extra)))!=8 || std::strcmp(schema,"C3X_PREVIEW_CASES_V1") ||
+        repeats<1 || repeats>16 || limit_ms<1000 || limit_ms>600000)return 2;
+    bool resident=std::strcmp(policy,"prepared_resident")==0;
+    bool cold=std::strcmp(policy,"process_cold")==0;
+    if((!resident && !cold && std::strcmp(policy,"assets_loaded")) ||
+       std::strcmp(warmup,resident?"sequence":"initial") || (cold && repeats!=1))return 2;
+    char scroll[64]={};
+    if(!GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SCROLL_ABLATION",scroll,sizeof(scroll)))return 2;
+    // One constructor configuration per process. The wrapper freezes all input
+    // and environment values; changed configurations use fresh processes.
+    char inputs_path[4*MAX_PATH]={};
+    if(!GetEnvironmentVariableA("C3X_RENDERER_SESSION_INPUTS",inputs_path,sizeof(inputs_path)))return 2;
+    if(fopen_s(&file,inputs_path,"rb") || !file)return 2;
+    std::vector<std::pair<std::string,WIN32_FILE_ATTRIBUTE_DATA>> input_stamps;
+    char input_path[4*MAX_PATH]={};
+    while(std::fgets(input_path,sizeof(input_path),file)) {
+        auto length=std::strlen(input_path);
+        if(!length || input_path[length-1]!='\n' || input_stamps.size()>=16384){std::fclose(file);return 2;}
+        input_path[--length]=0;if(length && input_path[length-1]=='\r')input_path[--length]=0;
+        WIN32_FILE_ATTRIBUTE_DATA stamp={};
+        if(!length || !GetFileAttributesExA(input_path,GetFileExInfoStandard,&stamp)){std::fclose(file);return 2;}
+        input_stamps.emplace_back(input_path,stamp);
+    }
+    std::fclose(file);if(input_stamps.empty())return 2;
+    auto verify_inputs=[&](){
+        auto begin=GetTickCount64();bool unchanged=true;
+        for(auto const& input:input_stamps) {
+            WIN32_FILE_ATTRIBUTE_DATA current={};auto const& initial=input.second;
+            if(!GetFileAttributesExA(input.first.c_str(),GetFileExInfoStandard,&current) ||
+                current.nFileSizeHigh!=initial.nFileSizeHigh || current.nFileSizeLow!=initial.nFileSizeLow ||
+                CompareFileTime(&current.ftLastWriteTime,&initial.ftLastWriteTime)!=0){unchanged=false;break;}
+        }
+        std::printf("CASE_INPUT_CHECK unchanged=%u paths=%zu ms=%llu verification=metadata_only\n",unsigned(unchanged),input_stamps.size(),GetTickCount64()-begin);
+        return unchanged;
+    };
+    HMODULE module=LoadLibraryA(argv[1]);if(!module)return 1;
+    auto reset=reinterpret_cast<c3x_renderer_reset_fn>(GetProcAddress(module,"c3x_renderer_reset"));
+    auto reset_case=reinterpret_cast<c3x_renderer_benchmark_session_reset_v1_fn>(
+        GetProcAddress(module,"c3x_renderer_benchmark_session_reset_v1"));
+    if(!reset || !reset_case){FreeLibrary(module);return 2;}
+    auto checkpoint=[&](char const* phase){
+        FILE* state=nullptr;
+        if(!fopen_s(&state,(std::string(argv[5])+".state.txt").c_str(),"wb") && state){
+            std::fprintf(state,"pid=%lu phase=%s\n",GetCurrentProcessId(),phase);std::fclose(state);
+        }
+    };
+    auto started=GetTickCount64();int code=0;bool configured=false;
+    std::vector<char*> args(argv,argv+argc);
+    auto run=[&](std::string path,bool bootstrap=false){args[5]=path.data();
+        int result=run_preview_case(argc,args.data(),module,!configured,bootstrap);configured=true;return result;};
+    auto clear=[&](unsigned mode){
+        c3x_renderer_benchmark_oracle_trim_v1 receipt={C3X_RENDERER_BENCHMARK_ORACLE_VERSION,sizeof(receipt)};
+        LARGE_INTEGER begin={},end={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&begin);
+        int result=reset_case(mode,&receipt);QueryPerformanceCounter(&end);
+        std::printf("CASE_RESET mode=%u result=%d ms=%.3f cleared_viewport=%llu cleared_regions=%llu cleared_blocks=%llu cleared_backdrops=%llu cleared_publication=%llu retained_geometry=%llu retained_natural=%llu retained_ground=%llu retained_shadow=%llu geometry_entries=%u geometry_evictions=%u pose_evictions=%u assets_device=retained budgets=unchanged\n",
+            mode,result,double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+            receipt.cleared_viewport_bytes,receipt.cleared_region_bytes,receipt.cleared_pixel_block_bytes,
+            receipt.cleared_backdrop_bytes,receipt.cleared_publication_bytes,receipt.retained_geometry_bytes,
+            receipt.retained_natural_bytes,receipt.retained_ground_bytes,receipt.retained_shadow_bytes,
+            receipt.retained_geometry_entries,receipt.capacity_geometry_evictions,receipt.capacity_pose_evictions);
+        return result==C3X_RENDERER_RESULT_OK;
+    };
+    // Load the immutable asset set once before every assets-loaded arm. This
+    // untimed bootstrap is explicitly reported, and its scene content is reset.
+    checkpoint("bootstrap");
+    if(!cold){std::puts("CASE_BOOTSTRAP_BEGIN");code=run(std::string(argv[5])+".bootstrap.bmp",true);std::printf("CASE_BOOTSTRAP_END result=%d elapsed_ms=%llu\n",code,GetTickCount64()-started);}
+    unsigned completed=0;
+    if(!code && !verify_inputs())code=4;
+    for(unsigned i=0;!code && i<repeats;++i) {
+        if(GetTickCount64()-started>=limit_ms){code=3;break;}
+        std::printf("CASE_BEGIN id=%s-%u config=%s request_digest=%s reset=%s warmup=%s\n",case_id,i,config,digest,policy,warmup);
+        if(!cold && !clear(1)){code=1;break;}
+        if(resident){
+            std::puts("CASE_WARMUP_BEGIN");code=run(std::string(argv[5])+".warmup"+std::to_string(i)+".bmp");
+            std::printf("CASE_WARMUP_END result=%d\n",code);
+            if(code || !clear(2)){code=1;break;}
+        }
+        checkpoint("playback");
+        std::puts("CASE_PLAYBACK_BEGIN");
+        code=run(std::string(argv[5])+".case"+std::to_string(i)+".bmp");
+        std::printf("CASE_END id=%s-%u result=%d\n",case_id,i,code);std::fflush(stdout);
+        if(!code && !verify_inputs())code=4;
+        if(!code)++completed;
+    }
+    // Workers and borrowed publications retire before unloading the one DLL.
+    checkpoint("worker_reset");reset();
+    checkpoint("dll_unload");FreeLibrary(module);
+    checkpoint("complete");
+    bool timed_out=GetTickCount64()-started>limit_ms;
+    std::printf("CASE_SESSION_END result=%d completed=%u requested=%u elapsed_ms=%llu time_limit_exceeded=%u\n",
+        code,completed,repeats,GetTickCount64()-started,unsigned(timed_out));
+    return code || timed_out ? 1 : 0;
 }
 
 bool preview_units(HMODULE module,char const* path,int hour) {

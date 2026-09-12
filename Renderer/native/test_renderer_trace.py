@@ -22,8 +22,9 @@ struct LARGE_INTEGER {long long QuadPart=0;};
 struct FILETIME {std::uint32_t dwLowDateTime=0,dwHighDateTime=0;};
 constexpr unsigned MAX_PATH=260;
 std::vector<std::string> lines;
-char const* trace_level="2";long long clock_ticks=0;
+char const* trace_level="2";long long clock_ticks=0;bool buffered=false;
 DWORD GetEnvironmentVariableA(char const* name,char* out,unsigned size){
+ if(!std::strcmp(name,"C3X_RENDERER_TRACE_BUFFERED") && buffered){std::strcpy(out,"1");return 1;}
  if(std::strcmp(name,"C3X_RENDERER_TRACE"))return 0;
  assert(std::strlen(trace_level)<size);std::strcpy(out,trace_level);return std::strlen(out);
 }
@@ -57,6 +58,13 @@ int main(){
  auto count=lines.size();trace_level="0";RendererTrace disabled;
  assert(disabled.usage_view(frame)==0);disabled.usage_result(1,1,0,output);disabled.write("test","",true);
  assert(lines.size()==count);
+ trace_level="2";buffered=true;
+ RendererTrace buffered_trace;
+ assert(lines.size()==count && !buffered_trace.pending.empty());
+ buffered_trace.file_limit=buffered_trace.pending.size()+1024;
+ for(int i=0;i<100;++i)buffered_trace.write("buffered","bounded",true);
+ assert(buffered_trace.pending.size()<=buffered_trace.file_limit && buffered_trace.dropped>0);
+ assert(lines.size()==count && buffered_trace.bytes==0); // No timed file/debugger writes.
 }
 ''')
 

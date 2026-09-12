@@ -1,0 +1,55 @@
+{
+  "id": "volcanoes",
+  "title": "Volcanoes",
+  "depends_on": [
+    "day-night",
+    "shadows",
+    "transitions",
+    "mountains"
+  ],
+  "implementation": [
+    "Renderer/native/render_core/relief_query.h",
+    "Renderer/native/render_core/terrain_query.h",
+    "Renderer/lab/shared/shaders/terrain/scene_material_v1.hlsl",
+    "Renderer/lab/shared/shaders/lighting/generated/scene_linear_v1.hlsl",
+    "Renderer/native/render_core/generate_shaders.py",
+    "Renderer/tools/asset_compiler/water_pack_builder.py",
+    "Renderer/tools/asset_compiler/terrain_relief_builder.py",
+    "Renderer/native/source_fidelity/geometry.h",
+    "Renderer/lab/shared/natural/relief_mesh_body.h",
+    "Renderer/lab/shared/shaders/relief/beauty_terrain.hlsl",
+    "Renderer/lab/shared/shaders/relief/beauty_mountain.hlsl"
+  ],
+  "recipe": {
+    "terrain": 2,
+    "feature": 10,
+    "objects": false,
+    "hours": [
+      12
+    ],
+    "zooms": [
+      128,
+      224
+    ],
+    "cases": [
+      "detail",
+      "active",
+      "gameplay",
+      "coastal"
+    ]
+  },
+  "tests": [
+    "Renderer.lab.test_volcano_fixture",
+    "Renderer.lab.test_natural",
+    "Renderer.native.source_fidelity.test_contract",
+    "Renderer.native.test_render_core"
+  ],
+  "references": {
+    "d3d11": []
+  },
+  "limitations": [
+    "User accepted skin-probe gameplay appearance on 2026-09-12; general runtime material routing and crater lava remain pending. No fixed reference replaced.",
+    "Ordinary terrain volcanoes only. Static crater lava; emissive glow, smoke and particles excluded.",
+    "BC5 material-channel interpretation remains unresolved; see category notes."
+  ]
+}

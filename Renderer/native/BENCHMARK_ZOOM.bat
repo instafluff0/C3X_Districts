@@ -1,5 +1,6 @@
 @echo off
 setlocal
+echo BUILD_TIMING phase=begin clock=%TIME%
 rem Isolated build/output: never overwrites the game DLL or another Lab candidate.
 if /i not "%~1"=="baseline" if /i not "%~1"=="candidate" exit /b 2
 pushd "%~dp0"
@@ -24,14 +25,31 @@ set "C3X_ZOOM_CACHE_FLAGS=/DC3X_RENDERER_BENCHMARK_ORACLE"
 if not defined C3X_ZOOM_GPU_CACHE_MIB set "C3X_ZOOM_GPU_CACHE_MIB=384"
 if not "%C3X_ZOOM_GPU_CACHE_MIB%"=="384" if not "%C3X_ZOOM_GPU_CACHE_MIB%"=="768" exit /b 2
 if "%C3X_ZOOM_LARGE_CACHE%"=="1" set "C3X_ZOOM_CACHE_FLAGS=%C3X_ZOOM_CACHE_FLAGS% /DC3X_RENDERER_BENCHMARK_LARGE_CACHE /DC3X_RENDERER_BENCHMARK_GPU_CACHE_MIB=%C3X_ZOOM_GPU_CACHE_MIB%"
+rem Reuse requires identical compiler/SDK identity in addition to source/flags.
+>"%C3X_ZOOM_OUT%\toolchain.txt" echo %VCToolsVersion% %WindowsSDKVersion%
+if not defined C3X_ZOOM_BUILD_UNITS set "C3X_ZOOM_BUILD_UNITS=all"
+if exist "%C3X_ZOOM_OUT%\previous-toolchain.txt" (
+  fc /b "%C3X_ZOOM_OUT%\previous-toolchain.txt" "%C3X_ZOOM_OUT%\toolchain.txt" >nul
+  if errorlevel 1 set "C3X_ZOOM_BUILD_UNITS=all"
+) else (
+  set "C3X_ZOOM_BUILD_UNITS=all"
+)
+echo BUILD_TIMING phase=compiler_begin clock=%TIME%
 if /i not "%~2"=="reuse" if /i not "%~2"=="preview-only" (
-  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /LD %C3X_ZOOM_CACHE_FLAGS% c3x_renderer.cpp terrain_scene_runtime.cpp environment_runtime.cpp terrain_definition_runtime.cpp scene_export.cpp frame_scheduler.cpp /Fo:%C3X_ZOOM_OUT%\ /Fe:%C3X_ZOOM_OUT%\C3XRenderer.dll /link /DEF:c3x_renderer.def /MAP:%C3X_ZOOM_OUT%\C3XRenderer.map /IMPLIB:%C3X_ZOOM_OUT%\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
+  for %%U in (c3x_renderer terrain_scene_runtime environment_runtime terrain_definition_runtime scene_export frame_scheduler) do (
+    call :compile_unit %%U dll
+    if errorlevel 1 exit /b 1
+  )
+  cl /nologo /LD "%C3X_ZOOM_OUT%\c3x_renderer.obj" "%C3X_ZOOM_OUT%\terrain_scene_runtime.obj" "%C3X_ZOOM_OUT%\environment_runtime.obj" "%C3X_ZOOM_OUT%\terrain_definition_runtime.obj" "%C3X_ZOOM_OUT%\scene_export.obj" "%C3X_ZOOM_OUT%\frame_scheduler.obj" /Fe:%C3X_ZOOM_OUT%\C3XRenderer.dll /link /DEF:c3x_renderer.def /MAP:%C3X_ZOOM_OUT%\C3XRenderer.map /IMPLIB:%C3X_ZOOM_OUT%\C3XRenderer.lib d3d11.lib d3dcompiler.lib dxgi.lib gdi32.lib msimg32.lib user32.lib bcrypt.lib
   if errorlevel 1 exit /b 1
 )
-rem ep.c enables large-address awareness on the installed game. Match that
-rem 32-bit address-space model so the witness does not fail artificially early.
-cl /nologo /std:c++17 /EHsc /O2 /W4 /WX biq_preview.cpp /Fo:%C3X_ZOOM_OUT%\ /Fe:%C3X_ZOOM_OUT%\biq_preview.exe /link /LARGEADDRESSAWARE gdi32.lib
+echo BUILD_TIMING phase=dll_done clock=%TIME%
+rem Match ep.c's x86 large-address-aware executable without staging it.
+call :compile_unit biq_preview preview
 if errorlevel 1 exit /b 1
+cl /nologo "%C3X_ZOOM_OUT%\biq_preview.obj" /Fe:%C3X_ZOOM_OUT%\biq_preview.exe /link /LARGEADDRESSAWARE gdi32.lib
+if errorlevel 1 exit /b 1
+echo BUILD_TIMING phase=preview_done clock=%TIME%
 if /i "%~2"=="build-only" exit /b 0
 if /i "%~2"=="preview-only" exit /b 0
 set "C3X_RENDERER_VISUAL_PROFILE="
@@ -52,3 +70,15 @@ if not defined C3X_ZOOM_HEIGHT set "C3X_ZOOM_HEIGHT=480"
 set "C3X_ZOOM_RESULT=%errorlevel%"
 type %C3X_ZOOM_OUT%\benchmark.log
 exit /b %C3X_ZOOM_RESULT%
+
+:compile_unit
+set "C3X_COMPILE_UNIT="
+if "%C3X_ZOOM_BUILD_UNITS%"=="all" set "C3X_COMPILE_UNIT=1"
+for %%U in (%C3X_ZOOM_BUILD_UNITS%) do if "%%U"=="%~1" set "C3X_COMPILE_UNIT=1"
+if not exist "%C3X_ZOOM_OUT%\%~1.obj" set "C3X_COMPILE_UNIT=1"
+if not defined C3X_COMPILE_UNIT exit /b 0
+echo BUILD_UNIT unit=%~1
+set "C3X_COMPILE_FLAGS="
+if "%~2"=="dll" set "C3X_COMPILE_FLAGS=/LD %C3X_ZOOM_CACHE_FLAGS%"
+cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /c %C3X_COMPILE_FLAGS% %~1.cpp /Fo:%C3X_ZOOM_OUT%\%~1.obj
+exit /b %errorlevel%
