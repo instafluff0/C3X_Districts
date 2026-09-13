@@ -10,7 +10,7 @@
     "Renderer/lab/shared/shaders/lighting/city_environment.hlsl": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9",
     "Renderer/lab/shared/shaders/objects/settlement_ground.hlsl": "a21447d01e7b1b9738cfbb766b5173778c0bea8d2a7e87a3cec3c02f94ceca31",
     "Renderer/native/environment_refresh/hydrology.hlsl": "46df612577fdee45b4efd7ae5711a929e5c1815622dabbb983f0c1bc04b90149",
-    "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl": "d3b5c5683e1231e9d2f391a385df87dc4a7f0a06a715222283697c8217cf9e7d",
+    "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl": "95a8cef6063dd69840aea682ee26a2ba7c443e3ba8087f5726e6cf07708c806c",
     "Renderer/native/environment_refresh/terrain.hlsl": "d5d89e02ade2348a0616b0a114f76c36ea362910608d34b4abd8793998abe950",
     "Renderer/native/environment_refresh/mountain.hlsl": "7686db5fb63994e8373d9c2cf2895a68f08ed552123f6728d7383a015906c01f",
     "Renderer/native/environment_refresh/objects.hlsl": "3baf5793f30cbc7dd1bbc4ff15cd0021445ab8ae3a1b539f477675fe7b6283aa",

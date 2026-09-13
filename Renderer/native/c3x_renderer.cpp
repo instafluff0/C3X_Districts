@@ -235,6 +235,7 @@ struct ResourceAnimation {
     c3x_renderer::AnimationMesh mesh;
     c3x_renderer::render_core::ResourceSourceBounds source_bounds;
     ID3D11Buffer * vertices = nullptr;
+    ID3D11ShaderResourceView * source_view=nullptr;
     std::vector<std::uint8_t> dds;
     ID3D11ShaderResourceView * view = nullptr;
     ID3D11Buffer * indices = nullptr;
@@ -256,7 +257,9 @@ struct ResourceBackdrop {
 struct ResourceBuffer {
     ID3D11Buffer * vertices = nullptr;
     ID3D11Buffer * shadow_vertices = nullptr;
-    unsigned capacity = 0, shadow_capacity = 0;
+    ID3D11Buffer * instance=nullptr;
+    ID3D11UnorderedAccessView * posed_view=nullptr;
+    unsigned capacity = 0, shadow_capacity = 0, instance_capacity=0;
 };
 
 enum GeometryLayer : std::size_t {
@@ -558,6 +561,7 @@ public:
     ID3D11PixelShader * resource_shadow_shader = nullptr;
     ID3D11VertexShader * resource_body_vertex_shader=nullptr,*resource_shadow_vertex_shader=nullptr;
     ID3D11InputLayout * resource_input_layout=nullptr;
+    ID3D11ComputeShader * resource_pose_shader=nullptr;
     ID3D11InputLayout * input_layout = nullptr;
     ID3D11InputLayout * feature_input_layout = nullptr;
     ID3D11Buffer * terrain_settings_buffer = nullptr;
@@ -902,12 +906,12 @@ public:
         clear_resource_backdrops();
         for (auto & buffer : resource_buffers) {
             release(buffer.vertices);
-            release(buffer.shadow_vertices);
+            release(buffer.shadow_vertices);release(buffer.instance);release(buffer.posed_view);
         }
         resource_buffers.clear(); resource_pixels.clear();
         resource_pixel_signature = 0; resource_pixel_clock = -1; visible_resource_animations = 0;
         for (auto & animation : resource_animations) {
-            release(animation.view); release(animation.indices);release(animation.vertices);
+            release(animation.view); release(animation.indices);release(animation.vertices);release(animation.source_view);
         }
     }
 
@@ -994,7 +998,7 @@ public:
         release(depth_state);
         release(blend_state);
         release(input_layout); release(feature_input_layout);
-        release(resource_body_vertex_shader);release(resource_shadow_vertex_shader);release(resource_input_layout);
+        release(resource_body_vertex_shader);release(resource_shadow_vertex_shader);release(resource_input_layout);release(resource_pose_shader);
         release(terrain_settings_buffer);
         release(viewport_settings_buffer);
         release(world_settings_buffer); release(shadow_settings_buffer);
@@ -1068,9 +1072,9 @@ public:
                                              ID3DBlob ** blob) {
             std::string selected_shader=integrated_shader_path;
             if(fidelity_profile && std::strstr(entry,"Feature"))selected_shader=fidelity_root+(city_profile?"/Renderer/native/city_fidelity/feature.hlsl":environment_profile?"/Renderer/native/environment_refresh/feature.hlsl":"/Renderer/native/render_core/terrain_scene.hlsl");
-            if(city_profile && (!std::strcmp(entry,"VSResourceBody") || !std::strcmp(entry,"VSResourceShadow")))
+            if(city_profile && (!std::strcmp(entry,"VSResourceBody") || !std::strcmp(entry,"VSResourceShadow") || !std::strcmp(entry,"CSResourcePose")))
                 selected_shader=fidelity_root+"/Renderer/native/city_fidelity/"+
-                    (std::strcmp(entry,"VSResourceBody")==0?"resource_body.hlsl":"resource_shadow.hlsl");
+                    (std::strcmp(entry,"VSResourceShadow")==0?"resource_shadow.hlsl":"resource_body.hlsl");
             int count = MultiByteToWideChar(CP_UTF8, 0, selected_shader.c_str(),
                                             -1, nullptr, 0);
             if (count <= 0)
@@ -1138,9 +1142,7 @@ public:
                     D3D11_INPUT_ELEMENT_DESC elements[]={
                         {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
                         {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0},
-                        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0},
-                        {"BLENDINDICES",0,DXGI_FORMAT_R32G32B32A32_UINT,0,56,D3D11_INPUT_PER_VERTEX_DATA,0},
-                        {"BLENDWEIGHT",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,72,D3D11_INPUT_PER_VERTEX_DATA,0}};
+                        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0}};
                     static_assert(sizeof(c3x_renderer::AnimationVertex)==88,"Resource source GPU layout");
                     if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,UINT(std::size(elements)),blob->GetBufferPointer(),blob->GetBufferSize(),&resource_input_layout);
                 }
@@ -1149,6 +1151,11 @@ public:
             if(SUCCEEDED(hr)) {
                 if(!compile_terrain_shader("VSResourceShadow",vs_target,&blob))hr=E_FAIL;
                 else hr=device->CreateVertexShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&resource_shadow_vertex_shader);
+                release(blob);
+            }
+            if(SUCCEEDED(hr)) {
+                if(!compile_terrain_shader("CSResourcePose","cs_5_0",&blob))hr=E_FAIL;
+                else hr=device->CreateComputeShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&resource_pose_shader);
                 release(blob);
             }
         }
@@ -3315,7 +3322,7 @@ public:
         std::vector<Vertex> shadow_vertices;
         std::size_t uploaded=0,pool_bytes=0;
         for (auto const & pool:resource_buffers)
-            pool_bytes+=pool.capacity+pool.shadow_capacity;
+            pool_bytes+=pool.capacity+pool.shadow_capacity+pool.instance_capacity;
         if(city_profile)for(auto const& asset:resource_animations){
             pool_bytes+=sizeof(asset.source_bounds);
             if(asset.vertices)pool_bytes+=asset.mesh.vertices.size()*sizeof(c3x_renderer::AnimationVertex);
@@ -3325,6 +3332,11 @@ public:
         float projection=frame.tile_width/224.f,relief=projection*.82f;
         int dx=int(geometry_viewport_settings.translation[0]),dy=int(geometry_viewport_settings.translation[1]);
         auto ticks=clock*std::max<c3x_renderer_i64>(1,frame.presentation_frequency/15);
+        if(city_profile){
+            ID3D11Buffer* empty=nullptr;UINT zero=0;
+            context->IASetVertexBuffers(0,1,&empty,&zero,&zero);
+            context->CSSetShader(resource_pose_shader,nullptr,0);
+        }
         for (auto const & anchor:resource_anchors) {
             if (anchor.asset>=resource_animations.size()) return false;
             auto & animation=resource_animations[anchor.asset];
@@ -3341,11 +3353,10 @@ public:
                 CachedVertexChunk chunk,shadow_chunk;
                 chunk.bounds=shadow_chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
                 for(unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=1e9f;chunk.world_bounds.high[a]=-1e9f;}
-                // Temporary diagnostic: exact CPU bounds isolate raster selection
-                // from GPU arithmetic. GPU vertices and instance uploads are unchanged.
-                std::vector<c3x_renderer::FeatureSourceVertex> bounds_vertices;
-                if(!c3x_renderer::sample_animation_mesh(animation.mesh,time,true,bounds_vertices))return false;
-                for(auto const& vertex:bounds_vertices){auto const* source=vertex.position;
+                // A posed source hull conservatively selects body and ground shadow
+                // without skinning all vertices or reading bounds back from the GPU.
+                for(unsigned c=0;c<8;++c){float source[3];
+                    for(unsigned a=0;a<3;++a)source[a]=(c&(1u<<a))?posed_bounds.high[a]:posed_bounds.low[a];
                     float x=source[0]+animation.offset[0],y=source[1]+animation.offset[1];
                     float lx=(x*cosine-y*sine)*animation.scale,ly=(x*sine+y*cosine)*animation.scale;
                     float lz=(source[2]+animation.offset[2])*animation.scale,feature_height=lz*150.f/.82f;
@@ -3373,11 +3384,13 @@ public:
                     trace.write("animation-budget-failed","shared source and instance cap=33554432",true);return false;};
                 if(!room((animation.vertices?0:source_bytes)+(animation.indices?0:index_bytes)))return false;
                 if(!animation.vertices){
-                    D3D11_BUFFER_DESC desc={};desc.ByteWidth=source_bytes;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+                    D3D11_BUFFER_DESC desc={};desc.ByteWidth=source_bytes;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+                    desc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;desc.StructureByteStride=sizeof(c3x_renderer::AnimationVertex);
                     D3D11_SUBRESOURCE_DATA data={};data.pSysMem=animation.mesh.vertices.data();
                     if(FAILED(device->CreateBuffer(&desc,&data,&animation.vertices)))return false;
                     pool_bytes+=source_bytes;uploaded+=source_bytes;
                 }
+                if(!animation.source_view && FAILED(device->CreateShaderResourceView(animation.vertices,nullptr,&animation.source_view)))return false;
                 if(!animation.indices){
                     D3D11_BUFFER_DESC desc={};desc.ByteWidth=index_bytes;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_INDEX_BUFFER;
                     D3D11_SUBRESOURCE_DATA data={};data.pSysMem=animation.mesh.indices.data();
@@ -3387,16 +3400,31 @@ public:
                 if(resource_buffers.size()<=visible_resource_animations)resource_buffers.emplace_back();
                 auto& pool=resource_buffers[visible_resource_animations];
                 unsigned bytes=unsigned(c3x_renderer::render_core::resource_pose_bytes(animation.mesh.bones));
-                if(bytes>pool.capacity){
-                    if(!room(bytes-pool.capacity))return false;
-                    pool_bytes-=pool.capacity;release(pool.vertices);pool.capacity=0;
+                if(bytes>pool.instance_capacity){
+                    if(!room(bytes-pool.instance_capacity))return false;
+                    pool_bytes-=pool.instance_capacity;release(pool.instance);pool.instance_capacity=0;
                     D3D11_BUFFER_DESC desc={};desc.ByteWidth=bytes;desc.Usage=D3D11_USAGE_DYNAMIC;
                     desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;desc.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;
+                    if(FAILED(device->CreateBuffer(&desc,nullptr,&pool.instance)))return false;
+                    pool.instance_capacity=bytes;pool_bytes+=bytes;
+                }
+                unsigned posed_bytes=unsigned(animation.mesh.vertices.size()*sizeof(c3x_renderer::FeatureSourceVertex));
+                if(posed_bytes>pool.capacity){
+                    if(!room(posed_bytes-pool.capacity))return false;
+                    pool_bytes-=pool.capacity;release(pool.posed_view);release(pool.vertices);pool.capacity=0;
+                    D3D11_BUFFER_DESC desc={};desc.ByteWidth=posed_bytes;desc.Usage=D3D11_USAGE_DEFAULT;
+                    desc.BindFlags=D3D11_BIND_VERTEX_BUFFER|D3D11_BIND_UNORDERED_ACCESS;
+                    desc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
                     if(FAILED(device->CreateBuffer(&desc,nullptr,&pool.vertices)))return false;
-                    pool.capacity=bytes;pool_bytes+=bytes;
+                    pool.capacity=posed_bytes;pool_bytes+=posed_bytes;
+                }
+                if(!pool.posed_view){
+                    D3D11_UNORDERED_ACCESS_VIEW_DESC desc={};desc.ViewDimension=D3D11_UAV_DIMENSION_BUFFER;
+                    desc.Format=DXGI_FORMAT_R32_TYPELESS;desc.Buffer.NumElements=pool.capacity/4;desc.Buffer.Flags=D3D11_BUFFER_UAV_FLAG_RAW;
+                    if(FAILED(device->CreateUnorderedAccessView(pool.vertices,&desc,&pool.posed_view)))return false;
                 }
                 D3D11_MAPPED_SUBRESOURCE mapped={};
-                if(FAILED(context->Map(pool.vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
+                if(FAILED(context->Map(pool.instance,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
                 auto values=static_cast<float*>(mapped.pData);
                 float placement[]={cosine,sine,animation.scale,c3x_renderer::lighting::object_height_to_world,
                     animation.offset[0],animation.offset[1],animation.offset[2],anchor.ground,
@@ -3404,11 +3432,15 @@ public:
                     half_w,half_h,projection,float(frame.target_height)};
                 std::copy(std::begin(placement),std::end(placement),values);
                 c3x_renderer::render_core::pack_resource_pose(pose,animation.mesh.bones,values);
-                context->Unmap(pool.vertices,0);uploaded+=bytes;
-                chunk.buffer=shadow_chunk.buffer=animation.vertices;
+                context->Unmap(pool.instance,0);uploaded+=bytes;
+                context->CSSetConstantBuffers(8,1,&pool.instance);
+                context->CSSetShaderResources(0,1,&animation.source_view);
+                context->CSSetUnorderedAccessViews(0,1,&pool.posed_view,nullptr);
+                context->Dispatch((UINT(animation.mesh.vertices.size())+63)/64,1,1);
+                chunk.buffer=shadow_chunk.buffer=pool.vertices;
                 chunk.indices=shadow_chunk.indices=animation.indices;
-                chunk.resource_instance=shadow_chunk.resource_instance=pool.vertices;
-                chunk.vertex_stride=shadow_chunk.vertex_stride=sizeof(c3x_renderer::AnimationVertex);
+                chunk.resource_instance=shadow_chunk.resource_instance=pool.instance;
+                chunk.vertex_stride=shadow_chunk.vertex_stride=sizeof(c3x_renderer::FeatureSourceVertex);
                 chunk.index_count=shadow_chunk.index_count=unsigned(animation.mesh.indices.size());
                 chunk.animation_texture=shadow_chunk.animation_texture=animation.view;
                 buffers[geometry_shadow].push_back(shadow_chunk);buffers[geometry_feature].push_back(chunk);
@@ -3527,6 +3559,11 @@ public:
             shadow_chunk.animation_texture=animation.view;
             buffers[geometry_shadow].push_back(shadow_chunk);
             buffers[geometry_feature].push_back(chunk);++visible_resource_animations;
+        }
+        if(city_profile){
+            ID3D11UnorderedAccessView* uav=nullptr;ID3D11ShaderResourceView* srv=nullptr;ID3D11Buffer* cb=nullptr;
+            context->CSSetUnorderedAccessViews(0,1,&uav,nullptr);context->CSSetShaderResources(0,1,&srv);
+            context->CSSetConstantBuffers(8,1,&cb);context->CSSetShader(nullptr,nullptr,0);
         }
         if(!prepare_wave_chunks(frame))return false;
         visible_wave_animations=unsigned(wave_chunks.size());

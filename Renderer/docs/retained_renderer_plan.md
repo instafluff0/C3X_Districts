@@ -132,6 +132,36 @@ validated, rather than keeping another optional pose cache or renderer.
   CPU work into more expensive repeated GPU work. Close after the bounded result;
   do not expand into a skinning framework or another baseline campaign.
 
+### Shared resource geometry — implementation evaluation
+
+The first candidate uses resident source meshes and per-instance bone/placement
+constants in vertex shaders. It builds and passes 133 category tests (one existing
+skip), nine focused pose/bounds checks, and the small native five-publication
+witness. An initial dense comparison found two changed wheat-edge pixels. Exact
+CPU bounds did not remove them. A bounded GPU probe isolated one-bit world-coordinate
+rounding differences; precise world arithmetic restored exact dense images without
+changing the shared compiler or relaxing pixel equality. The temporary CPU-bounds
+diagnostic was removed. Its source and evidence remain under
+`Renderer/native/build/resource-instances-20260913/`.
+
+That corrected vertex-stage version is not retained as the final implementation:
+whole-request evidence is mixed. Candidate means were 154.843 and 168.703 ms;
+the intervening two `assets_loaded` CPU control cases were 187.090 and 159.364 ms.
+All four 14-offset cases preserve saved images, inputs, ownership/accounting and
+exclusive-GPU checks. CPU pose preparation falls, but vertex skinning repeats for
+body/shadow and regional submissions, and GPU/readback variation offsets the saving.
+There is no reliable whole-workload speedup claim from these pairs. The earlier
+incorrect-image pair and shader-cache warmups remain diagnostic evidence only.
+
+The same selected task is now evaluating **one GPU skinning dispatch per instance,
+with a shared posed mesh consumed by body and shadow passes**. Source meshes,
+instance constants and posed buffers remain under the existing asset/buffer owners
+and unchanged 32 MiB resource-storage cap. Camera projection remains per occurrence;
+no pose cache, extra queue or new optional rendering mode is introduced. Existing
+legacy profiles keep their established CPU path. The revised isolated build and
+focused pose tests pass; native rendering and whole-request acceptance are pending.
+Do not describe this candidate as accepted or stage it while evaluation is open.
+
 ### Native request identity — structurally retained
 
 The optional `c3x_renderer_render_view` ordinary-demand export uses the existing
