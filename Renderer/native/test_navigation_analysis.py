@@ -86,6 +86,17 @@ class NavigationAnalysisTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"not checked"):
             session_accounting([l for l in lines if l!=check])
 
+    def test_animation_ablation_cannot_be_relabelled_as_acceptance(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=self.fixture(Path(temporary)/"run")
+            original=json.loads((root/"inputs.json").read_text())
+            for section,key in (("args","diagnostic_animation"),("environment","C3X_RENDERER_DIAGNOSTIC_ANIMATION")):
+                receipt=json.loads(json.dumps(original));receipt["quality_mode"]="current"
+                receipt.setdefault(section,{})[key]="body-shadow-finish"
+                (root/"inputs.json").write_text(json.dumps(receipt))
+                with self.assertRaisesRegex(ValueError,"Diagnostic ablation"):
+                    inspect(root)
+
     def test_quick_or_changed_source_receipts_cannot_pass_acceptance(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=self.fixture(Path(temporary)/"run")

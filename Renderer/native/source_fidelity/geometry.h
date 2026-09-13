@@ -15,7 +15,7 @@ if(fidelity_profile) {
     // and its finite-difference collar. Bind it once: mountain tessellation
     // performs thousands of distance samples and must not re-enter the LRU for
     // every vertex and normal tap.
-    auto const river_field=natural.retain_river_page(float(nc)+.5,float(nr)+.5);
+    auto const river_field=natural.retain_river_page(float(nc)+.5,float(nr)+.5,observe_river_page);
     auto river_at=[&](float x,float y){return river_field->sample({x,y}).distance;};
     GroundProjection project_natural{nc,nr,half_w,half_h,relief_projection_scale,float(frame.target_height)};
     auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};

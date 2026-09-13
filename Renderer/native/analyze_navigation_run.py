@@ -220,7 +220,8 @@ def inspect(directory):
     args = receipt["args"]
     env = receipt.get("environment", {})
     if (receipt.get("quality_mode", "current") != "current" or args.get("region_diagnostics") or args.get("reflection_ablation") or
-            env.get("C3X_RENDERER_REGION_DIAGNOSTICS") == "1" or env.get("C3X_RENDERER_REFLECTION_CONTROL") == "1"):
+            env.get("C3X_RENDERER_REGION_DIAGNOSTICS") == "1" or env.get("C3X_RENDERER_REFLECTION_CONTROL") == "1" or
+            args.get("diagnostic_animation","full")!="full" or env.get("C3X_RENDERER_DIAGNOSTIC_ANIMATION","full")!="full"):
         raise ValueError("Diagnostic ablation/logging is not performance evidence")
     lines = (directory / "benchmark.log").read_text().splitlines()
     if receipt.get("case_manifest"):

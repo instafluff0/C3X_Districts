@@ -104,6 +104,31 @@ These reject specific implementations/hypotheses, not all batching or retained
 rendering. Reopen one only with a changed mechanism and a stated reason; do not
 repeat it because an older note still calls it the next experiment.
 
+## GPU timestamp validity on the current VM
+
+The 2026-09-13 clock probe found mutable D3D11 timestamp results on the Windows 11
+Parallels adapter: reading the same completed query again changed its value;
+reversing retrieval order reversed the reported event order. One versus 128 draws
+also reported microsecond spans despite millisecond completion. These results
+cannot measure GPU execution. The query owners now reject mutable timestamps in
+addition to disjoint, error, incomplete and nonmonotonic results. Historical
+`valid=1` records predating that guard are not calibrated GPU timing evidence;
+existing CPU wall-time measurements remain separate.
+
+Optional `--profile` animation telemetry reports background/import, receiver-shadow,
+body/shadow, finishing and staging-copy command spans when valid, with unassigned
+span and explicit invalid/missing samples. It adds no stage waits. CPU completion
+wait overlaps the GPU timeline and must not be added to it.
+
+Where timestamps are unavailable, the existing dense scroll harness can run
+`--diagnostic-animation body-shadow`, `body-shadow-finish`, and
+`body-shadow-finish-import` with the explicit resource pass and waves off. These
+cumulatively omit work; finishing omission writes defined diagnostic pixels.
+They are counterfactual latency measurements, not visual or performance acceptance.
+Differences are conditional on earlier omissions, not additive pure GPU busy times.
+Preserve full-workload latency, completion wait, CPU copy, cache-hit/miss counts and
+immutable input/quality receipts alongside their interpretation.
+
 ## Tooling deliverables and rendering handoff
 
 Implement the unfinished tooling deliverables in order, recording completion in

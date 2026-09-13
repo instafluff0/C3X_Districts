@@ -162,6 +162,9 @@ def main(argv=None):
     parser.add_argument("--composition-casters-control", action="store_true", help="Rebuild caster preparation independently for each animation region")
     parser.add_argument("--animation-readback-atlas", action="store_true", help="Pack exact animated blocks into a compact staging atlas before CPU readback")
     args = parser.parse_args(argv)
+    if args.diagnostic_animation!="full" and (not args.prepared_resource_pass or args.waves!="0" or args.scenario!="scroll" or args.boundary_fixture):
+        parser.error("Animation phase ablations require the explicit resource pass, waves off, scroll, and no correctness boundary fixture")
+
     try:
         args.preparation_mode=preparation_mode(args.scenario,args.preparation_mode)
     except ValueError as error:

@@ -6,6 +6,10 @@ from Renderer.lab.platform import ROOT
 
 
 class AnimationRetentionTests(unittest.TestCase):
+    def test_local_finishing_matches_full_hdr_reconstruction(self):
+        run_cpp('',sources=('Renderer/native/test_local_finishing_windows.cpp',),timeout=60)
+
+
     def test_bounded_post_preserves_full_dispatch_workgroup_coordinates(self):
         source=(ROOT / "Renderer/native/city_fidelity/glow.h").read_text()
         body="D3D11_RECT dispatch_rectangle("+source.split("D3D11_RECT dispatch_rectangle(",1)[1].split("    std::size_t reconstruct(",1)[0]

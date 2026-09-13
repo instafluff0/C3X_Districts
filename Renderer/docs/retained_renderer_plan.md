@@ -3,7 +3,7 @@
 Current status and preserved evidence for the retained renderer. Planned work
 is not evidence that implementation or performance targets pass.
 
-## Current status — common scene depth retained; coherent animation consumer underway
+## Current status — local finishing damage retained; compiled-content validity next
 
 Local region validity passes the dense edit comparison: the four-edit sequence
 is 16.8–16.9% faster, with exact independent full redraws. Distant edits average
@@ -29,7 +29,7 @@ is the single active task record.
 
 We are completing reusable world/instance inputs and have begun explicit pass
 ownership; we have not yet made general view submission efficient. The dense
-standalone workload remains roughly 160–170 ms, against a first below-100 ms gate
+standalone workload now averages 147–154 ms in the latest paired runs, against a first below-100 ms gate
 and then 33 ms. These are workload gates, not promised native frame rates.
 The throughput path is resident content → selected compatible draw lists → fewer
 repeated render passes and output transfers → exact caller-driven native
@@ -38,14 +38,15 @@ Raster reuse can skip work, but newly exposed views must also be inexpensive.
 
 The current resource representation is a prerequisite, not the decisive speedup.
 Order-preserving instance submissions were implemented and tested, then removed
-after mixed whole-workload results. The selected task addresses the depth/overlap contract that prevents a coherent
-dynamic scene pass from replacing repeated region rendering. Both pre-raster
+after mixed whole-workload results. The common-depth task addressed the depth/overlap contract needed for a coherent
+dynamic scene pass to replace repeated region rendering. Both pre-raster
 rebasing and post-raster import failed exact legacy ordering; the GPU witness
 below establishes that stored depth alone cannot recover the new rounding.
 The user authorized small reviewed depth-rounding differences on 2026-09-13.
-The common producer contract is now retained; the immediate coherent consumer is
-underway. Failed numerical post-raster rebasing remains closed.
-Animation completion is about 85–94 ms and much of that is GPU/readback wait;
+The common producer contract is retained. Both coherent consumers were exact but
+slower and removed; the causal breakdown led to the retained local finishing change below.
+Failed numerical post-raster rebasing remains closed.
+Latest animation completion averages 78–83 ms and much of that is GPU/readback wait;
 we have not isolated all of that wait as transfer cost. A few milliseconds saved
 in pose maps/bindings cannot by itself meet the navigation target. Do not chain
 further helper optimizations if batching leaves that dominant cost intact.
@@ -67,17 +68,17 @@ records architectural gaps, not a second task queue or completion percentage.
 | --- | --- |
 | Complete persistent scene/world-instance database | A bounded canonical captured-appearance owner now feeds compiler lookups and retains local revisions; resident compiled-content bindings are now consumed; complete appearance capture and sparse object/action ownership remain unfinished. |
 | General spatially selected draw lists | Static draw/receiver/caster/region consumers now read compact resident occurrence records; general spatial selection feeding compatible batches remains unfinished. |
-| Systematic local revisions and invalidation | Local topology/dependency observations and retained-region validity now preserve unaffected work; compiled-input owners still have broad revision invalidation. |
+| Systematic local revisions and invalidation | Local topology/dependency observations, retained-region validity and finishing damage now preserve unaffected work; compiled-input owners still have broad revision invalidation. |
 | Broad batching/instancing with explicit passes | Animated resources now draw shared resident source meshes with separate pose/placement inputs through body/shadow passes; compatible instance submissions and general batching remain unfinished. |
 | Completed asynchronous Civ III presentation | The injected compositor now supplies lifecycle/visibility identity and consumes exact queued or compatible ambient work through the existing owner; general asynchronous camera handoff and live presentation verification remain unfinished. |
-| Camera movement with bounded reconstruction/rendering/readback | Retained overlap and region reuse exist; latest accepted-control dense navigation is 161–164 ms and remains above the first 100 ms gate. |
+| Camera movement with bounded reconstruction/rendering/readback | Retained overlap and region reuse exist; latest candidate dense navigation is 147–154 ms and remains above the first 100 ms gate. |
 
 The publication handoff, captured-appearance owner, resident-content bindings and
 compact occurrence records are retained. The first static terrain batch representation
 was rejected after exact but unhelpful whole-workload results. Native request identity
 is now connected and verified in source/replay. Shared animated resource geometry
-is structurally retained; the common scene-depth contract is now retained and its coherent animation
-consumer is the current selection. Other gaps remain explicit dependencies,
+is structurally retained; common scene depth and local finishing damage are retained.
+Local validity of reusable compiled content is selected next. Other gaps remain explicit dependencies,
 not tasks to pursue concurrently.
 
 ### Prioritization correction
@@ -116,48 +117,157 @@ explicitly rules out worker-completion notification/redraw requests. The propose
 notification code was removed before any build or native changes. Existing game
 animation scheduling is preserved, not converted into a completion channel.
 
-### Single next task — causal animation GPU/CPU breakdown
+### Local finishing damage — retained, modest measured improvement
 
-**Next task:** extend the existing optional frame telemetry to separate background
-preparation/import, resource shadow/body GPU command spans, finishing, staging copy,
-CPU completion wait and CPU bitmap copy. Measure the accepted common-depth renderer
-and the exact but slower coherent-window consumer with the existing dense fixture.
-The user explicitly requested this causal breakdown before selecting further
-architectural work on 2026-09-13. Do not add a runner or restart baseline campaigns.
+Conservative posed body/shadow bounds now carry four native pixels of filter
+support into the existing reconstruction, display conversion and copy owners.
+The complete guarded MSAA source and hardware resolve remain unchanged. Each
+output starts from the immutable static bitmap, so removal and old poses cannot
+leave stale pixels. The superseded unconditional whole-cell finishing path is
+replaced inside the existing prepared-resource pass; no new cache, target, shader
+or runtime switch was added. Region metadata remains charged under the existing
+4 MiB preparation cap.
 
-- **Capability enabled:** select the next coherent-pass implementation from measured
-  import, rendering and finishing costs, rather than proxy draw counts or Map wait.
-- **Limitation removed:** current animation completion mixes GPU execution, queued
-  work, driver behavior and transfer wait; it cannot identify which responsibility
-  prevents a coherent pass from delivering a useful benefit.
-- **Destination connection:** the result chooses whether retained static ownership,
-  compatible draw submission or output completion is the necessary next capability.
-  Preserve caller-driven exact-camera native consumption; no completion notification.
-- **Acceptance:** bounded optional queries, delayed nonblocking retrieval, explicit
-  missing/disjoint samples, no added waits or stage synchronizations; align GPU and
-  CPU records by request and avoid adding overlapping intervals. Verify instrumentation
-  preserves images and existing resource/ownership contracts. Include whole-workload
-  results separately from profiled timings.
-- **Stop condition:** obtain the smallest representative matched causal comparison
-  sufficient to select exactly one bounded architectural implementation. If the VM
-  cannot provide valid timestamps, report that limitation and use a narrowly scoped
-  existing-harness ablation for the unresolved decision. Do not infer pure GPU or
-  transfer cost from CPU Map wait alone.
+**Architectural acceptance:** local damage now controls finishing and publication
+copies as well as draw selection. The production GPU witness passes nine exact
+HDR/MSAA/filter cases, including guard-only inputs, workgroup edges and thin spans;
+six independent boundary redraws pass, including motion and removal/reappearance.
+All five saved dense images in each matched pair are exact. Three zoom revisits
+pass and all saved 128/160/192 images equal the retained common-depth control.
+Minimum sampled contiguous headroom across candidate dense runs is 1,698.7 MiB,
+well above 512 MiB; transient driver residency remains unmeasured. The complete
+source guard and material/depth behavior are preserved.
 
-The common-depth prerequisite is retained. The coherent consumer remains only as
-a diagnostic candidate for this named question; it is not accepted production code.
-The two-dimensional candidate is exact on six boundary checks and all saved dense
-images, but averages 175.07 / 167.72 ms versus 154.60 / 147.33 ms control. Its 520x520
-scratch resolves unused pixels for small windows. A partial software MSAA resolve
-was rejected at the GPU witness because it did not equal hardware resolution on
-varied per-sample values. No oracle was weakened and no performance claim follows.
+**Performance acceptance:** two serial candidate/control pairs, each with two
+assets-loaded cases of 14 requests on the dense 100x100 synthetic world at
+2240x1192, width 128, waves/reflections off:
+
+| Pair | Control mean (ms) | Candidate mean (ms) | Saving |
+| --- | ---: | ---: | ---: |
+| 1 | 157.758 | 153.864 | 3.895 ms / 2.47% |
+| 2 | 152.822 | 147.206 | 5.617 ms / 3.68% |
+
+Individual case means vary: candidate 146.75–157.93 ms, control 152.03–162.57 ms.
+The targeted animation completion mean improves in both pairs (83.69 → 81.01 ms;
+83.51 → 78.15 ms). Its completion wait falls from about 62 ms to 57–59 ms and CPU
+bitmap copy from about 0.94–0.98 ms to 0.60–0.69 ms. These are overlapping endpoint
+components, not additive GPU timings. Copied animation pixels fall to roughly
+200,000, but that proxy is not the acceptance result. Retain the small complete
+change for repeated whole-workload benefit and its end-to-end damage responsibility;
+it is not the decisive throughput improvement or a passed navigation gate.
+
+**Remaining limitation:** full hardware resolve, static backdrop restoration and
+per-cell rendering still run. This path excludes views with waves. The 100 ms then
+33 ms targets, general spatial batching and native presentation remain unmet. Do
+not continue dispatch/copy helper tuning from this result. The causal diagnosis is
+closed at its available precision, including the invalid VM GPU clock below.
+Focused current-code resource integration passes 255 tests (one existing skip),
+plus animation, zoom-return, scroll and removal replay. Implementation identity:
+`a8cde6ba6738e35956613f7f336f08c23ef8d41e40ef5d7164e112abe29917fa`; DLL:
+`1729f5a06540db1380002690c2aa9a48356dcf10df6137289111664f834fda45`. No staging, installation, injected
+compilation or live-game claim.
+Evidence: `Renderer/native/build/local-finishing-damage-20260913/comparison.json`,
+`contracts.log`, `boundary.log`, `zoom.log`, and the four matched navigation directories.
+
+### Single next implementation task — local validity for compiled terrain content
+
+The user clarified that this is an **edit/rebuild evaluation**, not a navigation
+speedup. Close it with evidence, then return to the unchanged-map navigation
+bottleneck. Do not extend this task into successive edit-cache improvements.
+
+**Next task:** complete dependency propagation from the existing natural river-page
+owner into reusable terrain/natural compiled content, then replace the whole-map
+revision in those content keys with complete local validity. Reuse the existing
+world observations, compiler dependency records and bounded content owners. Audit
+all river-page consumers, including the terrain compiler and natural relief, before
+removing a global guard; keep global map/device/asset/reset identity intact.
+
+- **Capability afterward:** unchanged resident terrain/natural content survives an
+  unrelated authoritative edit, including content reused when entering a new view
+  or zoom. This extends systematic local invalidation from raster results to the
+  persistent content that must render on a cache miss.
+- **Repeated work removed:** rebuilding reusable samples and shared world meshes
+  solely because another part of the map advanced the topology revision. Existing
+  visible-edit evidence rebuilds 81 tiles and takes 1.85–1.90 seconds; that motivates
+  examining compilation, but is not a promise that all 81 builds are unnecessary.
+- **Concrete dependency:** `NaturalWorld` currently clears its 16 river pages on
+  every topology revision. Those pages read a 16x16 support area and terrain-height
+  lookups outside the tile compiler's recorded queries. Shared natural and ground
+  content keys still include the global revision. Local page observations must
+  reach every consuming content owner before those guards can be safely removed.
+  This completes an existing responsibility; it does not add another content cache.
+- **Destination connection:** spatially selected draws need valid resident content
+  after edits and on newly exposed views. Local content validity is independent of
+  raster residency and advances that prerequisite. Native demand remains passive,
+  caller-driven and exact-camera. Before enabling asynchronous camera handoff,
+  resolve the documented no-ready-image/overlay/picking constraint; live acceptance
+  still requires staging/install/game authorization, not further timer plumbing.
+- **Architectural acceptance:** preserve exact independent redraws for local/distant
+  terrain and river edits, reversals, wrapped inputs, zoom and reset. Observe all
+  corridor and height inputs, preserve immutable borrowed-page lifetimes, and bound
+  new dependency storage under existing owners and >=512 MiB sampled headroom.
+  Keep conservative global validity wherever the dependency audit is incomplete.
+- **Performance acceptance and stop:** use the existing small edit oracle first,
+  then the fixed dense edit sequence and one unaffected navigation comparison if
+  useful. Retain only complete useful reuse without material whole-workload or
+  capacity regression. Reject removal of required guards or metadata/validation
+  overhead that erases the benefit; do not chase cache sizes or restart baselines.
+
+### Causal breakdown — retained measurement capability, completed diagnosis
+
+The common-depth foundation remains; both coherent animation consumers were removed
+from the runtime after exact but slower results. Their source and evidence are kept
+only under ignored build evidence. No coherent-pass performance gain is retained.
+
+The optional query owner now separates background preparation/import, receiver
+shadows, body/shadow drawing, finishing and staging copy without stage waits. The
+existing analyzer aligns GPU/CPU records by request and keeps their overlap explicit.
+The VM's D3D timestamp results failed a decisive validity probe: repeated reads of
+the same completed query change values, and reversing read order reverses the
+reported event order. Both timestamp owners now reject mutable results. Historical
+microsecond `valid=1` GPU records are not calibrated GPU execution evidence; CPU
+completion measurements remain valid. No invalid GPU durations are treated as zero.
+
+The existing dense 100x100 synthetic map, 2240x1192, waves/reflections disabled,
+ran four serial one-case cumulative ablations (14 navigation requests each).
+Seven matching resident revisits have identical backdrop hit counts (66–72), no
+backdrop misses and no static draw work, which isolates animation more usefully
+than the mixed preparation sequence. Values below are means in milliseconds.
+
+| Cumulative work omitted | Whole navigation sequence | Animation on resident revisits | CPU completion wait on those revisits |
+| --- | ---: | ---: | ---: |
+| None | 156.54 | 49.84 | 32.99 |
+| Body/shadow draws | 175.79 | 46.06 | 29.82 |
+| Also finishing | 133.41 | 29.24 | 14.64 |
+| Also backdrop restoration | 126.51 | 21.78 | 7.45 |
+
+Conditional resident animation reductions are about 3.8 ms for body/shadow draws
+(noisy), 16.8 ms for finishing and 7.5 ms for backdrop restoration. CPU bitmap copy
+is 0.9–1.0 ms. The last 7.45 ms wait still includes staging/clear/driver/queue effects;
+it is not isolated transfer time. These reductions are not additive pure GPU busy
+times. Mixed whole-sequence totals vary with preparation, and these intentionally
+incorrect ablations are never visual or performance acceptance. The unablated
+instrumented-build control preserves all saved shared-depth images exactly.
+The local finishing implementation above passed its own whole-workload comparison.
+
+This evidence selects the missing responsibility: damage propagation currently
+stops before finishing, repeatedly processing unchanged static content. It does
+not justify another round of body instancing or a new backdrop cache. Query lifetime,
+pressure/error/disjoint/mutable behavior and analysis alignment/overlap are covered
+by executable tests (18 focused tests pass). Current focused resource integration
+also passes 254 tests (one existing skip) and exact animation/scroll/removal replay.
+Pre-finishing implementation: `eada70a29a31ce85af742642e26ad07f891d22adccad4f76ac10f46f9675d659`;
+DLL: `2266b7c464fca76049ee3be3cfd13138039c7c8e82b432e0ece70ad9bfc01e48`.
+No staging, installation, injected compilation or live-game claim. Evidence and raw timing limitations:
+`Renderer/native/build/coherent-resource-pass-20260913/causal-breakdown.json`,
+`timestamp-probe-immutable.log`, and the four `resource-causal-*` run directories.
 
 The first consumer combined up to four horizontal cells in 16.2 MiB scratch.
 Exact MSAA import passed; assigning each cell its own interior fixed a one-pixel
 seam difference, after which all six boundary redraws and dense saved images were
 exact. Whole navigation was 157.79 / 154.06 ms versus a fresh common-depth control
-at 154.60 / 147.33 ms. It is rejected as a speedup. The bounded revision uses complete
-rectangles in both dimensions and imports directly from cached textures, removing
+at 154.60 / 147.33 ms. It was rejected as a speedup. The bounded revision used complete
+rectangles in both dimensions and imported directly from cached textures, removing
 the redundant intermediate cell copies. This changes the consumer implementation,
 not correctness thresholds or the architectural destination. Evidence lives under
 `Renderer/native/build/coherent-resource-pass-20260913/`.

@@ -3606,6 +3606,7 @@ public:
         struct PreparedResourceRegion {
             ViewportShaderSettings settings;
             std::array<std::vector<CachedVertexChunk>,geometry_layer_count> draws;
+            D3D11_RECT output_damage={136,136,0,0};
             std::size_t shadow_batch=0;
         };
         using ShadowPages=std::set<std::pair<int,int>>;
@@ -3644,9 +3645,24 @@ public:
                         region.draws[layer].reserve(count);
                         prepared_bytes+=region.draws[layer].capacity()*sizeof(CachedVertexChunk);
                         for(auto const& chunk:buffers[layer])
-                            if(chunk_intersects_region(chunk,region.settings,guard,false))region.draws[layer].push_back(chunk);
+                            if(chunk_intersects_region(chunk,region.settings,guard,false)){
+                                region.draws[layer].push_back(chunk);
+                                // Existing posed hulls include raster coverage. The
+                                // post filter reaches +/-8 high-resolution samples,
+                                // or four native pixels. Include guard-only draws too.
+                                auto damage=guarded_block_rectangle(chunk.bounds,
+                                    int(region.settings.translation[0])+chunk.translation_x,
+                                    int(region.settings.translation[1])+chunk.translation_y,4,136);
+                                auto& output=region.output_damage;
+                                output.left=std::min(output.left,damage.left);output.top=std::min(output.top,damage.top);
+                                output.right=std::max(output.right,damage.right);output.bottom=std::max(output.bottom,damage.bottom);
+                            }
                     }
                     if(!prepared_resource_pass)break;
+                    auto& output=region.output_damage;
+                    output.left=std::max<LONG>(4,output.left);output.top=std::max<LONG>(4,output.top);
+                    output.right=std::min<LONG>(132,output.right);output.bottom=std::min<LONG>(132,output.bottom);
+                    if(output.left>=output.right || output.top>=output.bottom)output={4,4,132,132};
                     receivers.clear();
                     collect_region_receivers(geometry_vertex_buffers,region.settings,{guard},false,receivers);
                     auto pages=Shadow::required_pages(receivers,shadow_basis);
@@ -3788,7 +3804,11 @@ public:
                             *animation_casters_ptr,animation_prepared_ptr,nullptr,&shadow_batches[region.shadow_batch]))return false;
                     active_shadow_batch=region.shadow_batch;
                 }
-                if(!submit_prepared_resource_region(region.draws,region.settings))return false;
+                if(!submit_prepared_resource_region(region.draws,region.settings,region.output_damage))return false;
+                clipped.left=std::max(clipped.left,rect.left+region.output_damage.left-4);
+                clipped.top=std::max(clipped.top,rect.top+region.output_damage.top-4);
+                clipped.right=std::min(clipped.right,rect.left+region.output_damage.right-4);
+                clipped.bottom=std::min(clipped.bottom,rect.top+region.output_damage.bottom-4);
             } else if(!submit_geometry(buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
                     nullptr,true,true,geometry_vertex_buffers,false,animation_casters_ptr,animation_prepared_ptr))return false;
             {AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::transfer);
@@ -4666,7 +4686,7 @@ public:
 
     bool submit_prepared_resource_region(
             GeometryDrawView buffers,
-            ViewportShaderSettings const& settings) {
+            ViewportShaderSettings const& settings,D3D11_RECT const& output_damage) {
         std::vector<D3D11_RECT> rectangles={{0,0,136,136}};
         auto& linear=city_glow.linear;
         context->OMSetRenderTargets(1,&linear.target,linear.depth);
@@ -4714,11 +4734,11 @@ public:
             context->ClearRenderTargetView(block_target,clear);return true;
         }
 #endif
-        frame_post_lanes+=city_glow.reconstruct(context);
-        linear_output.draw(context,linear,city_glow.target,display_exposure,1,city_glow.view,136,136);
+        frame_post_lanes+=city_glow.reconstruct(context,&output_damage);
+        linear_output.draw(context,linear,city_glow.target,display_exposure,1,city_glow.view,136,136,&output_damage);
         context->OMSetRenderTargets(0,nullptr,nullptr);
-        D3D11_BOX box={4,4,0,132,132,1};
-        context->CopySubresourceRegion(block_texture,0,0,0,0,city_glow.native,0,&box);
+        D3D11_BOX box={unsigned(output_damage.left),unsigned(output_damage.top),0,unsigned(output_damage.right),unsigned(output_damage.bottom),1};
+        context->CopySubresourceRegion(block_texture,0,box.left-4,box.top-4,0,city_glow.native,0,&box);
         return true;
     }
 
@@ -6161,6 +6181,13 @@ public:
             std::unordered_map<std::size_t, std::uint32_t> world_dependencies;
             auto observe_world = [&](std::size_t i, std::uint32_t value) { world_dependencies.emplace(i,value); };
             auto observe_coast = [&](auto id,auto revision) { coast_dependencies.emplace(id,revision); };
+            std::vector<std::pair<int,int>> observed_river_pages;
+            auto observe_river_page = [&](auto const& page) {
+                auto key=std::make_pair(page.c,page.r);
+                if(std::find(observed_river_pages.begin(),observed_river_pages.end(),key)!=observed_river_pages.end())return;
+                observed_river_pages.push_back(key);
+                for(auto const& input:page.dependencies)observe_world(input.first,input.second);
+            };
             c3x_renderer::fidelity::SurfaceQueries queries(world_coast,shore_samples,
                 tile.tile_x,tile.tile_y,observe_world,observe_coast,skip_flat_shore);
             auto world_lookup = [&](int c,int r) { return queries.tile(c,r); };
@@ -6471,7 +6498,7 @@ public:
                                       float u, float v) {
                 if(fidelity_profile){
                     float x=float(river_tile.tile_x+river_tile.tile_y)*.5f+u,y=float(river_tile.tile_x-river_tile.tile_y)*.5f+1-v;
-                    return float(natural.river_sample({x,y}).distance);
+                    return float(natural.river_sample({x,y},observe_river_page).distance);
                 }
                 float distance = 1000.0f;
                 unsigned mask = river_tile.river_code & 170u;
@@ -6490,7 +6517,7 @@ public:
                 return distance;
             };
             auto river_node_distance = [&](float u, float v, unsigned node_kind) {
-                if(fidelity_profile && node_kind!=1){auto sample=natural.river_sample({(tile.tile_x+tile.tile_y)*.5+u,(tile.tile_x-tile.tile_y)*.5+1-v});return float(node_kind==0?sample.source:sample.mouth);}
+                if(fidelity_profile && node_kind!=1){auto sample=natural.river_sample({(tile.tile_x+tile.tile_y)*.5+u,(tile.tile_x-tile.tile_y)*.5+1-v},observe_river_page);return float(node_kind==0?sample.source:sample.mouth);}
                 float point_x = static_cast<float>(tile.tile_x) + u - v;
                 float point_y = static_cast<float>(tile.tile_y) + u + v - 1.0f;
                 float distance = 1000.0f;
@@ -7186,7 +7213,7 @@ public:
             // coordinates/UVs, not just canonical gameplay identity.
             auto ground_key=(std::uint64_t(std::uint32_t(tile.tile_x))<<32)|std::uint32_t(tile.tile_y);
             std::uint64_t ground_signature=tile_content_signature(tile);
-            for(auto value:{content_revision,std::uint64_t(frame.world_topology_revision),
+            for(auto value:{content_revision,
                     std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
                     std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y)})
                 ground_signature=(ground_signature^value)*1099511628211ull;
@@ -7432,7 +7459,7 @@ public:
                 append_ground_layer(bed_vertices, 4.0f, flat_grid, &ground_indices[geometry_bed]);
                 append_ground_layer(water_vertices, 5.0f, flat_grid, &ground_indices[geometry_water]);
             }
-            if (river_assets_ready && ((tile.river_code & 170u) != 0 || (fidelity_profile && natural.river_affects((tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2))))
+            if (river_assets_ready && ((tile.river_code & 170u) != 0 || (fidelity_profile && natural.river_affects((tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,observe_river_page))))
                 append_ground_layer(river_vertices, 9.0f,
                                     frame.tile_width >= 96 ? 32 : 16, &ground_indices[geometry_river]);
             if (!pickup_profile && ground < 11) {
@@ -7704,7 +7731,7 @@ public:
                         for(unsigned attempt=0;attempt<4 && !placed;attempt++){
                             river::P point;double side=((seed&1u)?1.:-1.)*((attempt&1u)?-1.:1.);
                             double margin=11.+c3x_renderer::stable_random(seed^0x2c07u)*1.5+(attempt/2u)*3.;
-                            if(!natural.river_page(query_point.x,query_point.y).bank_point(query_point,margin,side,point))continue;
+                            if(!natural.river_page(query_point.x,query_point.y,observe_river_page).bank_point(query_point,margin,side,point))continue;
                             int c=int(std::floor(point.x)),r=int(std::floor(point.y));
                             auto receiving=topology_cache.current(observed_coordinate_key(c+r,c-r));
                             if(receiving==nullptr || ground_type(receiving->occurrence)>=11)continue;
@@ -7713,7 +7740,7 @@ public:
                             bool clear=relief_at_world(float(point.x),float(point.y))[0]+2.5f<18;
                             for(auto const&vertex:asset.vertices){river::P q{point.x+(vertex.position[0]*cosine-vertex.position[1]*sine)*scale,
                                 point.y-(vertex.position[0]*sine+vertex.position[1]*cosine)*scale};
-                                if(natural.river_sample(q).distance<5.5){clear=false;break;}}
+                                if(natural.river_sample(q,observe_river_page).distance<5.5){clear=false;break;}}
                             if(!clear)continue;
                             owner=&receiving->occurrence;local_u=u;local_v=v;placed=true;
                         }
@@ -8028,7 +8055,7 @@ public:
             // GPU tile cache. Never reuse samples across authoritative edits.
             std::uint64_t natural_key=1469598103934665603ull;
             for(auto value:{std::uint64_t(std::uint32_t(tile.tile_x)),std::uint64_t(std::uint32_t(tile.tile_y)),
-                    tile_content_signature(tile),content_revision,std::uint64_t(frame.world_topology_revision),
+                    tile_content_signature(tile),content_revision,
                     std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
                     std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y)})
                 natural_key=(natural_key^value)*1099511628211ull;
