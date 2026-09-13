@@ -29,7 +29,7 @@ PixelInput VSReflection(IntegratedVertexInput input) {
  float h=max(0,input.q6_world.z-NativeReflection.z);
  o.position.y-=h*NativeReflection.x*4*c3x_inverse_viewport_size.y;
  float base=input.position.y+h*NativeReflection.x;
- o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_translation.y)/16384,.001,.999);
+ o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_depth_translation)/16384,.001,.999);
  return o;
 }
 float4 PSReflection(PixelInput input):SV_Target {
@@ -40,6 +40,10 @@ float4 PSReflection(PixelInput input):SV_Target {
 '''
     (HERE/'hydrology.hlsl').write_text(hydro+terrain_reflect+read(LAB/'shaders/hydrology/coastal_waves.hlsl'))
     feature=read(HERE.parent/'render_core/terrain_scene.hlsl')
+    # The preserved feature material closure keeps its old binding adapter.
+    # Bring only its viewport-depth binding into the current scene contract.
+    feature=feature.replace('+ c3x_viewport_translation.y;', '+ c3x_viewport_depth_translation;')
+    feature=feature.replace('// Use a power-of-two pixel depth range. An integer camera movement now adds\n// an exactly representable depth offset; coplanar neighbors cannot exchange\n// their depth-test order because of viewport-dependent division roundoff.','// Use one power-of-two pixel depth range, independent of raster-region XY.\n// Integer basis offsets are representable, but D24 rasterization can still\n// change near-coplanar rounding at a world-origin transition. Material order\n// and depth-write rules remain explicit; stored depth carries its basis.')
     feature=read(LAB/'shaders/lighting/shadow_policy.hlsl')+'\n'+feature
     old='float alpha = frame_cast_shadow_strength() * 0.22 *'
     assert feature.count(old)==1
@@ -68,7 +72,7 @@ FeaturePixelInput VSReflection(PackedFeatureInput input) {
  float h=max(0,input.world.z-NativeReflection.z);
  o.position.y-=h*NativeReflection.x*4*c3x_inverse_viewport_size.y;
  float base=input.position.y+h*NativeReflection.x;
- o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_translation.y)/16384,.001,.999);
+ o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_depth_translation)/16384,.001,.999);
  return o;
 }
 float4 PSReflection(FeaturePixelInput input):SV_Target {
@@ -84,7 +88,7 @@ P VSReflection(V input) {
  float h=max(0,input.world.z-NativeReflection.z);
  o.position.y-=h*NativeReflection.x*4*inverse_size.y;
  float base=native_project_position(input.position,input.world.xyz).y+h*NativeReflection.x;
- o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+translation.y)/16384,.001,.999);
+ o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+depth_translation)/16384,.001,.999);
  return o;
 }
 float4 PSReflection(P input):SV_Target {

@@ -34,7 +34,7 @@ struct ID3D11Device{
     }
 };
 struct ID3D11DeviceContext{
-    int status=S_FALSE;bool disjoint=false;unsigned begins=0,ends=0,reads=0;UINT64 time=0;
+    int status=S_FALSE;bool disjoint=false,unstable=false;unsigned begins=0,ends=0,reads=0;UINT64 time=0;
     void Begin(ID3D11Query*){++begins;}
     void End(ID3D11Query* q){q->stamp=(time+=10);++ends;}
     int GetData(ID3D11Query* q,void* data,unsigned bytes,unsigned flags){
@@ -42,7 +42,7 @@ struct ID3D11DeviceContext{
         if(status!=S_OK)return status;
         if(q->kind==D3D11_QUERY_TIMESTAMP_DISJOINT){
             D3D11_QUERY_DATA_TIMESTAMP_DISJOINT value{1000,disjoint};assert(bytes==sizeof(value));std::memcpy(data,&value,bytes);
-        }else{assert(bytes==sizeof(q->stamp));std::memcpy(data,&q->stamp,bytes);}
+        }else{assert(bytes==sizeof(q->stamp));if(unstable)++q->stamp;std::memcpy(data,&q->stamp,bytes);}
         return S_OK;
     }
 };
@@ -64,11 +64,42 @@ int main(){
     context.disjoint=true;owner.poll(&context,reject);assert(invalid==2);
     assert(owner.begin(&device,&context,202));owner.draw_end(&context);owner.end(&context);
     context.status=-1;owner.poll(&context,reject);assert(invalid==3);
+    context.status=S_OK;context.unstable=true;
+    assert(owner.begin(&device,&context,206));owner.draw_end(&context);owner.end(&context);
+    owner.poll(&context,reject);assert(invalid==4);context.unstable=false;
     owner.reset();assert(allocated==0 && owner.skipped==0);
     device.creates=0;device.fail_at=2;assert(!owner.begin(&device,&context,203));assert(owner.failed);
     assert(!owner.begin(&device,&context,204));owner.reset();assert(allocated==0);
     device.fail_at=-1;assert(owner.begin(&device,&context,205));owner.draw_end(&context);owner.end(&context);
     owner.reset();assert(allocated==0); // Reset discards pending queries without polling or waiting.
+    GpuAnimationTelemetry animation;context.status=S_OK;context.disjoint=false;
+    assert(animation.begin(&device,&context,300,2));
+    {GpuAnimationTelemetry::Pass p(animation,&context,GpuAnimationTelemetry::import);
+     GpuAnimationTelemetry::Pass nested(animation,&context,GpuAnimationTelemetry::body);}
+    {GpuAnimationTelemetry::Pass p(animation,&context,GpuAnimationTelemetry::finish);}
+    animation.end(&context);
+    unsigned animation_reports=0;
+    animation.poll(&context,[&](auto const& sample){
+        assert(sample.valid && sample.sequence==300 && sample.frequency==1000);
+        assert(sample.total==50 && sample.ticks[GpuAnimationTelemetry::import]==10 && sample.ticks[GpuAnimationTelemetry::finish]==10);
+        assert(sample.counts[GpuAnimationTelemetry::body]==0);++animation_reports;
+    });assert(animation_reports==1);
+    context.status=S_FALSE;
+    for(unsigned i=0;i<2;++i){assert(animation.begin(&device,&context,301+i,1));animation.end(&context);}
+    assert(!animation.begin(&device,&context,303,1));animation.poll(&context,[&](auto const&){assert(false);});
+    context.status=S_OK;context.disjoint=true;
+    animation.poll(&context,[&](auto const& sample){assert(!sample.valid && sample.total==0);++animation_reports;});assert(animation_reports==3);
+    context.disjoint=false;assert(animation.begin(&device,&context,304,1));
+    {GpuAnimationTelemetry::Scope cancelled{animation,&context};}
+    animation.poll(&context,[&](auto const& sample){assert(!sample.valid);++animation_reports;});assert(animation_reports==4);
+    context.unstable=true;assert(animation.begin(&device,&context,307,1));animation.end(&context);
+    animation.poll(&context,[&](auto const& sample){assert(!sample.valid);++animation_reports;});assert(animation_reports==5);
+    context.unstable=false;
+    assert(!animation.begin(&device,&context,305,1025));
+    animation.reset();assert(allocated==0);
+    device.creates=0;device.fail_at=4;assert(!animation.begin(&device,&context,306,2));assert(animation.failed);
+    animation.reset();assert(allocated==0);
+
 }
 '''
         self.run_program(program)

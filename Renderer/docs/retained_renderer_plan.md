@@ -3,7 +3,7 @@
 Current status and preserved evidence for the retained renderer. Planned work
 is not evidence that implementation or performance targets pass.
 
-## Current status — native identity retained; shared animated resource geometry next
+## Current status — common scene depth retained; coherent animation consumer underway
 
 Local region validity passes the dense edit comparison: the four-edit sequence
 is 16.8–16.9% faster, with exact independent full redraws. Distant edits average
@@ -25,6 +25,39 @@ not captured live state.
 [the benchmark workflow](benchmark_workflow.md) specifies validation. This status
 is the single active task record.
 
+### How this reaches fast rendering
+
+We are completing reusable world/instance inputs and have begun explicit pass
+ownership; we have not yet made general view submission efficient. The dense
+standalone workload remains roughly 160–170 ms, against a first below-100 ms gate
+and then 33 ms. These are workload gates, not promised native frame rates.
+The throughput path is resident content → selected compatible draw lists → fewer
+repeated render passes and output transfers → exact caller-driven native
+consumption. Local revisions keep that path incremental when game state changes.
+Raster reuse can skip work, but newly exposed views must also be inexpensive.
+
+The current resource representation is a prerequisite, not the decisive speedup.
+Order-preserving instance submissions were implemented and tested, then removed
+after mixed whole-workload results. The selected task addresses the depth/overlap contract that prevents a coherent
+dynamic scene pass from replacing repeated region rendering. Both pre-raster
+rebasing and post-raster import failed exact legacy ordering; the GPU witness
+below establishes that stored depth alone cannot recover the new rounding.
+The user authorized small reviewed depth-rounding differences on 2026-09-13.
+The common producer contract is now retained; the immediate coherent consumer is
+underway. Failed numerical post-raster rebasing remains closed.
+Animation completion is about 85–94 ms and much of that is GPU/readback wait;
+we have not isolated all of that wait as transfer cost. A few milliseconds saved
+in pose maps/bindings cannot by itself meet the navigation target. Do not chain
+further helper optimizations if batching leaves that dominant cost intact.
+The previously rejected texture-array region batch remains closed; it did not
+remove the underlying repeated region work enough to help.
+
+Native publication identity is connected, but live behavior remains unverified.
+The renderer supplies ready compatible work when Civ III calls; it never notifies
+the game. Exact-camera overlays/picking constrain camera handoff now, so asynchronous
+bookkeeping cannot be presented as a substitute for faster view rendering. The
+strategic live checkpoint still requires staging/install/game authorization.
+
 ### Destination checkpoints
 
 The user's clarified objective keeps all six capabilities in scope. This table
@@ -35,7 +68,7 @@ records architectural gaps, not a second task queue or completion percentage.
 | Complete persistent scene/world-instance database | A bounded canonical captured-appearance owner now feeds compiler lookups and retains local revisions; resident compiled-content bindings are now consumed; complete appearance capture and sparse object/action ownership remain unfinished. |
 | General spatially selected draw lists | Static draw/receiver/caster/region consumers now read compact resident occurrence records; general spatial selection feeding compatible batches remains unfinished. |
 | Systematic local revisions and invalidation | Local topology/dependency observations and retained-region validity now preserve unaffected work; compiled-input owners still have broad revision invalidation. |
-| Broad batching/instancing with explicit passes | Shared natural buffers and an explicit resource pass exist; general asset/instance batching remains unfinished. |
+| Broad batching/instancing with explicit passes | Animated resources now draw shared resident source meshes with separate pose/placement inputs through body/shadow passes; compatible instance submissions and general batching remain unfinished. |
 | Completed asynchronous Civ III presentation | The injected compositor now supplies lifecycle/visibility identity and consumes exact queued or compatible ambient work through the existing owner; general asynchronous camera handoff and live presentation verification remain unfinished. |
 | Camera movement with bounded reconstruction/rendering/readback | Retained overlap and region reuse exist; latest accepted-control dense navigation is 161–164 ms and remains above the first 100 ms gate. |
 
@@ -43,7 +76,8 @@ The publication handoff, captured-appearance owner, resident-content bindings an
 compact occurrence records are retained. The first static terrain batch representation
 was rejected after exact but unhelpful whole-workload results. Native request identity
 is now connected and verified in source/replay. Shared animated resource geometry
-is the current selection. Other gaps remain explicit dependencies,
+is structurally retained; the common scene-depth contract is now retained and its coherent animation
+consumer is the current selection. Other gaps remain explicit dependencies,
 not tasks to pursue concurrently.
 
 ### Prioritization correction
@@ -82,85 +116,295 @@ explicitly rules out worker-completion notification/redraw requests. The propose
 notification code was removed before any build or native changes. Existing game
 animation scheduling is preserved, not converted into a completion channel.
 
-### Single next implementation task — shared animated resource geometry
+### Single next task — causal animation GPU/CPU breakdown
 
-The native bridge now carries identity into ordinary publication selection; its
-strategic live checkpoint is explicit below. The remaining scene/database, spatial
-selection and batching gaps still share a missing responsibility: **animated mesh
-assets and instance placement are not separated at GPU submission**. Static
-occurrence records already provide that separation for resident static content.
-Resources still skin every instance on the CPU, project every posed vertex into
-body and shadow streams, and upload both streams before clipping/submission.
-`ResourceAnimation` already owns the source mesh/palettes/texture, `ResourceAnchor`
-already supplies placement and deterministic phase, and the explicit resource pass
-already separates compatible body/shadow bindings. Extend these owners.
+**Next task:** extend the existing optional frame telemetry to separate background
+preparation/import, resource shadow/body GPU command spans, finishing, staging copy,
+CPU completion wait and CPU bitmap copy. Measure the accepted common-depth renderer
+and the exact but slower coherent-window consumer with the existing dense fixture.
+The user explicitly requested this causal breakdown before selecting further
+architectural work on 2026-09-13. Do not add a runner or restart baseline campaigns.
 
-**Next task:** implement shared animated resource mesh inputs with per-instance
-pose/placement for the existing resource body and projected-shadow passes. Evaluate
-GPU skinning/projection as the bounded implementation, preserving the authored
-interpolated pose and normal transform. Reuse the existing asset, dynamic-buffer
-and pass owners; replace the superseded per-vertex CPU projection/upload path once
-validated, rather than keeping another optional pose cache or renderer.
+- **Capability enabled:** select the next coherent-pass implementation from measured
+  import, rendering and finishing costs, rather than proxy draw counts or Map wait.
+- **Limitation removed:** current animation completion mixes GPU execution, queued
+  work, driver behavior and transfer wait; it cannot identify which responsibility
+  prevents a coherent pass from delivering a useful benefit.
+- **Destination connection:** the result chooses whether retained static ownership,
+  compatible draw submission or output completion is the necessary next capability.
+  Preserve caller-driven exact-camera native consumption; no completion notification.
+- **Acceptance:** bounded optional queries, delayed nonblocking retrieval, explicit
+  missing/disjoint samples, no added waits or stage synchronizations; align GPU and
+  CPU records by request and avoid adding overlapping intervals. Verify instrumentation
+  preserves images and existing resource/ownership contracts. Include whole-workload
+  results separately from profiled timings.
+- **Stop condition:** obtain the smallest representative matched causal comparison
+  sufficient to select exactly one bounded architectural implementation. If the VM
+  cannot provide valid timestamps, report that limitation and use a narrowly scoped
+  existing-harness ablation for the unresolved decision. Do not infer pure GPU or
+  transfer cost from CPU Map wait alone.
 
-- **Capability afterward:** resource instances draw resident shared mesh content
-  using their own pose and authoritative occurrence transform; both body and shadow
-  use the same pose contract. This is a bounded animated-asset/instance capability,
-  not a claim of a complete world database or general batching.
-- **Repeated work removed:** CPU skinning, camera projection and full body/shadow
-  vertex uploads for every occurrence on each animation composition. Existing
-  dense trace samples put pose preparation around 15 ms and uploads around
-  5.6–6.2 MB per composition. The whole animation phase is much larger; do not
-  attribute its readback/GPU wait to CPU skinning or promise to remove all of it.
-- **Connection to the destination:** compatible instances can subsequently share
-  asset/material bindings and instance submissions without first reconstructing
-  individual screen-space meshes. This also lets newly exposed views render
-  resident animated assets when raster reuse misses. Unit action ownership,
-  waves and deferred wonders/Districts stay under their established contracts.
-- **Architectural acceptance:** independently preserve posed positions, inverse-
-  transpose normals (including collapsed bones), alpha coverage, depth, phase,
-  source facing, captured anchors and projected shadows. Keep unchanged budgets,
-  explicit failure/reset/asset-replacement cleanup and >=512 MiB sampled contiguous
-  headroom. Account for shared source/palette and temporary storage, not only the
-  replaced uploads. Start with the existing small resource boundary and supported
-  zoom/phase checks; image equality remains required for unchanged appearance.
-- **Performance acceptance and stop:** after exact focused checks, use the existing
-  matched short dense navigation sequence with identical production defaults and
-  reset policy. Retain a useful whole-request improvement; a structurally necessary
-  representation can remain without a large speedup only if it avoids material
-  regression and actually exposes the shared mesh/instance input needed by the
-  compatible instance submission above. Reject extra machinery that merely moves
-  CPU work into more expensive repeated GPU work. Close after the bounded result;
-  do not expand into a skinning framework or another baseline campaign.
+The common-depth prerequisite is retained. The coherent consumer remains only as
+a diagnostic candidate for this named question; it is not accepted production code.
+The two-dimensional candidate is exact on six boundary checks and all saved dense
+images, but averages 175.07 / 167.72 ms versus 154.60 / 147.33 ms control. Its 520x520
+scratch resolves unused pixels for small windows. A partial software MSAA resolve
+was rejected at the GPU witness because it did not equal hardware resolution on
+varied per-sample values. No oracle was weakened and no performance claim follows.
 
-### Shared resource geometry — implementation evaluation
+The first consumer combined up to four horizontal cells in 16.2 MiB scratch.
+Exact MSAA import passed; assigning each cell its own interior fixed a one-pixel
+seam difference, after which all six boundary redraws and dense saved images were
+exact. Whole navigation was 157.79 / 154.06 ms versus a fresh common-depth control
+at 154.60 / 147.33 ms. It is rejected as a speedup. The bounded revision uses complete
+rectangles in both dimensions and imports directly from cached textures, removing
+the redundant intermediate cell copies. This changes the consumer implementation,
+not correctness thresholds or the architectural destination. Evidence lives under
+`Renderer/native/build/coherent-resource-pass-20260913/`.
 
-The first candidate uses resident source meshes and per-instance bone/placement
-constants in vertex shaders. It builds and passes 133 category tests (one existing
-skip), nine focused pose/bounds checks, and the small native five-publication
-witness. An initial dense comparison found two changed wheat-edge pixels. Exact
-CPU bounds did not remove them. A bounded GPU probe isolated one-bit world-coordinate
-rounding differences; precise world arithmetic restored exact dense images without
-changing the shared compiler or relaxing pixel equality. The temporary CPU-bounds
-diagnostic was removed. Its source and evidence remain under
-`Renderer/native/build/resource-instances-20260913/`.
+### Common scene-depth prerequisite — retained
 
-That corrected vertex-stage version is not retained as the final implementation:
-whole-request evidence is mixed. Candidate means were 154.843 and 168.703 ms;
-the intervening two `assets_loaded` CPU control cases were 187.090 and 159.364 ms.
-All four 14-offset cases preserve saved images, inputs, ownership/accounting and
-exclusive-GPU checks. CPU pose preparation falls, but vertex skinning repeats for
-body/shadow and regional submissions, and GPU/readback variation offsets the saving.
-There is no reliable whole-workload speedup claim from these pairs. The earlier
-incorrect-image pair and shader-cache warmups remain diagnostic evidence only.
+Current map/resource producers now use one explicit scene-depth basis, independent
+of raster placement. Nearest-4096 origin changes retire incompatible backdrops;
+D24/MSAA4, material order, depth writes, normals and color reconstruction remain.
+The user authorized small reviewed depth-rounding differences on 2026-09-13.
+The production GPU witness proves compatible regional producers and one common
+consumer, including front/behind and identical coplanar order across seven origins.
+Focused integration passes 254 tests (one existing skip) and resource playback.
+Candidate identity: `374a1f3e7d99e8518745e6998c0bf95405ae6e5aa19fc90c066fc07a49621bae`;
+DLL: `7451d4530befb3b25218534824246d7732de824cf7cfa33af55400605e60b484`.
 
-The same selected task is now evaluating **one GPU skinning dispatch per instance,
-with a shared posed mesh consumed by body and shadow passes**. Source meshes,
-instance constants and posed buffers remain under the existing asset/buffer owners
-and unchanged 32 MiB resource-storage cap. Camera projection remains per occurrence;
-no pose cache, extra queue or new optional rendering mode is introduced. Existing
-legacy profiles keep their established CPU path. The revised isolated build and
-focused pose tests pass; native rendering and whole-request acceptance are pending.
-Do not describe this candidate as accepted or stage it while evaluation is open.
+Dense two-case navigation averages 152.50 / 160.17 ms, consistent with preserved
+155.80 / 169.75 ms controls but not a fresh interleaved speedup claim. All saved
+dense frames preserve the reviewed 25 changed pixels, maximum channel delta 3;
+revisits are exact and minimum sampled contiguous headroom is 1701.93 MiB.
+The 640x480 zoom warmup is exact at 128/160; 192 differs by 27 pixels (max 16).
+Its wrapper detected shader-cache warmup, so it is not timing acceptance.
+This prerequisite is retained for the immediate coherent consumer, without an
+independent speedup claim. Animation completion remains about 85–94 ms, including
+GPU/readback wait whose pure transfer portion has not been isolated.
+Evidence: `Renderer/native/build/scene-depth-pass-20260913/`,
+`scene-depth-common-navigation-candidate2-20260913`, and
+`scene-depth-common-zoom-20260913` beneath `Renderer/native/build/`.
+No staging, installation, injected compilation or live-game acceptance occurred.
+
+### Preserved scene-depth implementation decision
+
+The most consequential barrier remains repeated regional dynamic passes. Their
+retained static color and D24/MSAA4 depth use guarded region projections. The
+larger-pass probe reduced submission from 26–33 ms to 2–6 ms but failed correctness.
+The witnesses below now show why preserving every old depth-rounding outcome is
+not a simple coordinate conversion: different surfaces can have identical stored
+D24 values yet require different values after a common-origin rasterization.
+
+Previously selected task: complete an explicit common scene-depth contract preserving existing material/depth-write rules
+for existing static map and resource body/shadow producers through the existing
+viewport settings, pass states and backdrop owner. On 2026-09-13 the user approved
+allowing the small reviewed depth-rounding differences while preserving visual
+occlusion/layering and native ownership. This authorizes the architectural contract
+change, not staging, reference replacement or game launch. The common producer
+basis is being revised under that authorization; no post-raster import or optional
+legacy-depth path is added. The reviewed comparison is
+`Renderer/native/build/scene-depth-20260913/depth-contract-review.png`.
+
+The pass-owner inspection narrows the implementation boundary: the current farm
+compiler distinguishes base, crop and building components, then merges them into
+`farm_vertices`; `submit_geometry` draws that entire layer with depth writes enabled.
+Disabling depth writes for all farms would therefore also affect buildings and is
+not a justified fix. The existing natural-decal pass already uses a depth-tested,
+non-writing state. Any explicit coplanar pass must preserve component semantics
+and opaque-body occlusion through the existing compiler/draw owners, rather than
+assigning behavior from texture indices or treating every farm component as flat.
+A candidate separated only horizontal crop assets into a non-writing ground pass,
+preserving building depth writes. It passed the boundary witness but changed 60,617
+dense pixels (maximum channel delta 68), well beyond the reviewed rounding change.
+That split and its dedicated test extension were removed. Existing farm/material
+depth-write rules are retained; the common-depth basis remains the selected
+prerequisite. Evidence is under `Renderer/native/build/scene-depth-pass-20260913/`.
+
+- **Capability afterward:** retained static depth and selected dynamic instances
+  can participate in a coherent view/band pass with explicit compatible depth and
+  overlap rules. This enables replacing repeated regional resource rendering.
+- **Work and limitation removed:** region-dependent numerical tie-breaking stops
+  defining the architecture. The subsequent coherent pass, rather than this
+  prerequisite alone, must remove repeated body/shadow submission and finishing.
+  Use existing owners and pass states; do not add caches or preserve another
+  optional rendering path merely to reproduce rounding artifacts.
+- **Connection to the destination:** the coherent consumer is the immediate next
+  capability if this contract passes; general spatial selection and compatible
+  batching can feed it. New views must render resident world content efficiently.
+  Native consumption remains caller-driven and exact-camera compatible. The
+  strategic live checkpoint still needs separate staging/install/game authority.
+- **Architectural acceptance:** preserve existing material order and depth-write contracts,
+  correct overhang/body/shadow occlusion and stable camera/origin behavior. Preserve
+  D24/MSAA4, source normals, color reconstruction, ownership and visibility. Compare
+  retained operation against independent full redraws under the new contract,
+  including camera translation, wrap, zoom, removal and reset. Preserve and report
+  old/new image differences separately; do not silently relax an oracle or count
+  the permission as acceptance of untested future changes. Account for
+  metadata and transient targets within existing budgets and >=512 MiB headroom.
+- **Performance acceptance and stop:** a correct bounded prerequisite may be
+  retained without a large immediate speedup only if it avoids material regression
+  and demonstrates the common consumer dependency on the GPU. Reject unhelpful
+  complexity. Stop origin/format/offset tuning: the preserved witnesses already
+  establish the old rounding constraint. Test the complete bounded
+  depth/overlap contract before allocating the larger consumer target.
+
+### Post-raster depth import — rejected at the small witness
+
+The alternative preserves static color/rasterization, imports each D24/MSAA sample
+into a second depth target, and draws the identical coplanar captured farm quad
+through the proposed common consumer. The unchanged-origin import is exact.
+Integer-code translation fails at -128 (15 pixels) and +2,048 (292 pixels);
+normalized floating translation also fails at ordinary offsets, including +636
+(471 pixels). These are diagnostic supersampled pixels with flat colors, not
+claims of full-scene visual difference. No import code entered the renderer.
+
+A further GPU witness reads actual per-sample depth codes from two differently
+tessellated captured farm surfaces. At **11 identical sample positions**, both
+surfaces have the same old D24 code but different common-origin codes. For example,
+old `8249803` becomes `7598540` for one surface and `7598539` for the other at the
+same pixel/sample and +636 offset. Thus the stored depth value, origin and sample
+position do not contain enough information for a unique exact conversion to the
+newly rasterized depth. A depth-only rebase cannot generally reconstruct it.
+This is a concrete architectural tradeoff, not a reason to try more offset values.
+
+`depth-import.cpp/.log`, `depth-ambiguity.cpp/.log` and `decision.json` under
+`Renderer/native/build/scene-depth-20260913/` preserve the executable evidence.
+The permission checkpoint above is required by the current exact-output contract;
+no visual acceptance, performance acceptance, staging or live integration is claimed.
+
+### Common floating-point depth basis — rejected and removed
+
+The candidate separated depth translation from raster XY across static and dynamic
+producers, with bounded world-origin metadata in the existing backdrop owner.
+Builds and two behavioral contracts passed. A D24/MSAA4 witness consumed static
+depth from two regional projections in one larger dynamic pass with exact simple
+occlusion/coplanar ordering; its intentionally incompatible basis changed 4,096
+pixels. Five small native publications and six guarded-boundary redraws also
+matched the accepted renderer. These simple witnesses did not cover differently
+tessellated overlapping farm surfaces.
+
+The dense candidate passed same-build revisits but differed from the accepted
+renderer at **25 pixels, maximum channel delta 3**. Its 153.594 ms mean is not a
+performance acceptance result. A temporary capture then extracted the actual
+retained buffers/settings in the region containing a differing pixel. The capture
+hook was removed after that one diagnostic; its timings are excluded.
+
+A small GPU replay of that captured farm chunk, using the production vertex
+adapter and flat diagnostic colors, reproduces **44 changed supersampled pixels**
+when only the depth offset changes by 636 pixels. Whole-region shifts of +/-128
+also change 27 pixels; shifts of 512, 1,024, 2,048 and 4,096 fail too. The same
+geometry and order therefore select different overlapping layers after pre-raster
+depth translation. This establishes the precision-sensitive ordering dependency;
+the exact internal rounding stage has not been isolated. Changing the origin's
+phase/granularity is not a reliable fix, and no tolerance or appearance change is
+accepted.
+
+The implementation and its tests are archived under
+`Renderer/native/build/scene-depth-20260913/rejected-floating-basis-source/`.
+`decision.json`, `captured-region.bin`, `pixel-triangles.json` and the two
+`farm-depth*.log` witnesses preserve the diagnosis. The original source snapshots
+were restored and dependent shaders regenerated through the preparation guard.
+Current compiled inputs and implementation identity exactly match the previous
+passing resource Integration receipt; no redundant baseline campaign was run.
+Shared resource geometry and all previously validated improvements remain intact.
+Post-raster import was then tested and rejected as recorded above. The single next
+task requests an explicit stable depth/overlap contract rather than another attempt
+to preserve every legacy rounding outcome.
+
+### Ordered resource instancing — rejected and removed
+
+The preflight found real compatible batches: 310 selected draws formed 135
+consecutive runs in the initial dense view; after movement, 292 draws formed 145
+runs. Free reordering would not lower those counts further in these views. The
+candidate implemented one shared typed pose/placement upload, one selected instance
+stream, and indexed instanced draws with preserved order and independent phase.
+It removed per-instance constant-buffer allocation/binding and added no pose cache.
+
+**Correctness/resource evidence:** isolated builds and two behavioral pose/batch
+contracts pass, including denied-growth preservation. The small native witness
+passes five exact publications, and its images match the accepted CPU renderer.
+Supported zoom images at 128/160/192 are also exact against the existing independent
+control; that zoom invocation was a shader-cache warmup, not acceptance timing.
+All four dense timed cases preserve saved images and exact revisits, inputs,
+binaries, ownership/accounting and exclusive-GPU checks. Candidate minimum sampled
+contiguous headroom was 1,688.6 MiB; the 32 MiB resource limit was unchanged and
+included upload-growth transients.
+
+**Whole-workload decision:** candidate means were **175.920 and 161.390 ms**;
+the intervening matched controls were **155.804 and 169.746 ms**. These are mixed
+results, not a repeatable improvement. Fewer calls did not establish faster dense
+navigation, so the extra upload/submission code and its dedicated test were removed.
+The previous shared mesh/instance representation remains intact. No broader
+integration campaign or native installation was run for the rejected candidate.
+
+Evidence and exact source are preserved under
+`Renderer/native/build/resource-instance-batches-20260913/` (`comparison.json`,
+`opportunity.json`, small/zoom comparisons and `rejected-source/`). The first control
+invocation detected changed shader-cache inputs and stopped before timed cases;
+it is excluded. The single next task above addresses the pass/depth boundary,
+not further tuning of pose buffers, batch ordering, or raster-cache policy.
+
+### Shared resource geometry — structurally retained
+
+The retained implementation draws resident source meshes using per-instance
+bone/placement constants in vertex shaders. It removes per-occurrence CPU skinning,
+CPU camera projection and full body/shadow vertex uploads. Both existing passes
+share the source and pose contract; legacy visual profiles keep their established
+CPU path. No optional cache, new queue or presenter is introduced.
+
+An initial dense comparison found two changed wheat-edge pixels. Exact CPU bounds
+did not remove them. A bounded GPU probe isolated one-bit world-coordinate rounding;
+precise world arithmetic restored exact dense images without changing the shared
+compiler or relaxing equality. The temporary CPU-bounds diagnostic was removed.
+The retained sources and comparison receipt are under
+`Renderer/native/build/resource-instances-20260913/retained-decision.json`.
+
+**Architectural decision:** retain the shared mesh/instance foundation as the user
+requested. It exposes reusable mesh and independent instance inputs that the CPU
+screen-space streams did not. Those inputs can feed a coherent scene pass after
+the selected common-depth contract is established; the unsuccessful regional
+instance-submission variant above is not required to keep this foundation.
+It is not a complete world database, general batching, or a navigation gate pass.
+
+**Performance evidence:** corrected candidate means were **154.843 and 168.703 ms**;
+the intervening two `assets_loaded` CPU control cases were **187.090 and
+159.364 ms**. All four 14-offset cases preserve saved images, inputs,
+ownership/accounting and exclusive-GPU checks. Results are mixed: no reliable
+whole-workload speedup or material regression is established. The small witness's
+recurring uploads fall from 1,173,960 to 22,288 bytes; that is removed transfer work,
+not a claimed frame-time improvement. Dense sampled resource storage peaks at
+420,664 bytes versus 12,120,192 in the CPU control, under the unchanged 32 MiB cap;
+unchanged CPU asset payloads and other renderer owners remain separately accounted.
+Minimum candidate sampled contiguous headroom is **1,707.8 MiB**.
+
+**Dominant remaining cost:** animation composition averages about 85–94 ms in the
+two candidate runs, including repeated regional submissions and GPU/readback wait.
+Pose preparation drops to about 6.3–6.4 ms, but that alone does not make navigation
+fast. The selected instance-submission capability must demonstrate useful end-to-end
+consequences; the below-100 ms target and live presentation remain unmet.
+
+**Rejected alternative:** compute-once skinning into a shared posed buffer compiled
+and passed CPU pose contracts, but failed native correctness: the initial small
+image omitted resources (11,723 changed pixels versus the CPU control), and the
+dense exact revisit failed at offset step 4. Its timing is excluded. Both compute
+shader and UAV storage were removed from active code; source/evidence is preserved
+under `compute-raw-rejected-source/` and
+`Renderer/native/build/resource-compute-navigation-candidate1-20260913/`.
+Do not keep or revisit that extra machinery on a speculative benefit.
+
+**Verification:** 133 earlier resource-category tests (one existing skip), nine
+focused pose/bounds checks and the five-publication small native witness pass.
+The corrected dense images are exact against the accepted CPU control. Current production verification passes 252 focused tests (one existing skip),
+six temporal frames, zoom-return, exact cold scroll and removal comparisons, with
+zero fallback. Receipt: `Renderer/lab/out/integration/resources.json`. The required
+category build exposed an existing batch-variable/toolchain discovery error;
+`BUILD.bat` and the Lab preview build now use the already verified benchmark
+discovery, including preview Visual Studio installations. Production shader/source
+identity is verified; no staging, installation, reference replacement or Civ III
+launch occurred. Additional supported-zoom independent witnesses remain necessary
+when changing the selected instance submission contract.
 
 ### Native request identity — structurally retained
 

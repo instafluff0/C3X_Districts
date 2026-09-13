@@ -51,6 +51,22 @@ class NavigationAnalysisTests(unittest.TestCase):
         self.assertIsNone(missing["nested_diagnostics"]["gpu_execution_ms"])
         self.assertEqual("unmeasured",endpoint_accounting([])["status"])
 
+    def test_animation_gpu_spans_are_aligned_and_not_added_to_cpu_wait(self):
+        lines=["TIMING_SETUP schema=1 frequency=1000 process_enter=0 source_done=10 dll_done=20 definitions_done=30 initial_begin=40 initial_done=100 dropped=0",
+               "TIMING_REQUEST id=0 capture_begin=30 capture_end=35 caller_enter=40 caller_return=99 correct_done=100 geometry_ticks=20 draw_ticks=10 readback_ticks=5 result=1 tiles=12"]
+        gpu="qpc=200 sequence=3 stage=animation-gpu-phases sample_sequence=2 valid=1 frequency=1000 gpu_span_ms=10 unassigned_span_ms=1 background_ms=1 import_ms=2 receivers_ms=0 shadow_ms=1 body_ms=2 finish_ms=2 transfer_ms=1 spans=7 ring_skipped=0"
+        trace=["qpc=41 sequence=2 stage=render-begin",
+               "qpc=98 sequence=2 stage=animation-phases pose_prepare_ms=1 backdrop_submit_ms=2 animated_submit_ms=3 readback_submit_ms=1 readback_wait_ms=8 cpu_copy_ms=1",gpu]
+        r=endpoint_accounting(lines,trace)["requests"][0]
+        self.assertEqual(59,r["caller_ms"])
+        self.assertEqual(8,r["animation_cpu_spans_ms"]["readback_wait"])
+        self.assertEqual(10,r["animation_gpu_command_spans"]["total_ms"])
+        self.assertEqual(2,r["animation_gpu_command_spans"]["phases_ms"]["import"])
+        invalid=endpoint_accounting(lines,trace[:-1]+[gpu.replace("valid=1","valid=0")])["requests"][0]["animation_gpu_command_spans"]
+        self.assertEqual("invalid",invalid["status"]);self.assertNotIn("total_ms",invalid)
+        with self.assertRaisesRegex(ValueError,"GPU span accounting"):
+            endpoint_accounting(lines,trace[:-1]+[gpu.replace("gpu_span_ms=10","gpu_span_ms=5")])
+
     def test_persistent_cases_require_reset_and_input_checks(self):
         body=["TIMING_SETUP schema=1 frequency=1000 process_enter=0 source_done=10 dll_done=20 definitions_done=30 initial_begin=40 initial_done=100 dropped=0",
               "TIMING_REQUEST id=0 capture_begin=30 capture_end=35 caller_enter=40 caller_return=99 correct_done=100 geometry_ticks=20 draw_ticks=10 readback_ticks=5 result=1 tiles=12",

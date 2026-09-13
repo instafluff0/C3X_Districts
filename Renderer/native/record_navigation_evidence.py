@@ -134,6 +134,8 @@ def main(argv=None):
     parser.add_argument("--reflection-ablation", action="store_true", help="Diagnostic only: omit reflections to estimate their cost; images are not current quality")
     parser.add_argument("--diagnostic-routes", choices=("full", "draw", "all"), default="full",
                         help="Benchmark only: omit route surface draws or also construction; bridge objects remain")
+    parser.add_argument("--diagnostic-animation", choices=("full", "body-shadow", "body-shadow-finish", "body-shadow-finish-import"), default="full",
+                        help="Benchmark-only cumulative resource GPU omissions; never image/performance acceptance")
     parser.add_argument("--diagnostic-half-pixels", action="store_true",
                         help="Benchmark only: halve geometry scissor coverage with unchanged scene and draw candidates")
     parser.add_argument("--world-grid", action="store_true")
@@ -214,6 +216,7 @@ def main(argv=None):
            "C3X_RENDERER_BOUNDED_POST": "1" if args.bounded_post else "0",
            "C3X_RENDERER_REFLECTION_CONTROL": "1" if args.reflection_ablation else "0",
            "C3X_RENDERER_DIAGNOSTIC_ROUTES": args.diagnostic_routes,
+           "C3X_RENDERER_DIAGNOSTIC_ANIMATION": args.diagnostic_animation,
            "C3X_RENDERER_DIAGNOSTIC_HALF_PIXELS": "1" if args.diagnostic_half_pixels else "0",
            "C3X_RENDERER_PREVIEW_TOPOLOGY_EDITS": "1" if args.topology_edit_fixture else "",
            "C3X_RENDERER_LOCAL_REGION_REVISIONS": "1" if args.local_region_revisions else "0",
@@ -304,7 +307,7 @@ def main(argv=None):
     receipt = {"case_manifest":case_manifest,"verification":args.verification,
                "input_metadata":before_metadata,"invocation": uuid.uuid4().hex, "endpoint": "standalone capture plus completed render; no native presentation",
                "storage_preflight": storage,
-               "quality_mode": "diagnostic_pixel_ablation" if args.diagnostic_routes!="full" or args.diagnostic_half_pixels else "diagnostic_reflections_disabled" if args.reflection_ablation else "current",
+               "quality_mode": "diagnostic_pixel_ablation" if args.diagnostic_routes!="full" or args.diagnostic_half_pixels or args.diagnostic_animation!="full" else "diagnostic_reflections_disabled" if args.reflection_ablation else "current",
                "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
                "environment": env, "inputs": before,
                "host": {"os": platform.platform(), "architecture": platform.machine(), "logical_processors": os.cpu_count()},

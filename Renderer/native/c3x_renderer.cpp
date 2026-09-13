@@ -43,6 +43,7 @@
 #include "render_core/captured_scene.h"
 #include "render_core/geometry_draws.h"
 #include "render_core/resource_instances.h"
+#include "render_core/scene_depth.h"
 #include "render_core/coastal_waves.h"
 #include "render_core/relief_query.h"
 #include "render_core/exact_point_cache.h"
@@ -235,7 +236,6 @@ struct ResourceAnimation {
     c3x_renderer::AnimationMesh mesh;
     c3x_renderer::render_core::ResourceSourceBounds source_bounds;
     ID3D11Buffer * vertices = nullptr;
-    ID3D11ShaderResourceView * source_view=nullptr;
     std::vector<std::uint8_t> dds;
     ID3D11ShaderResourceView * view = nullptr;
     ID3D11Buffer * indices = nullptr;
@@ -249,6 +249,7 @@ struct ResourceAnchor {
 };
 struct ResourceBackdrop {
     int x=0,y=0;
+    std::int64_t depth_origin=0;
     ID3D11Texture2D * color=nullptr,* depth=nullptr;
     std::uint64_t signature=0,used=0;
     std::size_t bytes=0;
@@ -257,9 +258,7 @@ struct ResourceBackdrop {
 struct ResourceBuffer {
     ID3D11Buffer * vertices = nullptr;
     ID3D11Buffer * shadow_vertices = nullptr;
-    ID3D11Buffer * instance=nullptr;
-    ID3D11UnorderedAccessView * posed_view=nullptr;
-    unsigned capacity = 0, shadow_capacity = 0, instance_capacity=0;
+    unsigned capacity = 0, shadow_capacity = 0;
 };
 
 enum GeometryLayer : std::size_t {
@@ -489,6 +488,7 @@ public:
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
     unsigned diagnostic_routes=0; // 1: omit surface draws; 2: also omit surface construction.
     bool diagnostic_half_pixels=false;
+    unsigned diagnostic_animation=0; // Cumulative benchmark-only GPU phase ablations.
 #endif
     bool bounded_post=false;
     int scene_region_size=128;
@@ -525,6 +525,26 @@ public:
     RendererTrace trace;
     c3x_renderer::render_core::GpuFrameTelemetry gpu_telemetry;
     bool profiling=false;
+    using AnimationGpu=c3x_renderer::render_core::GpuAnimationTelemetry;
+    AnimationGpu animation_gpu;
+    void poll_animation_gpu(){
+        animation_gpu.poll(context,[&](AnimationGpu::Sample const& sample){
+            UINT64 covered=0;unsigned count=0;
+            for(unsigned i=0;i<AnimationGpu::phase_count;++i){covered+=sample.ticks[i];count+=sample.counts[i];}
+            double scale=sample.valid?1000.0/sample.frequency:0;
+            char detail[768];sprintf_s(detail,
+                "sample_sequence=%llu valid=%u frequency=%llu gpu_span_ms=%.6f unassigned_span_ms=%.6f "
+                "background_ms=%.6f import_ms=%.6f receivers_ms=%.6f shadow_ms=%.6f body_ms=%.6f finish_ms=%.6f transfer_ms=%.6f "
+                "background_spans=%u import_spans=%u receivers_spans=%u shadow_spans=%u body_spans=%u finish_spans=%u transfer_spans=%u spans=%u ring_skipped=%u",
+                sample.sequence,unsigned(sample.valid),sample.frequency,sample.total*scale,
+                (sample.total>=covered?sample.total-covered:0)*scale,
+                sample.ticks[0]*scale,sample.ticks[1]*scale,sample.ticks[2]*scale,sample.ticks[3]*scale,
+                sample.ticks[4]*scale,sample.ticks[5]*scale,sample.ticks[6]*scale,
+                sample.counts[0],sample.counts[1],sample.counts[2],sample.counts[3],sample.counts[4],sample.counts[5],sample.counts[6],count,sample.skipped);
+            trace.write("animation-gpu-phases",detail,true);
+        });
+    }
+
     std::size_t sampled_geometry_bucket=~std::size_t(0);
     std::uint64_t frame_draw_calls=0,frame_parameter_updates=0,frame_bounds_tests=0;
     unsigned frame_caster_preparations=0;
@@ -561,7 +581,6 @@ public:
     ID3D11PixelShader * resource_shadow_shader = nullptr;
     ID3D11VertexShader * resource_body_vertex_shader=nullptr,*resource_shadow_vertex_shader=nullptr;
     ID3D11InputLayout * resource_input_layout=nullptr;
-    ID3D11ComputeShader * resource_pose_shader=nullptr;
     ID3D11InputLayout * input_layout = nullptr;
     ID3D11InputLayout * feature_input_layout = nullptr;
     ID3D11Buffer * terrain_settings_buffer = nullptr;
@@ -687,6 +706,7 @@ public:
     std::vector<ResourceAnchor> resource_anchors;
     std::vector<ResourceBuffer> resource_buffers;
     std::vector<ResourceBackdrop> resource_backdrops;
+    std::int64_t scene_depth_origin=0;
     std::uint64_t resource_backdrop_epoch=0;
     std::size_t resource_backdrop_bytes=0;
     c3x_renderer_i64 resource_composite_ticks=0;
@@ -906,12 +926,12 @@ public:
         clear_resource_backdrops();
         for (auto & buffer : resource_buffers) {
             release(buffer.vertices);
-            release(buffer.shadow_vertices);release(buffer.instance);release(buffer.posed_view);
+            release(buffer.shadow_vertices);
         }
         resource_buffers.clear(); resource_pixels.clear();
         resource_pixel_signature = 0; resource_pixel_clock = -1; visible_resource_animations = 0;
         for (auto & animation : resource_animations) {
-            release(animation.view); release(animation.indices);release(animation.vertices);release(animation.source_view);
+            release(animation.view); release(animation.indices);release(animation.vertices);
         }
     }
 
@@ -922,7 +942,7 @@ public:
         unit_bodies.benchmark_reset_pose_limit();
 #endif
         render_regions.clear();region_context.clear();retained_region_casters={};
-        gpu_telemetry.reset();
+        gpu_telemetry.reset();animation_gpu.reset();
         sampled_geometry_bucket=~std::size_t(0);
         unit_bodies.reset_gpu();
         reset_resource_buffers();
@@ -998,7 +1018,7 @@ public:
         release(depth_state);
         release(blend_state);
         release(input_layout); release(feature_input_layout);
-        release(resource_body_vertex_shader);release(resource_shadow_vertex_shader);release(resource_input_layout);release(resource_pose_shader);
+        release(resource_body_vertex_shader);release(resource_shadow_vertex_shader);release(resource_input_layout);
         release(terrain_settings_buffer);
         release(viewport_settings_buffer);
         release(world_settings_buffer); release(shadow_settings_buffer);
@@ -1072,9 +1092,9 @@ public:
                                              ID3DBlob ** blob) {
             std::string selected_shader=integrated_shader_path;
             if(fidelity_profile && std::strstr(entry,"Feature"))selected_shader=fidelity_root+(city_profile?"/Renderer/native/city_fidelity/feature.hlsl":environment_profile?"/Renderer/native/environment_refresh/feature.hlsl":"/Renderer/native/render_core/terrain_scene.hlsl");
-            if(city_profile && (!std::strcmp(entry,"VSResourceBody") || !std::strcmp(entry,"VSResourceShadow") || !std::strcmp(entry,"CSResourcePose")))
+            if(city_profile && (!std::strcmp(entry,"VSResourceBody") || !std::strcmp(entry,"VSResourceShadow")))
                 selected_shader=fidelity_root+"/Renderer/native/city_fidelity/"+
-                    (std::strcmp(entry,"VSResourceShadow")==0?"resource_shadow.hlsl":"resource_body.hlsl");
+                    (std::strcmp(entry,"VSResourceBody")==0?"resource_body.hlsl":"resource_shadow.hlsl");
             int count = MultiByteToWideChar(CP_UTF8, 0, selected_shader.c_str(),
                                             -1, nullptr, 0);
             if (count <= 0)
@@ -1142,7 +1162,9 @@ public:
                     D3D11_INPUT_ELEMENT_DESC elements[]={
                         {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
                         {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0},
-                        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0}};
+                        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0},
+                        {"BLENDINDICES",0,DXGI_FORMAT_R32G32B32A32_UINT,0,56,D3D11_INPUT_PER_VERTEX_DATA,0},
+                        {"BLENDWEIGHT",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,72,D3D11_INPUT_PER_VERTEX_DATA,0}};
                     static_assert(sizeof(c3x_renderer::AnimationVertex)==88,"Resource source GPU layout");
                     if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,UINT(std::size(elements)),blob->GetBufferPointer(),blob->GetBufferSize(),&resource_input_layout);
                 }
@@ -1151,11 +1173,6 @@ public:
             if(SUCCEEDED(hr)) {
                 if(!compile_terrain_shader("VSResourceShadow",vs_target,&blob))hr=E_FAIL;
                 else hr=device->CreateVertexShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&resource_shadow_vertex_shader);
-                release(blob);
-            }
-            if(SUCCEEDED(hr)) {
-                if(!compile_terrain_shader("CSResourcePose","cs_5_0",&blob))hr=E_FAIL;
-                else hr=device->CreateComputeShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&resource_pose_shader);
                 release(blob);
             }
         }
@@ -2439,6 +2456,11 @@ public:
         GetEnvironmentVariableA("C3X_RENDERER_DIAGNOSTIC_ROUTES",control,sizeof(control));
         diagnostic_routes=std::strcmp(control,"draw")==0?1u:std::strcmp(control,"all")==0?2u:0u;
         diagnostic_half_pixels=GetEnvironmentVariableA("C3X_RENDERER_DIAGNOSTIC_HALF_PIXELS",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        char animation_ablation[40]={};
+        GetEnvironmentVariableA("C3X_RENDERER_DIAGNOSTIC_ANIMATION",animation_ablation,sizeof(animation_ablation));
+        diagnostic_animation=std::strcmp(animation_ablation,"body-shadow")==0?1u:
+            std::strcmp(animation_ablation,"body-shadow-finish")==0?2u:
+            std::strcmp(animation_ablation,"body-shadow-finish-import")==0?3u:0u;
 #endif
         fidelity_shadow_control=GetEnvironmentVariableA("C3X_RENDERER_FIDELITY_SHADOW_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
         fidelity_root = mod_root ? mod_root : "";
@@ -3322,7 +3344,7 @@ public:
         std::vector<Vertex> shadow_vertices;
         std::size_t uploaded=0,pool_bytes=0;
         for (auto const & pool:resource_buffers)
-            pool_bytes+=pool.capacity+pool.shadow_capacity+pool.instance_capacity;
+            pool_bytes+=pool.capacity+pool.shadow_capacity;
         if(city_profile)for(auto const& asset:resource_animations){
             pool_bytes+=sizeof(asset.source_bounds);
             if(asset.vertices)pool_bytes+=asset.mesh.vertices.size()*sizeof(c3x_renderer::AnimationVertex);
@@ -3332,11 +3354,6 @@ public:
         float projection=frame.tile_width/224.f,relief=projection*.82f;
         int dx=int(geometry_viewport_settings.translation[0]),dy=int(geometry_viewport_settings.translation[1]);
         auto ticks=clock*std::max<c3x_renderer_i64>(1,frame.presentation_frequency/15);
-        if(city_profile){
-            ID3D11Buffer* empty=nullptr;UINT zero=0;
-            context->IASetVertexBuffers(0,1,&empty,&zero,&zero);
-            context->CSSetShader(resource_pose_shader,nullptr,0);
-        }
         for (auto const & anchor:resource_anchors) {
             if (anchor.asset>=resource_animations.size()) return false;
             auto & animation=resource_animations[anchor.asset];
@@ -3384,13 +3401,11 @@ public:
                     trace.write("animation-budget-failed","shared source and instance cap=33554432",true);return false;};
                 if(!room((animation.vertices?0:source_bytes)+(animation.indices?0:index_bytes)))return false;
                 if(!animation.vertices){
-                    D3D11_BUFFER_DESC desc={};desc.ByteWidth=source_bytes;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
-                    desc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;desc.StructureByteStride=sizeof(c3x_renderer::AnimationVertex);
+                    D3D11_BUFFER_DESC desc={};desc.ByteWidth=source_bytes;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
                     D3D11_SUBRESOURCE_DATA data={};data.pSysMem=animation.mesh.vertices.data();
                     if(FAILED(device->CreateBuffer(&desc,&data,&animation.vertices)))return false;
                     pool_bytes+=source_bytes;uploaded+=source_bytes;
                 }
-                if(!animation.source_view && FAILED(device->CreateShaderResourceView(animation.vertices,nullptr,&animation.source_view)))return false;
                 if(!animation.indices){
                     D3D11_BUFFER_DESC desc={};desc.ByteWidth=index_bytes;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_INDEX_BUFFER;
                     D3D11_SUBRESOURCE_DATA data={};data.pSysMem=animation.mesh.indices.data();
@@ -3400,31 +3415,16 @@ public:
                 if(resource_buffers.size()<=visible_resource_animations)resource_buffers.emplace_back();
                 auto& pool=resource_buffers[visible_resource_animations];
                 unsigned bytes=unsigned(c3x_renderer::render_core::resource_pose_bytes(animation.mesh.bones));
-                if(bytes>pool.instance_capacity){
-                    if(!room(bytes-pool.instance_capacity))return false;
-                    pool_bytes-=pool.instance_capacity;release(pool.instance);pool.instance_capacity=0;
+                if(bytes>pool.capacity){
+                    if(!room(bytes-pool.capacity))return false;
+                    pool_bytes-=pool.capacity;release(pool.vertices);pool.capacity=0;
                     D3D11_BUFFER_DESC desc={};desc.ByteWidth=bytes;desc.Usage=D3D11_USAGE_DYNAMIC;
                     desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;desc.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;
-                    if(FAILED(device->CreateBuffer(&desc,nullptr,&pool.instance)))return false;
-                    pool.instance_capacity=bytes;pool_bytes+=bytes;
-                }
-                unsigned posed_bytes=unsigned(animation.mesh.vertices.size()*sizeof(c3x_renderer::FeatureSourceVertex));
-                if(posed_bytes>pool.capacity){
-                    if(!room(posed_bytes-pool.capacity))return false;
-                    pool_bytes-=pool.capacity;release(pool.posed_view);release(pool.vertices);pool.capacity=0;
-                    D3D11_BUFFER_DESC desc={};desc.ByteWidth=posed_bytes;desc.Usage=D3D11_USAGE_DEFAULT;
-                    desc.BindFlags=D3D11_BIND_VERTEX_BUFFER|D3D11_BIND_UNORDERED_ACCESS;
-                    desc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
                     if(FAILED(device->CreateBuffer(&desc,nullptr,&pool.vertices)))return false;
-                    pool.capacity=posed_bytes;pool_bytes+=posed_bytes;
-                }
-                if(!pool.posed_view){
-                    D3D11_UNORDERED_ACCESS_VIEW_DESC desc={};desc.ViewDimension=D3D11_UAV_DIMENSION_BUFFER;
-                    desc.Format=DXGI_FORMAT_R32_TYPELESS;desc.Buffer.NumElements=pool.capacity/4;desc.Buffer.Flags=D3D11_BUFFER_UAV_FLAG_RAW;
-                    if(FAILED(device->CreateUnorderedAccessView(pool.vertices,&desc,&pool.posed_view)))return false;
+                    pool.capacity=bytes;pool_bytes+=bytes;
                 }
                 D3D11_MAPPED_SUBRESOURCE mapped={};
-                if(FAILED(context->Map(pool.instance,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
+                if(FAILED(context->Map(pool.vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
                 auto values=static_cast<float*>(mapped.pData);
                 float placement[]={cosine,sine,animation.scale,c3x_renderer::lighting::object_height_to_world,
                     animation.offset[0],animation.offset[1],animation.offset[2],anchor.ground,
@@ -3432,15 +3432,11 @@ public:
                     half_w,half_h,projection,float(frame.target_height)};
                 std::copy(std::begin(placement),std::end(placement),values);
                 c3x_renderer::render_core::pack_resource_pose(pose,animation.mesh.bones,values);
-                context->Unmap(pool.instance,0);uploaded+=bytes;
-                context->CSSetConstantBuffers(8,1,&pool.instance);
-                context->CSSetShaderResources(0,1,&animation.source_view);
-                context->CSSetUnorderedAccessViews(0,1,&pool.posed_view,nullptr);
-                context->Dispatch((UINT(animation.mesh.vertices.size())+63)/64,1,1);
-                chunk.buffer=shadow_chunk.buffer=pool.vertices;
+                context->Unmap(pool.vertices,0);uploaded+=bytes;
+                chunk.buffer=shadow_chunk.buffer=animation.vertices;
                 chunk.indices=shadow_chunk.indices=animation.indices;
-                chunk.resource_instance=shadow_chunk.resource_instance=pool.instance;
-                chunk.vertex_stride=shadow_chunk.vertex_stride=sizeof(c3x_renderer::FeatureSourceVertex);
+                chunk.resource_instance=shadow_chunk.resource_instance=pool.vertices;
+                chunk.vertex_stride=shadow_chunk.vertex_stride=sizeof(c3x_renderer::AnimationVertex);
                 chunk.index_count=shadow_chunk.index_count=unsigned(animation.mesh.indices.size());
                 chunk.animation_texture=shadow_chunk.animation_texture=animation.view;
                 buffers[geometry_shadow].push_back(shadow_chunk);buffers[geometry_feature].push_back(chunk);
@@ -3559,11 +3555,6 @@ public:
             shadow_chunk.animation_texture=animation.view;
             buffers[geometry_shadow].push_back(shadow_chunk);
             buffers[geometry_feature].push_back(chunk);++visible_resource_animations;
-        }
-        if(city_profile){
-            ID3D11UnorderedAccessView* uav=nullptr;ID3D11ShaderResourceView* srv=nullptr;ID3D11Buffer* cb=nullptr;
-            context->CSSetUnorderedAccessViews(0,1,&uav,nullptr);context->CSSetShaderResources(0,1,&srv);
-            context->CSSetConstantBuffers(8,1,&cb);context->CSSetShader(nullptr,nullptr,0);
         }
         if(!prepare_wave_chunks(frame))return false;
         visible_wave_animations=unsigned(wave_chunks.size());
@@ -3685,6 +3676,12 @@ public:
         // excludes camera anchors. Conservatively miss when that set changes.
         auto backdrop_signature=anchored?c3x_renderer::render_core::static_region_identity(
             cached_signature.geometry,std::uint64_t(geometry_world_revision)):cached_signature.complete;
+        if(profiling){
+            poll_animation_gpu();
+            if(!animation_gpu.begin(device,context,trace.sequence.load(),unsigned(rectangles.size()*8+8)))
+                trace.write("animation-gpu-unavailable","bounded query capacity, pressure or allocation failure",true);
+        }
+        AnimationGpu::Scope animation_gpu_scope{animation_gpu,context};
         LARGE_INTEGER poses_ready={},background_started={},animation_started={},region_finished={};
         QueryPerformanceCounter(&poses_ready);
         LONGLONG background_ticks=0,animation_ticks=0;
@@ -3708,7 +3705,7 @@ public:
             QueryPerformanceCounter(&background_started);
             int key_x=rect.left-anchor_x,key_y=rect.top-anchor_y;
             auto found=std::find_if(resource_backdrops.begin(),resource_backdrops.end(),[&](auto const& block){
-                return !backdrop_reuse_control && block.signature==backdrop_signature && block.x==key_x && block.y==key_y;
+                return !backdrop_reuse_control && block.depth_origin==scene_depth_origin && block.signature==backdrop_signature && block.x==key_x && block.y==key_y;
             });
             ViewportShaderSettings settings=geometry_viewport_settings;
             settings.translation[0]-=float(rect.left);settings.translation[1]-=float(rect.top);
@@ -3728,7 +3725,7 @@ public:
                 catch(...) {}
                 if(valid) {
                     found=std::find_if(resource_backdrops.begin(),resource_backdrops.end(),[&](auto const& block){
-                        return !block.dependencies.empty() && block.dependencies==backdrop_dependencies;
+                        return block.depth_origin==scene_depth_origin && !block.dependencies.empty() && block.dependencies==backdrop_dependencies;
                     });
                     if(found!=resource_backdrops.end())++backdrop_dependency_hits;
                 } else {backdrop_dependencies={};++backdrop_dependency_rejections;}
@@ -3739,9 +3736,15 @@ public:
                 // Pin a dependency hit to the current view for the existing
                 // bounded eviction policy and its cheap unchanged-view lookup.
                 found->signature=backdrop_signature;found->x=key_x;found->y=key_y;
-                context->CopyResource(backdrop.color,found->color);
-                context->CopyResource(backdrop.depth_texture,found->depth);++backdrop_hits;
+                AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::import);
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+                if(diagnostic_animation<3)
+#endif
+                {context->CopyResource(backdrop.color,found->color);
+                 context->CopyResource(backdrop.depth_texture,found->depth);}
+                ++backdrop_hits;
             } else {
+                AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::background);
                 if(!submit_geometry(geometry_vertex_buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
                     nullptr,false,true,nullptr,false,animation_casters_ptr,animation_prepared_ptr,128,0,0,true))return false;
                 // Static submission can replace the page table or atlas slots.
@@ -3754,7 +3757,7 @@ public:
                     backdrop_dependencies.capacity()*sizeof(backdrop_dependencies[0])+sizeof(ResourceBackdrop);
                 if(!backdrop_reuse_control && make_resource_backdrop_room(bytes,backdrop_signature)) {
                     resource_backdrops.reserve(resource_backdrops.size()+1);
-                    ResourceBackdrop block;block.x=key_x;block.y=key_y;block.bytes=bytes;
+                    ResourceBackdrop block;block.x=key_x;block.y=key_y;block.bytes=bytes;block.depth_origin=scene_depth_origin;
                     block.signature=backdrop_signature;block.used=resource_backdrop_epoch;
                     block.dependencies=std::move(backdrop_dependencies);
                     D3D11_TEXTURE2D_DESC desc={};backdrop.color->GetDesc(&desc);
@@ -3780,6 +3783,7 @@ public:
             if(prepared_resource_pass) {
                 auto const& region=prepared_regions[rectangle_index];
                 if(active_shadow_batch!=region.shadow_batch) {
+                    AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::receivers);
                     if(!prepare_receiver_shadows(geometry_vertex_buffers,region.settings,{{0,0,136,136}},false,
                             *animation_casters_ptr,animation_prepared_ptr,nullptr,&shadow_batches[region.shadow_batch]))return false;
                     active_shadow_batch=region.shadow_batch;
@@ -3787,6 +3791,7 @@ public:
                 if(!submit_prepared_resource_region(region.draws,region.settings))return false;
             } else if(!submit_geometry(buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
                     nullptr,true,true,geometry_vertex_buffers,false,animation_casters_ptr,animation_prepared_ptr))return false;
+            {AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::transfer);
             D3D11_BOX box={unsigned(clipped.left-rect.left),unsigned(clipped.top-rect.top),0,
                 unsigned(clipped.right-rect.left),unsigned(clipped.bottom-rect.top),1};
             if(animation_readback_atlas) {
@@ -3796,6 +3801,7 @@ public:
             } else {
                 context->CopySubresourceRegion(render_texture,0,unsigned(clipped.left),unsigned(clipped.top),0,block_texture,0,&box);
             }
+            }
             rect=clipped;
             ++rectangle_index;
             QueryPerformanceCounter(&region_finished);
@@ -3804,6 +3810,7 @@ public:
         LARGE_INTEGER readback_started={},readback_submitted={},readback_ready={};
         QueryPerformanceCounter(&readback_started);
         unsigned dirty_pixels=0;
+        {AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::transfer,!animation_readback_atlas);
         for(auto const & rect:rectangles) {
             if(!animation_readback_atlas) {
                 D3D11_BOX box={unsigned(rect.left),unsigned(rect.top),0,unsigned(rect.right),unsigned(rect.bottom),1};
@@ -3811,6 +3818,8 @@ public:
             }
             dirty_pixels+=unsigned((rect.right-rect.left)*(rect.bottom-rect.top));
         }
+        }
+        animation_gpu.end(context);
         D3D11_MAPPED_SUBRESOURCE mapped={};
         QueryPerformanceCounter(&readback_submitted);
         auto mapped_texture=animation_readback_atlas?animation_readback_texture:readback_texture;
@@ -3831,6 +3840,7 @@ public:
         context->Unmap(mapped_texture,0);
         resource_pixel_signature=cached_signature.complete;resource_pixel_clock=clock;
         QueryPerformanceCounter(&finished);resource_composite_ticks=finished.QuadPart-started.QuadPart;
+        if(profiling)poll_animation_gpu();
         {
             char detail[320];sprintf_s(detail,"pose_prepare_ms=%.3f backdrop_submit_ms=%.3f animated_submit_ms=%.3f readback_submit_ms=%.3f readback_wait_ms=%.3f cpu_copy_ms=%.3f",
                 trace.milliseconds(poses_ready.QuadPart-started.QuadPart),trace.milliseconds(background_ticks),
@@ -4419,7 +4429,7 @@ public:
                 std::copy(std::begin(chunk.natural_projection()),std::end(chunk.natural_projection()),effective.natural_projection);
                 effective.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
                 effective.translation[0]+=float(chunk.translation_x());effective.translation[1]+=float(chunk.translation_y());
-                effective.depth_translation=-effective.translation[1]/height;
+                effective.depth_translation=city_profile?local.depth_translation+float(chunk.translation_y()):effective.translation[1];
                 if(!append_region_bytes(key,&effective,sizeof(effective)) ||
                    !append_region_bytes(key,chunk.content().city_atlas,sizeof(chunk.content().city_atlas)))return false;
                 return true;
@@ -4472,6 +4482,8 @@ public:
             GeometryDrawView buffers,
             std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & viewport_settings,
             std::atomic<bool> const * cancellation, bool reflection_pass=false) {
+        AnimationGpu::Pass gpu_phase(animation_gpu,context,layer==geometry_shadow?AnimationGpu::shadow:AnimationGpu::body,
+            profiling && (layer==geometry_shadow || layer==geometry_feature) && !buffers[layer].empty());
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
         if(diagnostic_routes && layer==geometry_route)return true;
 #endif
@@ -4498,7 +4510,7 @@ public:
             if(pickup_profile)settings.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
             settings.translation[0] += static_cast<float>(chunk.translation_x());
             settings.translation[1] += static_cast<float>(chunk.translation_y());
-            settings.depth_translation = -settings.translation[1] / height;
+            settings.depth_translation = city_profile?viewport_settings.depth_translation+float(chunk.translation_y()):settings.translation[1];
             if (first || std::memcmp(&previous, &settings, sizeof(settings)) != 0) {
                 context->UpdateSubresource(viewport_settings_buffer, 0, nullptr, &settings, 0, 0);
                 ++frame_parameter_updates;
@@ -4679,6 +4691,9 @@ public:
         context->PSSetSamplers(0,2,shadow_samplers);
         context->VSSetShader(vertex_shader,nullptr,0);
         context->PSSetShader(resource_shadow_shader,nullptr,0);
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        if(!diagnostic_animation)
+#endif
         if(!draw_cached_geometry(geometry_shadow,buffers,rectangles,settings,nullptr))return false;
         ID3D11SamplerState* body_samplers[]={terrain_sampler,decal_sampler};
         context->PSSetSamplers(0,2,body_samplers);
@@ -4686,7 +4701,19 @@ public:
         context->PSSetShaderResources(94,4,feature_texture_views.data()+4);
         context->VSSetShader(feature_vertex_shader,nullptr,0);
         context->PSSetShader(feature_pixel_shader,nullptr,0);
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        if(!diagnostic_animation)
+#endif
         if(!draw_cached_geometry(geometry_feature,buffers,rectangles,settings,nullptr))return false;
+        AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::finish);
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        if(diagnostic_animation>=2){
+            // Defined diagnostic output preserves replay determinism. This is
+            // a counterfactual cost experiment, never visual acceptance.
+            context->OMSetRenderTargets(0,nullptr,nullptr);float clear[4]={};
+            context->ClearRenderTargetView(block_target,clear);return true;
+        }
+#endif
         frame_post_lanes+=city_glow.reconstruct(context);
         linear_output.draw(context,linear,city_glow.target,display_exposure,1,city_glow.view,136,136);
         context->OMSetRenderTargets(0,nullptr,nullptr);
@@ -4870,8 +4897,10 @@ public:
             if(!submit_geometry(buffers,reflected_rects,reflected,destination,depth,reflected_extent,reflected_height,
                 cancellation,false,true,shadow_buffers_ptr,true,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y))return false;
         }
+        {AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::receivers);
         if(pickup_profile && !prepare_receiver_shadows(shadow_buffers_ptr?shadow_buffers_ptr:buffers,
-                settings,rectangles,reflection_pass,*shadow_casters_ptr,prepared_casters_ptr,cancellation))return false;
+                settings,rectangles,reflection_pass,*shadow_casters_ptr,prepared_casters_ptr,cancellation))return false;}
+
         float clear[4] = {0, 0, 0, 0};
         if(!accumulate) {
             context->ClearRenderTargetView(target, clear);
@@ -5102,6 +5131,7 @@ public:
             }
         }
 
+        AnimationGpu::Pass gpu_finish(animation_gpu,context,AnimationGpu::finish);
         if(reflection_pass){active_reflection.resolve(context);return true;}
         if(city_profile && linear && finish){
             // Only the experimental strip leaf has no accumulated 512-pixel
@@ -5828,8 +5858,14 @@ public:
             static_cast<float>(geometry_translation_x);
         viewport_settings.translation[1] =
             static_cast<float>(geometry_translation_y);
-        viewport_settings.depth_translation =
-            -static_cast<float>(geometry_translation_y) / frame.target_height;
+        viewport_settings.depth_translation = float(geometry_translation_y);
+        if(city_profile && frame.tile_count){
+            auto const& reference=frame.tiles[0];
+            auto basis=c3x_renderer::render_core::scene_depth_basis(reference.anchor_y,reference.tile_y,
+                frame.tile_height,frame.target_height,geometry_translation_y);
+            viewport_settings.depth_translation=basis.translation;
+            if(!prewarming)scene_depth_origin=basis.world_origin;
+        }
         if (!prewarming) {
             context->UpdateSubresource(terrain_settings_buffer, 0, nullptr, &frame_settings, 0, 0);
             display_exposure = environment.exposure;

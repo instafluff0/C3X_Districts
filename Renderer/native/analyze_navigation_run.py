@@ -98,6 +98,27 @@ def endpoint_accounting(lines, trace_lines=()):
                  "unexplained_caller_ms":max(0,call-known),
                  "cpu_phase_accounting_valid":known<=call+0.01,
                  "independent_pixel_parity":"unmeasured"}
+        # Separate command-stream spans from CPU submission/wait/copy. They
+        # overlap: never add GPU spans to CPU Map wait or renderer wall time.
+        animation_cpu=[r for r in matching if r["stage"]=="animation-phases"]
+        request["animation_cpu_spans_ms"]=None
+        if len(animation_cpu)==1:
+            names=("pose_prepare","backdrop_submit","animated_submit","readback_submit","readback_wait","cpu_copy")
+            request["animation_cpu_spans_ms"]={n:float(animation_cpu[0][n+"_ms"]) for n in names}
+        animation_gpu=[r for r in trace if r["stage"]=="animation-gpu-phases" and r.get("sample_sequence")==sequence] if sequence else []
+        request["animation_gpu_command_spans"]={"status":"unmeasured"}
+        if len(animation_gpu)==1:
+            g=animation_gpu[0]
+            result={"status":"valid" if g.get("valid")=="1" else "invalid",
+                    "frequency":int(g["frequency"]),"spans":int(g["spans"]),"ring_skipped":int(g["ring_skipped"])}
+            if result["status"]=="valid":
+                names=("background","import","receivers","shadow","body","finish","transfer","unassigned_span")
+                values={n:float(g[n+"_ms"]) for n in names};total=float(g["gpu_span_ms"])
+                if result["frequency"]<=0 or any(not math.isfinite(v) or v<0 for v in [total,*values.values()]) or abs(sum(values.values())-total)>.01:
+                    raise ValueError("Invalid animation GPU span accounting")
+                result.update(total_ms=total,phases_ms=values,
+                    interpretation="command spans may include starvation; CPU completion wait overlaps")
+            request["animation_gpu_command_spans"]=result
         calls=[r for r in matching if r["stage"]=="call-endpoints"]
         request["caller_cpu_spans_ms"]=None
         if len(calls)==1:

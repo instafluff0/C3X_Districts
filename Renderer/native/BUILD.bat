@@ -5,18 +5,19 @@ set "C3X_RENDERER_VISUAL_PROFILE=frozen"
 set "C3X_RENDERER_TRACE=0"
 pushd "%~dp0"
 
-if not defined C3X_VS_PATH (
-  set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
-  if not exist "%VSWHERE%" (
-    echo Visual Studio Installer's vswhere.exe was not found. 1>&2
-    exit /b 1
-  )
-  for /f "usebackq tokens=*" %%I in (`"%VSWHERE%" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "C3X_VS_PATH=%%I"
-)
-if not defined C3X_VS_PATH (
-  echo A Visual Studio installation with the x86 C++ toolchain was not found. 1>&2
-  exit /b 1
-)
+if defined C3X_VS_PATH goto compiler_ready
+set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
+if not exist "%VSWHERE%" exit /b 1
+rem Match the verified benchmark toolchain discovery, including preview installs.
+set "C3X_BUILD_VS_RECORD=%TEMP%\c3x-renderer-build-vs-path.txt"
+"%VSWHERE%" -latest -prerelease -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath >"%C3X_BUILD_VS_RECORD%"
+set /p C3X_VS_PATH=<"%C3X_BUILD_VS_RECORD%"
+if not defined C3X_VS_PATH "%VSWHERE%" -all -products * -property installationPath >"%C3X_BUILD_VS_RECORD%"
+if not defined C3X_VS_PATH set /p C3X_VS_PATH=<"%C3X_BUILD_VS_RECORD%"
+del "%C3X_BUILD_VS_RECORD%" >nul 2>nul
+:compiler_ready
+if not defined C3X_VS_PATH exit /b 1
+if not exist "%C3X_VS_PATH%\VC\Auxiliary\Build\vcvars32.bat" exit /b 1
 
 call "%C3X_VS_PATH%\VC\Auxiliary\Build\vcvars32.bat" >nul
 if errorlevel 1 exit /b 1

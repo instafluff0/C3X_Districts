@@ -17,10 +17,11 @@ class RenderRegionTests(unittest.TestCase):
 namespace c3x_renderer {namespace render_core {using RenderRegionKey=std::vector<std::uint64_t>;}}
 using Key=c3x_renderer::render_core::RenderRegionKey;
 struct ViewportShaderSettings {float translation[2]={},inverse_size[2]={};};
-struct Block {int x=0,y=0;std::uint64_t signature=1;Key dependencies;};
+struct Block {int x=0,y=0;std::uint64_t signature=1;Key dependencies;std::int64_t depth_origin=0;};
 struct State {
  std::vector<Block> resource_backdrops={{0,0,1,{10,20,30}}};
  std::uint64_t backdrop_signature=2;
+ std::int64_t scene_depth_origin=0;
  bool backdrop_reuse_control=false,dependency_backdrops=true;
  unsigned backdrop_dependency_hits=0,backdrop_dependency_rejections=0,calls=0;
  int anchor_x=64,anchor_y=32,geometry_vertex_buffers=0,casters=0,prepared=0;
@@ -40,6 +41,9 @@ struct State {
 };
 int main() {
  State state;assert(state.lookup() && state.calls==1 && state.backdrop_dependency_hits==1);
+ state.scene_depth_origin=4096;assert(!state.lookup()); // Equal dependencies cannot relabel stored depth.
+ state.backdrop_signature=1;assert(!state.lookup()); // Nor can the unchanged-view fast path.
+ state.scene_depth_origin=0;assert(state.lookup());state.backdrop_signature=2;
  state.next_key={10,20};assert(!state.lookup()); // A matching prefix is insufficient.
  state.next_key={10,20,31};assert(!state.lookup()); // A local edit must miss.
  state.next_key={10,20,30};state.key_result=0;assert(!state.lookup() && state.backdrop_dependency_rejections==1);
@@ -309,6 +313,7 @@ struct State{
  std::array<float,12> shadow_basis{1,0,0,0,0,1,0,0,0,0,1,0};
  struct {float height_pixels=40;bool enabled=true;}reflection;
  int height=1192,shadow_tile_width=128;
+ bool city_profile=true;
  bool region_receiver_shadows=false;
  bool composition_receiver_index=false;
  std::array<std::vector<CachedVertexChunk>,geometry_layer_count> geometry_vertex_buffers;
@@ -373,6 +378,8 @@ int main(){
    check_receivers(occurrences,{{-11,7,125,91}},true);
    return result;};
  auto original=key();assert(key()==original);assert(prepared.receiver_hits>0);
+ settings.depth_translation=1024;assert(key()!=original); // Common depth is part of raster validity.
+ settings.depth_translation=0;assert(key()==original);
  Key diagnostic;std::vector<std::size_t> sections;
  assert(state.render_region_key(buffers,settings,casters,&prepared,diagnostic,&sections));
  assert(diagnostic==original && sections.size()==7 && sections.front()==state.region_context.size() && sections.back()==original.size());

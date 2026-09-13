@@ -68,7 +68,7 @@
     },
     {
       "path": "generated/shaders/objects/resource_skinning.hlsl",
-      "sha256": "95a8cef6063dd69840aea682ee26a2ba7c443e3ba8087f5726e6cf07708c806c"
+      "sha256": "b11aa9a5dbefb8cac2145f425c9c671e35ff4c1ffa6608ea3d35234ba77280ee"
     },
     {
       "path": "generated/shaders/objects/settlement_ground.hlsl",
@@ -124,7 +124,7 @@
     },
     {
       "path": "hydrology.hlsl",
-      "sha256": "06eee4df16729905eb1b44092828045f28843886a954e8eb299ad9678de3e6c1"
+      "sha256": "5574e475bcaa5f95c0f183554fb8b0939900f79e2fdf174fe66a995cc4562ba6"
     }
   ]
 }

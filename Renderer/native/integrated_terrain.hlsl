@@ -8,7 +8,7 @@
 cbuffer C3XViewportSettings : register(b1)
 {
     float2 c3x_viewport_translation;
-    float c3x_viewport_depth_translation;
+    float c3x_viewport_depth_translation; // pixel depth basis, independent of raster XY
     float c3x_viewport_translation_padding;
     float2 c3x_inverse_viewport_size;
     float2 c3x_viewport_reserved;
@@ -34,12 +34,13 @@ struct IntegratedVertexInput
     float material_tundra : TEXCOORD13;
 };
 
-// Use a power-of-two pixel depth range. An integer camera movement now adds
-// an exactly representable depth offset; coplanar neighbors cannot exchange
-// their depth-test order because of viewport-dependent division roundoff.
+// Use one power-of-two pixel depth range, independent of raster-region XY.
+// Integer basis offsets are representable, but D24 rasterization can still
+// change near-coplanar rounding at a world-origin transition. Material order
+// and depth-write rules remain explicit; stored depth carries its basis.
 float translated_depth(IntegratedVertexInput input, bool feature)
 {
-    float pixel_depth = floor(input.position.z * 256.0 + 0.5) / 256.0 + c3x_viewport_translation.y;
+    float pixel_depth = floor(input.position.z * 256.0 + 0.5) / 256.0 + c3x_viewport_depth_translation;
     float depth = clamp(0.5 - pixel_depth / 16384.0, 0.001, 0.999);
     if (feature) return depth;
     // Preserve the existing layer separation in physical pixels at each size.

@@ -102,7 +102,7 @@ FeaturePixelInput VSNativeCityReflection(NativeCityInput p) {
  float h=max(0,p.world.z-NativeReflection.z);
  o.position.y-=h*NativeReflection.x*4*c3x_inverse_viewport_size.y;
  float base=p.position.y+h*NativeReflection.x;
- o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_translation.y)/16384,.001,.999);
+ o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_depth_translation)/16384,.001,.999);
  return o;
 }
 float4 PSNativeCity(FeaturePixelInput p):SV_Target { return PSNativeCityBody(p).color; }

@@ -391,10 +391,9 @@ int main() {
         self.assertIn(
             "pixel_depth / 16384.0", adapter
         )
-        self.assertIn(
-            "-static_cast<float>(geometry_translation_y) / frame.target_height",
-            renderer,
-        )
+        # Depth no longer follows the legacy normalized raster translation.
+        # test_scene_depth executes the CPU basis and production GPU consumer;
+        # test_render_region_cache checks incompatible retained-depth rejection.
         self.assertIn("VSSetConstantBuffers(1, 1, &viewport_settings_buffer)", renderer)
 
     def test_renderer_worker_owns_d3d_and_copies_immutable_frames(self) -> None:

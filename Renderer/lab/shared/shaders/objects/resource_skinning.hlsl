@@ -25,32 +25,8 @@ void resource_pose(ResourceVertex input,out precise float3 position,out precise 
     precise float len=sqrt(n.x*n.x+n.y*n.y+n.z*n.z);
     position=p;normal=len>1e-12?n/len:input.normal;
 }
-struct ResourcePosedVertex {
-    float3 position:POSITION;float3 normal:NORMAL;float2 uv:TEXCOORD0;
-};
-// Skin once per instance. Body and shadow submissions share this bounded posed
-// mesh; camera projection remains a cheap per-pass operation.
-struct ResourceSourceData {
-    float3 position;float3 normal;float2 uv;float3 tangent;float3 bitangent;
-    uint4 joints;float4 weights;
-};
-StructuredBuffer<ResourceSourceData> resource_sources:register(t0);
-RWByteAddressBuffer resource_posed:register(u0);
-[numthreads(64,1,1)]void CSResourcePose(uint3 id:SV_DispatchThreadID) {
-    uint count,stride;resource_sources.GetDimensions(count,stride);if(id.x>=count)return;
-    ResourceSourceData source=resource_sources[id.x];ResourceVertex input;
-    input.position=source.position;input.normal=source.normal;input.uv=source.uv;
-    input.joints=source.joints;input.weights=source.weights;
-    ResourcePosedVertex output;resource_pose(input,output.position,output.normal);output.uv=input.uv;
-    // Raw views allow the same storage to serve the vertex input stage.
-    // FeatureSourceVertex is position.xyz, normal.xyz, uv.xy: exactly 32 bytes.
-    uint offset=id.x*32;
-    resource_posed.Store3(offset,asuint(output.position));
-    resource_posed.Store3(offset+12,asuint(output.normal));
-    resource_posed.Store2(offset+24,asuint(output.uv));
-}
-void resource_local(ResourcePosedVertex input,out precise float3 local,out precise float3 normal) {
-    precise float3 source=input.position,n=input.normal;
+void resource_local(ResourceVertex input,out precise float3 local,out precise float3 normal) {
+    precise float3 source,n;resource_pose(input,source,n);
     precise float x=source.x+resource_offset.x,y=source.y+resource_offset.y;
     local=float3((x*resource_shape.x-y*resource_shape.y)*resource_shape.z,
         (x*resource_shape.y+y*resource_shape.x)*resource_shape.z,
@@ -60,7 +36,7 @@ void resource_local(ResourcePosedVertex input,out precise float3 local,out preci
     precise float len=sqrt(transformed.x*transformed.x+transformed.y*transformed.y+transformed.z*transformed.z);
     normal=len>1e-6?transformed/len:float3(0,0,1);
 }
-FeaturePixelInput VSResourceBody(ResourcePosedVertex vertex) {
+FeaturePixelInput VSResourceBody(ResourceVertex vertex) {
     precise float3 local,normal;resource_local(vertex,local,normal);
     precise float feature_height=local.z*150.0/.82;
     precise float relief=resource_projection.z*.82;
@@ -75,7 +51,7 @@ FeaturePixelInput VSResourceBody(ResourcePosedVertex vertex) {
     packed.world=world;
     return VSIntegratedFeature(packed);
 }
-PixelInput VSResourceShadow(ResourcePosedVertex vertex) {
+PixelInput VSResourceShadow(ResourceVertex vertex) {
     precise float3 local,normal;resource_local(vertex,local,normal);
     precise float height=(local.z*150.0/.82)/112.0;
     // The frame's authoritative key light supplies the same CPU ground offset.

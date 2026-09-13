@@ -2786,12 +2786,13 @@ struct IntegratedVertexInput
     float4 relief_material : TEXCOORD16;
 };
 
-// Use a power-of-two pixel depth range. An integer camera movement now adds
-// an exactly representable depth offset; coplanar neighbors cannot exchange
-// their depth-test order because of viewport-dependent division roundoff.
+// Use one power-of-two pixel depth range, independent of raster-region XY.
+// Integer basis offsets are representable, but D24 rasterization can still
+// change near-coplanar rounding at a world-origin transition. Material order
+// and depth-write rules remain explicit; stored depth carries its basis.
 float translated_depth(IntegratedVertexInput input, bool feature)
 {
-    float pixel_depth = floor(input.position.z * 256.0 + 0.5) / 256.0 + c3x_viewport_translation.y;
+    float pixel_depth = floor(input.position.z * 256.0 + 0.5) / 256.0 + c3x_viewport_depth_translation;
     float depth = clamp(0.5 - pixel_depth / 16384.0, 0.001, 0.999);
     if (feature) return depth;
     // Preserve the existing layer separation in physical pixels at each size.
@@ -2883,7 +2884,7 @@ FeaturePixelInput VSReflection(PackedFeatureInput input) {
  float h=max(0,input.world.z-NativeReflection.z);
  o.position.y-=h*NativeReflection.x*4*c3x_inverse_viewport_size.y;
  float base=input.position.y+h*NativeReflection.x;
- o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_translation.y)/16384,.001,.999);
+ o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_depth_translation)/16384,.001,.999);
  return o;
 }
 float4 PSReflection(FeaturePixelInput input):SV_Target {
@@ -3113,7 +3114,7 @@ FeaturePixelInput VSNativeCityReflection(NativeCityInput p) {
  float h=max(0,p.world.z-NativeReflection.z);
  o.position.y-=h*NativeReflection.x*4*c3x_inverse_viewport_size.y;
  float base=p.position.y+h*NativeReflection.x;
- o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_translation.y)/16384,.001,.999);
+ o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_depth_translation)/16384,.001,.999);
  return o;
 }
 float4 PSNativeCity(FeaturePixelInput p):SV_Target { return PSNativeCityBody(p).color; }
@@ -3155,32 +3156,8 @@ void resource_pose(ResourceVertex input,out precise float3 position,out precise 
     precise float len=sqrt(n.x*n.x+n.y*n.y+n.z*n.z);
     position=p;normal=len>1e-12?n/len:input.normal;
 }
-struct ResourcePosedVertex {
-    float3 position:POSITION;float3 normal:NORMAL;float2 uv:TEXCOORD0;
-};
-// Skin once per instance. Body and shadow submissions share this bounded posed
-// mesh; camera projection remains a cheap per-pass operation.
-struct ResourceSourceData {
-    float3 position;float3 normal;float2 uv;float3 tangent;float3 bitangent;
-    uint4 joints;float4 weights;
-};
-StructuredBuffer<ResourceSourceData> resource_sources:register(t0);
-RWByteAddressBuffer resource_posed:register(u0);
-[numthreads(64,1,1)]void CSResourcePose(uint3 id:SV_DispatchThreadID) {
-    uint count,stride;resource_sources.GetDimensions(count,stride);if(id.x>=count)return;
-    ResourceSourceData source=resource_sources[id.x];ResourceVertex input;
-    input.position=source.position;input.normal=source.normal;input.uv=source.uv;
-    input.joints=source.joints;input.weights=source.weights;
-    ResourcePosedVertex output;resource_pose(input,output.position,output.normal);output.uv=input.uv;
-    // Raw views allow the same storage to serve the vertex input stage.
-    // FeatureSourceVertex is position.xyz, normal.xyz, uv.xy: exactly 32 bytes.
-    uint offset=id.x*32;
-    resource_posed.Store3(offset,asuint(output.position));
-    resource_posed.Store3(offset+12,asuint(output.normal));
-    resource_posed.Store2(offset+24,asuint(output.uv));
-}
-void resource_local(ResourcePosedVertex input,out precise float3 local,out precise float3 normal) {
-    precise float3 source=input.position,n=input.normal;
+void resource_local(ResourceVertex input,out precise float3 local,out precise float3 normal) {
+    precise float3 source,n;resource_pose(input,source,n);
     precise float x=source.x+resource_offset.x,y=source.y+resource_offset.y;
     local=float3((x*resource_shape.x-y*resource_shape.y)*resource_shape.z,
         (x*resource_shape.y+y*resource_shape.x)*resource_shape.z,
@@ -3190,7 +3167,7 @@ void resource_local(ResourcePosedVertex input,out precise float3 local,out preci
     precise float len=sqrt(transformed.x*transformed.x+transformed.y*transformed.y+transformed.z*transformed.z);
     normal=len>1e-6?transformed/len:float3(0,0,1);
 }
-FeaturePixelInput VSResourceBody(ResourcePosedVertex vertex) {
+FeaturePixelInput VSResourceBody(ResourceVertex vertex) {
     precise float3 local,normal;resource_local(vertex,local,normal);
     precise float feature_height=local.z*150.0/.82;
     precise float relief=resource_projection.z*.82;
@@ -3205,7 +3182,7 @@ FeaturePixelInput VSResourceBody(ResourcePosedVertex vertex) {
     packed.world=world;
     return VSIntegratedFeature(packed);
 }
-PixelInput VSResourceShadow(ResourcePosedVertex vertex) {
+PixelInput VSResourceShadow(ResourceVertex vertex) {
     precise float3 local,normal;resource_local(vertex,local,normal);
     precise float height=(local.z*150.0/.82)/112.0;
     // The frame's authoritative key light supplies the same CPU ground offset.

@@ -289,6 +289,6 @@ P VSNative(V input) {
  input.position=native_project_position(input.position,input.world.xyz);
  P o=VSMain(input);
  o.position.xy=(floor(input.position.xy*256+0.5)/256+translation)*inverse_size*float2(2,-2)+float2(-1,1);
- o.position.z=clamp(0.5-(floor(input.position.z*256+0.5)/256+translation.y)/16384.0,0.001,0.999);
+ o.position.z=clamp(0.5-(floor(input.position.z*256+0.5)/256+depth_translation)/16384.0,0.001,0.999);
  return o;
 }
