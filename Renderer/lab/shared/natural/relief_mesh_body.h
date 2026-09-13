@@ -78,7 +78,8 @@
             return result;
         };
         if(!pieces.empty()){
-            constexpr unsigned count=65,span=67;constexpr float step=1/64.f;
+            unsigned const count=patch_detail.mountain+1,span=count+2;
+            float const step=1/float(patch_detail.mountain);
             // A coarser haloed distance field is aligned in world space and is
             // ample for the broad 16-pixel valley shoulder. Reconstructing it
             // for the fine mesh avoids thousands of river-page queries while
@@ -152,6 +153,6 @@
                     grid[y*count+x]=out;
                 }
             }
-            append_surface_grid(natural_vertices[2],grid,count-1,false,mountain_indices);
+            append_surface_grid(natural_vertices[2],grid,count-1,false,mountain_indices,&patch_layouts.get(count-1));
         }
     }

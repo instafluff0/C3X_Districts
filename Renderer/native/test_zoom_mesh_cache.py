@@ -286,12 +286,14 @@ int main(){
 namespace c3x_renderer {namespace render_core {struct SourceShadow {
  struct Bounds {float low[3]={1,2,3},high[3]={4,5,6};};
  struct Caster {int vertices=0,indices=0,count=0,index_format=0,stride=0;
+  void const* instances=nullptr;float instance_material=40;
   unsigned layer=0,version=0,binding=0;Bounds bounds;float offset[2]={};};
 };}}
 enum {geometry_land=1,geometry_feature=2,geometry_natural_decal=3,geometry_layer_count=5};
 struct CachedVertexChunk {
  struct {long left=0,top=0,right=0,bottom=0;} bounds;
  int translation_x=0,translation_y=0;float natural_projection[4]={};
+ struct {void const* value=nullptr;void const* get()const{return value;}} instances;float instance_material=40;
  int buffer=7,indices=8,index_count=9,index_format=16,vertex_stride=64;
  unsigned version=10,city_material=0xffffffffu;bool animation_texture=false;
  c3x_renderer::render_core::SourceShadow::Bounds world_bounds;
@@ -370,6 +372,7 @@ int main(){
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
+#include "Renderer/lab/shared/natural/world.h"
 #include "Renderer/lab/shared/natural/vertex.h"
 using Vertex=c3x_renderer::fidelity::MapVertex;
 ''' + retained + r'''
@@ -377,6 +380,8 @@ struct State {
  struct Frame {int world_width_tiles=100,world_height_tiles=100,world_wrap_x=1,world_wrap_y=0;
   int world_topology_revision=1,tile_width=128,tile_height=64,target_width=128,target_height=64;} frame;
  struct Tile {int tile_x=0,tile_y=0,anchor_x=0,anchor_y=0;} tile;
+ bool retained_world=true;
+ c3x_renderer::fidelity::NaturalWorld natural;
  std::uint64_t content_revision=1,tile_geometry_epoch=1;
  std::unordered_map<std::uint64_t,CachedGroundTile> ground_grid_cache;
  std::size_t ground_grid_cache_bytes=0,natural_mesh_cache_budget=8192,natural_mesh_cache_capacity=4;
@@ -391,6 +396,9 @@ struct State {
  bool run(int x,bool record){
   tile.tile_x=x;tile.anchor_x=x*64;
   bool retain_ground_grids=true,prewarming=false;
+  struct Node {int lattice_x,lattice_y,degree,touches_water;};
+  std::vector<Node const*> local_river_nodes;
+  c3x_renderer::fidelity::NaturalWorld::CellInputs river_dependencies;
   std::unordered_map<std::uint64_t,std::uint64_t> dependencies,coast_dependencies;
   std::unordered_map<std::size_t,std::uint32_t> world_dependencies;
 ''' + lookup + r'''
@@ -413,7 +421,9 @@ int main(){
  s.run(0,true);s.world_coast.data.value++;assert(!s.run(0,false));
  s.run(0,true);s.topology_cache.record.semantic++;assert(!s.run(0,false));
  s.run(0,true);s.content_revision++;assert(!s.run(0,false));
- s.run(0,true);s.frame.world_topology_revision++;assert(!s.run(0,false));
+ s.run(0,true);s.frame.world_topology_revision++;assert(s.run(0,false)); // Local values unchanged.
+ s.retained_world=false;s.run(0,true);s.frame.world_topology_revision++;assert(!s.run(0,false));
+ s.retained_world=true;
  s.run(0,true);s.frame.world_width_tiles+=2;assert(!s.run(0,false));
  s.run(0,true);s.frame.world_wrap_x=0;assert(!s.run(0,false));
  s.run(0,true);s.frame.tile_width=192;s.frame.tile_height=96;assert(s.run(0,false));
@@ -550,7 +560,7 @@ int main(){
             self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         append = "    void append_tile_geometry(" + source.split(
-            "    void append_tile_geometry(", 1)[1].split("    bool restore_viewport_geometry(", 1)[0]
+            "    void append_tile_geometry(", 1)[1].split("    bool tile_content_valid(", 1)[0]
         program = r'''
 #include <array>
 #include <cassert>
@@ -838,6 +848,7 @@ int main(){
 #include <cstring>
 #include <unordered_map>
 #include <vector>
+#include "Renderer/lab/shared/natural/world.h"
 #include "Renderer/lab/shared/natural/vertex.h"
 using Vertex=c3x_renderer::fidelity::MapVertex;
 using UINT=unsigned;
@@ -955,6 +966,7 @@ struct State {
     unsigned viewport_cache_capacity=32;
     struct Trace {void write(char const*,char const*,bool){}} trace;
     std::unordered_map<int,Item> tile_geometry_cache;
+    std::size_t terrain_patch_index_bytes=0;
     std::size_t tile_geometry_cache_bytes=60,prefetched_geometry_bytes=10;
     std::size_t tile_geometry_runtime_budget=100,tile_geometry_cache_capacity=2048;
     unsigned tile_geometry_epoch=3,frame_tiles_evicted=0,cache_evictions=0;
@@ -974,6 +986,7 @@ int main(){
  assert(s.tile_geometry_cache_bytes==30 && s.tile_geometry_cache.count(3));
  assert(!s.make_tile_cache_room(71) && s.tile_geometry_cache_bytes==30);
  assert(s.make_tile_cache_room(70) && s.tile_geometry_cache.size()==1);
+ s.terrain_patch_index_bytes=10;assert(!s.make_tile_cache_room(70));assert(s.make_tile_cache_room(60));
  State favored;favored.tile_geometry_cache={{1,{10,1,true}},{2,{20,2,false}},{3,{30,3,false}}};
  favored.tile_geometry_cache.at(1).animation_epoch=1;
  assert(favored.make_tile_cache_room(50));
@@ -1043,6 +1056,8 @@ bool check(bool feature) {
 void check_index_width(std::size_t vertex_count) {
     enum {DXGI_FORMAT_R16_UINT=16,DXGI_FORMAT_R32_UINT=32};
     struct {int index_format=DXGI_FORMAT_R32_UINT;std::size_t byte_count=0;} chunk;
+    bool natural_vertex=false;std::vector<UINT> const*grid_indices=nullptr;
+    c3x_renderer::fidelity::PatchLayouts patch_layouts;
     std::vector<Vertex> packed(vertex_count);
     std::vector<UINT> indices={0,1,UINT(vertex_count-1),0,UINT(vertex_count-1),1};
     std::size_t vertex_stride=76;

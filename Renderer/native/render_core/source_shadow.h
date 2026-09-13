@@ -2,6 +2,7 @@
 #include <set>
 #include <map>
 #include "shader_cache.h"
+#include "instance_stream.h"
 #include <array>
 #include <atomic>
 #include <vector>
@@ -19,7 +20,8 @@ class SourceShadow {
     std::uint64_t epoch=0;
     ID3D11Texture2D* texture=nullptr;
     std::array<ID3D11RenderTargetView*,32> targets{};
-    ID3D11VertexShader* vertex=nullptr;
+    ID3D11VertexShader* vertex=nullptr,*instance_vertex=nullptr;
+    ID3D11InputLayout* instance_layout=nullptr;
     ID3D11PixelShader *opaque=nullptr,*cutout=nullptr;
     ID3D11InputLayout *layout=nullptr,*feature_layout=nullptr,*natural_layout=nullptr;
     ID3D11Buffer* caster_settings=nullptr;
@@ -30,6 +32,7 @@ public:
     ID3D11ShaderResourceView* view=nullptr;
     ID3D11Buffer* table=nullptr;
     unsigned hits=0,rebuilt=0,draws=0;
+    InstanceStream instance_stream;
     struct Bounds { float low[3]={},high[3]={}; };
     struct Caster {
         DXGI_FORMAT index_format=DXGI_FORMAT_R32_UINT;
@@ -38,6 +41,7 @@ public:
         unsigned binding=0xffffffffu;
         std::uint64_t version=0;
         Bounds bounds;
+        std::vector<fidelity::MeshInstance> const* instances=nullptr;float instance_material=40;
         float offset[3]={};
     };
     SourceShadow()=default;
@@ -45,6 +49,7 @@ public:
     ~SourceShadow(){clear();}
     void clear_cached_pages(){pages={};basis={};epoch=0;}
     void clear(){
+        instance_stream.clear();drop(instance_vertex);drop(instance_layout);
         drop(view);drop(texture);for(auto& t:targets)drop(t);
         drop(vertex);drop(opaque);drop(cutout);drop(layout);drop(feature_layout);drop(natural_layout);drop(caster_settings);
         drop(table);drop(raster);drop(maximum);clear_cached_pages();
@@ -76,6 +81,15 @@ public:
             elements[3].AlignedByteOffset=56;elements[0].AlignedByteOffset=40;elements[1].AlignedByteOffset=72;
             elements[2].AlignedByteOffset=12;elements[2].Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
             if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,5,code->GetBufferPointer(),code->GetBufferSize(),&natural_layout);
+        }
+        if(SUCCEEDED(hr)){
+            std::wstring instance_path(path);auto slash=instance_path.find_last_of(L"/\\");
+            instance_path=instance_path.substr(0,slash)+L"/../source_fidelity/instance_caster.hlsl";
+            drop(code);drop(errors);
+            hr=compile_cached(instance_path.c_str(),"VSInstance","vs_5_0",&code,&errors);
+            if(errors)OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));
+            if(SUCCEEDED(hr))hr=device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&instance_vertex);
+            if(SUCCEEDED(hr))hr=create_instance_layout(device,code,&instance_layout);
         }
         if(SUCCEEDED(hr) && compile("PSOpaque","ps_5_0"))
             hr=device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&opaque);
@@ -303,13 +317,32 @@ public:
             // Publish identity only after the entire source field completes.
             page.hash=0;float clear[4]={-1e6f,-1e6f,-1e6f,-1e6f};
             context->ClearRenderTargetView(targets[slot],clear);context->OMSetRenderTargets(1,&targets[slot],nullptr);
-            for(auto i:selected){
+            for(std::size_t ordinal=0;ordinal<selected.size();++ordinal){
+                auto i=selected[ordinal];
                 if(cancellation && cancellation->load(std::memory_order_relaxed))return false;
                 auto const& c=casters[i];float settings[20]={};std::copy(basis.begin(),basis.end(),settings);
                 settings[12]=float(key.first);settings[13]=float(key.second);
                 std::copy(c.offset,c.offset+3,settings+16);
                 context->UpdateSubresource(caster_settings,0,nullptr,settings,0,0);
                 bool alpha=bind(c.binding==0xffffffffu?c.layer:c.binding);context->PSSetShader(alpha?cutout:opaque,nullptr,0);
+                if(c.instances){
+                    std::vector<fidelity::MeshInstance> data;
+                    std::size_t next=ordinal;
+                    for(;next<selected.size();++next){
+                        auto const&part=casters[selected[next]];
+                        if(!part.instances || part.vertices!=c.vertices || part.indices!=c.indices || part.count!=c.count ||
+                           part.binding!=c.binding || part.layer!=c.layer)break;
+                        if(data.size()+part.instances->size()>InstanceStream::limit)break;
+                        for(auto instance:*part.instances){std::copy(part.offset,part.offset+3,instance.view);instance.view[3]=part.instance_material;data.push_back(instance);}
+                    }
+                    if(data.empty() || !instance_stream.upload(nullptr,context,data))return false;
+                    ordinal=next-1;
+                    context->VSSetShader(instance_vertex,nullptr,0);context->IASetInputLayout(instance_layout);
+                    ID3D11Buffer*streams[]={c.vertices,instance_stream.buffer};UINT strides[]={32,64},offsets[]={0,instance_stream.offset};
+                    context->IASetVertexBuffers(0,2,streams,strides,offsets);context->IASetIndexBuffer(c.indices,c.index_format,0);
+                    context->DrawIndexedInstanced(c.count,UINT(data.size()),0,0,0);++draws;continue;
+                }
+                context->VSSetShader(vertex,nullptr,0);
                 context->IASetInputLayout(c.stride==92?natural_layout:c.stride==48?feature_layout:layout);
                 UINT stride=c.stride,offset=0;context->IASetVertexBuffers(0,1,&c.vertices,&stride,&offset);
                 context->IASetIndexBuffer(c.indices,c.index_format,0);context->DrawIndexed(c.count,0,0);++draws;

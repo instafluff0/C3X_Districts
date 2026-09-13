@@ -1660,6 +1660,65 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         }
         std::printf("TOPOLOGY_EDIT_END status=%s checks=%u independent_full_redraw=1\n",ok?"pass":"FAIL",checks);
     }
+    char content_edit_option[8]={};
+    if(ok && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CONTENT_EDITS",content_edit_option,sizeof(content_edit_option))) {
+        // Change appearance without a world-topology revision. A city next to
+        // forest exercises the outer instance binding and inner exclusion mesh.
+        std::size_t site=tiles.size(),forest_site=tiles.size();double closest=1e30;
+        for(std::size_t i=0;i<tiles.size();++i){auto const& tile=tiles[i];
+            if(tile.anchor_x<tile_width || tile.anchor_x>target_width-2*tile_width ||
+               tile.anchor_y<tile_height || tile.anchor_y>target_height-2*tile_height)continue;
+            for(std::size_t j=0;j<tiles.size();++j){auto const& other=tiles[j];
+                if(other.city_id>=0 ||
+                   std::abs(other.tile_x-tile.tile_x)!=1 || std::abs(other.tile_y-tile.tile_y)!=1)continue;
+                double dx=tile.anchor_x+tile_width/2-target_width/2,dy=tile.anchor_y+tile_height/2-target_height/2;
+                if(dx*dx+dy*dy<closest){closest=dx*dx+dy*dy;site=i;forest_site=j;}
+            }
+        }
+        if(site==tiles.size()){std::fputs("CONTENT_EDIT missing captured neighboring land sites\n",stderr);ok=false;}
+        if(ok){
+            auto& city=tiles[site];city.tile_flags=C3X_RENDERER_TILE_RENDER;
+            city.terrain_type=city.real_terrain_type=2;city.feature_flags=city.improvement_flags=city.irrigation_mask=city.river_code=city.has_effect=0;
+            city.resource_id=city.resource_class=-1;city.resource_name[0]=0;city.city_id=901;city.city_owner_id=1;city.city_size=0;
+            city.city_culture_group=0;city.city_era=0;city.city_flags=0;
+            auto& forest=tiles[forest_site];forest.tile_flags=C3X_RENDERER_TILE_RENDER;forest.terrain_type=2;forest.real_terrain_type=7;
+            forest.feature_flags|=C3X_RENDERER_FEATURE_FOREST;
+            auto x=(forest.tile_x%map_width+map_width)%map_width;
+            auto index=(std::size_t(forest.tile_y)*map_width+x)/2;
+            world[index]=(world[index]&0xffff0000u)|2u|(7u<<8);
+            auto city_x=(city.tile_x%map_width+map_width)%map_width;world[(std::size_t(city.tile_y)*map_width+city_x)/2]=2u|(2u<<8);
+            ++frame.world_topology_revision;frame.tiles=tiles.data();
+            reset();ok=set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK &&
+                render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && !output.device_recoveries && !output.fallback_tile_count;
+        }
+        auto original=tiles;unsigned checks=0;
+        auto pixels=[&](){auto p=static_cast<unsigned char const*>(output.bgra_pixels);
+            return std::vector<unsigned char>(p,p+std::size_t(output.stride_bytes)*output.height);};
+        auto flags=[&](){return std::vector<unsigned>(output.replacement_tile_flags,output.replacement_tile_flags+output.replacement_tile_count);};
+        for(unsigned step=0;ok && step<6;++step){
+            tiles=original;
+            if(!(step&1))for(auto& tile:tiles){
+                if(tile.tile_x!=original[site].tile_x || tile.tile_y!=original[site].tile_y)continue;
+                if(step==0)tile.city_size=(tile.city_size+1)%3;
+                if(step==2)tile.city_id=-1;
+                if(step==4){tile.city_culture_group=(tile.city_culture_group+1)%5;tile.city_era=(tile.city_era+1)%4;}
+            }
+            frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());frame.dirty_flags=C3X_RENDERER_DIRTY_SCENE|C3X_RENDERER_DIRTY_STATIC_MAP;
+            auto revision=frame.world_topology_revision;
+            ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 && output.device_recoveries==0;
+            if(!ok)break;
+            auto candidate=pixels();auto ownership=flags();auto animations=output.visible_animation_count;
+            auto warm=output;warm.bgra_pixels=candidate.data();
+            reset();ok=set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK &&
+                render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && !output.device_recoveries && !output.fallback_tile_count;
+            bool exact=ok && pixels()==candidate && flags()==ownership && output.visible_animation_count==animations;
+            std::printf("CONTENT_EDIT step=%u exact=%u topology_unchanged=%u city=%d\n",step,unsigned(exact),unsigned(frame.world_topology_revision==revision),original[site].city_id);
+            if(!exact){write_bmp((std::string(argv[5])+".content-candidate.bmp").c_str(),warm);
+                write_bmp((std::string(argv[5])+".content-reference.bmp").c_str(),output);ok=false;break;}
+            ++checks;
+        }
+        std::printf("CONTENT_EDIT_END status=%s checks=%u independent_full_redraw=1\n",ok?"pass":"FAIL",checks);
+    }
     char color_option[8]={};
     if(ok && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_COLOR",color_option,sizeof(color_option)))
         ok=write_color_preview(argv[5],module,output);

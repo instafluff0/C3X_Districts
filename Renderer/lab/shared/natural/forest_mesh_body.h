@@ -35,6 +35,7 @@
             // Uniform source XYZ scale precedes the documented source-to-world
             // basis conversion; normals use its inverse transpose.
             constexpr float z_basis=150.f/(.82f*64.f);
+            if(emit_forest_instance(recipe->object,nc,nr,u,v,co,si,scale,ground_h))continue;
             for(auto const&p:body.vertices){
                 float x=float(nc)+u+(p.position[0]*co-p.position[1]*si)*scale;
                 float y=float(nr)+1-v-(p.position[0]*si+p.position[1]*co)*scale;

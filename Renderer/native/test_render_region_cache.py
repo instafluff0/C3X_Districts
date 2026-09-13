@@ -175,6 +175,7 @@ int main(){
         projection="struct GroundProjection {"+ground.split("struct GroundProjection {",1)[1].split("\n};",1)[0]+"\n};"
         run_cpp(r'''
 #include "Renderer/native/render_core/projected_mesh_bounds.h"
+#include "Renderer/lab/shared/natural/instance.h"
 #include <cassert>
 #include <vector>
 struct MapVertex {float x,y,z,world_x,world_y,world_z,world_valid,normal_z,u,v;};
@@ -237,6 +238,7 @@ int main(){
 #include "Renderer/native/render_core/render_region_cache.h"
 #include "Renderer/native/render_core/region_contributor_index.h"
 #include "Renderer/native/render_core/projected_mesh_bounds.h"
+#include "Renderer/lab/shared/natural/instance.h"
 #include <cassert>
 #include <deque>
 struct Image {int refs=1;void Release(){assert(refs>0);--refs;}};
@@ -288,6 +290,7 @@ int main(){
 #include "Renderer/native/render_core/render_region_cache.h"
 #include "Renderer/native/render_core/region_contributor_index.h"
 #include "Renderer/native/render_core/projected_mesh_bounds.h"
+#include "Renderer/lab/shared/natural/instance.h"
 using UINT=unsigned;using DXGI_FORMAT=unsigned;constexpr unsigned DXGI_FORMAT_R32_UINT=42;
 struct ID3D11Buffer{};struct ID3D11ShaderResourceView{};struct ID3D11Texture2D{void Release(){}};
 struct D3D11_RECT{long left,top,right,bottom;};

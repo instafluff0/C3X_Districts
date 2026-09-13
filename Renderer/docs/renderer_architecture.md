@@ -29,9 +29,11 @@ The implemented city-profile path with waves/reflections disabled keeps circular
 scene color/depth and finished output at stable world-relative sample addresses.
 Camera changes select exposed/static damage and ordered dynamic passes; they do
 not translate the whole scene. Finishing updates affected output with exact filter
-support. Raster misses, broad content revisions, full MSAA resolve and general
-spatial instance selection remain opportunities for further work. The retained
-plan records controls, complete-request measurements and precision constraints.
+support. Persistent captured world identity is now separate from observations;
+local content proofs and a ready-instance path feed separate view assembly and
+spatially selected pass inputs. Full MSAA resolve and general native asynchronous
+handoff remain explicit limits. The retained plan records the scoped completion
+assessment, controls, complete-request measurements and precision constraints.
 
 ## Firm principles
 
@@ -76,10 +78,10 @@ simulator or duplicate category implementations.
 | Responsibility | Intended ownership | Current foothold |
 | --- | --- | --- |
 | Game scene bridge | Capture authoritative values and lifecycle changes; publish immutable input. | Capture and composition in `injected_code.c`, versioned API in `C3X.h` and the native DLL. |
-| Render world | Retain tile/object identity, local revisions, bounds and spatial membership across views. | `render_core/world_topology.h` and the bounded `render_core/captured_scene.h` owner provide canonical observed appearance, local revisions and current eligibility; resident compiled-content handles now serve current assembly/restore/prefetch; complete appearance capture and general spatial occurrence selection remain unfinished. |
-| Asset registry and scene compiler | Share assets; compile changed terrain, connectivity and compound object composition into reusable content. | Existing pack loaders, fidelity adapters, `CachedTileGeometry` and shared natural world meshes in `native/c3x_renderer.cpp`. |
-| View builder | Select eligible wrapped occurrences and build pass-specific draw lists. | Compact resident occurrence records in `native/render_core/geometry_draws.h` now feed static draw/receiver/caster/region consumers; the retained profile selects ordered layer batches within the shadow-page limit; general world-spatial occurrence selection remains unfinished. |
-| GPU renderer | Own the immediate D3D11 context, GPU lifetimes, uploads and pass execution. | Existing renderer worker, `draw_cached_geometry()` and `submit_geometry()`; the retained profile owns circular scene/depth and incremental finishing. Animated resources share resident meshes with separate pose/placement. General hardware instancing remains unfinished. |
+| Render world | Retain tile/object identity, local revisions, bounds and spatial membership across views. | `render_core/world_topology.h` owns complete terrain topology. `render_core/captured_scene.h` separates persistent canonical render appearance/revisions/bindings from bounded current observations. Identity survives camera departure and mesh eviction; unobserved appearance remains unknown and cannot authorize drawing. Complete local proofs guard compiled-content reuse. |
+| Asset registry and scene compiler | Share assets; compile changed terrain, connectivity and compound object composition into reusable content. | Existing pack loaders, fidelity adapters, `CachedTileGeometry` and shared natural world meshes in `native/c3x_renderer.cpp`. Regular terrain patches share canonical connectivity. Immutable tree placements refer to resident generic source meshes; local exclusions and surface dependencies remain with compiled world content. |
+| View builder | Select eligible wrapped occurrences and build pass-specific draw lists. | Separate assembly of current authoritative occurrences feeds `native/render_core/geometry_draws.h`. The retained profile uses the view-scoped contributor index for actual spatial pass selection, then ordered compatible submissions within the shadow-page limit. Its source world and compiled proofs survive view/index retirement. |
+| GPU renderer | Own the immediate D3D11 context, GPU lifetimes, uploads and pass execution. | Existing renderer worker, `draw_cached_geometry()` and `submit_geometry()`; the retained profile owns circular scene/depth and incremental finishing. Animated resources share resident meshes with separate pose/placement. Selected forests use hardware instancing in color and shadow passes, retaining the existing material order and page limit. Other object categories and reflection profiles retain their existing submissions. |
 | Compositor bridge | Publish and consume complete compatible results at the native map boundary. | The injected compositor supplies native lifecycle/visibility identity to ordinary DLL publication selection; identical queued and compatible ambient work can be consumed on native demand. General asynchronous camera handoff and live acceptance remain unfinished. |
 
 The fallback regional path still traverses layer chunks for each rectangle and

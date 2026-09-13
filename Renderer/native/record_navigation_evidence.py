@@ -61,6 +61,28 @@ def inputs():
         paths.update(p for p in (ROOT / directory).rglob("*") if p.is_file()
                      and not any(part in ("__pycache__", ".cache", "out", "build") for part in p.parts))
     paths = {p for p in paths if p.suffix.lower() not in (".py", ".pyc", ".cpp", ".h", ".md")}
+    # The generic city pack currently references texture payloads outside its
+    # own directory. Include the actual compiled references in measurement
+    # identity; copying only declared pack directories is not a full closure.
+    city_pack=ROOT/"Renderer/packs/CityCompositionRuntime/city.bin"
+    if city_pack.is_file():
+        data=city_pack.read_bytes()
+        if len(data)<20 or len(data)>32*1024*1024 or data[:8]!=b"C3XCITY2":
+            raise ValueError("Invalid compiled city dependency header")
+        count=int.from_bytes(data[8:12],"little")
+        if not 1<=count<=512:raise ValueError("Invalid city material count")
+        cursor=20
+        for _ in range(count):
+            cursor+=12  # address, channels, ground
+            for _ in range(7):
+                if cursor+4>len(data):raise ValueError("Truncated city texture reference")
+                length=int.from_bytes(data[cursor:cursor+4],"little");cursor+=4
+                if length>1024 or cursor+length>len(data):raise ValueError("Invalid city texture reference size")
+                name=data[cursor:cursor+length].decode("utf-8");cursor+=length
+                if not name:continue
+                if not name.startswith("Renderer/") or any(c in name for c in ("..", ":", "\\", "\0")):
+                    raise ValueError("Pack texture reference escapes renderer root")
+                paths.add(ROOT/Path(name))
     paths.update((ROOT / "Renderer").glob("*.custom_rendering.txt"))
     paths.add(ROOT / "Renderer/lab/.local/verification/world.csv")
     return {p.relative_to(ROOT).as_posix(): {"bytes": p.stat().st_size, "sha256": digest(p)}
@@ -107,6 +129,10 @@ def main(argv=None):
     parser.add_argument("--shared-scene-surface", action="store_true", help="Bounded complete shared-surface alternative; waves/reflections off")
     parser.add_argument("--automatic-scene-surface", action="store_true", help="Exercise automatic retained selection for an eligible production profile")
     parser.add_argument("--output-completion-probe", action="store_true", help="Serialize GPU scene/finish boundaries for attribution only; not performance evidence")
+    parser.add_argument("--content-edit-fixture", action="store_true", help="Independent city/forest appearance edits with unchanged world topology; correctness witness")
+    parser.add_argument("--legacy-tree-meshes", action="store_true", help="Control: bake tree vertices instead of using shared instance meshes")
+    parser.add_argument("--patch-pixels", type=int, choices=range(9), default=0, help="Explicit terrain-detail visual candidate; zero preserves current density")
+    parser.add_argument("--legacy-world-submission", action="store_true", help="Same-binary control for retained world validity and selected submission")
     parser.add_argument("--full-scene-output", action="store_true", help="Preserve the circular scene with full viewport finishing on scrolling as the incremental-output control")
     parser.add_argument("--prepared-resource-pass", action="store_true", help="Use the explicit animated body/shadow binding contract")
     parser.add_argument("--width", type=int, default=2240)
@@ -191,6 +217,8 @@ def main(argv=None):
         parser.error("Process-cold cases require a fresh process per case")
     if args.exclusive_gpu and not args.case_repeats:
         parser.error("--exclusive-gpu requires the bounded session watchdog")
+    if args.content_edit_fixture and not args.topology_edit_fixture:
+        parser.error("--content-edit-fixture requires --topology-edit-fixture")
     if args.topology_edit_fixture and (args.case_repeats not in (None,1) or args.boundary_fixture or args.scenario!="scroll" or args.scroll_sequence):
         parser.error("Topology edits require one scroll case without another correctness/sequence fixture")
     if args.boundary_fixture and (args.case_repeats or args.dense_scene or args.scenario!="scroll" or
@@ -223,15 +251,19 @@ def main(argv=None):
            "C3X_RENDERER_RASTER_REUSE_CONTROL": "1" if args.raster_control else "0",
            "C3X_RENDERER_REGION_SIZE": str(args.region_size),
            "C3X_RENDERER_BOUNDED_POST": "1" if args.bounded_post else "0",
+           "C3X_RENDERER_TREE_INSTANCES_CONTROL": "1" if args.legacy_tree_meshes else "0",
+           "C3X_RENDERER_PATCH_PIXELS": str(args.patch_pixels),
            "C3X_RENDERER_REFLECTION_CONTROL": "1" if args.reflection_ablation else "0",
            "C3X_RENDERER_DIAGNOSTIC_ROUTES": args.diagnostic_routes,
            "C3X_RENDERER_DIAGNOSTIC_ANIMATION": args.diagnostic_animation,
            "C3X_RENDERER_DIAGNOSTIC_HALF_PIXELS": "1" if args.diagnostic_half_pixels else "0",
+           "C3X_RENDERER_PREVIEW_CONTENT_EDITS": "1" if args.content_edit_fixture else "",
            "C3X_RENDERER_PREVIEW_TOPOLOGY_EDITS": "1" if args.topology_edit_fixture else "",
            "C3X_RENDERER_LOCAL_REGION_REVISIONS": "1" if args.local_region_revisions else "0",
            "C3X_RENDERER_PREVIEW_RETAINED_BOUNDARY": "1" if args.boundary_fixture else "",
            "C3X_RENDERER_SHARED_SCENE_SURFACE": "" if args.automatic_scene_surface else "1" if args.shared_scene_surface else "0",
            "C3X_RENDERER_OUTPUT_COMPLETION_PROBE": "1" if args.output_completion_probe else "0",
+           "C3X_RENDERER_RETAINED_WORLD": "0" if args.legacy_world_submission else "1",
            "C3X_RENDERER_INCREMENTAL_OUTPUT": "0" if args.full_scene_output else "1",
            "C3X_RENDERER_PREPARED_RESOURCE_PASS": "1" if args.prepared_resource_pass else "0",
            "C3X_RENDERER_WORLD_RASTER_GRID": "1" if args.world_grid else "0",
@@ -409,19 +441,25 @@ exit $childCode
     completion["binaries_unchanged"] = all(digest(out / name)==value for name,value in receipt["binaries"].items())
     completion["images"] = {p.name: digest(p) for p in sorted(out.glob("*.bmp")) if p.is_file()}
     if args.ambient_boundary:
-        ambient_log=(out/"benchmark.log").read_text(errors="replace")
+        ambient_log=((out/"benchmark.log").read_text(errors="replace") if (out/"benchmark.log").is_file() else "")
         completion["ambient_boundary_correctness_pass"]=bool(re.search(
             r"^AMBIENT_BOUNDARY_END status=pass exact_publications=5 .*",ambient_log,re.M)) and bool(re.search(
             r"^AMBIENT_BOUNDARY queued-current .* exact=1 fallback=0 recoveries=0$",ambient_log,re.M))
         if not completion["ambient_boundary_correctness_pass"]:
             completion["returncode"]=1;result["returncode"]=1
     if args.topology_edit_fixture:
-        edit_log=(out/"benchmark.log").read_text(errors="replace")
+        edit_log=((out/"benchmark.log").read_text(errors="replace") if (out/"benchmark.log").is_file() else "")
         completion["topology_edit_correctness_pass"]=bool(re.search(
             r"^TOPOLOGY_EDIT_END status=pass checks=4 independent_full_redraw=1$",edit_log,re.M))
         completion["topology_edits"]=[dict(re.findall(r"(\w+)=([^ ]+)",line))
             for line in edit_log.splitlines() if line.startswith("TOPOLOGY_EDIT step=")]
         if not completion["topology_edit_correctness_pass"]:
+            completion["returncode"]=1;result["returncode"]=1
+    if args.content_edit_fixture:
+        content_log=((out/"benchmark.log").read_text(errors="replace") if (out/"benchmark.log").is_file() else "")
+        completion["content_edit_correctness_pass"]=bool(re.search(
+            r"^CONTENT_EDIT_END status=pass checks=6 independent_full_redraw=1$",content_log,re.M))
+        if not completion["content_edit_correctness_pass"]:
             completion["returncode"]=1;result["returncode"]=1
     if args.local_region_revisions:
         trace_log=(out/"renderer.log").read_text(errors="replace") if (out/"renderer.log").is_file() else ""
@@ -441,7 +479,7 @@ exit $childCode
         if args.boundary_fixture and not completion["resource_material_variant_frames"]:
             completion["returncode"]=1;result["returncode"]=1
     if args.boundary_fixture:
-        log=(out/"benchmark.log").read_text(errors="replace")
+        log=((out/"benchmark.log").read_text(errors="replace") if (out/"benchmark.log").is_file() else "")
         completion["boundary_correctness_pass"]=bool(re.search(r"^RETAINED_BOUNDARY_END status=pass checks=6 independent_full_redraw=1$",log,re.M))
         if not completion["boundary_correctness_pass"]:completion["returncode"]=1;result["returncode"]=1
     phase("binary_image_verification_ms")
@@ -462,7 +500,7 @@ exit $childCode
     else:
         try:
             completion["endpoints"]=(session_accounting if args.case_repeats else endpoint_accounting)(
-                (out/"benchmark.log").read_text(errors="replace").splitlines(),
+                ((out/"benchmark.log").read_text(errors="replace") if (out/"benchmark.log").is_file() else "").splitlines(),
                 (out/"renderer.log").read_text(errors="replace").splitlines() if (out/"renderer.log").exists() else [])
         except (OSError,ValueError) as error:
             completion["endpoints"]={"status":"invalid", "reason":str(error)}

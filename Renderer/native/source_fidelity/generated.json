@@ -67,6 +67,10 @@
       "sha256": "75923e050f689869868b2eaebd21a7f71ea951e6e8091b9fbdc9610b36c24eaa"
     },
     {
+      "path": "generated/shaders/objects/instance_geometry.hlsl",
+      "sha256": "1f529aa78bb8819a874b970de6127e7ca8119fc08b3c201d01b53fea7ac3fad1"
+    },
+    {
       "path": "generated/shaders/objects/resource_skinning.hlsl",
       "sha256": "b11aa9a5dbefb8cac2145f425c9c671e35ff4c1ffa6608ea3d35234ba77280ee"
     },

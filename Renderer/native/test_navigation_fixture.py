@@ -6,6 +6,32 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class NavigationFixtureTests(unittest.TestCase):
+    def test_compiled_city_texture_references_join_measurement_identity(self):
+        import tempfile
+        import struct
+        from pathlib import Path
+        from unittest.mock import patch
+        from Renderer.native import record_navigation_evidence as evidence
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            texture=root/"Renderer/packs/Shared Materials/body texture.dds"
+            texture.parent.mkdir(parents=True);texture.write_bytes(b"first payload")
+            pack=root/"Renderer/packs/CityCompositionRuntime/city.bin"
+            pack.parent.mkdir(parents=True)
+            name=texture.relative_to(root).as_posix().encode()
+            # Parse the production header/material table, not a filename regex.
+            pack.write_bytes(b"C3XCITY2"+struct.pack("<6I",1,1,1,0,0,0)+
+                             struct.pack("<I",len(name))+name+struct.pack("<6I",0,0,0,0,0,0))
+            world=root/"Renderer/lab/.local/verification/world.csv"
+            world.parent.mkdir(parents=True);world.write_text("fixture")
+            with patch.object(evidence,"ROOT",root):
+                first=evidence.inputs();key=texture.relative_to(root).as_posix()
+                assert key in first
+                texture.write_bytes(b"changed payload");second=evidence.inputs()
+                assert first[key]["sha256"]!=second[key]["sha256"]
+                texture.unlink()
+                with self.assertRaises(FileNotFoundError):evidence.inputs()
+
     def test_dense_objects_keep_world_identity_and_draw_eligibility(self):
         source=(ROOT/"Renderer/native/biq_preview.cpp").read_text()
         seed="std::uint32_t preview_seed("+source.split("std::uint32_t preview_seed(",1)[1].split("\nbool preview_units",1)[0]

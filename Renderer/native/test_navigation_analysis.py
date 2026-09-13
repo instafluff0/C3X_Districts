@@ -123,7 +123,9 @@ class NavigationAnalysisTests(unittest.TestCase):
             root=self.fixture(Path(temporary)/"run")
             original=json.loads((root/"inputs.json").read_text())
             for section,key,value in (("args","output_completion_probe",True),
-                                      ("environment","C3X_RENDERER_OUTPUT_COMPLETION_PROBE","1")):
+                                      ("environment","C3X_RENDERER_OUTPUT_COMPLETION_PROBE","1"),
+                                      ("args","content_edit_fixture",True),
+                                      ("environment","C3X_RENDERER_PREVIEW_CONTENT_EDITS","1")):
                 receipt=json.loads(json.dumps(original));receipt["quality_mode"]="current"
                 receipt.setdefault(section,{})[key]=value
                 (root/"inputs.json").write_text(json.dumps(receipt))

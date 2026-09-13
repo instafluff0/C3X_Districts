@@ -889,6 +889,8 @@ def run_tests(category=None, *, integration=False, full=False):
                         "Renderer.native.test_effect_config",
                         "Renderer.native.test_zoom_mesh_cache",
                         "Renderer.native.test_captured_scene",
+                        "Renderer.native.test_world_view_submission",
+                        "Renderer.native.test_shared_mesh_instances",
                         "Renderer.native.test_frame_publication",
                         "Renderer.native.test_frame_telemetry",
                         "Renderer.native.test_renderer_trace",

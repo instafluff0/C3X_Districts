@@ -12,3 +12,9 @@ and focused regression tests. The current checkout is authoritative.
 Reference captures reproduce production using small synthetic diagnostic scenes;
 they are not claimed to be live Civ III captures. References are optional review
 aids. See `Renderer/docs/visual_fidelity_playbook.md`.
+
+The retained profile now stores immutable placements separately from shared tree
+body meshes. Spatially selected color and shadow passes use compatible instance
+batches; source recipes, exclusions, density and material shading are unchanged.
+Reflection and legacy profiles retain the existing geometry execution. The current
+comparison and validation are recorded in `Renderer/docs/retained_renderer_plan.md`.

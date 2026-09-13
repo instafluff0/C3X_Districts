@@ -1,255 +1,337 @@
-# Retained renderer implementation
+# Retained world → view → submission implementation
 
-## Objective and authority
+## Current implementation: shared geometry and terrain patches
 
-Complete a representative path through persistent world/content ownership, local
-invalidation, camera selection, compatible explicit passes, GPU reuse and caller-
-driven publication. The 2026-09-13 user instruction replaces the single-next-
-experiment queue and conflicting selection rules in the entry guides, execution
-contract and benchmark workflow. Intermediate changes need not individually win.
-AGENTS.md, assets/visual contracts, native ownership and deferred scope still apply.
-Implementation initially excluded staging, installation and game launch. The
-subsequent user request, "Please add so I can test in Civ 3," authorizes evaluation
-staging below. Installation and game launch remain unperformed.
+The user selected **full detail** for Civ III evaluation. The verified staged DLL
+uses the original terrain density (`C3X_RENDERER_PATCH_PIXELS=0` by default), with
+shared connectivity and tree instancing enabled in the eligible retained profile.
+Reduced-detail measurements remain preserved diagnostics, not the delivery mode.
+There is no temporary low-detail image or automatic refinement in this build.
 
-## Starting implementation and control
+The existing CPU-phase diagnostic places the largest geometry cost in terrain:
+2068 ms in natural ground, 3203 ms in relief, and only 40 ms in tree expansion on
+the preserved dense initial scene. Therefore a forest-only instancing claim would
+miss the dominant cost. The connected implementation has two responsibilities:
 
-Canonical captured appearance/topology, generation-checked content bindings,
-resident tile meshes, shared animated meshes and occurrence records already exist.
-The worker already accepts immutable caller requests and publishes exact identity;
-ambient adoption and exact queued-camera joining preserve native overlays/picking.
-Regional raster reuse and local finishing are useful controls. Geometry dependencies
-still contain broad revisions; selection and passes repeatedly traverse regions.
+- Terrain patches separate shared canonical connectivity from locally valid
+  surface values. CPU layouts and GPU index buffers are reused by all compatible
+  patches; color and shadow passes consume the same content. An explicit
+  screen-space detail policy selects a common power-of-two mountain lattice for
+  the view and its collar neighbors. Zero preserves existing density; positive
+  settings are visual candidates requiring review, not equal-quality speedups.
+  The pixel setting describes nominal projected horizontal grid pitch, not a
+  proven image-error bound on sloped relief.
+- Immutable tree placements reference one resident body mesh per generic asset.
+  The existing world owners retain placement and exclusion/height dependencies;
+  view assembly supplies authoritative projection; selected color inputs form
+  ordered instance batches, and shadow casters consume the same placement data.
+  Source assets, density, placement, clipping and materials remain unchanged.
 
-An unfinished full scene surface is also present in the starting worktree. Its
-existing dense result is 202.66 ms versus 145.23 ms control; stationary results are
-50.07 versus 45.12 ms. It copies/restores full MSAA color/depth repeatedly. It is
-not a completed architecture or a speedup. Preserve it as evidence, not a new run.
-Starting worktree patch/source and exact build receipts are retained under
-`Renderer/native/build/retained-architecture-20260913/`. The existing local-finishing
-control remains the performance reference. Earlier findings and rejected approaches
-are preserved in [the previous execution record](history/retained_execution_before_architecture_20260913.md).
-Parallels GPU timestamps are unreliable; CPU completion endpoints remain authoritative.
+The existing mesh budgets remain in force. Shared terrain indices are capped at
+4 MiB and charged in geometry admission; instance source meshes are capped at
+32 MiB; each pass stream is capped at 1 MiB. Compatible batches append into unused
+stream storage and discard only at wrap, avoiding a full stream rename per batch.
+Device/reset/eviction and publication continue through existing owners. Reflection/legacy profiles retain their existing
+geometry execution. Native asynchronous handoff remains outside this work.
 
-## Implementation design
+Preserve the current uncommitted source and verified binary control; test shared
+layout/placement ownership and both GPU passes, then compare stationary, dense
+scrolling and local edits through complete checked results. Distinguish unchanged
+quality effects from detail-policy tradeoffs. No Git mutation, installation or game
+launch. Evidence: `Renderer/native/build/mesh-instances-20260913/`.
 
-1. Retain the existing world and compiled-content owners. Extend actual dependency
-   validity where necessary; do not replace the scene compiler or duplicate assets.
-   View occurrences borrow protected content and retain captured ownership/anchors.
-2. Select ordered pass inputs once for exposed/static damage and dynamic bodies/
-   shadows. Batch within real material and shadow-page limits; preserve layer order.
-3. Keep a persistent circular scene color/depth surface and one sparse static
-   backup. Restore old animated damage; camera movement changes up to four physical
-   spans, without translating samples. Draw exposed/invalidated inputs, save only
-   current animated damage, then draw dynamic passes. World-relative projection
-   removes the former translated-bitmap clipping collar. Raster damage selects
-   scissors; it does not reconstruct little scenes.
-4. Keep MSAA4, 2x reconstruction, HDR/glow, common depth and display transfer.
-   Finish changed output with one resolve and one readback completion. Bound target
-   ownership explicitly, invalidate on failure/reset and retain >=512 MiB sampled
-   contiguous process headroom. Do not infer transient GPU residency from VA samples.
-5. Use the existing caller-driven worker/publication bridge. Exact compatible
-   pixels and ownership are consumed only on Civ III demand. Camera calls without
-   a compatible ready result must finish exact work; stale-camera display cannot
-   become the means of claiming a latency improvement.
+Current verification passes: 259 production integration tests (one skipped),
+resource animation/scroll/removal and common-depth checks, 21 focused ownership
+checks, and final boundary/zoom/content replays. The latter include four topology
+changes and six city/forest appearance changes checked against independent cold
+renders. Sources, binaries and runtime inputs remain unchanged within each run.
+A stale extracted test fixture now includes the shared instance type. The initial
+suite attempt used an older Python without Pillow and lacked VM access; its errors
+are preserved and superseded by the successful bundled-runtime integration run.
 
-## Checkpoints and completion
+A first complete comparison did not establish a scrolling win. Its initial
+per-batch stream discarded 1 MiB for every small submission; the connected
+correction uses bounded append/no-overwrite storage and discards on wrap. The
+D3D content replay now submits 50 color and 167 shadow batches with one
+initial discard per stream, then none on the following request. Earlier runs,
+shader-cache warmups, transport failures and the one dense run overlapping CPU
+tests remain preserved; final acceptance timings run without builds or tests.
 
-Design: owner/repeated-work audit above. Implementation: independent boundary,
-pose/removal, edit, pan, wrap, zoom and reset witnesses through existing harness.
-Performance: matched stationary animation, dense scrolling and local-content edit,
-including setup, complete request latency, actual reuse, completion waits, copy
-and bounded ownership. Compare saved pixels with both independent current redraws
-and the control. Existing accepted depth rounding is distinct from new differences.
-If performance fails, correct the dominant architectural cost within this path.
 
-The circular-surface implementation passes the independent six-case boundary,
-local edit and zoom-return witnesses. Correctly matched normal-tier comparisons
-use production defaults, the synthetic 100x100 world at 2240x1192/width 128, and
-waves/reflections disabled in both paths. Endpoints include capture through the
-completed result and ownership check; setup/cold redraws are reported separately.
+### Final shared-mesh comparison and delivery
 
-| Workload | Control | Retained scene | Whole-request saving |
+The preserved starting source/binary and final `shared-instances-stream-build`
+use the same art, definitions, world data and request sequences. Sixteen enumerated
+implementation inputs differ: the new instance shader and its generated adapters,
+compiled shader caches/provenance, and the shader-cache ignore file. Every run
+verifies its own unchanged inputs, source closure and binaries. The normal city
+profile has waves/reflections off. Dense scrolling uses two 14-request sequences;
+stationary animation uses 30 requests after ten warmups; edit means contain two
+distant and two visible changes, each compared with an independent cold redraw.
+Initial views start with assets loaded and renderer caches cleared.
+
+| Whole request | Starting control | Full detail | 3-pixel detail candidate |
 | --- | ---: | ---: | ---: |
-| Dense scrolling pair 1, 28 requests each | 150.64 ms | 129.51 ms | 14.03% |
-| Dense scrolling pair 2, 28 requests each | 151.68 ms | 127.66 ms | 15.84% |
-| Final automatic-selection dense pair, 28 requests each | 152.76 ms | 125.19 ms | 18.05% |
-| Stationary animation, 30 requests after warmup | 41.90 ms | 24.24 ms | 42.14% |
-| Distant local edits and reversals, 2 requests each | 96.55 ms | 89.27 ms | 7.54% |
-| Visible local edits and reversals, 2 requests each | 1,872.30 ms | 1,474.71 ms | 21.24% |
+| Initial dense view | 13033.80 ms | 12354.74 ms | 8611.38 ms |
+| Dense scrolling | 99.05 ms | 99.76 ms | 95.35 ms |
+| Stationary animation | 27.56 ms | 26.32 ms | 25.23 ms |
+| Distant topology change | 70.95 ms | 68.11 ms | 59.17 ms |
+| Visible topology change | 1555.52 ms | 1403.20 ms | 945.94 ms |
 
-Setup remains substantial: assets-loaded initial scene preparation is 12.7–12.9 s
-candidate versus 13.2–13.6 s control. Dense requests compile the same average 26.86
-tile entries and reuse 1,030.29 entries in both paths; the gain comes from scene
-execution, not claiming existing compilation reuse as a new speedup. There is one
-resolve/readback boundary and no full-surface color/depth copies. The complete
-viewport is finished during scrolling, so fewer processed pixels is not the claim.
-Stationary finishing is limited to the disjoint old/new animated damage.
+Full detail improves initial construction by 5.2% and visible edits by 9.8%; dense
+scrolling is effectively unchanged. The detail candidate improves initial work by
+33.9%, visible edits by 39.2% and scrolling by 3.7%. Stationary static work was
+already skipped; its timing variation does not establish an instancing benefit.
+These are standalone checked-result latencies, not native presented FPS.
 
-In the first matched dense candidate, CPU static submission averages 6.03 ms,
-dynamic submission 1.66 ms, finishing submission 0.03 ms, completion wait 69.28 ms
-and CPU copy 0.82 ms. Completion includes pending GPU execution and readback; it
-is not a calibrated transfer-only duration. Full composition accounting leaves
-less than 0.1 ms unexplained inside worker rendering. GPU timestamps stay invalid.
+Initial geometry uploads fall from 317762132 to 278106174 bytes at full detail,
+or 197937814 bytes with the detail option. New shared asset meshes total 112616
+bytes; initial color/shadow instance streams add 179904/264256 bytes, reported
+separately from geometry uploads. Dense requests still build 26.86 entries and
+upload 421114 geometry bytes, adding about 7090/20622 instance bytes. They mostly
+reuse terrain already constructed. Shadow source draws fall from 284.86 to
+170.43 per request without changing the 3.14 rebuilt pages. The append correction
+eliminates discards during the measured dense playback. Smaller uploads and fewer
+submissions have not eliminated its approximately 50 ms completion wait.
+Parallels GPU timestamps remain unsuitable for attributing that wait to a specific
+GPU stage. No new output-helper campaign or native handoff was substituted.
 
-The earlier full-surface translation implementation measured 180–182 ms and is
-superseded. Its source and receipts remain under the implementation evidence
-folder. A later comparison accidentally disabled production defaults and is
-excluded from performance claims; use only `production-*` and final `auto-*` receipts. The tested
-shader is now generated by the production adapter, byte-identical to the first
-circular shader witness. Category tests pass 135 checks (one existing skip), with
-28 separate architecture/publication checks and the independent GPU witnesses.
-Final current-code production integration passes 255 tests (one existing skip),
-resource playback, animation, scroll/removal parity and common-depth witnesses.
+Renderer target accounting stays at 1165363200 bytes, distinct from actual process
+residency. Shared mesh/index/stream caps stay bounded. The minimum reported
+contiguous free region across full-detail workloads is 1351.74 MiB; the detail
+candidate's minimum is 1432.34 MiB. Existing cache and target budgets were not enlarged.
 
-Evidence: `Renderer/native/build/retained-architecture-20260913/comparison.json`,
-`automatic-comparison.json`, `production-validation.log`, `final-delivery.log`,
-`resources-tests.log`, `architecture-final-tests.log`, and the named
-`retained-architecture-production-*` / `retained-architecture-auto-*` run directories. Dense local edits
-also match four independent full redraws: distant edits average 96.55 → 89.27 ms
-(7.54%); visible edits average 1,872.30 → 1,474.71 ms (21.24%). Visible edit geometry
-still costs about 1.2 s and is the remaining dominant edit cost. The explicit-
-identity caller-driven ambient boundary passes. The control's saved dense image
-is byte-identical to the preserved starting control. No live-game result is claimed.
+Across all final saved images, full detail differs from the starting renderer in
+at most 23 of 2670080 pixels, with maximum channel difference 5/255. This is new
+numerical variation in equivalent geometry/shader calculations, not byte-exact parity or an
+already accepted visual change. The detail option changes up to 9.8% of pixels,
+including relief silhouettes and shading; it is not an equal-quality speedup.
+Both preserve same-mode cold-render parity and returned ownership checks. Review
+`mesh-instances-20260913/final-terrain-comparison.png` and
+`final-terrain-detail-crop.png` beneath the native build evidence directory.
+No fixed references were replaced; `C3X_RENDERER_PATCH_PIXELS=0` remains default.
+`--patch-pixels 3` selects the tested detail candidate in the existing harness;
+`--legacy-tree-meshes` isolates the old tree geometry mechanism when needed.
 
-Eligible city-profile views now select this path automatically when waves and
-reflections are configured off. `C3X_RENDERER_SHARED_SCENE_SURFACE=0` retains the
-reproducible regional control; `1` explicitly selects the retained profile for
-witnesses. Unsupported extents use the existing custom renderer. The new path
-replaces static/animation regional execution for eligible requests; it is not a
-separate presenter or renderer service. Automatic-selection boundary replay and
-the final matched dense pair pass; the non-oracle production candidate also passes
-`python3 Renderer/renderer.py integration resources --renderer-only`.
+The verified production DLL is staged **for evaluation**, under the earlier user
+authorization, at `Renderer/bin/C3XRenderer.dll`, SHA-256
+`ae7a7306adbe756af8c4b9cd73375ea242b616570ec95bd423d6b8143e22b70e`.
+Its passing production receipt, prior DLL and exact replacement are preserved in
+`mesh-instances-20260913/evaluation-staging/`. No installation, game launch or Git
+mutation was performed. Native caller-driven asynchronous handoff and live cadence
+remain explicit integration responsibilities. Reflection/legacy execution and other
+object categories retain their existing paths. The user selected full detail; the
+reduced terrain option remains disabled for delivery.
 
-The same existing publication bridge consumes this path. No injected source or
-patch-table change is needed. Unmatched-camera calls still finish exact work;
-returning old pixels would violate native overlay/picking ownership. General
-camera anticipation and native presented cadence are not established by replay.
+Final comparison data/scripts and the starting source snapshot are preserved in
+`Renderer/native/build/mesh-instances-20260913/`. Final candidate runs are
+`Renderer/native/build/shared-instances-final-{dense,stationary,edit}-{full,detail3}`;
+control runs live in that snapshot. Rehydrate `control-snapshot` at
+`Renderer/validation/mesh_instance_control` before reproduction, because runtime
+input discovery excludes directories beneath `build`. The new shared path replaces
+baked trees in its eligible profile; there is no separate renderer framework.
 
-Minimum sampled contiguous VA across matched dense candidates is 1,474.92 MiB;
-transient driver residency remains unmeasured. Resource ownership: one RGBA16F/D24 MSAA4 scene at 2x, one color/depth backup,
-one resolved HDR target, one native reconstruction and BGRA target. Max target
-payload is 1,165,363,200 bytes at 2240x1192 including guards, within the existing
-1,152 MiB surface cap. Damage metadata has a bounded 8-pixel union grid; it does
-not own additional raster surfaces. No full-surface copies run during scrolling.
-Reference resources still use separate pose/placement on shared resident meshes;
-static/dynamic pass submissions preserve material order and the 32-page shadow cap.
 
-New differences from the regional control (8,055 pixels, 0.302% of the initial dense
-view; RGB mean absolute error 0.0121, maximum channel delta 62) remain separate
-from the previously authorized common-depth change. Saved side-by-side and focused
-comparisons are `comparison.png` and `edge-comparison.png` in the evidence folder.
-Independent current warm/cold redraws are exact; that does not constitute acceptance
-of differences from the control. No new
-visual acceptance or live-game result is claimed. Evaluation staging was
-subsequently authorized and completed below; no installer or game launch was run.
-Dense requests remain above the existing 100 ms average target. Completion wait
-is the largest measured dense stage; calibrated GPU busy time and driver residency
-remain unknown. Waves/reflections retain the existing path, and no generalized
-hardware instancing or speculative camera prediction was introduced.
+### Recommended next architectural step
 
-## Initial evaluation staging
+Complete the native caller-driven asynchronous preparation/publication handoff,
+including the displayed-view contract described in
+[native asynchronous presentation](native_async_presentation_audit.md). The retained
+world and selected passes supply full-detail work to the existing bounded worker
+queue. Separate requested state from the actually displayed view so pixels, native
+overlays, visibility and inverse picking always agree. A later Civ III rendering
+call may adopt a compatible complete publication; completion must never notify
+Civ III or request a redraw. Pending input should coalesce without starving useful
+full-detail completions. This requires more than binding the existing begin/poll
+exports: the no-ready-image case must be correct before enabling async camera mode.
 
-The initial verified non-oracle production candidate was staged in `Renderer/bin/C3XRenderer.dll`:
-SHA-256 `6440ea60a3d1fcab8810e0026db078107900994163a6af24058b3aa2e1df7138`.
-Its current compiled inputs and passing resource integration receipt were checked,
-and candidate/staged hashes match. The previous DLL and exact staged candidate,
-build/integration receipts and staging receipt are preserved under
-`Renderer/native/build/retained-architecture-20260913/evaluation-staging/`.
-Rollback DLL: `previous-C3XRenderer.dll`, SHA-256
-`b28d8f13676066445086bf2a4fe887e1e7fdf5bc6e3ea4a0a32446262cfd78e8`.
-Existing local configuration already enables custom rendering/cache and disables
-waves/reflections; no configuration changes or fixed-reference replacements were
-made. Restarting the existing configured game loads the new DLL. Unsupported
-viewport extents still select the existing path.
+Validate stationary animation, sustained navigation, zoom, visibility loss, local
+edits and unit takeover through that complete integration. Measure native caller
+blocking, input-to-correct-presentation latency, displayed-frame age and complete
+render-job time separately. This targets responsiveness and finishes the remaining
+end-to-end ownership responsibility; it does not claim to remove the roughly 50 ms
+pending-GPU-work wait or make a full-detail job intrinsically faster. Preserve the
+current full-detail control, closed resolve findings and GPU-timestamp limitations.
+This is a recommendation, not a new native implementation started in this handoff.
 
-## Incremental output continuation
+## Objective and control
 
-The user authorized this implementation after evaluation staging. The initial staged DLL
-above was preserved throughout validation and is the rollback for the new evaluation
-build below. Continuation builds and benchmarks used isolated candidates. Starting
-source, receipts and rejected mechanisms are preserved under
-`Renderer/native/build/incremental-output-20260913/`.
+The user's connected architecture instruction supersedes the former experiment
+queue. Complete ownership and behavior through the existing renderer; GPU mesh
+residency remains bounded. Preserve native ownership, asset/visual contracts and
+deferred scope. Native asynchronous handoff remains a separate integration gap.
 
-The finished circular HDR/native targets now persist across camera translations.
-Static damage expands by the glow kernel's four-native-pixel support, including
-across physical seams. Animated bounds already include that support. Disjoint
-workgroup-aligned damage selects reconstruction, HDR glow and display conversion;
-it does not reconstruct miniature scenes. A changed view still remaps the complete
-finished image into the current camera bitmap with one readback completion.
-`C3X_RENDERER_INCREMENTAL_OUTPUT=0` preserves the prior circular full-finishing
-control; the default uses incremental finishing. No additional render textures,
-publication buffers, native patches or redraw requests are introduced.
+Incremental output is finished. At the start, candidate source verification passed and
+the staged DLL matched its receipt (`b5cd1b08…c1f4d`). Its final dense comparison
+was 119.40 → 103.28 ms; stationary work showed no improvement. Exact finishing,
+edit and boundary witnesses passed. Evidence, rejected resolve approaches and
+staging are preserved in [the output record](history/retained_output_completed_20260913.md).
+Full hardware resolve and output handling are frozen for this implementation.
+Parallels GPU timestamps and event-query completion are unreliable attribution.
 
-A bounded diagnostic showed that Parallels event queries do not establish useful
-host GPU completion here: their waits were 0.14/0.04 ms, followed by a 66.45 ms
-**one-pixel** readback and only 0.85 ms for the subsequent full-image readback.
-This attributes most of the original wait to pending GPU work, not transfer
-volume; it does not separate scene drawing from finishing or establish GPU busy
-time. These serialized runs are excluded from performance acceptance, including
-when a receipt's quality label is incorrectly changed. The existing harness now
-also rejects an observed Civ III process during exclusive benchmark cases.
+## Six responsibilities: code assessment
 
-Full hardware MSAA4 resolve remains. Compute and render-target local resolves
-failed exact half-float parity with hardware resolve; an explicit rounding variant
-still differed. Their shader/witness snapshots and failures are preserved in the
-same evidence folder. Do not repeat those mechanisms without a materially different
-precision-preserving approach. Shared art, reconstruction, glow and display shaders
-are unchanged. The stronger GPU witness compares circular retained finishing with
-full reconstruction at seams, thin edits, bright bloom and sample-varying coverage.
+Completion below concerns ownership and behavior for the admitted map plane, not
+permanent GPU residency, an uncaptured game simulation, or every optional backend.
 
-Two matched intermediate dense pairs improved whole requests by 10.65% and 12.00%,
-with all five saved images per pair exact. A redundant second glow margin initially
-increased stationary work; the final correction retains the existing animated
-margin and expands only exposed/static damage.
+| Goal | Starting gap | Implemented responsibility and limits |
+| --- | --- | --- |
+| Persistent world/instances and reusable content | The 8192-entry appearance cache forgot identities; world records also held camera observations. | `CapturedScene` now retains canonical render appearance/revisions/bindings separately from a reusable observation pool. Camera departure and GPU eviction preserve identity. `ResidentContent` and existing mesh owners remain the only GPU lifetime authority. Never-captured appearance stays unknown. Metadata admission is bounded and fails explicitly. |
+| Local revisions and complete content validity | Appearance checking was split; outer hits bypassed forest/city exclusion validity; river queries did not propagate complete dependencies. | The instance fast path and ordinary cache lookup share validity. Own appearance, neighboring city presence/appearance, semantic neighbors, coast nodes, world samples, local river nodes and river query cells govern reuse. All three compiled tiers carry river proofs. Native population/labels/selectors and unit state do not invalidate static content. Broad natural/ground topology keys are replaced by these proofs. Asset/device/world-basis contexts still invalidate globally. |
+| Spatial selection separate from world construction | Compilation appended active draw lists; circular spans scanned every layer. | Compilation publishes protected handles. A separate assembly consumes current authoritative occurrences; the view index selects actual static pass inputs for damage spans, with exact intersection and ordered deduplication. Current capture remains the admission set. The index is view-scoped; world identity and compiled validity outlive it. Dynamic pose lists retain their small scan. |
+| Compatible submissions through explicit passes | Ordered layers/page limits existed, but selected inputs were incomplete. | Selected static/dynamic inputs feed existing ordered material submissions and bounded 32-page receiver batches. Main/caster/resource ownership and common depth are preserved. This completes representative pass ownership; selected tree placements now feed hardware-instanced color and shadow submissions. Reflection and other object categories retain their existing execution. |
+| GPU reuse, finishing and readback | Incremental output already finished. | Complete for the tested city profile, waves/reflections off and bounded extents. Circular color/depth, sparse restore, incremental finishing, hardware resolve and consolidated readback remain unchanged. Other profiles retain existing output execution. |
+| Caller-driven asynchronous preparation/publication | DLL preparation/publication and exact queued joins existed. | **Remaining native integration responsibility.** General asynchronous native camera handoff and presented cadence are not implemented. Unmatched current-camera demand still waits for exact output. No renderer notifications, redraw requests, new native hooks or ABI changes. |
 
-Final delivery uses the same normal-tier, production-default profile and synthetic
-100x100 dense world as its matched circular full-finishing control: 2240x1192,
-tile width 128, waves/reflections off. These are complete requests through checked
-result ownership; cold setup and independent verification remain separate.
+## Ownership and invalidation details
 
-| Workload | Circular control | Incremental output | Effect |
-| --- | ---: | ---: | --- |
-| Dense scrolling, 28 requests each | 119.40 ms | 103.28 ms | 13.50% lower latency |
-| Stationary animation, 30 after warmup | 22.61 ms | 22.98 ms | +0.37 ms; no claimed improvement |
-| Distant edits/reversals, 2 each | 78.43 ms | 68.99 ms | 12.04% lower measured latency |
-| Visible edits/reversals, 2 each | 1,432.13 ms | 1,386.83 ms | 3.16% lower measured latency |
+The world topology retains authoritative whole-map terrain. Canonical appearance
+records retain only render-relevant state observed through the capture contract;
+full records take precedence over duplicate lightweight halos. The observation
+pool is capped at 8192 occurrences. Persistent record admission and conservative
+metadata accounting are capped at 128 MiB, rather than evicting logical identity
+on camera pressure. Explicit renderer/world reset restarts that ownership.
+Compiled meshes remain evictable under the existing geometry/CPU budgets.
 
-Dense finishing falls from 2,697,600 to 365,952 pixels/request. Both paths still
-resolve 10,790,400 high-resolution pixels and remap the image in four readback
-copies before one completion wait. GPU completion/readback wait falls from
-65.52 to 49.27 ms; CPU copy stays about 0.66 ms. Compiled/reused entries and upload
-bytes are identical (26.86 / 1,030.29 / 421,114 per dense request). Initial scene
-preparation remains 12.5–12.7 seconds. Stationary finishing is identical at 174,037
-pixels/request; there is no eliminated stationary work or claimed stationary win.
-Visible edit geometry still averages 1.17 seconds; the small edit samples do not
-establish a general edit-speed guarantee.
+`NaturalWorld` now owns a dependency chain from copied world inputs through river
+pages to exact ordered query-cell values and compiled consumers. Missing cells
+are observations too. Source proofs survive page eviction, so validating unchanged
+meshes does not reconstruct fields. On an actual source change, the exact queried
+cell values determine consumer validity. Page construction still uses the original
+expressions and the globally invalidated 16-page cache. This differs from the
+closed page-cache experiment: it establishes **compiled mesh** validity, not merely
+page reuse. Source inputs are capped at 4096/page, cell metadata at 512 KiB/page,
+and compiled observation sets at 256 cells. Retained proof payloads are charged
+conservatively to existing compiled-cache budgets, including shared data.
 
-Target payload remains 1,165,363,200 bytes; no render texture or publication buffer
-was added. Minimum sampled contiguous VA in the final dense candidate is 1,477.20
-MiB. Transient driver residency and native presented cadence remain unmeasured.
-Dense requests remain slightly above the 100 ms average target.
+The first broad proof propagated every page input directly to every consumer.
+It passed redraw parity but increased the small visible-edit cost to about 3.1 s.
+Exact cell proofs restored the same workload to about 1.29 s. That intermediate
+source and failed control setup receipts remain in the evidence directory.
 
-Validation: 255 current-code integration tests pass (one existing skip), with
-resource animation, scrolling/removal and zoom-return witnesses. The independent
-six-case boundary and four-edit redraw checks pass. All five dense, 32 stationary
-and two edit saved images match their paired control exactly. The GPU fixture
-passes nine regional and nine circular HDR/MSAA finishing cases; portable circular
-convolution/damage tests and 17 analysis tests also pass. Earlier zoom and explicit
-caller-driven ambient witnesses passed; the final margin correction preserves
-that publication code. No new visual differences from the staged circular control
-were observed; its earlier differences from the regional renderer remain pending.
+## Connected design
 
-Receipts: `comparison.json`, `attribution.json`, `delivery-validation.log`,
-`final-output-tests.log` and `analysis-tests.log` under the continuation evidence
-folder. Exact final benchmark build: `Renderer/native/build/incremental-output-delivery-build/`.
-The rejected local resolves, intermediate runs and source snapshots remain there
-as evidence; they are not the delivered path.
+1. Separate persistent canonical appearance/identity from current observations.
+   Retain identities across camera departure and GPU eviction; bounded admission
+   fails explicitly instead of silently forgetting the world. Only current full
+   captures authorize appearance, selection or replacement.
+2. Carry complete appearance and actual observed dependencies through every
+   compiled tier. Forest exclusions observe city appearance, including absence;
+   river fields connect construction and height-callback inputs to exact query-cell
+   proofs retained by consumers.
+   Remove broad mesh keys only with these proofs. Preserve the globally invalidated
+   small river-page cache: this completes compiled-content validity rather than
+   reopening the rejected page-cache experiment.
+3. Compilation publishes protected content handles. Separate view assembly consumes
+   current authoritative occurrences. Reuse the contributor index to select actual
+   ordered pass inputs for circular damage, rather than only raster keys. Preserve
+   exact intersection, layer/occurrence order, bindings and shadow-page limits,
+   with bounded fallback scans.
+4. Preserve starting source/build and a same-binary control. Verify portable
+   ownership/validity/selection contracts and independent replay correctness, then
+   whole-request stationary, dense-scroll and local-edit comparisons. Report
+   eliminated work and initial construction separately. Automated tests do not
+   imply staging, installation, launch or visual acceptance.
 
-The verified non-oracle production DLL is now staged for the user's existing game
-test request: SHA-256 `b5cd1b08213d4b4d6ccc50aab07d3a1d5ebf63cdf5afb1162467a76fd59c1f4d`.
-Candidate and staged hashes match. The exact DLL, build/integration/comparison
-receipts and rollback `previous-C3XRenderer.dll` are under the continuation evidence
-folder's `evaluation-staging/`. Restart Civ III to load this update. Configuration,
-fixed references and injected code were unchanged; no installer or game launch
-was run by this task.
+## Previous world/view checkpoints
+
+Implementation: independent topology edit and six city/forest appearance edit
+checks pass; the latter hold topology revision fixed and exercise growth, removal,
+style changes and reversals. All preserve exact pixels, replacement flags and
+animation ownership against cold redraws.
+
+Final-source portable ownership, dependency, selection and measurement checks pass
+(34 tests). The shared river witness preserves all 312 original-expression samples,
+wrapped lookup, revision invalidation and the 16-page LRU. Native final-source
+replays pass six retained-boundary cases, zoom and ambient transitions, four
+topology edits and all six fixed-topology appearance edits. Each replay receipt
+confirms unchanged sources, binaries and runtime inputs. No new visual difference
+is expected or requested for approval; earlier accepted visual contracts remain.
+
+Production verification passes via `python3 Renderer/renderer.py integration
+resources --renderer-only`: 257 tests run, one skipped, plus config-off/playback,
+scroll/removal parity and native-depth checks. Three extracted C++ fixtures were
+updated to include the new dependency owner and preserve the correct extraction
+boundary; the ground-cache witness now checks both local validity and the old
+global-revision diagnostic control. Parallels transport failures are preserved
+in the earlier logs and superseded by the successful final run. No injected code
+changed, so injected compilation was not required.
+
+Under the earlier authorization to add the renderer for Civ III evaluation, the
+verified production candidate is staged at `Renderer/bin/C3XRenderer.dll`, SHA-256
+`22e87ecc770005ab3aa84074ab6877072b2b0755352301cb21a7a846370ed96b`.
+The previous DLL, new DLL, source/build receipt and passing integration receipt
+are preserved in `world-view-20260913/evaluation-staging`. No installation or Civ III
+launch was performed. Native live acceptance remains unmeasured.
+
+### Previous world/view whole-request comparison
+
+The preserved starting binary (`incremental-output-delivery-build`) and final
+`world-view-validated-build` use identical runtime dependency hashes and matched
+normal-tier city profiles, waves/reflections off. Dense scrolling comprises two
+14-request runs; stationary animation measures 30 requests after 10 warmups. Local
+edits contain two distant and two visible changes, each checked against a separate
+cold redraw. Initial construction is excluded and reported separately. Edit runs
+use a 180-second limit; the earlier timed-out control is retained and excluded.
+
+| Workload | Control | Current | Observed change |
+| --- | ---: | ---: | ---: |
+| Dense scrolling | 109.30 ms | 103.96 ms | 4.9% faster |
+| Stationary animation | 28.14 ms | 26.77 ms | 4.9% lower; no new eliminated rendering work |
+| Distant topology change | 65.07 ms | 63.96 ms | 1.7% faster |
+| Visible topology change | 1459.74 ms | 1495.37 ms | 2.4% slower |
+
+Dense preparation falls from 36.18 to 31.62 ms, with 1030.29 ready instances per
+request. Both arms build 26.86 entries and upload 421114 bytes per request; resolve,
+finishing and readback work are unchanged. A separate same-binary attribution pair
+(`ready-dense-control` / `ready-dense`) measured 120.03 → 114.73 ms and the same
+build/upload counts: the old submission scan inspected 13979.71 candidates versus
+921.93 indexed static candidates plus 507.43 dynamic candidates. Selected inputs
+and batches remained identical. That pair isolates the new mechanism; it is not
+the preserved-source headline control.
+
+Stationary timing varies despite identical output work, so do not attribute its
+entire observed improvement to this architecture. GPU completion remains about
+50.69 ms of the current dense request, versus 52.60 ms in the control. Those are
+CPU-observed waits, not reliable GPU-stage timestamps. Initial dense preparation
+still takes 12.90–13.73 seconds (control 12.59–12.86). Visible edits still compile
+81 entries, reuse 976, and spend 1247.63 ms in geometry (control 1195.81). The local
+validity correction does not make the existing terrain compiler cheap. This is a
+modest scrolling improvement, not a large universal speedup or a native FPS claim.
+
+All common saved comparison images are exact: 5 dense, 32 stationary and 3 edit
+images. Renderer-target allocation accounting is unchanged at 1165363200 bytes;
+this is not a process-residency measurement. Dense world metadata averages
+2.40 MiB. The smallest reported contiguous free region is 1532 MiB for candidate
+dense scrolling and 1443 MiB for its local edits. Existing geometry/output caps and
+the new metadata/proof caps continue to bound ownership in the 32-bit process.
+
+### Evidence and reproduction
+
+`Renderer/native/build/world-view-20260913/` preserves the starting commit/source,
+intermediate broad-proof implementation, comparison script/JSON, logs, and rejected
+setup receipts. Complete runs are `Renderer/native/build/world-view-final-{dense,
+stationary,edit}-{control,candidate}/`; each contains input/binary/source receipts,
+request endpoints, ownership checks and trace data. `C3X_RENDERER_RETAINED_WORLD=0`
+remains a same-binary diagnostic control; it is not the historical source binary.
+
+The isolated original-source snapshot is preserved under the evidence directory
+as `control-snapshot`. To rerun it, copy it to
+`Renderer/validation/control_snapshot_20260913` because runtime discovery excludes
+paths beneath `build`. Its local runtime inputs are verified hard links/copies,
+not redistributable assets. Its measurement harness also hashes the 111 textures
+actually referenced by the city material table outside the declared pack folders;
+the original dependency inventory omitted those files. Both final arms include
+the same complete 10315-file runtime set. No assets were discarded.
+
+### Remaining implementation responsibility
+
+Native caller-driven asynchronous handoff remains explicit: capture/prepare on
+Civ III calls, publish only matching completed output on subsequent calls, and
+retain exact visibility, overlay, picking and config-off behavior. No unsolicited
+renderer callback or redraw mechanism is appropriate. Shared tree instancing now
+completes a representative asset/placement/pass path, while broader category and
+reflection instancing remains outside the measured profile.
+Future performance work should address the measured geometry construction and GPU
+completion costs; this change does not reopen output-helper experiments or expand
+native ownership, wonders, or Districts scope.

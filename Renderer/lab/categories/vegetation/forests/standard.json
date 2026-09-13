@@ -14,7 +14,12 @@
     "Renderer/tools/asset_compiler/decal_sets.json",
     "Renderer/native/source_fidelity/runtime.h",
     "Renderer/native/city_fidelity/objects.hlsl",
-    "Renderer/native/terrain_scene_runtime.cpp"
+    "Renderer/native/terrain_scene_runtime.cpp",
+    "Renderer/lab/shared/natural/forest_mesh_body.h",
+    "Renderer/lab/shared/natural/instance.h",
+    "Renderer/lab/shared/shaders/objects/instance_geometry.hlsl",
+    "Renderer/native/render_core/instance_stream.h",
+    "Renderer/native/render_core/source_shadow.h"
   ],
   "recipe": {
     "terrain": 2,

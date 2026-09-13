@@ -109,6 +109,10 @@ P VSNative(V input) {
  return o;
 }
 '''
+        if name=='objects':
+            instance=(LAB/'shaders/objects/instance_geometry.hlsl').read_text()
+            s+='\n'+instance
+            (HERE/'instance_caster.hlsl').write_text('#define C3X_INSTANCE_CASTER 1\n'+instance)
         (HERE/f'{name}.hlsl').write_text(s)
 
 def build_pack(output=PACK):

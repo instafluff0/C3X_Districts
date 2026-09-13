@@ -1,5 +1,16 @@
 # Civ III patch dependency ledger
 
+The retained world/view/submission implementation is renderer-only. Persistent
+appearance, local dependency proofs and selected passes use the existing
+`Map_Renderer_m71_Draw_Tiles` / `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`
+capture and composite boundaries. `required_user_action: []`; no injected source,
+ABI, executable symbol, signature or supported-build address changes. General
+caller-driven native asynchronous handoff remains a separate integration task.
+Shared terrain connectivity and tree color/shadow instancing use the same captured
+world content and pass boundaries. They add no native hooks or ABI fields;
+`required_user_action: []`. The optional terrain detail policy does not alter
+picking, visibility or native replacement ownership.
+
 This is the current boundary and outstanding-request record, not a campaign
 history. Read `civ_prog_objects.csv` and the actual injected wrappers before
 claiming a capability is available. Agents must not edit that CSV or

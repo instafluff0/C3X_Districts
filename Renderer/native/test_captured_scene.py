@@ -21,28 +21,30 @@ int main(){
  auto submit=[&]{f.tiles=input.data();f.tile_count=unsigned(input.size());
   assert(scene.begin(f));for(auto const& t:input)if(t.tile_flags&(C3X_RENDERER_TILE_RENDER|C3X_RENDERER_TILE_TOPOLOGY_HALO))
    assert(scene.update(t,t.terrain_type,t.real_terrain_type,t.real_terrain_type,t.road_mask+100));scene.finish();};
- submit();auto key=scene.key(2,2);auto revision=scene.retained(key)->revision;
+ submit();auto key=scene.key(2,2);assert(scene.appearance_revision(key));auto revision=scene.retained(key)->revision;
  assert(revision && scene.current(key)->occurrence.city_id==17);
- scene.attach(full,{2,10});assert(scene.current(key)->compiled.generation==10);
+ scene.attach(full,{2,10});assert(scene.retained(key)->compiled.generation==10);
  // Current lookup owns the entire selected record, including authoritative anchors.
  input[0].city_id=99;assert(scene.current(key)->occurrence.city_id==17);
  input[0]=full;input[0].tile_x-=100;input[0].anchor_x=900;
  input[0].visibility_mask=88;input[0].unit_state=9;
+ input[0].city_population=23;input[0].square_parts=44;input[0].terrain_overlays=99;
+ input[0].tile_building_id=123;std::strcpy(input[0].city_owner,"native label");
  submit();assert(scene.retained(key)->revision==revision);
- assert(scene.current(key)->compiled.generation==10);
+ assert(scene.retained(key)->compiled.generation==10);
  assert(scene.current(key)->occurrence.tile_x==-98 && scene.current(key)->occurrence.anchor_x==900);
  // Full appearance survives a following lightweight halo; current lookup still
- // has the same last-ordered canonical record as the former maps.
+ // has the full appearance regardless of halo order.
  auto halo=full;halo.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO;
  halo.city_id=-1;halo.city_size=0;halo.resource_id=-1;halo.anchor_x=-42;
  input.push_back(halo);submit();
  scene.attach(halo,{3,20});assert(scene.retained(key)->compiled.generation==10);
- assert(scene.current(key)->occurrence.city_id==-1 && scene.current(key)->occurrence.anchor_x==-42);
+ assert(scene.current(key)->occurrence.city_id==17 && scene.current(key)->occurrence.anchor_x==900);
  assert(scene.retained(key)->appearance.city_id==17 && scene.retained(key)->revision==revision);
  std::reverse(input.begin(),input.end());submit();
  assert(scene.current(key)->occurrence.city_id==17 && scene.retained(key)->revision==revision);
  // Camera departure keeps content but revokes eligibility, not just draw flags.
- input.clear();submit();assert(!scene.current(key));assert(scene.retained(key)->revision==revision);
+ input.clear();submit();assert(!scene.current(key) && !scene.appearance_revision(key));assert(scene.retained(key)->revision==revision);
  auto edited=full;edited.city_id=-1;edited.resource_id=-1;edited.road_mask=8;
  edited.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_PREFETCH;
  input={edited};submit();assert(scene.retained(key)->revision>revision);
@@ -61,29 +63,30 @@ int main(){
 }
 ''')
 
-    def test_bounded_retention_protects_current_records_before_eviction(self):
+    def test_world_identity_survives_more_than_one_capture_and_mesh_eviction(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/captured_scene.h"
 #include <cassert>
 #include <vector>
 using c3x_renderer::render_core::CapturedScene;
 int main(){
- CapturedScene scene;std::vector<c3x_renderer_tile_v1> input(CapturedScene::record_limit);
+ CapturedScene scene;std::vector<c3x_renderer_tile_v1> input(CapturedScene::occurrence_limit);
  c3x_renderer_frame_v1 f={};f.world_width_tiles=f.world_height_tiles=2048;
  for(std::size_t i=0;i<input.size();++i){auto& t=input[i];t.tile_x=int(i%1024)*2;t.tile_y=int(i/1024)*2;t.tile_flags=C3X_RENDERER_TILE_RENDER;t.resource_id=int(i);}
  auto submit=[&]{f.tiles=input.data();f.tile_count=unsigned(input.size());assert(scene.begin(f));
  for(auto const& t:input)assert(scene.update(t,2,2,2,100));scene.finish();};
- submit();assert(scene.size()==CapturedScene::record_limit);
+ submit();assert(scene.size()==CapturedScene::occurrence_limit);
  assert(scene.bytes()<16u*1024u*1024u);
  auto last=input.back();auto keep=scene.key(last.tile_x,last.tile_y);auto revision=scene.retained(keep)->revision;
  auto evicted=scene.key(0,0);auto old_revision=scene.retained(evicted)->revision;
  auto fresh=last;fresh.tile_y=1000;
- input={fresh,last};submit();assert(scene.size()==2 && !scene.retained(evicted));
+ input={fresh,last};submit();assert(scene.size()==CapturedScene::occurrence_limit+1 && scene.retained(evicted));
+ assert(!scene.current(evicted) && scene.retained(evicted)->revision==old_revision);
  assert(scene.retained(keep)->revision==revision);
  input[0]={};input[0].tile_flags=C3X_RENDERER_TILE_RENDER;submit();
- assert(scene.retained(evicted)->revision>old_revision);
+ assert(scene.retained(evicted)->revision==old_revision);
  assert(scene.bytes()<16u*1024u*1024u);
- f.tile_count=CapturedScene::record_limit+1;assert(!scene.begin(f));assert(!scene.current(keep));
+ f.tile_count=CapturedScene::occurrence_limit+1;assert(!scene.begin(f));assert(!scene.current(keep));
 }
 ''')
 

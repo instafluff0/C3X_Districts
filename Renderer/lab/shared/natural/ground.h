@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <vector>
 #include "vertex.h"
+#include "patch.h"
 #include "../../../native/source_fidelity/kernels.h"
 #include "../../../native/source_fidelity/coast_join.h"
 namespace c3x_renderer { namespace fidelity {
@@ -68,7 +69,16 @@ MapVertex ground_surface(GroundProjection const&project,float u,float v,
 // cell. A null index destination retains the portable triangle-list adapter.
 inline void append_surface_grid(std::vector<MapVertex>&out,std::vector<MapVertex> const&grid,
                                 unsigned divisions,bool clip_coast,
-                                std::vector<unsigned>*indices=nullptr) {
+                                std::vector<unsigned>*indices=nullptr,PatchTopology const*topology=nullptr) {
+    if(indices && topology && topology->divisions==divisions && out.empty() && indices->empty()){
+        bool complete=!clip_coast;
+        if(clip_coast)complete=std::all_of(grid.begin(),grid.end(),[](auto const&v){return v.base_terrain>-9.999f;});
+        if(complete){
+            out.reserve(topology->corners.size());
+            for(auto corner:topology->corners)out.push_back(grid[corner]);
+            *indices=topology->indices;return;
+        }
+    }
     unsigned stride=divisions+1;
     std::vector<unsigned> remap;
     if(indices)remap.assign(grid.size(),~0u);
@@ -87,14 +97,14 @@ inline void append_surface_grid(std::vector<MapVertex>&out,std::vector<MapVertex
 
 template<class Surface,class Cancel>
 bool emit_ground_grid(std::vector<MapVertex>&out,Surface surface,Cancel cancelled,unsigned divisions=16,
-                      std::vector<unsigned>*indices=nullptr) {
+                      std::vector<unsigned>*indices=nullptr,PatchTopology const*topology=nullptr) {
     unsigned stride=divisions+1;
     std::vector<MapVertex> grid(stride*stride);
     for(unsigned y=0;y<=divisions;y++){
         if(cancelled())return false;
         for(unsigned x=0;x<=divisions;x++)grid[y*stride+x]=surface(float(x)/divisions,float(y)/divisions);
     }
-    append_surface_grid(out,grid,divisions,true,indices);
+    append_surface_grid(out,grid,divisions,true,indices,topology);
     return true;
 }
 }}

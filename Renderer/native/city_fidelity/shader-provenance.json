@@ -13,7 +13,7 @@
     "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl": "b11aa9a5dbefb8cac2145f425c9c671e35ff4c1ffa6608ea3d35234ba77280ee",
     "Renderer/native/environment_refresh/terrain.hlsl": "0ec9e5ae610411250b125d56eb618bfc9b4066f2377fe3f75632742e5371bba2",
     "Renderer/native/environment_refresh/mountain.hlsl": "8df1af7a9f829c06ed24052664c687022b15a24e5fcf8ba8be13b66c0b17d5e0",
-    "Renderer/native/environment_refresh/objects.hlsl": "70f830eae56fcf5313a467fb6ec22226bd7f307d79d420b057e7c2b3c845ef0f",
+    "Renderer/native/environment_refresh/objects.hlsl": "5cd7569c997a543351ef96c3f433b4f1e1882c67447c80be0e37af038aa1ec62",
     "Renderer/lab/shared/shaders/common/hdr_glow_tiled.hlsl": "37495420a08faecabe803eae68302a831de663e01e7e0e1a8686aabab7d8af32",
     "Renderer/lab/shared/shaders/sampling/reconstruction_v1.hlsl": "00eb9245631bc22c04072622e577192cc0cb01ae83863cedaf1e86a5a75d8460",
     "Renderer/native/render_core/source_caster.hlsl": "00ebc017793b7674d30c92ec7bd57ce9541d90e7b8a412134ba80da305cb1bee"

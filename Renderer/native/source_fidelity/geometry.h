@@ -15,8 +15,8 @@ if(fidelity_profile) {
     // and its finite-difference collar. Bind it once: mountain tessellation
     // performs thousands of distance samples and must not re-enter the LRU for
     // every vertex and normal tap.
-    auto const river_field=natural.retain_river_page(float(nc)+.5,float(nr)+.5);
-    auto river_at=[&](float x,float y){return river_field->sample({x,y}).distance;};
+    auto const river_field=natural.bind_river_page(float(nc)+.5,float(nr)+.5);
+    auto river_at=[&](float x,float y){return river_field.sample({x,y}).distance;};
     GroundProjection project_natural{nc,nr,half_w,half_h,relief_projection_scale,float(frame.target_height)};
     auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
     auto surface=[&](float u,float v){
@@ -32,9 +32,9 @@ if(fidelity_profile) {
     if(!unified_mountain_surface &&
        (ground<11 || shore_sample_at(float(nc)+.5f,float(nr)+.5f).distance>-.8f)){
         auto coastal=shore_sample_at(float(nc)+.5f,float(nr)+.5f);
-        unsigned divisions=coastal.rocky>.55 && std::abs(coastal.distance)<1.25 ? 48 : 16;
+        unsigned divisions=coastal.rocky>.55 && std::abs(coastal.distance)<1.25 ? patch_detail.rocky_ground : 16;
         if(!emit_ground_grid(natural_vertices[0],surface,cancelled,divisions,
-                             index_natural_grids?&natural_grid_indices[0]:nullptr))return false;
+                             index_natural_grids?&natural_grid_indices[0]:nullptr,&patch_layouts.get(divisions)))return false;
     }
     auto*mountain_indices=index_natural_grids?&natural_grid_indices[1]:nullptr;
     record_natural_phase(0);
@@ -98,6 +98,22 @@ if(fidelity_profile) {
                 buildings.push_back(b);
             }
         }
+        auto emit_forest_instance=[&](unsigned body,int c,int r,float u,float v,float co,float si,float scale,float ground_h){
+            if(!tree_instances_enabled)return false;
+            MeshInstance instance;float data[]={float(c),float(r),u,v,co,si,scale,ground_h};std::copy(data,data+8,instance.place);
+            forest_instances[body].push_back(instance);
+            auto& bounds=forest_bounds[body];
+            if(forest_instances[body].size()==1)for(unsigned axis=0;axis<3;++axis){bounds.low[axis]=1e9f;bounds.high[axis]=-1e9f;}
+            constexpr float z_basis=150.f/(.82f*64.f);
+            for(auto const&p:natural.bodies[body].vertices){
+                float x=float(c)+u+(p.position[0]*co-p.position[1]*si)*scale;
+                float y=float(r)+1-v-(p.position[0]*si+p.position[1]*co)*scale;
+                float h=ground_h+p.position[2]*scale*z_basis*112;
+                float world[]={x,y,h/112};for(unsigned axis=0;axis<3;++axis){bounds.low[axis]=std::min(bounds.low[axis],world[axis]);bounds.high[axis]=std::max(bounds.high[axis],world[axis]);}
+                forest_projected[body].include(x,y,h/112);
+            }
+            return true;
+        };
         auto&hash=c3x_renderer::stable_hash;
         auto&random=c3x_renderer::stable_random;
         #include "../../lab/shared/natural/forest_mesh_body.h"

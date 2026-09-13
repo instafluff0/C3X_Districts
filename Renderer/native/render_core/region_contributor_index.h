@@ -49,9 +49,13 @@ struct RegionContributorIndex {
         return true;
     }
     bool query(unsigned pass,int x,int y,int extent,std::vector<Item>& output)const {
-        output.clear();if(!ready || pass>=2 || extent<0 || extent>512)return false;
+        if(extent>512){output.clear();return false;}
+        return query_rectangle(pass,x,y,extent,extent,output);
+    }
+    bool query_rectangle(unsigned pass,int x,int y,int width,int height,std::vector<Item>& output)const {
+        output.clear();if(!ready || pass>=2 || width<0 || height<0 || width>4096 || height>4096)return false;
         int x0=int(std::floor(double(x)/128)),y0=int(std::floor(double(y)/128));
-        int x1=int(std::floor((double(x)+extent)/128)),y1=int(std::floor((double(y)+extent)/128));
+        int x1=int(std::floor((double(x)+width)/128)),y1=int(std::floor((double(y)+height)/128));
         for(int cy=y0;cy<=y1;++cy)for(int cx=x0;cx<=x1;++cx){
             auto found=cells[pass].find({cx,cy});if(found==cells[pass].end())continue;
             if(output.size()+found->second.size()>budget/(2*sizeof(Item)))return false;

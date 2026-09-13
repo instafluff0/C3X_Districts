@@ -31,6 +31,7 @@ bool emit_relief_meshes(NaturalData const&natural,int real,Tile owner,GroundProj
         std::vector<Vertex>&operator[](unsigned index){return *values[index];}
     } natural_vertices{layers};
     auto triangle=[](std::vector<Vertex>&out,Vertex const&a,Vertex const&b,Vertex const&c){out.push_back(a);out.push_back(b);out.push_back(c);};
+    PatchDetail patch_detail;PatchLayouts patch_layouts;
     #include "relief_mesh_body.h"
     return true;
 }
@@ -40,6 +41,7 @@ bool emit_forest(NaturalData const&natural,Tile owner,GroundProjection project_n
                  std::vector<BuildingBounds> const&buildings,Height height_natural,Shore shore_sample_at,
                  River river_at,Hash hash,Random random,Cancelled cancelled,Layers&natural_vertices) {
     int nc=project_natural.column,nr=project_natural.row;
+    auto emit_forest_instance=[](auto...){return false;};
     #include "forest_mesh_body.h"
     return true;
 }
