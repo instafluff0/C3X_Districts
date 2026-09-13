@@ -3533,3 +3533,9 @@ float4 PSCoastalWave(PixelInput input):SV_Target {
     float3 lit=float3(.74,.80,.83)*q6_receiver_illumination(input,float3(0,0,1),1,1);
     return float4(lit*coverage,coverage);
 }
+
+// This pass accepts only animated resource shadows; preserve the shared
+// coverage/shading math while compiling out unrelated terrain materials.
+float4 PSResourceShadow(PixelInput input):SV_Target {
+ input.panel=1;input.surface_kind=15;return PSIntegrated(input);
+}

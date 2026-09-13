@@ -40,6 +40,9 @@
 #include "color_quantization.h"
 #include "render_core/terrain_query.h"
 #include "render_core/world_coast.h"
+#include "render_core/captured_scene.h"
+#include "render_core/geometry_draws.h"
+#include "render_core/resource_instances.h"
 #include "render_core/coastal_waves.h"
 #include "render_core/relief_query.h"
 #include "render_core/exact_point_cache.h"
@@ -155,7 +158,7 @@ struct CachedViewport {
     std::vector<c3x_renderer_tile_v1> tiles;
     std::vector<c3x_renderer_u32> replacement_flags;
     // Weak identities only: retaining a bitmap must not pin GPU allocations.
-    std::vector<std::pair<std::uint64_t,std::uint64_t>> tile_keys;
+    std::vector<c3x_renderer::render_core::ContentHandle> tile_keys;
     std::vector<c3x_renderer_u32> fallback_indices;
     c3x_renderer_u32 rendered_tile_count = 0;
     c3x_renderer_u32 fallback_tile_count = 0;
@@ -168,7 +171,7 @@ struct CachedGeometry {
     std::vector<c3x_renderer_tile_v1> tiles;
     std::vector<c3x_renderer_u32> replacement_flags;
     std::vector<c3x_renderer_u32> fallback_indices;
-    std::vector<std::pair<std::uint64_t,std::uint64_t>> tile_keys;
+    std::vector<c3x_renderer::render_core::ContentHandle> tile_keys;
     c3x_renderer_u32 rendered_tile_count = 0;
     c3x_renderer_u32 fallback_tile_count = 0;
     c3x_renderer_u32 textured_tile_count = 0;
@@ -197,6 +200,7 @@ struct CachedVertexChunk {
     c3x_renderer::render_core::ProjectedMeshBounds projected_bounds;
     std::uint64_t version = 0;
     ID3D11ShaderResourceView * animation_texture = nullptr; // borrowed, dynamic pass only
+    ID3D11Buffer * resource_instance = nullptr; // borrowed instance constants, dynamic pass only
     unsigned city_material=0xffffffffu;
     bool city_environment=false;
     float city_atlas[4]={};
@@ -229,6 +233,8 @@ struct RetainedWaveCell {
 struct ResourceAnimation {
     std::string name;
     c3x_renderer::AnimationMesh mesh;
+    c3x_renderer::render_core::ResourceSourceBounds source_bounds;
+    ID3D11Buffer * vertices = nullptr;
     std::vector<std::uint8_t> dds;
     ID3D11ShaderResourceView * view = nullptr;
     ID3D11Buffer * indices = nullptr;
@@ -275,12 +281,15 @@ enum GeometryLayer : std::size_t {
     geometry_layer_count = geometry_natural_forest0 + 22
 };
 
+using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
+using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
+using GeometryDrawReference=GeometryDrawView::Reference;
+static_assert(sizeof(GeometryDrawRecord)<=sizeof(CachedVertexChunk)/2,"occurrence metadata must be smaller than owned content");
+
 struct CachedTileGeometry {
     std::uint64_t signature = 0, version = 0;
-    // A separate cache entry owns each world mesh once. Projection entries
-    // retain only its key, never unaccounted references to evicted buffers.
-    std::uint64_t natural_signature = 0;
-    std::uint64_t natural_version = 0;
+    // Bindings borrow the existing owner; eviction invalidates their generation.
+    c3x_renderer::render_core::ContentHandle binding, natural_content;
     bool shared_natural = false;
     int tile_x = 0, tile_y = 0;
     std::vector<ResourceAnchor> resource_anchors;
@@ -423,12 +432,8 @@ struct RiverNode {
     bool touches_water;
 };
 
-struct SceneTopology {
+struct SceneTopology : c3x_renderer::render_core::CapturedScene {
     std::uint64_t signature = 0;
-    c3x_renderer_tile_v1 const * records = nullptr;
-    std::unordered_map<std::uint64_t, int> ground, real, relief, surface;
-    std::unordered_map<std::uint64_t, c3x_renderer_tile_v1 const *> tiles;
-    std::unordered_map<std::uint64_t, std::uint64_t> semantic;
     std::vector<RiverNode> rivers;
 };
 
@@ -490,7 +495,7 @@ public:
     bool world_waves=false,wave_reuse_control=false;
     bool animation_readback_atlas=false;
     bool world_raster_grid=false;
-    bool world_regions=false,world_regions_control=false;
+    bool world_regions=false,world_regions_control=false,local_region_revisions=false;
     bool region_diagnostics=false;
     bool region_receiver_shadows=false;
     bool composition_receiver_index=false;
@@ -524,14 +529,16 @@ public:
     void memory_sample(char const* phase) {
         if(!profiling)return;
         auto sample=c3x_renderer::render_core::AddressSpaceSample::capture();
+        std::size_t view_draw_bytes=sizeof(geometry_vertex_buffers);
+        for(auto const& layer:geometry_vertex_buffers)view_draw_bytes+=layer.capacity()*sizeof(GeometryDrawRecord);
         char detail[640];sprintf_s(detail,
             "phase=%s available_virtual=%llu largest_free_region=%llu committed_va=%llu reserved_va=%llu "
             "gpu_geometry=%zu gpu_geometry_cap=%zu natural_cpu=%zu ground_cpu=%zu natural_cpu_cap=%zu "
-            "viewport_cpu=%zu viewport_cpu_cap=%zu backdrop_gpu=%zu backdrop_gpu_cap=%zu pixels_capacity=%zu",
+            "viewport_cpu=%zu viewport_cpu_cap=%zu backdrop_gpu=%zu backdrop_gpu_cap=%zu pixels_capacity=%zu scene_cpu=%zu content_bindings_cpu=%zu view_draw_cpu=%zu",
             phase,sample.available,sample.largest,sample.committed,sample.reserved,
             tile_geometry_cache_bytes,tile_geometry_cache_budget,natural_mesh_cache_bytes,ground_grid_cache_bytes,
             natural_mesh_cache_budget,viewport_cache_bytes,viewport_cache_budget,resource_backdrop_bytes,
-            resource_backdrop_cache_budget,pixels.capacity()*sizeof(pixels[0]));
+            resource_backdrop_cache_budget,pixels.capacity()*sizeof(pixels[0]),topology_cache.bytes(),resident_content.bytes(),view_draw_bytes);
         trace.write("memory-sample",detail,true);
         sprintf_s(detail,"linear_frame=%zu linear_block=%zu reflection=%zu glow=%zu region_reflection=%zu region_glow=%zu wave_geometry=%zu",
             linear_frame.bytes(),linear_block.bytes(),reflection.linear.bytes(),city_glow.linear.bytes(),
@@ -548,6 +555,9 @@ public:
     ID3D11PixelShader * pixel_shader = nullptr;
     ID3D11VertexShader * feature_vertex_shader = nullptr;
     ID3D11PixelShader * feature_pixel_shader = nullptr;
+    ID3D11PixelShader * resource_shadow_shader = nullptr;
+    ID3D11VertexShader * resource_body_vertex_shader=nullptr,*resource_shadow_vertex_shader=nullptr;
+    ID3D11InputLayout * resource_input_layout=nullptr;
     ID3D11InputLayout * input_layout = nullptr;
     ID3D11InputLayout * feature_input_layout = nullptr;
     ID3D11Buffer * terrain_settings_buffer = nullptr;
@@ -709,9 +719,9 @@ public:
     std::vector<CachedViewport> viewport_cache;
     std::size_t viewport_cache_bytes = 0;
     CachedGeometry geometry_cache;
-    std::array<std::vector<CachedVertexChunk>, geometry_layer_count>
-        geometry_vertex_buffers;
+    GeometryDrawView::Records geometry_vertex_buffers;
     std::unordered_multimap<std::uint64_t, CachedTileGeometry> tile_geometry_cache;
+    c3x_renderer::render_core::ResidentContent<CachedTileGeometry> resident_content{tile_geometry_cache_capacity};
     std::size_t tile_geometry_cache_bytes = 0, prefetched_geometry_bytes = 0;
     std::size_t tile_geometry_runtime_budget = tile_geometry_cache_budget;
     std::unordered_map<std::uint64_t,NaturalTile> natural_mesh_cache;
@@ -819,7 +829,7 @@ public:
                 return a.second.last_used<b.second.last_used;});
             tile_geometry_cache_bytes-=oldest->second.byte_count;
             if(oldest->second.prefetched)prefetched_geometry_bytes-=oldest->second.byte_count;
-            release_geometry_vertex_buffers(oldest->second.buffers);tile_geometry_cache.erase(oldest);
+            release_geometry_vertex_buffers(oldest->second.buffers);resident_content.release(oldest->second.binding);tile_geometry_cache.erase(oldest);
             ++result.capacity_geometry_evictions;
         }
         if(oracle_limits)result.capacity_pose_evictions=unit_bodies.benchmark_limit_pose_cache();
@@ -897,7 +907,7 @@ public:
         resource_buffers.clear(); resource_pixels.clear();
         resource_pixel_signature = 0; resource_pixel_clock = -1; visible_resource_animations = 0;
         for (auto & animation : resource_animations) {
-            release(animation.view); release(animation.indices);
+            release(animation.view); release(animation.indices);release(animation.vertices);
         }
     }
 
@@ -984,6 +994,7 @@ public:
         release(depth_state);
         release(blend_state);
         release(input_layout); release(feature_input_layout);
+        release(resource_body_vertex_shader);release(resource_shadow_vertex_shader);release(resource_input_layout);
         release(terrain_settings_buffer);
         release(viewport_settings_buffer);
         release(world_settings_buffer); release(shadow_settings_buffer);
@@ -991,6 +1002,7 @@ public:
         clear_geometry_vertex_buffers();
         clear_tile_geometry_cache();
         release(feature_pixel_shader);
+        release(resource_shadow_shader);
         release(feature_vertex_shader);
         release(pixel_shader);
         reset_waves();release(wave_shader);release(wave_frame);
@@ -1056,6 +1068,9 @@ public:
                                              ID3DBlob ** blob) {
             std::string selected_shader=integrated_shader_path;
             if(fidelity_profile && std::strstr(entry,"Feature"))selected_shader=fidelity_root+(city_profile?"/Renderer/native/city_fidelity/feature.hlsl":environment_profile?"/Renderer/native/environment_refresh/feature.hlsl":"/Renderer/native/render_core/terrain_scene.hlsl");
+            if(city_profile && (!std::strcmp(entry,"VSResourceBody") || !std::strcmp(entry,"VSResourceShadow")))
+                selected_shader=fidelity_root+"/Renderer/native/city_fidelity/"+
+                    (std::strcmp(entry,"VSResourceBody")==0?"resource_body.hlsl":"resource_shadow.hlsl");
             int count = MultiByteToWideChar(CP_UTF8, 0, selected_shader.c_str(),
                                             -1, nullptr, 0);
             if (count <= 0)
@@ -1111,6 +1126,32 @@ public:
             hr = device->CreatePixelShader(feature_pixel_blob->GetBufferPointer(),
                                            feature_pixel_blob->GetBufferSize(), nullptr,
                                            &feature_pixel_shader);
+        if(city_profile && SUCCEEDED(hr)) {
+            ID3DBlob* blob=nullptr;
+            if(!compile_terrain_shader("PSResourceShadow",ps_target,&blob))hr=E_FAIL;
+            else hr=device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&resource_shadow_shader);
+            release(blob);
+            if(SUCCEEDED(hr)) {
+                if(!compile_terrain_shader("VSResourceBody",vs_target,&blob))hr=E_FAIL;
+                else {
+                    hr=device->CreateVertexShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&resource_body_vertex_shader);
+                    D3D11_INPUT_ELEMENT_DESC elements[]={
+                        {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
+                        {"NORMAL",0,DXGI_FORMAT_R32G32B32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0},
+                        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0},
+                        {"BLENDINDICES",0,DXGI_FORMAT_R32G32B32A32_UINT,0,56,D3D11_INPUT_PER_VERTEX_DATA,0},
+                        {"BLENDWEIGHT",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,72,D3D11_INPUT_PER_VERTEX_DATA,0}};
+                    static_assert(sizeof(c3x_renderer::AnimationVertex)==88,"Resource source GPU layout");
+                    if(SUCCEEDED(hr))hr=device->CreateInputLayout(elements,UINT(std::size(elements)),blob->GetBufferPointer(),blob->GetBufferSize(),&resource_input_layout);
+                }
+                release(blob);
+            }
+            if(SUCCEEDED(hr)) {
+                if(!compile_terrain_shader("VSResourceShadow",vs_target,&blob))hr=E_FAIL;
+                else hr=device->CreateVertexShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&resource_shadow_vertex_shader);
+                release(blob);
+            }
+        }
         if(environment_profile && SUCCEEDED(hr)) {
             ID3DBlob* blob=nullptr;
             if(!compile_terrain_shader("PSCoastalWave",ps_target,&blob))hr=E_FAIL;
@@ -2037,6 +2078,7 @@ public:
                         animation.scale>0 && animation.scale<100 &&
                         pack_path(root.c_str(),mesh_path.c_str(),path,std::size(path)) &&
                         read_file(path,bytes) && c3x_renderer::decode_animation_mesh(bytes,animation.mesh) &&
+                        animation.source_bounds.prepare(animation.mesh) &&
                         load_dds_bytes(root.c_str(),texture_path.c_str(),animation.dds,
                             DXGI_FORMAT_BC1_UNORM_SRGB,DXGI_FORMAT_BC1_UNORM);
                     if (ok) {
@@ -2368,6 +2410,7 @@ public:
         world_regions=world_raster_grid && city_profile && scene_region_size==128 &&
             GetEnvironmentVariableA("C3X_RENDERER_WORLD_REGIONS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         world_regions_control=GetEnvironmentVariableA("C3X_RENDERER_WORLD_REGIONS_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0;
+        local_region_revisions=GetEnvironmentVariableA("C3X_RENDERER_LOCAL_REGION_REVISIONS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         region_diagnostics=GetEnvironmentVariableA("C3X_RENDERER_REGION_DIAGNOSTICS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         region_receiver_shadows=GetEnvironmentVariableA("C3X_RENDERER_REGION_RECEIVER_SHADOWS",control,sizeof(control)) && std::strcmp(control,"1")==0;
         composition_receiver_index=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_COMPOSITION_RECEIVER_INDEX");
@@ -3273,6 +3316,11 @@ public:
         std::size_t uploaded=0,pool_bytes=0;
         for (auto const & pool:resource_buffers)
             pool_bytes+=pool.capacity+pool.shadow_capacity;
+        if(city_profile)for(auto const& asset:resource_animations){
+            pool_bytes+=sizeof(asset.source_bounds);
+            if(asset.vertices)pool_bytes+=asset.mesh.vertices.size()*sizeof(c3x_renderer::AnimationVertex);
+            if(asset.indices)pool_bytes+=asset.mesh.indices.size()*sizeof(unsigned);
+        }
         float half_w=frame.tile_width*.5f,half_h=frame.tile_height*.5f;
         float projection=frame.tile_width/224.f,relief=projection*.82f;
         int dx=int(geometry_viewport_settings.translation[0]),dy=int(geometry_viewport_settings.translation[1]);
@@ -3282,6 +3330,90 @@ public:
             auto & animation=resource_animations[anchor.asset];
             double time=c3x_renderer::ambient_animation_time(ticks,frame.presentation_frequency,
                 animation.mesh.duration,anchor.seed);
+            if(city_profile) {
+                c3x_renderer::AnimationPose pose;
+                c3x_renderer::render_core::ResourceSourceBounds::Box posed_bounds;
+                if(!c3x_renderer::sample_animation_pose(animation.mesh,time,true,pose) ||
+                   !animation.source_bounds.posed(pose,animation.mesh.bones,posed_bounds))return false;
+                float cosine=std::cos(animation.yaw),sine=std::sin(animation.yaw);
+                float center_x=anchor.anchor_x+half_w+(anchor.u-anchor.v)*half_w;
+                float center_y=anchor.anchor_y+(anchor.u+anchor.v)*half_h-anchor.ground*relief;
+                CachedVertexChunk chunk,shadow_chunk;
+                chunk.bounds=shadow_chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
+                for(unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=1e9f;chunk.world_bounds.high[a]=-1e9f;}
+                // Temporary diagnostic: exact CPU bounds isolate raster selection
+                // from GPU arithmetic. GPU vertices and instance uploads are unchanged.
+                std::vector<c3x_renderer::FeatureSourceVertex> bounds_vertices;
+                if(!c3x_renderer::sample_animation_mesh(animation.mesh,time,true,bounds_vertices))return false;
+                for(auto const& vertex:bounds_vertices){auto const* source=vertex.position;
+                    float x=source[0]+animation.offset[0],y=source[1]+animation.offset[1];
+                    float lx=(x*cosine-y*sine)*animation.scale,ly=(x*sine+y*cosine)*animation.scale;
+                    float lz=(source[2]+animation.offset[2])*animation.scale,feature_height=lz*150.f/.82f;
+                    float sx=center_x+(lx-ly)*half_w,sy=center_y+(lx+ly)*half_h-lz*150.f*projection;
+                    auto cast=c3x_renderer::lighting::ground_offset(shadow_basis.data()+8,feature_height/112.f);
+                    float shadow_x=center_x+(lx-ly)*half_w+(cast[0]+cast[1])*half_w;
+                    float shadow_y=center_y+(lx+ly)*half_h+(cast[0]-cast[1])*half_h;
+                    if(!std::isfinite(sx) || !std::isfinite(sy) || !std::isfinite(shadow_x) || !std::isfinite(shadow_y) ||
+                       std::max({std::abs(sx),std::abs(sy),std::abs(shadow_x),std::abs(shadow_y)})>1e8f)return false;
+                    auto extend=[](D3D11_RECT& bounds,float px,float py){
+                        bounds.left=std::min(bounds.left,LONG(std::floor(px))-2);bounds.right=std::max(bounds.right,LONG(std::ceil(px))+2);
+                        bounds.top=std::min(bounds.top,LONG(std::floor(py))-2);bounds.bottom=std::max(bounds.bottom,LONG(std::ceil(py))+2);
+                    };
+                    extend(chunk.bounds,sx,sy);extend(chunk.bounds,shadow_x,shadow_y);extend(shadow_chunk.bounds,shadow_x,shadow_y);
+                    float world[]={anchor.world_u+anchor.u+lx,anchor.world_v+1-anchor.v-ly,(anchor.ground+2.5f+feature_height)/112.f};
+                    for(unsigned a=0;a<3;++a){chunk.world_bounds.low[a]=std::min(chunk.world_bounds.low[a],world[a]);chunk.world_bounds.high[a]=std::max(chunk.world_bounds.high[a],world[a]);}
+                }
+                D3D11_RECT visible={std::max<LONG>(0,chunk.bounds.left+dx),std::max<LONG>(0,chunk.bounds.top+dy),
+                    std::min<LONG>(width,chunk.bounds.right+dx),std::min<LONG>(height,chunk.bounds.bottom+dy)};
+                if(visible.left>=visible.right || visible.top>=visible.bottom)continue;
+                dirty(visible);
+                unsigned source_bytes=unsigned(animation.mesh.vertices.size()*sizeof(c3x_renderer::AnimationVertex));
+                unsigned index_bytes=unsigned(animation.mesh.indices.size()*sizeof(unsigned));
+                auto room=[&](std::size_t bytes){if(pool_bytes+bytes<=32u*1024u*1024u)return true;
+                    trace.write("animation-budget-failed","shared source and instance cap=33554432",true);return false;};
+                if(!room((animation.vertices?0:source_bytes)+(animation.indices?0:index_bytes)))return false;
+                if(!animation.vertices){
+                    D3D11_BUFFER_DESC desc={};desc.ByteWidth=source_bytes;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+                    D3D11_SUBRESOURCE_DATA data={};data.pSysMem=animation.mesh.vertices.data();
+                    if(FAILED(device->CreateBuffer(&desc,&data,&animation.vertices)))return false;
+                    pool_bytes+=source_bytes;uploaded+=source_bytes;
+                }
+                if(!animation.indices){
+                    D3D11_BUFFER_DESC desc={};desc.ByteWidth=index_bytes;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_INDEX_BUFFER;
+                    D3D11_SUBRESOURCE_DATA data={};data.pSysMem=animation.mesh.indices.data();
+                    if(FAILED(device->CreateBuffer(&desc,&data,&animation.indices)))return false;
+                    pool_bytes+=index_bytes;uploaded+=index_bytes;
+                }
+                if(resource_buffers.size()<=visible_resource_animations)resource_buffers.emplace_back();
+                auto& pool=resource_buffers[visible_resource_animations];
+                unsigned bytes=unsigned(c3x_renderer::render_core::resource_pose_bytes(animation.mesh.bones));
+                if(bytes>pool.capacity){
+                    if(!room(bytes-pool.capacity))return false;
+                    pool_bytes-=pool.capacity;release(pool.vertices);pool.capacity=0;
+                    D3D11_BUFFER_DESC desc={};desc.ByteWidth=bytes;desc.Usage=D3D11_USAGE_DYNAMIC;
+                    desc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;desc.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;
+                    if(FAILED(device->CreateBuffer(&desc,nullptr,&pool.vertices)))return false;
+                    pool.capacity=bytes;pool_bytes+=bytes;
+                }
+                D3D11_MAPPED_SUBRESOURCE mapped={};
+                if(FAILED(context->Map(pool.vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
+                auto values=static_cast<float*>(mapped.pData);
+                float placement[]={cosine,sine,animation.scale,c3x_renderer::lighting::object_height_to_world,
+                    animation.offset[0],animation.offset[1],animation.offset[2],anchor.ground,
+                    center_x,center_y,anchor.world_u+anchor.u,anchor.world_v+1-anchor.v,
+                    half_w,half_h,projection,float(frame.target_height)};
+                std::copy(std::begin(placement),std::end(placement),values);
+                c3x_renderer::render_core::pack_resource_pose(pose,animation.mesh.bones,values);
+                context->Unmap(pool.vertices,0);uploaded+=bytes;
+                chunk.buffer=shadow_chunk.buffer=animation.vertices;
+                chunk.indices=shadow_chunk.indices=animation.indices;
+                chunk.resource_instance=shadow_chunk.resource_instance=pool.vertices;
+                chunk.vertex_stride=shadow_chunk.vertex_stride=sizeof(c3x_renderer::AnimationVertex);
+                chunk.index_count=shadow_chunk.index_count=unsigned(animation.mesh.indices.size());
+                chunk.animation_texture=shadow_chunk.animation_texture=animation.view;
+                buffers[geometry_shadow].push_back(shadow_chunk);buffers[geometry_feature].push_back(chunk);
+                ++visible_resource_animations;continue;
+            }
             if (!c3x_renderer::sample_animation_mesh(animation.mesh,time,true,posed)) {
                 trace.write("animation-pose-failed",animation.name.c_str(),true);return false;
             }
@@ -3617,7 +3749,7 @@ public:
                 }
                 if(!submit_prepared_resource_region(region.draws,region.settings))return false;
             } else if(!submit_geometry(buffers,{{0,0,128,128}},settings,block_target,block_depth,128,128,
-                    nullptr,true,true,&geometry_vertex_buffers,false,animation_casters_ptr,animation_prepared_ptr))return false;
+                    nullptr,true,true,geometry_vertex_buffers,false,animation_casters_ptr,animation_prepared_ptr))return false;
             D3D11_BOX box={unsigned(clipped.left-rect.left),unsigned(clipped.top-rect.top),0,
                 unsigned(clipped.right-rect.left),unsigned(clipped.bottom-rect.top),1};
             if(animation_readback_atlas) {
@@ -3674,11 +3806,11 @@ public:
                 backdrop_dependency_hits,backdrop_dependency_rejections,resource_backdrops.size(),resource_backdrop_bytes);
             trace.write("animation-backdrop-dependencies",detail);
         }
-        char detail[640];sprintf_s(detail,"visible=%u waves=%u facing=SE clock=%lld rects=%zu pixels=%u upload_bytes=%zu pool_bytes=%zu backdrop_hits=%u backdrop_misses=%u backdrop_bytes=%zu terrain_built=%u ms=%.3f wave_upload_bytes=%zu wave_geometry_bytes=%zu wave_cells_built=%u wave_cells_reused=%u wave_cell_entries=%zu caster_preparations=%u readback=%s readback_width=%u readback_height=%u",
+        char detail[640];sprintf_s(detail,"visible=%u waves=%u facing=SE clock=%lld rects=%zu pixels=%u upload_bytes=%zu pool_bytes=%zu backdrop_hits=%u backdrop_misses=%u backdrop_bytes=%zu terrain_built=%u ms=%.3f wave_upload_bytes=%zu wave_geometry_bytes=%zu wave_cells_built=%u wave_cells_reused=%u wave_cell_entries=%zu caster_preparations=%u readback=%s readback_width=%u readback_height=%u resource_material_variants=%u",
             visible_resource_animations,visible_wave_animations,clock,rectangles.size(),dirty_pixels,uploaded,pool_bytes,backdrop_hits,backdrop_misses,
             resource_backdrop_bytes,frame_tiles_built,
             trace.milliseconds(resource_composite_ticks),wave_upload_bytes,wave_geometry_bytes,wave_cells_built,wave_cells_reused,retained_wave_cells.size(),frame_caster_preparations,
-            animation_readback_atlas?"atlas":"full",animation_readback_atlas?animation_readback_width:unsigned(width),animation_readback_atlas?animation_readback_height:unsigned(height));trace.write("animation-frame",detail);
+            animation_readback_atlas?"atlas":"full",animation_readback_atlas?animation_readback_width:unsigned(width),animation_readback_atlas?animation_readback_height:unsigned(height),unsigned(prepared_resource_pass && !rectangles.empty()));trace.write("animation-frame",detail);
         return true;
     }
 
@@ -3698,9 +3830,9 @@ public:
         output.fallback_tile_count = cached_fallback_tile_count;
         if (!compose_resource_animations(frame)) return false;
         if(world_regions){
-            char detail[320];sprintf_s(detail,"hits=%zu misses=%zu hit_pixels=%zu gpu_bytes=%zu metadata_bytes=%zu entries=%zu rejected=%zu evictions=%llu metadata_cap=%zu",
+            char detail[320];sprintf_s(detail,"hits=%zu misses=%zu hit_pixels=%zu gpu_bytes=%zu metadata_bytes=%zu entries=%zu rejected=%zu evictions=%llu metadata_cap=%zu local_revisions=%u",
                 frame_region_hits,frame_region_misses,frame_region_hit_pixels,render_regions.gpu_bytes,render_regions.metadata_bytes,
-                render_regions.entries.size(),frame_region_rejected,render_regions.evictions,render_regions.metadata_limit);trace.write("render-region-cache",detail,false);
+                render_regions.entries.size(),frame_region_rejected,render_regions.evictions,render_regions.metadata_limit,unsigned(local_region_revisions));trace.write("render-region-cache",detail,false);
         }
         if(world_regions){
             char detail[320];sprintf_s(detail,"contributors_ms=%.3f lights_ms=%.3f shadows_ms=%.3f tile_validation_ms=%.3f tile_append_ms=%.3f topology_ms=%.3f shadow_proof_hits=%llu shadow_proof_misses=%llu shadow_proof_bytes=%zu contributor_index_bytes=%zu",
@@ -3796,13 +3928,14 @@ public:
         region_contributors.clear();
         resource_anchors.clear();
         geometry_footprints.clear();
-        release_geometry_vertex_buffers(geometry_vertex_buffers);
+        for(auto& layer:geometry_vertex_buffers)std::vector<GeometryDrawRecord>().swap(layer);
     }
 
     void clear_tile_geometry_cache() {
         natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
         ground_grid_cache.clear();ground_grid_cache_bytes=0;
         topology_cache = {};
+        resident_content.clear();
         cancel_pixel_preparation();
         pixel_blocks.clear();
         bitmap_footprints.clear();
@@ -3845,7 +3978,7 @@ public:
             tile_geometry_cache_bytes -= oldest->second.byte_count;
             if (oldest->second.prefetched) prefetched_geometry_bytes -= oldest->second.byte_count;
             release_geometry_vertex_buffers(oldest->second.buffers);
-            tile_geometry_cache.erase(oldest);
+            resident_content.release(oldest->second.binding);tile_geometry_cache.erase(oldest);
             ++frame_tiles_evicted;
             if (cache_evictions != 0xffffffffu) ++cache_evictions;
         }
@@ -3934,7 +4067,7 @@ public:
             prefetched_geometry_bytes -= oldest->second.byte_count;
             tile_geometry_cache_bytes -= oldest->second.byte_count;
             release_geometry_vertex_buffers(oldest->second.buffers);
-            tile_geometry_cache.erase(oldest);
+            resident_content.release(oldest->second.binding);tile_geometry_cache.erase(oldest);
             ++frame_tiles_evicted;
             if (cache_evictions != 0xffffffffu) ++cache_evictions;
         }
@@ -4010,12 +4143,12 @@ public:
         return true;
     }
 
-    CachedVertexChunk project_natural_chunk(CachedVertexChunk chunk, c3x_renderer_tile_v1 const& record) {
+    GeometryDrawRecord project_natural_chunk(GeometryDrawRecord chunk, c3x_renderer_tile_v1 const& record) {
         int c=(record.tile_x+record.tile_y)/2,r=(record.tile_x-record.tile_y)/2;
         chunk.natural_projection[0]=float(c);chunk.natural_projection[1]=float(r);
         chunk.natural_projection[2]=float(shadow_tile_width);chunk.natural_projection[3]=float(height);
-        if(tight_natural_bounds && chunk.projected_bounds.valid && shadow_tile_height*2==shadow_tile_width){
-            auto bounds=chunk.projected_bounds.project(c,r,shadow_tile_width);
+        if(tight_natural_bounds && chunk.content().projected_bounds.valid && shadow_tile_height*2==shadow_tile_width){
+            auto bounds=chunk.content().projected_bounds.project(c,r,shadow_tile_width);
             chunk.bounds={bounds[0],bounds[1],bounds[2],bounds[3]};return chunk;
         }
         c3x_renderer::fidelity::GroundProjection projection{c,r,shadow_tile_width*.5f,
@@ -4023,7 +4156,7 @@ public:
         chunk.bounds={LONG_MAX,LONG_MAX,LONG_MIN,LONG_MIN};
         for(unsigned corner=0;corner<8;++corner){
             float p[3];for(unsigned axis=0;axis<3;++axis)p[axis]=(corner&(1u<<axis))?
-                chunk.world_bounds.high[axis]:chunk.world_bounds.low[axis];
+                chunk.content().world_bounds.high[axis]:chunk.content().world_bounds.low[axis];
             auto v=projection(p[0],p[1],p[2]*112.f);
             chunk.bounds.left=std::min(chunk.bounds.left,LONG(std::floor(v.x))-2);
             chunk.bounds.top=std::min(chunk.bounds.top,LONG(std::floor(v.y))-2);
@@ -4045,12 +4178,12 @@ public:
         auto include=[&](auto const& buffers,bool natural_world){
         for (auto const & layer : buffers)
             for (auto const & source_chunk : layer) {
-                auto chunk=natural_world?project_natural_chunk(source_chunk,record):source_chunk;
+                GeometryDrawRecord chunk=natural_world?project_natural_chunk(source_chunk,record):GeometryDrawRecord(source_chunk);
                 footprint.bounds.left = std::min(footprint.bounds.left, static_cast<int>(chunk.bounds.left));
                 footprint.bounds.top = std::min(footprint.bounds.top, static_cast<int>(chunk.bounds.top));
                 footprint.bounds.right = std::max(footprint.bounds.right, static_cast<int>(chunk.bounds.right));
                 footprint.bounds.bottom = std::max(footprint.bounds.bottom, static_cast<int>(chunk.bounds.bottom));
-                if(chunk.city_lighting){
+                if(chunk.content().city_lighting){
                     int radius=int(std::ceil(shadow_tile_width*.85f))+8;
                     footprint.bounds.left=std::min(footprint.bounds.left,int(chunk.bounds.left)-radius);
                     footprint.bounds.right=std::max(footprint.bounds.right,int(chunk.bounds.right)+radius);
@@ -4058,13 +4191,13 @@ public:
                     footprint.bounds.bottom=std::max(footprint.bounds.bottom,int(chunk.bounds.bottom)+radius);
                 }
                 if(environment_profile){
-                    int shift=int(std::ceil(2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f)))+4;
+                    int shift=int(std::ceil(2*reflection.height_pixels*std::max(0.f,chunk.content().world_bounds.high[2]-2.5f/112.f)))+4;
                     footprint.bounds.bottom=std::max(footprint.bounds.bottom,int(chunk.bounds.bottom)+shift);
                     footprint.bounds.left=std::min(footprint.bounds.left,int(chunk.bounds.left)-4);
                     footprint.bounds.right=std::max(footprint.bounds.right,int(chunk.bounds.right)+4);
                 }
                 if(pickup_profile) {
-                    float z=std::max(0.f,chunk.world_bounds.high[2]);
+                    float z=std::max(0.f,chunk.content().world_bounds.high[2]);
                     float u=-shadow_basis[8]/shadow_basis[10]*z,v=-shadow_basis[9]/shadow_basis[10]*z;
                     int dx=int(std::ceil(std::abs((u+v)*shadow_tile_width*.5f)))+3;
                     int dy=int(std::ceil(std::abs((u-v)*shadow_tile_height*.5f)+z*112*.82f*shadow_tile_width/224))+3;
@@ -4076,12 +4209,8 @@ public:
             }
         };
         include(tile.buffers,false);
-        if(tile.natural_signature){
-            auto natural_tile=tile_geometry_cache.find(tile.natural_signature);
-            if(natural_tile!=tile_geometry_cache.end() && natural_tile->second.shared_natural){
-                include(natural_tile->second.buffers,true);
-            }
-        }
+        if(auto natural_tile=resident_content.resolve(tile.natural_content))
+            if(natural_tile->shared_natural)include(natural_tile->buffers,true);
         return footprint;
     }
 
@@ -4105,23 +4234,21 @@ public:
         for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
             // Let push_back grow geometrically. Reserving exactly one tile at
             // a time copied the entire layer again for every visible tile.
-            for (CachedVertexChunk chunk : source.buffers[layer]) {
+            for (auto const& source_chunk : source.buffers[layer]) {
+                GeometryDrawRecord chunk(source_chunk);
                 if(natural_world)chunk=project_natural_chunk(chunk,record);
                 chunk.translation_x = anchor_x - source.anchor_x;
                 chunk.translation_y = anchor_y - source.anchor_y;
                 geometry_vertex_buffers[layer].push_back(chunk);
-                // Acquire only after the potentially throwing vector growth.
-                chunk.buffer->AddRef();
-                chunk.indices->AddRef();
+                // The current epoch protects this immutable owner from eviction.
+                // Draw records acquire no buffer or material references.
             }
         }
         };
         append(tile,false);
-        if(tile.natural_signature){
-            auto natural_tile=tile_geometry_cache.find(tile.natural_signature);
-            if(natural_tile!=tile_geometry_cache.end() && natural_tile->second.shared_natural)
-                append(natural_tile->second,true);
-        }
+        if(auto natural_tile=resident_content.resolve(tile.natural_content))
+            if(natural_tile->shared_natural)append(*natural_tile,true);
+        topology_cache.attach(record,tile.binding);
     }
 
     bool restore_viewport_geometry(CachedViewport const& stored,c3x_renderer_frame_v1 const& frame,
@@ -4131,15 +4258,12 @@ public:
         // topology and camera. Only GPU residency/lifetime needs checking again.
         std::vector<CachedTileGeometry*> owners(frame.tile_count,nullptr);
         for(std::size_t i=0;i<owners.size();++i){
-            auto key=stored.tile_keys[i];if(!key.second)continue;
-            auto range=tile_geometry_cache.equal_range(key.first);
-            for(auto it=range.first;it!=range.second;++it)
-                if(!it->second.shared_natural && it->second.version==key.second){owners[i]=&it->second;break;}
-            if(!owners[i])return false;
-            if(owners[i]->natural_signature){
-                auto world_mesh=tile_geometry_cache.find(owners[i]->natural_signature);
-                if(world_mesh==tile_geometry_cache.end() || !world_mesh->second.shared_natural ||
-                   world_mesh->second.version!=owners[i]->natural_version)return false;
+            auto handle=stored.tile_keys[i];if(!handle.generation)continue;
+            owners[i]=resident_content.resolve(handle);
+            if(!owners[i] || owners[i]->shared_natural)return false;
+            if(owners[i]->natural_content.generation){
+                auto world_mesh=resident_content.resolve(owners[i]->natural_content);
+                if(!world_mesh || !world_mesh->shared_natural)return false;
             }
         }
         // Validate the entire set before publishing any partial active geometry.
@@ -4164,29 +4288,29 @@ public:
         return true;
     }
 
-    bool chunk_intersects_region(CachedVertexChunk const& chunk,ViewportShaderSettings const& settings,
+    bool chunk_intersects_region(GeometryDrawReference const& chunk,ViewportShaderSettings const& settings,
                                  D3D11_RECT const& rect,bool reflected,int radius=0) const {
-        int dx=chunk.translation_x+int(settings.translation[0]),dy=chunk.translation_y+int(settings.translation[1]);
-        float low=reflected?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.low[2]-2.5f/112.f):0;
-        float high=reflected?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f):0;
-        return !(chunk.bounds.right+dx+radius<=rect.left || chunk.bounds.left+dx-radius>=rect.right ||
-                 chunk.bounds.bottom+dy+high+radius<=rect.top || chunk.bounds.top+dy+low-radius>=rect.bottom);
+        int dx=chunk.translation_x()+int(settings.translation[0]),dy=chunk.translation_y()+int(settings.translation[1]);
+        float low=reflected?2*reflection.height_pixels*std::max(0.f,chunk.content().world_bounds.low[2]-2.5f/112.f):0;
+        float high=reflected?2*reflection.height_pixels*std::max(0.f,chunk.content().world_bounds.high[2]-2.5f/112.f):0;
+        return !(chunk.bounds().right+dx+radius<=rect.left || chunk.bounds().left+dx-radius>=rect.right ||
+                 chunk.bounds().bottom+dy+high+radius<=rect.top || chunk.bounds().top+dy+low-radius>=rect.bottom);
     }
 
-    void prepare_region_contributors(std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers) {
+    void prepare_region_contributors(GeometryDrawView buffers) {
         if(region_contributors.ready && region_contributors.tile_width==shadow_tile_width &&
            region_contributors.reflection_height==reflection.height_pixels)return;
         region_contributors.clear();
         try {
             for(unsigned pass=0;pass<2;++pass)for(unsigned layer=0;layer<geometry_layer_count;++layer)
                 for(unsigned i=0;i<buffers[layer].size();++i){auto const& chunk=buffers[layer][i];
-                    int radius=layer==geometry_city && chunk.city_lighting?int(std::ceil(shadow_tile_width*.85f))+8:0;
-                    float low=pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.low[2]-2.5f/112.f):0;
-                    float high=pass?2*reflection.height_pixels*std::max(0.f,chunk.world_bounds.high[2]-2.5f/112.f):0;
-                    if(!region_contributors.add(pass,{layer,i},double(chunk.bounds.left)+chunk.translation_x-radius,
-                        double(chunk.bounds.top)+chunk.translation_y+low-radius,
-                        double(chunk.bounds.right)+chunk.translation_x+radius,
-                        double(chunk.bounds.bottom)+chunk.translation_y+high+radius)){
+                    int radius=layer==geometry_city && chunk.content().city_lighting?int(std::ceil(shadow_tile_width*.85f))+8:0;
+                    float low=pass?2*reflection.height_pixels*std::max(0.f,chunk.content().world_bounds.low[2]-2.5f/112.f):0;
+                    float high=pass?2*reflection.height_pixels*std::max(0.f,chunk.content().world_bounds.high[2]-2.5f/112.f):0;
+                    if(!region_contributors.add(pass,{layer,i},double(chunk.bounds().left)+chunk.translation_x()-radius,
+                        double(chunk.bounds().top)+chunk.translation_y()+low-radius,
+                        double(chunk.bounds().right)+chunk.translation_x()+radius,
+                        double(chunk.bounds().bottom)+chunk.translation_y()+high+radius)){
                         region_contributors.clear();return;
                     }
                 }
@@ -4195,31 +4319,31 @@ public:
         }catch(...){region_contributors.clear();}
     }
 
-    void collect_region_receivers(std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers,
+    void collect_region_receivers(GeometryDrawView buffers,
             ViewportShaderSettings const& settings,std::vector<D3D11_RECT> const& rectangles,bool reflected,
             std::vector<c3x_renderer::render_core::SourceShadow::Bounds>& receivers) {
         // The index borrows only the current static assembly. Posed buffers and
         // rejected/unavailable indexes retain the original complete scan.
         std::vector<c3x_renderer::render_core::RegionContributorIndex::Item> candidates;
         bool indexed=false;
-        if(composition_receiver_index && &buffers==&geometry_vertex_buffers && rectangles.size()==1 &&
+        if(composition_receiver_index && buffers.is(geometry_vertex_buffers) && rectangles.size()==1 &&
            region_contributors.tile_width==shadow_tile_width && region_contributors.reflection_height==reflection.height_pixels) {
             auto const& rect=rectangles[0];
             try {indexed=region_contributors.query(reflected?1u:0u,rect.left-int(settings.translation[0]),
                 rect.top-int(settings.translation[1]),std::max(rect.right-rect.left,rect.bottom-rect.top),candidates);}
             catch(...) {}
         }
-        auto append=[&](unsigned layer,CachedVertexChunk const& chunk) {
+        auto append=[&](unsigned layer,GeometryDrawReference const& chunk) {
             if(layer==geometry_shadow)return;
             bool visible=false;
             for(auto const& rect:rectangles)visible=visible || chunk_intersects_region(chunk,settings,rect,reflected);
-            if(visible)receivers.push_back(chunk.world_bounds);
+            if(visible)receivers.push_back(chunk.content().world_bounds);
         };
         if(indexed)for(auto const& item:candidates)append(item.first,buffers[item.first][item.second]);
         else for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:buffers[layer])append(layer,chunk);
     }
 
-    bool render_region_key(std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers,
+    bool render_region_key(GeometryDrawView buffers,
             ViewportShaderSettings const& settings,
             std::vector<c3x_renderer::render_core::SourceShadow::Caster> const& casters,
             c3x_renderer::render_core::SourceShadow::PreparedCasters* prepared,
@@ -4242,25 +4366,25 @@ public:
             std::vector<c3x_renderer::render_core::RegionContributorIndex::Item> candidates;
             bool indexed=false;
             try{indexed=region_contributors.query(pass,-int(local.translation[0]),-int(local.translation[1]),extent,candidates);}catch(...){}
-            auto contribute=[&](unsigned layer,CachedVertexChunk const& chunk){
-                if(layer==geometry_city && chunk.city_lighting &&
+            auto contribute=[&](unsigned layer,GeometryDrawReference const& chunk){
+                if(layer==geometry_city && chunk.content().city_lighting &&
                    chunk_intersects_region(chunk,local,rect,pass!=0,int(std::ceil(shadow_tile_width*.85f))+8)){
-                    auto light=chunk.city_lighting.get();
+                    auto light=chunk.content().city_lighting.get();
                     if(std::find(lights.begin(),lights.end(),light)==lights.end())lights.push_back(light);
                 }
                 if(!chunk_intersects_region(chunk,local,rect,pass!=0))return true;
-                if(chunk.animation_texture)return false; // Posed pixels never enter this static cache.
-                if(layer!=geometry_shadow)receivers.push_back(chunk.world_bounds);
-                std::uint64_t identity[]={layer,chunk.version,chunk.index_count,std::uint64_t(chunk.index_format),
-                    chunk.vertex_stride,chunk.city_material,std::uint64_t(chunk.city_environment)};
+                if(chunk.content().animation_texture)return false; // Posed pixels never enter this static cache.
+                if(layer!=geometry_shadow)receivers.push_back(chunk.content().world_bounds);
+                std::uint64_t identity[]={layer,chunk.content().version,chunk.content().index_count,std::uint64_t(chunk.content().index_format),
+                    chunk.content().vertex_stride,chunk.content().city_material,std::uint64_t(chunk.content().city_environment)};
                 if(!append_region_bytes(key,identity,sizeof(identity)))return false;
                 auto effective=local;
-                std::copy(std::begin(chunk.natural_projection),std::end(chunk.natural_projection),effective.natural_projection);
+                std::copy(std::begin(chunk.natural_projection()),std::end(chunk.natural_projection()),effective.natural_projection);
                 effective.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
-                effective.translation[0]+=float(chunk.translation_x);effective.translation[1]+=float(chunk.translation_y);
+                effective.translation[0]+=float(chunk.translation_x());effective.translation[1]+=float(chunk.translation_y());
                 effective.depth_translation=-effective.translation[1]/height;
                 if(!append_region_bytes(key,&effective,sizeof(effective)) ||
-                   !append_region_bytes(key,chunk.city_atlas,sizeof(chunk.city_atlas)))return false;
+                   !append_region_bytes(key,chunk.content().city_atlas,sizeof(chunk.content().city_atlas)))return false;
                 return true;
             };
             if(indexed){for(auto const& candidate:candidates)
@@ -4308,7 +4432,7 @@ public:
     }
 
     bool draw_cached_geometry(GeometryLayer layer,
-            std::array<std::vector<CachedVertexChunk>, geometry_layer_count> const & buffers,
+            GeometryDrawView buffers,
             std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & viewport_settings,
             std::atomic<bool> const * cancellation, bool reflection_pass=false) {
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
@@ -4327,16 +4451,16 @@ public:
         if(diagnostic_half_pixels)scaled.right=scaled.left+(scaled.right-scaled.left+1)/2;
 #endif
         context->RSSetScissorRects(1, &scaled);
-        for (CachedVertexChunk const & chunk : buffers[layer]) {
+        for (GeometryDrawReference const & chunk : buffers[layer]) {
             ++frame_bounds_tests;
             if (cancellation && cancellation->load(std::memory_order_relaxed)) return false;
-            if(reflection_pass && chunk.animation_texture)continue;
+            if(reflection_pass && chunk.content().animation_texture)continue;
             if(!chunk_intersects_region(chunk,viewport_settings,rect,reflection_pass))continue;
             ViewportShaderSettings settings = viewport_settings;
-            std::copy(std::begin(chunk.natural_projection),std::end(chunk.natural_projection),settings.natural_projection);
+            std::copy(std::begin(chunk.natural_projection()),std::end(chunk.natural_projection()),settings.natural_projection);
             if(pickup_profile)settings.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
-            settings.translation[0] += static_cast<float>(chunk.translation_x);
-            settings.translation[1] += static_cast<float>(chunk.translation_y);
+            settings.translation[0] += static_cast<float>(chunk.translation_x());
+            settings.translation[1] += static_cast<float>(chunk.translation_y());
             settings.depth_translation = -settings.translation[1] / height;
             if (first || std::memcmp(&previous, &settings, sizeof(settings)) != 0) {
                 context->UpdateSubresource(viewport_settings_buffer, 0, nullptr, &settings, 0, 0);
@@ -4344,18 +4468,18 @@ public:
                 previous = settings;
                 first = false;
             }
-            UINT stride = chunk.vertex_stride, offset = 0;
-            context->IASetVertexBuffers(0, 1, &chunk.buffer, &stride, &offset);
-            context->IASetIndexBuffer(chunk.indices, chunk.index_format, 0);
-            if(chunk.city_material!=0xffffffffu){
+            UINT stride = chunk.content().vertex_stride, offset = 0;
+            context->IASetVertexBuffers(0, 1, &chunk.content().buffer, &stride, &offset);
+            context->IASetIndexBuffer(chunk.content().indices, chunk.content().index_format, 0);
+            if(chunk.content().city_material!=0xffffffffu){
                 ID3D11SamplerState*samplers[]={natural_wrap,natural_clamp};context->PSSetSamplers(0,2,samplers);
                 context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
-                cities.bind(context,chunk.city_material,chunk.city_environment,chunk.city_atlas,reflection_pass,false);
-                context->DrawIndexed(chunk.index_count,0,0);
+                cities.bind(context,chunk.content().city_material,chunk.content().city_environment,chunk.content().city_atlas,reflection_pass,false);
+                context->DrawIndexed(chunk.content().index_count,0,0);
                 ++frame_draw_calls;
-                if(!cities.library.materials[chunk.city_material].ground){
-                    cities.bind(context,chunk.city_material,chunk.city_environment,chunk.city_atlas,reflection_pass,true);
-                    context->DrawIndexed(chunk.index_count,0,0);
+                if(!cities.library.materials[chunk.content().city_material].ground){
+                    cities.bind(context,chunk.content().city_material,chunk.content().city_environment,chunk.content().city_atlas,reflection_pass,true);
+                    context->DrawIndexed(chunk.content().index_count,0,0);
                     ++frame_draw_calls;
                 }
                 context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
@@ -4368,10 +4492,20 @@ public:
                 context->PSSetShaderResources(116,4,city_emissive_views.data());context->PSSetShaderResources(124,4,city_base_views.data());
                 ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);
             }
-            if (chunk.animation_texture) context->PSSetShaderResources(116,1,&chunk.animation_texture);
-            context->DrawIndexed(chunk.index_count, 0, 0);
+            if (chunk.content().animation_texture) context->PSSetShaderResources(116,1,&chunk.content().animation_texture);
+            if(chunk.content().resource_instance){
+                context->IASetInputLayout(resource_input_layout);
+                context->VSSetConstantBuffers(8,1,&chunk.content().resource_instance);
+                context->VSSetConstantBuffers(2,1,&shadow_settings_buffer);
+                context->VSSetShader(layer==geometry_shadow?resource_shadow_vertex_shader:resource_body_vertex_shader,nullptr,0);
+            }
+            context->DrawIndexed(chunk.content().index_count, 0, 0);
             ++frame_draw_calls;
-            if (chunk.animation_texture) context->PSSetShaderResources(116,1,resource_texture_views.data());
+            if(chunk.content().resource_instance){
+                context->IASetInputLayout(layer==geometry_shadow?input_layout:feature_input_layout);
+                context->VSSetShader(layer==geometry_shadow?vertex_shader:feature_vertex_shader,nullptr,0);
+            }
+            if (chunk.content().animation_texture) context->PSSetShaderResources(116,1,resource_texture_views.data());
         }
         }
         if(city_profile && layer==geometry_city){ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);}
@@ -4385,20 +4519,20 @@ public:
     }
 
     void collect_shadow_casters(
-            std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const & buffers,
+            GeometryDrawView buffers,
             std::vector<c3x_renderer::render_core::SourceShadow::Caster> & casters) {
         using Shadow=c3x_renderer::render_core::SourceShadow;
         auto dims=world_coast.world().dimensions();
         for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:buffers[layer]) {
             bool caster=layer==geometry_land || (layer>=geometry_feature && layer!=geometry_natural_decal);
-            if(chunk.city_material!=0xffffffffu && cities.library.materials[chunk.city_material].ground)caster=false;
-            if(!caster || chunk.animation_texture)continue;
+            if(chunk.content().city_material!=0xffffffffu && cities.library.materials[chunk.content().city_material].ground)caster=false;
+            if(!caster || chunk.content().animation_texture)continue;
             for(int wy=dims.wrap_y?-1:0;wy<=(dims.wrap_y?1:0);++wy)
                 for(int wx=dims.wrap_x?-1:0;wx<=(dims.wrap_x?1:0);++wx) {
-                    Shadow::Caster c;c.vertices=chunk.buffer;c.indices=chunk.indices;c.count=chunk.index_count;
-                    c.index_format=chunk.index_format;
-                    c.stride=chunk.vertex_stride;c.layer=layer;c.version=chunk.version;c.bounds=chunk.world_bounds;
-                    if(chunk.city_material!=0xffffffffu)c.binding=10000+chunk.city_material;
+                    Shadow::Caster c;c.vertices=chunk.content().buffer;c.indices=chunk.content().indices;c.count=chunk.content().index_count;
+                    c.index_format=chunk.content().index_format;
+                    c.stride=chunk.content().vertex_stride;c.layer=layer;c.version=chunk.content().version;c.bounds=chunk.content().world_bounds;
+                    if(chunk.content().city_material!=0xffffffffu)c.binding=10000+chunk.content().city_material;
                     c.offset[0]=float(wx*dims.width+wy*dims.height)*.5f;
                     c.offset[1]=float(wx*dims.width-wy*dims.height)*.5f;casters.push_back(c);
                 }
@@ -4406,7 +4540,7 @@ public:
     }
 
     c3x_renderer::render_core::SourceShadow::PreparedCasters* prepare_shadow_submission(
-            std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers,
+            GeometryDrawView buffers,
             std::vector<c3x_renderer::render_core::SourceShadow::Caster>& casters,
             c3x_renderer::render_core::SourceShadow::PreparedCasters& prepared) {
         ++frame_caster_preparations;
@@ -4414,10 +4548,10 @@ public:
         char control[8]={};
         bool reuse=!(GetEnvironmentVariableA("C3X_RENDERER_CASTER_BOUNDS_CONTROL",control,sizeof(control)) && std::strcmp(control,"1")==0);
         char dependency_control[8]={};
-        bool retain=world_regions && &buffers==&geometry_vertex_buffers &&
+        bool retain=world_regions && buffers.is(geometry_vertex_buffers) &&
             !(GetEnvironmentVariableA("C3X_RENDERER_REGION_DEPENDENCY_CONTROL",dependency_control,sizeof(dependency_control)) && std::strcmp(dependency_control,"1")==0);
         char index_control[8]={};
-        bool index=world_regions && &buffers==&geometry_vertex_buffers &&
+        bool index=world_regions && buffers.is(geometry_vertex_buffers) &&
             !(GetEnvironmentVariableA("C3X_RENDERER_REGION_INDEX_CONTROL",index_control,sizeof(index_control)) && std::strcmp(index_control,"1")==0);
         if(index)prepare_region_contributors(buffers);else region_contributors.clear();
         auto& selected=retain?retained_region_casters:prepared;
@@ -4431,7 +4565,7 @@ public:
     }
 
     bool prepare_receiver_shadows(
-            std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& shadow_buffers,
+            GeometryDrawView shadow_buffers,
             ViewportShaderSettings const& settings,std::vector<D3D11_RECT> const& rectangles,bool reflection_pass,
             std::vector<c3x_renderer::render_core::SourceShadow::Caster> const& casters,
             c3x_renderer::render_core::SourceShadow::PreparedCasters* prepared_casters_ptr,
@@ -4482,7 +4616,7 @@ public:
     }
 
     bool submit_prepared_resource_region(
-            std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const& buffers,
+            GeometryDrawView buffers,
             ViewportShaderSettings const& settings) {
         std::vector<D3D11_RECT> rectangles={{0,0,136,136}};
         auto& linear=city_glow.linear;
@@ -4492,7 +4626,7 @@ public:
         context->RSSetState(rasterizer_state);
         D3D11_VIEWPORT viewport={0,0,272,272,0,1};context->RSSetViewports(1,&viewport);
         if(!cities.lights(context,{}))return false;
-        // Reuse the same shaders, sample order and guarded depth target.
+        // The shadow material variant preserves shading, sample order and depth.
         // Only body/shadow resources are consumed: no terrain table,
         // natural-provider transitions, cliff bindings or empty layer draws.
         context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -4507,7 +4641,7 @@ public:
         ID3D11SamplerState* shadow_samplers[]={natural_wrap,natural_clamp};
         context->PSSetSamplers(0,2,shadow_samplers);
         context->VSSetShader(vertex_shader,nullptr,0);
-        context->PSSetShader(pixel_shader,nullptr,0);
+        context->PSSetShader(resource_shadow_shader,nullptr,0);
         if(!draw_cached_geometry(geometry_shadow,buffers,rectangles,settings,nullptr))return false;
         ID3D11SamplerState* body_samplers[]={terrain_sampler,decal_sampler};
         context->PSSetSamplers(0,2,body_samplers);
@@ -4524,13 +4658,13 @@ public:
         return true;
     }
 
-    bool submit_geometry(std::array<std::vector<CachedVertexChunk>, geometry_layer_count> const & buffers,
+    bool submit_geometry(GeometryDrawView buffers,
                          std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & settings,
                          ID3D11RenderTargetView * target, ID3D11DepthStencilView * depth,
                          int projection_width, int projection_height,
                          std::atomic<bool> const * cancellation = nullptr,
                          bool accumulate = false, bool finish = true,
-                         std::array<std::vector<CachedVertexChunk>,geometry_layer_count> const * shadow_buffers_ptr = nullptr,
+                         GeometryDrawView shadow_buffers_ptr = {},
                          bool reflection_pass=false,
                          std::vector<c3x_renderer::render_core::SourceShadow::Caster> const * shadow_casters_ptr=nullptr,
                          c3x_renderer::render_core::SourceShadow::PreparedCasters * prepared_casters_ptr=nullptr,
@@ -4546,7 +4680,7 @@ public:
         c3x_renderer::render_core::SourceShadow::PreparedCasters prepared_casters;
         if(pickup_profile && !shadow_casters_ptr) {
             if(cancellation && cancellation->load(std::memory_order_relaxed))return false;
-            prepared_casters_ptr=prepare_shadow_submission(shadow_buffers_ptr?*shadow_buffers_ptr:buffers,submission_casters,prepared_casters);
+            prepared_casters_ptr=prepare_shadow_submission(shadow_buffers_ptr?shadow_buffers_ptr:buffers,submission_casters,prepared_casters);
             shadow_casters_ptr=&submission_casters;
         }
         if(fidelity_profile && !reflection_pass) {
@@ -4576,7 +4710,7 @@ public:
                         // taps; drawing uses the unchanged 2x/MSAA projection.
                         // A finished bitmap cannot restore MSAA linear color/depth for animation accumulation.
                         bool const region_path=!require_linear_backdrop && world_regions && region_size==128 && !accumulate && !shadow_buffers_ptr &&
-                            &buffers==&geometry_vertex_buffers;
+                            buffers.is(geometry_vertex_buffers);
                         D3D11_RECT block_rect={0,0,extent,extent_y};
                         if(clip_dirty_blocks && !region_path)block_rect=guarded_block_rectangle({l,t,r,b},guard-x,guard-y,guard,extent,extent_y);
                         c3x_renderer::render_core::RenderRegionKey key;
@@ -4676,11 +4810,11 @@ public:
         if(cull_empty_water && environment_profile && !reflection_pass) {
             reflection_needed=false;
             for(auto const& chunk:buffers[geometry_water]) {
-                int dx=chunk.translation_x+int(settings.translation[0]);
-                int dy=chunk.translation_y+int(settings.translation[1]);
+                int dx=chunk.translation_x()+int(settings.translation[0]);
+                int dy=chunk.translation_y()+int(settings.translation[1]);
                 for(auto const& rect:rectangles)
-                    reflection_needed=reflection_needed || !(chunk.bounds.right+dx<=rect.left ||
-                        chunk.bounds.left+dx>=rect.right || chunk.bounds.bottom+dy<=rect.top || chunk.bounds.top+dy>=rect.bottom);
+                    reflection_needed=reflection_needed || !(chunk.bounds().right+dx<=rect.left ||
+                        chunk.bounds().left+dx>=rect.right || chunk.bounds().bottom+dy<=rect.top || chunk.bounds().top+dy>=rect.bottom);
             }
         }
         if(environment_profile && !reflection_pass && active_reflection.enabled && reflection_needed){
@@ -4699,7 +4833,7 @@ public:
             if(!submit_geometry(buffers,reflected_rects,reflected,destination,depth,reflected_extent,reflected_height,
                 cancellation,false,true,shadow_buffers_ptr,true,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y))return false;
         }
-        if(pickup_profile && !prepare_receiver_shadows(shadow_buffers_ptr?*shadow_buffers_ptr:buffers,
+        if(pickup_profile && !prepare_receiver_shadows(shadow_buffers_ptr?shadow_buffers_ptr:buffers,
                 settings,rectangles,reflection_pass,*shadow_casters_ptr,prepared_casters_ptr,cancellation))return false;
         float clear[4] = {0, 0, 0, 0};
         if(!accumulate) {
@@ -4720,8 +4854,8 @@ public:
         if(environment_profile)active_reflection.bind(context);
         if(city_profile){
             std::vector<c3x_renderer::city_fidelity::Lighting const*> active;
-            for(auto const&chunk:buffers[geometry_city])if(chunk.city_lighting){
-                auto pointer=chunk.city_lighting.get();if(std::find(active.begin(),active.end(),pointer)!=active.end())continue;
+            for(auto const&chunk:buffers[geometry_city])if(chunk.content().city_lighting){
+                auto pointer=chunk.content().city_lighting.get();if(std::find(active.begin(),active.end(),pointer)!=active.end())continue;
                 bool intersects=false;int radius=int(std::ceil(shadow_tile_width*.85f))+8;
                 for(auto const&r:rectangles)intersects=intersects || chunk_intersects_region(chunk,settings,r,reflection_pass,radius);
                 if(intersects)active.push_back(pointer);
@@ -4730,8 +4864,8 @@ public:
         }
 
         bool has_cached_geometry = false;
-        for (std::vector<CachedVertexChunk> const & layer : buffers)
-            has_cached_geometry = has_cached_geometry || !layer.empty();
+        for (std::size_t layer=0;layer<geometry_layer_count;++layer)
+            has_cached_geometry = has_cached_geometry || !buffers[layer].empty();
         if (has_cached_geometry) {
             context->IASetInputLayout(input_layout);
             context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -5067,28 +5201,28 @@ public:
         if (!ensure_block_targets()) return false;
         // Borrow buffers only for this worker call. No extra retained GPU mesh
         // references escape the cache budget; the D3D command stream owns draws.
-        std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
+        GeometryDrawView::Records buffers;
         for (auto const & contributor : pending_pixel_block.key) {
             auto found=std::find_if(tile_geometry_cache.begin(),tile_geometry_cache.end(),[&](auto const & item){
                 return !item.second.shared_natural && item.second.version==contributor.mesh;
             });
             if(found==tile_geometry_cache.end()) { ++pixel_prepare_cursor; return true; }
             for(std::size_t layer=0;layer<geometry_layer_count;++layer)
-                for(auto chunk:found->second.buffers[layer]) {
+                for(auto const& source_chunk:found->second.buffers[layer]) {
+                    GeometryDrawRecord chunk(source_chunk);
                     chunk.translation_x=contributor.x; chunk.translation_y=contributor.y;
                     buffers[layer].push_back(chunk);
                 }
-            if(found->second.natural_signature){
-                auto world_mesh=tile_geometry_cache.find(found->second.natural_signature);
-                if(world_mesh==tile_geometry_cache.end() || !world_mesh->second.shared_natural ||
-                   world_mesh->second.version!=found->second.natural_version){
+            if(found->second.natural_content.generation){
+                auto world_mesh=resident_content.resolve(found->second.natural_content);
+                if(!world_mesh || !world_mesh->shared_natural){
                     ++pixel_prepare_cursor;return true;
                 }
                 c3x_renderer_tile_v1 record={};
                 record.tile_x=found->second.tile_x;record.tile_y=found->second.tile_y;
                 for(std::size_t layer=geometry_natural_terrain;layer<geometry_layer_count;++layer)
-                    for(auto chunk:world_mesh->second.buffers[layer]){
-                        chunk=project_natural_chunk(chunk,record);
+                    for(auto const& source_chunk:world_mesh->buffers[layer]){
+                        auto chunk=project_natural_chunk(source_chunk,record);
                         chunk.translation_x=contributor.x;chunk.translation_y=contributor.y;
                         buffers[layer].push_back(chunk);
                     }
@@ -5688,7 +5822,10 @@ public:
         if(!prewarming && world_regions){
             region_origin_x=frame.tile_count?std::int64_t(frame.tiles[0].anchor_x)-std::int64_t(frame.tiles[0].tile_x)*frame.tile_width/2:0;
             region_origin_y=frame.tile_count?std::int64_t(frame.tiles[0].anchor_y)-std::int64_t(frame.tiles[0].tile_y)*frame.tile_height/2:0;
-            region_context={content_revision,device_generation,std::uint64_t(frame.world_topology_revision),
+            // Geometry dependency validation still observes every topology revision.
+            // Region validity can then follow selected contributor versions and
+            // shadow proofs, instead of invalidating pixels for an unrelated edit.
+            region_context={content_revision,device_generation,local_region_revisions?0:std::uint64_t(frame.world_topology_revision),
                 signature.environment,signature.wrap,std::uint64_t(width),std::uint64_t(height),
                 std::uint64_t(frame.tile_width),std::uint64_t(frame.tile_height),
                 std::uint64_t(reflection.enabled),std::uint64_t(fidelity_shadow_control),std::uint64_t(cull_empty_water),std::uint64_t(region_receiver_shadows),std::uint64_t(tight_natural_bounds),std::uint64_t(region_input_ring)};
@@ -5716,28 +5853,15 @@ public:
             return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(x)) << 32) |
                 static_cast<std::uint32_t>(y);
         };
-        auto & ground_by_coordinate = topology_cache.ground;
-        auto & real_by_coordinate = topology_cache.real;
-        auto & relief_by_coordinate = topology_cache.relief;
-        auto & surface_by_coordinate = topology_cache.surface;
-        auto & tile_by_coordinate = topology_cache.tiles;
-        auto & semantic_by_coordinate = topology_cache.semantic;
         auto & river_nodes = topology_cache.rivers;
         std::uint64_t topology_signature = prewarming ? prewarm_signature : signature.complete;
-        // The pointer guard distinguishes the immutable idle snapshot from the
-        // foreground job vector, which the caller may overwrite during idle work.
-        // A full content key is still required when a vector reuses its address.
-        if (topology_cache.signature != topology_signature || topology_cache.records != frame.tiles) {
+        // All lookup payloads are owned; a new snapshot address does not change
+        // appearance. The complete capture signature still guards view changes.
+        if (topology_cache.signature != topology_signature) {
         auto topology_started=std::chrono::steady_clock::now();
-        topology_cache.signature = 0; topology_cache.records = nullptr;
-        ground_by_coordinate.clear(); real_by_coordinate.clear(); relief_by_coordinate.clear();
-        surface_by_coordinate.clear(); tile_by_coordinate.clear(); semantic_by_coordinate.clear(); river_nodes.clear();
-        semantic_by_coordinate.reserve(frame.tile_count);
-        ground_by_coordinate.reserve(frame.tile_count);
-        real_by_coordinate.reserve(frame.tile_count);
-        relief_by_coordinate.reserve(frame.tile_count);
-        surface_by_coordinate.reserve(frame.tile_count);
-        tile_by_coordinate.reserve(frame.tile_count);
+        topology_cache.signature = 0;
+        if(!topology_cache.begin(frame))return false;
+        river_nodes.clear();
         for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
             if ((index & 63u) == 0 && cancelled()) return false;
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
@@ -5746,26 +5870,12 @@ public:
                 continue;
             int ground = ground_type(tile);
             int relief = relief_type(tile);
-            tile_by_coordinate[coordinate_key(tile.tile_x, tile.tile_y)] = &tile;
-            semantic_by_coordinate[coordinate_key(tile.tile_x, tile.tile_y)] = tile_topology_signature(tile);
-            if (relief == 10 && !volcano_assets_ready)
-                relief = -1;
-            ground_by_coordinate[coordinate_key(tile.tile_x, tile.tile_y)] =
-                ground >= 0 && ground < c3x_renderer::terrain_type_count &&
-                terrain_textures[ground].view != nullptr ? ground : -1;
-            real_by_coordinate[coordinate_key(tile.tile_x, tile.tile_y)] =
-                tile.real_terrain_type;
-            relief_by_coordinate[coordinate_key(tile.tile_x, tile.tile_y)] =
-                relief >= 0 && relief < c3x_renderer::terrain_type_count &&
-                terrain_textures[relief].view != nullptr ? relief : -1;
-            int integrated_marsh = marsh_assets_ready &&
-                tile.real_terrain_type == 9 && terrain_textures[9].view != nullptr ? 9 : -1;
-            surface_by_coordinate[coordinate_key(tile.tile_x, tile.tile_y)] =
-                integrated_marsh >= 0 ? integrated_marsh :
-                (relief >= 0 && relief < c3x_renderer::terrain_type_count &&
-                 terrain_textures[relief].view != nullptr ? relief :
-                 (ground >= 0 && ground < c3x_renderer::terrain_type_count &&
-                  terrain_textures[ground].view != nullptr ? ground : -1));
+            if (relief == 10 && !volcano_assets_ready)relief = -1;
+            ground=ground>=0 && ground<c3x_renderer::terrain_type_count && terrain_textures[ground].view?ground:-1;
+            relief=relief>=0 && relief<c3x_renderer::terrain_type_count && terrain_textures[relief].view?relief:-1;
+            int surface=marsh_assets_ready && tile.real_terrain_type==9 && terrain_textures[9].view?9:
+                relief>=0?relief:ground;
+            if(!topology_cache.update(tile,ground,relief,surface,tile_topology_signature(tile)))return false;
         }
         std::unordered_map<std::uint64_t, std::size_t> river_index;
         auto river_key = [](int x, int y) {
@@ -5810,7 +5920,11 @@ public:
                 if (found != river_index.end()) river_nodes[found->second].touches_water = true;
             }
         }
-        topology_cache.signature = topology_signature; topology_cache.records = frame.tiles;
+        topology_cache.finish();
+        topology_cache.signature = topology_signature;
+        char scene_detail[160];sprintf_s(scene_detail,"records=%zu bytes=%zu cap=%zu",
+            topology_cache.size(),topology_cache.bytes(),topology_cache.record_limit);
+        trace.write("captured-scene",scene_detail,true);
         frame_topology_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-topology_started).count();
         }
         c3x_renderer::FeatureGroup broadleaf_forest;
@@ -5987,8 +6101,8 @@ public:
                 // Zero denotes a missing captured neighbor; revealing it must invalidate.
                 auto inserted = dependencies.try_emplace(key, 0);
                 if (inserted.second) {
-                    auto found = semantic_by_coordinate.find(key);
-                    inserted.first->second = found == semantic_by_coordinate.end() ? 0 : found->second;
+                    auto found = topology_cache.current(key);
+                    inserted.first->second = found == nullptr ? 0 : found->semantic;
                 }
                 return key;
             };
@@ -6016,10 +6130,10 @@ public:
             };
             bool relief_neighborhood = relief == 5 || relief == 6 || relief == 10 || draw_dunes;
             for (int edge = 0; edge < 4; ++edge) {
-                auto found = relief_by_coordinate.find(observed_coordinate_key(
+                auto found = topology_cache.current(observed_coordinate_key(
                     neighbor_coordinates[edge][0], neighbor_coordinates[edge][1]));
-                relief_neighborhood = relief_neighborhood || (found != relief_by_coordinate.end() &&
-                    (found->second == 5 || found->second == 6 || found->second == 10));
+                relief_neighborhood = relief_neighborhood || (found != nullptr &&
+                    (found->relief == 5 || found->relief == 6 || found->relief == 10));
             }
             if (pickup_profile) {
                 int c = (tile.tile_x + tile.tile_y)/2, r = (tile.tile_x - tile.tile_y)/2;
@@ -6092,48 +6206,56 @@ public:
                 }
             }
             auto validation_started=std::chrono::steady_clock::now();
-            auto candidates = tile_geometry_cache.equal_range(tile_signature);
-            bool reused_tile = false;
-            for (auto cached_tile = candidates.first; cached_tile != candidates.second; ++cached_tile) {
-                bool valid = !cached_tile->second.shared_natural;
-                if(cached_tile->second.natural_signature){
-                    auto shared=tile_geometry_cache.find(cached_tile->second.natural_signature);
-                    valid=valid && shared!=tile_geometry_cache.end() && shared->second.shared_natural &&
-                        shared->second.version==cached_tile->second.natural_version;
+            auto reuse_tile = [&](CachedTileGeometry& cached) {
+                bool valid = !cached.shared_natural;
+                if(cached.natural_content.generation){
+                    auto shared=resident_content.resolve(cached.natural_content);
+                    valid=valid && shared && shared->shared_natural;
                 }
-                for (auto const & dependency : cached_tile->second.dependencies) {
-                    auto current = semantic_by_coordinate.find(dependency.first);
-                    auto value = current == semantic_by_coordinate.end() ? 0 : current->second;
+                for (auto const & dependency : cached.dependencies) {
+                    auto current = topology_cache.current(dependency.first);
+                    auto value = current == nullptr ? 0 : current->semantic;
                     if (value != dependency.second) { valid = false; break; }
                 }
-                for (auto const & dependency : cached_tile->second.coast_dependencies)
+                for (auto const & dependency : cached.coast_dependencies)
                     if (world_coast.node_revision(dependency.first) != dependency.second) { valid = false; break; }
-                for (auto const & dependency : cached_tile->second.world_dependencies)
+                for (auto const & dependency : cached.world_dependencies)
                     if (world_coast.world().at(dependency.first) != dependency.second) { valid = false; break; }
-                for (auto const & dependency : cached_tile->second.anchor_dependencies) {
-                    auto current = tile_by_coordinate.find(dependency.first);
-                    if (current == tile_by_coordinate.end() ||
-                        current->second->anchor_x - tile.anchor_x != dependency.second[0] ||
-                        current->second->anchor_y - tile.anchor_y != dependency.second[1]) valid = false;
+                for (auto const & dependency : cached.anchor_dependencies) {
+                    auto current = topology_cache.current(dependency.first);
+                    if (current == nullptr ||
+                        current->occurrence.anchor_x - tile.anchor_x != dependency.second[0] ||
+                        current->occurrence.anchor_y - tile.anchor_y != dependency.second[1]) valid = false;
                 }
                 if (valid) {
                     auto append_started=std::chrono::steady_clock::now();
                     frame_tile_validation_ms+=std::chrono::duration<double,std::milli>(append_started-validation_started).count();
                     if (prewarming) {
-                        cached_tile->second.last_used = std::max(cached_tile->second.last_used, tile_geometry_epoch-1);
-                        prepared_footprint = tile_footprint(cached_tile->second, tile);
+                        topology_cache.attach(tile,cached.binding);
+                        cached.last_used = std::max(cached.last_used, tile_geometry_epoch-1);
+                        prepared_footprint = tile_footprint(cached, tile);
                         ++frame_tiles_reused; return true;
                     }
-                    if (cached_tile->second.replaces_resource) build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
-                    geometry_cache.tile_keys[index]={tile_signature,cached_tile->second.version};
-                    append_tile_geometry(cached_tile->second, tile, animated_view);
+                    if (cached.replaces_resource) build_replacement[index] |= C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
+                    geometry_cache.tile_keys[index]=cached.binding;
+                    append_tile_geometry(cached, tile, animated_view);
                     frame_tile_append_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-append_started).count();
                     ++frame_tiles_reused;
-                    reused_tile = true;
-                    break;
+                    return true;
                 }
+                return false;
+            };
+            // World records carry a non-owning association. Exact context and
+            // all dependency checks still apply before using resident content.
+            auto record=topology_cache.current(coordinate_key(tile.tile_x,tile.tile_y));
+            auto bound=record?resident_content.resolve(record->compiled):nullptr;
+            bool reused_tile=bound && bound->signature==tile_signature && reuse_tile(*bound);
+            if(!reused_tile){
+                auto candidates=tile_geometry_cache.equal_range(tile_signature);
+                for(auto it=candidates.first;it!=candidates.second;++it)
+                    if(&it->second!=bound && reuse_tile(it->second)){reused_tile=true;break;}
             }
-            if (reused_tile) continue;
+            if(reused_tile){if(prewarming)return true;continue;}
             frame_tile_validation_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-validation_started).count();
             ++frame_tiles_built;
             std::vector<ResourceAnchor> tile_resource_anchors;
@@ -6156,13 +6278,11 @@ public:
                     ? &neighborhood[local_y * neighborhood_side + local_x] : nullptr;
                 if (cached != nullptr && cached->ready) return *cached;
                 auto key = observed_coordinate_key(x, y);
-                auto base = ground_by_coordinate.find(key);
-                auto surface = surface_by_coordinate.find(key);
-                auto relief = relief_by_coordinate.find(key);
+                auto record = topology_cache.current(key);
                 NeighborhoodSample value{true,
-                    base == ground_by_coordinate.end() ? ground_slot : static_cast<float>(base->second),
-                    surface == surface_by_coordinate.end() ? surface_slot : static_cast<float>(surface->second),
-                    relief == relief_by_coordinate.end() ? -1 : relief->second};
+                    record ? static_cast<float>(record->ground) : ground_slot,
+                    record ? static_cast<float>(record->surface) : surface_slot,
+                    record ? record->relief : -1};
                 if (cached != nullptr) *cached = value;
                 return value;
             };
@@ -6661,10 +6781,10 @@ public:
                 // authored hills, mountain/volcano chains, and dunes.
                 int owner_u = static_cast<int>(std::floor(world_u));
                 int owner_v = static_cast<int>(std::floor(world_v));
-                auto owner_found = tile_by_coordinate.find(observed_coordinate_key(
+                auto owner_found = topology_cache.current(observed_coordinate_key(
                     owner_u + owner_v, owner_u - owner_v));
                 c3x_renderer_tile_v1 const & height_tile =
-                    owner_found == tile_by_coordinate.end() ? tile : *owner_found->second;
+                    owner_found == nullptr ? tile : owner_found->occurrence;
                 TerrainTexture const & hill_asset = terrain_textures[5];
                 auto hill_value = [&](float sample_u, float sample_v) {
                     if (hill_asset.relief_profile != 2 || hill_asset.height_pixels.empty())
@@ -6720,11 +6840,11 @@ public:
                     local_u, local_v, 1.0f - local_u, 1.0f - local_v};
                 float hill_compatibility = 1.0f;
                 for (int edge = 0; edge < 4; ++edge) {
-                    auto neighbor = ground_by_coordinate.find(observed_coordinate_key(
+                    auto neighbor = topology_cache.current(observed_coordinate_key(
                         height_tile.tile_x + source_offsets[edge][0],
                         height_tile.tile_y + source_offsets[edge][1]));
-                    bool compatible = neighbor != ground_by_coordinate.end() &&
-                        neighbor->second >= 0 && neighbor->second < 11;
+                    bool compatible = neighbor != nullptr &&
+                        neighbor->ground >= 0 && neighbor->ground < 11;
                     if (!compatible)
                         hill_compatibility *= smoothstep01(distances[edge] / 0.22f);
                 }
@@ -6738,11 +6858,11 @@ public:
                     float relief_envelope = 1.0f;
                     if (current_real == 6 || current_real == 10) {
                         for (int edge = 0; edge < 4; ++edge) {
-                            auto neighbor = relief_by_coordinate.find(observed_coordinate_key(
+                            auto neighbor = topology_cache.current(observed_coordinate_key(
                                 height_tile.tile_x + source_offsets[edge][0],
                                 height_tile.tile_y + source_offsets[edge][1]));
-                            int neighbor_real = neighbor == relief_by_coordinate.end()
-                                ? -1 : neighbor->second;
+                            int neighbor_real = neighbor == nullptr
+                                ? -1 : neighbor->relief;
                             bool continues = neighbor_real == 5 || neighbor_real == 6 ||
                                 neighbor_real == 10;
                             if (!continues)
@@ -6753,11 +6873,11 @@ public:
                     if (current_real == 5) {
                         transition_envelope = 0.0f;
                         for (int edge = 0; edge < 4; ++edge) {
-                            auto neighbor = relief_by_coordinate.find(observed_coordinate_key(
+                            auto neighbor = topology_cache.current(observed_coordinate_key(
                                 height_tile.tile_x + source_offsets[edge][0],
                                 height_tile.tile_y + source_offsets[edge][1]));
-                            if (neighbor != relief_by_coordinate.end() &&
-                                neighbor->second == 6)
+                            if (neighbor != nullptr &&
+                                neighbor->relief == 6)
                                 transition_envelope = std::max(transition_envelope,
                                     1.0f - smoothstep01(distances[edge] / 0.24f));
                         }
@@ -6785,11 +6905,11 @@ public:
                     else {
                         material_envelope = 1.0f;
                         for (int edge = 0; edge < 4; ++edge) {
-                            auto neighbor = relief_by_coordinate.find(observed_coordinate_key(
+                            auto neighbor = topology_cache.current(observed_coordinate_key(
                                 height_tile.tile_x + source_offsets[edge][0],
                                 height_tile.tile_y + source_offsets[edge][1]));
-                            int neighbor_real = neighbor == relief_by_coordinate.end()
-                                ? -1 : neighbor->second;
+                            int neighbor_real = neighbor == nullptr
+                                ? -1 : neighbor->relief;
                             if (neighbor_real != 6 && neighbor_real != 10)
                                 material_envelope *= smoothstep01(
                                     distances[edge] / 0.28f);
@@ -6806,11 +6926,8 @@ public:
                         std::uint64_t key = observed_coordinate_key(
                             height_tile.tile_x + source_offsets[edge][0],
                             height_tile.tile_y + source_offsets[edge][1]);
-                        auto neighbor_ground = ground_by_coordinate.find(key);
-                        auto neighbor_real = real_by_coordinate.find(key);
-                        bool continues = neighbor_ground != ground_by_coordinate.end() &&
-                            neighbor_real != real_by_coordinate.end() &&
-                            neighbor_ground->second == 0 && neighbor_real->second == 0;
+                        auto neighbor = topology_cache.current(key);
+                        bool continues = neighbor && neighbor->ground == 0 && neighbor->real == 0;
                         if (!continues)
                             dune_envelope *= smoothstep01(distances[edge] / 0.16f);
                     }
@@ -7004,8 +7121,8 @@ public:
             bool ground_hit=retain_ground_grids && !prewarming && retained_ground!=ground_grid_cache.end() &&
                 retained_ground->second.signature==ground_signature;
             if(ground_hit)for(auto const& dependency:retained_ground->second.dependencies){
-                auto found=semantic_by_coordinate.find(dependency.first);
-                if((found==semantic_by_coordinate.end()?0:found->second)!=dependency.second){ground_hit=false;break;}
+                auto found=topology_cache.current(dependency.first);
+                if((found==nullptr?0:found->semantic)!=dependency.second){ground_hit=false;break;}
             }
             if(ground_hit)for(auto const& dependency:retained_ground->second.coast_dependencies)
                 if(world_coast.node_revision(dependency.first)!=dependency.second){ground_hit=false;break;}
@@ -7301,10 +7418,10 @@ public:
                 for (int direction = 0; direction < 4; ++direction) {
                     int neighbor_x = tile.tile_x + route_offsets[direction][0];
                     int neighbor_y = tile.tile_y + route_offsets[direction][1];
-                    auto found = tile_by_coordinate.find(observed_coordinate_key(neighbor_x, neighbor_y));
-                    if (found == tile_by_coordinate.end())
+                    auto found = topology_cache.current(observed_coordinate_key(neighbor_x, neighbor_y));
+                    if (found == nullptr)
                         continue;
-                    c3x_renderer_tile_v1 const & neighbor = *found->second;
+                    c3x_renderer_tile_v1 const & neighbor = found->occurrence;
                     bool railroad = tile.railroad_mask != 0 && neighbor.railroad_mask != 0;
                     bool road = tile.road_mask != 0 && neighbor.road_mask != 0;
                     if (!railroad && !road)
@@ -7490,11 +7607,11 @@ public:
                     c3x_renderer_tile_v1 const * owner = &tile;
                     float local_u = edge.north_edge ? along : 0.975f;
                     float local_v = edge.north_edge ? 0.025f : along;
-                    auto neighbor = tile_by_coordinate.find(
+                    auto neighbor = topology_cache.current(
                         observed_coordinate_key(edge.neighbor_x, edge.neighbor_y));
-                    if (ground_type(*owner) >= 11 && neighbor != tile_by_coordinate.end() &&
-                        ground_type(*neighbor->second) < 11) {
-                        owner = neighbor->second;
+                    if (ground_type(*owner) >= 11 && neighbor != nullptr &&
+                        ground_type(neighbor->occurrence) < 11) {
+                        owner = &neighbor->occurrence;
                         local_u = edge.north_edge ? along : 0.025f;
                         local_v = edge.north_edge ? 0.975f : along;
                     }
@@ -7516,8 +7633,8 @@ public:
                             double margin=11.+c3x_renderer::stable_random(seed^0x2c07u)*1.5+(attempt/2u)*3.;
                             if(!natural.river_page(query_point.x,query_point.y).bank_point(query_point,margin,side,point))continue;
                             int c=int(std::floor(point.x)),r=int(std::floor(point.y));
-                            auto receiving=tile_by_coordinate.find(observed_coordinate_key(c+r,c-r));
-                            if(receiving==tile_by_coordinate.end() || ground_type(*receiving->second)>=11)continue;
+                            auto receiving=topology_cache.current(observed_coordinate_key(c+r,c-r));
+                            if(receiving==nullptr || ground_type(receiving->occurrence)>=11)continue;
                             float u=std::clamp(float(point.x-c),.00001f,.99999f),v=std::clamp(float(r+1-point.y),.00001f,.99999f);
                             if(shore_sample_at(float(point.x),float(point.y)).distance<.065)continue;
                             bool clear=relief_at_world(float(point.x),float(point.y))[0]+2.5f<18;
@@ -7525,7 +7642,7 @@ public:
                                 point.y-(vertex.position[0]*sine+vertex.position[1]*cosine)*scale};
                                 if(natural.river_sample(q).distance<5.5){clear=false;break;}}
                             if(!clear)continue;
-                            owner=receiving->second;local_u=u;local_v=v;placed=true;
+                            owner=&receiving->occurrence;local_u=u;local_v=v;placed=true;
                         }
                         if(!placed)continue;
                     }
@@ -7846,9 +7963,9 @@ public:
             // the ordinary topology dependency map intentionally omits it.
             if(tile.real_terrain_type==7)for(int dr=-2;dr<=2;++dr)for(int dc=-2;dc<=2;++dc){
                 int c=(tile.tile_x+tile.tile_y)/2+dc,r=(tile.tile_x-tile.tile_y)/2+dr;
-                auto neighbor=tile_by_coordinate.find(coordinate_key(c+r,c-r));
-                auto value=neighbor!=tile_by_coordinate.end() && neighbor->second->city_id>=0?
-                    tile_content_signature(*neighbor->second):0;
+                auto neighbor=topology_cache.current(coordinate_key(c+r,c-r));
+                auto value=neighbor!=nullptr && neighbor->occurrence.city_id>=0?
+                    tile_content_signature(neighbor->occurrence):0;
                 natural_key=(natural_key^value)*1099511628211ull;
             }
             // World-space GPU data may outlive any particular camera entry.
@@ -7858,8 +7975,8 @@ public:
             auto shared_natural=tile_geometry_cache.find(natural_key);
             bool shared_hit=share_natural && shared_natural!=tile_geometry_cache.end() && shared_natural->second.shared_natural;
             if(shared_hit)for(auto const& dependency:shared_natural->second.dependencies){
-                auto current=semantic_by_coordinate.find(dependency.first);
-                if((current==semantic_by_coordinate.end()?0:current->second)!=dependency.second){shared_hit=false;break;}
+                auto current=topology_cache.current(dependency.first);
+                if((current==nullptr?0:current->semantic)!=dependency.second){shared_hit=false;break;}
             }
             if(shared_hit)for(auto const& dependency:shared_natural->second.coast_dependencies)
                 if(world_coast.node_revision(dependency.first)!=dependency.second){shared_hit=false;break;}
@@ -7868,7 +7985,7 @@ public:
             if(share_natural && !shared_hit && shared_natural!=tile_geometry_cache.end()){
                 if(shared_natural->second.shared_natural && shared_natural->second.last_used!=tile_geometry_epoch){
                     tile_geometry_cache_bytes-=shared_natural->second.byte_count;
-                    tile_geometry_cache.erase(shared_natural);
+                    resident_content.release(shared_natural->second.binding);tile_geometry_cache.erase(shared_natural);
                 }else share_natural=false; // Do not replace a pinned owner or a colliding ordinary key.
             }
             if(shared_hit){
@@ -7881,8 +7998,8 @@ public:
             auto natural_found=natural_mesh_cache.find(natural_key);
             bool natural_hit=fidelity_profile && natural_found!=natural_mesh_cache.end();
             if(natural_hit)for(auto const& dependency:natural_found->second.dependencies){
-                auto current=semantic_by_coordinate.find(dependency.first);
-                if((current==semantic_by_coordinate.end()?0:current->second)!=dependency.second){natural_hit=false;break;}
+                auto current=topology_cache.current(dependency.first);
+                if((current==nullptr?0:current->semantic)!=dependency.second){natural_hit=false;break;}
             }
             if(natural_hit)for(auto const& dependency:natural_found->second.coast_dependencies)
                 if(world_coast.node_revision(dependency.first)!=dependency.second){natural_hit=false;break;}
@@ -7932,7 +8049,7 @@ public:
             std::size_t metadata_bytes = pickup_profile
                 ? compiled.coast_dependencies.capacity() * sizeof(compiled.coast_dependencies[0]) +
                   compiled.world_dependencies.capacity() * sizeof(compiled.world_dependencies[0]) : 0;
-            metadata_bytes += compiled.resource_anchors.capacity()*sizeof(ResourceAnchor);
+            metadata_bytes += compiled.resource_anchors.capacity()*sizeof(ResourceAnchor)+sizeof(compiled.binding);
             if(!city_chunks.empty())metadata_bytes+=sizeof(c3x_renderer::city_fidelity::Lighting)+
                 city_chunks.front().lighting->lights.capacity()*sizeof(c3x_renderer::city_fidelity::Light)+
                 city_chunks.front().lighting->blockers.capacity()*sizeof(c3x_renderer::city_fidelity::Lighting::Box);
@@ -8019,8 +8136,7 @@ public:
                 }
             }
             if(share_natural){
-                compiled.natural_signature=natural_key;
-                compiled.natural_version=shared_hit?shared_natural->second.version:compiled.version;
+                if(shared_hit)compiled.natural_content=shared_natural->second.binding;
                 if(!shared_hit){
                     CachedTileGeometry shared;
                     shared.shared_natural=true;shared.signature=natural_key;
@@ -8048,7 +8164,14 @@ public:
                     compiled.byte_count-=shared.byte_count;
                     shared.byte_count+=metadata;tile_geometry_cache_bytes+=metadata;
                     std::size_t shared_bytes=shared.byte_count;
-                    try {tile_geometry_cache.emplace(natural_key,std::move(shared));}
+                    try {
+                        auto inserted=tile_geometry_cache.emplace(natural_key,std::move(shared));
+                        try {
+                            inserted->second.binding=resident_content.bind(inserted->second);
+                            if(!inserted->second.binding.generation)throw std::bad_alloc();
+                            compiled.natural_content=inserted->second.binding;
+                        }catch(...){tile_geometry_cache.erase(inserted);throw;}
+                    }
                     catch(...){tile_geometry_cache_bytes-=compiled.byte_count+shared_bytes;return false;}
                 }
             }
@@ -8059,6 +8182,10 @@ public:
             decltype(tile_geometry_cache)::iterator inserted;
             try {
                 inserted = tile_geometry_cache.emplace(tile_signature, std::move(compiled));
+                try {
+                    inserted->second.binding=resident_content.bind(inserted->second);
+                    if(!inserted->second.binding.generation)throw std::bad_alloc();
+                }catch(...){tile_geometry_cache.erase(inserted);throw;}
             } catch (...) {
                 // Container insertion can allocate after GPU upload. RAII owns
                 // the buffers even if it moved the value before allocation failed.
@@ -8066,11 +8193,12 @@ public:
                 return false;
             }
             if (prewarming) {
+                topology_cache.attach(tile,inserted->second.binding);
                 prefetched_geometry_bytes += inserted->second.byte_count;
                 prepared_footprint = tile_footprint(inserted->second, tile);
                 return true;
             }
-            geometry_cache.tile_keys[index]={tile_signature,inserted->second.version};
+            geometry_cache.tile_keys[index]=inserted->second.binding;
             append_tile_geometry(inserted->second, tile, animated_view);
             QueryPerformanceCounter(&phase_end);upload_ticks+=phase_end.QuadPart-phase_time.QuadPart;
         }
@@ -8480,7 +8608,7 @@ struct PublishedMapFrame {
                 source.replacement_tile_flags+source.replacement_tile_count);
             if(captured){
                 if(captured->tile_count)next.occurrences.assign(captured->tiles,captured->tiles+captured->tile_count);
-                next.frame=*captured;next.identity=epochs;
+                next.frame=*captured;
                 next.frame.tiles=next.occurrences.empty()?nullptr:next.occurrences.data();
                 next.frame.world_topology=nullptr;next.frame.world_topology_count=0;
             }
@@ -8488,6 +8616,7 @@ struct PublishedMapFrame {
             if(next.bytes()>budget)return false;
             next.output=source;next.phase_x=x;next.phase_y=y;
             pixels.swap(next.pixels);fallback.swap(next.fallback);replacements.swap(next.replacements);
+            next.identity=epochs;
             occurrences.swap(next.occurrences);frame=next.frame;identity=next.identity;
             output=next.output;phase_x=next.phase_x;phase_y=next.phase_y;
             output.bgra_pixels=pixels.data();
@@ -8495,6 +8624,21 @@ struct PublishedMapFrame {
             output.replacement_tile_flags=replacements.empty()?nullptr:replacements.data();
             return true;
         } catch (...) {return false;}
+    }
+    bool matches_static_view(c3x_renderer_frame_v1 const& current) const {
+        if(!frame.api_version || current.tile_count!=occurrences.size())return false;
+        auto left=current,right=frame;
+        left.tiles=right.tiles=nullptr;left.world_topology=right.world_topology=nullptr;
+        left.world_topology_count=right.world_topology_count=0;
+        left.presentation_time_ticks=right.presentation_time_ticks=0;
+        left.clip_left=right.clip_left=left.clip_top=right.clip_top=0;
+        left.clip_right=right.clip_right=left.clip_bottom=right.clip_bottom=0;
+        left.visible_animation_count=right.visible_animation_count=0;
+        // A publication retains the topology revision, not its payload. The
+        // worker separately checks that payload against its immutable request.
+        return !std::memcmp(&left,&right,sizeof(left)) &&
+            (!current.tile_count || (current.tiles && !std::memcmp(current.tiles,occurrences.data(),
+                std::size_t(current.tile_count)*sizeof(*current.tiles))));
     }
     void clear() {
         std::vector<std::uint32_t>().swap(pixels);
@@ -8697,7 +8841,8 @@ public:
         return submit_locked(lock, Command::configure_definitions);
     }
 
-    int render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output) {
+    int render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output,
+               c3x_renderer_camera_identity_v1 const& identity={}) {
         // Diagnostic-only disjoint caller/worker endpoints. The destructor runs
         // after both call locks release, and buffered traces flush at DLL teardown.
         struct CallTiming {
@@ -8718,8 +8863,12 @@ public:
         std::unique_lock<std::mutex> lock(state_mutex);
         if(renderer_state.trace.buffered)QueryPerformanceCounter(&timing.locked);
         start_locked();
+        auto const& queued_identity=camera_pending?camera_pending_identity:job_camera_identity;
+        bool compatible_camera=camera_result==C3X_RENDERER_RESULT_SUPERSEDED ||
+            !std::memcmp(&queued_identity,&identity,sizeof(identity));
         if(ambient_async_enabled && completed_result==C3X_RENDERER_RESULT_OK &&
-           completed_resources && publication.output.bgra_pixels) {
+           completed_resources && publication.output.bgra_pixels && compatible_camera &&
+           !std::memcmp(&publication.identity,&identity,sizeof(identity))) {
             // Commit a completed ambient result only when the current capture
             // still describes its exact static view. The active job snapshot
             // retains topology bytes that are intentionally absent from the
@@ -8732,12 +8881,12 @@ public:
                     completed_resource_clock=RendererState::resource_clock(publication.frame);
                 }
             }
-            if(same_ambient_view(frame,job_frame)) {
+            if(publication.matches_static_view(frame) && same_ambient_view(frame,job_frame)) {
                 auto clock=RendererState::resource_clock(frame);
                 if(clock!=completed_resource_clock && !camera_active && !camera_pending &&
                    (camera_result==C3X_RENDERER_RESULT_OK || camera_result==C3X_RENDERER_RESULT_SUPERSEDED)) {
                     c3x_renderer_i64 ignored=0;
-                    if(enqueue_camera_locked(frame,{},ignored)!=C3X_RENDERER_RESULT_PENDING) {
+                    if(enqueue_camera_locked(frame,identity,ignored)!=C3X_RENDERER_RESULT_PENDING) {
                         drain_camera_locked(lock);
                     }
                 }
@@ -8748,11 +8897,41 @@ public:
                 }
             }
         }
+        // Native demand may arrive after this exact view was queued through
+        // the camera interface. Join its existing owner rather than canceling
+        // useful rendering and copying/submitting the same request again.
+        // Legacy callers supply zero epochs; explicit native demand supplies its own.
+        bool adopt=camera_ticket>0 && !camera_paused &&
+            (camera_result==C3X_RENDERER_RESULT_PENDING || camera_result==C3X_RENDERER_RESULT_OK) &&
+            (camera_pending?same_camera_request(frame,identity,camera_pending_frame,camera_pending_identity):
+                (job_camera_ticket==camera_ticket && !camera_cancelled.load(std::memory_order_relaxed) &&
+                 same_camera_request(frame,identity,job_frame,job_camera_identity)));
+        if(adopt) {
+            auto ticket=camera_ticket;
+            bool pending=camera_active || camera_pending;
+            bool already_front=camera_front_ticket==ticket && camera_front_result==C3X_RENDERER_RESULT_OK;
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            completed.wait(lock,[this,ticket]{return camera_ticket!=ticket ||
+                (!camera_active && !camera_pending && camera_result!=C3X_RENDERER_RESULT_PENDING);});
+            int result=camera_poll_locked(ticket,output);
+            if(result==C3X_RENDERER_RESULT_OK) {
+                completed_scene_signature=publication.scene_signature;
+                completed_resources=renderer_state.ambient_count();
+                completed_resource_clock=RendererState::resource_clock(publication.frame);
+                if(already_front)return_current_bitmap(frame,output,"adopted-front");
+            }
+            QueryPerformanceCounter(&end);
+            char detail[192];sprintf_s(detail,"ticket=%lld result=%d pending=%u wait_ms=%.3f",
+                ticket,result,unsigned(pending),renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart));
+            renderer_state.trace.write("worker-adopted-camera",detail,result!=C3X_RENDERER_RESULT_OK);
+            return result;
+        }
         drain_camera_locked(lock);
         // Idle geometry/pixel preparation never mutates the published frame
         // bitmap or ownership arrays. An identical authoritative appearance
         // can return that immutable publication without cancelling useful work.
         if(completed_scene_signature && completed_result==C3X_RENDERER_RESULT_OK &&
+           !std::memcmp(&completed_identity,&identity,sizeof(identity)) &&
            (!completed_resources || completed_resource_clock==RendererState::resource_clock(frame)) &&
            c3x_renderer::terrain_frame_signature(frame,completed_output.content_revision,
                 completed_output.device_generation).complete==completed_scene_signature) {
@@ -8760,7 +8939,7 @@ public:
             return C3X_RENDERER_RESULT_OK;
         }
         foreground_pending.store(true, std::memory_order_relaxed);
-        job_frame = frame;
+        job_frame = frame;job_camera_identity=identity;
         // Reuse bounded snapshot capacity; no allocation/copy on a second vector.
         job_tiles.clear();
         try {
@@ -8802,7 +8981,7 @@ public:
                      c3x_renderer_camera_identity_v1 const& identity={}) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
-        // Completion redraws may submit the same immutable request again. Keep
+        // Later caller demand may submit the same immutable request again. Keep
         // its ticket and ready publication instead of restarting useful work.
         // Compare complete inputs, including time, visibility, order and epochs;
         // no scene hash or old-camera image is sufficient for this decision.
@@ -8835,9 +9014,9 @@ private:
         // render scratch. Its previous borrowed pointer expires at this begin.
         if(completed_result==C3X_RENDERER_RESULT_OK && completed_output.bgra_pixels &&
            completed_output.bgra_pixels!=publication.output.bgra_pixels) {
-            if(!publication.capture(completed_output,completed_phase_x,completed_phase_y))
+            if(!publication.capture(completed_output,completed_phase_x,completed_phase_y,nullptr,completed_identity))
                 return C3X_RENDERER_RESULT_ERROR;
-            completed_output=publication.output;
+            completed_output=publication.output;completed_identity=publication.identity;
         }
         start_locked();
         camera_pending_frame=frame;
@@ -8931,7 +9110,7 @@ private:
         if(camera_ready.output.bgra_pixels) {
             publication.swap(camera_ready);
             camera_ready.clear();
-            completed_output=publication.output;
+            completed_output=publication.output;completed_identity=publication.identity;
             completed_phase_x=publication.phase_x;completed_phase_y=publication.phase_y;
             completed_result=C3X_RENDERER_RESULT_OK;
             camera_front_ticket=ticket;camera_front_result=camera_ready_result;
@@ -9096,7 +9275,7 @@ private:
     c3x_renderer_i64 camera_front_ticket=0;
     int camera_ready_result=C3X_RENDERER_RESULT_OK,camera_front_result=C3X_RENDERER_RESULT_PENDING;
     c3x_renderer_frame_v1 camera_pending_frame={};
-    c3x_renderer_camera_identity_v1 camera_pending_identity={},job_camera_identity={};
+    c3x_renderer_camera_identity_v1 camera_pending_identity={},job_camera_identity={},completed_identity={};
     std::vector<c3x_renderer_tile_v1> camera_pending_tiles;
     std::vector<c3x_renderer_u32> camera_pending_topology;
     c3x_renderer_i64 camera_ticket=0,job_camera_ticket=0;
@@ -9172,7 +9351,7 @@ private:
     }
 
     void drain_camera_locked(std::unique_lock<std::mutex>& lock) {
-        // Configuration, reset and synchronous map draws replace camera work.
+        // Configuration, reset and incompatible synchronous draws replace camera work.
         // Units use a resumable pause instead. Never change
         // job_frame or any renderer-owned object while the camera uses it.
         camera_cancelled.store(true,std::memory_order_relaxed);
@@ -9564,7 +9743,7 @@ private:
                 completed_phase_y=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_y;
                 if(isolated_publication){
                     auto captured=ambient_async_enabled?&job_frame:nullptr;
-                    if(publication.capture(output,completed_phase_x,completed_phase_y,captured)){
+                    if(publication.capture(output,completed_phase_x,completed_phase_y,captured,job_camera_identity)){
                         publication.scene_signature=c3x_renderer::terrain_frame_signature(
                             job_frame,output.content_revision,output.device_generation).complete;
                         output=publication.output;
@@ -9578,6 +9757,8 @@ private:
             completed_resources = command==Command::render ? renderer_state.ambient_count() : 0;
             completed_resource_clock=command==Command::render ? RendererState::resource_clock(job_frame) : -1;
             completed_output = output;
+            completed_identity=command==Command::render && result==C3X_RENDERER_RESULT_OK ?
+                job_camera_identity:c3x_renderer_camera_identity_v1{};
             completed_scene_signature=command==Command::render && result==C3X_RENDERER_RESULT_OK ?
                 c3x_renderer::terrain_frame_signature(job_frame,output.content_revision,output.device_generation).complete:0;
             completed_result = result;
@@ -9694,6 +9875,22 @@ extern "C" __declspec(dllexport) int c3x_renderer_render(
         QueryPerformanceCounter(&finished);
         renderer.trace.usage_result(request,result,finished.QuadPart-started.QuadPart,*output);
     }
+    return result;
+}
+
+// Optional ordinary-demand entry. Identity does not relax exact captured camera
+// or ownership checks and does not arrange another native render call.
+extern "C" __declspec(dllexport) int c3x_renderer_render_view(
+    c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output) {
+    if(!request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION ||
+       request->struct_size!=sizeof(*request) || !valid_frame(request->frame,output))
+        return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    auto usage=renderer.trace.usage_view(*request->frame);
+    LARGE_INTEGER started={},finished={};
+    if(usage)QueryPerformanceCounter(&started);
+    int result=get_renderer_worker().render(*request->frame,*output,request->identity);
+    if(usage){QueryPerformanceCounter(&finished);
+        renderer.trace.usage_result(usage,result,finished.QuadPart-started.QuadPart,*output);}
     return result;
 }
 

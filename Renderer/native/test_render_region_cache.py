@@ -123,7 +123,8 @@ int main(){
 #include <cassert>
 bool eligible(bool require_linear_backdrop) {
  bool world_regions=true,accumulate=false;int region_size=128;
- void *shadow_buffers_ptr=nullptr;int geometry_vertex_buffers=0;
+ void *shadow_buffers_ptr=nullptr;
+ struct Buffers{bool is(Buffers const& other)const{return this==&other;}} geometry_vertex_buffers;
  auto &buffers=geometry_vertex_buffers;
  return '''+predicate+r''';
 }
@@ -299,6 +300,10 @@ struct SourceShadow {
 ''' + preparation + r'''
 };}}
 ''' + viewport+chunk+layers+r'''
+#include "Renderer/native/render_core/geometry_draws.h"
+using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
+using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
+using GeometryDrawReference=GeometryDrawView::Reference;
 struct State{
  c3x_renderer::render_core::RenderRegionKey region_context{1,2,3,4};
  std::array<float,12> shadow_basis{1,0,0,0,0,1,0,0,0,0,1,0};
@@ -355,7 +360,18 @@ int main(){
    Shadow::PreparedCasters independent;assert(independent.build(casters,state.shadow_basis));
    state.region_contributors.clear();
    Key expected;assert(state.render_region_key(buffers,settings,casters,&independent,expected));
-   assert(result==expected);return result;};
+   assert(result==expected);
+   GeometryDrawView::Records occurrences;
+   for(unsigned layer=0;layer<geometry_layer_count;++layer)
+    for(auto const& chunk:buffers[layer])occurrences[layer].emplace_back(chunk);
+   auto refs=buffers[geometry_city].empty()?0:buffers[geometry_city][0].city_lighting.use_count();
+   Key borrowed;state.region_contributors.clear();state.prepare_region_contributors(occurrences);
+   assert(state.render_region_key(occurrences,settings,casters,&independent,borrowed));
+   assert(borrowed==expected);
+   if(refs)assert(buffers[geometry_city][0].city_lighting.use_count()==refs);
+   check_receivers(occurrences,{{0,0,136,136}},false);
+   check_receivers(occurrences,{{-11,7,125,91}},true);
+   return result;};
  auto original=key();assert(key()==original);assert(prepared.receiver_hits>0);
  Key diagnostic;std::vector<std::size_t> sections;
  assert(state.render_region_key(buffers,settings,casters,&prepared,diagnostic,&sections));

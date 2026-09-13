@@ -124,7 +124,17 @@ float4 PSNativeCityReflectionEmission(FeaturePixelInput p):SV_Target {
     assert hydro.count(marker)==1
     hydro=hydro.replace(marker,field+marker)
     hydro=hydro.replace('return frame_illumination(normal,','return q8_local_irradiance(input.q6_world,normal,ambient_visibility)+frame_illumination(normal,')
+    hydro+='''
+// This pass accepts only animated resource shadows; preserve the shared
+// coverage/shading math while compiling out unrelated terrain materials.
+float4 PSResourceShadow(PixelInput input):SV_Target {
+ input.panel=1;input.surface_kind=15;return PSIntegrated(input);
+}
+'''
     (HERE/'hydrology.hlsl').write_text(hydro)
+    resource_skin=read(LAB/'shaders/objects/resource_skinning.hlsl')
+    (HERE/'resource_body.hlsl').write_text(source+'\n'+resource_skin)
+    (HERE/'resource_shadow.hlsl').write_text(hydro+'\n'+resource_skin)
     for name in ['terrain','mountain','objects']:
         natural=read(HERE.parent/'environment_refresh'/f'{name}.hlsl')
         marker='Output shade(P input) {'

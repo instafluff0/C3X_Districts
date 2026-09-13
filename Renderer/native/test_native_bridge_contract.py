@@ -710,7 +710,7 @@ int main() {
         self.assertIn("mix_tile(frame.tile_height)", renderer)
         self.assertIn("mix_tile(frame.hour)", renderer)
         self.assertIn("mix_tile(frame.season)", renderer)
-        self.assertIn("cached_tile->second.dependencies", renderer)
+        self.assertIn("auto const & dependency : cached.dependencies", renderer)
         self.assertIn("dependencies.try_emplace(key", renderer)
         self.assertNotIn("world_sample_cache_bytes", renderer)
         self.assertIn("grid_v <= subdivisions", renderer)
@@ -890,7 +890,7 @@ int main() {
         shader = (Path(__file__).parent / "terrain_rendering.hlsl").read_text(
             encoding="utf-8"
         )
-        self.assertIn("ground_by_coordinate", native)
+        self.assertIn("record ? static_cast<float>(record->ground) : ground_slot", native)
         self.assertIn("neighbor_coordinates[4][2]", native)
         self.assertIn("base_ground_grid = frame.tile_width >= 96", native)
         self.assertIn("terrain_at_lattice", native)
@@ -920,7 +920,7 @@ int main() {
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
         self.assertIn("DXGI_FORMAT_R8_UNORM", native)
         self.assertIn("mountain_atlas", native)
-        self.assertIn("surface_by_coordinate", native)
+        self.assertIn("record ? static_cast<float>(record->surface) : surface_slot", native)
         self.assertIn("relief_sample", native)
         self.assertIn("hill_compatibility", native)
         self.assertIn("hill_support", native)

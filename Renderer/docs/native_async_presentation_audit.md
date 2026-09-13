@@ -1,6 +1,6 @@
 # Native asynchronous presentation audit
 
-Current source audit, September 9, 2026. No hooks were installed, patch-table
+Current source audit, updated September 13, 2026. No hooks were installed, patch-table
 addresses changed, or game launched for this audit. This is an implementation
 constraint record, not a live presentation pass.
 
@@ -9,28 +9,29 @@ constraint record, not a live presentation pass.
 `patch_Map_Renderer_m71_Draw_Tiles` starts authoritative capture and runs the
 original map traversal. `patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`
 captures the first tile pass and calls `composite_custom_renderer_frame` before
-the later retained passes. The compositor calls the synchronous DLL render,
+the later retained passes. The compositor calls the explicit-identity ordinary DLL render (legacy fallback for
+older DLLs),
 validates ownership against the current ordered callback array, and copies via
 the UI-thread blit. The worker owns D3D and never touches a native canvas.
 Config-off retains original rendering; custom-on map failures never replay the
 native tile plane. Units retain their separate action-director/body path.
 
-The CSV supplies both map vtable replacements and the existing timer inlead.
-`Animator_update` is `define` (callable), not an entry patch. The current timer
-sets the existing animator dirty byte before calling the original approximately
-66 ms callback. It is gated by visible animation, focus/map/modal/input state
-and an outstanding-redraw flag. No completion notification is currently wired
-to that path. A static-camera completion therefore has no guaranteed redraw.
+## Current caller-driven contract
 
-The custom zoom handler already calls `Main_Screen_Form_bring_tile_into_view`
-with refreshed tile bounds. Its comments and zoom contract explain why the
-animator dirty byte alone is insufficient: it can produce a one-tile damage
-traversal. A completion handler must request full enough retained-map work on
-the UI thread without recursing into the capture it is completing. Calling this
-camera operation from a worker or treating a window repaint as a proven full map
-capture would violate the current boundary. The audited timer can support a
-coalesced low-frequency poll/invalidation experiment; it cannot establish 30 Hz.
-A higher-frequency UI callback and its full-redraw semantics still need proof.
+The user clarified on September 12 that Civ III owns render demand: the renderer
+must be ready for the next native render call, not notify Civ III when a worker
+finishes. Earlier proposals for completion-driven polling/invalidation or a new
+full-redraw callback are superseded. No completion notification was installed.
+
+The CSV supplies the existing map boundaries and timer inlead. The timer remains
+Civ III's existing animation scheduling path; it is not a worker-completion signal.
+Completed work stays owned by the DLL until a subsequent native request can
+consume a compatible result. An unchanged static camera may consume a newer
+ambient publication; changed capture/camera/visibility must reject incompatible
+content. An identical queued request can supply the next ordinary call; an
+incompatible request still takes over synchronously. No new timer/redraw hook is a
+prerequisite for this pull-based handoff. Actual native call/presentation cadence
+still needs observed evidence before any native frame-rate claim.
 
 ## No-ready-image constraint
 
@@ -52,16 +53,53 @@ payloads stay in preparation snapshots; the display metadata retains their
 revision. Old API-17 layouts and synchronous entry points remain compatible.
 
 The actual publication owner/worker tests cover ordering, deep copies, epochs,
-failure atomicity, supersession and unit resumption. The injected caller does
-not yet bind this extension or supply authoritative lifecycle epochs. Equal
+failure atomicity, supersession and unit resumption. The injected caller now binds
+`c3x_renderer_render_view`, using the same camera request structure for ordinary
+demand with authoritative scenario/viewer/visibility identity. It does not call the
+separate begin/poll entry points. Equal
 ownership-array lengths are insufficient to validate a later callback ordering.
 The disabled terrain-only preview remains an unaccepted full-ownership solution.
 
 Before enabling an injected async mode, implement and test a current-camera,
 coverage- and visibility-safe presentation or explicitly coordinate all retained
 native layers and picking with a displayed identity. Visibility loss must reject
-old content, even when a camera ticket has not changed. A completion-only redraw
-must consume compatible output without repeatedly submitting identical work.
+old content, even when a camera ticket has not changed. A subsequent native render call must consume compatible ready output without
+restarting identical work. Completion alone does not cause a native render call.
+
+The September 12 caller-driven handoff correction also validates the displayed
+front against `PublishedMapFrame`'s own captured view before returning it from the
+ambient legacy path. The active job's matching identity alone is insufficient:
+explicit camera requests and legacy calls share the same owner. The actual worker
+regression reproduces old-camera return with the former guard. The corrected
+owner and small native ambient boundary pass; evidence and the one next task are
+recorded only in the retained plan. That correction introduced no completion notification. The September 13 identity
+connection below subsequently changes the injected bridge.
+
+## Authoritative identity at ordinary native demand
+
+The September 13 source implementation binds the optional `render_view` export at
+existing capture/composition boundaries. Renderer unload advances scenario lifetime;
+each capture certifies one native viewer. The existing world topology scan also
+observes both complete native visibility words per tile, with a separate revision.
+Topology supplies the scene epoch; local object/anchor changes remain covered by
+exact ordered capture. Profiles without the world scan keep visibility epoch zero
+and retain the local visibility checks. No complete-world appearance claim follows.
+
+The visibility observation is bounded to eight bytes per parity tile, at most
+16 MiB under existing map limits. Resize may overlap old/new observation storage;
+allocation failures preserve both prior owners/count until successful commit.
+This is authoritative capture bookkeeping, not a larger render cache. Executable
+native capture/allocation tests, worker epoch/adoption tests, approved injected
+compile and the small native explicit-identity ambient boundary pass. Evidence and
+the single next task live in the retained plan.
+
+The strategic native checkpoint remains pending staging/install/game authorization:
+verify scenario/viewer/visibility transitions, passive same-view ambient demand,
+exact camera/zoom with overlays and picking, and unit takeover through the real
+call path. Ambient mode remains opt-in. The standalone fixture does not measure
+native capture cost or presentation cadence. Before enabling a general asynchronous
+camera mode, resolve its no-ready-image constraint above; source identity plumbing
+alone is not that acceptance.
 
 ## Worker and memory constraints
 
@@ -72,16 +110,23 @@ byte and lifecycle epoch matches. Caller pointer addresses are excluded;
 padding differences can only decline reuse. A different clock, visibility,
 order, world revision, camera or epoch still supersedes work. Comparison borrows
 the existing immutable snapshots under the state lock and adds no snapshot
-owner. Configuration, synchronous rendering, cancellation and reset still
-invalidate reuse. Begin returns `PENDING`; poll consumes the preserved result.
+owner. Configuration, incompatible synchronous rendering, cancellation and reset
+still invalidate reuse. Begin returns `PENDING`; poll consumes the preserved result.
+An ordinary render can instead consume or wait for the exact request when its
+caller-owned lifecycle epochs match. The legacy entry supplies zero epochs; the
+new explicit-identity ordinary entry supplies the native observations. Unknown
+nonzero epochs cannot be adopted by the legacy caller. This reuses the same queue, condition variable and publication
+transfer, and returns only a final exact result or the queued error. It may still
+block; it does not provide bounded camera-call latency or request native redraws.
 The actual worker test exercises duplicates, content changes, unit takeover and
 reset. The standalone camera witness now repeats begin during polling and records
 submission and per-request maximum poll/duplicate-call times. These are DLL call
 measurements, not game-thread scheduling or input-to-presentation measurements.
 
 This resolves the duplicate-resubmission hazard inside the optional DLL queue.
-It does not bind the extension in injected code, provide lifecycle epochs, add
-a native completion callback, or solve the no-ready-image constraint above.
+The September 13 bridge connection supplies lifecycle epochs at ordinary demand.
+It does not change when Civ III requests rendering or solve the no-ready-image
+constraint above.
 
 The first 100-request Windows queue run matched the synchronous images exactly.
 Submission p95 was 0.507 ms and the per-request maximum poll-call p95 was
@@ -112,7 +157,7 @@ pending map work. The candidate now pauses camera dispatch, interrupts active
 map work at its existing cancellation boundaries, preserves the latest immutable
 snapshot without allocating another owner, and resumes after the UI-thread unit
 copy. Newer pending input wins over the interrupted snapshot. Configuration,
-synchronous map render and reset still supersede camera requests. The actual
+incompatible synchronous map render and reset still supersede camera requests. The actual
 worker test covers repeated unit takeover, rejected unit requests, eventual
 latest completion and reset on MSVC. This does not yet prove the sustained-input
 frame target: repeated interruptions may postpone completion, and unit drawing
@@ -129,8 +174,8 @@ be reported separately; neither is a measurement of actual driver residency.
 
 ## Patch-table action
 
-`required_user_action: []` for the source audit, telemetry and renderer-only
-prepared-view work. No new address or unsupported callback is assumed.
+`required_user_action: []` for patch-table changes in this audit, telemetry and
+explicit-identity native handoff through existing symbols. No new address or unsupported callback is assumed.
 Preserve the existing separate request in `civ3_patch_dependency_ledger.md`:
 `Main_Screen_Form_tile_to_screen_coords: define -> inlead`, signature
 `void (__fastcall *)(Main_Screen_Form *, int, int, int, int *, int *)`, recorded

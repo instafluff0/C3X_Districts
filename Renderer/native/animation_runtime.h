@@ -103,8 +103,13 @@ inline std::uint32_t ambient_animation_frame(std::int64_t ticks, std::int64_t fr
         time / duration * static_cast<double>(frames - 1)));
 }
 
-inline bool sample_animation_mesh(AnimationMesh const & mesh, double seconds, bool loop,
-                                   std::vector<FeatureSourceVertex> & output) {
+struct AnimationPose {
+    std::array<std::array<float,16>,256> positions{};
+    std::array<std::array<float,9>,256> normals{};
+};
+
+inline bool sample_animation_pose(AnimationMesh const & mesh, double seconds, bool loop,
+                                  AnimationPose & output) {
     if (!std::isfinite(seconds) || mesh.frames < 2 || !mesh.bones || mesh.bones > 256 ||
         mesh.duration <= 0 || mesh.palettes.size() != std::size_t(mesh.frames) * mesh.bones * 16)
         return false;
@@ -114,8 +119,7 @@ inline bool sample_animation_mesh(AnimationMesh const & mesh, double seconds, bo
     auto first = std::min(mesh.frames - 1, static_cast<std::uint32_t>(frame));
     auto second = std::min(mesh.frames - 1, first + 1);
     float fraction = static_cast<float>(frame - first);
-    std::array<std::array<float, 16>, 256> poses{};
-    std::array<std::array<float, 9>, 256> normals{};
+    auto& poses=output.positions;auto& normals=output.normals;
     for (std::uint32_t bone = 0; bone < mesh.bones; ++bone) {
         auto & p = poses[bone];
         auto a = mesh.palettes.data() + (std::size_t(first) * mesh.bones + bone) * 16;
@@ -134,6 +138,14 @@ inline bool sample_animation_mesh(AnimationMesh const & mesh, double seconds, bo
         if (std::abs(determinant) >= 1e-12f)
             for (auto & v : n) v /= determinant;
     }
+    return true;
+}
+
+inline bool sample_animation_mesh(AnimationMesh const & mesh, double seconds, bool loop,
+                                   std::vector<FeatureSourceVertex> & output) {
+    AnimationPose pose;
+    if(!sample_animation_pose(mesh,seconds,loop,pose))return false;
+    auto const& poses=pose.positions;auto const& normals=pose.normals;
     output.resize(mesh.vertices.size());
     for (std::size_t i = 0; i < mesh.vertices.size(); ++i) {
         auto const & input = mesh.vertices[i];

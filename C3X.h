@@ -2651,6 +2651,7 @@ struct district_button_image_set {
 	c3x_renderer_set_pack_path_fn custom_renderer_set_pack_path;
 	c3x_renderer_set_definition_paths_fn custom_renderer_set_definition_paths;
 	c3x_renderer_render_fn custom_renderer_render;
+	c3x_renderer_render_view_fn custom_renderer_render_view;
 	c3x_renderer_blit_fn custom_renderer_blit;
 	c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw;
 	c3x_renderer_unit_draw_expanded_fn custom_renderer_unit_draw_expanded;
@@ -2665,6 +2666,11 @@ struct district_button_image_set {
 	unsigned int * custom_renderer_world_topology;
 	int custom_renderer_world_topology_count;
 	long long custom_renderer_world_topology_revision;
+	// Native lifecycle and exact visibility observations; never a completion signal.
+	unsigned long long * custom_renderer_world_visibility;
+	long long custom_renderer_visibility_revision;
+	long long custom_renderer_map_epoch, custom_renderer_viewer_epoch;
+	int custom_renderer_viewer_civ_id;
 	bool custom_renderer_capture_world_topology;
 	// Main-map stepped zoom is an injected camera transform. Civ III remains the
 	// authoritative camera; these fields scale its captured anchors and invert

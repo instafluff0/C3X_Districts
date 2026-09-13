@@ -9,7 +9,7 @@ class NavigationFixtureTests(unittest.TestCase):
     def test_dense_objects_keep_world_identity_and_draw_eligibility(self):
         source=(ROOT/"Renderer/native/biq_preview.cpp").read_text()
         seed="std::uint32_t preview_seed("+source.split("std::uint32_t preview_seed(",1)[1].split("\nbool preview_units",1)[0]
-        body="if(dense_scene)for(auto & tile:tiles) {"+source.split("if(dense_scene)for(auto & tile:tiles) {",1)[1].split("    if (animate && !dense_scene)",1)[0]
+        body="if(dense_scene)for(auto & tile:tiles) {"+source.split("if(dense_scene)for(auto & tile:tiles) {",1)[1].split("    if (animate && !dense_scene",1)[0]
         run_cpp(r'''
 #include "Renderer/native/c3x_renderer_api.h"
 #include <cassert>

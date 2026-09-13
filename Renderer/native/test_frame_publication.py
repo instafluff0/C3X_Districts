@@ -127,6 +127,7 @@ int main(){
         publication = publication.replace("auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);",
                                           "publication_checkpoint(); auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);")
         worker = "class RendererWorker {" + source.split("class RendererWorker {", 1)[1].split("RendererWorker * renderer_worker", 1)[0]
+        worker = worker.replace("completed.wait(lock,[this,ticket]", "adoption_checkpoint(); completed.wait(lock,[this,ticket]")
         program = r'''
 #include <algorithm>
 #include <array>
@@ -149,7 +150,11 @@ int main(){
 using HDC=void*;
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=std::chrono::steady_clock::now().time_since_epoch().count();}
-unsigned GetEnvironmentVariableA(char const*,char*,std::size_t){return 0;}
+bool ambient_mode=false;
+unsigned GetEnvironmentVariableA(char const* name,char* out,std::size_t){
+    if(ambient_mode && !std::strcmp(name,"C3X_RENDERER_SYNC_AMBIENT")){std::strcpy(out,"1");return 1;}
+    return 0;
+}
 #ifndef _MSC_VER
 template<std::size_t N,class... T> void sprintf_s(char (&buffer)[N],char const* format,T... args){std::snprintf(buffer,N,format,args...);}
 #endif
@@ -159,6 +164,8 @@ Signature terrain_frame_signature(c3x_renderer_frame_v1 const& f,long long,unsig
     return {std::uint64_t(f.presentation_time_ticks)+1};
 }
 }
+std::atomic<unsigned> adoption_entered{0};
+void adoption_checkpoint(){++adoption_entered;}
 std::atomic<bool> hold_publication{false};
 std::atomic<unsigned> publication_entered{0};
 void publication_checkpoint(){++publication_entered;while(hold_publication.load())std::this_thread::yield();}
@@ -190,6 +197,7 @@ struct RendererState {
     std::vector<unsigned> pixels,flags;
     std::atomic<unsigned> entered{0},cancelled{0},resets{0};
     std::atomic<bool> hold{false};
+    bool animate_pixels=false,fail_render=false;
     bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1& out,int=-1,
                 std::atomic<bool> const* stop=nullptr,std::uint64_t=0){
         ++entered;
@@ -198,7 +206,9 @@ struct RendererState {
             std::this_thread::yield();
         }
         if(stop && stop->load()){++cancelled;return false;}
+        if(fail_render)return false;
         unsigned value=unsigned(f.tiles[0].anchor_x)^f.world_topology[0];
+        if(animate_pixels)value^=unsigned(f.presentation_time_ticks);
         pixels.assign(std::size_t(f.target_width)*f.target_height,value);
         flags.clear();for(unsigned i=0;i<f.tile_count;++i)flags.push_back(f.tiles[i].tile_flags);
         cached_tiles.assign(f.tiles,f.tiles+f.tile_count);
@@ -209,7 +219,7 @@ struct RendererState {
         out.bgra_pixels=pixels.data();out.replacement_tile_flags=flags.data();out.replacement_tile_count=f.tile_count;
         out.clip_right=out.width;out.clip_bottom=out.height;return true;
     }
-    static long long resource_clock(c3x_renderer_frame_v1 const&){return 0;}
+    static long long resource_clock(c3x_renderer_frame_v1 const& f){return f.presentation_time_ticks;}
     bool configure_pack(char const*){reset();return true;}
     bool configure_definitions(char const*,char const*,char const*,char const*){reset();return true;}
     void reset(){++resets;pixels.clear();flags.clear();}
@@ -373,6 +383,181 @@ int main(){
     until([&]{return state.entered.load()>entered;});
     worker.reset_and_stop();assert(state.resets==1);
     assert(worker.camera_poll(last,out)==C3X_RENDERER_RESULT_SUPERSEDED);
+    // Legacy render and the explicit camera interface share one publication.
+    // A matching active camera request cannot certify an older front's view.
+    ambient_mode=true;
+    {
+        RendererState ambient;ambient.visible_resource_animations=1;ambient.animate_pixels=true;
+        RendererWorker pull(ambient);
+        f.api_version=C3X_RENDERER_API_VERSION;f.struct_size=sizeof(f);
+        f.tiles=&tile;f.tile_count=1;
+        f.presentation_time_ticks=1;tile.anchor_x=7;
+        assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);
+        auto original_pixel=static_cast<unsigned const*>(out.bgra_pixels)[0];
+        f.presentation_time_ticks=2;ambient.hold=true;
+        auto before=ambient.entered.load();
+        assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==original_pixel);
+        until([&]{return ambient.entered.load()>before;});
+        // Supersede the ambient job with an explicit different camera, while
+        // keeping its render in flight and the old publication intact.
+        tile.anchor_x=29;before=ambient.entered.load();
+        assert(pull.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return ambient.entered.load()>before;});
+        before=ambient.entered.load();auto adopted=adoption_entered.load();std::atomic<bool> returned{false};
+        std::thread caller([&]{assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);returned=true;});
+        until([&]{return returned.load() || adoption_entered.load()>adopted;});
+        assert(!returned.load()); // Must synchronously obtain the current view.
+        ambient.hold=false;caller.join();
+        assert(ambient.entered.load()==before); // Reuse the exact already-running job.
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==(unsigned(tile.anchor_x)^topology^2u));
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]!=original_pixel);
+        // Same-view clock work remains passive until the next render call.
+        f.presentation_time_ticks=3;before=ambient.entered.load();
+        assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);
+        until([&]{return ambient.entered.load()>before;});
+        // Calls may arrive while pending or after completion. Neither changes
+        // the camera, and consuming this clock must not create another job.
+        until([&]{assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);
+            return static_cast<unsigned const*>(out.bgra_pixels)[0]==(unsigned(tile.anchor_x)^topology^3u);});
+        for(unsigned i=0;i<10;++i)assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);
+        assert(ambient.entered.load()==before+1);
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==(unsigned(tile.anchor_x)^topology^3u));
+        c3x_renderer_camera_identity_v1 epochs={1,2,3,4};
+        assert(pull.camera_begin(f,last,epochs)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return pull.camera_poll(last,out)==C3X_RENDERER_RESULT_OK;});
+        before=ambient.entered.load();adopted=adoption_entered.load();
+        assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);
+        assert(ambient.entered.load()==before+1 && adoption_entered.load()==adopted);
+    }
+    {
+        RendererState ambient;ambient.visible_resource_animations=1;ambient.animate_pixels=true;
+        RendererWorker pull(ambient);c3x_renderer_camera_identity_v1 epochs={21,22,23,24};
+        f.tiles=&tile;f.tile_count=1;f.presentation_time_ticks=1;
+        assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        auto previous=static_cast<unsigned const*>(out.bgra_pixels)[0];
+        f.presentation_time_ticks=2;ambient.hold=true;auto before=ambient.entered.load();
+        assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==previous);
+        until([&]{return ambient.entered.load()>before;});
+        // Visibility loss cannot return the older ambient front, even when
+        // the camera, requested clock and payload bytes otherwise match.
+        ++epochs.visibility_epoch;std::atomic<bool> returned{false};before=ambient.entered.load();
+        std::thread native([&]{assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);returned=true;});
+        until([&]{return ambient.entered.load()>before;});assert(!returned.load());
+        ambient.hold=false;native.join();
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]!=previous);
+        f.presentation_time_ticks=3;before=ambient.entered.load();
+        until([&]{assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+            return static_cast<unsigned const*>(out.bgra_pixels)[0]==(unsigned(tile.anchor_x)^topology^3u);});
+        assert(ambient.entered.load()==before+1);
+        for(unsigned i=0;i<10;++i)assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        assert(ambient.entered.load()==before+1);
+    }
+    ambient_mode=false;
+    {
+        RendererState state;RendererWorker pull(state);
+        f.api_version=C3X_RENDERER_API_VERSION;f.struct_size=sizeof(f);
+        f.tiles=&tile;f.tile_count=1;f.presentation_time_ticks=100;
+        // Adoption also works without the ambient compatibility mode.
+        state.hold=true;assert(pull.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return state.entered.load()==1;});
+        auto adopted=adoption_entered.load();std::atomic<bool> returned{false};
+        std::thread caller([&]{assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);returned=true;});
+        until([&]{return adoption_entered.load()>adopted;});
+        assert(!returned.load() && !state.cancelled.load());state.hold=false;caller.join();
+        assert(state.entered.load()==1 && !state.cancelled.load());
+        assert(out.replacement_tile_count==1 && out.replacement_tile_flags[0]==tile.tile_flags);
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==(unsigned(tile.anchor_x)^topology));
+        assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK && state.entered.load()==1);
+        // A completed explicit publication can be consumed without execution.
+        ++f.presentation_time_ticks;
+        assert(pull.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return pull.camera_poll(last,out)==C3X_RENDERER_RESULT_OK;});
+        auto executions=state.entered.load();
+        assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK && state.entered.load()==executions);
+        // The exact request may still be pending behind an obsolete completion
+        // copy. Joining must preserve it without a third snapshot or execution.
+        hold_publication=true;auto copying=publication_entered.load();
+        executions=state.entered.load();++f.presentation_time_ticks;
+        assert(pull.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return publication_entered.load()>copying;});
+        ++f.presentation_time_ticks;
+        assert(pull.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
+        adopted=adoption_entered.load();returned=false;
+        std::thread pending([&]{assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);returned=true;});
+        until([&]{return adoption_entered.load()>adopted;});
+        assert(!returned.load() && state.entered.load()==executions+1);
+        hold_publication=false;pending.join();
+        assert(state.entered.load()==executions+2);
+        // Lifecycle identity is not available through legacy render. Even
+        // byte-identical frame data cannot adopt an epoch-bearing request.
+        for(unsigned which=0;which<4;++which){
+            c3x_renderer_camera_identity_v1 epoch={};
+            if(which==0)epoch.map_epoch=1;if(which==1)epoch.viewer_epoch=1;
+            if(which==2)epoch.visibility_epoch=1;if(which==3)epoch.scene_epoch=1;
+            ++f.presentation_time_ticks;
+            assert(pull.camera_begin(f,last,epoch)==C3X_RENDERER_RESULT_PENDING);
+            until([&]{return pull.camera_poll(last,out)==C3X_RENDERER_RESULT_OK;});
+            executions=state.entered.load();adopted=adoption_entered.load();
+            assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);
+            assert(state.entered.load()==executions+1 && adoption_entered.load()==adopted);
+        }
+        // Native ordinary demand can join nonzero identities without another
+        // render, then reject each independently changed lifecycle component.
+        c3x_renderer_camera_identity_v1 epochs={11,12,13,14};
+        for(unsigned which=0;which<4;++which){
+            ++f.presentation_time_ticks;state.hold=true;
+            executions=state.entered.load();
+            assert(pull.camera_begin(f,last,epochs)==C3X_RENDERER_RESULT_PENDING);
+            until([&]{return state.entered.load()==executions+1;});
+            auto before_cancel=state.cancelled.load();adopted=adoption_entered.load();returned=false;
+            std::thread native([&]{assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);returned=true;});
+            until([&]{return adoption_entered.load()>adopted;});
+            assert(!returned.load() && state.cancelled.load()==before_cancel);
+            state.hold=false;native.join();assert(state.entered.load()==executions+1);
+            assert(pull.camera_poll_view(last,view)==C3X_RENDERER_RESULT_OK);
+            assert(!std::memcmp(&view.identity,&epochs,sizeof(epochs)));
+            assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK && state.entered.load()==executions+1);
+            if(which==0)++epochs.map_epoch;if(which==1)++epochs.viewer_epoch;
+            if(which==2)++epochs.visibility_epoch;if(which==3)++epochs.scene_epoch;
+            adopted=adoption_entered.load();
+            assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+            assert(state.entered.load()==executions+2 && adoption_entered.load()==adopted);
+            // The ordinary publication's identity must also guard its fast cache.
+            assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK && state.entered.load()==executions+2);
+        }
+        // Distinct clock, camera, visibility, order and topology require their
+        // own rendering even when an older result is ready.
+        for(unsigned which=0;which<5;++which){
+            c3x_renderer_tile_v1 pair[2]={tile,tile};pair[1].anchor_x+=100;
+            auto current=f;current.tiles=pair;current.tile_count=2;
+            ++current.presentation_time_ticks;
+            assert(pull.camera_begin(current,last)==C3X_RENDERER_RESULT_PENDING);
+            until([&]{return pull.camera_poll(last,out)==C3X_RENDERER_RESULT_OK;});
+            executions=state.entered.load();adopted=adoption_entered.load();
+            if(which==0)++current.presentation_time_ticks;
+            if(which==1)++pair[0].anchor_x;
+            if(which==2)++pair[0].visibility_mask;
+            if(which==3)std::swap(pair[0],pair[1]);
+            if(which==4)++topology;
+            assert(pull.render(current,out)==C3X_RENDERER_RESULT_OK);
+            assert(state.entered.load()==executions+1 && adoption_entered.load()==adopted);
+            assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==(unsigned(pair[0].anchor_x)^topology));
+        }
+        ++f.presentation_time_ticks;state.hold=true;state.fail_render=true;
+        auto before=state.entered.load();
+        assert(pull.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return state.entered.load()>before;});
+        adopted=adoption_entered.load();returned=false;auto untouched=out;
+        std::thread failed([&]{assert(pull.render(f,out)==C3X_RENDERER_RESULT_DEVICE_ERROR);returned=true;});
+        until([&]{return adoption_entered.load()>adopted;});
+        assert(!returned.load());state.hold=false;failed.join();
+        assert(!std::memcmp(&out,&untouched,sizeof(out))); // No old front reported as success.
+        state.fail_render=false;
+        assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);
+        pull.reset_and_stop();assert(pull.camera_poll(last,out)==C3X_RENDERER_RESULT_SUPERSEDED);
+    }
 }
 '''
         run_cpp(program, sources=("Renderer/native/environment_runtime.cpp",))

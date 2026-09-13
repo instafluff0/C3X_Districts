@@ -236,6 +236,8 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     int map_width = 0, map_height = 0;
     char boundary_option[8]={};
     bool retained_boundary=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_RETAINED_BOUNDARY",boundary_option,sizeof(boundary_option))!=0;
+    char topology_edit_option[8]={};
+    bool topology_edits=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_TOPOLOGY_EDITS",topology_edit_option,sizeof(topology_edit_option))!=0;
     bool boundary_resource=true,boundary_mine=true;
     int boundary_x=center_x,boundary_y=center_y;
     std::vector<CsvTile> source_tiles;
@@ -470,6 +472,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     auto camera_poll=reinterpret_cast<c3x_renderer_camera_poll_fn>(GetProcAddress(module,"c3x_renderer_camera_poll"));
     bool camera_view=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CAMERA_VIEW",camera_option,sizeof(camera_option))!=0;
     auto camera_begin_view=reinterpret_cast<c3x_renderer_camera_begin_view_fn>(GetProcAddress(module,"c3x_renderer_camera_begin_view"));
+    auto render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
     auto camera_poll_view=reinterpret_cast<c3x_renderer_camera_poll_view_fn>(GetProcAddress(module,"c3x_renderer_camera_poll_view"));
     bool ambient_async=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_AMBIENT_ASYNC",camera_option,sizeof(camera_option))!=0;
     bool ambient_boundary=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_AMBIENT_BOUNDARY",camera_option,sizeof(camera_option))!=0;
@@ -482,7 +485,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     if(background_camera && (!camera_begin || !camera_poll)) {
         std::fputs("camera extension exports missing\n",stderr);return 1;
     }
-    if(ambient_async && (!camera_begin_view || !camera_poll_view)) {
+    if(ambient_async && (!camera_begin_view || !camera_poll_view || (ambient_boundary && !render_view))) {
         std::fputs("ambient async requires camera view extension exports\n",stderr);return 1;
     }
     unsigned camera_case=0;
@@ -699,7 +702,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     char navigation_option[16]={};
     bool navigation_benchmark=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_NAVIGATION",navigation_option,sizeof(navigation_option))!=0;
     char scroll_option[64]={};
-    bool scroll_ablation=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SCROLL_ABLATION",scroll_option,sizeof(scroll_option))!=0;
+    bool scroll_ablation=!topology_edits && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SCROLL_ABLATION",scroll_option,sizeof(scroll_option))!=0;
     char distant_option[16]={};
     int distant_steps=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DISTANT_STEPS",distant_option,sizeof(distant_option))?std::clamp(std::atoi(distant_option),0,1000):0;
     char idle_option[16]={};
@@ -739,6 +742,13 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     #include "retained_replay_preview.h"
     #include "busy_session_preview.h"
     if(ok && ambient_async) {
+        c3x_renderer_camera_identity_v1 stationary_identity={1,2,3,4};
+        auto legacy_render=render;
+        auto render_ambient=[&](c3x_renderer_frame_v1 const* input,c3x_renderer_output_v1* result){
+            if(!ambient_boundary)return legacy_render(input,result);
+            c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),input,stationary_identity};
+            return render_view(&request,result);
+        };
         // Small architectural gate: the consumer retains the last exact bitmap
         // for this camera while the renderer prepares a newer ambient clock on
         // its worker. Publication is accepted only as one exact pixel/ownership
@@ -772,7 +782,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         references.push_back(reference_from(frame.presentation_time_ticks));
         for(int step=1;step<=3 && ok;++step) {
             frame.presentation_time_ticks=1000000+c3x_renderer_i64(step)*frame.presentation_frequency/15;
-            int code=render(&frame,&output);
+            int code=render_ambient(&frame,&output);
             ok=code==C3X_RENDERER_RESULT_OK && preview_ownership(frame,output) &&
                 output.visible_animation_count>0 && output.fallback_tile_count==0 && output.device_recoveries==0;
             if(ok)references.push_back(reference_from(frame.presentation_time_ticks));
@@ -785,7 +795,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         frame.presentation_time_ticks=1000000+c3x_renderer_i64(4)*frame.presentation_frequency/15;
         AmbientReference changed_reference;
         if(ok) {
-            int code=render(&frame,&output);
+            int code=render_ambient(&frame,&output);
             ok=code==C3X_RENDERER_RESULT_OK && preview_ownership(frame,output) &&
                 output.visible_animation_count>0 && output.fallback_tile_count==0 && output.device_recoveries==0;
             if(ok)changed_reference=reference_from(frame.presentation_time_ticks);
@@ -797,7 +807,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         center_x=home_x;center_y=home_y;tiles=home_tiles;
         frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
         frame.presentation_time_ticks=references.front().ticks;
-        if(ok)ok=render(&frame,&output)==C3X_RENDERER_RESULT_OK && preview_ownership(frame,output);
+        if(ok)ok=render_ambient(&frame,&output)==C3X_RENDERER_RESULT_OK && preview_ownership(frame,output);
         std::vector<unsigned char> front;
         if(ok) {
             auto pixels=static_cast<unsigned char const*>(output.bgra_pixels);
@@ -917,7 +927,6 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             }
             return healthy;
         };
-        c3x_renderer_camera_identity_v1 stationary_identity={1,2,3,4};
         if(ambient_boundary) {
             auto exact_output=[&](AmbientReference const& expected) {
                 auto pixels=static_cast<unsigned char const*>(output.bgra_pixels);
@@ -928,11 +937,11 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                     output.replacement_tile_flags && !std::memcmp(output.replacement_tile_flags,
                         expected.ownership.data(),expected.ownership.size()*sizeof(expected.ownership[0]));
             };
-            std::printf("AMBIENT_BOUNDARY_BEGIN ticks=3 policy=sync-abi-retain-last-exact camera=stationary floor_mib=512\n");
+            std::printf("AMBIENT_BOUNDARY_BEGIN ticks=3 policy=explicit-identity-pull camera=stationary floor_mib=512\n");
             for(int step=1;step<=3 && ok;++step) {
                 frame.presentation_time_ticks=references[step].ticks;
                 LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
-                int code=render(&frame,&output);QueryPerformanceCounter(&end);
+                int code=render_ambient(&frame,&output);QueryPerformanceCounter(&end);
                 double call_ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
                 max_accept_ms=(std::max)(max_accept_ms,call_ms);
                 auto pixels=static_cast<unsigned char const*>(output.bgra_pixels);
@@ -944,7 +953,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                 ok=retained && call_ms<16.0 && draw_ambient_set(step) && sample_memory();
                 auto started=GetTickCount64();unsigned calls=1;
                 while(ok && !exact_output(references[step]) && GetTickCount64()-started<120000) {
-                    Sleep(1);QueryPerformanceCounter(&begin);code=render(&frame,&output);QueryPerformanceCounter(&end);
+                    Sleep(1);QueryPerformanceCounter(&begin);code=render_ambient(&frame,&output);QueryPerformanceCounter(&end);
                     call_ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
                     max_accept_ms=(std::max)(max_accept_ms,call_ms);++calls;
                     ok=code==C3X_RENDERER_RESULT_OK && call_ms<16.0 && sample_memory();
@@ -958,11 +967,11 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             }
             if(ok) {
                 frame.presentation_time_ticks=1000000+c3x_renderer_i64(5)*frame.presentation_frequency/15;
-                ok=render(&frame,&output)==C3X_RENDERER_RESULT_OK;
+                ok=render_ambient(&frame,&output)==C3X_RENDERER_RESULT_OK;
                 Sleep(5);center_x=home_x+4;center_y=home_y;tiles=changed_tiles;
                 frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());frame.presentation_time_ticks=changed_reference.ticks;
                 LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
-                int code=render(&frame,&output);QueryPerformanceCounter(&end);
+                int code=render_ambient(&frame,&output);QueryPerformanceCounter(&end);
                 double call_ms=double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart;
                 bool exact=code==C3X_RENDERER_RESULT_OK && exact_output(changed_reference) &&
                     output.fallback_tile_count==0 && output.device_recoveries==0 && sample_memory();
@@ -970,11 +979,35 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                     code,call_ms,unsigned(exact),unsigned(exact),output.fallback_tile_count,output.device_recoveries);
                 ok=exact;
             }
+            if(ok) {
+                // One caller request is prepared through the camera interface,
+                // then demanded through ordinary render. Include begin and all
+                // work before return in the endpoint; do not hide preparation
+                // behind a sleep or measure only the final pull call.
+                center_x=home_x;center_y=home_y;tiles=home_tiles;
+                frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+                frame.presentation_time_ticks=references[3].ticks;
+                c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&frame,stationary_identity};
+                c3x_renderer_i64 ticket=0;
+                LARGE_INTEGER begin={},accepted={},finished={};QueryPerformanceCounter(&begin);
+                int begun=camera_begin_view(&request,&ticket);QueryPerformanceCounter(&accepted);
+                int code=begun==C3X_RENDERER_RESULT_PENDING?render_ambient(&frame,&output):begun;
+                QueryPerformanceCounter(&finished);
+                bool exact=code==C3X_RENDERER_RESULT_OK && exact_output(references[3]) &&
+                    preview_ownership(frame,output) && output.fallback_tile_count==0 &&
+                    output.device_recoveries==0 && sample_memory();
+                std::printf("AMBIENT_BOUNDARY queued-current ticket=%lld result=%d begin_ms=%.3f call_ms=%.3f total_ms=%.3f exact=%u fallback=%u recoveries=%u\n",
+                    static_cast<long long>(ticket),code,double(accepted.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                    double(finished.QuadPart-accepted.QuadPart)*1000/frequency.QuadPart,
+                    double(finished.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,unsigned(exact),
+                    output.fallback_tile_count,output.device_recoveries);
+                ok=exact;
+            }
             if(ok && ambient_soak_seconds) {
                 center_x=home_x;center_y=home_y;tiles=home_tiles;
                 frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
                 frame.presentation_time_ticks=2000000;
-                int code=render(&frame,&output);
+                int code=render_ambient(&frame,&output);
                 // Returning home is a camera change, so this call must itself
                 // be exact before the stationary cadence begins.
                 ok=code==C3X_RENDERER_RESULT_OK && preview_ownership(frame,output) &&
@@ -1006,7 +1039,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                     do {QueryPerformanceCounter(&now);if(now.QuadPart+frequency.QuadPart/500<target)Sleep(1);else if(now.QuadPart<target)Sleep(0);} while(now.QuadPart<target);
                     frame.presentation_time_ticks=2000000+c3x_renderer_i64(tick)*frame.presentation_frequency/15;
                     LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
-                    code=render(&frame,&output);QueryPerformanceCounter(&end);
+                    code=render_ambient(&frame,&output);QueryPerformanceCounter(&end);
                     render_calls.push_back(double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart);
                     auto memory=camera_memory_values();soak_min_largest=(std::min)(soak_min_largest,memory.second);
                     ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 &&
@@ -1032,7 +1065,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                     double(soak_min_largest)/(1024.0*1024.0),output.fallback_tile_count,output.device_recoveries);
             }
             std::printf("AMBIENT_BOUNDARY_END status=%s exact_publications=%u max_sync_call_ms=%.3f min_largest_free_mib=%.1f units=%d unit_draws=%u max_unit_set_ms=%.3f max_unit_call_ms=%.3f\n",
-                ok?"pass":"FAIL",ok?4u:0u,max_accept_ms,double(min_largest_free)/(1024.0*1024.0),
+                ok?"pass":"FAIL",ok?5u:0u,max_accept_ms,double(min_largest_free)/(1024.0*1024.0),
                 idle_unit_count,measured_unit_draws,max_unit_set_ms,max_unit_ms);
         } else {
         std::printf("AMBIENT_ASYNC_BEGIN ticks=3 policy=retain-last-exact camera=stationary floor_mib=512\n");
@@ -1440,7 +1473,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         ok=ok && (idle_steps==1 || changes>0);
         std::printf("IDLE_END status=%s changed_frames=%u\n",ok?"pass":"FAIL",changes);
     }
-    if(ok && animate && !ambient_async && !zoom_benchmark && !navigation_benchmark && !scroll_ablation && !distant_steps && !idle_steps && !busy_session) {
+    if(ok && animate && !topology_edits && !ambient_async && !zoom_benchmark && !navigation_benchmark && !scroll_ablation && !distant_steps && !idle_steps && !busy_session) {
         // Exercise animation after an immutable viewport LRU restore, not only
         // after the unchanged-current-view fast path.
         auto initial=static_cast<unsigned char const*>(output.bgra_pixels);
@@ -1557,6 +1590,75 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             ++checks;preceding=std::move(candidate);
         }
         std::printf("RETAINED_BOUNDARY_END status=%s checks=%u independent_full_redraw=1\n",ok?"pass":"FAIL",checks);
+    }
+    if(ok && topology_edits) {
+        // Exercise real copied world changes. Independent reset redraws may not
+        // reuse any pre-edit geometry or completed region from the candidate.
+        auto pixels=[&](){auto p=static_cast<unsigned char const*>(output.bgra_pixels);
+            return std::vector<unsigned char>(p,p+std::size_t(output.stride_bytes)*output.height);};
+        auto flags=[&](){return std::vector<unsigned>(output.replacement_tile_flags,
+            output.replacement_tile_flags+output.replacement_tile_count);};
+        auto draw=[&](){return render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK &&
+            output.fallback_tile_count==0 && output.device_recoveries==0;};
+        auto before=pixels();
+        std::size_t visible_site=source_tiles.size(),distant_site=source_tiles.size();
+        double near_distance=1e30,far_distance=-1;
+        for(std::size_t i=0;i<source_tiles.size();++i) {
+            auto const& source=source_tiles[i];
+            if(source.base!=source.real || (source.base!=2 && source.base!=3) || source.river)continue;
+            bool captured=false;
+            for(auto const& tile:tiles) {
+                if((tile.tile_x%map_width+map_width)%map_width!=source.x || tile.tile_y!=source.y)continue;
+                captured=true;
+                int x=tile.anchor_x+tile_width/2,y=tile.anchor_y+tile_height/2;
+                double distance=double(x-target_width/2)*(x-target_width/2)+double(y-target_height/2)*(y-target_height/2);
+                if(x>=tile_width && x<target_width-tile_width && y>=tile_height && y<target_height-tile_height && distance<near_distance){visible_site=i;near_distance=distance;}
+            }
+            int dx=std::abs(source.x-center_x);dx=dx<map_width-dx?dx:map_width-dx;
+            double distance=double(dx)*dx+double(source.y-center_y)*(source.y-center_y);
+            if(!captured && distance>far_distance){distant_site=i;far_distance=distance;}
+        }
+        if(visible_site==source_tiles.size() || distant_site==source_tiles.size()) {
+            std::fputs("TOPOLOGY_EDIT missing visible/distant flat-land fixture sites\n",stderr);ok=false;
+        }
+        unsigned checks=0;
+        int original=0;
+        for(unsigned step=0;ok && step<4;++step) {
+            std::size_t index=step<2?distant_site:visible_site;
+            auto& source=source_tiles[index];
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            if(!(step&1))original=source.base;
+            source.base=source.real=(step&1)?original:(original==2?3:2);
+            auto world_index=(std::size_t(source.y)*map_width+source.x)/2;
+            world[world_index]=(world[world_index]&0xffff0000u)|unsigned(source.base)|(unsigned(source.real)<<8);
+            ++frame.world_topology_revision;
+            tiles=capture_view();frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            frame.dirty_flags=C3X_RENDERER_DIRTY_SCENE|C3X_RENDERER_DIRTY_STATIC_MAP;
+            ok=draw();if(!ok)break;
+            auto candidate=pixels();auto ownership=flags();auto animations=output.visible_animation_count;
+            bool changed=candidate!=before;
+            QueryPerformanceCounter(&end);
+            camera_memory(); // Host boundary sample, outside the timed edit.
+            auto warm_output=output;warm_output.bgra_pixels=candidate.data();
+            // A distant flat-land edit cannot alter this captured view. The
+            // selected visible edit/reversal must alter actual displayed pixels.
+            ok=changed==(step>=2);
+            if(ok){reset();ok=set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK && draw();}
+            bool exact=ok && pixels()==candidate && flags()==ownership && output.visible_animation_count==animations;
+            std::printf("TOPOLOGY_EDIT step=%u site=%s x=%d y=%d revision=%lld changed=%u exact=%u total_ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f\n",
+                step,step<2?"distant":"visible",source.x,source.y,frame.world_topology_revision,unsigned(changed),unsigned(exact),
+                double(end.QuadPart-begin.QuadPart)*1000/timing_frequency.QuadPart,
+                double(warm_output.geometry_ticks)*1000/timing_frequency.QuadPart,
+                double(warm_output.draw_ticks)*1000/timing_frequency.QuadPart,
+                double(warm_output.readback_ticks)*1000/timing_frequency.QuadPart);
+            if(!exact){
+                write_bmp((std::string(argv[5])+".edit-candidate.bmp").c_str(),warm_output);
+                write_bmp((std::string(argv[5])+".edit-reference.bmp").c_str(),output);
+                ok=false;break;
+            }
+            before=std::move(candidate);++checks;
+        }
+        std::printf("TOPOLOGY_EDIT_END status=%s checks=%u independent_full_redraw=1\n",ok?"pass":"FAIL",checks);
     }
     char color_option[8]={};
     if(ok && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_COLOR",color_option,sizeof(color_option)))

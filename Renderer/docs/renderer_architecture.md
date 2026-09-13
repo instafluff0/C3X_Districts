@@ -69,11 +69,11 @@ simulator or duplicate category implementations.
 | Responsibility | Intended ownership | Current foothold |
 | --- | --- | --- |
 | Game scene bridge | Capture authoritative values and lifecycle changes; publish immutable input. | Capture and composition in `injected_code.c`, versioned API in `C3X.h` and the native DLL. |
-| Render world | Retain tile/object identity, local revisions, bounds and spatial membership across views. | `render_core/world_topology.h`, captured records and dependency observations; a complete persistent appearance mirror is still a destination. |
+| Render world | Retain tile/object identity, local revisions, bounds and spatial membership across views. | `render_core/world_topology.h` and the bounded `render_core/captured_scene.h` owner provide canonical observed appearance, local revisions and current eligibility; resident compiled-content handles now serve current assembly/restore/prefetch; complete appearance capture and general spatial occurrence selection remain unfinished. |
 | Asset registry and scene compiler | Share assets; compile changed terrain, connectivity and compound object composition into reusable content. | Existing pack loaders, fidelity adapters, `CachedTileGeometry` and shared natural world meshes in `native/c3x_renderer.cpp`. |
-| View builder | Select eligible wrapped occurrences and build pass-specific draw lists. | Existing contributor/bounds queries and assembled geometry layers; general persistent selection remains to be developed. |
+| View builder | Select eligible wrapped occurrences and build pass-specific draw lists. | Compact resident occurrence records in `native/render_core/geometry_draws.h` now feed static draw/receiver/caster/region consumers; general spatially selected compatible batches remain unfinished. |
 | GPU renderer | Own the immediate D3D11 context, GPU lifetimes, uploads and pass execution. | Existing renderer worker, `draw_cached_geometry()` and `submit_geometry()`. |
-| Compositor bridge | Publish and consume complete compatible results at the native map boundary. | DLL publication records and injected synchronous composition; ordinary native asynchronous coordination is unfinished. |
+| Compositor bridge | Publish and consume complete compatible results at the native map boundary. | The injected compositor supplies native lifecycle/visibility identity to ordinary DLL publication selection; identical queued and compatible ambient work can be consumed on native demand. General asynchronous camera handoff and live acceptance remain unfinished. |
 
 The current draw path still traverses layer chunks for each rectangle, and pass
 submission includes recursive regional/reflection work. Those are migration
@@ -169,9 +169,11 @@ from replaceable camera requests: cancellation may supersede a view, but must no
 lose world changes or discard useful completed preparation. Bound uploads, pending
 work and resource residency. Prefer visible missing content over speculation.
 
-Move ordinary redraws toward bounded submission, polling and publication only with
-a concrete native completion/redraw path. A bounded staging ring is a candidate
-readback mechanism, not proof of reduced cost or permission to queue stale views.
+Civ III owns render demand. Move ordinary calls toward bounded submission and
+consumption of compatible ready publications at the next native render call.
+Worker completion must not notify Civ III, request a redraw, or introduce a
+renderer-driven presentation loop. A bounded staging ring is a candidate readback
+mechanism, not proof of reduced cost or permission to queue stale views.
 Current native overlays and picking cannot advance against an incompatible old
 bitmap. Worker throughput alone does not establish native presented-frame cadence;
 follow the native presentation constraints and require live evidence at that gate.

@@ -26858,6 +26858,7 @@ unload_custom_renderer ()
 	is->custom_renderer_set_pack_path = NULL;
 	is->custom_renderer_set_definition_paths = NULL;
 	is->custom_renderer_render = NULL;
+	is->custom_renderer_render_view = NULL;
 	is->custom_renderer_blit = NULL;
 	is->custom_renderer_unit_draw = NULL;
 	is->custom_renderer_unit_draw_expanded = NULL;
@@ -26876,6 +26877,14 @@ unload_custom_renderer ()
 	is->custom_renderer_world_topology = NULL;
 	is->custom_renderer_world_topology_count = 0;
 	is->custom_renderer_world_topology_revision = 0;
+	// No publication survives unload; a subsequent worker gets a distinct map lifetime.
+	if (is->custom_renderer_world_visibility != NULL) free (is->custom_renderer_world_visibility);
+	is->custom_renderer_world_visibility = NULL;
+	is->custom_renderer_visibility_revision = 0;
+	is->custom_renderer_map_epoch = is->custom_renderer_map_epoch < 0x7fffffffffffffffLL ?
+		is->custom_renderer_map_epoch + 1 : 1;
+	is->custom_renderer_viewer_epoch = 0;
+	is->custom_renderer_viewer_civ_id = -1;
 	is->custom_renderer_capture_world_topology = false;
 	is->custom_renderer_frame_active = false;
 	is->custom_renderer_capture_failed = false;
@@ -27125,6 +27134,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_set_pack_path = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_pack_path");
 		is->custom_renderer_set_definition_paths = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_definition_paths");
 		is->custom_renderer_render = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_render");
+		is->custom_renderer_render_view = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_render_view");
 		is->custom_renderer_blit = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_blit");
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
@@ -27184,6 +27194,14 @@ bool
 capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 	Map_Renderer * target, int visibility_mask, int tile_x, int tile_y, Tile * tile, bool topology_only)
 {
+	// A complete capture belongs to one authoritative native viewer.
+	if (is->custom_renderer_tile_count == 0) {
+		if (is->custom_renderer_viewer_epoch == 0 || is->custom_renderer_viewer_civ_id != visible_to_civ_id) {
+			is->custom_renderer_viewer_civ_id = visible_to_civ_id;
+			is->custom_renderer_viewer_epoch = is->custom_renderer_viewer_epoch < 0x7fffffffffffffffLL ?
+				is->custom_renderer_viewer_epoch + 1 : 1;
+		}
+	} else if (is->custom_renderer_viewer_civ_id != visible_to_civ_id) return false;
 	int const max_tiles = 8192;
 	if (is->custom_renderer_tile_count >= max_tiles)
 		return false;
@@ -27548,16 +27566,30 @@ capture_custom_renderer_world_topology ()
 	    (map->Width > 2048) || (map->Height > 2048)) return false;
 	int count = map->Width * map->Height / 2;
 	bool changed = count != is->custom_renderer_world_topology_count;
-	if (changed) {
+	bool observe_visibility = is->custom_renderer_render_view != NULL;
+	if (changed || (observe_visibility && is->custom_renderer_world_visibility == NULL)) {
+		// Allocate visibility first so a failure cannot shrink one live owner while
+		// retaining the old count. Commit both owners only after all allocation succeeds.
+		unsigned long long * visibility = NULL;
+		if (observe_visibility) {
+			visibility = malloc (count * sizeof visibility[0]);
+			if (visibility == NULL) return false;
+		}
 		unsigned int * data = realloc (is->custom_renderer_world_topology, count * sizeof data[0]);
-		if (data == NULL) return false;
+		if (data == NULL) { free (visibility); return false; }
 		is->custom_renderer_world_topology = data;
+		if (observe_visibility) {
+			free (is->custom_renderer_world_visibility);
+			is->custom_renderer_world_visibility = visibility;
+			memset (visibility, 0xff, count * sizeof visibility[0]);
+		}
 		is->custom_renderer_world_topology_count = count;
+		changed = true;
 		memset (data, 0xff, count * sizeof data[0]);
 	}
 	LARGE_INTEGER started, finished;
 	QueryPerformanceCounter (&started);
-	int modified = 0;
+	int modified = 0, visibility_modified = 0;
 	for (int y = 0; y < map->Height; y++) {
 		for (int x = y & 1; x < map->Width; x += 2) {
 			Tile * tile = tile_at (x, y);
@@ -27570,6 +27602,14 @@ capture_custom_renderer_world_topology ()
 				((unsigned int)(unsigned char)tile->vtable->m37_Get_River_Code (tile) << 16) |
 				((unsigned int)(tile->Body.active_tile_effect != NULL) << 24);
 			int index = (y * map->Width + x) / 2;
+			if (observe_visibility) {
+				unsigned long long visibility = ((unsigned long long)(unsigned int)tile->Body.FOWStatus << 32) |
+					(unsigned int)tile->Body.Visibility;
+				if (is->custom_renderer_world_visibility[index] != visibility) {
+					is->custom_renderer_world_visibility[index] = visibility;
+					visibility_modified++;
+				}
+			}
 			if (is->custom_renderer_world_topology[index] != value) {
 				is->custom_renderer_world_topology[index] = value;
 				modified++;
@@ -27577,12 +27617,16 @@ capture_custom_renderer_world_topology ()
 		}
 	}
 	if (changed || modified) is->custom_renderer_world_topology_revision++;
+	if (observe_visibility && (changed || visibility_modified))
+		is->custom_renderer_visibility_revision = is->custom_renderer_visibility_revision < 0x7fffffffffffffffLL ?
+			is->custom_renderer_visibility_revision + 1 : 1;
 	QueryPerformanceCounter (&finished);
-	char detail[256];
+	char detail[384];
 	snprintf (detail, sizeof detail,
-		"[C3X renderer] qpc=%lld frame=%u stage=world-topology tiles=%d changed=%d revision=%lld bytes=%u capture_ms=%.3f\n",
+		"[C3X renderer] qpc=%lld frame=%u stage=world-topology tiles=%d changed=%d revision=%lld bytes=%u visibility_changed=%d visibility_revision=%lld visibility_bytes=%u capture_ms=%.3f\n",
 		finished.QuadPart, is->custom_renderer_requested_frames, count, modified,
-		is->custom_renderer_world_topology_revision, count * (unsigned int)sizeof(unsigned int),
+		is->custom_renderer_world_topology_revision, count * (unsigned int)sizeof(unsigned int), visibility_modified, is->custom_renderer_visibility_revision,
+		observe_visibility ? count * (unsigned int)sizeof(unsigned long long) : 0u,
 		1000.0 * (double)(finished.QuadPart - started.QuadPart) / (double)is->custom_renderer_qpc_frequency.QuadPart);
 	detail[(sizeof detail) - 1] = '\0';
 	(*p_OutputDebugStringA) (detail);
@@ -27692,7 +27736,18 @@ composite_custom_renderer_frame ()
 	output.struct_size = sizeof output;
 	if (is->custom_renderer_presented_frames == 0)
 		log_custom_renderer_event ("render-start", C3X_RENDERER_RESULT_OK);
-	int render_result = is->custom_renderer_render (&frame, &output);
+	struct c3x_renderer_camera_request_v1 request = {0};
+	request.version = C3X_RENDERER_CAMERA_VIEW_VERSION;
+	request.struct_size = sizeof request;
+	request.frame = &frame;
+	if (is->custom_renderer_map_epoch == 0) is->custom_renderer_map_epoch = 1;
+	request.identity.map_epoch = is->custom_renderer_map_epoch;
+	request.identity.viewer_epoch = is->custom_renderer_viewer_epoch;
+	request.identity.visibility_epoch = is->custom_renderer_visibility_revision;
+	// Local object/anchor changes remain certified by the complete ordered capture.
+	request.identity.scene_epoch = frame.world_topology_revision;
+	int render_result = is->custom_renderer_render_view != NULL ?
+		is->custom_renderer_render_view (&request, &output) : is->custom_renderer_render (&frame, &output);
 	if (is->custom_renderer_presented_frames == 0)
 		log_custom_renderer_event ("render-done", render_result);
 	if (render_result != C3X_RENDERER_RESULT_OK) {

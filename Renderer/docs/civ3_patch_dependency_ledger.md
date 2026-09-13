@@ -7,6 +7,22 @@ claiming a capability is available. Agents must not edit that CSV or
 
 ## Current action
 
+The native request-identity handoff changes `C3X.h`/`injected_code.c` and adds the
+optional DLL export `c3x_renderer_render_view`, using the existing versioned camera
+request. API-17 layouts and legacy render calls remain compatible. Existing
+`load_scenario`/renderer-unload lifetime and `Map_Renderer_m71_Draw_Tiles` /
+`Map_Renderer_m19_Draw_Tile_by_XY_and_Flags` capture/composition supply scenario,
+viewer and visibility observations. Native `Tile.Body.FOWStatus` and `Visibility`
+are read in the existing bounded world scan; no new executable symbol, signature
+or supported-build address is needed. `required_user_action: []` for patch-table
+changes. The approved injected compile passes. Staging/install/live verification
+remain separate and unperformed. Exact-camera misses can still block; completion
+never notifies Civ III or requests a redraw.
+
+Retained appearance/content bindings and compact occurrence records use those same
+map boundaries without expanding replacement ownership. The rejected terrain batch
+experiment leaves no live batching path or new patch requirement.
+
 Ordinary volcano material ownership, static crater lava and caster coverage are
 renderer-only. They consume captured terrain identity and topology through
 `Map_Renderer_m71_Draw_Tiles` / `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`
@@ -91,8 +107,9 @@ The experimental DLL-only `c3x_renderer_camera_begin`, `c3x_renderer_camera_poll
 and `c3x_renderer_camera_cancel` exports add a bounded latest-request queue.
 They are not Civ III symbols, require no executable addresses, and are not bound
 by the injected bridge yet. Existing synchronous hooks remain unchanged;
-`required_user_action: []`. Current-camera previews and native final-redraw
-coordination remain implementation work, not an additional patch-table request.
+`required_user_action: []`. The explicit-identity ordinary render entry above consumes exact queued work;
+these begin/poll exports are still not bound by injected code. A general camera
+handoff remains constrained by native overlays/picking, not a completion-redraw hook.
 Opt-in terrain-only provisional images add a distinct `PREVIEW` result to those
 experimental exports, not a success result on the synchronous map API. They
 claim terrain ownership only; the injected bridge does not consume them yet.

@@ -339,7 +339,12 @@ typedef int (*c3x_renderer_render_fn)(struct c3x_renderer_frame_v1 const *, stru
 // Begin expires earlier synchronous borrowed outputs. Poll's borrowed publication
 // survives background work, but expires at the next successful publication poll,
 // synchronous render, pack/definition change or reset. Copy it for longer use.
-// Synchronous render/configuration calls cancel and drain camera work first.
+// Ordinary render may consume or wait for a byte-exact camera request with
+// zero caller-owned lifecycle epochs. It returns only final current-view output;
+// incompatible requests still cancel/drain and render synchronously. The optional
+// same-view ambient mode may retain a compatible front while its clock advances.
+// Configuration cancels and drains camera work. Worker completion never requests
+// a native redraw; Civ III owns when the next render call occurs.
 // Unit drawing interrupts active camera work at cancellation boundaries, keeps
 // the latest immutable request, and resumes it after the UI-thread unit copy.
 // Unit drawing remains synchronous and may wait for an outstanding GPU pass.
@@ -354,6 +359,12 @@ typedef int (*c3x_renderer_camera_cancel_fn)(c3x_renderer_i64 ticket);
 // before copying any pixels or reading replacement flags. Flags index the
 // returned frame.tiles, never a later capture array. This does not schedule a
 // native redraw or authorize displaying an older camera with current overlays.
+// Optional ordinary render with caller-owned lifecycle identity. Like render,
+// returns only complete current-camera output (or a compatible ambient front in
+// the existing opt-in mode). Exact queued work with these epochs is consumed or
+// joined, never restarted. Replacement flags index this request's ordered tiles.
+// Legacy render is equivalent to zero epochs. No notification/redraw is emitted.
+typedef int (*c3x_renderer_render_view_fn)(struct c3x_renderer_camera_request_v1 const *, struct c3x_renderer_output_v1 *);
 typedef int (*c3x_renderer_camera_begin_view_fn)(struct c3x_renderer_camera_request_v1 const *, c3x_renderer_i64 * ticket);
 typedef int (*c3x_renderer_camera_poll_view_fn)(c3x_renderer_i64 ticket, struct c3x_renderer_camera_view_v1 *);
 typedef int (*c3x_renderer_blit_fn)(struct c3x_renderer_output_v1 const *, void * destination_hdc);

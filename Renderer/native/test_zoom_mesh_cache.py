@@ -273,7 +273,7 @@ int main(){
         method = "    void collect_shadow_casters(" + source.split(
             "    void collect_shadow_casters(", 1)[1].split("    c3x_renderer::render_core::SourceShadow::PreparedCasters* prepare_shadow_submission(", 1)[0]
         submission = source.split("    bool submit_geometry(", 1)[1].split("    bool ensure_block_targets", 1)[0]
-        self.assertIn("shadow_buffers_ptr?*shadow_buffers_ptr:buffers,submission_casters", submission)
+        self.assertIn("shadow_buffers_ptr?shadow_buffers_ptr:buffers,submission_casters", submission)
         self.assertIn("shadow_buffers_ptr,false,shadow_casters_ptr,prepared_casters_ptr", submission)
         self.assertIn("shadow_buffers_ptr,reflection_pass,shadow_casters_ptr,prepared_casters_ptr", submission)
         self.assertIn("shadow_buffers_ptr,true,shadow_casters_ptr,prepared_casters_ptr", submission)
@@ -290,10 +290,16 @@ namespace c3x_renderer {namespace render_core {struct SourceShadow {
 };}}
 enum {geometry_land=1,geometry_feature=2,geometry_natural_decal=3,geometry_layer_count=5};
 struct CachedVertexChunk {
+ struct {long left=0,top=0,right=0,bottom=0;} bounds;
+ int translation_x=0,translation_y=0;float natural_projection[4]={};
  int buffer=7,indices=8,index_count=9,index_format=16,vertex_stride=64;
  unsigned version=10,city_material=0xffffffffu;bool animation_texture=false;
  c3x_renderer::render_core::SourceShadow::Bounds world_bounds;
 };
+#include "Renderer/native/render_core/geometry_draws.h"
+using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
+using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
+using GeometryDrawReference=GeometryDrawView::Reference;
 struct State {
  struct Dims {int width=100,height=80;bool wrap_x=false,wrap_y=false;} dims;
  struct World {Dims* dims;Dims dimensions()const{return *dims;}} world{&dims};
@@ -314,6 +320,19 @@ int main(){
  for(bool wx:{false,true})for(bool wy:{false,true}){
   s.dims.wrap_x=wx;s.dims.wrap_y=wy;std::vector<C> out;s.collect_shadow_casters(buffers,out);
   int copies=(wx?3:1)*(wy?3:1);assert(out.size()==unsigned(4*copies));
+  GeometryDrawView::Records occurrences;
+  for(unsigned layer=0;layer<geometry_layer_count;++layer)for(auto const& chunk:buffers[layer]){
+   occurrences[layer].emplace_back(chunk);
+   occurrences[layer].back().translation_x=999;
+   occurrences[layer].back().natural_projection[0]=-321;
+  }
+  std::vector<C> borrowed;s.collect_shadow_casters(occurrences,borrowed);
+  assert(borrowed.size()==out.size());
+  for(std::size_t i=0;i<out.size();++i){
+   assert(borrowed[i].vertices==out[i].vertices && borrowed[i].version==out[i].version);
+   assert(borrowed[i].offset[0]==out[i].offset[0] && borrowed[i].offset[1]==out[i].offset[1]);
+   assert(borrowed[i].bounds.low[2]==out[i].bounds.low[2] && borrowed[i].bounds.high[2]==out[i].bounds.high[2]);
+  }
   unsigned index=0;
   for(int body:{101,102,500,104})for(int y=wy?-1:0;y<=(wy?1:0);++y)
    for(int x=wx?-1:0;x<=(wx?1:0);++x){
@@ -333,7 +352,7 @@ int main(){
         with tempfile.TemporaryDirectory(prefix="c3x-submission-casters-") as directory:
             cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
             cpp.write_text(program)
-            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True)
 
     def test_retained_ground_dependencies_and_bounded_admission(self):
@@ -361,7 +380,8 @@ struct State {
  std::uint64_t content_revision=1,tile_geometry_epoch=1;
  std::unordered_map<std::uint64_t,CachedGroundTile> ground_grid_cache;
  std::size_t ground_grid_cache_bytes=0,natural_mesh_cache_budget=8192,natural_mesh_cache_capacity=4;
- std::unordered_map<std::uint64_t,std::uint64_t> semantic_by_coordinate{{9,11}};
+ struct Scene {struct Record {std::uint64_t semantic=11;} record;
+  Record const* current(std::uint64_t key) const{return key==9?&record:nullptr;}} topology_cache;
  struct World {unsigned value=17;unsigned at(std::size_t) const{return value;}};
  struct Coast {World data;std::uint64_t revision=23;
   World const& world() const{return data;}
@@ -378,8 +398,8 @@ struct State {
   if(record){
    CachedGroundGrid grid;grid.divisions=1;grid.layer=.5f;grid.vertices.resize(4);grid.samples.resize(4);
    pending_ground_grids.push_back(std::move(grid));
-   dependencies[9]=semantic_by_coordinate.at(9);coast_dependencies[5]=world_coast.revision;world_dependencies[7]=world_coast.data.value;
-  }else if(hit){assert(dependencies.at(9)==semantic_by_coordinate.at(9));assert(coast_dependencies.at(5)==world_coast.revision);assert(world_dependencies.at(7)==world_coast.data.value);}
+   dependencies[9]=topology_cache.record.semantic;coast_dependencies[5]=world_coast.revision;world_dependencies[7]=world_coast.data.value;
+  }else if(hit){assert(dependencies.at(9)==topology_cache.record.semantic);assert(coast_dependencies.at(5)==world_coast.revision);assert(world_dependencies.at(7)==world_coast.data.value);}
 ''' + admission + r'''
   std::size_t sum=0;for(auto const& entry:ground_grid_cache)sum+=entry.second.bytes;
   assert(sum==ground_grid_cache_bytes && sum<=natural_mesh_cache_budget && ground_grid_cache.size()<=natural_mesh_cache_capacity);
@@ -391,7 +411,7 @@ int main(){
  assert(!s.run(100,false) && !s.run(-100,false));
  s.world_coast.revision++;assert(!s.run(0,false) && !s.ground_grid_cache_bytes);
  s.run(0,true);s.world_coast.data.value++;assert(!s.run(0,false));
- s.run(0,true);s.semantic_by_coordinate[9]++;assert(!s.run(0,false));
+ s.run(0,true);s.topology_cache.record.semantic++;assert(!s.run(0,false));
  s.run(0,true);s.content_revision++;assert(!s.run(0,false));
  s.run(0,true);s.frame.world_topology_revision++;assert(!s.run(0,false));
  s.run(0,true);s.frame.world_width_tiles+=2;assert(!s.run(0,false));
@@ -475,6 +495,8 @@ int main(){
         program = r'''
 #include <cassert>
 #include <cstdint>
+#include "Renderer/native/render_core/resident_content.h"
+using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
 using c3x_renderer_u32=unsigned;
@@ -482,47 +504,47 @@ namespace c3x_renderer {struct TerrainFrameSignature {std::uint64_t complete=0;}
 struct c3x_renderer_tile_v1 {int x=0;};
 struct c3x_renderer_frame_v1 {unsigned tile_count=2;c3x_renderer_tile_v1 const* tiles;int world_topology_revision=9;};
 ''' + caches + r'''
-struct CachedTileGeometry {bool shared_natural=false;std::uint64_t version=0,natural_signature=0,natural_version=0;};
+struct CachedTileGeometry {bool shared_natural=false;std::uint64_t version=0;Handle binding,natural_content;};
 struct State {
- std::unordered_multimap<int,CachedTileGeometry> tile_geometry_cache;
+ c3x_renderer::render_core::ResidentContent<CachedTileGeometry> resident_content{8};
  CachedGeometry geometry_cache;int geometry_world_revision=0,appends=0;
  void append_tile_geometry(CachedTileGeometry&,c3x_renderer_tile_v1 const&,bool animated){assert(animated);++appends;}
 ''' + restore + r'''
 };
 int main(){
  State state;CachedViewport view;view.signature.complete=10;
- view.tile_keys={{1,100},{2,200}};view.tiles={{3},{5}};
+ view.tiles={{3},{5}};
  view.replacement_flags={1,0};view.fallback_indices={1};view.rendered_tile_count=1;
  view.fallback_tile_count=1;view.textured_tile_count=1;
  c3x_renderer_frame_v1 frame={2,view.tiles.data(),9};
- state.tile_geometry_cache.emplace(1,CachedTileGeometry{false,100,99,100});
- state.tile_geometry_cache.emplace(99,CachedTileGeometry{true,100,0});
+ CachedTileGeometry camera,world,second;world.shared_natural=true;
+ world.binding=state.resident_content.bind(world);camera.natural_content=world.binding;
+ camera.binding=state.resident_content.bind(camera);second.binding=state.resident_content.bind(second);
+ view.tile_keys={camera.binding,{7,99999}};
  assert(!state.restore_viewport_geometry(view,frame,{10}) && !state.appends);
- state.tile_geometry_cache.emplace(2,CachedTileGeometry{false,201,0});
- assert(!state.restore_viewport_geometry(view,frame,{10}) && !state.appends);
- state.tile_geometry_cache.emplace(2,CachedTileGeometry{false,200,0});
+ view.tile_keys[1]=second.binding;
  assert(!state.restore_viewport_geometry(view,frame,{11}) && !state.appends);
  assert(state.restore_viewport_geometry(view,frame,{10}) && state.appends==2);
  assert(state.geometry_cache.valid && state.geometry_cache.tile_keys==view.tile_keys);
  assert(state.geometry_cache.replacement_flags==view.replacement_flags);
  assert(state.geometry_cache.fallback_indices==view.fallback_indices && state.geometry_world_revision==9);
- state.tile_geometry_cache.find(99)->second.version=101;state.appends=0;
+ state.resident_content.release(world.binding);world.binding=state.resident_content.bind(world);state.appends=0;
  assert(!state.restore_viewport_geometry(view,frame,{10}) && !state.appends);
- state.tile_geometry_cache.erase(99);state.appends=0;state.geometry_cache.clear();
+ state.resident_content.release(world.binding);state.appends=0;state.geometry_cache.clear();
  assert(!state.restore_viewport_geometry(view,frame,{10}) && !state.appends && !state.geometry_cache.valid);
  frame.tile_count=1;assert(!state.restore_viewport_geometry(view,frame,{10}));
  // Zero identities are intentionally non-rendered records, not missing owners.
- frame.tile_count=2;view.tile_keys={{0,0},{2,200}};
+ frame.tile_count=2;view.tile_keys={{},second.binding};
  assert(state.restore_viewport_geometry(view,frame,{10}) && state.appends==1);
 }
 '''
         with tempfile.TemporaryDirectory(prefix="c3x-viewport-identities-") as directory:
             cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
             cpp.write_text(program)
-            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True)
 
-    def test_shared_draw_lists_pin_owners_and_grow_amortized(self):
+    def test_resident_draw_records_borrow_active_owners_and_grow_amortized(self):
         compiler = shutil.which("clang++") or shutil.which("g++")
         if not compiler:
             self.skipTest("C++ compiler unavailable")
@@ -533,34 +555,49 @@ int main(){
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include "Renderer/native/render_core/resident_content.h"
+using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
 constexpr int geometry_layer_count=2,C3X_RENDERER_TILE_RENDER=1;
 struct Ref {int references=1;void AddRef(){++references;}void Release(){--references;}};
-struct CachedVertexChunk {Ref *buffer=nullptr,*indices=nullptr;int translation_x=0,translation_y=0,projected=0;};
+struct CachedVertexChunk {
+ CachedVertexChunk(Ref* b=nullptr,Ref* i=nullptr):buffer(b),indices(i){}
+ CachedVertexChunk(CachedVertexChunk const&)=delete;
+ CachedVertexChunk& operator=(CachedVertexChunk const&)=delete;
+ CachedVertexChunk(CachedVertexChunk&&)=default;
+ Ref *buffer=nullptr,*indices=nullptr;int translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={};};
+#include "Renderer/native/render_core/geometry_draws.h"
+using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
+using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
+using GeometryDrawReference=GeometryDrawView::Reference;
+
 struct c3x_renderer_tile_v1 {int tile_flags=1,anchor_x=0,anchor_y=0;};
 struct Anchor {int anchor_x=0,anchor_y=0;};
 struct CachedTileGeometry {
  bool prefetched=false,shared_natural=false;std::size_t byte_count=0;
- std::uint64_t natural_signature=0,last_used=0,animation_epoch=0;
+ std::uint64_t last_used=0,animation_epoch=0;Handle binding,natural_content;
  int anchor_x=0,anchor_y=0;std::vector<Anchor> resource_anchors;
  std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
 };
 struct State {
  std::size_t prefetched_geometry_bytes=20;std::uint64_t tile_geometry_epoch=5;
  std::unordered_map<int,CachedTileGeometry> tile_geometry_cache;
+ c3x_renderer::render_core::ResidentContent<CachedTileGeometry> resident_content{4};
+ struct Scene {void attach(c3x_renderer_tile_v1 const&,Handle){}} topology_cache;
  std::vector<Anchor> resource_anchors;std::vector<int> geometry_footprints;
- std::array<std::vector<CachedVertexChunk>,geometry_layer_count> geometry_vertex_buffers;
+ GeometryDrawView::Records geometry_vertex_buffers;
  int tile_footprint(CachedTileGeometry const&,c3x_renderer_tile_v1 const&){return 1;}
- CachedVertexChunk project_natural_chunk(CachedVertexChunk chunk,c3x_renderer_tile_v1 const&){chunk.projected=1;return chunk;}
+ GeometryDrawRecord project_natural_chunk(GeometryDrawRecord chunk,c3x_renderer_tile_v1 const&){chunk.natural_projection[0]=1;return chunk;}
 ''' + append + r'''
 };
 int main(){
  Ref ground,world,indices;State state;CachedTileGeometry tile;
- tile.prefetched=true;tile.byte_count=20;tile.natural_signature=99;
+ tile.prefetched=true;tile.byte_count=20;tile.binding=state.resident_content.bind(tile);
  tile.buffers[0].push_back({&ground,&indices});tile.resource_anchors.push_back({1,2});
  auto& owner=state.tile_geometry_cache[99];owner.shared_natural=true;owner.byte_count=100;
  owner.buffers[1].push_back({&world,&indices});
+ tile.natural_content=state.resident_content.bind(owner);
  std::size_t copied_capacity=0;
  for(int i=0;i<4000;i++){
   auto old=state.geometry_vertex_buffers[0].capacity();
@@ -570,11 +607,18 @@ int main(){
  assert(copied_capacity<16000); // exact per-tile reserve is quadratic, ~8 million.
  assert(!tile.prefetched && !state.prefetched_geometry_bytes);
  assert(tile.last_used==5 && owner.last_used==5 && owner.animation_epoch==5);
- assert(ground.references==4001 && world.references==4001 && indices.references==8001);
+ assert(ground.references==1 && world.references==1 && indices.references==1);
  assert(state.resource_anchors.size()==4000 && state.resource_anchors.back().anchor_x==7999);
  assert(state.geometry_vertex_buffers[1].back().translation_x==7998);
- assert(state.geometry_vertex_buffers[1].back().projected && !owner.buffers[1][0].projected);
- for(auto& layer:state.geometry_vertex_buffers)for(auto& chunk:layer){chunk.buffer->Release();chunk.indices->Release();}
+ assert(state.geometry_vertex_buffers[1].back().natural_projection[0]==1 && !owner.buffers[1][0].natural_projection[0]);
+ assert(state.geometry_vertex_buffers[1].back().source==&owner.buffers[1][0]);
+ GeometryDrawView view(state.geometry_vertex_buffers);assert(view.is(state.geometry_vertex_buffers));
+ int count=0;for(auto const& draw:view[1]){assert(&draw.content()==&owner.buffers[1][0]);++count;}
+ assert(count==4000 && view[0].size()==4000);
+ GeometryDrawView direct(owner.buffers);assert(direct.is(owner.buffers));
+ assert(direct[0].empty() && direct[1][0].content().buffer==&world);
+ assert(!GeometryDrawView{});
+ for(auto& layer:state.geometry_vertex_buffers)layer.clear();
  assert(ground.references==1 && world.references==1 && indices.references==1);
  // Caster-only records must not publish resource anchors or pin indefinitely.
  state.tile_geometry_epoch=6;state.append_tile_geometry(tile,{0,0,0},false);
@@ -584,7 +628,7 @@ int main(){
         with tempfile.TemporaryDirectory(prefix="c3x-shared-draws-") as directory:
             cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
             cpp.write_text(program)
-            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True)
 
     def test_pixel_prefetch_borrows_both_camera_and_world_layers(self):
@@ -600,24 +644,32 @@ int main(){
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include "Renderer/native/render_core/resident_content.h"
+using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
 constexpr int geometry_layer_count=3,geometry_natural_terrain=1;
-struct CachedVertexChunk {int id,translation_x=0,translation_y=0,projected=0;};
+struct CachedVertexChunk {int id,translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={};};
+#include "Renderer/native/render_core/geometry_draws.h"
+using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
+using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
+using GeometryDrawReference=GeometryDrawView::Reference;
+
 struct c3x_renderer_tile_v1 {int tile_x=0,tile_y=0;};
 struct Entry {
- bool shared_natural=false;std::uint64_t version=0,natural_signature=0,natural_version=0;
+ bool shared_natural=false;std::uint64_t version=0;Handle binding,natural_content;
  int tile_x=0,tile_y=0;
  std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
 };
 struct State {
  std::unordered_multimap<int,Entry> tile_geometry_cache;
+ c3x_renderer::render_core::ResidentContent<Entry> resident_content{4};
  struct Contributor {std::uint64_t mesh;int x,y;};
  struct {std::vector<Contributor> key;} pending_pixel_block;
  int pixel_prepare_cursor=0,submissions=0;
- std::array<std::vector<CachedVertexChunk>,geometry_layer_count> buffers;
- CachedVertexChunk project_natural_chunk(CachedVertexChunk chunk,c3x_renderer_tile_v1 record){
-  chunk.projected=record.tile_x*100+record.tile_y;return chunk;
+ GeometryDrawView::Records buffers;
+ GeometryDrawRecord project_natural_chunk(GeometryDrawRecord chunk,c3x_renderer_tile_v1 record){
+  chunk.natural_projection[0]=float(record.tile_x*100+record.tile_y);return chunk;
  }
  bool prepare(){
 ''' + borrow + r'''
@@ -625,22 +677,25 @@ struct State {
  }
 };
 int main(){
- State s;Entry camera;camera.version=7;camera.natural_signature=99;camera.natural_version=7;
+ State s;Entry camera;camera.version=7;
  camera.tile_x=15;camera.tile_y=47;camera.buffers[0].push_back({1});
  Entry world;world.version=7;world.shared_natural=true;world.buffers[1].push_back({2});
  s.tile_geometry_cache.emplace(42,std::move(camera));s.tile_geometry_cache.emplace(99,std::move(world));
+ s.tile_geometry_cache.find(99)->second.binding=s.resident_content.bind(s.tile_geometry_cache.find(99)->second);
+ s.tile_geometry_cache.find(42)->second.natural_content=s.tile_geometry_cache.find(99)->second.binding;
  s.pending_pixel_block.key.push_back({7,120,60});
  assert(s.prepare() && s.submissions==1 && !s.pixel_prepare_cursor);
  assert(s.buffers[0].size()==1 && s.buffers[1].size()==1 && s.buffers[2].empty());
- assert(s.buffers[0][0].id==1 && !s.buffers[0][0].projected);
- assert(s.buffers[1][0].id==2 && s.buffers[1][0].projected==1547);
+ assert(s.buffers[0][0].content().id==1 && !s.buffers[0][0].natural_projection[0]);
+ assert(s.buffers[1][0].content().id==2 && s.buffers[1][0].natural_projection[0]==1547);
  assert(s.buffers[1][0].translation_x==120 && s.buffers[1][0].translation_y==60);
- assert(!s.tile_geometry_cache.find(99)->second.buffers[1][0].projected);
+ assert(!s.tile_geometry_cache.find(99)->second.buffers[1][0].natural_projection[0]);
  // An evicted owner must cancel preparation, never cache incomplete pixels.
+ s.resident_content.release(s.tile_geometry_cache.find(99)->second.binding);
  s.tile_geometry_cache.erase(99);s.buffers={};
  assert(s.prepare() && s.submissions==1 && s.pixel_prepare_cursor==1);
  // A shared owner's coincident version is not itself a camera contributor.
- s.tile_geometry_cache.clear();Entry orphan;orphan.version=7;orphan.shared_natural=true;
+ s.resident_content.clear();s.tile_geometry_cache.clear();Entry orphan;orphan.version=7;orphan.shared_natural=true;
  s.tile_geometry_cache.emplace(99,std::move(orphan));
  assert(s.prepare() && s.submissions==1 && s.pixel_prepare_cursor==2);
 }
@@ -648,7 +703,7 @@ int main(){
         with tempfile.TemporaryDirectory(prefix="c3x-world-prefetch-") as directory:
             cpp, binary = Path(directory) / "test.cpp", Path(directory) / "test"
             cpp.write_text(program)
-            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True)
 
     def test_shared_world_bounds_cover_every_zoom_and_reflected_height(self):
@@ -656,8 +711,8 @@ int main(){
         if not compiler:
             self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
-        project = "CachedVertexChunk project_natural_chunk(" + source.split(
-            "CachedVertexChunk project_natural_chunk(", 1)[1].split(
+        project = "GeometryDrawRecord project_natural_chunk(" + source.split(
+            "GeometryDrawRecord project_natural_chunk(", 1)[1].split(
             "    c3x_renderer::TileFootprint tile_footprint", 1)[0]
         program = r'''
 #include <cassert>
@@ -667,11 +722,17 @@ int main(){
 using LONG=long;
 struct c3x_renderer_tile_v1 {int tile_x,tile_y;};
 struct CachedVertexChunk {
+ int translation_x=0,translation_y=0;
  c3x_renderer::render_core::ProjectedMeshBounds projected_bounds;
  float natural_projection[4]={};
  struct {float low[3],high[3];} world_bounds;
  struct {LONG left,top,right,bottom;} bounds;
 };
+constexpr int geometry_layer_count=1;
+#include "Renderer/native/render_core/geometry_draws.h"
+using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
+using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
+using GeometryDrawReference=GeometryDrawView::Reference;
 struct State {int shadow_tile_width=128,shadow_tile_height=64,height=1192;bool tight_natural_bounds=false;
 ''' + project + r'''
 };
@@ -883,11 +944,14 @@ int main(){
 #include <cassert>
 #include <cstdio>
 #include <cstdint>
+#include "Renderer/native/render_core/resident_content.h"
+using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 template<std::size_t N,class... A> int sprintf_s(char(&out)[N],char const*format,A...args){return std::snprintf(out,N,format,args...);}
 struct State {
-    struct Item {std::size_t byte_count;unsigned last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;};
+    struct Item {std::size_t byte_count;unsigned last_used;bool prefetched;int buffers=0;std::uint64_t animation_epoch=0;Handle binding;};
     using CachedTileGeometry=Item;
+    c3x_renderer::render_core::ResidentContent<Item> resident_content{2048};
     unsigned viewport_cache_capacity=32;
     struct Trace {void write(char const*,char const*,bool){}} trace;
     std::unordered_map<int,Item> tile_geometry_cache;
@@ -899,9 +963,12 @@ struct State {
 };
 int main(){
  State s;s.tile_geometry_cache={{1,{10,1,true}},{2,{20,2,false}},{3,{30,3,false}}};
+ for(auto& item:s.tile_geometry_cache)item.second.binding=s.resident_content.bind(item.second);
+ auto expired=s.tile_geometry_cache.at(1).binding;
  assert(s.make_tile_cache_room(10) && s.tile_geometry_cache.size()==3);
  assert(s.make_tile_cache_room(50) && s.tile_geometry_cache.size()==2);
  assert(!s.tile_geometry_cache.count(1) && s.tile_geometry_cache.count(3));
+ assert(!s.resident_content.resolve(expired));
  assert(s.tile_geometry_cache_bytes==50 && !s.prefetched_geometry_bytes && s.frame_tiles_evicted==1);
  assert(!s.make_tile_cache_room(80) && s.tile_geometry_cache.size()==1);
  assert(s.tile_geometry_cache_bytes==30 && s.tile_geometry_cache.count(3));
@@ -925,7 +992,7 @@ int main(){
             cpp = Path(directory) / "test.cpp"
             cpp.write_text(program)
             binary = Path(directory) / "test"
-            subprocess.run([compiler, "-std=c++17", "-O2", str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
             subprocess.run([str(binary)], check=True)
 
     def test_exact_indexing_and_world_reprojection(self):
