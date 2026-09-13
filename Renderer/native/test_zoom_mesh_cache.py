@@ -413,7 +413,7 @@ int main(){
  s.run(0,true);s.world_coast.data.value++;assert(!s.run(0,false));
  s.run(0,true);s.topology_cache.record.semantic++;assert(!s.run(0,false));
  s.run(0,true);s.content_revision++;assert(!s.run(0,false));
- s.run(0,true);s.frame.world_topology_revision++;assert(s.run(0,false));
+ s.run(0,true);s.frame.world_topology_revision++;assert(!s.run(0,false));
  s.run(0,true);s.frame.world_width_tiles+=2;assert(!s.run(0,false));
  s.run(0,true);s.frame.world_wrap_x=0;assert(!s.run(0,false));
  s.run(0,true);s.frame.tile_width=192;s.frame.tile_height=96;assert(s.run(0,false));

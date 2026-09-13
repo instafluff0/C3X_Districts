@@ -104,6 +104,8 @@ def main(argv=None):
     parser.add_argument("--topology-edit-fixture", action="store_true", help="Distant/visible terrain edits and reversals against independent full redraws")
     parser.add_argument("--ambient-boundary", action="store_true", help="Use the existing caller-driven ambient render boundary witness")
     parser.add_argument("--local-region-revisions", action="store_true", help="Use contributor dependencies instead of global topology revision for retained regions")
+    parser.add_argument("--shared-scene-surface", action="store_true", help="Bounded complete shared-surface alternative; waves/reflections off")
+    parser.add_argument("--automatic-scene-surface", action="store_true", help="Exercise automatic retained selection for an eligible production profile")
     parser.add_argument("--prepared-resource-pass", action="store_true", help="Use the explicit animated body/shadow binding contract")
     parser.add_argument("--width", type=int, default=2240)
     parser.add_argument("--height", type=int, default=1192)
@@ -162,6 +164,8 @@ def main(argv=None):
     parser.add_argument("--composition-casters-control", action="store_true", help="Rebuild caster preparation independently for each animation region")
     parser.add_argument("--animation-readback-atlas", action="store_true", help="Pack exact animated blocks into a compact staging atlas before CPU readback")
     args = parser.parse_args(argv)
+    if (args.shared_scene_surface or args.automatic_scene_surface) and (args.waves!="0" or not args.reflection_ablation):
+        parser.error("Shared scene surface requires waves and reflections disabled")
     if args.diagnostic_animation!="full" and (not args.prepared_resource_pass or args.waves!="0" or args.scenario!="scroll" or args.boundary_fixture):
         parser.error("Animation phase ablations require the explicit resource pass, waves off, scroll, and no correctness boundary fixture")
 
@@ -224,6 +228,7 @@ def main(argv=None):
            "C3X_RENDERER_PREVIEW_TOPOLOGY_EDITS": "1" if args.topology_edit_fixture else "",
            "C3X_RENDERER_LOCAL_REGION_REVISIONS": "1" if args.local_region_revisions else "0",
            "C3X_RENDERER_PREVIEW_RETAINED_BOUNDARY": "1" if args.boundary_fixture else "",
+           "C3X_RENDERER_SHARED_SCENE_SURFACE": "" if args.automatic_scene_surface else "1" if args.shared_scene_surface else "0",
            "C3X_RENDERER_PREPARED_RESOURCE_PASS": "1" if args.prepared_resource_pass else "0",
            "C3X_RENDERER_WORLD_RASTER_GRID": "1" if args.world_grid else "0",
            "C3X_RENDERER_WORLD_REGIONS": "1" if args.world_regions else "0",
@@ -420,7 +425,12 @@ exit $childCode
             r"stage=render-region-cache .*local_revisions=1(?:\s|$)",trace_log))
         if not completion["local_region_revision_frames"]:
             completion["returncode"]=1;result["returncode"]=1
-    if args.prepared_resource_pass:
+    if args.shared_scene_surface or args.automatic_scene_surface:
+        trace_log=(out/"renderer.log").read_text(errors="replace") if (out/"renderer.log").is_file() else ""
+        completion["shared_scene_surface_frames"]=len(re.findall(r"stage=shared-scene-surface ",trace_log))
+        if not completion["shared_scene_surface_frames"]:
+            completion["returncode"]=1;result["returncode"]=1
+    if args.prepared_resource_pass and not (args.shared_scene_surface or args.automatic_scene_surface):
         trace_log=(out/"renderer.log").read_text(errors="replace") if (out/"renderer.log").is_file() else ""
         completion["resource_material_variant_frames"]=len(re.findall(
             r"stage=animation-frame .*resource_material_variants=1(?:\s|$)",trace_log))

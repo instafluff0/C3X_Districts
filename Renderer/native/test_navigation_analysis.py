@@ -51,6 +51,19 @@ class NavigationAnalysisTests(unittest.TestCase):
         self.assertIsNone(missing["nested_diagnostics"]["gpu_execution_ms"])
         self.assertEqual("unmeasured",endpoint_accounting([])["status"])
 
+    def test_scene_surface_spans_are_nested_and_gpu_time_remains_unknown(self):
+        lines=["TIMING_SETUP schema=1 frequency=1000 process_enter=0 source_done=10 dll_done=20 definitions_done=30 initial_begin=40 initial_done=100 dropped=0",
+               "TIMING_REQUEST id=0 capture_begin=30 capture_end=35 caller_enter=40 caller_return=99 correct_done=100 geometry_ticks=20 draw_ticks=0 readback_ticks=0 result=1 tiles=12"]
+        trace=["qpc=41 sequence=2 stage=render-begin",
+               "qpc=98 sequence=2 stage=shared-scene-surface static_submit_ms=5 dynamic_submit_ms=2 finish_submit_ms=1 completion_wait_ms=20 cpu_copy_ms=1 static_reused=1 translated=0 damage_rects=0 static_selected=0 dynamic_selected=10 batches=2 target_bytes=1000 resolves=1 readbacks=1"]
+        r=endpoint_accounting(lines,trace)["requests"][0]
+        self.assertEqual(29,r["renderer_cpu_spans_ms"]["scene_surface"])
+        self.assertEqual(10,r["unexplained_caller_ms"])
+        self.assertEqual(20,r["nested_diagnostics"]["blocking_map_wait_ms"])
+        self.assertIsNone(r["nested_diagnostics"]["gpu_execution_ms"])
+        self.assertEqual(0,r["scene_work"]["static_selected"])
+        self.assertFalse(r["accounting_complete"])
+
     def test_animation_gpu_spans_are_aligned_and_not_added_to_cpu_wait(self):
         lines=["TIMING_SETUP schema=1 frequency=1000 process_enter=0 source_done=10 dll_done=20 definitions_done=30 initial_begin=40 initial_done=100 dropped=0",
                "TIMING_REQUEST id=0 capture_begin=30 capture_end=35 caller_enter=40 caller_return=99 correct_done=100 geometry_ticks=20 draw_ticks=10 readback_ticks=5 result=1 tiles=12"]

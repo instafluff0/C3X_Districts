@@ -38,7 +38,8 @@ groupshared float3 highlights[1024];
 groupshared float3 near_rows[256];
 groupshared float3 far_rows[256];
 float3 q8_highlight(int2 p) {
- if(any(p<0)||any(p>=int2(input_size)))return 0;
+ if(NativeGlow.w>0)p=(p%int2(input_size)+int2(input_size))%int2(input_size);
+ else if(any(p<0)||any(p>=int2(input_size)))return 0;
  float4 c=Scene.Load(int3(p,0));
  if(Validity.Load(int3(p,0)).a<=0||c.a<=0)return 0;
  float peak=max(c.r,max(c.g,c.b));

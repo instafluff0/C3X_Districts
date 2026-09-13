@@ -400,3 +400,12 @@ Report a new concrete request to the user in the same turn; never edit the CSV,
 invent addresses or silently treat missing support as complete. Run
 `TEST_INJECTED_CODE_COMPILE.bat` when the corresponding injected source changes.
 DLL-only or documentation changes do not require injected compilation.
+
+## Retained circular scene surface (2026-09-13)
+
+The existing `c3x_renderer_render_view` demand/publication boundary consumes the
+new retained surface through the ordinary DLL output. Existing captured anchors,
+ordered ownership flags, scenario/viewer/visibility identity and unit fallback
+remain authoritative. No new Civ III patch symbol, signature, address or capture
+field is needed. `required_user_action: []`. This records source/replay integration;
+no staging, installation or game launch is authorized by the implementation.

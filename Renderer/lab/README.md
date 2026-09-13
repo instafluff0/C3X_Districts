@@ -8,9 +8,9 @@ For renderer performance engineering, follow the
 [benchmark workflow](../docs/benchmark_workflow.md). It extends the existing
 harness and preserves the category verification rules below. Read
 [the architecture](../docs/renderer_architecture.md) for the destination and
-[the retained plan](../docs/retained_renderer_plan.md) for the single next task.
-The bounded tooling phase supersedes old performance handoffs, not ordinary
-category art work; its completion returns work to scene/rendering implementation.
+[the retained plan](../docs/retained_renderer_plan.md) for the current connected implementation objective.
+Its September 13 execution reset replaces the old single-experiment queue;
+ordinary category art and visual-acceptance contracts still apply.
 
 Current commands from the repository root:
 

@@ -11,10 +11,10 @@ struct Glow {
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
     void reset(){linear.reset();drop(target);drop(native);drop(output_validity);drop(output);drop(view);drop(validity);drop(color);drop(settings);drop(shader);}
     ~Glow(){reset();}
-    bool ensure(ID3D11Device*device,std::string const&root,unsigned extent=136,unsigned height=0){
+    bool ensure(ID3D11Device*device,std::string const&root,unsigned extent=136,unsigned height=0,bool sampleable=false){
         if(!height)height=extent;
-        if(shader && native_extent==extent && native_height==height)return true;
-        if(!((extent==136 || extent==264 || extent==520) && height==extent) && !(extent==2248 && height==264))return false;
+        if(shader && linear.color && native_extent==extent && native_height==height && (!sampleable || linear.samples))return true;
+        if(extent<16 || height<16 || extent>2248 || height>1200)return false;
         reset();native_extent=extent;native_height=height;
         std::wstring path(root.begin(),root.end());path+=L"/Renderer/native/city_fidelity/hdr_glow.hlsl";
         ID3DBlob*blob=nullptr,*errors=nullptr;
@@ -34,7 +34,7 @@ struct Glow {
         d.Format=DXGI_FORMAT_B8G8R8A8_UNORM;d.BindFlags=D3D11_BIND_RENDER_TARGET;
         if(SUCCEEDED(hr))hr=device->CreateTexture2D(&d,nullptr,&native);
         if(SUCCEEDED(hr))hr=device->CreateRenderTargetView(native,nullptr,&target);
-        if(FAILED(hr) || !linear.ensure(device,native_extent*2,native_height*2)){reset();return false;}return true;
+        if(FAILED(hr) || !linear.ensure(device,native_extent*2,native_height*2,sampleable)){reset();return false;}return true;
     }
     static D3D11_RECT dispatch_rectangle(unsigned width,unsigned height,D3D11_RECT const* dirty){
         D3D11_RECT rect={0,0,LONG(width),LONG(height)};
@@ -49,13 +49,13 @@ struct Glow {
         rect.right=(rect.right+7)/8*8;rect.bottom=(rect.bottom+7)/8*8;
         return rect;
     }
-    std::size_t reconstruct(ID3D11DeviceContext*context,D3D11_RECT const* dirty=nullptr){
+    std::size_t reconstruct(ID3D11DeviceContext*context,D3D11_RECT const* dirty=nullptr,bool resolve=true,bool circular=false){
         auto dispatch=dispatch_rectangle(native_extent,native_height,dirty);
         if(dispatch.right==dispatch.left || dispatch.bottom==dispatch.top)return 0;
         context->OMSetRenderTargets(0,nullptr,nullptr);
-        context->ResolveSubresource(linear.resolved,0,linear.color,0,DXGI_FORMAT_R16G16B16A16_FLOAT);
+        if(resolve)context->ResolveSubresource(linear.resolved,0,linear.color,0,DXGI_FORMAT_R16G16B16A16_FLOAT);
         int extent=static_cast<int>(native_extent),height=static_cast<int>(native_height);
-        struct {unsigned input[2],output_size[2];int rectangle[4];float glow[4];} values={{native_extent*2,native_height*2},{native_extent,native_height},{0,0,extent,height},{gain,float(dispatch.left),float(dispatch.top),0}};
+        struct {unsigned input[2],output_size[2];int rectangle[4];float glow[4];} values={{native_extent*2,native_height*2},{native_extent,native_height},{0,0,extent,height},{gain,float(dispatch.left),float(dispatch.top),circular?1.f:0.f}};
         context->UpdateSubresource(settings,0,nullptr,&values,0,0);
         context->CSSetShader(shader,nullptr,0);context->CSSetConstantBuffers(2,1,&settings);
         context->CSSetShaderResources(0,1,&linear.view);context->CSSetShaderResources(3,1,&linear.view);

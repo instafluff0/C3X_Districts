@@ -8,9 +8,9 @@ For renderer optimization, read [the architecture](docs/renderer_architecture.md
 for the destination and firm principles, [the execution contract](docs/autonomous_renderer_execution.md)
 for bounded decisions, and [the benchmark workflow](docs/benchmark_workflow.md)
 for measurement, tooling deliverables and validation. [The retained plan](docs/retained_renderer_plan.md)
-alone records current status and the single next task. Its bounded tooling phase
-precedes the selected retained route/object capability; completion moves the task
-back to scene/rendering implementation instead of open-ended harness expansion.
+records the current connected implementation objective and status. Its September 13
+execution reset supersedes the old single-experiment queue and tooling-first rules;
+validate the complete representative path at meaningful checkpoints.
 Do not restart baseline/oracle runs or old "next step" experiments from handoffs.
 
 The [navigation handoff](docs/navigation_handoff.md) preserves historical staged

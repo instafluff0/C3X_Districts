@@ -155,6 +155,10 @@ float4 PSResourceShadow(PixelInput input):SV_Target {
     glow=glow.replace('Texture2D<float> Validity','Texture2D<float4> Validity').replace('Validity.Load(int3(p,0))','Validity.Load(int3(p,0)).a')
     glow=glow.replace('int4 valid_rect;','int4 valid_rect;float4 NativeGlow;').replace('#define Q8_GLOW_GAIN 6.0','#define Q8_GLOW_GAIN NativeGlow.x')
     glow=glow.replace('#define Q8_OUTPUT_ORIGIN uint2(0,0)','#define Q8_OUTPUT_ORIGIN uint2(NativeGlow.yz)')
+    # Circular retained surfaces sample the same lens support across their
+    # physical seam. Regional surfaces retain zero outside their guard.
+    glow=glow.replace(' if(any(p<0)||any(p>=int2(input_size)))return 0;',
+        ' if(NativeGlow.w>0)p=(p%int2(input_size)+int2(input_size))%int2(input_size);\n else if(any(p<0)||any(p>=int2(input_size)))return 0;')
     (HERE/'hdr_glow.hlsl').write_text(glow)
     (HERE/'local_lights.hlsl').write_text(field)
     caster=read(HERE.parent/'render_core/source_caster.hlsl')

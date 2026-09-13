@@ -79,6 +79,18 @@ def endpoint_accounting(lines, trace_lines=()):
         if len(animation)==1:
             phases["animation_composition"]=float(animation[0]["ms"])
             known=sum(phases.values())
+        scene=[r for r in matching if r["stage"]=="shared-scene-surface"]
+        scene_spans=None
+        if len(scene)==1:
+            names=("static_submit","dynamic_submit","finish_submit","completion_wait","cpu_copy")
+            scene_spans={n:float(scene[0][n+"_ms"]) for n in names}
+            if any(not math.isfinite(v) or v<0 for v in scene_spans.values()):
+                raise ValueError("Invalid retained scene CPU span")
+            # Surface spans exclude pose/selection preparation. Keep that gap
+            # explicit until the complete composition endpoint is available.
+            total=[r for r in matching if r["stage"]=="scene-composition"]
+            phases["scene_surface"]=float(total[0]["ms"]) if len(total)==1 else sum(scene_spans.values())
+            known=sum(phases.values())
         # Report nested diagnostics separately: they are contained by caller and
         # readback, and cannot be added to their parent intervals.
         nested={"blocking_map_wait_ms":None,"cpu_bitmap_copy_ms":None,
@@ -86,6 +98,9 @@ def endpoint_accounting(lines, trace_lines=()):
         if len(submission)==1:
             nested.update(blocking_map_wait_ms=float(submission[0]["map_wait_ms"]),
                           cpu_bitmap_copy_ms=float(submission[0]["cpu_copy_ms"]))
+        if scene_spans:
+            nested.update(blocking_map_wait_ms=scene_spans["completion_wait"],
+                          cpu_bitmap_copy_ms=scene_spans["cpu_copy"])
         if len(gpu)==1 and gpu[0].get("valid")=="1":
             nested.update(gpu_execution_ms=float(gpu[0]["gpu_draw_ms"]),gpu_copy_ms=float(gpu[0]["gpu_copy_ms"]))
         request={"id":int(row["id"]),"role":"initial_preparation" if not requests else "playback",
@@ -98,6 +113,10 @@ def endpoint_accounting(lines, trace_lines=()):
                  "unexplained_caller_ms":max(0,call-known),
                  "cpu_phase_accounting_valid":known<=call+0.01,
                  "independent_pixel_parity":"unmeasured"}
+        request["scene_cpu_spans_ms"]=scene_spans
+        request["scene_work"]=({k:int(scene[0][k]) for k in
+            ("static_reused","translated","damage_rects","static_selected","dynamic_selected","batches","target_bytes","resolves","readbacks")}
+            if scene_spans else None)
         # Separate command-stream spans from CPU submission/wait/copy. They
         # overlap: never add GPU spans to CPU Map wait or renderer wall time.
         animation_cpu=[r for r in matching if r["stage"]=="animation-phases"]

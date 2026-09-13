@@ -44,6 +44,7 @@
 #include "render_core/geometry_draws.h"
 #include "render_core/resource_instances.h"
 #include "render_core/scene_depth.h"
+#include "render_core/scene_surface.h"
 #include "render_core/coastal_waves.h"
 #include "render_core/relief_query.h"
 #include "render_core/exact_point_cache.h"
@@ -491,6 +492,14 @@ public:
     unsigned diagnostic_animation=0; // Cumulative benchmark-only GPU phase ablations.
 #endif
     bool bounded_post=false;
+    bool shared_scene_surface=false,scene_surface_requested=false;
+    c3x_renderer::render_core::LinearTarget scene_scratch;
+    std::vector<D3D11_RECT> scene_dynamic_damage;
+    std::uint64_t scene_static_signature=0;
+    c3x_renderer::render_core::LinearRestore scene_restore;
+    std::int64_t scene_static_depth_origin=0;
+    bool scene_overlap=false;int scene_dx=0,scene_dy=0;
+    std::vector<D3D11_RECT> scene_damage;
     int scene_region_size=128;
     int scene_region_height=128;
     bool cull_empty_water=false;
@@ -886,6 +895,8 @@ public:
     }
 
     void reset_targets() {
+        scene_restore.reset();
+        scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         cancel_pixel_preparation();
         linear_frame.reset(); linear_block.reset(); reflection.linear.reset();region_reflection.linear.reset();region_glow.linear.reset();
         pixel_blocks.clear();
@@ -905,6 +916,7 @@ public:
     }
 
     void clear_resource_backdrops() {
+        scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         for(auto & block:resource_backdrops){release(block.color);release(block.depth);}
         resource_backdrops.clear();resource_backdrop_epoch=0;resource_backdrop_bytes=0;
     }
@@ -2417,6 +2429,17 @@ public:
         environment_profile=use_environment;
         fidelity_profile = use_fidelity;
         char control[8]={};
+        bool explicit_surface=GetEnvironmentVariableA("C3X_RENDERER_SHARED_SCENE_SURFACE",control,sizeof(control))!=0;
+        bool requested_surface=explicit_surface && std::strcmp(control,"1")==0;
+        if(!explicit_surface){
+            char waves[8]={},reflections[8]={};
+            GetEnvironmentVariableA("C3X_RENDERER_WAVES",waves,sizeof(waves));
+            GetEnvironmentVariableA("C3X_RENDERER_REFLECTION_CONTROL",reflections,sizeof(reflections));
+            requested_surface=city_profile && std::strcmp(waves,"0")==0 && std::strcmp(reflections,"1")==0;
+        }
+        scene_surface_requested=requested_surface;
+        if(requested_surface!=shared_scene_surface){reset_targets();clear_resource_backdrops();}
+        shared_scene_surface=requested_surface;
         bool three_zoom_memory=c3x_renderer::NavigationOptions::retained(GetEnvironmentVariableA,"C3X_RENDERER_THREE_ZOOM_MEMORY");
         auto viewport_limit=three_zoom_memory?std::max(default_viewport_cache_budget,std::size_t(64u*1024u*1024u)):default_viewport_cache_budget;
         auto backdrop_limit=three_zoom_memory?std::size_t(832u*1024u*1024u):default_resource_backdrop_cache_budget;
@@ -3316,7 +3339,7 @@ public:
 
     bool compose_resource_animations(c3x_renderer_frame_v1 const & frame) {
         resource_composite_ticks=0;
-        if (!frame_has_resource_animation(frame)) {
+        if (!shared_scene_surface && !frame_has_resource_animation(frame)) {
             visible_resource_animations=visible_wave_animations=0; resource_pixel_signature=0; return true;
         }
         auto clock=resource_clock(frame);
@@ -3567,6 +3590,15 @@ public:
                 D3D11_RECT visible={std::max<LONG>(0,chunk.bounds.left+wave_dx),std::max<LONG>(0,chunk.bounds.top+wave_dy),std::min<LONG>(width,chunk.bounds.right+wave_dx),std::min<LONG>(height,chunk.bounds.bottom+wave_dy)};
                 dirty(visible);
             }
+        }
+        if(shared_scene_surface) {
+            if(visible_wave_animations){trace.write("scene-surface-failed","waves outside bounded alternative",true);return false;}
+            if(!compose_scene_surface(buffers))return false;
+            resource_pixel_signature=cached_signature.complete;resource_pixel_clock=clock;
+            QueryPerformanceCounter(&finished);resource_composite_ticks=finished.QuadPart-started.QuadPart;
+            char detail[128];sprintf_s(detail,"ms=%.3f",trace.milliseconds(resource_composite_ticks));
+            trace.write("scene-composition",detail,true);
+            return true;
         }
         if (!ambient_count()) {resource_pixel_signature=0;return true;}
         // All regions in this composition borrow the same pinned static
@@ -3881,6 +3913,200 @@ public:
         return true;
     }
 
+    bool compose_scene_surface(GeometryDrawView dynamic) {
+        // Failure cannot certify partially changed attachments for later reuse.
+        struct Transaction {
+            std::uint64_t& signature;bool complete=false;
+            ~Transaction(){if(!complete)signature=0;}
+        } transaction{scene_static_signature};
+        // One scene-linear working set, independent of raster cache cells.
+        // Sparse static backup: color/depth only; finishing targets belong to Glow.
+        auto& glow=region_glow;
+        unsigned w=unsigned(width)+8,h=unsigned(height)+8;
+        std::size_t target_bytes=std::size_t(w)*h*432u;
+        if(!city_profile || !c3x_renderer::render_core::scene_surface_extent(width,height) ||
+           target_bytes>1152u*1024u*1024u || reflection.enabled) {
+            trace.write("scene-surface-failed","bounded no-reflection view/target contract",true);return false;
+        }
+        if(glow.native_extent!=w || glow.native_height!=h || !glow.linear.color){
+            scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
+        }
+        if(!glow.ensure(device,fidelity_root,w,h,true) || !scene_scratch.ensure(device,w*2,h*2,true,false) ||
+           !scene_restore.ensure(device))return false;
+        auto& linear=glow.linear;
+        ViewportShaderSettings settings=geometry_viewport_settings;
+        settings.translation[0]+=4;settings.translation[1]+=4;
+        settings.inverse_size[0]=1.f/w;settings.inverse_size[1]=1.f/h;
+        D3D11_RECT view={0,0,LONG(w),LONG(h)};
+        using Shadow=c3x_renderer::render_core::SourceShadow;
+        std::vector<Shadow::Caster> casters;Shadow::PreparedCasters prepared;
+        auto prepared_ptr=prepare_shadow_submission(geometry_vertex_buffers,casters,prepared);
+        LARGE_INTEGER begin={},static_end={},dynamic_end={},finish_end={},ready={},copied={};
+        QueryPerformanceCounter(&begin);
+        bool restored=scene_static_signature==cached_signature.complete;
+        bool translated=!restored && scene_overlap && scene_static_signature && scene_static_depth_origin==scene_depth_origin;
+        std::vector<D3D11_RECT> static_rectangles=translated?scene_damage:std::vector<D3D11_RECT>{view};
+        auto spans=c3x_renderer::render_core::scene_spans<D3D11_RECT>(int(w),int(h),region_origin_x,region_origin_y);
+        auto physical=[&](std::vector<D3D11_RECT> const& logical){
+            std::vector<D3D11_RECT> result;
+            for(auto span:spans)for(auto r:logical){
+                r={std::max(span.rect.left,r.left+span.x),std::max(span.rect.top,r.top+span.y),
+                   std::min(span.rect.right,r.right+span.x),std::min(span.rect.bottom,r.bottom+span.y)};
+                if(r.left<r.right && r.top<r.bottom)result.push_back(r);
+            }return result;
+        };
+        unsigned batches=0,selected_static=0,selected_dynamic=0;
+        // The working attachment contains the last composed scene. The spare
+        // owns only the static samples underneath its animated damage. Restore
+        // those samples before accepting camera damage or a new pose.
+        context->OMSetRenderTargets(0,nullptr,nullptr);
+        if(restored || translated){
+            if(!scene_dynamic_damage.empty() && !scene_restore.draw(context,linear,scene_scratch.samples,
+                scene_scratch.depth_samples,0,0,{},&scene_dynamic_damage))return false;
+            if(translated){
+                auto dirty=physical(static_rectangles);
+                // Clear only exposed/invalidated physical spans. All unchanged
+                // static samples stay at their original world-relative address.
+                for(auto rect:dirty){std::vector<D3D11_RECT> one={rect};
+                    if(!scene_restore.draw(context,linear,scene_scratch.samples,
+                        scene_scratch.depth_samples,0,0,one,&one))return false;}
+            }
+        }else{
+            float clear[4]={};context->ClearRenderTargetView(linear.target,clear);
+            context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
+        }
+        std::vector<D3D11_RECT> dynamic_damage;
+        for(auto layer:{geometry_shadow,geometry_feature})for(auto item:dynamic[layer]){
+            auto rect=item.bounds();int dx=item.translation_x()+int(settings.translation[0]),dy=item.translation_y()+int(settings.translation[1]);
+            rect={std::max<LONG>(0,rect.left+dx-4),std::max<LONG>(0,rect.top+dy-4),
+                  std::min<LONG>(w,rect.right+dx+4),std::min<LONG>(h,rect.bottom+dy+4)};
+            if(rect.left<rect.right && rect.top<rect.bottom)dynamic_damage.push_back(rect);
+        }
+        // Union damage into disjoint scan bands; no duplicate translucent draws
+        // or repeated finishing. These are scissors, never miniature scenes.
+        auto disjoint=[&](std::vector<D3D11_RECT> const& inputs){
+            return c3x_renderer::render_core::scene_damage_union(int(w),int(h),inputs);
+        };
+        dynamic_damage=disjoint(physical(dynamic_damage));
+        auto finish_damage=scene_dynamic_damage;
+        finish_damage.insert(finish_damage.end(),dynamic_damage.begin(),dynamic_damage.end());
+        finish_damage=restored?disjoint(finish_damage):std::vector<D3D11_RECT>{view};
+        // Preserve production layer/occurrence order. Batches change only when
+        // selected receivers would exceed the existing 32 shadow-page slots.
+        auto submit=[&](GeometryDrawView inputs,std::vector<unsigned> const& order,bool dynamic_pass){
+            for(auto span:spans){
+            ViewportShaderSettings pass_settings=settings;
+            pass_settings.translation[0]+=float(span.x);pass_settings.translation[1]+=float(span.y);
+            std::vector<D3D11_RECT> rectangles;
+            for(auto rect:dynamic_pass?std::vector<D3D11_RECT>{view}:static_rectangles){
+                rect={std::max(span.rect.left,rect.left+span.x),std::max(span.rect.top,rect.top+span.y),
+                      std::min(span.rect.right,rect.right+span.x),std::min(span.rect.bottom,rect.bottom+span.y)};
+                if(rect.left<rect.right && rect.top<rect.bottom)rectangles.push_back(rect);
+            }
+            if(rectangles.empty())continue;
+            GeometryDrawView::Records selected;
+            std::set<std::pair<int,int>> pages;
+            std::vector<Shadow::Bounds> receivers;
+            std::size_t selected_bytes=0;
+            auto flush=[&](){
+                if(pages.empty())return true;
+                if(!prepare_receiver_shadows(geometry_vertex_buffers,pass_settings,{span.rect},false,casters,prepared_ptr,nullptr,&pages))return false;
+                bool ok=dynamic_pass?submit_prepared_resource_region(selected,pass_settings,span.rect,&glow):
+                    submit_geometry(selected,rectangles,pass_settings,glow.target,linear.depth,int(w),int(h),nullptr,
+                        true,false,nullptr,false,&casters,prepared_ptr,128,0,0,false,true);
+                for(auto& layer:selected)layer.clear();pages.clear();++batches;return ok;
+            };
+            for(auto layer:order){
+                for(auto item:inputs[layer]){
+                    bool visible=false;for(auto const& rect:rectangles)visible=visible || chunk_intersects_region(item,pass_settings,rect,false);
+                    if(!visible)continue;
+                    GeometryDrawRecord record(item.content());
+                    record.bounds=item.bounds();record.translation_x=item.translation_x();record.translation_y=item.translation_y();
+                    std::copy(item.natural_projection(),item.natural_projection()+4,record.natural_projection);
+                    receivers.clear();
+                    if(layer!=geometry_shadow)receivers.push_back(item.content().world_bounds);
+                    auto needed=Shadow::required_pages(receivers,shadow_basis);
+                    // Some non-receiving layers still draw; an empty sentinel
+                    // batch uses no extra shadow slots but must be submitted.
+                    std::size_t additional=0;for(auto const& page:needed)if(!pages.count(page))++additional;
+                    if(pages.size()+additional>32 && !flush())return false;
+                    if(needed.size()>32)return false;
+                    pages.insert(needed.begin(),needed.end());
+                    auto before=selected[layer].capacity();selected[layer].push_back(record);
+                    selected_bytes+=(selected[layer].capacity()-before)*sizeof(GeometryDrawRecord);
+                    if(selected_bytes>4u*1024u*1024u)return false;
+                    if(dynamic_pass)++selected_dynamic;else ++selected_static;
+                }
+                // Explicit material/pass ordering is preserved across batches.
+                bool any=false;for(auto const& values:selected)any=any || !values.empty();
+                if(any && pages.empty()){
+                    bool ok=dynamic_pass?submit_prepared_resource_region(selected,pass_settings,span.rect,&glow):
+                        submit_geometry(selected,rectangles,pass_settings,glow.target,linear.depth,int(w),int(h),nullptr,
+                            true,false,nullptr,false,&casters,prepared_ptr,128,0,0,false,true);
+                    if(!ok)return false;for(auto& values:selected)values.clear();++batches;
+                }else if(!flush())return false;
+            }
+            }
+            return true;
+        };
+        if(!restored){
+            std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
+            for(auto const& item:geometry_vertex_buffers[geometry_city])if(item.content().city_lighting){
+                auto pointer=item.content().city_lighting.get();
+                if(std::find(lights.begin(),lights.end(),pointer)==lights.end())lights.push_back(pointer);
+            }
+            if(!cities.lights(context,lights))return false;
+            std::vector<unsigned> order={geometry_underlay,geometry_land,geometry_natural_terrain,geometry_natural_mountain,geometry_natural_decal};
+            for(unsigned layer=geometry_natural_forest0;layer<geometry_layer_count;++layer)order.push_back(layer);
+            for(auto layer:{geometry_bed,geometry_water,geometry_river,geometry_shadow,geometry_route})order.push_back(layer);
+            for(unsigned i=0;i<cliff_bundle.assets.size();++i)order.push_back(geometry_cliff0+i);
+            for(auto layer:{geometry_feature,geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall})order.push_back(layer);
+            if(!submit(geometry_vertex_buffers,order,false))return false;
+            context->OMSetRenderTargets(0,nullptr,nullptr);
+
+            scene_static_signature=cached_signature.complete;scene_static_depth_origin=scene_depth_origin;
+        }
+        if(!dynamic_damage.empty() && !scene_restore.draw(context,scene_scratch,linear.samples,
+            linear.depth_samples,0,0,{},&dynamic_damage))return false;
+        scene_dynamic_damage=std::move(dynamic_damage);
+        QueryPerformanceCounter(&static_end);
+        if(!submit(dynamic,{geometry_shadow,geometry_feature},true))return false;
+        QueryPerformanceCounter(&dynamic_end);
+        bool first=true;
+        for(auto const& rect:finish_damage){
+            frame_post_lanes+=glow.reconstruct(context,&rect,first,true);first=false;
+            linear_output.draw(context,linear,glow.target,display_exposure,1,glow.view,w,h,&rect);
+        }
+        context->OMSetRenderTargets(0,nullptr,nullptr);
+        std::vector<D3D11_RECT> copies;
+        for(auto span:spans)for(auto damage:finish_damage){
+            D3D11_RECT rect={std::max<LONG>(span.rect.left,damage.left),std::max<LONG>(span.rect.top,damage.top),
+                             std::min<LONG>(span.rect.right,damage.right),std::min<LONG>(span.rect.bottom,damage.bottom)};
+            rect={std::max<LONG>(rect.left,span.x+4),std::max<LONG>(rect.top,span.y+4),
+                  std::min<LONG>(rect.right,span.x+width+4),std::min<LONG>(rect.bottom,span.y+height+4)};
+            if(rect.left>=rect.right || rect.top>=rect.bottom)continue;
+            D3D11_BOX box={UINT(rect.left),UINT(rect.top),0,UINT(rect.right),UINT(rect.bottom),1};
+            context->CopySubresourceRegion(readback_texture,0,rect.left-span.x-4,rect.top-span.y-4,0,glow.native,0,&box);
+            copies.push_back({rect.left-span.x-4,rect.top-span.y-4,rect.right-span.x-4,rect.bottom-span.y-4});
+        }
+        QueryPerformanceCounter(&finish_end);
+        D3D11_MAPPED_SUBRESOURCE mapped={};
+        if(!copies.empty() && FAILED(context->Map(readback_texture,0,D3D11_MAP_READ,0,&mapped)))return false;
+        QueryPerformanceCounter(&ready);
+        // One persistent composed bitmap also covers animation removal. Output
+        // pointer selection must not resurrect a pre-animation CPU bitmap.
+        auto& output=pixels;output.resize(std::size_t(width)*height);
+        for(auto rect:copies)for(int y=rect.top;y<rect.bottom;++y)std::memcpy(output.data()+std::size_t(y)*width+rect.left,
+            static_cast<unsigned char*>(mapped.pData)+std::size_t(y)*mapped.RowPitch+rect.left*4,std::size_t(rect.right-rect.left)*4);
+        if(!copies.empty())context->Unmap(readback_texture,0);QueryPerformanceCounter(&copied);
+        char detail[768];sprintf_s(detail,"static_reused=%u translated=%u damage_rects=%zu static_selected=%u dynamic_selected=%u batches=%u target_bytes=%zu target_cap=1207959552 resolves=%u readbacks=%u full_surface_copies=0 dynamic_damage_rects=%zu copied_rects=%zu static_submit_ms=%.3f dynamic_submit_ms=%.3f finish_submit_ms=%.3f completion_wait_ms=%.3f cpu_copy_ms=%.3f",
+            unsigned(restored),unsigned(translated),static_rectangles.size(),selected_static,selected_dynamic,batches,target_bytes,unsigned(!finish_damage.empty()),unsigned(!copies.empty()),scene_dynamic_damage.size(),copies.size(),
+            trace.milliseconds(static_end.QuadPart-begin.QuadPart),trace.milliseconds(dynamic_end.QuadPart-static_end.QuadPart),
+            trace.milliseconds(finish_end.QuadPart-dynamic_end.QuadPart),trace.milliseconds(ready.QuadPart-finish_end.QuadPart),trace.milliseconds(copied.QuadPart-ready.QuadPart));
+        trace.write("shared-scene-surface",detail,true);memory_sample("shared-scene-complete");
+        transaction.complete=true;return true;
+    }
+
     bool fill_output(c3x_renderer_frame_v1 const & frame,
                      c3x_renderer_output_v1 & output, c3x_renderer_u32 invalidations,
                      c3x_renderer_i64 renderer_ticks) {
@@ -3910,7 +4136,7 @@ public:
                 center_shore_cache.hits,center_shore_cache.misses,center_shore_cache.bytes,center_shore_cache.entries.size());
             trace.write("center-shore-cache",detail,false);
         }
-        output.bgra_pixels = ambient_count() ? resource_pixels.data() : pixels.data();
+        output.bgra_pixels = ambient_count() && !shared_scene_surface ? resource_pixels.data() : pixels.data();
         // Terrain is independent of retained native unit/effect animation.  A
         // cache hit must still report the current frame's animation demand so
         // Civ III keeps driving those overlay planes without rerendering the
@@ -4686,14 +4912,16 @@ public:
 
     bool submit_prepared_resource_region(
             GeometryDrawView buffers,
-            ViewportShaderSettings const& settings,D3D11_RECT const& output_damage) {
-        std::vector<D3D11_RECT> rectangles={{0,0,136,136}};
-        auto& linear=city_glow.linear;
+            ViewportShaderSettings const& settings,D3D11_RECT const& output_damage,
+            c3x_renderer::city_fidelity::Glow* surface=nullptr) {
+        auto& glow=surface?*surface:city_glow;
+        std::vector<D3D11_RECT> rectangles={surface?output_damage:D3D11_RECT{0,0,LONG(glow.native_extent),LONG(glow.native_height)}};
+        auto& linear=glow.linear;
         context->OMSetRenderTargets(1,&linear.target,linear.depth);
         context->OMSetDepthStencilState(depth_state,0);
         context->OMSetBlendState(blend_state,nullptr,0xffffffffu);
         context->RSSetState(rasterizer_state);
-        D3D11_VIEWPORT viewport={0,0,272,272,0,1};context->RSSetViewports(1,&viewport);
+        D3D11_VIEWPORT viewport={0,0,float(linear.width),float(linear.height),0,1};context->RSSetViewports(1,&viewport);
         if(!cities.lights(context,{}))return false;
         // The shadow material variant preserves shading, sample order and depth.
         // Only body/shadow resources are consumed: no terrain table,
@@ -4725,6 +4953,7 @@ public:
         if(!diagnostic_animation)
 #endif
         if(!draw_cached_geometry(geometry_feature,buffers,rectangles,settings,nullptr))return false;
+        if(surface)return true; // Shared scene caller finishes and reads back once.
         AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::finish);
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
         if(diagnostic_animation>=2){
@@ -4752,9 +4981,9 @@ public:
                          bool reflection_pass=false,
                          std::vector<c3x_renderer::render_core::SourceShadow::Caster> const * shadow_casters_ptr=nullptr,
                          c3x_renderer::render_core::SourceShadow::PreparedCasters * prepared_casters_ptr=nullptr,
-                         int region_size=128,int grid_x=0,int grid_y=0,bool require_linear_backdrop=false) {
+                         int region_size=128,int grid_x=0,int grid_y=0,bool require_linear_backdrop=false,bool scene_surface_pass=false) {
         int const region_height=region_size==2240?256:region_size;
-        auto& active_glow=region_size==128?city_glow:region_glow;
+        auto& active_glow=scene_surface_pass?region_glow:region_size==128?city_glow:region_glow;
         auto& active_reflection=region_size==128?reflection:region_reflection;
         // Geometry owners remain pinned throughout this synchronous submission.
         // Camera blocks and reflection passes borrow one immutable caster list;
@@ -4767,7 +4996,7 @@ public:
             prepared_casters_ptr=prepare_shadow_submission(shadow_buffers_ptr?shadow_buffers_ptr:buffers,submission_casters,prepared_casters);
             shadow_casters_ptr=&submission_casters;
         }
-        if(fidelity_profile && !reflection_pass) {
+        if(fidelity_profile && !reflection_pass && !scene_surface_pass) {
             ID3D11Resource* destination_resource=nullptr;target->GetResource(&destination_resource);
             ID3D11Texture2D* destination_texture=nullptr;
             HRESULT hr=destination_resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(&destination_texture));
@@ -4851,7 +5080,7 @@ public:
             }
             destination_texture->Release();
         }
-        if(pickup_profile && !(city_profile && region_size==2240)) {
+        if(pickup_profile && !scene_surface_pass && !(city_profile && region_size==2240)) {
             std::vector<D3D11_RECT> pieces;
             for(auto const& rect:rectangles)
                 for(LONG y=rect.top;y<rect.bottom;y+=512)for(LONG x=rect.left;x<rect.right;x+=512)
@@ -4901,7 +5130,7 @@ public:
                         chunk.bounds().left+dx>=rect.right || chunk.bounds().bottom+dy<=rect.top || chunk.bounds().top+dy>=rect.bottom);
             }
         }
-        if(environment_profile && !reflection_pass && active_reflection.enabled && reflection_needed){
+        if(environment_profile && !reflection_pass && !scene_surface_pass && active_reflection.enabled && reflection_needed){
             ViewportShaderSettings reflected=settings;
             reflected.translation[0]+=4;reflected.translation[1]+=4;
             int reflected_extent=int(active_reflection.native_extent),reflected_height=int(active_reflection.native_height);
@@ -4918,7 +5147,7 @@ public:
                 cancellation,false,true,shadow_buffers_ptr,true,shadow_casters_ptr,prepared_casters_ptr,region_size,grid_x,grid_y))return false;
         }
         {AnimationGpu::Pass gpu_phase(animation_gpu,context,AnimationGpu::receivers);
-        if(pickup_profile && !prepare_receiver_shadows(shadow_buffers_ptr?shadow_buffers_ptr:buffers,
+        if(pickup_profile && !scene_surface_pass && !prepare_receiver_shadows(shadow_buffers_ptr?shadow_buffers_ptr:buffers,
                 settings,rectangles,reflection_pass,*shadow_casters_ptr,prepared_casters_ptr,cancellation))return false;}
 
         float clear[4] = {0, 0, 0, 0};
@@ -4938,7 +5167,7 @@ public:
         D3D11_RECT scissor = {0, 0, projection_width, projection_height};
         context->RSSetScissorRects(1, &scissor);
         if(environment_profile)active_reflection.bind(context);
-        if(city_profile){
+        if(city_profile && !scene_surface_pass){
             std::vector<c3x_renderer::city_fidelity::Lighting const*> active;
             for(auto const&chunk:buffers[geometry_city])if(chunk.content().city_lighting){
                 auto pointer=chunk.content().city_lighting.get();if(std::find(active.begin(),active.end(),pointer)!=active.end())continue;
@@ -5189,7 +5418,7 @@ public:
         cancel_pixel_preparation();
         // The legacy pixel-block producer uses its own screen-space scratch
         // grid. Do not mix those pixels with the world-grid experiment.
-        if(world_raster_grid)return;
+        if(world_raster_grid || shared_scene_surface)return;
         bool has_prefetch=false;
         for(unsigned i=0;i<frame.tile_count;++i) has_prefetch=has_prefetch || (frame.tiles[i].tile_flags & C3X_RENDERER_TILE_PREFETCH) != 0;
         if (!has_prefetch) return;
@@ -5491,6 +5720,11 @@ public:
         frame_geometry_ticks = frame_draw_ticks = frame_readback_ticks = 0;
         frame_cache_path = "tiles";
         if (!prewarming) {
+        bool selected_surface=scene_surface_requested &&
+            c3x_renderer::render_core::scene_surface_extent(frame.target_width,frame.target_height);
+        if(selected_surface!=shared_scene_surface){
+            reset_targets();clear_resource_backdrops();shared_scene_surface=selected_surface;
+        }
         ++trace.sequence;
         char profile_option[8]={};
         profiling=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",profile_option,sizeof(profile_option)) &&
@@ -5656,7 +5890,7 @@ public:
             return fill_output(frame, output, 0, 0);
         }
         {
-            for (std::size_t cache_index = 0; cache_index < viewport_cache.size(); ++cache_index) {
+            for (std::size_t cache_index = 0; !shared_scene_surface && cache_index < viewport_cache.size(); ++cache_index) {
                 if (viewport_cache[cache_index].signature.complete != signature.complete)
                     continue;
                 if(frame_has_resource_animation(frame)) {
@@ -5688,7 +5922,7 @@ public:
                 return fill_output(frame, output, 0, 0);
             }
         }
-        if (!frame_has_resource_animation(frame) && reuse_cached_subset(frame, signature)) {
+        if (!shared_scene_surface && !frame_has_resource_animation(frame) && reuse_cached_subset(frame, signature)) {
             frame_cache_path = "viewport-subset";
             if (cache_hits != 0xffffffffu)
                 ++cache_hits;
@@ -5912,7 +6146,7 @@ public:
         viewport_settings.inverse_size[1] = 1.0f / c3x_renderer::power_of_two_extent(frame.target_height);
         viewport_settings.reserved[0] = static_cast<float>(frame.target_height);
         if (!prewarming) geometry_viewport_settings = viewport_settings;
-        if(!prewarming && world_regions){
+        if(!prewarming && (world_regions || shared_scene_surface)){
             region_origin_x=frame.tile_count?std::int64_t(frame.tiles[0].anchor_x)-std::int64_t(frame.tiles[0].tile_x)*frame.tile_width/2:0;
             region_origin_y=frame.tile_count?std::int64_t(frame.tiles[0].anchor_y)-std::int64_t(frame.tiles[0].tile_y)*frame.tile_height/2:0;
             // Geometry dependency validation still observes every topology revision.
@@ -6181,13 +6415,6 @@ public:
             std::unordered_map<std::size_t, std::uint32_t> world_dependencies;
             auto observe_world = [&](std::size_t i, std::uint32_t value) { world_dependencies.emplace(i,value); };
             auto observe_coast = [&](auto id,auto revision) { coast_dependencies.emplace(id,revision); };
-            std::vector<std::pair<int,int>> observed_river_pages;
-            auto observe_river_page = [&](auto const& page) {
-                auto key=std::make_pair(page.c,page.r);
-                if(std::find(observed_river_pages.begin(),observed_river_pages.end(),key)!=observed_river_pages.end())return;
-                observed_river_pages.push_back(key);
-                for(auto const& input:page.dependencies)observe_world(input.first,input.second);
-            };
             c3x_renderer::fidelity::SurfaceQueries queries(world_coast,shore_samples,
                 tile.tile_x,tile.tile_y,observe_world,observe_coast,skip_flat_shore);
             auto world_lookup = [&](int c,int r) { return queries.tile(c,r); };
@@ -6498,7 +6725,7 @@ public:
                                       float u, float v) {
                 if(fidelity_profile){
                     float x=float(river_tile.tile_x+river_tile.tile_y)*.5f+u,y=float(river_tile.tile_x-river_tile.tile_y)*.5f+1-v;
-                    return float(natural.river_sample({x,y},observe_river_page).distance);
+                    return float(natural.river_sample({x,y}).distance);
                 }
                 float distance = 1000.0f;
                 unsigned mask = river_tile.river_code & 170u;
@@ -6517,7 +6744,7 @@ public:
                 return distance;
             };
             auto river_node_distance = [&](float u, float v, unsigned node_kind) {
-                if(fidelity_profile && node_kind!=1){auto sample=natural.river_sample({(tile.tile_x+tile.tile_y)*.5+u,(tile.tile_x-tile.tile_y)*.5+1-v},observe_river_page);return float(node_kind==0?sample.source:sample.mouth);}
+                if(fidelity_profile && node_kind!=1){auto sample=natural.river_sample({(tile.tile_x+tile.tile_y)*.5+u,(tile.tile_x-tile.tile_y)*.5+1-v});return float(node_kind==0?sample.source:sample.mouth);}
                 float point_x = static_cast<float>(tile.tile_x) + u - v;
                 float point_y = static_cast<float>(tile.tile_y) + u + v - 1.0f;
                 float distance = 1000.0f;
@@ -7213,7 +7440,7 @@ public:
             // coordinates/UVs, not just canonical gameplay identity.
             auto ground_key=(std::uint64_t(std::uint32_t(tile.tile_x))<<32)|std::uint32_t(tile.tile_y);
             std::uint64_t ground_signature=tile_content_signature(tile);
-            for(auto value:{content_revision,
+            for(auto value:{content_revision,std::uint64_t(frame.world_topology_revision),
                     std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
                     std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y)})
                 ground_signature=(ground_signature^value)*1099511628211ull;
@@ -7459,7 +7686,7 @@ public:
                 append_ground_layer(bed_vertices, 4.0f, flat_grid, &ground_indices[geometry_bed]);
                 append_ground_layer(water_vertices, 5.0f, flat_grid, &ground_indices[geometry_water]);
             }
-            if (river_assets_ready && ((tile.river_code & 170u) != 0 || (fidelity_profile && natural.river_affects((tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,observe_river_page))))
+            if (river_assets_ready && ((tile.river_code & 170u) != 0 || (fidelity_profile && natural.river_affects((tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2))))
                 append_ground_layer(river_vertices, 9.0f,
                                     frame.tile_width >= 96 ? 32 : 16, &ground_indices[geometry_river]);
             if (!pickup_profile && ground < 11) {
@@ -7731,7 +7958,7 @@ public:
                         for(unsigned attempt=0;attempt<4 && !placed;attempt++){
                             river::P point;double side=((seed&1u)?1.:-1.)*((attempt&1u)?-1.:1.);
                             double margin=11.+c3x_renderer::stable_random(seed^0x2c07u)*1.5+(attempt/2u)*3.;
-                            if(!natural.river_page(query_point.x,query_point.y,observe_river_page).bank_point(query_point,margin,side,point))continue;
+                            if(!natural.river_page(query_point.x,query_point.y).bank_point(query_point,margin,side,point))continue;
                             int c=int(std::floor(point.x)),r=int(std::floor(point.y));
                             auto receiving=topology_cache.current(observed_coordinate_key(c+r,c-r));
                             if(receiving==nullptr || ground_type(receiving->occurrence)>=11)continue;
@@ -7740,7 +7967,7 @@ public:
                             bool clear=relief_at_world(float(point.x),float(point.y))[0]+2.5f<18;
                             for(auto const&vertex:asset.vertices){river::P q{point.x+(vertex.position[0]*cosine-vertex.position[1]*sine)*scale,
                                 point.y-(vertex.position[0]*sine+vertex.position[1]*cosine)*scale};
-                                if(natural.river_sample(q,observe_river_page).distance<5.5){clear=false;break;}}
+                                if(natural.river_sample(q).distance<5.5){clear=false;break;}}
                             if(!clear)continue;
                             owner=&receiving->occurrence;local_u=u;local_v=v;placed=true;
                         }
@@ -8055,7 +8282,7 @@ public:
             // GPU tile cache. Never reuse samples across authoritative edits.
             std::uint64_t natural_key=1469598103934665603ull;
             for(auto value:{std::uint64_t(std::uint32_t(tile.tile_x)),std::uint64_t(std::uint32_t(tile.tile_y)),
-                    tile_content_signature(tile),content_revision,
+                    tile_content_signature(tile),content_revision,std::uint64_t(frame.world_topology_revision),
                     std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
                     std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y)})
                 natural_key=(natural_key^value)*1099511628211ull;
@@ -8415,6 +8642,17 @@ public:
         trace.write("geometry-ready", frame_cache_path);
         if(cancelled())return false;
         memory_sample("geometry-ready");
+        if(shared_scene_surface){
+            scene_overlap=false;scene_damage.clear();
+            std::vector<c3x_renderer::PixelRect> damage;
+            if(reuse_raster && scene_static_signature==cached_signature.complete &&
+               c3x_renderer::scroll_damage(bitmap_footprints,current_footprints,width,height,scene_dx,scene_dy,damage,0) && damage.size()<=16){
+                for(auto const& rect:damage)scene_damage.push_back({rect.left==0?0:rect.left+4,rect.top==0?0:rect.top+4,
+                    rect.right==width?width+8:rect.right+4,rect.bottom==height?height+8:rect.bottom+4});
+                scene_overlap=true;
+            }
+            raster_rects.clear();block_copies.clear();reuse_raster=false;
+        }
         if(profiling && !raster_rects.empty())gpu_telemetry.begin(device,context,trace.sequence.load());
         c3x_renderer::render_core::GpuFrameTelemetry::Scope timing_scope{gpu_telemetry,context};
         if (!raster_rects.empty() && !submit_geometry(geometry_vertex_buffers, raster_rects,
@@ -8501,7 +8739,7 @@ public:
         else
             cached_tiles.assign(frame.tiles, frame.tiles + frame.tile_count);
         cached_replacement_tile_flags = replacement_tile_flags;
-        if (cache_valid) {
+        if (cache_valid && !shared_scene_surface) {
             for (auto existing = viewport_cache.begin(); existing != viewport_cache.end(); ++existing) {
                 if (existing->signature.complete == signature.complete) {
                     viewport_cache_bytes -= existing->byte_count;

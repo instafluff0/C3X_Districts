@@ -1,5 +1,11 @@
 # Autonomous renderer execution contract
 
+The 2026-09-13 implementation objective in [the retained plan](retained_renderer_plan.md)
+supersedes this document's single-experiment queue, tooling-first sequence and
+per-increment performance acceptance rules. Build and measure the connected
+representative architecture; retain the correctness, ownership, measurement,
+asset and approval contracts below. Historical experiment rules do not select work.
+
 This contract governs renderer optimization continuation. AGENTS.md, the user's
 current scope and the Lab ownership/visual-acceptance rules remain authoritative.
 [The architecture](renderer_architecture.md) defines the destination, firm

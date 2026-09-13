@@ -1,5 +1,11 @@
 # Renderer architectural destination
 
+The 2026-09-13 implementation objective in [the retained plan](retained_renderer_plan.md)
+supersedes this document's single-experiment queue, tooling-first sequence and
+per-increment performance acceptance rules. Build and measure the connected
+representative architecture; retain the correctness, ownership, measurement,
+asset and approval contracts below. Historical experiment rules do not select work.
+
 The destination is a persistent scene with reusable world content, spatially
 selected draw lists and explicit render passes, publishing an off-screen bitmap
 through Civ III's existing map boundary. Camera movement should mostly change

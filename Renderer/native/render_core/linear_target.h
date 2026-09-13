@@ -5,37 +5,103 @@ namespace c3x_renderer { namespace render_core {
 struct LinearTarget {
     ID3D11Texture2D *color=nullptr,*resolved=nullptr,*depth_texture=nullptr;
     ID3D11RenderTargetView *target=nullptr;
-    ID3D11ShaderResourceView *view=nullptr;
+    ID3D11ShaderResourceView *view=nullptr,*samples=nullptr,*depth_samples=nullptr;
     ID3D11DepthStencilView *depth=nullptr;
     UINT width=0,height=0;
     template<class T> void release(T*& p) { if(p) { p->Release(); p=nullptr; } }
     void reset() {
-        release(depth); release(depth_texture); release(view); release(target);
+        release(depth_samples); release(samples); release(depth); release(depth_texture); release(view); release(target);
         release(resolved); release(color); width=height=0;
     }
     ~LinearTarget() { reset(); }
-    bool ensure(ID3D11Device* device,UINT w,UINT h) {
-        if(target && width==w && height==h) return true;
+    bool ensure(ID3D11Device* device,UINT w,UINT h,bool sampleable=false,bool resolve=true) {
+        if(target && width==w && height==h && (!sampleable || samples) && (!resolve || resolved)) return true;
         reset();
         UINT quality=0;
         if(FAILED(device->CheckMultisampleQualityLevels(DXGI_FORMAT_R16G16B16A16_FLOAT,4,&quality)) ||
             quality==0) return false;
         D3D11_TEXTURE2D_DESC d={}; d.Width=w; d.Height=h; d.MipLevels=d.ArraySize=1;
         d.Format=DXGI_FORMAT_R16G16B16A16_FLOAT; d.SampleDesc.Count=4;
-        d.BindFlags=D3D11_BIND_RENDER_TARGET; d.Usage=D3D11_USAGE_DEFAULT;
+        d.BindFlags=D3D11_BIND_RENDER_TARGET|(sampleable?D3D11_BIND_SHADER_RESOURCE:0); d.Usage=D3D11_USAGE_DEFAULT;
         HRESULT hr=device->CreateTexture2D(&d,nullptr,&color);
         if(SUCCEEDED(hr)) hr=device->CreateRenderTargetView(color,nullptr,&target);
+        if(SUCCEEDED(hr) && sampleable) hr=device->CreateShaderResourceView(color,nullptr,&samples);
         d.SampleDesc.Count=1; d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
-        if(SUCCEEDED(hr)) hr=device->CreateTexture2D(&d,nullptr,&resolved);
-        if(SUCCEEDED(hr)) hr=device->CreateShaderResourceView(resolved,nullptr,&view);
-        d.SampleDesc.Count=4; d.Format=DXGI_FORMAT_D24_UNORM_S8_UINT;
-        d.BindFlags=D3D11_BIND_DEPTH_STENCIL;
+        if(SUCCEEDED(hr) && resolve) hr=device->CreateTexture2D(&d,nullptr,&resolved);
+        if(SUCCEEDED(hr) && resolve) hr=device->CreateShaderResourceView(resolved,nullptr,&view);
+        d.SampleDesc.Count=4; d.Format=sampleable?DXGI_FORMAT_R24G8_TYPELESS:DXGI_FORMAT_D24_UNORM_S8_UINT;
+        d.BindFlags=D3D11_BIND_DEPTH_STENCIL|(sampleable?D3D11_BIND_SHADER_RESOURCE:0);
         if(SUCCEEDED(hr)) hr=device->CreateTexture2D(&d,nullptr,&depth_texture);
-        if(SUCCEEDED(hr)) hr=device->CreateDepthStencilView(depth_texture,nullptr,&depth);
+        D3D11_DEPTH_STENCIL_VIEW_DESC ds={};ds.Format=DXGI_FORMAT_D24_UNORM_S8_UINT;ds.ViewDimension=D3D11_DSV_DIMENSION_TEXTURE2DMS;
+        if(SUCCEEDED(hr)) hr=device->CreateDepthStencilView(depth_texture,&ds,&depth);
+        D3D11_SHADER_RESOURCE_VIEW_DESC dv={};dv.Format=DXGI_FORMAT_R24_UNORM_X8_TYPELESS;dv.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2DMS;
+        if(SUCCEEDED(hr) && sampleable) hr=device->CreateShaderResourceView(depth_texture,&dv,&depth_samples);
         if(FAILED(hr)) { reset(); return false; }
         width=w; height=h; return true;
     }
-    std::size_t bytes() const { return std::size_t(width)*height*(8*4+8+4*4); }
+    std::size_t bytes() const { return std::size_t(width)*height*(8*4+(resolved?8:0)+4*4); }
+};
+// Sample-preserving translation of a resident static scene. Newly exposed or
+// invalidated rectangles are cleared in the same draw, before selected geometry.
+struct LinearRestore {
+    ID3D11VertexShader* vertex=nullptr;ID3D11PixelShader* pixel=nullptr;
+    ID3D11Buffer* settings=nullptr;ID3D11DepthStencilState* depth=nullptr;
+    ID3D11RasterizerState* rasterizer=nullptr;
+    template<class T>void release(T*& p){if(p)p->Release();p=nullptr;}
+    void reset(){release(vertex);release(pixel);release(settings);release(depth);release(rasterizer);}
+    ~LinearRestore(){reset();}
+    bool ensure(ID3D11Device* device){
+        if(pixel)return true;
+        char const* source=R"(
+Texture2DMS<float4,4> scene:register(t0);
+Texture2DMS<float,4> scene_depth:register(t1);
+cbuffer Restore:register(b0){int4 move_extent;int4 metadata;int4 dirty[16];};
+float4 VS(uint id:SV_VertexID):SV_Position{float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0,1);}
+struct Output{float4 color:SV_Target;float depth:SV_Depth;};
+Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
+ int2 destination=int2(position.xy),p=destination-move_extent.xy;
+ bool valid=all(p>=0)&&all(p<move_extent.zw);
+ for(int i=0;i<metadata.x;++i)if(all(destination>=dirty[i].xy*2)&&all(destination<dirty[i].zw*2))valid=false;
+ Output result;result.color=valid?scene.Load(p,sample):float4(0,0,0,0);
+ result.depth=valid?scene_depth.Load(p,sample):1;return result;
+})";
+        auto compile=[&](char const* entry,char const* target,ID3DBlob** blob){
+            ID3DBlob* errors=nullptr;HRESULT hr=D3DCompile(source,std::strlen(source),"scene_restore",nullptr,nullptr,
+                entry,target,D3DCOMPILE_OPTIMIZATION_LEVEL3,0,blob,&errors);
+            if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));errors->Release();}return hr;
+        };
+        ID3DBlob* blob=nullptr;HRESULT hr=compile("VS","vs_5_0",&blob);
+        if(SUCCEEDED(hr))hr=device->CreateVertexShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&vertex);release(blob);
+        if(SUCCEEDED(hr))hr=compile("PS","ps_5_0",&blob);
+        if(SUCCEEDED(hr))hr=device->CreatePixelShader(blob->GetBufferPointer(),blob->GetBufferSize(),nullptr,&pixel);release(blob);
+        D3D11_BUFFER_DESC b={};b.ByteWidth=288;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+        if(SUCCEEDED(hr))hr=device->CreateBuffer(&b,nullptr,&settings);
+        D3D11_DEPTH_STENCIL_DESC d={};d.DepthEnable=true;d.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ALL;d.DepthFunc=D3D11_COMPARISON_ALWAYS;
+        if(SUCCEEDED(hr))hr=device->CreateDepthStencilState(&d,&depth);
+        D3D11_RASTERIZER_DESC r={};r.FillMode=D3D11_FILL_SOLID;r.CullMode=D3D11_CULL_NONE;r.DepthClipEnable=true;r.MultisampleEnable=true;r.ScissorEnable=true;
+        if(SUCCEEDED(hr))hr=device->CreateRasterizerState(&r,&rasterizer);
+        if(FAILED(hr)){reset();return false;}return true;
+    }
+    bool draw(ID3D11DeviceContext* context,LinearTarget const& target,
+              ID3D11ShaderResourceView* color,ID3D11ShaderResourceView* old_depth,
+              int dx,int dy,std::vector<D3D11_RECT> const& dirty,
+              std::vector<D3D11_RECT> const* regions=nullptr){
+        if(dirty.size()>16)return false;
+        struct Constants{int move_extent[4],metadata[4];D3D11_RECT dirty[16];} values={};
+        values.move_extent[0]=dx*2;values.move_extent[1]=dy*2;
+        values.move_extent[2]=int(target.width);values.move_extent[3]=int(target.height);values.metadata[0]=int(dirty.size());
+        std::copy(dirty.begin(),dirty.end(),values.dirty);context->UpdateSubresource(settings,0,nullptr,&values,0,0);
+        context->OMSetRenderTargets(1,&target.target,target.depth);context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
+        context->OMSetDepthStencilState(depth,0);context->RSSetState(rasterizer);
+        D3D11_VIEWPORT viewport={0,0,float(target.width),float(target.height),0,1};context->RSSetViewports(1,&viewport);
+        context->IASetInputLayout(nullptr);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);context->PSSetConstantBuffers(0,1,&settings);
+        ID3D11ShaderResourceView* inputs[]={color,old_depth};context->PSSetShaderResources(0,2,inputs);
+        auto draw=[&](D3D11_RECT rect){context->RSSetScissorRects(1,&rect);context->Draw(3,0);};
+        if(regions)for(auto rect:*regions){rect.left*=2;rect.top*=2;rect.right*=2;rect.bottom*=2;draw(rect);}
+        else draw({0,0,LONG(target.width),LONG(target.height)});
+        inputs[0]=inputs[1]=nullptr;context->PSSetShaderResources(0,2,inputs);context->OMSetRenderTargets(0,nullptr,nullptr);return true;
+    }
 };
 struct LinearOutput {
     ID3D11VertexShader *vertex=nullptr;
