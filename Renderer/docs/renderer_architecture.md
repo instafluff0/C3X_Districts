@@ -19,18 +19,19 @@ The current checkout is the implementation authority. This document defines the
 intended architecture; [the execution contract](autonomous_renderer_execution.md)
 governs bounded changes; [the benchmark workflow](benchmark_workflow.md) defines
 measurement, tooling deliverables and validation; [the retained plan](retained_renderer_plan.md)
-alone records current status and the single next task. Historical evidence does
+records current implementation status and measured scope. Historical evidence does
 not create another queue. User scope, AGENTS.md and Lab ownership/visual-acceptance
 rules continue to apply; the [visible scene contract](visible_scene_contract.md)
 and [native presentation constraints](native_async_presentation_audit.md) preserve
 the integration boundary. Proposed internal handles do not change a wire schema.
 
-Translating a valid static front, composing exposed strips and dirty route/object
-bounds, and updating ambient/unit layers independently is the **current migration
-step**. It remains the selected near-term path and workload gate, not the permanent
-definition of rendering. Retained scene resources should also make a raster miss
-or a new view efficient. A changed implementation decision needs causal evidence
-and an update to the single active task in the retained plan, not a parallel roadmap.
+The implemented city-profile path with waves/reflections disabled keeps circular
+scene color/depth and finished output at stable world-relative sample addresses.
+Camera changes select exposed/static damage and ordered dynamic passes; they do
+not translate the whole scene. Finishing updates affected output with exact filter
+support. Raster misses, broad content revisions, full MSAA resolve and general
+spatial instance selection remain opportunities for further work. The retained
+plan records controls, complete-request measurements and precision constraints.
 
 ## Firm principles
 
@@ -77,19 +78,20 @@ simulator or duplicate category implementations.
 | Game scene bridge | Capture authoritative values and lifecycle changes; publish immutable input. | Capture and composition in `injected_code.c`, versioned API in `C3X.h` and the native DLL. |
 | Render world | Retain tile/object identity, local revisions, bounds and spatial membership across views. | `render_core/world_topology.h` and the bounded `render_core/captured_scene.h` owner provide canonical observed appearance, local revisions and current eligibility; resident compiled-content handles now serve current assembly/restore/prefetch; complete appearance capture and general spatial occurrence selection remain unfinished. |
 | Asset registry and scene compiler | Share assets; compile changed terrain, connectivity and compound object composition into reusable content. | Existing pack loaders, fidelity adapters, `CachedTileGeometry` and shared natural world meshes in `native/c3x_renderer.cpp`. |
-| View builder | Select eligible wrapped occurrences and build pass-specific draw lists. | Compact resident occurrence records in `native/render_core/geometry_draws.h` now feed static draw/receiver/caster/region consumers; general spatially selected compatible batches remain unfinished. |
-| GPU renderer | Own the immediate D3D11 context, GPU lifetimes, uploads and pass execution. | Existing renderer worker, `draw_cached_geometry()` and `submit_geometry()`; animated resources now share resident mesh inputs with separate instance pose/placement across body and shadow passes. Compatible instance submissions remain unfinished. |
+| View builder | Select eligible wrapped occurrences and build pass-specific draw lists. | Compact resident occurrence records in `native/render_core/geometry_draws.h` now feed static draw/receiver/caster/region consumers; the retained profile selects ordered layer batches within the shadow-page limit; general world-spatial occurrence selection remains unfinished. |
+| GPU renderer | Own the immediate D3D11 context, GPU lifetimes, uploads and pass execution. | Existing renderer worker, `draw_cached_geometry()` and `submit_geometry()`; the retained profile owns circular scene/depth and incremental finishing. Animated resources share resident meshes with separate pose/placement. General hardware instancing remains unfinished. |
 | Compositor bridge | Publish and consume complete compatible results at the native map boundary. | The injected compositor supplies native lifecycle/visibility identity to ordinary DLL publication selection; identical queued and compatible ambient work can be consumed on native demand. General asynchronous camera handoff and live acceptance remain unfinished. |
 
-The current draw path still traverses layer chunks for each rectangle, and pass
-submission includes recursive regional/reflection work. Current guarded map
+The fallback regional path still traverses layer chunks for each rectangle and
+includes recursive regional/reflection work. The retained profile selects explicit
+static/dynamic inputs and keeps scene/output ownership across camera changes. Current guarded map
 shaders use an explicit common scene-depth basis, independent of raster translation.
 The user approved the measured small D24 rounding changes; existing material order,
 depth writes and MSAA4 remain. Incompatible stored depth is retired on origin changes.
-Regional producers and a common consumer pass the GPU contract. This enables a
-coherent dynamic pass to consume resident static color/depth without numerical
-rebasing. That consumer must demonstrate correct sample import and useful whole-
-workload benefit; the prerequisite alone is not a rendering speedup.
+Regional producers and a common consumer pass the GPU contract. The retained
+dynamic pass now consumes resident static color/depth without numerical rebasing.
+Its measured whole-request benefit and independent replay evidence are recorded
+in the retained plan; the depth contract alone is not a performance result.
 
 ## Preferred mechanisms
 

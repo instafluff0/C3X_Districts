@@ -148,9 +148,9 @@ is the largest measured dense stage; calibrated GPU busy time and driver residen
 remain unknown. Waves/reflections retain the existing path, and no generalized
 hardware instancing or speculative camera prediction was introduced.
 
-## Evaluation staging and next implementation step
+## Initial evaluation staging
 
-The verified non-oracle production candidate is staged in `Renderer/bin/C3XRenderer.dll`:
+The initial verified non-oracle production candidate was staged in `Renderer/bin/C3XRenderer.dll`:
 SHA-256 `6440ea60a3d1fcab8810e0026db078107900994163a6af24058b3aa2e1df7138`.
 Its current compiled inputs and passing resource integration receipt were checked,
 and candidate/staged hashes match. The previous DLL and exact staged candidate,
@@ -163,15 +163,93 @@ waves/reflections; no configuration changes or fixed-reference replacements were
 made. Restarting the existing configured game loads the new DLL. Unsupported
 viewport extents still select the existing path.
 
-The next connected implementation step is incremental GPU output on the retained
-scene: preserve finished color across scrolling, resolve/reconstruct the changed
-physical spans with correct filter support, and consolidate their output into the
-existing exact caller-driven publication. Start with a bounded completion-boundary
-diagnostic to distinguish pending rendering/finishing from readback transfer;
-the current wait measurement combines them. Use that attribution to select the
-output mechanism, preserve MSAA/depth/visual contracts and the 32-bit budget, and
-judge the result by complete stationary/scroll/edit request latency. A staging
-ring or shorter caller wait alone is not success. Waves/reflections can then consume
-the same explicit pass/output ownership; they must not reintroduce regional scene
-reconstruction. This records direction, not another single-experiment prerequisite
-queue or authorization to expand deferred content.
+## Incremental output continuation
+
+The user authorized this implementation after evaluation staging. The initial staged DLL
+above was preserved throughout validation and is the rollback for the new evaluation
+build below. Continuation builds and benchmarks used isolated candidates. Starting
+source, receipts and rejected mechanisms are preserved under
+`Renderer/native/build/incremental-output-20260913/`.
+
+The finished circular HDR/native targets now persist across camera translations.
+Static damage expands by the glow kernel's four-native-pixel support, including
+across physical seams. Animated bounds already include that support. Disjoint
+workgroup-aligned damage selects reconstruction, HDR glow and display conversion;
+it does not reconstruct miniature scenes. A changed view still remaps the complete
+finished image into the current camera bitmap with one readback completion.
+`C3X_RENDERER_INCREMENTAL_OUTPUT=0` preserves the prior circular full-finishing
+control; the default uses incremental finishing. No additional render textures,
+publication buffers, native patches or redraw requests are introduced.
+
+A bounded diagnostic showed that Parallels event queries do not establish useful
+host GPU completion here: their waits were 0.14/0.04 ms, followed by a 66.45 ms
+**one-pixel** readback and only 0.85 ms for the subsequent full-image readback.
+This attributes most of the original wait to pending GPU work, not transfer
+volume; it does not separate scene drawing from finishing or establish GPU busy
+time. These serialized runs are excluded from performance acceptance, including
+when a receipt's quality label is incorrectly changed. The existing harness now
+also rejects an observed Civ III process during exclusive benchmark cases.
+
+Full hardware MSAA4 resolve remains. Compute and render-target local resolves
+failed exact half-float parity with hardware resolve; an explicit rounding variant
+still differed. Their shader/witness snapshots and failures are preserved in the
+same evidence folder. Do not repeat those mechanisms without a materially different
+precision-preserving approach. Shared art, reconstruction, glow and display shaders
+are unchanged. The stronger GPU witness compares circular retained finishing with
+full reconstruction at seams, thin edits, bright bloom and sample-varying coverage.
+
+Two matched intermediate dense pairs improved whole requests by 10.65% and 12.00%,
+with all five saved images per pair exact. A redundant second glow margin initially
+increased stationary work; the final correction retains the existing animated
+margin and expands only exposed/static damage.
+
+Final delivery uses the same normal-tier, production-default profile and synthetic
+100x100 dense world as its matched circular full-finishing control: 2240x1192,
+tile width 128, waves/reflections off. These are complete requests through checked
+result ownership; cold setup and independent verification remain separate.
+
+| Workload | Circular control | Incremental output | Effect |
+| --- | ---: | ---: | --- |
+| Dense scrolling, 28 requests each | 119.40 ms | 103.28 ms | 13.50% lower latency |
+| Stationary animation, 30 after warmup | 22.61 ms | 22.98 ms | +0.37 ms; no claimed improvement |
+| Distant edits/reversals, 2 each | 78.43 ms | 68.99 ms | 12.04% lower measured latency |
+| Visible edits/reversals, 2 each | 1,432.13 ms | 1,386.83 ms | 3.16% lower measured latency |
+
+Dense finishing falls from 2,697,600 to 365,952 pixels/request. Both paths still
+resolve 10,790,400 high-resolution pixels and remap the image in four readback
+copies before one completion wait. GPU completion/readback wait falls from
+65.52 to 49.27 ms; CPU copy stays about 0.66 ms. Compiled/reused entries and upload
+bytes are identical (26.86 / 1,030.29 / 421,114 per dense request). Initial scene
+preparation remains 12.5–12.7 seconds. Stationary finishing is identical at 174,037
+pixels/request; there is no eliminated stationary work or claimed stationary win.
+Visible edit geometry still averages 1.17 seconds; the small edit samples do not
+establish a general edit-speed guarantee.
+
+Target payload remains 1,165,363,200 bytes; no render texture or publication buffer
+was added. Minimum sampled contiguous VA in the final dense candidate is 1,477.20
+MiB. Transient driver residency and native presented cadence remain unmeasured.
+Dense requests remain slightly above the 100 ms average target.
+
+Validation: 255 current-code integration tests pass (one existing skip), with
+resource animation, scrolling/removal and zoom-return witnesses. The independent
+six-case boundary and four-edit redraw checks pass. All five dense, 32 stationary
+and two edit saved images match their paired control exactly. The GPU fixture
+passes nine regional and nine circular HDR/MSAA finishing cases; portable circular
+convolution/damage tests and 17 analysis tests also pass. Earlier zoom and explicit
+caller-driven ambient witnesses passed; the final margin correction preserves
+that publication code. No new visual differences from the staged circular control
+were observed; its earlier differences from the regional renderer remain pending.
+
+Receipts: `comparison.json`, `attribution.json`, `delivery-validation.log`,
+`final-output-tests.log` and `analysis-tests.log` under the continuation evidence
+folder. Exact final benchmark build: `Renderer/native/build/incremental-output-delivery-build/`.
+The rejected local resolves, intermediate runs and source snapshots remain there
+as evidence; they are not the delivered path.
+
+The verified non-oracle production DLL is now staged for the user's existing game
+test request: SHA-256 `b5cd1b08213d4b4d6ccc50aab07d3a1d5ebf63cdf5afb1162467a76fd59c1f4d`.
+Candidate and staged hashes match. The exact DLL, build/integration/comparison
+receipts and rollback `previous-C3XRenderer.dll` are under the continuation evidence
+folder's `evaluation-staging/`. Restart Civ III to load this update. Configuration,
+fixed references and injected code were unchanged; no installer or game launch
+was run by this task.

@@ -4,6 +4,40 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class SceneSurfaceTests(unittest.TestCase):
+    def test_incremental_filter_matches_full_circular_convolution(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/scene_surface.h"
+#include <cassert>
+struct Rect {int left,top,right,bottom;};
+using namespace c3x_renderer::render_core;
+int main(){
+ for(int w:{16,37,128})for(int h:{19,64}){
+  std::vector<int> scene(w*h),retained(w*h),expected(w*h);
+  auto filter=[&](int x,int y){int sum=0;
+   for(int dy=-4;dy<=4;++dy)for(int dx=-4;dx<=4;++dx)
+    sum+=scene[((y+dy+h)%h)*w+(x+dx+w)%w]*(5-std::abs(dx))*(5-std::abs(dy));
+   return sum;
+  };
+  for(int step=0;step<24;++step){
+   // Moving exposed strips, opposite seams, and a one-pixel local edit.
+   int x=step*7%w,y=step*11%h;
+   std::vector<Rect> changed={{x,0,std::min(w,x+3),h},{0,y,w,std::min(h,y+2)},
+                             {w-1,h-1,w,h},{0,0,1,1}};
+   for(auto r:changed)for(int j=r.top;j<r.bottom;++j)for(int i=r.left;i<r.right;++i)
+    scene[j*w+i]=(step+i*3+j*7)%17;
+   auto damage=scene_filter_damage(w,h,changed,4);
+   std::vector<unsigned> visits(w*h);
+   for(auto r:damage)for(int j=r.top;j<r.bottom;++j)for(int i=r.left;i<r.right;++i){
+    assert(++visits[j*w+i]==1);retained[j*w+i]=filter(i,j);
+   }
+   for(int j=0;j<h;++j)for(int i=0;i<w;++i)expected[j*w+i]=filter(i,j);
+   assert(retained==expected);
+  }
+ }
+ assert(scene_filter_damage<Rect>(37,19,{},4).empty());
+}
+''')
+
     def test_wrapping_damage_bounds_and_stationary_world_addresses(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/scene_surface.h"

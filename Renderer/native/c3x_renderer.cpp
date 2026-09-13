@@ -3990,7 +3990,15 @@ public:
         dynamic_damage=disjoint(physical(dynamic_damage));
         auto finish_damage=scene_dynamic_damage;
         finish_damage.insert(finish_damage.end(),dynamic_damage.begin(),dynamic_damage.end());
-        finish_damage=restored?disjoint(finish_damage):std::vector<D3D11_RECT>{view};
+        char output_control[8]={};GetEnvironmentVariableA("C3X_RENDERER_INCREMENTAL_OUTPUT",output_control,sizeof(output_control));
+        bool incremental_output=std::strcmp(output_control,"0")!=0;
+        if(incremental_output && translated){
+            auto support=c3x_renderer::render_core::scene_filter_damage(int(w),int(h),physical(static_rectangles),4);
+            finish_damage.insert(finish_damage.end(),support.begin(),support.end());
+        }
+        // Animated bounds already carry the four-pixel lens margin above.
+        // Expanding them again needlessly increases every stationary update.
+        finish_damage=(restored || (incremental_output && translated))?disjoint(finish_damage):std::vector<D3D11_RECT>{view};
         // Preserve production layer/occurrence order. Batches change only when
         // selected receivers would exceed the existing 32 shadow-page slots.
         auto submit=[&](GeometryDrawView inputs,std::vector<unsigned> const& order,bool dynamic_pass){
@@ -4072,14 +4080,57 @@ public:
         QueryPerformanceCounter(&static_end);
         if(!submit(dynamic,{geometry_shadow,geometry_feature},true))return false;
         QueryPerformanceCounter(&dynamic_end);
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        // Attribution only: explicit completion boundaries perturb overlap.
+        // Never use these serialized durations as production speed evidence.
+        auto completion_probe=[&](char const* stage){
+            char option[8]={};GetEnvironmentVariableA("C3X_RENDERER_OUTPUT_COMPLETION_PROBE",option,sizeof(option));
+            if(std::strcmp(option,"1")!=0)return true;
+            ID3D11Query* query=nullptr;D3D11_QUERY_DESC desc={D3D11_QUERY_EVENT,0};
+            if(FAILED(device->CreateQuery(&desc,&query)))return false;
+            LARGE_INTEGER start={},end={};QueryPerformanceCounter(&start);
+            context->End(query);context->Flush();HRESULT hr=S_FALSE;
+            do{hr=context->GetData(query,nullptr,0,D3D11_ASYNC_GETDATA_DONOTFLUSH);
+                QueryPerformanceCounter(&end);if(hr==S_FALSE)Sleep(0);
+            }while(hr==S_FALSE && trace.milliseconds(end.QuadPart-start.QuadPart)<5000);
+            query->Release();char detail[160];sprintf_s(detail,"boundary=%s wait_ms=%.3f completed=%u serialized=1",
+                stage,trace.milliseconds(end.QuadPart-start.QuadPart),unsigned(hr==S_OK));
+            trace.write("output-completion-probe",detail,true);return hr==S_OK;
+        };
+        if(!completion_probe("scene"))return false;
+#endif
+        // Keep hardware MSAA resolve: local shader resolves failed exact HDR
+        // parity. Reconstruction, glow and display transfer still remain local.
+        std::size_t resolved_pixels=finish_damage.empty()?0:std::size_t(w)*h*4;
         bool first=true;
         for(auto const& rect:finish_damage){
             frame_post_lanes+=glow.reconstruct(context,&rect,first,true);first=false;
             linear_output.draw(context,linear,glow.target,display_exposure,1,glow.view,w,h,&rect);
         }
         context->OMSetRenderTargets(0,nullptr,nullptr);
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+        if(!completion_probe("finish"))return false;
+        char probe_option[8]={};GetEnvironmentVariableA("C3X_RENDERER_OUTPUT_COMPLETION_PROBE",probe_option,sizeof(probe_option));
+        if(std::strcmp(probe_option,"1")==0){
+            ID3D11Texture2D* probe=nullptr;D3D11_TEXTURE2D_DESC desc={};
+            desc.Width=desc.Height=desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+            desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+            if(FAILED(device->CreateTexture2D(&desc,nullptr,&probe)))return false;
+            LARGE_INTEGER start={},end={};QueryPerformanceCounter(&start);
+            D3D11_BOX box={0,0,0,1,1,1};context->CopySubresourceRegion(probe,0,0,0,0,glow.native,0,&box);
+            D3D11_MAPPED_SUBRESOURCE data={};HRESULT hr=context->Map(probe,0,D3D11_MAP_READ,0,&data);
+            if(SUCCEEDED(hr))context->Unmap(probe,0);QueryPerformanceCounter(&end);probe->Release();
+            char detail[160];sprintf_s(detail,"boundary=one-pixel wait_ms=%.3f completed=%u serialized=1",
+                trace.milliseconds(end.QuadPart-start.QuadPart),unsigned(SUCCEEDED(hr)));
+            trace.write("output-completion-probe",detail,true);if(FAILED(hr))return false;
+        }
+#endif
         std::vector<D3D11_RECT> copies;
-        for(auto span:spans)for(auto damage:finish_damage){
+        // Scrolling remaps the retained physical image into the exact current
+        // camera bitmap. Transfer is cheap; keep one full readback on view changes
+        // rather than adding a staging atlas and CPU bitmap translation.
+        auto copy_damage=restored?finish_damage:std::vector<D3D11_RECT>{view};
+        for(auto span:spans)for(auto damage:copy_damage){
             D3D11_RECT rect={std::max<LONG>(span.rect.left,damage.left),std::max<LONG>(span.rect.top,damage.top),
                              std::min<LONG>(span.rect.right,damage.right),std::min<LONG>(span.rect.bottom,damage.bottom)};
             rect={std::max<LONG>(rect.left,span.x+4),std::max<LONG>(rect.top,span.y+4),
@@ -4104,6 +4155,9 @@ public:
             trace.milliseconds(static_end.QuadPart-begin.QuadPart),trace.milliseconds(dynamic_end.QuadPart-static_end.QuadPart),
             trace.milliseconds(finish_end.QuadPart-dynamic_end.QuadPart),trace.milliseconds(ready.QuadPart-finish_end.QuadPart),trace.milliseconds(copied.QuadPart-ready.QuadPart));
         trace.write("shared-scene-surface",detail,true);memory_sample("shared-scene-complete");
+        sprintf_s(detail,"incremental=%u resolve_pixels=%zu finish_rects=%zu readback_rects=%zu",
+            unsigned(incremental_output),resolved_pixels,finish_damage.size(),copies.size());
+        trace.write("scene-output",detail,true);
         transaction.complete=true;return true;
     }
 

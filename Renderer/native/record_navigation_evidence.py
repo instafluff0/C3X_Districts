@@ -106,6 +106,8 @@ def main(argv=None):
     parser.add_argument("--local-region-revisions", action="store_true", help="Use contributor dependencies instead of global topology revision for retained regions")
     parser.add_argument("--shared-scene-surface", action="store_true", help="Bounded complete shared-surface alternative; waves/reflections off")
     parser.add_argument("--automatic-scene-surface", action="store_true", help="Exercise automatic retained selection for an eligible production profile")
+    parser.add_argument("--output-completion-probe", action="store_true", help="Serialize GPU scene/finish boundaries for attribution only; not performance evidence")
+    parser.add_argument("--full-scene-output", action="store_true", help="Preserve the circular scene with full viewport finishing on scrolling as the incremental-output control")
     parser.add_argument("--prepared-resource-pass", action="store_true", help="Use the explicit animated body/shadow binding contract")
     parser.add_argument("--width", type=int, default=2240)
     parser.add_argument("--height", type=int, default=1192)
@@ -229,6 +231,8 @@ def main(argv=None):
            "C3X_RENDERER_LOCAL_REGION_REVISIONS": "1" if args.local_region_revisions else "0",
            "C3X_RENDERER_PREVIEW_RETAINED_BOUNDARY": "1" if args.boundary_fixture else "",
            "C3X_RENDERER_SHARED_SCENE_SURFACE": "" if args.automatic_scene_surface else "1" if args.shared_scene_surface else "0",
+           "C3X_RENDERER_OUTPUT_COMPLETION_PROBE": "1" if args.output_completion_probe else "0",
+           "C3X_RENDERER_INCREMENTAL_OUTPUT": "0" if args.full_scene_output else "1",
            "C3X_RENDERER_PREPARED_RESOURCE_PASS": "1" if args.prepared_resource_pass else "0",
            "C3X_RENDERER_WORLD_RASTER_GRID": "1" if args.world_grid else "0",
            "C3X_RENDERER_WORLD_REGIONS": "1" if args.world_regions else "0",
@@ -315,7 +319,7 @@ def main(argv=None):
     receipt = {"case_manifest":case_manifest,"verification":args.verification,
                "input_metadata":before_metadata,"invocation": uuid.uuid4().hex, "endpoint": "standalone capture plus completed render; no native presentation",
                "storage_preflight": storage,
-               "quality_mode": "diagnostic_pixel_ablation" if args.diagnostic_routes!="full" or args.diagnostic_half_pixels or args.diagnostic_animation!="full" else "diagnostic_reflections_disabled" if args.reflection_ablation else "current",
+               "quality_mode": "diagnostic_serialized_completion" if args.output_completion_probe else "diagnostic_pixel_ablation" if args.diagnostic_routes!="full" or args.diagnostic_half_pixels or args.diagnostic_animation!="full" else "diagnostic_reflections_disabled" if args.reflection_ablation else "current",
                "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
                "environment": env, "inputs": before,
                "host": {"os": platform.platform(), "architecture": platform.machine(), "logical_processors": os.cpu_count()},
@@ -346,7 +350,7 @@ $exclusive=${str(args.exclusive_gpu).lower()}
 $checks=0
 $conflicts=@()
 function Other-Workloads($owned) {{
- @(Get-Process biq_preview,native_preview,cl,link -ErrorAction SilentlyContinue | Where-Object {{$_.Id -ne $owned}} | Select-Object ProcessName,Id)
+ @(Get-Process biq_preview,native_preview,cl,link,Civ3Conquests* -ErrorAction SilentlyContinue | Where-Object {{$_.Id -ne $owned}} | Select-Object ProcessName,Id)
 }}
 if($exclusive) {{
  $checks++;$conflicts=@(Other-Workloads 0)

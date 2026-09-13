@@ -21,6 +21,7 @@ HRESULT compile_cached(wchar_t const* path,char const* entry,char const* target,
 #include "render_core/linear_target.h"
 #undef D3DCompile
 #include "city_fidelity/glow.h"
+#include "render_core/scene_surface.h"
 int main(){
  std::setvbuf(stdout,nullptr,_IONBF,0);assert(SetCurrentDirectoryW(L"../../../.."));
  auto create=reinterpret_cast<decltype(&D3D11CreateDevice)>(GetProcAddress(LoadLibraryA("d3d11.dll"),"D3D11CreateDevice"));
@@ -37,6 +38,7 @@ int main(){
   int2 xy=int2(p.xy);float alpha=(sample+1)*.25;
   bool hot=all(xy>=changed.xy)&&all(xy<changed.zw);
   float3 rgb=hot?float3(5.0,2.0,1.2):float3(.12,.2,.08);
+  rgb+=float3((xy.x*11+xy.y*17+sample*47)%1021,(xy.x*13+xy.y*19+sample*23)%1019,(xy.x*29+xy.y*7+sample*31)%1013)/127.0;
   return float4(rgb*alpha,alpha);
  })";
  auto compile=[&](char const* entry,char const* target){
@@ -83,5 +85,19 @@ int main(){
   ++checks;
  }
  assert(changed>100);std::printf("PASS %u exact local HDR reconstruction checks: cell guards, workgroup edges, thin spans, MSAA coverage and bloom; changed_pixels=%u\n",checks,changed);
+ // Retain resolved/finished pixels across local changes and both physical seams.
+ assert(glow.ensure(device,".",136,136,true));
+ unsigned circular_checks=0;
+ for(auto patch:std::array<D3D11_RECT,9>{{{0,0,3,3},{3,3,5,5},{7,7,9,9},{63,63,64,64},{64,64,65,65},
+      {100,30,104,32},{130,130,134,134},{133,50,136,54},{0,65,136,66}}}){
+  render(patch);glow.reconstruct(context,nullptr,true,true);auto full=pixels();
+  render({0,0,0,0});glow.reconstruct(context,nullptr,true,true);
+  render(patch);
+  auto damage=c3x_renderer::render_core::scene_filter_damage(136,136,std::vector<D3D11_RECT>{patch},4);
+  bool first=true;for(auto r:damage){glow.reconstruct(context,&r,first,true);first=false;}
+  auto partial=pixels();
+  assert(full==partial);++circular_checks;
+ }
+ std::printf("PASS %u exact circular HDR/MSAA4 finishing checks: independent full reconstruction, filter seams and retained output\n",circular_checks);
  context->ClearState();staging->Release();rasterizer->Release();settings->Release();ps->Release();vs->Release();glow.reset();context->Release();device->Release();
 }

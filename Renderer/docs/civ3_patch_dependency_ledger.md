@@ -409,3 +409,7 @@ ordered ownership flags, scenario/viewer/visibility identity and unit fallback
 remain authoritative. No new Civ III patch symbol, signature, address or capture
 field is needed. `required_user_action: []`. This records source/replay integration;
 no staging, installation or game launch is authorized by the implementation.
+
+Incremental GPU finishing uses the same boundary, captured anchors and ordered
+output ownership. It adds no callback, redraw request, asynchronous publication
+mode or executable dependency. `required_user_action: []` for this continuation.

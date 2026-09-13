@@ -118,6 +118,17 @@ class NavigationAnalysisTests(unittest.TestCase):
                 (root/"evidence.json").write_text(json.dumps(dict(original,**change)))
                 with self.assertRaisesRegex(ValueError,"Unverified"):inspect(root)
 
+    def test_serialized_completion_probe_cannot_be_relabelled_as_performance(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=self.fixture(Path(temporary)/"run")
+            original=json.loads((root/"inputs.json").read_text())
+            for section,key,value in (("args","output_completion_probe",True),
+                                      ("environment","C3X_RENDERER_OUTPUT_COMPLETION_PROBE","1")):
+                receipt=json.loads(json.dumps(original));receipt["quality_mode"]="current"
+                receipt.setdefault(section,{})[key]=value
+                (root/"inputs.json").write_text(json.dumps(receipt))
+                with self.assertRaisesRegex(ValueError,"Diagnostic ablation"):inspect(root)
+
     def test_busy_session_reports_skipped_phases_and_excludes_cold_verification(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=self.fixture(Path(temporary)/"run")

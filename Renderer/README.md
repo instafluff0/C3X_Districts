@@ -57,9 +57,11 @@ and generated preview/verification archives have been removed.
 ## Architectural boundaries
 
 The destination is persistent scene identity, shared assets/world content, local
-invalidation and spatially selected passes. Translating the static front and
-composing exposed strips/dirty bounds remains the current migration step, not the
-permanent architecture. Mechanisms and tuning choices require measured evidence.
+invalidation and spatially selected passes. Eligible city-profile views now retain
+a circular GPU scene and finished output, updating exposed/changed content through
+ordered passes. The existing regional renderer remains the control and supports
+waves/reflections and unsupported extents. See the retained plan for measured
+scope, precision constraints and remaining ownership work.
 
 Civ III/C3X owns game state, visibility, tile/object screen anchors, time and
 seasons. The renderer produces an off-screen map bitmap and inserts it at the

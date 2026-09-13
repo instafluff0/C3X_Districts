@@ -19,7 +19,7 @@ template<class Rect> std::vector<SceneSpan<Rect>> scene_spans(
     int px=phase(world_x,width),py=phase(world_y,height);
     std::vector<SceneSpan<Rect>> result;
     for(int y:{py,py-height})for(int x:{px,px-width}){
-        Rect r={std::max(0,x),std::max(0,y),std::min(width,x+width),std::min(height,y+height)};
+        Rect r={std::max<int>(0,x),std::max<int>(0,y),std::min<int>(width,x+width),std::min<int>(height,y+height)};
         if(r.left<r.right && r.top<r.bottom)result.push_back({r,x,y});
     }
     return result;
@@ -48,7 +48,7 @@ template<class Rect> std::vector<Rect> scene_damage_union(
         for(int x=0;x<columns;){
             if(!occupied[y*columns+x]){++x;continue;}
             int left=x++;while(x<columns && occupied[y*columns+x])++x;
-            int right=std::min(width,x*cell),bottom=std::min(height,(y+1)*cell);
+            int right=std::min<int>(width,x*cell),bottom=std::min<int>(height,(y+1)*cell);
             auto old=previous[left];
             if(old!=std::size_t(-1) && result[old].right==right){result[old].bottom=bottom;current[left]=old;}
             else{current[left]=result.size();result.push_back({left*cell,y*cell,right,bottom});}
@@ -56,5 +56,23 @@ template<class Rect> std::vector<Rect> scene_damage_union(
         previous.swap(current);
     }
     return result;
+}
+
+// The HDR lens has radius eight at 2x resolution: four native pixels.
+// Changed samples invalidate neighboring outputs, including across the physical
+// seam. Retained output uses the same workgroup origin/arithmetic as a full pass.
+template<class Rect> std::vector<Rect> scene_filter_damage(
+        int width,int height,std::vector<Rect> const& inputs,int radius) {
+    if(width<=0 || height<=0 || width>2248 || height>1200 || radius<0 || radius>8)return {};
+    std::vector<Rect> support;
+    for(auto r:inputs){
+        if(r.left>=r.right || r.top>=r.bottom)continue;
+        for(int dy:{-height,0,height})for(int dx:{-width,0,width}){
+            Rect s={std::max<int>(0,int(r.left)-radius+dx),std::max<int>(0,int(r.top)-radius+dy),
+                    std::min<int>(width,int(r.right)+radius+dx),std::min<int>(height,int(r.bottom)+radius+dy)};
+            if(s.left<s.right && s.top<s.bottom)support.push_back(s);
+        }
+    }
+    return scene_damage_union(width,height,support);
 }
 } }
