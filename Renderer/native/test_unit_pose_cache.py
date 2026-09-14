@@ -6,7 +6,7 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class UnitPoseCacheTests(unittest.TestCase):
-    def test_all_unit_actions_follow_the_native_cursor(self):
+    def test_legacy_unit_requests_keep_explicit_cursor_sampling(self):
         source=(ROOT/"Renderer/native/unit_body_renderer.h").read_text()
         body="NativeUnitDraw draw;"+source.split("NativeUnitDraw draw;",1)[1].split("        int scale_milli=",1)[0]
         run_cpp(r'''

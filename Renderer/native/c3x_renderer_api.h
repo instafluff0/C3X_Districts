@@ -98,6 +98,11 @@ enum c3x_renderer_scheduler_state_flags {
     C3X_RENDERER_SCHEDULER_PATHFINDER_HOLD = 32u
 };
 
+enum c3x_renderer_unit_playback_flags {
+    C3X_RENDERER_UNIT_STATE_CAPTURED = 1u,
+    C3X_RENDERER_UNIT_SELECTED = 2u
+};
+
 #pragma pack(push, 4)
 // Optional body-only ABI, separate from the retained terrain frame contract.
 struct c3x_renderer_unit_v1 {
@@ -380,6 +385,8 @@ typedef int (*c3x_renderer_unit_draw_fn)(struct c3x_renderer_unit_v1 const *, vo
 typedef int (*c3x_renderer_unit_draw_background_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc, void * background_hdc);
 /* Optional extension; writes drawn left/top/right/bottom only on success. */
 typedef int (*c3x_renderer_unit_draw_expanded_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc, void * background_hdc, int * bounds_ltrb);
+// Optional policy extension; v1 layout/legacy exports remain compatible.
+typedef int (*c3x_renderer_unit_draw_playback_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc, void * background_hdc, int * bounds_ltrb, c3x_renderer_u32 flags);
 // Optional unit configuration. Set before definition/asset loading; defaults off.
 typedef int (*c3x_renderer_set_unit_rendering_fn)(int enabled);
 typedef int (*c3x_renderer_export_scene_fn)(struct c3x_renderer_frame_v1 const *, struct c3x_renderer_scene_export_v1 const *);

@@ -55,6 +55,11 @@ This completes preparation through pixels for the representative unit path,
 without moving D3D or native GDI ownership. Short-window pose stalls improve, but
 warm idle requests already take roughly 4 ms and native idle cadence remains
 about 15 Hz. Higher presentation cadence is unfinished native integration work.
+Unit playback now has a bounded instance owner fed by explicit native selection:
+frozen idle/fidget units generate no future pose work; selected idle and active
+work loops preserve authored source duration/frames. Directed actions keep native
+cursors. Resolved pose identities feed the existing content and pixel owners;
+caller timestamps alone do not invalidate a pose or authorize another prediction.
 
 ## Firm principles
 

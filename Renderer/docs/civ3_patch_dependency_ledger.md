@@ -239,6 +239,20 @@ Fog-edge work and wonders/Districts remain deferred.
 
 ## Available boundaries
 
+The unit playback correction uses those same existing `Unit_tick_anim` and normal/
+reduced body hooks, with unchanged signatures and supported-build addresses.
+`forward_custom_unit_body` captures whether the parent display unit equals
+`Main_Screen_Form::Current_Unit` (including army representatives) and supplies it
+to optional DLL export `c3x_renderer_unit_draw_playback`. Signature:
+`int(unit_v1 const*, void* destination, void* background, int* bounds, unsigned flags)`.
+This is a DLL capability, not a new Civ III patch symbol. The bridge falls back
+to `unit_draw_expanded` / `unit_draw_background` with an older DLL. New DLLs keep
+the v1 struct layout and legacy explicit-cursor behavior. Native visibility,
+anchors, underlay and returned dirty bounds remain unchanged.
+`required_user_action: []`; no CSV changes, new hooks, timer or redraw callback.
+The matching bridge is compiled by the ordinary `INSTALL.bat` workflow.
+
+
 The approved unit fidelity update uses the existing `Unit_tick_anim`,
 `Sprite_draw_unit_body_normal` and `Sprite_draw_unit_body_reduced` boundaries,
 with unchanged patch capabilities, signatures and supported-build addresses.

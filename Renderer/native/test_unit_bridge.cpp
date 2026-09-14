@@ -28,6 +28,7 @@ struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
 struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_renderer_unit_canvas=nullptr;
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;
+ c3x_renderer_unit_draw_playback_fn custom_renderer_unit_draw_playback=nullptr;
  c3x_renderer_unit_draw_expanded_fn custom_renderer_unit_draw_expanded=nullptr;int custom_renderer_init_state=1;
  struct {bool enable_custom_rendering=true,enable_custom_rendered_units=true,enable_custom_rendering_zoom=false;int day_night_cycle_mode=0,seasonal_cycle_mode=0;} current_config;
  int custom_renderer_zoom_tile_width=128,custom_renderer_zoom_native_tile_width=128;
@@ -37,6 +38,8 @@ struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_rende
  bool day_night_cycle_unstarted=false,seasonal_cycle_unstarted=false;int current_day_night_cycle=12,current_seasonal_cycle=0;
  LARGE_INTEGER custom_renderer_qpc_frequency={1000000},custom_renderer_animation_timestamp={},custom_renderer_animation_sample_at={};};
 constexpr int AT_DEFAULT=1,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
+struct Screen {Unit* Current_Unit=nullptr;} screen;Screen* p_main_screen_form=&screen;
+unsigned playback_flags=0;
 State state;State* is=&state;Bic bic;Bic* p_bic_data=&bic;PCX_Color_Table fixture_palette;
 std::vector<int> calls;c3x_renderer_unit_v1 captured;bool success=true,fixture_reduced=false;int dc_count=0;PCX_Image* fixture_background=nullptr;JGL_Image* denied_dc=nullptr;
 int clamp(int a,int b,int v){return v<a?a:(v>b?b:v);}
@@ -69,6 +72,9 @@ int capture_expanded(c3x_renderer_unit_v1 const* value,void* destination,void* b
  int result=capture(value,destination,background);
  if(result){bounds[0]=-40;bounds[1]=-60;bounds[2]=300;bounds[3]=280;}
  return result;
+}
+int capture_playback(c3x_renderer_unit_v1 const* value,void* destination,void* background,int* bounds,unsigned flags){
+ playback_flags=flags;return capture_expanded(value,destination,background,bounds);
 }
 int __fastcall Sprite_draw_unit_body_normal(Sprite*,int,PCX_Image*,PCX_Image*,int x,int y,char* path,PCX_Color_Table* p){assert(x==11 && y==23 && path[0]=='p' && p==&fixture_palette);calls.push_back(30);return 77;}
 int __fastcall original_reduced(Sprite*,int,PCX_Image*,PCX_Image*,int x,int y,int sx,int sy,int divisor,char* path,PCX_Color_Table* p){assert(x==11 && y==23 && sx==1 && sy==1 && divisor==2 && path[0]=='p' && p==&fixture_palette);calls.push_back(30);return 77;}
@@ -134,6 +140,14 @@ int main(){
  success=true;invoke();assert(unit.Body.Rect.left==-40 && unit.Body.Rect.top==-60 && unit.Body.Rect.right==300 && unit.Body.Rect.bottom==280);
  success=false;invoke();assert(unit.Body.Rect.left==20 && unit.Body.Rect.right==45);
  state.custom_renderer_unit_draw_expanded=nullptr;
+ state.custom_renderer_unit_draw_playback=capture_playback;success=true;
+ invoke();assert(playback_flags==C3X_RENDERER_UNIT_STATE_CAPTURED);
+ screen.Current_Unit=&unit;invoke();assert(playback_flags==(C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED));
+ unit.army=true;Unit member=unit;member.army=false;member.Body.ID=84;member.Body.Rect={};army_member=&member;unit.Body.army_top_defender_id=84;
+ invoke();assert(captured.unit_id==84 && playback_flags==(C3X_RENDERER_UNIT_STATE_CAPTURED|C3X_RENDERER_UNIT_SELECTED));
+ assert(unit.Body.Rect.left==-40 && member.Body.Rect.left==20);
+ army_member=nullptr;unit.army=false;screen.Current_Unit=nullptr;
+ state.custom_renderer_unit_draw_playback=nullptr;
  // UI portraits use these same native hooks, outside the map tick's canvas.
  // They must preserve native arguments/return values at every custom zoom.
  state.current_config.enable_custom_rendering_zoom=true;

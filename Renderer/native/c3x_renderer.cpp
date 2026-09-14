@@ -62,6 +62,7 @@
 #include "environment_refresh/reflection.h"
 #include "unit_body_renderer.h"
 #include "render_core/unit_frame_preparation.h"
+#include "render_core/unit_playback.h"
 #include "city_fidelity/gpu.h"
 #include "city_fidelity/glow.h"
 #include "../lab/shared/natural/ground.h"
@@ -9633,6 +9634,7 @@ public:
         // Call serialization excludes foreground configure/render jobs. Idle
         // terrain preparation never reads this unit-only configuration value.
         renderer_state.unit_rendering_enabled=enabled!=0;
+        if(!enabled){unit_pixels_queue.clear();unit_playback.clear();renderer_state.unit_bodies.release_pose_leases();}
         renderer_state.trace.write("unit-config",enabled?"enabled; bind at definition load":"disabled; native units",true);
         return C3X_RENDERER_RESULT_OK;
     }
@@ -10038,11 +10040,29 @@ public:
         return result;
     }
 
-    int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr,int* bounds=nullptr) {
+    int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr,int* bounds=nullptr,unsigned playback_flags=0) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
-        start_locked();job_unit=request;
+        start_locked();job_unit=request;job_unit_predict=1;
+        bool selected=(playback_flags&C3X_RENDERER_UNIT_SELECTED)!=0;
+        if((playback_flags&C3X_RENDERER_UNIT_STATE_CAPTURED) && !selected && job_unit.action==8)
+            job_unit.action=1; // Unselected native fidgets use a stationary idle body.
+        auto const& playback_units=renderer_state.unit_bodies.units;
+        auto playback_unit=std::find_if(playback_units.begin(),playback_units.end(),[&](auto const& u){
+            return std::find(u.keys.begin(),u.keys.end(),job_unit.unit_key)!=u.keys.end();});
+        auto action_name=c3x_renderer::native_unit_action(job_unit.action);
+        if(playback_unit==playback_units.end() || !action_name)return C3X_RENDERER_RESULT_ERROR;
+        auto playback_clip=std::find_if(playback_unit->actions.begin(),playback_unit->actions.end(),
+            [&](auto const& a){return a.name==action_name;});
+        if(playback_clip==playback_unit->actions.end())return C3X_RENDERER_RESULT_ERROR;
+        if(playback_flags&C3X_RENDERER_UNIT_STATE_CAPTURED) {
+            bool advancing=unit_playback.resolve(job_unit,*playback_clip,selected,job_unit_predict);
+            if(!advancing)job_unit_predict=0;
+            if(!job_unit_predict && !playback_clip->ambient && job_unit.action==1) {
+                job_unit.action_cursor=0;job_unit.frame_count=1;
+            }
+        }
         if(bounds) {
             auto const& units=renderer_state.unit_bodies.units;
             auto found=std::find_if(units.begin(),units.end(),[&](auto const& unit){
@@ -10056,15 +10076,8 @@ public:
         // Cached unit pixels are an independent CPU publication. Do not cancel
         // an exact ambient map render merely to copy a pose already in memory.
         if(unit_pixels_enabled) {
-            auto const& units=renderer_state.unit_bodies.units;
-            auto found=std::find_if(units.begin(),units.end(),[&](auto const& u){
-                return std::find(u.keys.begin(),u.keys.end(),request.unit_key)!=u.keys.end();});
-            auto action=c3x_renderer::native_unit_action(request.action);
-            if(found!=units.end() && action) {
-                auto clip=std::find_if(found->actions.begin(),found->actions.end(),[&](auto const& a){return a.name==action;});
-                if(clip!=found->actions.end())unit_pixels_queue.observe(job_unit,clip->loop);
-            }
-            wake.notify_one();
+            unit_pixels_queue.observe(job_unit,playback_clip->loop,job_unit_predict!=0,job_unit_predict);
+            if(job_unit_predict)wake.notify_one();
         }
         c3x_renderer::UnitBodyRenderer::PublishedPose cached;
         bool hit=renderer_state.unit_bodies.copy_cached(job_unit,cached);
@@ -10236,6 +10249,8 @@ private:
     int completed_result = C3X_RENDERER_RESULT_ERROR;
     int last_job_result = C3X_RENDERER_RESULT_ERROR;
     c3x_renderer_unit_v1 job_unit={};
+    unsigned job_unit_predict=1;
+    c3x_renderer::render_core::UnitPlayback unit_playback;
     c3x_renderer_output_v1 completed_output = {};
     std::uint64_t completed_scene_signature=0;
     unsigned fast_cache_hits=0;
@@ -10322,7 +10337,7 @@ private:
     };
 
     int submit_locked(std::unique_lock<std::mutex> & lock, Command command) {
-        if(command!=Command::unit && command!=Command::render)unit_pixels_queue.clear();
+        if(command!=Command::unit && command!=Command::render){unit_pixels_queue.clear();unit_playback.clear();}
         if(command!=Command::unit)foreground_pending.store(true, std::memory_order_relaxed);
         job_command = command;
         has_job = true;
@@ -10804,7 +10819,7 @@ private:
                 }
             } else if(command==Command::unit) {
                 result=renderer_state.unit_bodies.render(renderer_state.device,renderer_state.context,job_unit,
-                    [&](auto const& action){return renderer_state.prepare_unit_action(action);})
+                    [&](auto const& action){return renderer_state.prepare_unit_action(action);},nullptr,job_unit_predict)
                     ? C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
                 if(renderer_state.trace.level) {
                     auto& body=renderer_state.unit_bodies;auto prep=body.pose_preparation_statistics();char detail[512];
@@ -11144,6 +11159,14 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_expanded(
         return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
     return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds);
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_playback(
+    c3x_renderer_unit_v1 const* unit,void* destination_hdc,void* background_hdc,int* bounds,unsigned flags) {
+    if(!unit || unit->struct_size!=sizeof(*unit) || unit->unit_key[63]!=0 || !destination_hdc || !background_hdc || !bounds ||
+       !(flags&C3X_RENDERER_UNIT_STATE_CAPTURED) || (flags&~3u))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
+    return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,flags);
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_set_unit_rendering(int enabled) {

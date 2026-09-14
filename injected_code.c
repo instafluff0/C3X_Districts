@@ -26874,6 +26874,7 @@ unload_custom_renderer ()
 	is->custom_renderer_blit = NULL;
 	is->custom_renderer_unit_draw = NULL;
 	is->custom_renderer_unit_draw_expanded = NULL;
+	is->custom_renderer_unit_draw_playback = NULL;
 	is->custom_renderer_unit_context = NULL;
 	is->custom_renderer_unit_canvas = NULL;
 	is->custom_renderer_export_scene = NULL;
@@ -27009,7 +27010,12 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 		draw.body_y + sprite->Height * draw.projection_scale_milli / 1000};
 	int result = C3X_RENDERER_RESULT_ERROR;
 	if (background_dc != NULL) {
-		if (is->custom_renderer_unit_draw_expanded != NULL)
+		if (is->custom_renderer_unit_draw_playback != NULL) {
+			unsigned flags = C3X_RENDERER_UNIT_STATE_CAPTURED;
+			if (display_unit == p_main_screen_form->Current_Unit) flags |= C3X_RENDERER_UNIT_SELECTED;
+			result = is->custom_renderer_unit_draw_playback (&draw, dc, background_dc, body_bounds, flags);
+		}
+		else if (is->custom_renderer_unit_draw_expanded != NULL)
 			result = is->custom_renderer_unit_draw_expanded (&draw, dc, background_dc, body_bounds);
 		else result = is->custom_renderer_unit_draw (&draw, dc, background_dc);
 	}
@@ -27166,6 +27172,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_blit = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_blit");
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
+		is->custom_renderer_unit_draw_playback = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_playback");
 		is->custom_renderer_export_scene = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_export_scene");
 		is->custom_renderer_schedule = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_schedule_idle");
 		is->custom_renderer_reset = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_reset");

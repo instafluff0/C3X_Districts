@@ -80,7 +80,7 @@ public:
     // A completed pose is CPU-owned and needs neither the D3D context nor a
     // map-worker takeover. The caller serializes this unit sub-owner while a
     // camera render may continue on the independent terrain/map state.
-    bool restore_cached(c3x_renderer_unit_v1 const& request) {
+    bool restore_cached(c3x_renderer_unit_v1 const& request,unsigned predict=1) {
         std::lock_guard<std::recursive_mutex> guard(cache_mutex);
         cache_hit=false;keyed_pixels=cast_pixels=0;failure_reason="cache-miss";
         if(request.struct_size!=sizeof(request) || request.unit_key[63]!=0 ||
@@ -113,7 +113,7 @@ public:
         for(auto& saved:cache)if(saved.key==key) {
             saved.used=++serial;pixels=saved.pixels;image_width=w;image_height=h;
             cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";
-            schedule_pose_content(request,*found,*action,pose,key);return true;
+            if(predict)schedule_pose_content(request,*found,*action,pose,key,predict);return true;
         }
         for(auto const& saved:cache)if(saved.key.unit==key.unit && saved.key.action==key.action &&
            saved.key.cursor==key.cursor) {
@@ -166,11 +166,11 @@ public:
     }
 
     template<class Prepare>
-    bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare,PendingPose* deferred=nullptr) {
+    bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare,PendingPose* deferred=nullptr,unsigned predict=1) {
         payload_ms=pose_ms=submission_ms=readback_ms=output_ms=0;
         LARGE_INTEGER stage_begin={},stage_end={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&stage_begin);
         auto elapsed=[&](){QueryPerformanceCounter(&stage_end);double ms=1000.0*(stage_end.QuadPart-stage_begin.QuadPart)/frequency.QuadPart;stage_begin=stage_end;return ms;};
-        if(restore_cached(request))return true;
+        if(restore_cached(request,predict))return true;
         cache_hit=false;keyed_pixels=cast_pixels=0;failure_reason="invalid-request-or-device";
         if(!device || !context || request.struct_size!=sizeof(request) ||
            request.unit_key[63]!=0 || request.hour<0 || request.hour>23 ||
@@ -197,9 +197,8 @@ public:
         int pose_cursor=action->loop?request.action_cursor%request.frame_count:
             std::min(request.action_cursor,request.frame_count-1);
         int pose_frames=request.frame_count;
-        // Civ III's action director owns whether a unit advances. Ordinary
-        // unselected units keep a fixed native cursor; workers, selected units
-        // and directed actions advance it through the existing bridge.
+        // The caller resolves eligibility/source loop time before this exact
+        // pose owner. Directed actions still carry their native cursor.
         int scale_milli=request.projection_scale_milli>0?request.projection_scale_milli:(draw.reduced?500:1000);
         int w=request.sprite_width*scale_milli/1000,h=request.sprite_height*scale_milli/1000;
         if(w<1 || h<1 || w>1024 || h>1024)return false;
@@ -227,7 +226,7 @@ public:
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
         context->PSSetConstantBuffers(0,1,&settings);
         submission_ms+=elapsed();
-        auto prepared=prepare_pose_content(request,*found,*action,pose,key);
+        auto prepared=prepare_pose_content(request,*found,*action,pose,key,predict);
         if(!prepared){failure_reason="pose-content";return false;}
         auto const& shadow=prepared->shadow;
         // Selected BeautyStudies response, driven by the same native phase as
@@ -331,7 +330,7 @@ public:
         std::array<PendingPose,2> pending;unsigned submitted=0;
         for(unsigned i=0;i<count && !demanded.load(std::memory_order_relaxed);++i) {
             PendingPose next;
-            if(!render(device,context,requests[i],prepare,&next) || !next.content)continue;
+            if(!render(device,context,requests[i],prepare,&next,false) || !next.content)continue;
             next.speculative=true;
             auto box=D3D11_BOX{0,0,0,UINT(next.key.width),UINT(next.key.height),1};
             context->CopySubresourceRegion(batch_readback,0,0,submitted*1024,0,output,0,&box);
@@ -499,7 +498,7 @@ private:
         return !input.source.meshes.empty() && bytes<=24u*1024u*1024u;
     }
     void schedule_pose_content(c3x_renderer_unit_v1 const& request,Unit const& unit,Action const& action,
-                               UnitAnimationPose const& pose,Key const& key) {
+                               UnitAnimationPose const& pose,Key const& key,unsigned step) {
         auto workers=preparation_workers();if(!workers)return;
         try {
             MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);
@@ -519,7 +518,8 @@ private:
                 pose_preparation.configure({},UnitPoseCompiler{},workers,{},128u*1024u*1024u);
                 pose_preparation_configured=true;
             }
-            Key next=key;next.cursor=action.loop?(key.cursor+1)%key.frames:std::min(key.cursor+1,key.frames-1);
+            Key next=key;next.cursor=action.loop?(key.cursor+int(step%unsigned(key.frames)))%key.frames:
+                std::min(key.cursor+int(std::min(step,65536u)),key.frames-1);
             if(next.cursor==key.cursor)return;
             // A single next-pose window fits the active native set. Retaining
             // two distant predictions per unit displaced work due this frame.
@@ -532,7 +532,7 @@ private:
         }catch(...){} // Optional preparation cannot make a native draw fail.
     }
     std::shared_ptr<UnitPoseContent const> prepare_pose_content(c3x_renderer_unit_v1 const& request,Unit const& unit,
-                                Action const& action,UnitAnimationPose const& pose,Key const& key) {
+                                Action const& action,UnitAnimationPose const& pose,Key const& key,unsigned predict) {
         auto wanted=content_key(key);pose_content_hit=false;
         std::shared_ptr<UnitPoseContent const> value;
         if(preparation_workers()) {
@@ -557,7 +557,7 @@ private:
                 }
                 retained_poses.push_back({wanted,value});retained_pose_bytes+=value->bytes();
             }
-            schedule_pose_content(request,unit,action,pose,key);
+            if(predict)schedule_pose_content(request,unit,action,pose,key,predict);
             }catch(...){} // Retention remains optional after exact compilation.
         }
         return value;

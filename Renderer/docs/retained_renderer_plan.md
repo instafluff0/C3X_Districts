@@ -1,5 +1,61 @@
 # Retained world → view → submission implementation
 
+## Current correction: authored unit loops and explicit idle eligibility
+
+The native body bridge now captures selection explicitly through the optional
+`c3x_renderer_unit_draw_playback` export. Unselected idle/fidget bodies stay fixed;
+their changed native cursors or presentation timestamps cannot authorize future
+CPU/GPU poses. Already needed pixels still composite over the current native
+underlay; lighting, placement, visibility and dirty bounds remain authoritative.
+Directed movement/combat/terminal actions retain native lifecycle and cursor timing.
+
+Selected idle and active work loops sample the pack's authored duration and source
+frames, independently of native FLC cursor wrapping. The existing builder work
+clips retain 30 Hz samples: road/irrigation/planting span approximately 3.133 s,
+mine/fortress 3.333 s, forest/jungle 4.667 s. No asset, frame, skeleton or detail
+reduction was made. Periodic playback wraps at the endpoint (the first pose of
+the next cycle), using all intervening source samples rather than a native
+10/15/16-pose approximation. A bounded 128-instance owner pauses inactive/hidden
+observations and resets on action/pack/config lifecycle changes. It never advances
+gameplay or requests a redraw. Legacy explicit-cursor exports remain compatible.
+
+Resolved sample identity feeds existing caches and preparation. Predictions use
+the observed caller interval to target the next likely source sample, instead of
+always preparing one 30 Hz sample when the caller usually arrives at 15 Hz.
+Timestamp-only changes no longer requeue an unchanged pose. Deselection retracts
+queued pixel predictions; no new CPU prediction is made for a frozen draw or
+recursively from speculative GPU work. Already executing optional work may finish.
+
+The source-clock correction does not remove Civ III's roughly 66 ms presentation
+limit. At that cadence a 30 Hz clip is sampled at the proper speed, but every
+source sample cannot be displayed. Faster caller-driven rendering remains a
+separate integration responsibility; the timer has not been changed.
+
+Validation: production build, 60 targeted checks and approved injected smoke
+compilation pass. Native
+day/night witnesses compare the new worker output against explicitly requested
+source samples across a native cursor wrap, and prove frozen idle/fidget output.
+Existing action, clipping, underlay, config-off and terrain parity witnesses pass.
+The prior measured control remains `8baaa091` / DLL `017def8f...fee7d8`; this
+correction changes playback intentionally and has no new whole-request speedup
+claim. Evidence is under `native/build/unit-playback/` and Lab unit replay outputs.
+The evaluation DLL `549daee21744e6724ae9b5080cb2b14714e9f89cab9d663c63411a9c4abca028`
+is staged with matching candidate/staged hashes after confirming Civ III closed.
+Use the ordinary `INSTALL.bat` to compile the matching selection-capture bridge.
+No game installation/launch or visual reference replacement was performed.
+
+A bounded full-kit motion probe at a fixed native anchor found maximum projected
+planar mean-body offsets from idle of 9.875 px (Scout), 2.988 px (Worker) and
+5.279 px (Settler), at full zoom/facing 3. Move-loop endpoint differences were
+about 0.091 px, zero, and 0.00018 px respectively. This diagnoses pose sway and
+move-to-idle stance differences, not a measured native destination error. The
+compiler already removes planar root travel. Preserve those assets; do not
+"fix" apparent overshoot by moving native anchors or flattening authored motion.
+The supplied earlier log also shows 10-frame native movement cycles and variable
+request stalls (Worker max 60.861 ms, Scout 16.205 ms); source resampling, native
+cadence and body-rendering stalls are separate contributors to choppiness.
+
+
 ## Implemented: finished preparation and idle cadence audit
 
 The existing unit owner now retains exact completed pose pixels independently of

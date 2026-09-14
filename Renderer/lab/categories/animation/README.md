@@ -9,11 +9,14 @@ the guard is bypassed immediately when Civ III reports a selected-unit map/
 pathfinder hold. Other clicks and the release interval remain guarded, without
 a separate timer or input hook.
 
-Ambient unit loops have a stable phase derived from the native unit identity;
-nearby units do not share a zero-offset loop. Camera, zoom and callback order
-leave that phase unchanged. Movement, combat and explicitly native-directed
-fidget clips retain their authoritative native cursors. Exact posed-image reuse
-keys the resulting frame, so reuse cannot synchronize different unit phases.
+The native bridge supplies selection explicitly. Only selected idle units and
+active work loops advance by source time; unselected idle/fidget bodies freeze
+and authorize no future pose preparation. The bounded visual instance owner
+pauses inactive observations and resets on action/lifetime changes. Camera and
+zoom do not change its phase. Movement, combat and selected native-directed
+fidgets retain native cursors. Legacy explicit-cursor Lab requests remain
+supported. At the existing roughly 15 Hz caller cadence, 30 Hz source clips keep
+their speed but cannot display every source sample; no faster timer is implied.
 
 The `OutputDebugStringA` test stream emits one `scheduler-callback` record per
 eligible Civ III timer callback. Its callback/presentation gaps, mouse-button

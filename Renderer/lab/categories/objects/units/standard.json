@@ -45,6 +45,8 @@
     "Renderer.native.test_animation_runtime",
     "Renderer.native.test_unit_animation_runtime",
     "Renderer.native.test_unit_pose_cache",
+    "Renderer.native.test_unit_playback",
+    "Renderer.native.test_unit_frame_preparation",
     "Renderer.lab.studies.units.test_sizing",
     "Renderer.tools.asset_compiler.test_unit_attachment_bindings"
   ],

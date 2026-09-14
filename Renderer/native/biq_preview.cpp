@@ -2129,6 +2129,46 @@ bool preview_units(HMODULE module,char const* path,int hour) {
         ok=write_bmp((std::string(path)+".ambient-phases.bmp").c_str(),sheet);
     }
     ambient_images.clear();ambient_sheet.clear();
+    // Exercise the optional native-selection policy through the real DLL and
+    // compare it with independently requested exact source samples.
+    auto playback_draw=reinterpret_cast<c3x_renderer_unit_draw_playback_fn>(GetProcAddress(module,"c3x_renderer_unit_draw_playback"));
+    if(playback_draw && ok) {
+        c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Worker");
+        unit.unit_id=22000;unit.action=13;unit.direction=3;unit.frame_count=15;
+        unit.sprite_width=unit.sprite_height=191;unit.body_x=unit.body_y=100;
+        unit.presentation_frequency=1000000;unit.hour=hour;unit.display_color_rgb=0x205bdd;
+        auto values=static_cast<std::uint32_t*>(bits);
+        auto capture=[&](bool policy,unsigned flags) {
+            std::fill_n(values,1024*1152,0xff565b62u);
+            int result=policy?playback_draw(&unit,dc,dc,drawn_bounds,flags):draw(&unit,dc);
+            GdiFlush();ok=ok && result==C3X_RENDERER_RESULT_OK;
+            return std::vector<std::uint32_t>(values,values+1024*1152);
+        };
+        std::vector<std::uint32_t> comparison(1280*640,0xff565b62u);
+        for(int frame=0;frame<16 && ok;++frame) {
+            unit.frame_count=15;unit.action_cursor=frame%15;unit.presentation_time_ticks=frame*66000;
+            auto current=capture(true,C3X_RENDERER_UNIT_STATE_CAPTURED);
+            if(frame%5==0)for(int y=0;y<320;++y)for(int x=0;x<320;++x)
+                comparison[(y+320)*1280+(frame/5)*320+x]=current[(y+36)*1024+x+36];
+            auto legacy=capture(false,0);
+            if(frame%5==0)for(int y=0;y<320;++y)for(int x=0;x<320;++x)
+                comparison[y*1280+(frame/5)*320+x]=legacy[(y+36)*1024+x+36];
+            // Authored builder road clip: 95 samples spanning 94/30 seconds.
+            unit.frame_count=94;unit.action_cursor=int((frame*.066)/3.133333444595337*94);
+            auto expected=capture(false,0);ok=ok && current==expected;
+        }
+        unit.action=1;unit.frame_count=15;unit.action_cursor=0;
+        auto frozen=capture(true,C3X_RENDERER_UNIT_STATE_CAPTURED);
+        for(int frame=0;frame<10 && ok;++frame) {
+            unit.presentation_time_ticks+=66000;unit.action_cursor=frame;unit.action=frame%2?8:1;
+            ok=capture(true,C3X_RENDERER_UNIT_STATE_CAPTURED)==frozen && ok;
+        }
+        std::printf("UNIT caller playback: authored worker time/source pixels, frozen idle/fidget: %s\n",ok?"pass":"FAIL");
+        if(ok) {
+            c3x_renderer_output_v1 sheet={};sheet.width=1280;sheet.height=640;sheet.stride_bytes=1280*4;sheet.bgra_pixels=comparison.data();
+            ok=write_bmp((std::string(path)+".worker-playback.bmp").c_str(),sheet);
+        }
+    }
     char const* names[]={"Archer","Swordsman","Infantry","Fighter","Galley","Warrior","Scout","Settler","Worker"};
     std::vector<std::uint32_t> first;
     for(int zoom=0;zoom<2 && ok;++zoom)for(int phase=0;phase<2 && ok;++phase) {

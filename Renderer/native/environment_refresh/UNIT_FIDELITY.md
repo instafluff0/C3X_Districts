@@ -1,9 +1,11 @@
 # Current unit fidelity
 
 The accepted C3X build uses `UnitAnimationFidelity`: 78 unit entries and 94
-standard Conquests native aliases. Civ III owns the action lifecycle, cursor,
-timing and placement; the renderer supplies the existing source bodies and
-materials. Unit names and gameplay roles do not select shader behavior.
+standard Conquests native aliases. Civ III owns the action lifecycle and placement.
+Directed actions retain its cursor timing; selected idle and active work loops
+use the pack's authored duration/frames on the caller's pause-filtered clock.
+Unselected idle/fidget bodies are frozen. The renderer supplies the existing
+source bodies and materials. Unit names and gameplay roles do not select shader behavior.
 
 ## Source and preparation
 
