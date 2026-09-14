@@ -9816,6 +9816,15 @@ public:
     }
 
 private:
+    bool compatible_ahead(c3x_renderer_frame_v1 const& frame,
+                          c3x_renderer_camera_identity_v1 const& identity) const {
+        auto candidate=frame;candidate.dirty_flags=ahead_frame.dirty_flags;
+        auto clock=RendererState::resource_clock(frame);
+        return native_presentation && ahead_frame.api_version && ahead_requested>=0 &&
+            !ahead_cancelled.load(std::memory_order_relaxed) && clock>=ahead_requested && clock<=ahead_requested+2 &&
+            !std::memcmp(&identity,&ahead_identity,sizeof(identity)) && same_ambient_view(candidate,ahead_frame);
+    }
+
     int enqueue_camera_locked(c3x_renderer_frame_v1 const& frame,
                               c3x_renderer_camera_identity_v1 const& identity,
                               c3x_renderer_i64& ticket) {
@@ -9840,9 +9849,13 @@ private:
             completed_output=publication.output;completed_identity=publication.identity;
         }
         start_locked();
-        // Immutable speculative input remains alive until its active job yields.
-        ahead_cancelled.store(true,std::memory_order_relaxed);ahead_requested=-1;
-        for(auto& ready:ahead_ready)if(ready.output.bgra_pixels){++ahead_discarded;ready.clear();}
+        // A native request inside the proven ambient horizon transfers that
+        // producer's result into the camera queue. Do not cancel work it needs.
+        // Incompatible scene/view/visibility still cancels the horizon normally.
+        if(!compatible_ahead(frame,identity)) {
+            ahead_cancelled.store(true,std::memory_order_relaxed);ahead_requested=-1;
+            for(auto& ready:ahead_ready)if(ready.output.bgra_pixels){++ahead_discarded;ready.clear();}
+        }
         camera_pending_frame=frame;
         camera_pending_identity=identity;
         camera_pending_tiles.swap(tiles);camera_pending_topology.swap(topology);
@@ -9878,6 +9891,33 @@ public:
             view.frame=publication.frame;view.output=output;
         }
         return result;
+    }
+
+    // Pull-only presentation lease. The native caller has recaptured the view
+    // it intends to display, including current visibility and local appearance.
+    // A time difference can hold ambient animation; a content/view difference
+    // cannot acquire pixels or replacement ownership. This never waits for D3D.
+    int camera_present_view(c3x_renderer_camera_request_v1 const& request,
+                            c3x_renderer_camera_view_v1& view) {
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::unique_lock<std::mutex> lock(state_mutex);
+        native_presentation=true;isolated_publication=true;camera_preview_enabled=false;
+        auto current=*request.frame;
+        // Dirty flags are scheduling hints. Complete fresh occurrences and the
+        // native world/visibility revisions below establish content validity.
+        current.dirty_flags=publication.frame.dirty_flags;
+        if(completed_result!=C3X_RENDERER_RESULT_OK || !publication.output.bgra_pixels ||
+           !publication.matches_static_view(current) ||
+           std::memcmp(&publication.identity,&request.identity,sizeof(request.identity)))
+            return C3X_RENDERER_RESULT_PENDING;
+        c3x_renderer_output_v1 prepared={};
+        current.dirty_flags=ahead_frame.dirty_flags;
+        if(!camera_active && !camera_pending)consume_ahead_locked(lock,current,request.identity,prepared,false);
+        view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+        view.ticket=camera_front_ticket;view.identity=publication.identity;
+        view.frame=publication.frame;
+        return_current_bitmap(*request.frame,view.output,"native-displayed-view");
+        return C3X_RENDERER_RESULT_OK;
     }
 
 private:
@@ -9932,12 +9972,21 @@ private:
         if(ticket<=0 || ticket!=camera_ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
         if(camera_result!=C3X_RENDERER_RESULT_OK && camera_result!=C3X_RENDERER_RESULT_PENDING)return camera_result;
         if(camera_ready.output.bgra_pixels) {
+            bool stable=native_presentation && publication.matches_static_view(camera_ready.frame) &&
+                !std::memcmp(&publication.identity,&camera_ready.identity,sizeof(publication.identity));
             publication.swap(camera_ready);
             camera_ready.clear();
             completed_output=publication.output;completed_identity=publication.identity;
             completed_phase_x=publication.phase_x;completed_phase_y=publication.phase_y;
             completed_result=C3X_RENDERER_RESULT_OK;
             camera_front_ticket=ticket;camera_front_result=camera_ready_result;
+            if(native_presentation && camera_ready_result==C3X_RENDERER_RESULT_OK) {
+                completed_scene_signature=publication.scene_signature;
+                completed_resources=renderer_state.ambient_count();
+                completed_resource_clock=RendererState::resource_clock(publication.frame);
+                job_stable_view=stable;
+                if(!compatible_ahead(job_frame,job_camera_identity))start_ahead();
+            }
         }
         if(camera_front_ticket!=ticket)return C3X_RENDERER_RESULT_PENDING;
         output=completed_output;
@@ -10096,6 +10145,7 @@ private:
     PublishedMapFrame camera_ready;
     bool camera_preview_enabled=false;
     bool ambient_async_enabled=false;
+    bool native_presentation=false;
     bool ahead_enabled=false,ahead_active=false,job_stable_view=false;
     std::atomic<bool> ahead_cancelled{false};
     c3x_renderer_frame_v1 ahead_frame={};
@@ -10266,7 +10316,7 @@ private:
 
     bool consume_ahead_locked(std::unique_lock<std::mutex>& lock,
             c3x_renderer_frame_v1 const& frame,c3x_renderer_camera_identity_v1 const& identity,
-            c3x_renderer_output_v1& output) {
+            c3x_renderer_output_v1& output,bool allow_wait=true) {
         if(!ahead_enabled || !ahead_frame.api_version || ahead_requested<0 ||
            std::memcmp(&ahead_identity,&identity,sizeof(identity)) || !same_ambient_view(frame,ahead_frame))return false;
         auto clock=RendererState::resource_clock(frame);
@@ -10278,6 +10328,7 @@ private:
         }
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
         bool joined=ahead_active && ahead_active_clock==clock;
+        if(joined && !allow_wait)return false;
         if(joined)completed.wait(lock,[this]{return !ahead_active;});
         for(auto& ready:ahead_ready)if(ready.output.bgra_pixels && RendererState::resource_clock(ready.frame)==clock) {
             publication.swap(ready);ready.clear();
@@ -10456,6 +10507,13 @@ private:
                 camera_pending_tiles.clear();camera_pending_topology.clear();
                 job_frame.tiles=job_tiles.empty()?nullptr:job_tiles.data();
                 job_frame.world_topology=job_world_topology.empty()?nullptr:job_world_topology.data();
+                PublishedMapFrame prepared_camera;
+                if(compatible_ahead(job_frame,job_camera_identity)) {
+                    auto clock=RendererState::resource_clock(job_frame);
+                    for(auto& ready:ahead_ready)if(ready.output.bgra_pixels && RendererState::resource_clock(ready.frame)==clock) {
+                        prepared_camera.swap(ready);++ahead_hits;ahead_requested=clock;break;
+                    }
+                }
                 camera_pending=false;camera_active=true;
                 camera_cancelled.store(false,std::memory_order_relaxed);
                 warm_order.clear();warm_cursor=0;warm_signature=0;
@@ -10481,7 +10539,19 @@ private:
                     lock.unlock();
                 }
                 try {
-                    bool ok=renderer_state.render(job_frame,output,-1,&camera_cancelled);
+                    bool ok=false;
+                    if(prepared_camera.output.bgra_pixels) {
+                        // The existing ambient proof certifies identical full-detail
+                        // output throughout this profile's quantized animation bucket.
+                        output=prepared_camera.output;
+                        output.clip_left=job_frame.clip_left;output.clip_top=job_frame.clip_top;
+                        output.clip_right=job_frame.clip_right;output.clip_bottom=job_frame.clip_bottom;
+                        output.geometry_tiles_built=output.geometry_tiles_reused=output.geometry_tiles_evicted=0;
+                        output.geometry_upload_bytes=0;
+                        output.geometry_ticks=output.draw_ticks=output.readback_ticks=output.renderer_cpu_ticks=0;
+                        output.raster_reused_pixels=output.raster_draw_pixels=output.raster_cached_pixels=0;
+                        ok=true;
+                    } else ok=renderer_state.render(job_frame,output,-1,&camera_cancelled);
                     if(camera_cancelled.load(std::memory_order_relaxed)) {
                         // Completed tile entries and the last committed CPU
                         // bitmap remain individually validated. Render marks
@@ -10516,18 +10586,25 @@ private:
                    !camera_cancelled.load(std::memory_order_relaxed)) {
                     if(result==C3X_RENDERER_RESULT_OK) {
                         camera_ready.swap(finished_frame);camera_ready_result=C3X_RENDERER_RESULT_OK;
+                        try {prepare_neighborhood();}
+                        catch (...) {warm_order.clear();warm_cursor=0;warm_signature=0;warm_tiles.clear();}
                     }
                     camera_result=result;
                 }
                 char detail[128];std::snprintf(detail,sizeof(detail),"ticket=%lld current=%lld result=%d",
                     static_cast<long long>(ticket),static_cast<long long>(camera_ticket),result);
                 renderer_state.trace.write("camera-complete",detail,true);
+                if(prepared_camera.output.bgra_pixels) {
+                    char reuse[256];sprintf_s(reuse,"clock=%lld joined=0 wait_ms=0.000 hits=%llu built=%llu discarded=%llu bytes=%zu peak_bytes=%zu camera=1",
+                        RendererState::resource_clock(job_frame),ahead_hits,ahead_built,ahead_discarded,ahead_bytes(),ahead_peak_bytes);
+                    renderer_state.trace.write("ahead-consumed",reuse,true);
+                }
                 camera_active=false;
                 snapshot_memory("camera-complete");
                 foreground_pending.store(camera_pending,std::memory_order_relaxed);
                 completed.notify_all();
                 // Reclaim an obsolete result/preview outside the queue lock too.
-                lock.unlock();finished_frame.clear();lock.lock();
+                lock.unlock();finished_frame.clear();prepared_camera.clear();lock.lock();
                 continue;
             }
             if(!has_job && !stop_requested && !camera_paused && !camera_pending && renderer_state.scene_guard_pending()) {
@@ -10732,7 +10809,7 @@ private:
                 bool const preparing_ahead=ahead_enabled && job_stable_view &&
                     renderer_state.can_prepare_ambient() && job_frame.presentation_frequency>0;
                 if(isolated_publication || preparing_ahead){
-                    auto captured=ambient_async_enabled?&job_frame:nullptr;
+                    auto captured=(ambient_async_enabled || native_presentation)?&job_frame:nullptr;
                     if(publication.capture(output,completed_phase_x,completed_phase_y,captured,job_camera_identity)){
                         publication.scene_signature=c3x_renderer::terrain_frame_signature(
                             job_frame,output.content_revision,output.device_generation).complete;
@@ -10883,6 +10960,16 @@ extern "C" __declspec(dllexport) int c3x_renderer_render_view(
     if(usage){QueryPerformanceCounter(&finished);
         renderer.trace.usage_result(usage,result,finished.QuadPart-started.QuadPart,*output);}
     return result;
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_camera_present_view(
+    c3x_renderer_camera_request_v1 const* request,c3x_renderer_camera_view_v1* view) {
+    c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(c3x_renderer_output_v1)};
+    if(!request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION ||
+       request->struct_size!=sizeof(*request) || !view ||
+       view->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || view->struct_size!=sizeof(*view) ||
+       !valid_frame(request->frame,&output))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return get_renderer_worker().camera_present_view(*request,*view);
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_camera_begin(

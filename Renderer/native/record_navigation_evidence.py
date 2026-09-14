@@ -184,6 +184,7 @@ def main(argv=None):
     parser.add_argument("--tight-natural-bounds", action="store_true", help="Use actual projected natural mesh extrema for culling")
     parser.add_argument("--region-input-ring", type=int, choices=(2,4), default=2, help="Use this many tiles of current captured appearance support")
     parser.add_argument("--world-regions-control", action="store_true", help="Draw identical full regions independently without caching")
+    parser.add_argument("--native-handoff", action="store_true", help="Recapture displayed views and poll full-detail results at a simulated 16 ms native-call cadence")
     parser.add_argument("--camera-view", action="store_true", help="Exercise the versioned camera queue and exact publication identity")
     parser.add_argument("--three-zoom-memory", action="store_true", help="Opt-in bounded 64 MiB viewport / 832 MiB MSAA backdrop retention experiment")
     parser.add_argument("--water-coverage", action="store_true", help="Omit provably empty water/bed passes and unused reflections")
@@ -217,6 +218,8 @@ def main(argv=None):
         parser.error("--unit-actions realistic requires --scenario ambient or idle and --idle-units")
     if args.scenario in ("replay","session") and (not args.idle_units or not args.dense_scene or args.waves!="1" or args.reflection_ablation or args.camera_view or args.tile_width!=128 or args.unit_actions!="mixed"):
         parser.error("A busy replay/session starts at width 128 and requires units, mixed actions, --dense-scene, waves/reflections on and the synchronous native-compatible render API")
+    if args.native_handoff and (args.camera_view or args.scenario not in ("scroll","idle","zoom") or args.case_repeats):
+        parser.error("Native handoff witness requires one-shot scroll, idle or zoom, without the legacy camera queue")
     if args.case_repeats and (args.scenario!="scroll" or args.idle_units or args.camera_view):
         parser.error("Persistent cases currently cover synchronous scroll with one fixed constructor configuration")
     if args.case_repeats and args.case_reset=="process_cold" and args.case_repeats!=1:
@@ -294,6 +297,7 @@ def main(argv=None):
            "C3X_RENDERER_COMPOSITION_CASTERS_CONTROL": "1" if args.composition_casters_control else "0",
            "C3X_RENDERER_ANIMATION_READBACK_ATLAS": "1" if args.animation_readback_atlas else "0",
            "C3X_RENDERER_PREVIEW_RESIDENT_STEPS": str(args.resident_steps),
+           "C3X_RENDERER_PREVIEW_NATIVE_HANDOFF": "1" if args.native_handoff else "",
            "C3X_RENDERER_CAMERA_PREVIEW": "0", "C3X_RENDERER_PREVIEW_CAMERA_QUEUE": "1" if args.camera_view else "",
            "C3X_RENDERER_PREVIEW_CAMERA_VIEW": "1" if args.camera_view else "",
            "C3X_RENDERER_PREVIEW_AMBIENT_ASYNC": "1" if args.scenario == "ambient" else "",

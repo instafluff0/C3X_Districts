@@ -200,13 +200,16 @@ struct RendererState {
     std::vector<unsigned> pixels,flags;
     std::atomic<unsigned> entered{0},cancelled{0},resets{0};
     std::atomic<bool> hold{false};
+    std::atomic<long long> hold_clock{-1};
+    std::atomic<unsigned> target_clock_entries{0};
     bool animate_pixels=false,fail_render=false,world_preparation=false,scene_guard_failed=false;
     bool scene_guard_pending()const{return false;}
     bool prepare_scene_guard(std::atomic<bool> const&){return true;}
     bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1& out,int=-1,
                 std::atomic<bool> const* stop=nullptr,std::uint64_t=0,unsigned const* =nullptr,unsigned=0){
         ++entered;
-        while(hold.load()){
+        if(f.presentation_time_ticks==101)++target_clock_entries;
+        while(hold.load() || hold_clock.load()==f.presentation_time_ticks){
             if(stop && stop->load()){++cancelled;return false;}
             std::this_thread::yield();
         }
@@ -249,7 +252,7 @@ int main(){
     RendererState state;RendererWorker worker(state);
     c3x_renderer_tile_v1 tile={};tile.tile_flags=C3X_RENDERER_TILE_RENDER;tile.anchor_x=7;
     unsigned topology=42;
-    c3x_renderer_frame_v1 f={};f.target_width=2240;f.target_height=1192;f.tile_width=128;f.tile_height=64;
+    c3x_renderer_frame_v1 f={};f.api_version=C3X_RENDERER_API_VERSION;f.struct_size=sizeof(f);f.target_width=2240;f.target_height=1192;f.tile_width=128;f.tile_height=64;
     f.tile_count=1;f.tiles=&tile;f.world_topology=&topology;f.world_topology_count=1;
     f.presentation_time_ticks=1;
     c3x_renderer_output_v1 out={C3X_RENDERER_API_VERSION,sizeof(out)};
@@ -358,6 +361,25 @@ int main(){
     state.hold=false;
     until([&]{return worker.camera_poll_view(last,view)==C3X_RENDERER_RESULT_OK;});
     assert(view.identity.visibility_epoch==34 && view.frame.tiles[0].anchor_x==99);
+    // The native caller must recapture its displayed view before acquiring old pixels.
+    c3x_renderer_camera_request_v1 present={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(present),&f,identity};
+    auto held=view;auto prior_clock=view.frame.presentation_time_ticks;
+    f.presentation_time_ticks+=100;f.dirty_flags^=C3X_RENDERER_DIRTY_ALL;
+    assert(worker.camera_present_view(present,held)==C3X_RENDERER_RESULT_OK);
+    assert(held.frame.presentation_time_ticks==prior_clock && held.output.bgra_pixels==view.output.bgra_pixels);
+    auto reject=[&](){auto before=held;assert(worker.camera_present_view(present,held)==C3X_RENDERER_RESULT_PENDING);
+        assert(!std::memcmp(&before,&held,sizeof(held)));};
+    ++present.identity.visibility_epoch;reject();--present.identity.visibility_epoch;
+    ++present.identity.viewer_epoch;reject();--present.identity.viewer_epoch;
+    ++present.identity.map_epoch;reject();--present.identity.map_epoch;
+    ++present.identity.scene_epoch;reject();--present.identity.scene_epoch;
+    ++f.world_topology_revision;reject();--f.world_topology_revision;
+    ++f.target_width;reject();--f.target_width;
+    ++f.tile_width;reject();--f.tile_width;
+    ++captured[0].city_population;reject();--captured[0].city_population;
+    ++captured[0].visibility_mask;reject();--captured[0].visibility_mask;
+    std::swap(captured[0],captured[1]);reject();std::swap(captured[0],captured[1]);
+    assert(worker.camera_present_view(present,held)==C3X_RENDERER_RESULT_OK);
     // Every identity/visibility/topology/time change still replaces the request.
     auto replace=[&](){
         auto previous=last;
@@ -640,6 +662,37 @@ int main(){
         auto saved=static_cast<unsigned const*>(out.bgra_pixels)[0];
         assert(pull.blit(out,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
         assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==saved);
+        pull.reset_and_stop();
+    }
+    // Native camera requests take ownership of an already-running ambient
+    // result. The caller remains nonblocking and the exact bucket renders once.
+    {
+        RendererState state;state.visible_resource_animations=1;state.animate_pixels=true;
+        RendererWorker pull(state);c3x_renderer_camera_identity_v1 epochs={3,4,5,6};
+        f.tiles=&tile;f.tile_count=1;f.world_topology=&topology;f.world_topology_count=1;
+        f.presentation_frequency=15;f.presentation_time_ticks=99;
+        c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&f,epochs};
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
+        assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        state.hold_clock=101;f.presentation_time_ticks=100;
+        assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        until([&]{return state.target_clock_entries.load()==1;});
+        auto cancellations=state.cancelled.load();auto hits=ahead_consumed.load();
+        f.presentation_time_ticks=101;
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
+        assert(view.frame.presentation_time_ticks==100); // No wait for held producer.
+        assert(pull.camera_begin(f,last,epochs)==C3X_RENDERER_RESULT_PENDING);
+        assert(pull.camera_poll_view(last,view)==C3X_RENDERER_RESULT_PENDING);
+        assert(state.cancelled.load()==cancellations);
+        state.hold_clock=-1;
+        until([&]{return pull.camera_poll_view(last,view)==C3X_RENDERER_RESULT_OK;});
+        assert(state.target_clock_entries.load()==1 && state.cancelled.load()==cancellations);
+        assert(ahead_consumed.load()==hits+1);
+        assert(view.frame.presentation_time_ticks==101);
+        assert(static_cast<unsigned const*>(view.output.bgra_pixels)[0]==(unsigned(tile.anchor_x)^topology^101u));
+        assert(!view.output.renderer_cpu_ticks);
+        ++tile.visibility_mask;
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
         pull.reset_and_stop();
     }
     ahead_mode=false;

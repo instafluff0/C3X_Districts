@@ -1,6 +1,129 @@
 # Retained world → view → submission implementation
 
-## Active implementation: prepared world neighborhood
+## Active implementation: caller-driven native handoff
+
+The user approved the native asynchronous handoff after accepting and staging
+the four-helper neighborhood path below. Preserve that DLL/source as the control
+under `Renderer/native/build/native-handoff-20260913/`.
+
+The implementation now owns one requested view and one displayed native view around the existing
+map boundary. A pending camera retains a full-detail displayed view; its fresh
+capture must validate content, visibility, occurrence order and epochs before
+old pixels can be used. The user-authorized native `move_camera` inlead separates
+relative scroll intent from the displayed camera fields, so native traversal,
+overlays, direct picking and unit culling share the displayed bounds even between
+calls. Original native movement still owns wrap/clamp. Zoom/resize and invalid
+publications require exact rendering. No partial terrain preview is accepted.
+
+Copied authoritative requests are submitted on native calls. An active request
+survives until completion; the newest demand is selected when its slot becomes available.
+This bounds backlog without repeatedly cancelling work during sustained movement.
+The DLL owns immutable pixels and the GPU; completion never requests a redraw.
+Caller blocking, full render completion, displayed age and request latency are
+measured separately. Validation covers the actual bridge and worker, production
+replay and the approved injected compile. Live cadence/interaction remains a strategic checkpoint
+requiring game-launch authorization; no installation or launch is authorized here.
+
+### User evaluation staging
+
+The user subsequently requested: “Please allow me to test it.” The exact validated
+production candidate is now staged for evaluation at `Renderer/bin/C3XRenderer.dll`,
+SHA-256 `d92d104627d4edf6246fbf53dc042b6c67abbb1419edbe7843b9f0452fa6ed3c`.
+`Renderer/TEST_NATIVE_ASYNC.bat` enables `C3X_RENDERER_NATIVE_ASYNC=1` for its
+session and delegates to the existing game-test launcher and `RUN.bat`. That route
+injects the current camera hook when the user starts the game; no installation is
+needed. The prior DLL and staging receipt are under
+`native-handoff-20260913/evaluation-staging/`. This supersedes the unstaged status
+in the implementation checkpoint below. Live acceptance remains pending.
+
+### Implementation checkpoint and measured limits
+
+`native-handoff-build3` implements the native displayed/requested camera owner,
+optional exact presentation lease, existing queue integration and ambient producer
+transfer. The GOG `move_camera` inlead is `0x004DF700`; user-requested non-GOG
+addresses remain `0x0`. The patch ledger records the GOG-only limitation. Mode is
+opt-in with `C3X_RENDERER_NATIVE_ASYNC=1`, requires complete world visibility
+capture, and preserves exact fallback when the display proof fails. No native
+completion notification exists. Full detail and existing visual contracts remain.
+
+Same-binary paired replay, 2240×1192, accepted retained city profile with
+waves/reflections off, four default CPU helpers and existing work ahead:
+
+| Workload | Synchronous whole request median / maximum | Async whole request median / maximum | Async individual-call median / maximum |
+| --- | --- | --- | --- |
+| Dense 14-step scrolling/reversal, 3 s preparation | 79.207 / 150.130 ms | 94.441 / 189.906 ms | 1.720 / 3.119 ms |
+| 30 stationary ticks, 67 ms pace after 10 warmup ticks | 0.554 / 71.077 ms | 2.024 / 70.762 ms | 1.960 / 2.543 ms |
+
+The individual-call column is the distribution of each request's largest call;
+whole requests include completion and checked output. These are small samples,
+not reliable tail percentiles. All paired images are exact. Scrolling made 70
+simulated calls, holding a freshly validated full-detail view on 56. The fixture
+polls every 16 ms and waits for each requested result; it does not measure native
+cadence or simulate every accumulated native input. The compiled bridge test
+separately covers sustained latest-intent accumulation and bounded submission.
+
+This is a measured reduction in caller blocking, **not an overall rendering
+speedup**. Polling adds publication latency; recapturing the held view also costs
+work. Stationary ready-frame calls were already fast. Prepared animation still
+runs: candidate completed 34 future frames and consumed 32 across warmup/measured
+work, with one cancelled/failed result, zero foreground joins and zero compiled
+geometry/uploads in that producer. Control completed 28 and consumed 27, with one
+join. Different timing can change speculative work; counts alone are not a win.
+Sampled candidate contiguous free address space stayed above 1440 MiB (not a peak
+ownership measurement), above the preserved 512 MiB floor.
+
+The initial build2 handoff restarted compatible ambient work: idle median
+47.245 ms versus control 0.524 ms, zero consumed future frames and 23 cancellations.
+That approach is rejected and preserved. Build3 transfers the producer/result
+through the same queue and retains the finite horizon. An actual-worker test holds
+the active producer, verifies nonwaiting native calls, one render of the requested
+bucket, full-detail pixels, no cancellation and visibility rejection.
+
+Local validity: both arms pass four terrain/topology edits and six city/forest
+appearance edits against independent full redraws. These deliberately instrumented
+edit fixtures are correctness/attribution evidence; the general navigation analyzer
+rejects them as performance samples. Visible terrain changes still require exact
+barrier rendering (candidate 750/738 ms, control 727/822 ms in this fixture).
+One first distant edit took 1051 ms versus 68 ms: its trace places 976 ms in
+completion wait after an existing background static-margin submission; geometry
+was 23 ms and no camera poll was involved. GPU-only time is unavailable on
+Parallels. This exposes the remaining cost of already-submitted speculative GPU
+work at exact barriers; the bridge does not guarantee short calls for cold start,
+visibility/content changes, zoom/resize or native unit takeover. Do not hide that
+cost behind caller-latency numbers or reopen the closed timestamp experiments.
+
+The full current-code integration check passes: 270 tests (one skipped), the
+approved GOG compile/injection smoke, and all six production replay groups
+(scrolling, reduced zoom, wrapping, resource playback, units by day and night).
+The separately versioned presentation exports are present in the production DLL.
+A separate public-API confirmation uses that unstaged production DLL plus the
+verified current preview executable: all dense scrolling images, six independent
+boundary redraw checks and three warmed zoom widths are exact. Production
+scrolling medians are 80.404 ms synchronous whole request, 98.680 ms async whole
+request, and 1.672 ms maximum individual call per request (3.822 ms largest call).
+There were 67 simulated calls and 53 held views. The extra publication/poll delay
+remains; no native FPS claim follows. Production build and preview provenance are
+stored separately in `native-handoff-production-binaries/`, without substituting
+a benchmark DLL for the production candidate. See `production-scroll-comparison.json`,
+`production-replays.log` and `integration-receipt.json` in the evidence directory.
+
+Evidence is under `Renderer/native/build/native-handoff-20260913/`:
+`fixed-scroll-comparison.json`, `fixed-idle-comparison.json`,
+`fixed-content-checks.json`, `local-change-spike.json`, focused test and build logs.
+Isolated replay inputs/binaries/images are in `native-handoff-fixed-*` sibling
+build directories. The accepted staged DLL and starting source archive remain
+preserved; the candidate has not been staged, installed or launched.
+
+The first five architectural responsibilities remain with the world/content,
+selection, compatible submission and retained surface owners assessed below.
+The sixth now has implemented native display/request coordination and queue
+consumption, with **live acceptance still pending**. The next integration step is
+an authorized GOG game checkpoint for scrolling, picking/overlays, unit takeover,
+zoom/recenter and lifecycle/visibility changes. Any subsequent throughput work
+should address measured producer/submission and speculative GPU admission costs,
+not another isolated output helper.
+
+## Accepted implementation: prepared world neighborhood
 
 The user authorized completing preparation through GPU-ready surrounding scenery
 on the resized VM (8 logical CPUs, 15,025,766,400 physical-memory bytes). This
@@ -163,12 +286,13 @@ timestamps/event-query limitations remain closed findings, not speed evidence.
 | World → view selection | Construction publishes handles; current occurrences assemble the pass inputs and the spatial index selects real submissions. A captured view plus bounded margin defines selection, separately from world identity. Not every world mesh must stay on the GPU. |
 | Compatible pass submission | Existing material ordering, shared mesh instances and 32-page shadow batches are reused. Explicit scene targets are now caller-owned; foreground and background use the same static submission path. Separate city/body parallel compilers are not claimed. |
 | GPU color/depth and output | Persistent static margin plus viewport-sized dynamic/finishing surfaces is implemented for the bounded city profile with waves/reflections off. Other profiles retain existing execution. The displayed static shading differences have been accepted. |
-| Caller-driven asynchronous integration | Renderer workers, cancellation, copied snapshots and exact eligible idle publications exist. General native camera begin/poll/publication handoff remains an explicit integration responsibility. Civ III still calls; the renderer does not notify it or request redraws. |
+| Caller-driven asynchronous integration | Renderer workers, cancellation, copied snapshots and exact eligible idle publications exist. The opt-in bridge above now connects native camera begin/poll/publication and displayed fields; live cadence/interaction acceptance remains an explicit integration responsibility. Civ III still calls; the renderer does not notify it or request redraws. |
 
 Deferred wonders/Districts, native unit-action ownership and source-asset
 contracts are unchanged. No Civ III install/launch or Git operation is part of
-this checkpoint. Future work should address the remaining native handoff or a
-measured producer/submission bottleneck; do not restart an output-helper queue.
+the accepted preparation checkpoint. The native handoff above is its subsequent
+implementation; remaining live validation is distinct from measured producer or
+submission work. Do not restart an output-helper queue.
 
 ## Previous implementation: bounded concurrent preparation
 

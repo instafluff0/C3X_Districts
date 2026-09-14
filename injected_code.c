@@ -26859,6 +26859,18 @@ unload_custom_renderer ()
 	is->custom_renderer_set_definition_paths = NULL;
 	is->custom_renderer_render = NULL;
 	is->custom_renderer_render_view = NULL;
+	is->custom_renderer_camera_begin = NULL;
+	is->custom_renderer_camera_poll = NULL;
+	is->custom_renderer_camera_present = NULL;
+	is->custom_renderer_camera_cancel = NULL;
+	is->custom_renderer_camera_ticket = 0;
+	is->custom_renderer_display_clock = 0;
+	is->custom_renderer_async_enabled = false;
+	is->custom_renderer_display_valid = false;
+	is->custom_renderer_requested_view_valid = false;
+	is->custom_renderer_async_drawing = false;
+	is->custom_renderer_capture_only = false;
+	is->custom_renderer_async_presented = false;
 	is->custom_renderer_blit = NULL;
 	is->custom_renderer_unit_draw = NULL;
 	is->custom_renderer_unit_draw_expanded = NULL;
@@ -27135,6 +27147,22 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_set_definition_paths = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_definition_paths");
 		is->custom_renderer_render = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_render");
 		is->custom_renderer_render_view = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_render_view");
+		is->custom_renderer_camera_begin = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_begin_view");
+		is->custom_renderer_camera_poll = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_poll_view");
+		is->custom_renderer_camera_present = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_present_view");
+		is->custom_renderer_camera_cancel = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_cancel");
+		char async_option[8] = {0};
+		if (get_environment != NULL) get_environment ("C3X_RENDERER_NATIVE_ASYNC", async_option, sizeof async_option);
+#ifdef Main_Screen_Form_move_camera
+		// Evaluation mode until the native displayed-view checkpoint is observed.
+		is->custom_renderer_async_enabled = strcmp (async_option, "1") == 0 &&
+			is->custom_renderer_render_view != NULL && is->custom_renderer_camera_begin != NULL &&
+			is->custom_renderer_camera_poll != NULL && is->custom_renderer_camera_present != NULL &&
+			is->custom_renderer_camera_cancel != NULL;
+#else
+		// No asynchronous camera mode without the central native camera inlead.
+		is->custom_renderer_async_enabled = false;
+#endif
 		is->custom_renderer_blit = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_blit");
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
@@ -27660,7 +27688,7 @@ prepare_custom_renderer_zoom_tiles (int target_width, int target_height)
 }
 
 bool
-composite_custom_renderer_frame ()
+prepare_custom_renderer_frame (struct c3x_renderer_frame_v1 * prepared)
 {
 	Map_Renderer * target = is->custom_renderer_target;
 	if ((target == NULL) || (is->custom_renderer_tile_count <= 0)) {
@@ -27685,7 +27713,7 @@ composite_custom_renderer_frame ()
 		clip = (RECT){0, 0, width, height};
 	bool zoomed_out = p_bic_data->Map.vtable->m10_Get_Map_Zoom (&p_bic_data->Map);
 	prepare_custom_renderer_zoom_tiles (width, height);
-	if (custom_renderer_zoom_transform_active ())
+	if (is->custom_renderer_async_drawing || custom_renderer_zoom_transform_active ())
 		clip = (RECT){0, 0, width, height};
 	struct c3x_renderer_frame_v1 frame = {0};
 	frame.api_version = C3X_RENDERER_API_VERSION;
@@ -27725,6 +27753,17 @@ composite_custom_renderer_frame ()
 		frame.world_topology_revision = is->custom_renderer_world_topology_revision;
 	}
 
+	*prepared = frame;
+	return true;
+}
+
+bool
+composite_custom_renderer_frame ()
+{
+	struct c3x_renderer_frame_v1 frame;
+	if (! prepare_custom_renderer_frame (&frame)) return false;
+	JGL_Image * image = ((PCX_Image *)is->custom_renderer_target)->JGL.Image;
+
 	LARGE_INTEGER capture_finished;
 	QueryPerformanceCounter (&capture_finished);
 	long long capture_ticks = capture_finished.QuadPart - is->custom_renderer_frame_started_at.QuadPart;
@@ -27746,8 +27785,23 @@ composite_custom_renderer_frame ()
 	request.identity.visibility_epoch = is->custom_renderer_visibility_revision;
 	// Local object/anchor changes remain certified by the complete ordered capture.
 	request.identity.scene_epoch = frame.world_topology_revision;
-	int render_result = is->custom_renderer_render_view != NULL ?
-		is->custom_renderer_render_view (&request, &output) : is->custom_renderer_render (&frame, &output);
+	int render_result = C3X_RENDERER_RESULT_PENDING;
+	struct c3x_renderer_camera_view_v1 displayed = {0};
+	displayed.version = C3X_RENDERER_CAMERA_VIEW_VERSION;
+	displayed.struct_size = sizeof displayed;
+	if (is->custom_renderer_async_drawing)
+		render_result = is->custom_renderer_camera_present (&request, &displayed);
+	if (render_result == C3X_RENDERER_RESULT_OK) {
+		output = displayed.output;
+		is->custom_renderer_display_clock = displayed.frame.presentation_time_ticks;
+	} else {
+		// A fresh complete capture failed the display proof. Do not expose stale
+		// content or a partial preview; exact render also drains incompatible work.
+		is->custom_renderer_camera_ticket = 0;
+		render_result = is->custom_renderer_render_view != NULL ?
+			is->custom_renderer_render_view (&request, &output) : is->custom_renderer_render (&frame, &output);
+		is->custom_renderer_display_clock = frame.presentation_time_ticks;
+	}
 	if (is->custom_renderer_presented_frames == 0)
 		log_custom_renderer_event ("render-done", render_result);
 	if (render_result != C3X_RENDERER_RESULT_OK) {
@@ -27819,6 +27873,7 @@ composite_custom_renderer_frame ()
 		(*p_OutputDebugStringA) (message);
 	}
 	if (result == C3X_RENDERER_RESULT_OK) {
+		is->custom_renderer_async_presented = true;
 		// Transfer category ownership only after this exact frame has rendered and
 		// composited successfully. Mapping intent alone never suppresses native art.
 		for (int n = 0; n < is->custom_renderer_tile_count; n++)
@@ -27878,6 +27933,12 @@ is_or_could_become_grassland (Tile * tile)
 void __fastcall
 patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, int param_1, int pixel_x, int pixel_y, Map_Renderer * map_renderer, int param_5, int tile_x, int tile_y, int param_8)
 {
+	if (is->custom_renderer_capture_only) {
+		if (! is->custom_renderer_capture_failed)
+			is->custom_renderer_capture_failed = ! capture_custom_renderer_tile (
+				param_1, pixel_x, pixel_y, map_renderer, param_5, tile_x, tile_y, tile_at (tile_x, tile_y), false);
+		return;
+	}
 	Map * map = &p_bic_data->Map;
 	Tile * tile = tile_at (tile_x, tile_y);
 	
@@ -27899,6 +27960,11 @@ patch_Map_Renderer_m19_Draw_Tile_by_XY_and_Flags (Map_Renderer * this, int edx, 
 			else {
 				capture_custom_renderer_topology (param_1, param_5);
 				composite_custom_renderer_frame ();
+			}
+			if (is->custom_renderer_async_drawing && ! is->custom_renderer_async_presented) {
+				JGL_Image * failed_image = ((PCX_Image *)this)->JGL.Image;
+				if (failed_image != NULL)
+					PCX_Image_fill_area ((PCX_Image *)this, __, &failed_image->Image_Rect, -2147483647 - 1);
 			}
 		}
 	}
@@ -29485,6 +29551,110 @@ patch_Unit_do_capture_units (Unit * this, int edx, int tile_x, int tile_y, int o
 	return tr;
 }
 
+struct custom_renderer_native_view
+custom_renderer_native_view (Map_Renderer * target)
+{
+	JGL_Image * image = ((PCX_Image *)target)->JGL.Image;
+	struct custom_renderer_native_view view = {0};
+	view.camera_x = p_main_screen_form->camera_x; view.camera_y = p_main_screen_form->camera_y;
+	view.min_x = p_main_screen_form->TileX_Min; view.max_x = p_main_screen_form->TileX_Max;
+	view.min_y = p_main_screen_form->TileY_Min; view.max_y = p_main_screen_form->TileY_Max;
+	if (image != NULL && image->vtable != NULL) {
+		view.width = image->vtable->m54_Get_Width (image); view.height = image->vtable->m55_Get_Height (image);
+	}
+	view.tile_width = is->custom_renderer_zoom_tile_width;
+	view.native_width = p_bic_data->is_zoomed_out ? 64 : 128;
+	view.translate_x = is->custom_renderer_zoom_translate_x_fp;
+	view.translate_y = is->custom_renderer_zoom_translate_y_fp;
+	return view;
+}
+
+void
+select_custom_renderer_native_view (struct custom_renderer_native_view * view)
+{
+	p_main_screen_form->camera_x = view->camera_x; p_main_screen_form->camera_y = view->camera_y;
+	p_main_screen_form->TileX_Min = view->min_x; p_main_screen_form->TileX_Max = view->max_x;
+	p_main_screen_form->TileY_Min = view->min_y; p_main_screen_form->TileY_Max = view->max_y;
+}
+
+bool
+custom_renderer_same_projection (struct custom_renderer_native_view * a, struct custom_renderer_native_view * b)
+{
+	return a->width == b->width && a->height == b->height && a->tile_width == b->tile_width &&
+		a->native_width == b->native_width && a->translate_x == b->translate_x && a->translate_y == b->translate_y;
+}
+
+#ifdef Main_Screen_Form_move_camera
+void __fastcall
+patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds)
+{
+	bool retained = is->custom_renderer_async_enabled && is->custom_renderer_display_valid &&
+		custom_renderer_zoom_enabled () && ! is->custom_renderer_draw_in_progress;
+	// Reason 1 is the native relative keyboard/edge-scroll path. Programmatic
+	// recentering, animation takeover and native wheel/zoom remain exact barriers.
+	if (retained && reason == 1) {
+		if (is->custom_renderer_requested_view_valid) {
+			x += is->custom_renderer_requested_view.camera_x - is->custom_renderer_display_view.camera_x;
+			y += is->custom_renderer_requested_view.camera_y - is->custom_renderer_display_view.camera_y;
+		}
+		Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
+		is->custom_renderer_requested_view = custom_renderer_native_view (&p_bic_data->Map.Renderer);
+		is->custom_renderer_requested_view_valid = true;
+		select_custom_renderer_native_view (&is->custom_renderer_display_view);
+	} else {
+		if (is->custom_renderer_camera_ticket != 0 && is->custom_renderer_camera_cancel != NULL)
+			is->custom_renderer_camera_cancel (is->custom_renderer_camera_ticket);
+		is->custom_renderer_camera_ticket = 0;
+		is->custom_renderer_display_valid = false;
+		is->custom_renderer_requested_view_valid = false;
+		Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
+	}
+}
+#endif
+
+void
+queue_custom_renderer_native_view (Map_Renderer * target, int viewer, struct custom_renderer_native_view * view)
+{
+	// One active request survives intervening calls. The next available slot
+	// captures the newest demand, so there is no stale FIFO or cancellation storm.
+	if (is->custom_renderer_camera_ticket != 0 || ! is->custom_renderer_async_presented) return;
+	long long animation_quantum = is->custom_renderer_qpc_frequency.QuadPart / 15;
+	if (animation_quantum < 1) animation_quantum = 1;
+	if (view->camera_x == is->custom_renderer_display_view.camera_x &&
+	    view->camera_y == is->custom_renderer_display_view.camera_y &&
+	    (! is->custom_renderer_visible_animation_count || is->custom_renderer_display_clock / animation_quantum ==
+	     is->custom_renderer_animation_timestamp.QuadPart / animation_quantum)) return;
+	JGL_Image * image = ((PCX_Image *)target)->JGL.Image;
+	if (image == NULL) return;
+	RECT saved_clip = image->Clip_Rect;
+	is->custom_renderer_capture_only = true;
+	is->custom_renderer_tile_count = 0; is->custom_renderer_capture_failed = false;
+	// Call the existing authoritative traversal with only its first-pass flags.
+	// Its m19 interception above captures records and returns before drawing.
+	((void (__fastcall *) (Map_Renderer *, int, int, int, int, Map_Renderer *, void *, int, int, int))
+		target->vtable->m21_Draw_Tiles_by_Flags) (target, __, viewer, -1, -1, target, NULL, -1, -1, 9);
+	if (! is->custom_renderer_capture_failed && is->custom_renderer_tile_count > 0) {
+		capture_custom_renderer_topology (viewer, is->custom_renderer_tiles[0].visibility_mask);
+		struct c3x_renderer_frame_v1 frame;
+		if (prepare_custom_renderer_frame (&frame)) {
+			struct c3x_renderer_camera_request_v1 request = {0};
+			request.version = C3X_RENDERER_CAMERA_VIEW_VERSION; request.struct_size = sizeof request;
+			request.frame = &frame;
+			request.identity.map_epoch = is->custom_renderer_map_epoch;
+			request.identity.viewer_epoch = is->custom_renderer_viewer_epoch;
+			request.identity.visibility_epoch = is->custom_renderer_visibility_revision;
+			request.identity.scene_epoch = frame.world_topology_revision;
+			long long ticket = 0;
+			if (is->custom_renderer_camera_begin (&request, &ticket) == C3X_RENDERER_RESULT_PENDING) {
+				is->custom_renderer_camera_ticket = ticket;
+				is->custom_renderer_queued_view = *view;
+			}
+		}
+	}
+	is->custom_renderer_capture_only = false;
+	image->Clip_Rect = saved_clip;
+}
+
 void __fastcall
 patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, int param_2, int param_3)
 {
@@ -29534,6 +29704,35 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	}
 	is->custom_renderer_animation_sample_at = is->custom_renderer_frame_timestamp;
 
+	if (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();
+	struct custom_renderer_native_view requested_view = custom_renderer_native_view (this);
+	if (is->custom_renderer_requested_view_valid &&
+	    custom_renderer_same_projection (&requested_view, &is->custom_renderer_requested_view))
+		requested_view = is->custom_renderer_requested_view;
+	bool async_view = is->custom_renderer_async_enabled && custom_renderer_zoom_enabled () &&
+		this == &p_bic_data->Map.Renderer && is->custom_renderer_capture_world_topology;
+	if (! async_view || (is->custom_renderer_display_valid &&
+	    ! custom_renderer_same_projection (&requested_view, &is->custom_renderer_display_view))) {
+		if (is->custom_renderer_camera_ticket != 0 && is->custom_renderer_camera_cancel != NULL)
+			is->custom_renderer_camera_cancel (is->custom_renderer_camera_ticket);
+		is->custom_renderer_camera_ticket = 0; is->custom_renderer_display_valid = false;
+		is->custom_renderer_requested_view_valid = false;
+	}
+	if (async_view && is->custom_renderer_camera_ticket != 0) {
+		struct c3x_renderer_camera_view_v1 ready = {0};
+		ready.version = C3X_RENDERER_CAMERA_VIEW_VERSION; ready.struct_size = sizeof ready;
+		int status = is->custom_renderer_camera_poll (is->custom_renderer_camera_ticket, &ready);
+		if (status == C3X_RENDERER_RESULT_OK) {
+			is->custom_renderer_display_view = is->custom_renderer_queued_view;
+			is->custom_renderer_display_valid = true;
+		}
+		if (status != C3X_RENDERER_RESULT_PENDING) is->custom_renderer_camera_ticket = 0;
+	}
+	is->custom_renderer_async_drawing = async_view;
+	is->custom_renderer_async_presented = false;
+	if (async_view && is->custom_renderer_display_valid)
+		select_custom_renderer_native_view (&is->custom_renderer_display_view);
+
 	is->custom_renderer_draw_in_progress = true;
 	if (! is->custom_renderer_redraw_pending)
 		is->custom_renderer_dirty_flags |= C3X_RENDERER_DIRTY_ALL;
@@ -29553,7 +29752,7 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	// This keeps partial redraws from becoming incomplete terrain cache entries.
 	JGL_Image * zoom_canvas = ((PCX_Image *)this)->JGL.Image;
 	RECT saved_zoom_clip = {0};
-	bool expanded_zoom_clip = custom_renderer_zoom_transform_active () && (zoom_canvas != NULL);
+	bool expanded_zoom_clip = (async_view || custom_renderer_zoom_transform_active ()) && (zoom_canvas != NULL);
 	if (expanded_zoom_clip) {
 		saved_zoom_clip = zoom_canvas->Clip_Rect;
 		zoom_canvas->Clip_Rect = zoom_canvas->Image_Rect;
@@ -29561,6 +29760,15 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	Map_Renderer_m71_Draw_Tiles (this, __, param_1, param_2, 0);
 	if (expanded_zoom_clip)
 		zoom_canvas->Clip_Rect = saved_zoom_clip;
+	if (async_view) {
+		is->custom_renderer_display_valid = is->custom_renderer_async_presented;
+		if (is->custom_renderer_display_valid) is->custom_renderer_display_view = custom_renderer_native_view (this);
+		select_custom_renderer_native_view (&requested_view);
+		queue_custom_renderer_native_view (this, param_1, &requested_view);
+		if (is->custom_renderer_display_valid)
+			select_custom_renderer_native_view (&is->custom_renderer_display_view);
+	}
+	is->custom_renderer_async_drawing = false;
 	is->custom_renderer_frame_active = false;
 	if (! is->custom_renderer_composited)
 		log_custom_renderer_event ("composite-boundary-not-reached", C3X_RENDERER_RESULT_ERROR);
@@ -29585,6 +29793,17 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 			is->custom_renderer_animation_timestamp.QuadPart * ticks_to_ms);
 		message[(sizeof message) - 1] = '\0';
 		(*p_OutputDebugStringA) (message);
+	}
+	if (async_view) {
+		char detail[512];
+		double scale = 1000.0 / is->custom_renderer_qpc_frequency.QuadPart;
+		snprintf (detail, sizeof detail,
+			"[C3X renderer] stage=native-handoff requested=%d,%d displayed=%d,%d valid=%d ticket=%lld call_ms=%.3f animation_age_ms=%.3f\n",
+			requested_view.camera_x, requested_view.camera_y, is->custom_renderer_display_view.camera_x,
+			is->custom_renderer_display_view.camera_y, is->custom_renderer_display_valid,
+			is->custom_renderer_camera_ticket, map_pass_ticks * scale,
+			(is->custom_renderer_animation_timestamp.QuadPart - is->custom_renderer_display_clock) * scale);
+		detail[(sizeof detail) - 1] = '\0'; (*p_OutputDebugStringA) (detail);
 	}
 	is->custom_renderer_draw_in_progress = false;
 }

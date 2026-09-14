@@ -1698,6 +1698,14 @@ struct highlighted_city_radius_tile_info {
 	int highlight_level;
 };
 
+// Native projection values travel with a displayed camera ticket. These are
+// bridge state, never renderer-owned game pointers or a second camera controller.
+struct custom_renderer_native_view {
+	int camera_x, camera_y, min_x, max_x, min_y, max_y;
+	int width, height, tile_width, native_width;
+	long long translate_x, translate_y;
+};
+
 struct injected_state {
 	// ==========
 	// These fields are valid at any time in the injected code because they're set by the patcher {
@@ -2652,6 +2660,14 @@ struct district_button_image_set {
 	c3x_renderer_set_definition_paths_fn custom_renderer_set_definition_paths;
 	c3x_renderer_render_fn custom_renderer_render;
 	c3x_renderer_render_view_fn custom_renderer_render_view;
+	c3x_renderer_camera_begin_view_fn custom_renderer_camera_begin;
+	c3x_renderer_camera_poll_view_fn custom_renderer_camera_poll;
+	c3x_renderer_camera_present_view_fn custom_renderer_camera_present;
+	c3x_renderer_camera_cancel_fn custom_renderer_camera_cancel;
+	struct custom_renderer_native_view custom_renderer_display_view, custom_renderer_queued_view, custom_renderer_requested_view;
+	long long custom_renderer_camera_ticket, custom_renderer_display_clock;
+	bool custom_renderer_async_enabled, custom_renderer_display_valid, custom_renderer_requested_view_valid;
+	bool custom_renderer_async_drawing, custom_renderer_capture_only, custom_renderer_async_presented;
 	c3x_renderer_blit_fn custom_renderer_blit;
 	c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw;
 	c3x_renderer_unit_draw_expanded_fn custom_renderer_unit_draw_expanded;

@@ -1,11 +1,11 @@
 # Civ III patch dependency ledger
 
-The retained world/view/submission implementation is renderer-only. Persistent
+The accepted retained world/view/submission implementation was renderer-only. Persistent
 appearance, local dependency proofs and selected passes use the existing
 `Map_Renderer_m71_Draw_Tiles` / `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`
 capture and composite boundaries. `required_user_action: []`; no injected source,
-ABI, executable symbol, signature or supported-build address changes. General
-caller-driven native asynchronous handoff remains a separate integration task.
+ABI, executable symbol, signature or supported-build address changes. The subsequent
+caller-driven native handoff is recorded under Current action below.
 Shared terrain connectivity and tree color/shadow instancing use the same captured
 world content and pass boundaries. They add no native hooks or ABI fields;
 `required_user_action: []`. The optional terrain detail policy does not alter
@@ -18,10 +18,42 @@ no injected source, ABI field, patch symbol or address changes are needed.
 
 This is the current boundary and outstanding-request record, not a campaign
 history. Read `civ_prog_objects.csv` and the actual injected wrappers before
-claiming a capability is available. Agents must not edit that CSV or
+claiming a capability is available. The camera entry below is the explicit user
+exception to the CSV editing restriction. Do not edit other CSV entries or
 `ref/Civ3Conquests.h`.
 
 ## Current action
+
+
+The caller-driven displayed-view bridge adds the user-authorized
+`Main_Screen_Form_move_camera` **inlead** directly to `civ_prog_objects.csv`.
+Signature: `void (__fastcall *) (Main_Screen_Form * this, int edx, int x, int y,
+int reason, bool update_bounds)`. GOG address: **0x004DF700**. Steam and
+PCGames.de addresses: **0x0**, explicitly requested by the user; this entry is
+GOG-only until those addresses are established. The current patcher requires a
+nonzero inlead address, so this table cannot install on those other builds yet.
+
+The unmodified GOG executable confirms the entry's camera writes at offsets
+0x4E98/0x4E9C, native bounds/wrap/clamp, and the call from the existing
+`bring_tile_into_view` at 0x004DFAA1. Read-only disassembly and the approved
+compile/injection smoke receipt are preserved in
+`Renderer/native/build/native-handoff-20260913/`.
+
+Reason: direct native picking, unit visibility and culling also read these camera
+fields. Holding only transformed overlay anchors is insufficient. The inlead
+lets native relative keyboard/edge scrolling update requested intent while the
+native fields continue to describe the displayed publication. Native clamp/wrap
+remains in the original function. Programmatic recenter, unit-animation camera
+moves and zoom retain an exact-render barrier. The existing m71/m19 boundaries
+capture, validate and commit the displayed view; m21 is called through its existing
+vtable for a capture-only request traversal. No completion callback or redraw hook
+is added. `required_user_action: []` for the authorized GOG table addition.
+
+Without the inlead or any optional presentation export, async mode stays disabled
+and the existing exact path remains. The candidate mode is currently selected by
+`C3X_RENDERER_NATIVE_ASYNC=1`; live displayed-view validation is still required
+before a shipping-default claim. Candidate compile/replay does not authorize
+installation or launching Civ III.
 
 The native request-identity handoff changes `C3X.h`/`injected_code.c` and adds the
 optional DLL export `c3x_renderer_render_view`, using the existing versioned camera

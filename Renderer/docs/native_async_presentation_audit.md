@@ -1,8 +1,68 @@
 # Native asynchronous presentation audit
 
-Current source audit, updated September 13, 2026. No hooks were installed, patch-table
-addresses changed, or game launched for this audit. This is an implementation
-constraint record, not a live presentation pass.
+Current implementation updated September 13, 2026. The GOG camera inlead was
+added with explicit user authorization; other addresses remain `0x0`. Candidate
+compilation/replay does not install hooks or launch Civ III.
+
+## Implemented caller-driven displayed view
+
+The opt-in `C3X_RENDERER_NATIVE_ASYNC=1` bridge now connects the existing captured
+world, camera queue and immutable publication at m71/m19. Native camera fields and
+bounds describe the displayed view between calls, including native overlay
+placement, direct inverse picking and unit culling. The new `move_camera` inlead
+accumulates relative scroll intent separately and delegates wrap/clamp to the
+original function. Programmatic recentering, animation takeover, zoom/resize and
+invalid display proofs use an exact-render barrier. Complete topology/visibility
+capture and all optional exports are required; otherwise the exact path remains.
+
+On each native draw, the bridge polls its one active ticket, selects the candidate
+native camera, then recaptures that view before acquiring pixels. The new optional
+`camera_present_view` validates exact ordered appearance, topology revision,
+visibility and native lifecycle epochs. Only time and dirty scheduling hints may
+differ. The lease exposes the actual displayed clock. Failed validation requires
+exact full-detail rendering; failed composition clears the map plane in this mode.
+No low-detail preview or changed native suppression ownership is introduced.
+
+After native map traversal, a capture-only call through the existing m21 vtable
+builds the latest requested view using the same m19/frame owner. It queues only
+when the active slot is free. New relative scroll intent can accumulate without
+cancelling that request on every draw. Native fields then return to the displayed
+view. Completed work stays in the DLL until Civ III calls again. There is no
+completion callback, redraw request, additional timer, or renderer-owned presenter.
+
+The camera queue also adopts a compatible in-flight or ready ambient result.
+Complete view/identity proof and the existing eligible profile's quantized clock
+certify reuse. It preserves the bounded future horizon and transfers a full-detail
+result without a second render. The actual-worker regression holds that producer,
+queues its exact bucket, verifies nonwaiting calls and one execution, then checks
+pixels and rejection after visibility changes. Existing cancellation, failure,
+unit takeover, configuration and reset tests remain.
+
+Storage remains bounded: one active and one pending camera snapshot, front/ready
+publications capped at 32 MiB each, and the existing 32 MiB ambient budget. During
+publication the worker may temporarily own one additional capped result; reusing
+an ambient frame moves its storage out of that budget before the existing immutable
+publication copy. No native surfaces or pointers are handed to helpers. D3D stays
+under one render-thread owner; GDI composition stays on the game thread.
+
+The compiled bridge regression executes the actual movement, selection and queue
+code, including accumulated input, clamp/wrap, reversal, barriers and failed
+publication. Standalone full-detail replay compares exact pixels and ownership,
+recording full request completion separately from individual simulated native
+calls. Its 16 ms polling interval is a fixture parameter, **not measured Civ III
+cadence**. Results and retained controls are in `retained_renderer_plan.md`.
+
+Remaining strategic checkpoint: authorized GOG staging/install/live verification
+of edge/keyboard scroll and reversal, mouse picking and overlays while pending,
+unit takeover, recenter, zoom/resize, visibility/viewer/scenario changes and config
+off. Actual input-to-presentation latency, native capture/blit cost and presented
+cadence remain unmeasured. Mode stays opt-in pending that checkpoint.
+
+## Earlier audit and preserved constraints
+
+The sections below record the starting implementation and its no-ready-image gap.
+The displayed-view ownership above supersedes statements that begin/poll are not
+connected; source identity plumbing alone was insufficient.
 
 ## Existing path and capabilities
 

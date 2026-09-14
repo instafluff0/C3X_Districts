@@ -46,6 +46,9 @@ int modern(c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
 }
 int legacy(c3x_renderer_frame_v1 const*,c3x_renderer_output_v1*){++legacy_calls;return 9;}
 struct State {
+ bool custom_renderer_async_drawing=false;
+ c3x_renderer_camera_present_view_fn custom_renderer_camera_present=nullptr;
+ long long custom_renderer_display_clock=0,custom_renderer_camera_ticket=0;
  c3x_renderer_render_view_fn custom_renderer_render_view=modern;
  c3x_renderer_render_fn custom_renderer_render=legacy;
  unsigned* custom_renderer_world_topology=nullptr;
@@ -109,3 +112,126 @@ int main(){
  std::free(state.custom_renderer_world_topology);
 }
 ''')
+
+    def test_displayed_camera_transactions_and_request_only_capture(self):
+        source = (ROOT / 'injected_code.c').read_text()
+        header = (ROOT / 'C3X.h').read_text()
+        view = 'struct custom_renderer_native_view {' + header.split('struct custom_renderer_native_view {', 1)[1].split('};', 1)[0] + '};'
+        helpers = 'struct custom_renderer_native_view\ncustom_renderer_native_view' + source.split('struct custom_renderer_native_view\ncustom_renderer_native_view', 1)[1].split('void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles', 1)[0]
+        body = source.split('void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles', 1)[1]
+        start = '\tif (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();' + body.split('\tif (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();', 1)[1].split('\tis->custom_renderer_draw_in_progress = true;', 1)[0]
+        finish = '\tif (async_view) {' + body.split('\tif (async_view) {', 1)[1].split('\tis->custom_renderer_frame_active = false;', 1)[0]
+        program = r'''
+#include "Renderer/native/c3x_renderer_api.h"
+#include <cassert>
+#include <cstring>
+#include <algorithm>
+#define __fastcall
+#define __ 0
+#define Main_Screen_Form_move_camera native_move
+struct RECT {int left=0,top=0,right=2240,bottom=1192;};
+struct JGL_Image;
+struct ImageVtable {int(*m54_Get_Width)(JGL_Image*);int(*m55_Get_Height)(JGL_Image*);};
+struct JGL_Image {ImageVtable* vtable;RECT Clip_Rect;};
+ImageVtable image_vtable{[](JGL_Image*){return 2240;},[](JGL_Image*){return 1192;}};
+JGL_Image image{&image_vtable};
+struct JGL {JGL_Image* Image=&image;};
+struct Map_Renderer;
+struct Vtable {void* m21_Draw_Tiles_by_Flags;};
+struct Map_Renderer {Vtable* vtable;struct JGL JGL;};
+struct PCX_Image {void* vtable;struct JGL JGL;};
+struct MapData {Map_Renderer Renderer;};
+struct Bic {MapData Map;bool is_zoomed_out=false;} bic;
+Bic* p_bic_data=&bic;
+struct Main_Screen_Form {int camera_x=0,camera_y=0,TileX_Min=0,TileX_Max=20,TileY_Min=0,TileY_Max=20;} screen;
+Main_Screen_Form* p_main_screen_form=&screen;
+struct Clock {long long QuadPart=0;};
+''' + view + r'''
+struct State {
+ bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false,custom_renderer_requested_view_valid=false;
+ bool custom_renderer_draw_in_progress=false,custom_renderer_async_drawing=false,custom_renderer_async_presented=false;
+ bool custom_renderer_capture_only=false,custom_renderer_capture_failed=false,custom_renderer_capture_world_topology=true;
+ int custom_renderer_zoom_tile_width=128,custom_renderer_tile_count=0;
+ long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
+ long long custom_renderer_camera_ticket=0,custom_renderer_display_clock=0;
+ long long custom_renderer_map_epoch=1,custom_renderer_viewer_epoch=2,custom_renderer_visibility_revision=3;
+ struct custom_renderer_native_view custom_renderer_display_view{},custom_renderer_requested_view{},custom_renderer_queued_view{};
+ c3x_renderer_tile_v1 storage[2]{},*custom_renderer_tiles=storage;
+ unsigned custom_renderer_visible_animation_count=0;
+ Clock custom_renderer_animation_timestamp,custom_renderer_qpc_frequency;
+ c3x_renderer_camera_begin_view_fn custom_renderer_camera_begin;
+ c3x_renderer_camera_poll_view_fn custom_renderer_camera_poll;
+ c3x_renderer_camera_cancel_fn custom_renderer_camera_cancel;
+} state;State* is=&state;
+bool custom_renderer_zoom_enabled(){return true;}
+void sync_custom_renderer_zoom_to_native(){}
+void native_move(Main_Screen_Form* s,int,int x,int y,int,bool){
+ s->camera_x=(x%8192+8192)%8192;s->camera_y=(y%4096+4096)%4096;
+ s->TileX_Min=s->camera_x/64;s->TileX_Max=s->TileX_Min+20;
+ s->TileY_Min=s->camera_y/32;s->TileY_Max=s->TileY_Min+20;
+}
+unsigned captures=0,begins=0,cancels=0;int queued_x=-1,poll_status=C3X_RENDERER_RESULT_PENDING;
+void capture(Map_Renderer* target,int,int viewer,int,int,Map_Renderer* output,void* clip,int x,int y,int flags){
+ assert(state.custom_renderer_capture_only && !clip && x==-1 && y==-1 && flags==9 && output==target && viewer==2);
+ ++captures;state.custom_renderer_tile_count=2;
+ state.storage[0]={};state.storage[0].visibility_mask=8;state.storage[0].anchor_x=-screen.camera_x;
+ image.Clip_Rect.left=7; // The real traversal may change clipping; the bridge restores it.
+}
+void capture_custom_renderer_topology(int viewer,int mask){assert(viewer==2 && mask==8);}
+bool prepare_custom_renderer_frame(c3x_renderer_frame_v1* frame){
+ *frame={};frame->tiles=state.storage;frame->tile_count=2;
+ frame->world_topology_revision=4;frame->presentation_time_ticks=state.custom_renderer_animation_timestamp.QuadPart;return true;
+}
+int begin(c3x_renderer_camera_request_v1 const* r,long long* ticket){
+ assert(r->identity.map_epoch==1 && r->identity.viewer_epoch==2 && r->identity.visibility_epoch==3 && r->identity.scene_epoch==4);
+ queued_x=-r->frame->tiles[0].anchor_x;*ticket=++begins;return C3X_RENDERER_RESULT_PENDING;
+}
+int poll(long long,c3x_renderer_camera_view_v1*){return poll_status;}
+int cancel(long long){++cancels;return C3X_RENDERER_RESULT_OK;}
+''' + helpers.replace('this', 'screen_arg') + r'''
+int displayed_x=-1;
+void call(bool success=true){Map_Renderer* screen_arg=&bic.Map.Renderer;int param_1=2;
+''' + start.replace('this', 'screen_arg') + r'''
+ state.custom_renderer_async_presented=success;
+ if(success){displayed_x=screen.camera_x;state.custom_renderer_display_clock=state.custom_renderer_animation_timestamp.QuadPart;}
+''' + finish.replace('this', 'screen_arg') + r'''
+}
+int main(){
+ Vtable vt{reinterpret_cast<void*>(&capture)};bic.Map.Renderer.vtable=&vt;
+ state.custom_renderer_camera_begin=begin;state.custom_renderer_camera_poll=poll;state.custom_renderer_camera_cancel=cancel;
+ call();assert(displayed_x==0 && state.custom_renderer_display_valid && begins==0);
+ patch_Main_Screen_Form_move_camera(&screen,0,32,0,1,false);
+ assert(screen.camera_x==0 && state.custom_renderer_requested_view.camera_x==32);
+ call();assert(displayed_x==0 && screen.camera_x==0 && queued_x==32 && begins==1 && captures==1 && image.Clip_Rect.left==0);
+ // Native units, picking and culling read the displayed fields, even between calls.
+ assert(screen.TileX_Min==state.custom_renderer_display_view.min_x);
+ for(int i=0;i<20;++i){patch_Main_Screen_Form_move_camera(&screen,0,32,0,1,false);call();}
+ assert(begins==1 && captures==1 && screen.camera_x==0 && state.custom_renderer_requested_view.camera_x==672);
+ poll_status=C3X_RENDERER_RESULT_OK;call();
+ assert(displayed_x==32 && screen.camera_x==32 && queued_x==672 && begins==2);
+ call();assert(displayed_x==672 && screen.camera_x==672 && begins==2);
+ // Reversal accumulates from requested intent, while publication remains complete.
+ poll_status=C3X_RENDERER_RESULT_PENDING;
+ patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x-32,0,1,false);call();
+ assert(queued_x==640 && screen.camera_x==672);
+ patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x-32,0,1,false);call();
+ assert(begins==3 && state.custom_renderer_requested_view.camera_x==608);
+ // Zoom/native recenter are exact barriers; they cannot adopt an old projection.
+ patch_Main_Screen_Form_move_camera(&screen,0,1000,320,0,true);
+ assert(!state.custom_renderer_display_valid && !state.custom_renderer_requested_view_valid && !state.custom_renderer_camera_ticket && cancels==1);
+ call();assert(screen.camera_x==1000 && displayed_x==1000);
+ patch_Main_Screen_Form_move_camera(&screen,0,1032,320,1,false);call();
+ state.custom_renderer_zoom_tile_width=160;call();
+ assert(!state.custom_renderer_camera_ticket && state.custom_renderer_display_view.tile_width==160 && cancels==2);
+ // Native wrap/clamp remains in the original move owner.
+ patch_Main_Screen_Form_move_camera(&screen,0,8180,0,0,true);call();
+ patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x+32,0,1,false);call();
+ assert(queued_x==20 && screen.camera_x==8180);
+ poll_status=C3X_RENDERER_RESULT_OK;call();assert(screen.camera_x==20);
+ // A failed native composition does not commit a displayed identity or queue more work.
+ unsigned before=begins;call(false);assert(!state.custom_renderer_display_valid && begins==before);
+ // Configuration/older DLL gate can retire pending work without enabling another path.
+ state.custom_renderer_async_enabled=false;call();assert(!state.custom_renderer_display_valid && !state.custom_renderer_camera_ticket);
+}
+'''
+        run_cpp(program)

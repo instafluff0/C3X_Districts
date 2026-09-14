@@ -367,6 +367,13 @@ typedef int (*c3x_renderer_camera_cancel_fn)(c3x_renderer_i64 ticket);
 typedef int (*c3x_renderer_render_view_fn)(struct c3x_renderer_camera_request_v1 const *, struct c3x_renderer_output_v1 *);
 typedef int (*c3x_renderer_camera_begin_view_fn)(struct c3x_renderer_camera_request_v1 const *, c3x_renderer_i64 * ticket);
 typedef int (*c3x_renderer_camera_poll_view_fn)(c3x_renderer_i64 ticket, struct c3x_renderer_camera_view_v1 *);
+// Validate a freshly recaptured displayed view against the immutable front.
+// OK returns matching pixels/occurrences/epochs with their actual captured clock;
+// PENDING changes no output and requires an exact render before this view is shown.
+// The caller owns coordination of native layers/picking with this displayed view.
+// This opt-in lease enables immutable synchronous publications for future calls.
+// It neither submits work nor waits for rendering nor schedules a native redraw.
+typedef int (*c3x_renderer_camera_present_view_fn)(struct c3x_renderer_camera_request_v1 const *, struct c3x_renderer_camera_view_v1 *);
 typedef int (*c3x_renderer_blit_fn)(struct c3x_renderer_output_v1 const *, void * destination_hdc);
 typedef int (*c3x_renderer_unit_draw_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc);
 /* Optional extension: native underlay resolves color-key canvas antialiasing. */

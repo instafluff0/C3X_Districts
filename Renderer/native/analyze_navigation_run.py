@@ -670,6 +670,15 @@ def inspect(directory, *, retained_profile=False):
     if scenario == "zoom":
         report["warm_zoom"] = distribution([float(r["ms"]) for r in rows if int(r["cycle"]) > 0])
         report["first_zoom_changes"] = distribution([float(r["ms"]) for r in rows[1:] if r["cycle"] == "0"])
+    if args.get("native_handoff"):
+        handoff = [fields(l) for l in lines if l.startswith("NATIVE_HANDOFF case=")][-count:]
+        if len(handoff)!=count or any(r.get("result")!="1" for r in handoff):
+            raise ValueError("Missing checked native-handoff fixture results")
+        report["handoff_fixture"]={
+            "simulated_call_period_ms":16,"native_game_cadence_measured":False,
+            "request_max_call_ms":distribution([float(r["max_call_ms"]) for r in handoff]),
+            "exact_result_ms":distribution([float(r["exact_ms"]) for r in handoff]),
+            "calls":sum(int(r["calls"]) for r in handoff),"held_calls":sum(int(r["holds"]) for r in handoff)}
     if args.get("camera_view"):
         camera = [fields(l) for l in lines if l.startswith("CAMERA ticket=")][-count:]
         if len(camera) != count or any(r.get("identical_coalesced") != "1" or r.get("stale_rejected") != "1" or r["result"] != "1" for r in camera):
@@ -819,15 +828,15 @@ def compare(reference, candidate, *, retained_profile=False):
     after, new = inspect(candidate,retained_profile=retained_profile)
     if before["binaries"] != after["binaries"] or before["inputs"] != after["inputs"]:
         raise ValueError("Paired evidence requires identical binaries and runtime inputs")
-    controls = {"preparation_defaults", "world_preparation", "cpu_preparation_workers", "prepare_ahead", "dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view", "preparation_mode",
+    controls = {"native_handoff", "preparation_defaults", "world_preparation", "cpu_preparation_workers", "prepare_ahead", "dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view", "preparation_mode",
                 "backdrop_control", "wave_control", "composition_casters_control", "backdrop_dependencies", "unit_pose_memory", "unit_pose_memory_mib", "composition_receiver_index", "mountain_samples", "material_samples", "production_defaults"}
     ignored = controls | {"out", "binaries"}
     # Receipts made before these opt-in witnesses existed represent their
     # disabled defaults. Nondefault scene/unit settings still must match.
-    defaults={"preparation_defaults":False,"world_preparation":False,"scroll_prepare_ms":0,"cpu_preparation_workers":0,"prepare_ahead":False,"idle_pace_ms":0,"idle_steps":100,"idle_units":0,"idle_warmup":10,"dense_scene":False,"unit_actions":"idle"}
+    defaults={"native_handoff":False,"preparation_defaults":False,"world_preparation":False,"scroll_prepare_ms":0,"cpu_preparation_workers":0,"prepare_ahead":False,"idle_pace_ms":0,"idle_steps":100,"idle_units":0,"idle_warmup":10,"dense_scene":False,"unit_actions":"idle"}
     if {k: v for k, v in (defaults|before["args"]).items() if k not in ignored} != {k: v for k, v in (defaults|after["args"]).items() if k not in ignored}:
         raise ValueError("Paired cameras or quality settings differ")
-    env_controls = {"C3X_RENDERER_WORLD_PREPARATION", "C3X_RENDERER_CPU_PREPARATION", "C3X_RENDERER_PREPARE_AHEAD", "C3X_RENDERER_REGION_DEPENDENCY_CONTROL", "C3X_RENDERER_REGION_INDEX_CONTROL",
+    env_controls = {"C3X_RENDERER_PREVIEW_NATIVE_HANDOFF", "C3X_RENDERER_WORLD_PREPARATION", "C3X_RENDERER_CPU_PREPARATION", "C3X_RENDERER_PREPARE_AHEAD", "C3X_RENDERER_REGION_DEPENDENCY_CONTROL", "C3X_RENDERER_REGION_INDEX_CONTROL",
                     "C3X_RENDERER_CENTER_SHORE_CONTROL", "C3X_RENDERER_WORLD_REGIONS_CONTROL",
                     "C3X_RENDERER_BACKDROP_REUSE_CONTROL", "C3X_RENDERER_WAVE_REUSE_CONTROL",
                     "C3X_RENDERER_BACKDROP_DEPENDENCIES",
