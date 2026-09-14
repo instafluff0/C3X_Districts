@@ -1,5 +1,46 @@
 # Retained world → view → submission implementation
 
+## Current correction: restore native scrolling
+
+The subsequent default-on game test failed its scrolling checkpoint. In the
+supplied trace, all 26 map calls with different requested/displayed cameras leave
+the display at the old position; those calls average 211.026 ms (median 216.220 ms).
+There are 59 superseded camera completions among 130 completions overall. Repeated
+exact renders of the old displayed view cancel upcoming work. This is a correctness
+regression, not evidence that native asynchronous scrolling is complete.
+
+Every `Main_Screen_Form_move_camera` call now cancels the held ticket, invalidates
+the display proof, and leaves the original function's resulting camera/bounds in
+place. The next map call renders that exact native view. Stationary asynchronous
+publication, terrain/ambient preparation and unit CPU helpers remain enabled by
+default. Normal `INSTALL.bat` and launch require no environment settings. The
+validated DLL is unchanged; this correction is in injected camera ownership.
+
+The former bridge fixture substituted camera field writes and manually called
+m71; it did not execute native animator/canvas behavior around that boundary.
+Source inspection confirms native animator camera copies outside m71. The trace
+proves cancellation and no progress, but does not identify the exact field that
+rejects the static publication proof. Do not claim that attribution is resolved.
+Restore asynchronous scrolling only after a bounded reproducer covers that native
+boundary and proves progress with repeated inputs, content changes and unit draws.
+The prior requested/displayed mechanism is superseded in the native movement hook;
+its evidence below is historical. General async scrolling remains unfinished.
+
+The unit mechanism is useful in this game trace: 105 pixel misses, 96 prepared
+results consumed, median pose stage 0.308 ms and median miss call 14.576 ms. Remaining
+median miss stages include 4.951 ms readback and 5.645 ms output. These are logged
+samples, not a paired native FPS comparison; they do not override the user's
+responsiveness report. The 5.711-second initial map call is also still present.
+Do not start another output-helper campaign from these numbers.
+
+Validation: the approved Windows GOG compile/injection smoke test passes. Nine
+native identity/publication tests pass, including pending-work cancellation,
+immediate camera visibility between native calls, repeated movement, reversal,
+wrap, zoom, recenter, config-off and stationary publication. Fifteen additional
+zoom, captured-content and trace-analysis tests pass. No installation or
+game launch was performed. Trace analysis and compile receipt are under
+`native/build/scroll-handoff-regression/`; the changed live capture is preserved.
+
 ## Active implementation: useful preparation across scene owners
 
 The user approved prioritizing work by usefulness before demand, across scene

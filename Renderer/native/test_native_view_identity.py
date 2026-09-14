@@ -235,37 +235,40 @@ int main(){
  Vtable vt{reinterpret_cast<void*>(&capture)};bic.Map.Renderer.vtable=&vt;
  state.custom_renderer_camera_begin=begin;state.custom_renderer_camera_poll=poll;state.custom_renderer_camera_cancel=cancel;
  call();assert(displayed_x==0 && state.custom_renderer_display_valid && begins==0);
+ // Every native movement is now an exact barrier. The real animator observes
+ // these fields between movement and m71; the previous fixture omitted it.
  patch_Main_Screen_Form_move_camera(&screen,0,32,0,1,false);
- assert(screen.camera_x==0 && state.custom_renderer_requested_view.camera_x==32);
- call();assert(displayed_x==0 && screen.camera_x==0 && queued_x==32 && begins==1 && captures==1 && image.Clip_Rect.left==0);
- // Native units, picking and culling read the displayed fields, even between calls.
- assert(screen.TileX_Min==state.custom_renderer_display_view.min_x);
- for(int i=0;i<20;++i){patch_Main_Screen_Form_move_camera(&screen,0,32,0,1,false);call();}
- assert(begins==1 && captures==1 && screen.camera_x==0 && state.custom_renderer_requested_view.camera_x==672);
- poll_status=C3X_RENDERER_RESULT_OK;call();
- assert(displayed_x==32 && screen.camera_x==32 && queued_x==672 && begins==2);
- call();assert(displayed_x==672 && screen.camera_x==672 && begins==2);
- // Reversal accumulates from requested intent, while publication remains complete.
- poll_status=C3X_RENDERER_RESULT_PENDING;
- patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x-32,0,1,false);call();
- assert(queued_x==640 && screen.camera_x==672);
- patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x-32,0,1,false);call();
- assert(begins==3 && state.custom_renderer_requested_view.camera_x==608);
- // Zoom/native recenter are exact barriers; they cannot adopt an old projection.
+ assert(screen.camera_x==32 && !state.custom_renderer_display_valid && !state.custom_renderer_requested_view_valid);
+ call();assert(displayed_x==32 && begins==0 && captures==0);
+ for(int i=0;i<20;++i){
+  patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x+32,0,1,false);
+  assert(screen.camera_x==64+i*32); // Input cannot be hidden behind publication.
+  call();assert(displayed_x==screen.camera_x && begins==0);
+ }
+ // Stationary ambient updates still use the bounded caller-driven queue.
+ state.custom_renderer_qpc_frequency.QuadPart=150;
+ state.custom_renderer_visible_animation_count=1;
+ state.custom_renderer_animation_timestamp.QuadPart=30;
+ queue_custom_renderer_native_view(&bic.Map.Renderer,2,&state.custom_renderer_display_view);
+ assert(begins==1 && state.custom_renderer_camera_ticket && queued_x==672);
+ // Movement cancels old ambient work even if it is never ready. Native bounds,
+ // picking and unit culling immediately see the new native camera.
+ patch_Main_Screen_Form_move_camera(&screen,0,640,0,1,false);
+ assert(cancels==1 && !state.custom_renderer_camera_ticket && screen.camera_x==640);
+ assert(screen.TileX_Min==10 && !state.custom_renderer_display_valid);
+ state.custom_renderer_visible_animation_count=0;
+ call();assert(displayed_x==640 && !state.custom_renderer_camera_ticket);
+ // Exact programmatic recenter, zoom, wrap and repeated reversal remain native.
  patch_Main_Screen_Form_move_camera(&screen,0,1000,320,0,true);
- assert(!state.custom_renderer_display_valid && !state.custom_renderer_requested_view_valid && !state.custom_renderer_camera_ticket && cancels==1);
  call();assert(screen.camera_x==1000 && displayed_x==1000);
- patch_Main_Screen_Form_move_camera(&screen,0,1032,320,1,false);call();
  state.custom_renderer_zoom_tile_width=160;call();
- assert(!state.custom_renderer_camera_ticket && state.custom_renderer_display_view.tile_width==160 && cancels==2);
- // Native wrap/clamp remains in the original move owner.
+ assert(state.custom_renderer_display_view.tile_width==160);
  patch_Main_Screen_Form_move_camera(&screen,0,8180,0,0,true);call();
- patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x+32,0,1,false);call();
- assert(queued_x==20 && screen.camera_x==8180);
- poll_status=C3X_RENDERER_RESULT_OK;call();assert(screen.camera_x==20);
- // A failed native composition does not commit a displayed identity or queue more work.
+ patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x+32,0,1,false);
+ assert(screen.camera_x==20);call();assert(displayed_x==20);
+ patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x-32,0,1,false);
+ assert(screen.camera_x==8180);call();assert(displayed_x==8180);
  unsigned before=begins;call(false);assert(!state.custom_renderer_display_valid && begins==before);
- // Configuration/older DLL gate can retire pending work without enabling another path.
  state.custom_renderer_async_enabled=false;call();assert(!state.custom_renderer_display_valid && !state.custom_renderer_camera_ticket);
 }
 '''

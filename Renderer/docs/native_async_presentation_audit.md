@@ -4,6 +4,19 @@ Current implementation updated September 13, 2026. The GOG camera inlead was
 added with explicit user authorization; other addresses remain `0x0`. Candidate
 compilation/replay does not install hooks or launch Civ III.
 
+## Live checkpoint correction
+
+The default-enabled bridge failed actual scrolling: requests changed but displayed
+camera coordinates did not advance, and old-view exact redraws repeatedly cancelled
+camera work. Native movement now keeps its immediate camera/bounds changes and is
+an exact-render barrier. Stationary publication and CPU preparation remain enabled.
+The former native fixture omitted animator/canvas camera state outside m71; its
+success did not certify the full integration. The exact publication-proof mismatch
+is unresolved. See the retained plan for trace counts and recovery validation.
+
+The following describes the prior bridge, retained as implementation evidence;
+its relative-input holding behavior no longer runs in the native movement hook.
+
 ## Implemented caller-driven displayed view
 
 The bridge now defaults on for the user-authorized `INSTALL.bat` workflow, with

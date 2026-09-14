@@ -24,6 +24,16 @@ exception to the CSV editing restriction. Do not edit other CSV entries or
 
 ## Current action
 
+The latest live test failed async scrolling. The existing
+`Main_Screen_Form_move_camera` hook now treats every movement as an exact barrier:
+it cancels held work and lets native camera/bounds changes remain visible to the
+animator and subsequent map draw. Stationary async publication remains enabled.
+This reuses the same GOG inlead, signature and addresses below; no CSV changes or
+new symbols are needed. `required_user_action: []`. The approved compile/injection
+smoke test passes. Installation and game launch remain user actions.
+
+The remainder of this action records the original bridge and its dependency.
+
 
 The caller-driven displayed-view bridge adds the user-authorized
 `Main_Screen_Form_move_camera` **inlead** directly to `civ_prog_objects.csv`.

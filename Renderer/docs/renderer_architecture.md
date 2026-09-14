@@ -31,9 +31,10 @@ Camera changes select exposed/static damage and ordered dynamic passes; they do
 not translate the whole scene. Finishing updates affected output with exact filter
 support. Persistent captured world identity is now separate from observations;
 local content proofs and a ready-instance path feed separate view assembly and
-spatially selected pass inputs. Full MSAA resolve remains an explicit limit. The opt-in GOG native handoff now
-separates displayed and requested views and validates exact publication leases;
-actual native interaction acceptance remains pending. The retained plan records the scoped completion
+spatially selected pass inputs. Full MSAA resolve remains an explicit limit. Native camera movement now remains
+an exact barrier after the displayed/requested bridge failed the live scrolling
+checkpoint. Stationary publication and CPU preparation remain asynchronous;
+general native async scrolling is unfinished. The retained plan records the scoped completion
 assessment, controls, complete-request measurements and precision constraints.
 
 Full-detail CPU surface compilation now has a bounded helper pool sharing immutable

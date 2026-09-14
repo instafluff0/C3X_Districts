@@ -29588,27 +29588,16 @@ custom_renderer_same_projection (struct custom_renderer_native_view * a, struct 
 void __fastcall
 patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds)
 {
-	bool retained = is->custom_renderer_async_enabled && is->custom_renderer_display_valid &&
-		custom_renderer_zoom_enabled () && ! is->custom_renderer_draw_in_progress;
-	// Reason 1 is the native relative keyboard/edge-scroll path. Programmatic
-	// recentering, animation takeover and native wheel/zoom remain exact barriers.
-	if (retained && reason == 1) {
-		if (is->custom_renderer_requested_view_valid) {
-			x += is->custom_renderer_requested_view.camera_x - is->custom_renderer_display_view.camera_x;
-			y += is->custom_renderer_requested_view.camera_y - is->custom_renderer_display_view.camera_y;
-		}
-		Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
-		is->custom_renderer_requested_view = custom_renderer_native_view (&p_bic_data->Map.Renderer);
-		is->custom_renderer_requested_view_valid = true;
-		select_custom_renderer_native_view (&is->custom_renderer_display_view);
-	} else {
-		if (is->custom_renderer_camera_ticket != 0 && is->custom_renderer_camera_cancel != NULL)
-			is->custom_renderer_camera_cancel (is->custom_renderer_camera_ticket);
-		is->custom_renderer_camera_ticket = 0;
-		is->custom_renderer_display_valid = false;
-		is->custom_renderer_requested_view_valid = false;
-		Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
-	}
+	// Native movement also drives animator/canvas state outside m71. Until the
+	// displayed/requested bridge certifies that complete boundary, every camera
+	// movement is an exact barrier. Stationary publication and CPU preparation
+	// remain asynchronous; never restore old camera fields after native input.
+	if (is->custom_renderer_camera_ticket != 0 && is->custom_renderer_camera_cancel != NULL)
+		is->custom_renderer_camera_cancel (is->custom_renderer_camera_ticket);
+	is->custom_renderer_camera_ticket = 0;
+	is->custom_renderer_display_valid = false;
+	is->custom_renderer_requested_view_valid = false;
+	Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
 }
 #endif
 
