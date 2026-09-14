@@ -150,6 +150,7 @@ int main(){
 #include "Renderer/native/environment_runtime.h"
 #include "Renderer/native/unit_animation_runtime.h"
 #include "Renderer/native/render_core/unit_frame_preparation.h"
+#include "Renderer/native/render_core/unit_playback.h"
 using HDC=void*;
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=std::chrono::steady_clock::now().time_since_epoch().count();}
@@ -185,7 +186,7 @@ struct Bodies {
     std::size_t pose_retained_bytes()const{return 0;}
     void release_pose_leases(){}
 
-    struct Action {std::string name;bool loop=true;};
+    struct Action {std::string name;bool loop=true,ambient=false;float duration=1;unsigned frames=31;};
     struct Unit {std::vector<std::string> keys;int minimum_canvas=0;std::vector<Action> actions;};
     struct PublishedPose {std::vector<unsigned> pixels;int width=191,height=191;unsigned cast_pixels=0;bool prepared=false;};
     bool copy_cached(c3x_renderer_unit_v1 const&,PublishedPose&){return cached;}
@@ -195,11 +196,11 @@ struct Bodies {
         assert(count<=2 && requests[0].action_cursor==1);unit_pixels_entered=true;
         while(hold_unit_pixels.load() && !demanded.load())std::this_thread::yield();return count;
     }
-    std::vector<Unit> units;int image_width=191,image_height=191;
+    std::vector<Unit> units={{{"unit"},0,{{c3x_renderer::native_unit_action(1),true}}}};int image_width=191,image_height=191;
     char const* failure_reason="";bool cache_hit=false,cached=false;std::size_t cache_bytes=0;unsigned keyed_pixels=0,cast_pixels=0;
     bool restore_cached(c3x_renderer_unit_v1 const&){cache_hit=cached;return cached;}
     std::size_t cached_pose_entries()const{return cached?1u:0u;}
-    template<class F> bool render(int,int,c3x_renderer_unit_v1 const&,F){return true;}
+    template<class F> bool render(int,int,c3x_renderer_unit_v1 const&,F,void* =nullptr,unsigned=1){return true;}
     bool blit(HDC,int,int,HDC){return true;}void reset_gpu(){}
 };
 struct RendererState {
@@ -315,7 +316,7 @@ int main(){
     assert(worker.camera_begin(f,last)==C3X_RENDERER_RESULT_PENDING);
     until([&]{return state.entered.load()>entered;});
     auto cancellations=state.cancelled.load();
-    c3x_renderer_unit_v1 unit={};state.unit_bodies.cached=true;
+    c3x_renderer_unit_v1 unit={};unit.action=1;std::strcpy(unit.unit_key,"unit");state.unit_bodies.cached=true;
     assert(worker.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
     assert(state.cancelled.load()==cancellations && worker.camera_poll(last,out)==C3X_RENDERER_RESULT_PENDING);
     state.unit_bodies.cached=false;state.hold=false;
@@ -717,7 +718,6 @@ int main(){
     ahead_mode=false;
     {
         RendererState state;RendererWorker pull(state);
-        state.unit_bodies.units.push_back({{"unit"},0,{{"default",true}}});
         // Use the actual native action name and hold the GPU preparation owner.
         state.unit_bodies.units[0].actions[0].name=c3x_renderer::native_unit_action(1);
         state.unit_bodies.cached=true;unit.action=1;unit.action_cursor=0;unit.frame_count=15;

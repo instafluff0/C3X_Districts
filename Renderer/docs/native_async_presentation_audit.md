@@ -1,8 +1,21 @@
 # Native asynchronous presentation audit
 
-Current implementation updated September 13, 2026. The GOG camera inlead was
+Current implementation updated September 14, 2026. The GOG camera inlead was
 added with explicit user authorization; other addresses remain `0x0`. Candidate
 compilation/replay does not install hooks or launch Civ III.
+
+The current-camera correction also removes the remaining m71 camera swapping
+and unused requested-camera state. Native Animator computes canvas/wrap copies
+before m71; polling cannot replace that camera. The executable fixture now models
+that ordering and rejects completed old-camera/old-projection tickets, including
+camera changes bypassing the movement hook. General nonblocking scrolling is
+still unfinished; the game remains the sole caller and camera owner.
+
+A separate unit visual-cadence candidate is implemented but disabled pending the
+five symbols in [the patch ledger](civ3_patch_dependency_ledger.md). It reuses the
+native timer/animator, preserves native advancement and keeps map cadence unchanged.
+The renderer does not notify the game. See [the retained plan](retained_renderer_plan.md)
+for the verified ABI, lifecycle tests and rejected global map-rate measurement.
 
 ## Live checkpoint correction
 

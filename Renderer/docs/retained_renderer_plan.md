@@ -1,5 +1,75 @@
 # Retained world → view → submission implementation
 
+## Implemented candidate: native unit visual cadence and current-camera publication
+
+The candidate creates a 33 ms visual opportunity for selected/working custom
+unit bodies on Civ III's existing animation timer while retaining a 66 ms deadline
+for its original callback. Map animation keeps its existing scheduler and 15 Hz
+sampling; map-only animation does not activate the faster timer. This separates
+unit visual delivery from map work and native gameplay advancement. Full source
+poses, authored work duration, native action cursors and anchors are unchanged.
+
+The verified native timer transport coalesces `WM_USER+1` messages and dispatches
+on the game thread even for multimedia timers. Intermediate refreshes use the
+existing `Animator_update`, skip its unit/cursor/army/effect advancement service,
+and preserve its elapsed accumulator. They enter unit erase/draw/composition
+without forcing static map damage. Modal/loading/online/unfocused/suspended,
+reentrant, special-interaction and pending-unit-reconciliation states retain the
+native path. Disable/unload restores the native timer; a stopped timer is never
+resurrected. No worker completion notification, second presenter or copied loop.
+
+Five concrete GOG capabilities are required: the native Timer object, its
+reset/activate routine, the animation advancement inlead, and the original
+callback's suspension/shutdown guards. Exact signatures, addresses and fallbacks
+are in [the patch ledger](civ3_patch_dependency_ledger.md). The CSV is unchanged;
+**the faster cadence remains disabled pending authorization**. Current fallback
+smoke compilation cannot certify the absent inlead's actual injection.
+
+The camera adapter removes the obsolete displayed/requested camera swapping and
+unused requested-camera state. Polling may select pixels only for the actual
+native camera/projection, including animator canvas copies made before m71.
+Movement remains immediate with exact demand fallback. Completed old tickets,
+changes bypassing the movement hook, zoom and wrap cannot restore old camera
+fields. General nonblocking scrolling is still unfinished.
+
+The user prefers narrow, straightforward native integration over replacing the
+game's loop. The shim still depends on three native values: the visual-update
+gate and the two-word elapsed accumulator, temporarily preserved around
+`Animator_update`. This is explicit and tested, not a claim of a pure render-only
+native API. Native list maintenance, FLC frame loading, underlay composition and
+presentation still run. Broader native-loop replacement is outside this change;
+keep capture/request/response where clean separation is unavailable.
+
+Validation: production build and approved injected smoke compile pass. Targeted
+contracts cover timer lifecycle, native advancement, publication ownership,
+current camera, playback and retained output. The enabled branch runs as an
+isolated 32-bit MSVC contract and compiles with TCC against the real native/C3X
+types. The executable byte audit confirms both four-stack-argument ABIs, call
+sites, guards and coalesced timer transport. In the deterministic two-second
+fixture, 61 opportunities give 31 original callbacks/advances and 30 intermediate
+draws; native elapsed time remains 1.98 s. This is not measured native FPS.
+Full-detail day/night unit action, authored-loop, frozen-idle, underlay and terrain
+parity replays pass. No game installation, launch or reference replacement.
+
+A global 30 Hz map-sampling variant was measured and rejected. At the existing
+15 Hz caller demand, 60 warm whole requests (map, copy and eight legacy unit
+bodies, 1119×1192, 30 warmup frames) rose from **3.970 to 7.462 ms mean**;
+p95 rose **4.974 to 22.680 ms**. Mean map cost rose **0.757 to 4.315 ms**;
+unit cost stayed **2.986 versus 2.946 ms**. All 62 images matched exactly.
+The global sampling/preparation change was removed rather than shipping a
+regression or claiming a speedup from shorter typical waits. Retained resource
+sampling and preparation remain unchanged. The final change needs no new DLL;
+the staged control remains `549daee21744e6724ae9b5080cb2b14714e9f89cab9d663c63411a9c4abca028`.
+Evidence, rejected patch/binaries, paired receipts and the original GOG audit are
+under `native/build/native-visual-cadence/`.
+
+Remaining: authorize the five symbols and verify the actual native cadence and
+interaction boundary; then measure complete native requests before choosing
+consolidated active-unit submission/readback or broader map cadence. The current
+checkpoint establishes a gated delivery mechanism, not a demonstrated in-game
+speedup or a completed native asynchronous scrolling path.
+
+
 ## Current correction: authored unit loops and explicit idle eligibility
 
 The native body bridge now captures selection explicitly through the optional

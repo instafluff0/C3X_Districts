@@ -63,6 +63,11 @@ caller timestamps alone do not invalidate a pose or authorize another prediction
 
 ## Firm principles
 
+- **Narrow native integration.** Verified animator/map-loop hooks may improve
+  delivery or remove duplicate work, but preserve Civ III's ownership and avoid
+  copying its loop or maintaining competing camera/canvas state. Prefer the
+  existing capture/request/response boundary when a clean split is unavailable.
+  Extra visual opportunities and faster complete rendering are separate claims.
 - **Authoritative C3X ownership.** C3X owns game state, visibility, anchors, camera,
   time, seasons and action lifecycle. The renderer consumes immutable copied
   values, never game pointers or native canvases. Fog, borders, labels, selection,

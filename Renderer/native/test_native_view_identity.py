@@ -148,7 +148,7 @@ int main(){
 }
 ''')
 
-    def test_displayed_camera_transactions_and_request_only_capture(self):
+    def test_current_camera_publication_and_request_only_capture(self):
         source = (ROOT / 'injected_code.c').read_text()
         header = (ROOT / 'C3X.h').read_text()
         view = 'struct custom_renderer_native_view {' + header.split('struct custom_renderer_native_view {', 1)[1].split('};', 1)[0] + '};'
@@ -183,14 +183,14 @@ Main_Screen_Form* p_main_screen_form=&screen;
 struct Clock {long long QuadPart=0;};
 ''' + view + r'''
 struct State {
- bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false,custom_renderer_requested_view_valid=false;
+ bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false;
  bool custom_renderer_draw_in_progress=false,custom_renderer_async_drawing=false,custom_renderer_async_presented=false;
  bool custom_renderer_capture_only=false,custom_renderer_capture_failed=false,custom_renderer_capture_world_topology=true;
  int custom_renderer_zoom_tile_width=128,custom_renderer_tile_count=0;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
  long long custom_renderer_camera_ticket=0,custom_renderer_display_clock=0;
  long long custom_renderer_map_epoch=1,custom_renderer_viewer_epoch=2,custom_renderer_visibility_revision=3;
- struct custom_renderer_native_view custom_renderer_display_view{},custom_renderer_requested_view{},custom_renderer_queued_view{};
+ struct custom_renderer_native_view custom_renderer_display_view{},custom_renderer_queued_view{};
  c3x_renderer_tile_v1 storage[2]{},*custom_renderer_tiles=storage;
  unsigned custom_renderer_visible_animation_count=0;
  Clock custom_renderer_animation_timestamp,custom_renderer_qpc_frequency;
@@ -224,12 +224,16 @@ int begin(c3x_renderer_camera_request_v1 const* r,long long* ticket){
 int poll(long long,c3x_renderer_camera_view_v1*){return poll_status;}
 int cancel(long long){++cancels;return C3X_RENDERER_RESULT_OK;}
 ''' + helpers.replace('this', 'screen_arg') + r'''
-int displayed_x=-1;
+int displayed_x=-1,animator_x=-1,animator_y=-1;
 void call(bool success=true){Map_Renderer* screen_arg=&bic.Map.Renderer;int param_1=2;
+ // Native Animator_update computes canvas and wrap copies before calling m71.
+ animator_x=screen.camera_x;animator_y=screen.camera_y;
 ''' + start.replace('this', 'screen_arg') + r'''
+ assert(screen.camera_x==animator_x && screen.camera_y==animator_y);
  state.custom_renderer_async_presented=success;
  if(success){displayed_x=screen.camera_x;state.custom_renderer_display_clock=state.custom_renderer_animation_timestamp.QuadPart;}
 ''' + finish.replace('this', 'screen_arg') + r'''
+ assert(screen.camera_x==animator_x && screen.camera_y==animator_y);
 }
 int main(){
  Vtable vt{reinterpret_cast<void*>(&capture)};bic.Map.Renderer.vtable=&vt;
@@ -238,7 +242,7 @@ int main(){
  // Every native movement is now an exact barrier. The real animator observes
  // these fields between movement and m71; the previous fixture omitted it.
  patch_Main_Screen_Form_move_camera(&screen,0,32,0,1,false);
- assert(screen.camera_x==32 && !state.custom_renderer_display_valid && !state.custom_renderer_requested_view_valid);
+ assert(screen.camera_x==32 && !state.custom_renderer_display_valid);
  call();assert(displayed_x==32 && begins==0 && captures==0);
  for(int i=0;i<20;++i){
   patch_Main_Screen_Form_move_camera(&screen,0,screen.camera_x+32,0,1,false);
@@ -258,6 +262,23 @@ int main(){
  assert(screen.TileX_Min==10 && !state.custom_renderer_display_valid);
  state.custom_renderer_visible_animation_count=0;
  call();assert(displayed_x==640 && !state.custom_renderer_camera_ticket);
+ // Camera changes that bypass the move hook still invalidate old queued output.
+ // A completed old ticket cannot rewrite the native animator's current camera.
+ state.custom_renderer_visible_animation_count=1;
+ state.custom_renderer_animation_timestamp.QuadPart+=30;
+ queue_custom_renderer_native_view(&bic.Map.Renderer,2,&state.custom_renderer_display_view);
+ assert(state.custom_renderer_camera_ticket);
+ native_move(&screen,0,704,64,1,false);poll_status=C3X_RENDERER_RESULT_OK;
+ state.custom_renderer_visible_animation_count=0;
+ call();assert(cancels==2 && displayed_x==704 && screen.camera_y==64);
+ assert(!state.custom_renderer_camera_ticket && screen.TileX_Min==11);
+ // Projection changes likewise reject a ready old-view publication.
+ state.custom_renderer_visible_animation_count=1;
+ state.custom_renderer_animation_timestamp.QuadPart+=30;
+ queue_custom_renderer_native_view(&bic.Map.Renderer,2,&state.custom_renderer_display_view);
+ assert(state.custom_renderer_camera_ticket);
+ state.custom_renderer_zoom_tile_width=144;state.custom_renderer_visible_animation_count=0;
+ call();assert(cancels==3 && !state.custom_renderer_camera_ticket && displayed_x==704);
  // Exact programmatic recenter, zoom, wrap and repeated reversal remain native.
  patch_Main_Screen_Form_move_camera(&screen,0,1000,320,0,true);
  call();assert(screen.camera_x==1000 && displayed_x==1000);

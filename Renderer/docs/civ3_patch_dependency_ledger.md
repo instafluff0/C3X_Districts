@@ -24,12 +24,50 @@ exception to the CSV editing restriction. Do not edit other CSV entries or
 
 ## Current action
 
-Finished unit-pixel preparation reuses the existing unit draw exports, m71/m19
-map publication and caller-owned GDI composition. No injected source, ABI, CSV,
-address or native ownership changes; `required_user_action: []`. The cadence audit
-confirms the current 66 ms native timer also drives animator/game behavior and
-changes timer mechanism below 50 ms. No faster rendering-only patch is established
-or requested. Do not shorten that timer or invent a speculative patch dependency.
+The visual-cadence candidate uses the existing `on_timer_0x9F6500` inlead,
+`Animator_update` definition and m71/m19 capture/composition. Civ III's native
+Timer posts coalesced `WM_USER+1` messages to its game thread; renderer completion
+never posts messages or requests drawing. For selected/working custom units, a 33 ms timer opportunity alternates
+native callbacks with visual refreshes, retaining a 66 ms native deadline.
+Map animation keeps the current scheduler and sampling; map-only animation
+does not activate this cadence.
+Intermediate draws skip the single native animation advancement service and
+preserve its elapsed-time accumulator. Native camera/canvas construction remains
+inside `Animator_update`; no copied animator implementation is introduced.
+
+`required_user_action`: authorize the following **five** additions to
+`civ_prog_objects.csv`. The file has **not** been changed. All addresses below
+are verified against the local unmodified GOG x86 executable; Steam and PCGames.de
+must stay `0x0` until verified. These entries are GOG-only, like the existing
+camera inlead; the current patcher cannot install a zero-address inlead elsewhere.
+
+| Symbol | Kind | GOG address | Signature/type | Capability |
+| --- | --- | --- | --- | --- |
+| `p_main_animation_timer` | define | `0x009F6500` | `Timer *` | Use the existing native timer owner. |
+| `Timer_reset_and_activate` | define | `0x006205D0` | `void (__fastcall *) (Timer * this, int edx, void * callback_fn, void * callback_param, int duration, int resolution)` | Stop/rearm using the native mechanism; restore 66 ms on disable. |
+| `Units_Image_Data_advance_animations` | inlead | `0x00405FC0` | `void (__fastcall *) (Units_Image_Data * this, int edx, float elapsed, Unit ** units, int count, void * effects)` | Suppress unit/cursor/army/effect advancement only during an intermediate visual draw. |
+| `p_native_timer_inhibited` | define | `0x0072C2C4` | `int *` | Honor the original callback's native suspension guard. |
+| `p_native_game_ending` | define | `0x00CC37BC` | `int *` | Honor native shutdown before calling the animator. |
+
+The two routines each have four stack arguments (`ret 16`). The decompiler omits
+the fourth advancement argument; the call site and executable bytes include the
+tile-effect list. `Renderer/tools/audit_native_visual_cadence.py` checks these
+bytes, call targets, timer transport and guards without running the game.
+Evidence: `Renderer/native/build/native-visual-cadence/`.
+
+Fallback: without all five symbols, compile-time gates keep the current 66 ms
+callback. Runtime eligibility excludes shutdown, suspension, loading, modal,
+online, unfocused, drawing, pending native unit reconciliation and special
+interaction modes. A stopped native timer is never resurrected. No faster live
+cadence is certified until the entries are authorized and the game checkpoint
+passes. This replaces the earlier audit's incomplete conclusion that crossing
+50 ms necessarily runs game work on the multimedia thread: the verified normal
+transport posts back to the game thread when `callback_fn_2` is null.
+
+Finished unit-pixel preparation itself adds no native symbols. The current-camera
+publication correction removes obsolete camera swapping at m71 and rejects stale
+queued cameras/projections before polling. It reuses the existing camera inlead
+and requires no additional table entries.
 
 The latest live test failed async scrolling. The existing
 `Main_Screen_Form_move_camera` hook now treats every movement as an exact barrier:

@@ -886,6 +886,7 @@ def run_tests(category=None, *, integration=False, full=False):
                         "Renderer.definitions.test_rule_resolver", "Renderer.scenes.test_scene_contract",
                         "Renderer.native.test_native_bridge_contract",
                         "Renderer.native.test_native_view_identity",
+                        "Renderer.native.test_native_visual_cadence",
                         "Renderer.native.test_effect_config",
                         "Renderer.native.test_zoom_mesh_cache",
                         "Renderer.native.test_captured_scene",

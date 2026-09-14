@@ -26848,6 +26848,14 @@ log_custom_renderer_event (char const * stage, int result)
 void
 unload_custom_renderer ()
 {
+#if defined(p_main_animation_timer) && defined(Timer_reset_and_activate) && defined(Units_Image_Data_advance_animations) && defined(p_native_timer_inhibited) && defined(p_native_game_ending)
+	if (is->custom_renderer_fast_timer && p_main_animation_timer != NULL && Timer_reset_and_activate != NULL &&
+	    p_main_animation_timer->timer_id != NULL && p_main_animation_timer->duration == 33)
+		Timer_reset_and_activate (p_main_animation_timer, __, p_main_animation_timer->callback_fn,
+			p_main_animation_timer->callback_param, 66, 66);
+#endif
+	is->custom_renderer_fast_timer = false;
+	is->custom_renderer_native_timer_due.QuadPart = 0;
 	if ((is->custom_renderer_module != NULL) &&
 	    (is->custom_renderer_reset != NULL))
 		is->custom_renderer_reset ();
@@ -26867,7 +26875,6 @@ unload_custom_renderer ()
 	is->custom_renderer_display_clock = 0;
 	is->custom_renderer_async_enabled = false;
 	is->custom_renderer_display_valid = false;
-	is->custom_renderer_requested_view_valid = false;
 	is->custom_renderer_async_drawing = false;
 	is->custom_renderer_capture_only = false;
 	is->custom_renderer_async_presented = false;
@@ -29576,14 +29583,6 @@ custom_renderer_native_view (Map_Renderer * target)
 	return view;
 }
 
-void
-select_custom_renderer_native_view (struct custom_renderer_native_view * view)
-{
-	p_main_screen_form->camera_x = view->camera_x; p_main_screen_form->camera_y = view->camera_y;
-	p_main_screen_form->TileX_Min = view->min_x; p_main_screen_form->TileX_Max = view->max_x;
-	p_main_screen_form->TileY_Min = view->min_y; p_main_screen_form->TileY_Max = view->max_y;
-}
-
 bool
 custom_renderer_same_projection (struct custom_renderer_native_view * a, struct custom_renderer_native_view * b)
 {
@@ -29603,7 +29602,6 @@ patch_Main_Screen_Form_move_camera (Main_Screen_Form * this, int edx, int x, int
 		is->custom_renderer_camera_cancel (is->custom_renderer_camera_ticket);
 	is->custom_renderer_camera_ticket = 0;
 	is->custom_renderer_display_valid = false;
-	is->custom_renderer_requested_view_valid = false;
 	Main_Screen_Form_move_camera (this, __, x, y, reason, update_bounds);
 }
 #endif
@@ -29702,32 +29700,27 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 
 	if (custom_renderer_zoom_enabled ()) sync_custom_renderer_zoom_to_native ();
 	struct custom_renderer_native_view requested_view = custom_renderer_native_view (this);
-	if (is->custom_renderer_requested_view_valid &&
-	    custom_renderer_same_projection (&requested_view, &is->custom_renderer_requested_view))
-		requested_view = is->custom_renderer_requested_view;
 	bool async_view = is->custom_renderer_async_enabled && custom_renderer_zoom_enabled () &&
 		this == &p_bic_data->Map.Renderer && is->custom_renderer_capture_world_topology;
-	if (! async_view || (is->custom_renderer_display_valid &&
-	    ! custom_renderer_same_projection (&requested_view, &is->custom_renderer_display_view))) {
-		if (is->custom_renderer_camera_ticket != 0 && is->custom_renderer_camera_cancel != NULL)
+	// Animator has already copied this camera into its erase/wrap canvases.
+	// Polling can select pixels, never a different native camera or tile bounds.
+	if (is->custom_renderer_camera_ticket != 0 && (! async_view ||
+	    requested_view.camera_x != is->custom_renderer_queued_view.camera_x ||
+	    requested_view.camera_y != is->custom_renderer_queued_view.camera_y ||
+	    ! custom_renderer_same_projection (&requested_view, &is->custom_renderer_queued_view))) {
+		if (is->custom_renderer_camera_cancel != NULL)
 			is->custom_renderer_camera_cancel (is->custom_renderer_camera_ticket);
-		is->custom_renderer_camera_ticket = 0; is->custom_renderer_display_valid = false;
-		is->custom_renderer_requested_view_valid = false;
+		is->custom_renderer_camera_ticket = 0;
 	}
+	if (! async_view) is->custom_renderer_display_valid = false;
 	if (async_view && is->custom_renderer_camera_ticket != 0) {
 		struct c3x_renderer_camera_view_v1 ready = {0};
 		ready.version = C3X_RENDERER_CAMERA_VIEW_VERSION; ready.struct_size = sizeof ready;
 		int status = is->custom_renderer_camera_poll (is->custom_renderer_camera_ticket, &ready);
-		if (status == C3X_RENDERER_RESULT_OK) {
-			is->custom_renderer_display_view = is->custom_renderer_queued_view;
-			is->custom_renderer_display_valid = true;
-		}
 		if (status != C3X_RENDERER_RESULT_PENDING) is->custom_renderer_camera_ticket = 0;
 	}
 	is->custom_renderer_async_drawing = async_view;
 	is->custom_renderer_async_presented = false;
-	if (async_view && is->custom_renderer_display_valid)
-		select_custom_renderer_native_view (&is->custom_renderer_display_view);
 
 	is->custom_renderer_draw_in_progress = true;
 	if (! is->custom_renderer_redraw_pending)
@@ -29759,10 +29752,7 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	if (async_view) {
 		is->custom_renderer_display_valid = is->custom_renderer_async_presented;
 		if (is->custom_renderer_display_valid) is->custom_renderer_display_view = custom_renderer_native_view (this);
-		select_custom_renderer_native_view (&requested_view);
 		queue_custom_renderer_native_view (this, param_1, &requested_view);
-		if (is->custom_renderer_display_valid)
-			select_custom_renderer_native_view (&is->custom_renderer_display_view);
 	}
 	is->custom_renderer_async_drawing = false;
 	is->custom_renderer_frame_active = false;
@@ -45551,9 +45541,9 @@ custom_renderer_scheduler_tick ()
 	input.event_start_ticks = is->custom_renderer_last_presented_at.QuadPart;
 	input.event_duration_ticks = is->custom_renderer_qpc_frequency.QuadPart;
 	input.visible_animation_count = is->custom_renderer_visible_animation_count;
-	// This runs from Civ III's existing 0x42 ms timer. Use a slightly lower
-	// eligibility threshold so ordinary timer/render jitter does not make idle
-	// animation fall to every other callback; this cannot create extra callbacks.
+	// Map animation retains its existing cadence independently of extra unit
+	// visual refreshes. Finer global map buckets wasted preparation at the
+	// measured native demand rate; this scheduler only marks native demand.
 	input.cadence_ms = 0x32;
 	bool map_visible = (*p_player_bits != 0) && ! p_main_screen_form->is_now_loading_game &&
 		(is->saved_tile_count < 0);
@@ -45660,12 +45650,82 @@ clear_active_custom_tile_animation_effects ()
 	}
 }
 
+// The intermediate native visual call must not advance FLC unit, cursor,
+// army-member or tile-effect state. Four stack arguments are verified in GOG.
+#ifdef Units_Image_Data_advance_animations
+void __fastcall
+patch_Units_Image_Data_advance_animations (Units_Image_Data * this, int edx, float elapsed,
+	Unit ** units, int count, void * effects)
+{
+	if (! is->custom_renderer_visual_only)
+		Units_Image_Data_advance_animations (this, __, elapsed, units, count, effects);
+}
+#endif
+
+bool
+custom_renderer_has_visual_work ()
+{
+	if (! is->current_config.enable_custom_rendering || is->custom_renderer_init_state != IS_OK ||
+	    is->custom_renderer_qpc_frequency.QuadPart <= 0 || is->custom_renderer_modal ||
+	    is->custom_renderer_draw_in_progress || p_main_screen_form->is_now_loading_game ||
+	    *p_player_bits == 0 || is->saved_tile_count >= 0 || is_online_game () ||
+	    GetFocus == NULL || GetFocus () == NULL ||
+	    (p_main_screen_form->Mode_Action != 0 && p_main_screen_form->Mode_Action != 0x7f00) ||
+	    p_main_screen_form->animator.Units2_Count != 0 ||
+	    *(bool *)(p_main_screen_form->animator.field_18E4 + 0xb)) return false;
+	if (! is->current_config.enable_custom_rendered_units) return false;
+	Animator * animator = &p_main_screen_form->animator;
+	for (int n = 0; n < animator->Units_Count && n < 1024; n++) {
+		Unit * unit = animator->Units[n];
+		if (unit == NULL || unit->Body.ID < 0) continue;
+		int action = unit->Body.Animation.summary.current_anim_type;
+		if (unit == p_main_screen_form->Current_Unit || action == AT_FORTRESS ||
+		    (action >= AT_ROAD && action <= AT_PLANT)) return true;
+	}
+	return false;
+}
+
 void __stdcall
 patch_on_timer_0x9F6500 (void)
 {
+	// Native timer transport remains the sole source of demand. Nested UI
+	// dispatch cannot advance gameplay or take over an active visual refresh.
+	if (is->custom_renderer_timer_running) return;
+	bool visual_only = false;
+#if defined(p_main_animation_timer) && defined(Timer_reset_and_activate) && defined(Units_Image_Data_advance_animations) && defined(p_native_timer_inhibited) && defined(p_native_game_ending)
+	LARGE_INTEGER cadence_now = {0};
+	bool capable = p_main_animation_timer != NULL && Timer_reset_and_activate != NULL &&
+		Units_Image_Data_advance_animations != NULL;
+	bool visual_work = capable && p_main_animation_timer->callback_fn_2 == NULL &&
+		QueryPerformanceCounter (&cadence_now) && p_native_timer_inhibited != NULL && p_native_game_ending != NULL &&
+		! *p_native_timer_inhibited && ! *p_native_game_ending && custom_renderer_has_visual_work ();
+	if (capable && p_main_animation_timer->timer_id != NULL &&
+	    ((visual_work && p_main_animation_timer->duration == 66) ||
+	     (! visual_work && is->custom_renderer_fast_timer && p_main_animation_timer->duration == 33))) {
+		Timer_reset_and_activate (p_main_animation_timer, __, p_main_animation_timer->callback_fn,
+			p_main_animation_timer->callback_param, visual_work ? 33 : 66, visual_work ? 5 : 66);
+		if (p_main_animation_timer->timer_id == NULL && visual_work)
+			Timer_reset_and_activate (p_main_animation_timer, __, p_main_animation_timer->callback_fn,
+				p_main_animation_timer->callback_param, 66, 66);
+	}
+	is->custom_renderer_fast_timer = visual_work && p_main_animation_timer->timer_id != NULL &&
+		p_main_animation_timer->duration == 33;
+	if (is->custom_renderer_fast_timer) {
+		long long frequency = is->custom_renderer_qpc_frequency.QuadPart;
+		long long due = is->custom_renderer_native_timer_due.QuadPart;
+		visual_only = due > cadence_now.QuadPart + frequency / 500 && due <= cadence_now.QuadPart + frequency;
+		if (! visual_only) {
+			long long interval = frequency * 66 / 1000;
+			is->custom_renderer_native_timer_due.QuadPart =
+				(due > 0 && due <= cadence_now.QuadPart + frequency && due + interval > cadence_now.QuadPart) ?
+				due + interval : cadence_now.QuadPart + interval;
+		}
+	} else is->custom_renderer_native_timer_due.QuadPart = 0;
+#endif
+	is->custom_renderer_timer_running = true;
 	bool trace_custom_timer = is->current_config.enable_custom_rendering &&
 		(is->custom_renderer_init_state == IS_OK) &&
-		(is->custom_renderer_visible_animation_count > 0) &&
+		(is->custom_renderer_visible_animation_count > 0 || is->custom_renderer_fast_timer) &&
 		(is->custom_renderer_qpc_frequency.QuadPart > 0);
 	LARGE_INTEGER timer_started = {0}, scheduler_finished = {0}, timer_finished = {0};
 	unsigned int requested_before = is->custom_renderer_requested_frames;
@@ -45682,13 +45742,26 @@ patch_on_timer_0x9F6500 (void)
 	custom_renderer_scheduler_tick ();
 	if (trace_custom_timer)
 		QueryPerformanceCounter (&scheduler_finished);
-	on_timer_0x9F6500 ();
+	if (visual_only) {
+		Animator * animator = &p_main_screen_form->animator;
+		int previous_low = animator->field_1AE0, previous_high = animator->field_1AE4;
+		bool force_units = *(bool *)(animator->field_18E4 + 0xd);
+		// Enter unit erase/draw/composition without forcing a static map rebuild.
+		*(bool *)(animator->field_18E4 + 0xd) = true;
+		is->custom_renderer_visual_only = true;
+		Animator_update (animator);
+		is->custom_renderer_visual_only = false;
+		*(bool *)(animator->field_18E4 + 0xd) = force_units;
+		// The next native advancement still receives the whole native interval.
+		animator->field_1AE0 = previous_low; animator->field_1AE4 = previous_high;
+	} else on_timer_0x9F6500 ();
+	is->custom_renderer_timer_running = false;
 	if (trace_custom_timer && QueryPerformanceCounter (&timer_finished)) {
 		char message[512];
 		double ticks_to_ms = 1000.0 / is->custom_renderer_qpc_frequency.QuadPart;
 		snprintf (message, sizeof message,
-			"[C3X renderer] qpc=%lld stage=timer-return total_ms=%.3f scheduler_ms=%.3f native_ms=%.3f requested_delta=%u presented_delta=%u pending_before=%d pending_after=%d drawing=%d visible=%u\n",
-			timer_finished.QuadPart,
+			"[C3X renderer] qpc=%lld stage=timer-return visual_only=%d interval_ms=%d total_ms=%.3f scheduler_ms=%.3f native_ms=%.3f requested_delta=%u presented_delta=%u pending_before=%d pending_after=%d drawing=%d visible=%u\n",
+			timer_finished.QuadPart, visual_only ? 1 : 0, is->custom_renderer_fast_timer ? 33 : 66,
 			(timer_finished.QuadPart - timer_started.QuadPart) * ticks_to_ms,
 			(scheduler_finished.QuadPart - timer_started.QuadPart) * ticks_to_ms,
 			(timer_finished.QuadPart - scheduler_finished.QuadPart) * ticks_to_ms,
