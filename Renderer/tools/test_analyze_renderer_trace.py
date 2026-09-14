@@ -52,6 +52,17 @@ class TraceTests(unittest.TestCase):
         self.assertEqual(1,usage["invalid_records"])
         self.assertEqual(1,usage["failed_calls"])
 
+    def test_cadence_configuration_and_speculative_duration_are_distinct(self):
+        report=analyze("""[C3X renderer] ms=999999 stage=timer-return interval_ms=33 visual_only=1 total_ms=4
+[C3X renderer] ms=999999 stage=timer-return interval_ms=66 visual_only=0 total_ms=8
+[C3X renderer] ms=999999 stage=unit-pixels-prepared built=2 ms=45
+[C3X renderer] ms=999999 stage=unit-pixels-prepared built=0
+""")
+        self.assertEqual({"interval_33_visual_1":1,"interval_66_visual_0":1},report["native_timer_opportunities"])
+        self.assertNotIn("timer-return.interval_ms",report["timings"])
+        self.assertEqual(45,report["timings"]["unit-pixels-prepared.call_ms"]["total_ms"])
+        self.assertEqual({"with_output":1,"without_output":1},report["unit_pixel_jobs"])
+
     def test_native_animation_clock_is_not_render_duration(self):
         report=analyze("[C3X renderer] stage=map-complete total_ms=50 animation_ms=59000")
         self.assertNotIn("map-complete.animation_ms",report["timings"])

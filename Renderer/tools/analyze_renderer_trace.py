@@ -90,6 +90,7 @@ def analyze(text: str) -> dict:
     peak_buffer_bytes = 0
     usage_events = []
     unit_ids, unit_actions = set(), Counter()
+    cadence, pixel_jobs = Counter(), Counter()
     unit_hits = unit_misses = 0
     unit_reasons = Counter()
     unit_peak_entries = unit_peak_bytes = 0
@@ -109,6 +110,18 @@ def analyze(text: str) -> dict:
                         unit_peak_entries = max(unit_peak_entries, int(fields[field]))
                     else:
                         unit_peak_bytes = max(unit_peak_bytes, int(fields[field]))
+        if stage == "timer-return":
+            cadence[f"interval_{fields.get('interval_ms', 'unknown')}_visual_{fields.get('visual_only', 'unknown')}"] += 1
+        if stage == "unit-pixels-prepared":
+            pixel_jobs["with_output" if fields.get("built", "0") != "0" else "without_output"] += 1
+            duration = re.search(r"stage=unit-pixels-prepared\b.*\bms=([^\s]+)", line)
+            if duration:
+                try:
+                    elapsed = float(duration[1])
+                    if math.isfinite(elapsed) and elapsed >= 0:
+                        timings["unit-pixels-prepared.call_ms"].append(elapsed)
+                except ValueError:
+                    pass
         if stage == "unit-body":
             if "id" in fields:
                 unit_ids.add((fields.get("process"), fields["id"]))
@@ -129,7 +142,7 @@ def analyze(text: str) -> dict:
                 except ValueError:
                     pass
         for name, value in fields.items():
-            if name.endswith("_ms") and name not in ("utc_unix_ms", "animation_ms") and not name.startswith(("max_", "cumulative_")):
+            if name.endswith("_ms") and name not in ("utc_unix_ms", "animation_ms", "interval_ms") and not name.startswith(("max_", "cumulative_")):
                 try:
                     sample = float(value)
                 except ValueError:
@@ -162,6 +175,7 @@ def analyze(text: str) -> dict:
         "invalidations": dict(invalidations), "totals": dict(totals),
         "peak_gpu_buffer_bytes": peak_buffer_bytes, "timings": distributions,
         "usage": usage_summary(usage_events),
+        "native_timer_opportunities": dict(cadence), "unit_pixel_jobs": dict(pixel_jobs),
         "unit_activity": {"distinct_logged_ids": len(unit_ids), "draws_by_action": dict(unit_actions),
                           "pose_hits": unit_hits, "pose_misses": unit_misses,
                           "miss_reasons": dict(unit_reasons), "maximum_miss_entries": unit_peak_entries,

@@ -5,6 +5,9 @@
 #include <stdexcept>
 
 namespace c3x_renderer { namespace render_core {
+// Expected interruption is distinct from malformed content or device failure.
+struct CliffPreparationCancelled {};
+
 struct CliffPlacement {
     Point position;
     double z=0,scale=0,yaw=0;
@@ -51,7 +54,7 @@ auto cliff_placements(World world,int owner_c,int owner_r,Lookup lookup,
         auto key=std::make_tuple(c,r,n);
         auto found=candidates.find(key); if(found!=candidates.end())return found->second;
         Candidate out{c,r,n,0,{}};
-        if(cancelled && cancelled())throw std::runtime_error("cliff preparation cancelled");
+        if(cancelled && cancelled())throw CliffPreparationCancelled{};
         auto segment=contour(c,r).at(n);
         auto ci=index(c,r);
         if(ci==std::size_t(-1))return out;

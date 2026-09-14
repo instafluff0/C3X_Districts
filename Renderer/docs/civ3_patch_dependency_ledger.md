@@ -60,8 +60,9 @@ Evidence: `Renderer/native/build/native-visual-cadence/`.
 Fallback: without all five symbols, compile-time gates keep the current 66 ms
 callback. Runtime eligibility excludes shutdown, suspension, loading, modal,
 online, unfocused, drawing, pending native unit reconciliation and special
-interaction modes. A stopped native timer is never resurrected. No faster live
-cadence is certified until the game checkpoint passes. The enabled patch table
+interaction modes. A stopped native timer is never resurrected. The September 14
+live trace confirms 518 intermediate visual refreshes; displayed FPS and complete
+interaction acceptance remain unverified. The enabled patch table
 and inlead pass the approved compile/injection smoke test. The ordinary
 `INSTALL.bat` now activates the eligible faster cadence without extra settings;
 installation and launching the game remain user actions. This replaces the earlier audit's incomplete conclusion that crossing
@@ -71,9 +72,10 @@ transport posts back to the game thread when `callback_fn_2` is null.
 Finished unit-pixel preparation itself adds no native symbols. The current-camera
 publication correction removes obsolete camera swapping at m71 and rejects stale
 queued cameras/projections before polling. It reuses the existing camera inlead
-and requires no additional table entries.
+and requires no additional table entries. Demand-priority and typed cliff-cancellation
+corrections also stay inside the DLL: `required_user_action: []`.
 
-The latest live test failed async scrolling. The existing
+An earlier live test failed async scrolling. The existing
 `Main_Screen_Form_move_camera` hook now treats every movement as an exact barrier:
 it cancels held work and lets native camera/bounds changes remain visible to the
 animator and subsequent map draw. Stationary async publication remains enabled.

@@ -11,6 +11,11 @@ int main(){using namespace c3x_renderer::render_core;
  t.update(w,v.data(),v.size());field.clear_scratch();
  auto height=[](double,double){return 50.;};auto shore=[](double u,double r){return 16.-u-r;};
  auto index=[&](int c,int r){return t.index(c,r);};auto maximum=[](unsigned){return 1.;};
+ // Cancellation unwinds with its own type; other source failures remain errors.
+ bool interrupted=false;
+ try {cliff_placements(w,10,4,lookup,index,height,shore,maximum,contour,{},[]{return true;});}
+ catch(CliffPreparationCancelled const&){interrupted=true;}
+ assert(interrupted);
  std::vector<CliffPlacement> all;
  for(int y=4;y<20;y++)for(int x=14+(y&1);x<=17;x+=2){
   int c=(x+y)/2,r=(x-y)/2;

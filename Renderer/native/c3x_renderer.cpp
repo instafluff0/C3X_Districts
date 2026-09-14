@@ -10082,10 +10082,16 @@ public:
         c3x_renderer::UnitBodyRenderer::PublishedPose cached;
         bool hit=renderer_state.unit_bodies.copy_cached(job_unit,cached);
         if(!hit && unit_pixels_active) {
+            // Reserve the next owner turn before releasing the queue mutex.
+            // Cancellation alone cannot prevent another speculative batch from
+            // starting while this caller reacquires the mutex after notification.
+            camera_paused=true;
             foreground_pending.store(true,std::memory_order_relaxed);
             completed.wait(lock,[this]{return !unit_pixels_active;});
+            camera_paused=false;
             foreground_pending.store(camera_pending,std::memory_order_relaxed);
             hit=renderer_state.unit_bodies.copy_cached(job_unit,cached);
+            wake.notify_one();
         }
         if(hit) {
             unsigned keyed=0;
@@ -10291,6 +10297,9 @@ private:
     }
 
     void drain_camera_locked(std::unique_lock<std::mutex>& lock) {
+        // Configuration/reset and incompatible map demand also own the next
+        // turn; no optional producer may refill while they drain active work.
+        camera_paused=true;
         foreground_pending.store(true,std::memory_order_relaxed);
         completed.wait(lock,[this]{return !unit_pixels_active;});
         stop_ahead_locked(lock);
@@ -10300,9 +10309,11 @@ private:
         camera_cancelled.store(true,std::memory_order_relaxed);
         camera_pending=false;camera_result=C3X_RENDERER_RESULT_SUPERSEDED;
         completed.wait(lock,[this]{return !camera_active;});
+        camera_paused=false;
         foreground_pending.store(false,std::memory_order_relaxed);
         camera_ready.clear();
         camera_pending_tiles.clear();camera_pending_topology.clear();
+        wake.notify_one();
     }
 
     // A unit owns the serialized renderer until its UI-thread copy finishes.
@@ -10647,7 +10658,20 @@ private:
                         renderer_state.reset();
                         result=C3X_RENDERER_RESULT_DEVICE_ERROR;
                     }
+                }catch(c3x_renderer::render_core::CliffPreparationCancelled const&) {
+                    // Recursive placement unwinds on ordinary supersession.
+                    // Keep resident assets and validated world content, exactly
+                    // as for render's non-exception cancellation return above.
+                    renderer_state.geometry_cache.clear();
+                    renderer_state.clear_geometry_vertex_buffers();
+                    renderer_state.trace.write("camera-cancelled","phase=cliff-placement",true);
+                    result=C3X_RENDERER_RESULT_SUPERSEDED;
+                }catch(std::exception const& error) {
+                    renderer_state.trace.write("camera-error",error.what(),true);
+                    renderer_state.reset();
+                    result=C3X_RENDERER_RESULT_ERROR;
                 }catch(...) {
+                    renderer_state.trace.write("camera-error","unknown exception",true);
                     renderer_state.reset();
                     result=C3X_RENDERER_RESULT_ERROR;
                 }

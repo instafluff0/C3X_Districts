@@ -151,6 +151,7 @@ int main(){
 #include "Renderer/native/unit_animation_runtime.h"
 #include "Renderer/native/render_core/unit_frame_preparation.h"
 #include "Renderer/native/render_core/unit_playback.h"
+#include "Renderer/native/render_core/cliff_placement.h"
 using HDC=void*;
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=std::chrono::steady_clock::now().time_since_epoch().count();}
@@ -179,6 +180,8 @@ struct Trace {int level=0;bool buffered=false;void write(char const* stage,char 
 using RendererTrace=Trace;
 struct Footprint {int coordinate=0;struct {int left=0,right=0;} bounds;};
 std::atomic<bool> hold_unit_pixels{false},unit_pixels_entered{false};
+std::atomic<bool> check_demand_priority{false},demand_executed{false};
+std::atomic<unsigned> priority_preparations{0};
 struct Bodies {
     double payload_ms=0,pose_ms=0,submission_ms=0,readback_ms=0,output_ms=0;bool pose_content_hit=false;
     struct Stats {unsigned built=0,consumed=0,cancelled=0,evicted=0,rejected=0,active_peak=0;double cpu_ms=0,wait_ms=0;std::size_t bytes=0,peak_bytes=0;};
@@ -193,6 +196,7 @@ struct Bodies {
     bool blit(PublishedPose const&,HDC,int,int,HDC,unsigned&){return true;}
     std::size_t cached_pose_bytes()const{return cache_bytes;}
     template<class F> unsigned prepare_pixels(int,int,c3x_renderer_unit_v1 const* requests,unsigned count,F,std::atomic<bool> const& demanded){
+        if(check_demand_priority && priority_preparations.fetch_add(1)>0)assert(demand_executed);
         assert(count<=2 && requests[0].action_cursor==1);unit_pixels_entered=true;
         while(hold_unit_pixels.load() && !demanded.load())std::this_thread::yield();return count;
     }
@@ -200,7 +204,7 @@ struct Bodies {
     char const* failure_reason="";bool cache_hit=false,cached=false;std::size_t cache_bytes=0;unsigned keyed_pixels=0,cast_pixels=0;
     bool restore_cached(c3x_renderer_unit_v1 const&){cache_hit=cached;return cached;}
     std::size_t cached_pose_entries()const{return cached?1u:0u;}
-    template<class F> bool render(int,int,c3x_renderer_unit_v1 const&,F,void* =nullptr,unsigned=1){return true;}
+    template<class F> bool render(int,int,c3x_renderer_unit_v1 const&,F,void* =nullptr,unsigned=1){demand_executed=true;return true;}
     bool blit(HDC,int,int,HDC){return true;}void reset_gpu(){}
 };
 struct RendererState {
@@ -223,17 +227,19 @@ struct RendererState {
     std::atomic<long long> hold_clock{-1};
     std::atomic<unsigned> target_clock_entries{0};
     bool animate_pixels=false,fail_render=false,world_preparation=false,scene_guard_failed=false;
+    bool throw_cancellation=false,throw_failure=false;
     bool scene_guard_pending()const{return false;}
     bool prepare_scene_guard(std::atomic<bool> const&){return true;}
     bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1& out,int=-1,
                 std::atomic<bool> const* stop=nullptr,std::uint64_t=0,unsigned const* =nullptr,unsigned=0){
         ++entered;
+        if(throw_failure)throw std::runtime_error("fixture runtime failure");
         if(f.presentation_time_ticks==101)++target_clock_entries;
         while(hold.load() || hold_clock.load()==f.presentation_time_ticks){
-            if(stop && stop->load()){++cancelled;return false;}
+            if(stop && stop->load()){++cancelled;if(throw_cancellation)throw c3x_renderer::render_core::CliffPreparationCancelled{};return false;}
             std::this_thread::yield();
         }
-        if(stop && stop->load()){++cancelled;return false;}
+        if(stop && stop->load()){++cancelled;if(throw_cancellation)throw c3x_renderer::render_core::CliffPreparationCancelled{};return false;}
         if(fail_render)return false;
         unsigned value=unsigned(f.tiles[0].anchor_x)^f.world_topology[0];
         if(animate_pixels)value^=unsigned(f.presentation_time_ticks);
@@ -250,7 +256,7 @@ struct RendererState {
     static long long resource_clock(c3x_renderer_frame_v1 const& f){return f.presentation_time_ticks;}
     bool configure_pack(char const*){reset();return true;}
     bool configure_definitions(char const*,char const*,char const*,char const*){reset();return true;}
-    void reset(){++resets;pixels.clear();flags.clear();}
+    void reset(){demand_executed=true;++resets;pixels.clear();flags.clear();}
     void clear_geometry_vertex_buffers(){}
     template<class T> bool prepare_unit_action(T const&){return true;}
     void begin_pixel_neighborhood(c3x_renderer_frame_v1 const&){}
@@ -727,6 +733,44 @@ int main(){
         // Current cached body copies complete while the GPU preparation remains held.
         for(int i=0;i<20;++i)assert(pull.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
         assert(hold_unit_pixels.load());hold_unit_pixels=false;pull.reset_and_stop();
+    }
+    // Recursive source compilation can unwind on supersession. That must
+    // retire the partial assembly without reloading assets or world content.
+    for(bool failure:{false,true}) {
+        RendererState state;RendererWorker pull(state);
+        state.throw_cancellation=!failure;state.throw_failure=failure;
+        state.hold=!failure;
+        c3x_renderer_i64 ticket=0;
+        assert(pull.camera_begin(f,ticket)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return state.entered.load()>0;});
+        pull.camera_cancel(ticket);
+        until([&]{return failure?state.resets.load()>0:state.cancelled.load()>0;});
+        state.hold=false;state.throw_failure=false;
+        assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);
+        assert(state.resets.load()==unsigned(failure));
+        pull.reset_and_stop();
+    }
+    // A waiting native draw or configuration/reset owns the next GPU turn.
+    // Finishing one optional job must not immediately start another while the
+    // caller is still reacquiring the queue mutex after its condition wait.
+    for(bool reset:{false,true}) {
+        RendererState state;RendererWorker pull(state);
+        state.unit_bodies.cached=true;unit.unit_id=10;unit.direction=1;
+        unit.action=1;unit.action_cursor=0;unit.frame_count=15;
+        hold_unit_pixels=true;unit_pixels_entered=false;priority_preparations=0;
+        check_demand_priority=true;demand_executed=false;
+        assert(pull.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
+        until([&]{return unit_pixels_entered.load();});
+        auto other=unit;other.unit_id=11;
+        assert(pull.draw_unit(other,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
+        // Keep a second prediction pending while the first waits for demand.
+        if(reset)pull.reset_and_stop();
+        else {
+            state.unit_bodies.cached=false;unit.direction=2;
+            assert(pull.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
+        }
+        assert(demand_executed);hold_unit_pixels=false;pull.reset_and_stop();
+        check_demand_priority=false;
     }
 }
 '''
