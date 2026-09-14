@@ -60,6 +60,7 @@ int main(){
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/environment_runtime.h"
 #include "Renderer/native/unit_animation_runtime.h"
+#include "Renderer/native/render_core/unit_frame_preparation.h"
 ''' + body + r'''
 struct Texture {bool configured=true;std::vector<std::uint8_t> dds;};
 void word(std::vector<std::uint8_t>& data,unsigned at,unsigned value){for(unsigned c=0;c<4;++c)data[at+c]=std::uint8_t(value>>(8*c));}
@@ -127,6 +128,7 @@ int main(){
         publication = publication.replace("auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);",
                                           "publication_checkpoint(); auto first=static_cast<std::uint32_t const*>(source.bgra_pixels);")
         worker = "class RendererWorker {" + source.split("class RendererWorker {", 1)[1].split("RendererWorker * renderer_worker", 1)[0]
+        worker = worker.replace("c3x_renderer::UnitBodyRenderer::PublishedPose", "Bodies::PublishedPose")
         worker = worker.replace("completed.wait(lock,[this,ticket]", "adoption_checkpoint(); completed.wait(lock,[this,ticket]")
         program = r'''
 #include <algorithm>
@@ -147,6 +149,7 @@ int main(){
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/environment_runtime.h"
 #include "Renderer/native/unit_animation_runtime.h"
+#include "Renderer/native/render_core/unit_frame_preparation.h"
 using HDC=void*;
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=std::chrono::steady_clock::now().time_since_epoch().count();}
@@ -174,6 +177,7 @@ void publication_checkpoint(){++publication_entered;while(hold_publication.load(
 struct Trace {int level=0;bool buffered=false;void write(char const* stage,char const*,bool=false){if(!std::strcmp(stage,"ahead-prepared"))++ahead_completed;if(!std::strcmp(stage,"ahead-consumed"))++ahead_consumed;} double milliseconds(long long value){return double(value)/1000000;}};
 using RendererTrace=Trace;
 struct Footprint {int coordinate=0;struct {int left=0,right=0;} bounds;};
+std::atomic<bool> hold_unit_pixels{false},unit_pixels_entered{false};
 struct Bodies {
     double payload_ms=0,pose_ms=0,submission_ms=0,readback_ms=0,output_ms=0;bool pose_content_hit=false;
     struct Stats {unsigned built=0,consumed=0,cancelled=0,evicted=0,rejected=0,active_peak=0;double cpu_ms=0,wait_ms=0;std::size_t bytes=0,peak_bytes=0;};
@@ -181,7 +185,16 @@ struct Bodies {
     std::size_t pose_retained_bytes()const{return 0;}
     void release_pose_leases(){}
 
-    struct Unit {std::vector<std::string> keys;int minimum_canvas=0;};
+    struct Action {std::string name;bool loop=true;};
+    struct Unit {std::vector<std::string> keys;int minimum_canvas=0;std::vector<Action> actions;};
+    struct PublishedPose {std::vector<unsigned> pixels;int width=191,height=191;unsigned cast_pixels=0;bool prepared=false;};
+    bool copy_cached(c3x_renderer_unit_v1 const&,PublishedPose&){return cached;}
+    bool blit(PublishedPose const&,HDC,int,int,HDC,unsigned&){return true;}
+    std::size_t cached_pose_bytes()const{return cache_bytes;}
+    template<class F> unsigned prepare_pixels(int,int,c3x_renderer_unit_v1 const* requests,unsigned count,F,std::atomic<bool> const& demanded){
+        assert(count<=2 && requests[0].action_cursor==1);unit_pixels_entered=true;
+        while(hold_unit_pixels.load() && !demanded.load())std::this_thread::yield();return count;
+    }
     std::vector<Unit> units;int image_width=191,image_height=191;
     char const* failure_reason="";bool cache_hit=false,cached=false;std::size_t cache_bytes=0;unsigned keyed_pixels=0,cast_pixels=0;
     bool restore_cached(c3x_renderer_unit_v1 const&){cache_hit=cached;return cached;}
@@ -702,6 +715,19 @@ int main(){
         pull.reset_and_stop();
     }
     ahead_mode=false;
+    {
+        RendererState state;RendererWorker pull(state);
+        state.unit_bodies.units.push_back({{"unit"},0,{{"default",true}}});
+        // Use the actual native action name and hold the GPU preparation owner.
+        state.unit_bodies.units[0].actions[0].name=c3x_renderer::native_unit_action(1);
+        state.unit_bodies.cached=true;unit.action=1;unit.action_cursor=0;unit.frame_count=15;
+        std::strcpy(unit.unit_key,"unit");hold_unit_pixels=true;unit_pixels_entered=false;
+        assert(pull.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
+        until([&]{return unit_pixels_entered.load();});
+        // Current cached body copies complete while the GPU preparation remains held.
+        for(int i=0;i<20;++i)assert(pull.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
+        assert(hold_unit_pixels.load());hold_unit_pixels=false;pull.reset_and_stop();
+    }
 }
 '''
         run_cpp(program, sources=("Renderer/native/environment_runtime.cpp",))

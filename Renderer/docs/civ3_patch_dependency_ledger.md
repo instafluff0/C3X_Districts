@@ -24,6 +24,13 @@ exception to the CSV editing restriction. Do not edit other CSV entries or
 
 ## Current action
 
+Finished unit-pixel preparation reuses the existing unit draw exports, m71/m19
+map publication and caller-owned GDI composition. No injected source, ABI, CSV,
+address or native ownership changes; `required_user_action: []`. The cadence audit
+confirms the current 66 ms native timer also drives animator/game behavior and
+changes timer mechanism below 50 ms. No faster rendering-only patch is established
+or requested. Do not shorten that timer or invent a speculative patch dependency.
+
 The latest live test failed async scrolling. The existing
 `Main_Screen_Form_move_camera` hook now treats every movement as an exact barrier:
 it cancels held work and lets native camera/bounds changes remain visible to the

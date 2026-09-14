@@ -1,5 +1,83 @@
 # Retained world → view → submission implementation
 
+## Implemented: finished preparation and idle cadence audit
+
+The existing unit owner now retains exact completed pose pixels independently of
+GPU scratch. A native cache hit copies its own immutable body and performs the
+existing underlay/color-key composition while the GPU owner prepares other work.
+Native observations authorize at most one next pose per unit/action/facing; fixed
+observations do not repeatedly schedule work, endpoints stop, and changed actions
+replace pending predictions. The queue holds at most 32 copied requests and 128
+observations. No game pointers, canvases or autonomous animation clocks enter it.
+
+The single GPU worker prioritizes demanded work and the nearest pending map bucket,
+then shares remaining preparation time between unit outputs and farther ambient
+work. Up to two unit outputs use one staging readback, retaining existing full-detail
+shaders, geometry, shadow conversion and exact pixel keys. The staging surface is
+8 MiB; admission requires 608 MiB available virtual address space to protect the
+existing 512 MiB reserve plus transient leases/scratch. Finished pixels share the
+existing bounded pose cache, with one caller-owned copy. Reset drains preparation
+before releasing assets. `C3X_RENDERER_UNIT_PIXELS=0` is a diagnostic control;
+ordinary installation requires no settings. Native scrolling remains an exact
+barrier, and worker completion has no redraw callback.
+
+Preserved control: commit `9c3d8661` and DLL
+`ead40b16387ad67573adbd89e4baf0fba3760255d8710427253eda051314c12e`.
+New production DLL: `017def8f0534b8b7100a358765889f21f39619c7ded8d0db5019d31308fee7d8`.
+The exact validated DLL is staged for the user's normal `INSTALL.bat` workflow;
+Civ III was confirmed closed. No installation or game launch was performed.
+Evidence and rejected builds are under `native/build/finished-preparation/`.
+
+Trace-disabled whole requests include map rendering, native-compatible GDI copy
+and eight unit draws at 1119×1192, with full detail and waves/reflections off.
+These are standalone measurements, not native FPS.
+
+| Workload | Samples / warmup | Control → candidate mean | Median | Maximum |
+| --- | --- | --- | --- | --- |
+| Paced idle with new poses | 30 / 10 | 26.196 → 13.294 ms (49% lower) | 18.041 → 3.645 ms | 83.448 → 82.728 ms |
+| Mixed native actions | 40 / 10 | 136.099 → 121.592 ms (11% lower) | 129.092 → 119.779 ms | 192.680 → 176.739 ms |
+| Warm paced idle | 100 / 30 | 4.549 → 4.134 ms | 4.031 → 3.712 ms | 27.074 → 21.214 ms |
+
+All paired images match exactly. Idle requests exceeding 66 ms fall from four to
+two in the short window; neither warm run exceeds 66 ms. Warm p95 is slightly
+worse (5.337 → 5.976 ms), so do not claim uniform tail improvement. The warm result
+shows that persistent choppiness cannot be explained by these renderer request
+costs alone. Harness `IDLE_DEADLINE` includes warmup debt and intervening image-file
+writes; it is not native display cadence and is not used as such.
+
+The final bounded diagnostic produces 35 unit outputs in 29 readback batches;
+30 are consumed through the prepared-pixel path, with five unused by shutdown.
+CPU helpers build 54 results and consume 49, with no cancellation/eviction/rejection.
+An intermediate 2 ms collection delay with simple alternating priorities is
+rejected: only eight prepared outputs were consumed, and trace-disabled idle
+mean regressed to 27.572 ms while unit time improved. Removing that delay and
+prioritizing the nearest map bucket resolves the measured whole-request regression.
+Do not repeat that mechanism or use its favorable instrumented result as acceptance.
+
+Production build and 54 targeted ownership, queue, cache, native identity, zoom,
+evidence and trace tests pass; the final scheduling subset also passes. Native
+unit day/night witnesses pass body/underlay/clipping/config-off, action interruption,
+held endpoints and unchanged terrain. No injected source changed in this work.
+The new readback batch is covered by exact whole-image comparisons, including
+native-compatible composition. No new visual difference or deferred category work.
+
+### Caller cadence remains an integration responsibility
+
+The existing `on_timer_0x9F6500` callback is installed with a 66 ms interval. It
+also runs native animator refresh and other game behavior. `Timer::activate`
+uses `SetTimer` at that interval but switches to `timeSetEvent` below 50 ms;
+shortening it blindly would change both callback frequency and execution mechanism.
+No faster rendering-only native boundary has been established in the current
+patch set. The audit does not authorize an extra renderer timer or presenter,
+and the native timer is unchanged. Ambient preparation currently uses 15 Hz buckets
+as well; a faster caller alone would not make every displayed ambient frame new.
+
+The next integration work must establish a native rendering-only opportunity,
+separate presentation cadence from native simulation/action advancement, and
+validate fresh frame delivery across animator/canvas/overlay ownership. Preserve
+caller-driven publication and the scrolling recovery. This is the remaining work
+for smoother steady idle; additional speculative workers are not the next priority.
+
 ## Current correction: restore native scrolling
 
 The subsequent default-on game test failed its scrolling checkpoint. In the

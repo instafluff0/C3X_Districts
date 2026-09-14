@@ -121,6 +121,7 @@ def main(argv=None):
     parser.add_argument("--idle-pace-ms", type=int, choices=range(0,501), default=0, help="Absolute stationary demand cadence; zero uses unpaced demand")
     parser.add_argument("--idle-warmup", type=int, choices=range(10,151), default=10)
     parser.add_argument("--unit-preparation-workers", type=int, choices=(0,1,2,4), default=None, help="CPU unit-pose preparation; omit for production policy, zero for same-binary control")
+    parser.add_argument("--unit-pixels", choices=("0","1"), default="1", help="Finished native pose preparation control")
     parser.add_argument("--unit-pose-memory", action="store_true", help="Opt-in 256 MiB / 4096-entry exact unit-pose retention")
     parser.add_argument("--unit-pose-memory-mib", type=int, choices=(256,512), default=256, help="Bounded pose-pixel budget when --unit-pose-memory is enabled")
     parser.add_argument("--idle-units", type=int, choices=(0,8,24,64), default=0,
@@ -308,6 +309,7 @@ def main(argv=None):
            "C3X_RENDERER_PREVIEW_DISTANT_STEPS": str(args.distant_steps) if args.scenario == "distant" else "",
            "C3X_RENDERER_PREVIEW_IDLE_STEPS": str(args.idle_steps) if args.scenario == "idle" else "",
            "C3X_RENDERER_PREVIEW_IDLE_UNITS": str(args.idle_units),
+           "C3X_RENDERER_UNIT_PIXELS": args.unit_pixels,
            "C3X_RENDERER_UNIT_PREPARATION": "" if args.unit_preparation_workers is None else str(args.unit_preparation_workers),
            "C3X_RENDERER_PREVIEW_UNIT_ACTIONS": args.unit_actions,
            "C3X_RENDERER_CPU_PREPARATION": "" if args.preparation_defaults else str(args.cpu_preparation_workers),

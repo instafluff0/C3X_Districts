@@ -50,8 +50,10 @@ int main(){
 #include <cassert>
 #include <cstdint>
 #include <vector>
+#include <mutex>
 struct State {
- struct Cached {unsigned key;std::uint64_t used;std::vector<std::uint32_t> pixels;unsigned cast_pixels;};
+ std::recursive_mutex cache_mutex;struct {bool speculative=false;} pending;
+ struct Cached {unsigned key;std::uint64_t used;std::vector<std::uint32_t> pixels;unsigned cast_pixels;bool prepared=false;};
  std::vector<Cached> cache;std::vector<std::uint32_t> pixels;
  std::size_t cache_bytes=0,pose_cache_budget=8*1024*1024,pose_cache_entries=128;
  std::uint64_t serial=0;unsigned cast_pixels=7;

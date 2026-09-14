@@ -48,6 +48,14 @@ mechanisms coexist with the caller-driven native camera handoff. They do not
 predict game state or add redraw callbacks. See the retained plan for controls and measured
 scope; helper count alone is not a speedup claim.
 
+Completed unit pixels now have independent caller-owned composition while the
+single GPU worker prepares a bounded future-pose queue. The nearest map bucket
+has priority; up to two compatible unit outputs share one staging readback.
+This completes preparation through pixels for the representative unit path,
+without moving D3D or native GDI ownership. Short-window pose stalls improve, but
+warm idle requests already take roughly 4 ms and native idle cadence remains
+about 15 Hz. Higher presentation cadence is unfinished native integration work.
+
 ## Firm principles
 
 - **Authoritative C3X ownership.** C3X owns game state, visibility, anchors, camera,

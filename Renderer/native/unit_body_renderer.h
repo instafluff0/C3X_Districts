@@ -12,7 +12,9 @@ namespace c3x_renderer {
 // Worker-owned body rendering. No terrain buffers, cache keys, simulation state
 // or native window presentation are owned here. The caller supplies the canvas.
 class UnitBodyRenderer {
+    struct PendingPose;
 public:
+    struct PublishedPose {std::vector<std::uint32_t> pixels;int width=0,height=0;unsigned cast_pixels=0;bool prepared=false;};
     struct Mesh { std::shared_ptr<AnimationMesh const> animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Part { unsigned mesh=0,texture=0,address=0; unsigned material_textures[4]={UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX}; float material_model=0; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
@@ -31,10 +33,12 @@ public:
     double payload_ms=0,pose_ms=0,submission_ms=0,readback_ms=0,output_ms=0;
     std::size_t cache_bytes=0;
     std::size_t pose_cache_budget=8u*1024u*1024u,pose_cache_entries=128;
-    std::size_t cached_pose_entries() const {return cache.size();}
+    std::size_t cached_pose_entries() const {std::lock_guard<std::recursive_mutex> guard(cache_mutex);return cache.size();}
+    std::size_t cached_pose_bytes() const {std::lock_guard<std::recursive_mutex> guard(cache_mutex);return cache_bytes;}
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
     std::size_t benchmark_pose_cache_budget=SIZE_MAX;
     unsigned benchmark_limit_pose_cache() {
+        std::lock_guard<std::recursive_mutex> guard(cache_mutex);
         benchmark_pose_cache_budget=256u*1024u*1024u;
         unsigned evicted=0;
         while(!cache.empty() && cache_bytes>benchmark_pose_cache_budget) {
@@ -47,6 +51,7 @@ public:
 #endif
 
     void configure_pose_cache(bool larger,bool dense=false) {
+        std::lock_guard<std::recursive_mutex> guard(cache_mutex);
         pose_cache_budget=(larger?(dense?512u:256u):8u)*1024u*1024u;pose_cache_entries=larger?4096u:128u;
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
         pose_cache_budget=(std::min)(pose_cache_budget,benchmark_pose_cache_budget);
@@ -67,7 +72,7 @@ public:
         for(auto & sampler:samplers)release(sampler);
         release(raster);release(target);release(output);release(readback);
         linear.reset();transfer.reset(); capacity=0; image_width=image_height=0;target_width=target_height=0;
-        cache.clear();cache_bytes=0;pixels.clear();
+        {std::lock_guard<std::recursive_mutex> guard(cache_mutex);cache.clear();cache_bytes=0;}pixels.clear();release(batch_readback);
     }
     ~UnitBodyRenderer() {reset_gpu();reset_blit();}
     void clear() {reset_gpu();meshes.clear();textures.clear();units.clear();resident_bytes=0;payload_serial=0;}
@@ -76,6 +81,7 @@ public:
     // map-worker takeover. The caller serializes this unit sub-owner while a
     // camera render may continue on the independent terrain/map state.
     bool restore_cached(c3x_renderer_unit_v1 const& request) {
+        std::lock_guard<std::recursive_mutex> guard(cache_mutex);
         cache_hit=false;keyed_pixels=cast_pixels=0;failure_reason="cache-miss";
         if(request.struct_size!=sizeof(request) || request.unit_key[63]!=0 ||
            request.hour<0 || request.hour>23 || (request.reduced!=0 && request.reduced!=1) ||
@@ -123,8 +129,44 @@ public:
         return false;
     }
 
+    bool copy_cached(c3x_renderer_unit_v1 const& request,PublishedPose& published) {
+        std::lock_guard<std::recursive_mutex> guard(cache_mutex);
+        if(request.struct_size!=sizeof(request) || request.unit_key[63]!=0 ||
+           request.hour<0 || request.hour>23 || (request.reduced!=0 && request.reduced!=1) ||
+           (request.projection_scale_milli!=0 &&
+            (request.projection_scale_milli<250 || request.projection_scale_milli>2000)))return false;
+        auto found=std::find_if(units.begin(),units.end(),[&](Unit const& unit){
+            return std::find(unit.keys.begin(),unit.keys.end(),request.unit_key)!=unit.keys.end();});
+        auto name=native_unit_action(request.action);
+        if(found==units.end() || !name)return false;
+        auto action=std::find_if(found->actions.begin(),found->actions.end(),[&](Action const& a){return a.name==name;});
+        if(action==found->actions.end() || action->parts.empty())return false;
+        NativeUnitDraw draw;draw.sprite=draw.expected_sprite=draw.canvas=draw.expected_canvas=1;
+        draw.unit_id=request.unit_id;draw.action=request.action;draw.direction=request.direction;
+        draw.action_cursor=request.action_cursor;draw.frame_count=request.frame_count;
+        draw.body_x=request.body_x;draw.body_y=request.body_y;
+        draw.sprite_width=request.sprite_width;draw.sprite_height=request.sprite_height;draw.reduced=request.reduced!=0;
+        draw.projection_scale_milli=request.projection_scale_milli;
+        UnitAnimationPose pose;
+        if(!prepare_native_unit_pose(draw,action->loop,pose))return false;
+        int pose_cursor=action->loop?request.action_cursor%request.frame_count:
+            std::min(request.action_cursor,request.frame_count-1);
+        int scale_milli=request.projection_scale_milli>0?request.projection_scale_milli:(draw.reduced?500:1000);
+        int w=request.sprite_width*scale_milli/1000,h=request.sprite_height*scale_milli/1000;
+        if(w<1 || h<1 || w>1024 || h>1024)return false;
+        Key key={unsigned(found-units.begin()),int(action-found->actions.begin()),request.direction,
+            pose_cursor,request.frame_count,w,h,scale_milli,request.hour,request.season,request.display_color_rgb};
+        unsigned pose_memory=NavigationOptions::unit_pose_mib(GetEnvironmentVariableA);
+        configure_pose_cache(pose_memory>=256,pose_memory==512);
+        for(auto& saved:cache)if(saved.key==key) {
+            saved.used=++serial;published.pixels=saved.pixels;published.width=w;published.height=h;
+            published.cast_pixels=saved.cast_pixels;published.prepared=saved.prepared;saved.prepared=false;return true;
+        }
+        return false;
+    }
+
     template<class Prepare>
-    bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare) {
+    bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare,PendingPose* deferred=nullptr) {
         payload_ms=pose_ms=submission_ms=readback_ms=output_ms=0;
         LARGE_INTEGER stage_begin={},stage_end={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&stage_begin);
         auto elapsed=[&](){QueryPerformanceCounter(&stage_end);double ms=1000.0*(stage_end.QuadPart-stage_begin.QuadPart)/frequency.QuadPart;stage_begin=stage_end;return ms;};
@@ -167,9 +209,6 @@ public:
             pose_cursor,pose_frames,w,h,scale_milli,request.hour,request.season,request.display_color_rgb};
         unsigned pose_memory=NavigationOptions::unit_pose_mib(GetEnvironmentVariableA);
         configure_pose_cache(pose_memory>=256,pose_memory==512);
-        for(auto & saved:cache)if(saved.key==key) {
-            saved.used=++serial; pixels=saved.pixels;image_width=w;image_height=h;cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";return true;
-        }
         failure_reason="animation-payload-load";
         if(!prepare(*action))return false;
         payload_ms=elapsed();
@@ -179,7 +218,6 @@ public:
         int samples=found->sample_scale;
         if((samples!=1 && samples!=2 && samples!=4) || !ensure(device,w,h,samples,found->minimum_canvas?1536:128))return false;
         auto environment=evaluate_environment(float(request.hour),request.season);
-        float zoom=pose.projection_scale;
         float clear_color[4]={};context->OMSetRenderTargets(1,&linear.target,linear.depth);
         context->ClearRenderTargetView(linear.target,clear_color);
         context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH,1,0);
@@ -261,31 +299,81 @@ public:
         ID3D11ShaderResourceView* empty[6]={};context->PSSetShaderResources(0,6,empty);
         failure_reason="gpu-body-readback";
         transfer.draw(context,linear,target,environment.exposure,samples);
-        context->OMSetRenderTargets(0,nullptr,nullptr);context->CopyResource(readback,output);
-        submission_ms+=elapsed();
+        context->OMSetRenderTargets(0,nullptr,nullptr);
+        PendingPose pending;pending.key=key;pending.request=request;pending.pose=pose;
+        pending.content=prepared;pending.shadow_strength=environment.shadow_strength;
+        if(deferred) {
+            *deferred=std::move(pending);submission_ms+=elapsed();return true;
+        }
+        context->CopyResource(readback,output);submission_ms+=elapsed();
         D3D11_MAPPED_SUBRESOURCE mapped={};
         if(FAILED(context->Map(readback,0,D3D11_MAP_READ,0,&mapped)))return false;
         readback_ms=elapsed();
+        bool ok=finish_pose(pending,mapped);
+        context->Unmap(readback,0);output_ms=elapsed();return ok;
+    }
+
+    // One bounded compatible output batch, submitted by the existing GPU owner.
+    // Staging is 8 MiB maximum; authored body targets/materials stay unchanged.
+    template<class Prepare>
+    unsigned prepare_pixels(ID3D11Device* device,ID3D11DeviceContext* context,
+            c3x_renderer_unit_v1 const* requests,unsigned count,Prepare prepare,
+            std::atomic<bool> const& demanded) {
+        if(!device || !context || !count || count>2)return 0;
+        MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);
+        if(!GlobalMemoryStatusEx(&memory) || memory.ullAvailVirtual<608ull*1024*1024)return 0;
+        if(!batch_readback) {
+            D3D11_TEXTURE2D_DESC desc={};desc.Width=1024;desc.Height=2048;
+            desc.MipLevels=desc.ArraySize=1;desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
+            desc.SampleDesc.Count=1;desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+            if(FAILED(device->CreateTexture2D(&desc,nullptr,&batch_readback)))return 0;
+        }
+        std::array<PendingPose,2> pending;unsigned submitted=0;
+        for(unsigned i=0;i<count && !demanded.load(std::memory_order_relaxed);++i) {
+            PendingPose next;
+            if(!render(device,context,requests[i],prepare,&next) || !next.content)continue;
+            next.speculative=true;
+            auto box=D3D11_BOX{0,0,0,UINT(next.key.width),UINT(next.key.height),1};
+            context->CopySubresourceRegion(batch_readback,0,0,submitted*1024,0,output,0,&box);
+            pending[submitted++]=std::move(next);
+        }
+        if(!submitted)return 0;
+        D3D11_MAPPED_SUBRESOURCE mapped={};
+        if(FAILED(context->Map(batch_readback,0,D3D11_MAP_READ,0,&mapped)))return 0;
+        try {
+            for(unsigned i=0;i<submitted;++i) {
+                auto row=mapped;row.pData=static_cast<char*>(mapped.pData)+std::size_t(i)*1024*mapped.RowPitch;
+                finish_pose(pending[i],row);
+            }
+        } catch(...) {context->Unmap(batch_readback,0);return 0;}
+        context->Unmap(batch_readback,0);return submitted;
+    }
+
+private:
+    bool finish_pose(PendingPose const& pending,D3D11_MAPPED_SUBRESOURCE const& mapped) {
+        auto const& key=pending.key;auto const& pose=pending.pose;auto const& shadow=pending.content->shadow;
+        int w=key.width,h=key.height;float zoom=pose.projection_scale;
+        struct {float shadow_strength;} environment{pending.shadow_strength};
         pixels.resize(std::size_t(w)*h);
         cast_pixels=0;
         for(int y=0;y<h;++y)for(int x=0;x<w;++x) {
             auto p=static_cast<std::uint8_t const*>(mapped.pData)+std::size_t(y)*mapped.RowPitch+x*4;
             unsigned alpha=p[3];
-            float sx=(float(x)+.5f-float(pose.anchor_x-request.body_x))/(64*zoom);
-            float sy=(float(y)+.5f-float(pose.anchor_y-request.body_y))/(32*zoom);
+            float sx=(float(x)+.5f-float(pose.anchor_x-pending.request.body_x))/(64*zoom);
+            float sy=(float(y)+.5f-float(pose.anchor_y-pending.request.body_y))/(32*zoom);
             float fade=std::clamp(float(std::min({x,y,w-1-x,h-1-y}))/3,0.f,1.f);
             unsigned shade=unsigned(255*lighting::c3x_dynamic_shadow_opacity*environment.shadow_strength*fade*shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
             unsigned combined=alpha+(shade*(255-alpha)+127)/255;
             if(shade && alpha<255)++cast_pixels;
             pixels[std::size_t(y)*w+x]=(combined<<24)|(((p[2]*alpha+127)/255)<<16)|(((p[1]*alpha+127)/255)<<8)|((p[0]*alpha+127)/255);
         }
-        context->Unmap(readback,0);image_width=w;image_height=h;
-        output_ms=elapsed();
+        image_width=w;image_height=h;
         // This optional owner retains exact posed pixels across native anchors
         // and repeated authored loops. Admission failure leaves this completed
         // body available for the current draw; it never drops a visible unit.
         try {
-            Cached saved={key,++serial,pixels,cast_pixels};
+            std::lock_guard<std::recursive_mutex> guard(cache_mutex);
+            Cached saved={key,++serial,pixels,cast_pixels,pending.speculative};
             std::size_t size=saved.pixels.capacity()*4;
             if(size<=pose_cache_budget) {
                 while(!cache.empty() && (cache_bytes>pose_cache_budget-size || cache.size()>=pose_cache_entries)) {
@@ -298,14 +386,23 @@ public:
         failure_reason="none";return true;
     }
 
+public:
+
     // The native Animator canvas uses magenta as a color key. Resolve partial
     // coverage against its current pixels, substituting the supplied terrain
     // underlay only at keyed pixels; never blend a fringe with magenta.
     bool blit(HDC destination,int x,int y,HDC background=nullptr) {
-        if(!destination || pixels.size()!=std::size_t(image_width)*image_height)return false;
-        if(blit_width!=image_width || blit_height!=image_height) {
+        return blit_pixels(pixels,image_width,image_height,destination,x,y,background,keyed_pixels);
+    }
+    bool blit(PublishedPose const& body,HDC destination,int x,int y,HDC background,unsigned& keyed) {
+        return blit_pixels(body.pixels,body.width,body.height,destination,x,y,background,keyed);
+    }
+    bool blit_pixels(std::vector<std::uint32_t> const& body_pixels,int body_width,int body_height,
+                     HDC destination,int x,int y,HDC background,unsigned& keyed_count) {
+        if(!destination || body_pixels.size()!=std::size_t(body_width)*body_height)return false;
+        if(blit_width!=body_width || blit_height!=body_height) {
             reset_blit();BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
-            info.bmiHeader.biWidth=image_width;info.bmiHeader.biHeight=-image_height;
+            info.bmiHeader.biWidth=body_width;info.bmiHeader.biHeight=-body_height;
             info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
             dc=CreateCompatibleDC(destination);underlay_dc=CreateCompatibleDC(destination);
             if(!dc || !underlay_dc)return false;
@@ -313,28 +410,28 @@ public:
             underlay_bitmap=CreateDIBSection(destination,&info,DIB_RGB_COLORS,&underlay_bits,nullptr,0);
             if(!bitmap || !underlay_bitmap){reset_blit();return false;}
             previous=SelectObject(dc,bitmap);underlay_previous=SelectObject(underlay_dc,underlay_bitmap);
-            blit_width=image_width;blit_height=image_height;
+            blit_width=body_width;blit_height=body_height;
         }
         RECT clip={};int clip_type=GetClipBox(destination,&clip);
         if(clip_type==ERROR)return false;if(clip_type==NULLREGION)return true;
         auto target_pixels=static_cast<std::uint32_t*>(bits);
         auto ground=static_cast<std::uint32_t*>(underlay_bits);
-        std::fill_n(target_pixels,pixels.size(),0xffff00ffu);
-        std::fill_n(ground,pixels.size(),0xffff00ffu);
-        if(!BitBlt(dc,0,0,image_width,image_height,destination,x,y,SRCCOPY))return false;
-        if(background && !BitBlt(underlay_dc,0,0,image_width,image_height,background,x,y,SRCCOPY))return false;
+        std::fill_n(target_pixels,body_pixels.size(),0xffff00ffu);
+        std::fill_n(ground,body_pixels.size(),0xffff00ffu);
+        if(!BitBlt(dc,0,0,body_width,body_height,destination,x,y,SRCCOPY))return false;
+        if(background && !BitBlt(underlay_dc,0,0,body_width,body_height,background,x,y,SRCCOPY))return false;
         GdiFlush();
-        keyed_pixels=0;
+        keyed_count=0;
         auto keyed=[](std::uint32_t value){return (value&0x00f800f8u)==0x00f800f8u && (value&0x0000f800u)==0;};
-        for(std::size_t i=0;i<pixels.size();++i) {
-            int px=x+int(i%image_width),py=y+int(i/image_width);
+        for(std::size_t i=0;i<body_pixels.size();++i) {
+            int px=x+int(i%body_width),py=y+int(i/body_width);
             if(px<clip.left || px>=clip.right || py<clip.top || py>=clip.bottom){target_pixels[i]=0x00ff00ffu;continue;}
-            auto source=pixels[i];unsigned alpha=source>>24;
+            auto source=body_pixels[i];unsigned alpha=source>>24;
             if(!alpha){target_pixels[i]=0x00ff00ffu;continue;}
             auto below=target_pixels[i];
             if(alpha<255 && keyed(below)) {
                 if(!background)return false; // Reject atomically; native body remains.
-                below=ground[i];++keyed_pixels;
+                below=ground[i];++keyed_count;
                 if(keyed(below)) {target_pixels[i]=0x00ff00ffu;continue;} // outside the native underlay
             }
             std::uint32_t result=0;
@@ -346,8 +443,8 @@ public:
             if(keyed(result))result^=0x00000800u;
             target_pixels[i]=result;
         }
-        return TransparentBlt(destination,x,y,image_width,image_height,dc,0,0,
-                              image_width,image_height,RGB(255,0,255))!=FALSE;
+        return TransparentBlt(destination,x,y,body_width,body_height,dc,0,0,
+                              body_width,body_height,RGB(255,0,255))!=FALSE;
     }
     unsigned keyed_pixels=0,cast_pixels=0;
 
@@ -357,7 +454,11 @@ private:
         bool operator==(Key const& b) const {return unit==b.unit && action==b.action && direction==b.direction &&
             cursor==b.cursor && frames==b.frames && width==b.width && height==b.height && scale_milli==b.scale_milli && hour==b.hour && season==b.season && color==b.color;}
     };
-    struct Cached {Key key;std::uint64_t used;std::vector<std::uint32_t> pixels;unsigned cast_pixels;};
+    struct Cached {Key key;std::uint64_t used;std::vector<std::uint32_t> pixels;unsigned cast_pixels;bool prepared=false;};
+    struct PendingPose {Key key{};c3x_renderer_unit_v1 request{};UnitAnimationPose pose{};
+        std::shared_ptr<UnitPoseContent const> content;float shadow_strength=0;bool speculative=false;};
+    ID3D11Texture2D* batch_readback=nullptr;
+    mutable std::recursive_mutex cache_mutex;
     std::vector<Cached> cache;std::uint64_t serial=0;
     using PoseKey=std::array<int,10>;
     using PosePreparation=render_core::ContentPreparation<PoseKey,UnitPoseInput,UnitPoseContent>;
@@ -422,7 +523,8 @@ private:
             if(next.cursor==key.cursor)return;
             // A single next-pose window fits the active native set. Retaining
             // two distant predictions per unit displaced work due this frame.
-            if(std::any_of(cache.begin(),cache.end(),[&](auto const& p){return p.key==next;}))return;
+            {std::lock_guard<std::recursive_mutex> guard(cache_mutex);
+            if(std::any_of(cache.begin(),cache.end(),[&](auto const& p){return p.key==next;}))return;}
             auto prepared_key=content_key(next);
             if(std::any_of(retained_poses.begin(),retained_poses.end(),[&](auto const& p){return p.key==prepared_key;}))return;
             input.phase=action.loop?double(next.cursor)/key.frames:(key.frames==1?1.0:double(next.cursor)/(key.frames-1));

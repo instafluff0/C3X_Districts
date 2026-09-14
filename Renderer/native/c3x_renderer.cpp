@@ -61,6 +61,7 @@
 #include "source_fidelity/terrain_compiler.h"
 #include "environment_refresh/reflection.h"
 #include "unit_body_renderer.h"
+#include "render_core/unit_frame_preparation.h"
 #include "city_fidelity/gpu.h"
 #include "city_fidelity/glow.h"
 #include "../lab/shared/natural/ground.h"
@@ -9618,6 +9619,8 @@ public:
         if(ambient_async_enabled)isolated_publication=true;
         ahead_enabled=!GetEnvironmentVariableA("C3X_RENDERER_PREPARE_AHEAD",option,sizeof(option)) ||
             std::strcmp(option,"1")==0;
+        unit_pixels_enabled=!GetEnvironmentVariableA("C3X_RENDERER_UNIT_PIXELS",option,sizeof(option)) ||
+            std::strcmp(option,"0")!=0;
         // Work ahead isolates its front only after a stable eligible request.
         // Moving-camera synchronous results retain their existing lifetime.
     }
@@ -10052,22 +10055,39 @@ public:
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
         // Cached unit pixels are an independent CPU publication. Do not cancel
         // an exact ambient map render merely to copy a pose already in memory.
-        if(renderer_state.unit_bodies.restore_cached(job_unit)) {
-            int result=renderer_state.unit_bodies.blit(destination,job_unit.body_x,job_unit.body_y,background)
+        if(unit_pixels_enabled) {
+            auto const& units=renderer_state.unit_bodies.units;
+            auto found=std::find_if(units.begin(),units.end(),[&](auto const& u){
+                return std::find(u.keys.begin(),u.keys.end(),request.unit_key)!=u.keys.end();});
+            auto action=c3x_renderer::native_unit_action(request.action);
+            if(found!=units.end() && action) {
+                auto clip=std::find_if(found->actions.begin(),found->actions.end(),[&](auto const& a){return a.name==action;});
+                if(clip!=found->actions.end())unit_pixels_queue.observe(job_unit,clip->loop);
+            }
+            wake.notify_one();
+        }
+        c3x_renderer::UnitBodyRenderer::PublishedPose cached;
+        bool hit=renderer_state.unit_bodies.copy_cached(job_unit,cached);
+        if(!hit && unit_pixels_active) {
+            foreground_pending.store(true,std::memory_order_relaxed);
+            completed.wait(lock,[this]{return !unit_pixels_active;});
+            foreground_pending.store(camera_pending,std::memory_order_relaxed);
+            hit=renderer_state.unit_bodies.copy_cached(job_unit,cached);
+        }
+        if(hit) {
+            unsigned keyed=0;
+            int result=renderer_state.unit_bodies.blit(cached,destination,job_unit.body_x,job_unit.body_y,background,keyed)
                 ? C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
-            if(result!=C3X_RENDERER_RESULT_OK)renderer_state.unit_bodies.failure_reason="native-canvas-blit";
+            if(cached.prepared)++unit_pixels_hits;
             if(result==C3X_RENDERER_RESULT_OK && bounds) {
                 bounds[0]=job_unit.body_x;bounds[1]=job_unit.body_y;
-                bounds[2]=job_unit.body_x+renderer_state.unit_bodies.image_width;
-                bounds[3]=job_unit.body_y+renderer_state.unit_bodies.image_height;
+                bounds[2]=job_unit.body_x+cached.width;bounds[3]=job_unit.body_y+cached.height;
             }
             QueryPerformanceCounter(&finished);
-            char detail[384];std::snprintf(detail,sizeof(detail),
-                "id=%d key=%.63s action=%d queued=%d cursor=%d/%d dir=%d xy=%d,%d reduced=%d color=%06x result=%d reason=%s cache_hit=1 cache_only=1 cache_bytes=%zu keyed=%u shadow_pixels=%u ms=%.3f",
-                request.unit_id,request.unit_key,request.action,request.queued_action,request.action_cursor,request.frame_count,
-                request.direction,request.body_x,request.body_y,request.reduced,request.display_color_rgb,result,
-                renderer_state.unit_bodies.failure_reason,renderer_state.unit_bodies.cache_bytes,
-                renderer_state.unit_bodies.keyed_pixels,renderer_state.unit_bodies.cast_pixels,
+            char detail[512];std::snprintf(detail,sizeof(detail),
+                "id=%d key=%.63s action=%d cursor=%d/%d dir=%d result=%d cache_hit=1 cache_only=1 prepared=%u prepared_hits=%llu keyed=%u shadow_pixels=%u ms=%.3f",
+                request.unit_id,request.unit_key,request.action,request.action_cursor,request.frame_count,
+                request.direction,result,unsigned(cached.prepared),static_cast<unsigned long long>(unit_pixels_hits),keyed,cached.cast_pixels,
                 renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart));
             renderer_state.trace.write("unit-body",detail,true);
             return result;
@@ -10076,8 +10096,8 @@ public:
             char detail[256];std::snprintf(detail,sizeof(detail),
                 "id=%d key=%.63s action=%d cursor=%d/%d dir=%d reason=%s entries=%zu bytes=%zu",
                 request.unit_id,request.unit_key,request.action,request.action_cursor,request.frame_count,
-                request.direction,renderer_state.unit_bodies.failure_reason,
-                renderer_state.unit_bodies.cached_pose_entries(),renderer_state.unit_bodies.cache_bytes);
+                request.direction,"cache-miss",
+                renderer_state.unit_bodies.cached_pose_entries(),renderer_state.unit_bodies.cached_pose_bytes());
             renderer_state.trace.write("unit-cache-only-miss",detail,true);
         }
         UnitCameraPause pause(*this,lock);
@@ -10163,6 +10183,9 @@ private:
     bool camera_preview_enabled=false;
     bool ambient_async_enabled=false;
     bool native_presentation=false;
+    bool unit_pixels_enabled=false,unit_pixels_active=false,unit_pixels_turn=true;
+    c3x_renderer::render_core::UnitFramePreparation unit_pixels_queue;
+    std::uint64_t unit_pixels_built=0,unit_pixels_hits=0,unit_pixels_batches=0;
     bool ahead_enabled=false,ahead_active=false,job_stable_view=false;
     std::atomic<bool> ahead_cancelled{false};
     c3x_renderer_frame_v1 ahead_frame={};
@@ -10253,6 +10276,8 @@ private:
     }
 
     void drain_camera_locked(std::unique_lock<std::mutex>& lock) {
+        foreground_pending.store(true,std::memory_order_relaxed);
+        completed.wait(lock,[this]{return !unit_pixels_active;});
         stop_ahead_locked(lock);
         // Configuration, reset and incompatible synchronous draws replace camera work.
         // Units use a resumable pause instead. Never change
@@ -10297,6 +10322,7 @@ private:
     };
 
     int submit_locked(std::unique_lock<std::mutex> & lock, Command command) {
+        if(command!=Command::unit && command!=Command::render)unit_pixels_queue.clear();
         if(command!=Command::unit)foreground_pending.store(true, std::memory_order_relaxed);
         job_command = command;
         has_job = true;
@@ -10515,7 +10541,31 @@ private:
     void run() {
         std::unique_lock<std::mutex> lock(state_mutex);
         for (;;) {
+            // The next displayed map bucket is due before optional future unit
+            // poses; the second ambient bucket can share the remaining window.
+            if(!has_job && !stop_requested && !camera_paused && !camera_pending && unit_pixels_enabled && !unit_pixels_queue.empty() &&
+               !(ahead_pending() && ahead_next<=ahead_requested+1) &&
+               (unit_pixels_turn || !ahead_pending())) {
+                std::array<c3x_renderer_unit_v1,2> requests{};
+                unsigned count=unit_pixels_queue.take(requests.data(),2);
+                unit_pixels_active=true;unit_pixels_turn=false;
+                foreground_pending.store(false,std::memory_order_relaxed);
+                lock.unlock();LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+                unsigned built=0;
+                try {built=renderer_state.unit_bodies.prepare_pixels(renderer_state.device,renderer_state.context,
+                    requests.data(),count,[&](auto const& action){return renderer_state.prepare_unit_action(action);},foreground_pending);}
+                catch(...) {} // Optional work never suppresses a demanded native body.
+                QueryPerformanceCounter(&end);lock.lock();
+                unit_pixels_active=false;unit_pixels_built+=built;if(built)++unit_pixels_batches;
+                char detail[256];std::snprintf(detail,sizeof(detail),"built=%u total=%llu batches=%llu hits=%llu queued=%u ms=%.3f staging_cap=8388608",
+                    built,static_cast<unsigned long long>(unit_pixels_built),static_cast<unsigned long long>(unit_pixels_batches),
+                    static_cast<unsigned long long>(unit_pixels_hits),unsigned(!unit_pixels_queue.empty()),
+                    renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart));
+                renderer_state.trace.write("unit-pixels-prepared",detail,true);
+                completed.notify_all();continue;
+            }
             if(!has_job && !stop_requested && camera_pending && !camera_paused) {
+                unit_pixels_turn=true;
                 auto const ticket=camera_ticket;
                 job_camera_ticket=ticket;
                 job_frame=camera_pending_frame;
@@ -10628,7 +10678,7 @@ private:
                 // Allow bursty foreground callers to take priority before a new
                 // non-preemptible GPU submission. Demand wakes this wait early.
                 wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;});
-                if(!has_job && !camera_pending && !stop_requested)prepare_ahead(lock);
+                if(!has_job && !camera_pending && !stop_requested){unit_pixels_turn=true;prepare_ahead(lock);}
                 continue;
             }
             if(!has_job && !stop_requested && !camera_paused && !camera_pending && renderer_state.scene_guard_pending()) {
@@ -10716,8 +10766,8 @@ private:
                 }
                 continue;
             }
-            wake.wait(lock, [this] { return has_job || (camera_pending && !camera_paused) || (!camera_paused && ahead_pending()) || stop_requested; });
-            if(!has_job && !stop_requested && !camera_paused && (camera_pending || ahead_pending()))continue;
+            wake.wait(lock, [this] { return has_job || (camera_pending && !camera_paused) || (!camera_paused && (ahead_pending() || (unit_pixels_enabled && !unit_pixels_queue.empty()))) || stop_requested; });
+            if(!has_job && !stop_requested && !camera_paused && (camera_pending || ahead_pending() || (unit_pixels_enabled && !unit_pixels_queue.empty())))continue;
             if (stop_requested && !has_job)
                 break;
             Command command = job_command;
