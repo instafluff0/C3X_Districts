@@ -6,7 +6,9 @@ compilation/replay does not install hooks or launch Civ III.
 
 ## Implemented caller-driven displayed view
 
-The opt-in `C3X_RENDERER_NATIVE_ASYNC=1` bridge now connects the existing captured
+The bridge now defaults on for the user-authorized `INSTALL.bat` workflow, with
+no environment settings required (`C3X_RENDERER_NATIVE_ASYNC=0` is retained only
+as a diagnostic opt-out). It connects the existing captured
 world, camera queue and immutable publication at m71/m19. Native camera fields and
 bounds describe the displayed view between calls, including native overlay
 placement, direct inverse picking and unit culling. The new `move_camera` inlead
@@ -56,7 +58,8 @@ Remaining strategic checkpoint: authorized GOG staging/install/live verification
 of edge/keyboard scroll and reversal, mouse picking and overlays while pending,
 unit takeover, recenter, zoom/resize, visibility/viewer/scenario changes and config
 off. Actual input-to-presentation latency, native capture/blit cost and presented
-cadence remain unmeasured. Mode stays opt-in pending that checkpoint.
+cadence remain unmeasured. The user requested default activation for direct
+installation/testing; this does not complete that live checkpoint.
 
 ## Earlier audit and preserved constraints
 

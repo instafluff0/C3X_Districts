@@ -31,8 +31,9 @@ Camera changes select exposed/static damage and ordered dynamic passes; they do
 not translate the whole scene. Finishing updates affected output with exact filter
 support. Persistent captured world identity is now separate from observations;
 local content proofs and a ready-instance path feed separate view assembly and
-spatially selected pass inputs. Full MSAA resolve and general native asynchronous
-handoff remain explicit limits. The retained plan records the scoped completion
+spatially selected pass inputs. Full MSAA resolve remains an explicit limit. The opt-in GOG native handoff now
+separates displayed and requested views and validates exact publication leases;
+actual native interaction acceptance remains pending. The retained plan records the scoped completion
 assessment, controls, complete-request measurements and precision constraints.
 
 Full-detail CPU surface compilation now has a bounded helper pool sharing immutable
@@ -42,8 +43,8 @@ world owner before selected pass submission. The renderer thread can compile
 unstarted demanded work while helpers prepare other captured instances. One GPU
 owner also prepares a finite horizon of exact ambient frames after a stationary
 view is confirmed; later matching calls consume immutable publications. These
-mechanisms do not complete Civ III's general asynchronous camera handoff, predict
-game state, or add redraw callbacks. See the retained plan for controls and measured
+mechanisms coexist with the caller-driven native camera handoff. They do not
+predict game state or add redraw callbacks. See the retained plan for controls and measured
 scope; helper count alone is not a speedup claim.
 
 ## Firm principles

@@ -7,6 +7,41 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class NativeViewIdentityTests(unittest.TestCase):
+    def test_default_handoff_requires_capabilities_and_allows_diagnostic_opt_out(self):
+        source = (ROOT / 'injected_code.c').read_text()
+        selection = source.split('char async_option[8] = {0};', 1)[1]
+        selection = '#ifdef Main_Screen_Form_move_camera' + selection.split('#ifdef Main_Screen_Form_move_camera', 1)[1].split('#endif', 1)[0] + '#endif'
+        run_cpp(r"""
+#include <cassert>
+#include <initializer_list>
+#include <cstring>
+struct State {
+ bool custom_renderer_async_enabled=false;
+ void *custom_renderer_render_view=this, *custom_renderer_camera_begin=this,
+      *custom_renderer_camera_poll=this, *custom_renderer_camera_present=this,
+      *custom_renderer_camera_cancel=this;
+};
+#define Main_Screen_Form_move_camera available
+void select(State* is, char const* async_option) {
+""" + selection + r"""
+}
+#undef Main_Screen_Form_move_camera
+void unsupported(State* is, char const* async_option) {
+""" + selection + r"""
+}
+int main() {
+ State state;select(&state, "");assert(state.custom_renderer_async_enabled);
+ select(&state, "0");assert(!state.custom_renderer_async_enabled);
+ select(&state, "1");assert(state.custom_renderer_async_enabled);
+ for(auto member:{&State::custom_renderer_render_view,&State::custom_renderer_camera_begin,
+                  &State::custom_renderer_camera_poll,&State::custom_renderer_camera_present,
+                  &State::custom_renderer_camera_cancel}) {
+  State missing;missing.*member=nullptr;select(&missing, "");assert(!missing.custom_renderer_async_enabled);
+ }
+ unsupported(&state, "");assert(!state.custom_renderer_async_enabled);
+}
+""")
+
     def test_capture_lifecycle_visibility_and_legacy_dispatch(self):
         source = (ROOT / 'injected_code.c').read_text()
         world = 'bool\ncapture_custom_renderer_world_topology ()' + source.split('capture_custom_renderer_world_topology ()', 1)[1].split('\nvoid\n', 1)[0]

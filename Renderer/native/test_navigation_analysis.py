@@ -268,6 +268,35 @@ class NavigationAnalysisTests(unittest.TestCase):
             inputs_unchanged=True, binaries_unchanged=True, images={p.name: digest(p) for p in root.glob("*.bmp")})))
         return root
 
+    def test_missing_trace_is_allowed_only_for_explicit_timing_mode(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder=self.fixture(Path(temporary)/"timing")
+            (folder/"renderer.log").unlink()
+            with self.assertRaises(FileNotFoundError):inspect(folder)
+            receipt=json.loads((folder/"inputs.json").read_text())
+            receipt["instrumentation_mode"]="timing"
+            (folder/"inputs.json").write_text(json.dumps(receipt))
+            self.assertEqual(14,inspect(folder)[1]["timing"]["ms"]["samples"])
+
+    def test_connected_build_comparison_only_allows_explicit_renderer_change(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            a=self.fixture(Path(temporary)/"a");b=self.fixture(Path(temporary)/"b")
+            data=json.loads((b/"inputs.json").read_text())
+            (b/"C3XRenderer.dll").write_bytes(b"new connected renderer")
+            data["binaries"]["C3XRenderer.dll"]=digest(b/"C3XRenderer.dll")
+            (b/"inputs.json").write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError,"different_renderer"):compare(a,b)
+            result=compare(a,b,different_renderer=True)
+            self.assertTrue(result["all_images_exact"] and result["renderer_binary_changed"])
+            data["inputs"]["scene"]="changed capture"
+            (b/"inputs.json").write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError,"runtime inputs"):compare(a,b,different_renderer=True)
+            data["inputs"]["scene"]="frozen"
+            (b/"biq_preview.exe").write_bytes(b"changed harness")
+            data["binaries"]["biq_preview.exe"]=digest(b/"biq_preview.exe")
+            (b/"inputs.json").write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError,"harness"):compare(a,b,different_renderer=True)
+
     def test_pair_allows_only_cache_controls(self):
         with tempfile.TemporaryDirectory() as temporary:
             a=self.fixture(Path(temporary)/"a");b=self.fixture(Path(temporary)/"b")

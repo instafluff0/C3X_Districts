@@ -6,6 +6,35 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class NavigationFixtureTests(unittest.TestCase):
+    def test_timing_mode_does_not_require_disabled_trace_records(self):
+        import re
+        import tempfile
+        import textwrap
+        from pathlib import Path
+        from types import SimpleNamespace
+        source=(ROOT/"Renderer/native/record_navigation_evidence.py").read_text()
+        start=source.index('    completion["trace_path_validation"]')
+        end=source.index('    if args.boundary_fixture:\n',start)
+        check=textwrap.dedent(source[start:end])
+        with tempfile.TemporaryDirectory() as folder:
+            out=Path(folder)
+            for mode in ("diagnostic","timing"):
+                args=SimpleNamespace(instrumentation=mode,local_region_revisions=True,
+                                     shared_scene_surface=False,automatic_scene_surface=True,
+                                     prepared_resource_pass=True,boundary_fixture=False)
+                completion={};result={"returncode":0}
+                exec(check,dict(args=args,out=out,completion=completion,result=result,re=re))
+                self.assertEqual(1 if mode=="diagnostic" else 0,result["returncode"])
+                if mode=="timing":
+                    self.assertNotIn("shared_scene_surface_frames",completion)
+                    self.assertEqual("unavailable-timing-mode",completion["trace_path_validation"])
+            (out/"renderer.log").write_text("stage=render-region-cache local_revisions=1\nstage=shared-scene-surface valid=1\n")
+            args.instrumentation="diagnostic";completion={};result={"returncode":0}
+            exec(check,dict(args=args,out=out,completion=completion,result=result,re=re))
+            self.assertEqual(0,result["returncode"])
+            self.assertEqual(1,completion["local_region_revision_frames"])
+            self.assertEqual(1,completion["shared_scene_surface_frames"])
+
     def test_compiled_city_texture_references_join_measurement_identity(self):
         import tempfile
         import struct

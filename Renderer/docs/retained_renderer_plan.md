@@ -1,6 +1,147 @@
 # Retained world → view → submission implementation
 
-## Active implementation: caller-driven native handoff
+## Active implementation: useful preparation across scene owners
+
+The user approved prioritizing work by usefulness before demand, across scene
+elements rather than terrain alone. Preserve the staged native-handoff DLL as
+control; current evidence starts at `native/build/useful-preparation-20260914/`.
+
+The supplied live trace changes the priority: 962 unit pixel misses consume
+40.637 seconds of logged unit caller time; 4,902 hits consume 2.539 seconds.
+The cache grows monotonically to 962 entries (about 354 MiB), so this is cold
+pose diversity, not eviction churn. Direction, native cursor and owner color
+create legitimate distinct outputs. The 429 map boundaries consume 34.964 seconds,
+including cold start; these are separate distributions, not additive frame costs.
+The trace has no native-handoff/camera-begin records and cannot prove that the
+opt-in handoff was active. Its 1119×1192 view and sparse roads also differ from the
+dense 2240×1192 synthetic workload. Existing ambient work completes 383 uncancelled
+future frames and consumes 258; speculative work is useful but not free.
+
+The bounded stage diagnostic identifies CPU pose/shadow construction as the main
+unit miss cost: median 30.068 ms of a 45.753 ms miss, versus 6.489 ms waiting for
+GPU completion. It uses CPU wall-clock boundaries, not Parallels GPU timestamps.
+
+`UnitPoseCompiler` now compiles the existing exact pose, tangent frames, projected
+vertices, clipping proof and shadow field into immutable CPU content. The existing
+`ContentPreparation` pool supplies two unit helpers by default (four terrain helpers
+remain separate); `C3X_RENDERER_UNIT_PREPARATION=0/1/2/4` is the bounded control.
+Native observations offer the next frame of the currently known action and
+facing. Repeated fixed cursors schedule nothing new; observed advances outrank
+unused predictions. The demand path adopts ready content, joins matching active
+work, or compiles unstarted work itself. Owner color is absent from this CPU key;
+unit/action, direction, native cursor/frame count, projection, hour and season
+remain dependencies. Final pixels keep their complete color-inclusive key.
+
+Animation jobs hold immutable leases in the existing 96 MiB payload owner.
+Demanded payload pressure revokes optional leases before admission fails. Pending
+jobs are capped at 32, ready content at 128 MiB, retained consumed content at 32 MiB,
+and each helper's estimated result/scratch at 24 MiB. A conservative virtual-memory
+check drops optional content before endangering the preserved 512 MiB reserve.
+Reset joins readers before releasing assets. Helpers touch no D3D context, native
+object, canvas or mutable pixel publication; existing full-detail GPU submissions,
+finishing and caller-owned GDI composition consume the prepared content.
+
+Near-term finite ambient preparation now precedes optional static guard expansion
+on the existing GPU worker. No extra GPU unit predictions or redraw callbacks were
+added. This extends preparation across scene owners without a parallel renderer.
+
+Build1 exposed a full reservoir of unused stationary predictions: only four of
+53 unit misses consumed preparation, with no unit-time improvement. Preserve it
+as a rejected scheduling mechanism. Build2 prioritizes observed advances and
+prevents repeated frozen predictions. Its 20-frame diagnostic matches every
+control image exactly; whole map-plus-eight-unit mean falls 51.747 → 23.715 ms.
+This is preliminary diagnostic evidence. The first production mixed-action run
+showed only a 3% mean improvement: 522 helper builds, 38 consumed and 476 evicted.
+That two-frame window/front-insertion mechanism is rejected for busy native sets.
+The final scheduler keeps one predicted pose per observation, preserves FIFO order
+among advancing units, and lets those finite jobs use the full 128 MiB ready budget;
+unused fixed-unit results are evicted before advancing results. This prevents new
+future work displacing the older predictions needed by the rest of the current draw.
+The production comparison below is the release measurement. CPU work increases when predictions are unused. Report that
+cost separately from work removed from the caller and from exact content reuse.
+No new staging, installation or game launch is part of this implementation run.
+
+### Production checkpoint: full-detail CPU preparation
+
+Candidate `Renderer/native/build/candidate/C3XRenderer.dll`, SHA-256
+`ead40b16387ad67573adbd89e4baf0fba3760255d8710427253eda051314c12e`,
+replaces the inline demand-only CPU compiler in the existing unit rendering owner.
+The staged control remains unchanged. All artifacts, including rejected windows,
+are under `native/build/useful-preparation-20260914/`.
+
+Trace-disabled paired production runs use identical verified preview binaries,
+10,321 runtime inputs, full detail, waves/reflections off, and a 1119×1192 view.
+Whole requests include map rendering, GDI copy and all eight native unit draws;
+initial setup and ten warmup frames are outside the measured windows.
+
+| Workload | Samples | Control → candidate mean | Median | Maximum |
+| --- | --- | --- | --- | --- |
+| Paced idle, selected/directed/working subset | 30 | 39.395 → 30.734 ms (22% lower) | 18.227 → 20.677 ms | 139.575 → 86.372 ms |
+| Unpaced mixed native actions | 40 | 279.527 → 147.644 ms (47% lower) | 283.801 → 137.520 ms | 331.890 → 217.686 ms |
+
+Every paired image is exact. These small synthetic windows establish whole-request
+improvement, not native FPS or reliable tail percentiles. Warm idle calls do not
+consistently improve. Instrumented idle was more favorable (40.001 → 17.051 ms);
+use the trace-disabled numbers above, not that result, for the performance claim.
+The same-binary helper-disabled diagnostic is 42.070 → 17.051 ms, also exact.
+
+Work attribution: the final busy diagnostic consumes 350 prepared results across
+380 pixel misses; only 30 compile on demand. Helpers finish 358 builds, with zero
+ready evictions/rejections and one cancelled task. Thus 388 completed CPU builds
+serve 380 requested misses, with eight future results unused at shutdown. The
+rejected window performed 864 completed builds (522 helper + 342 foreground) for
+the same misses. The final path mainly moves necessary work before demand;
+color-independent retained content additionally avoids repeated CPU construction.
+Summed helper compilation wall time is 8.741 s; foreground pose stage totals
+0.739 s including warmup. Those are not CPU-cycle or GPU-time measurements.
+
+Dense 2240×1192 scrolling remains effectively unchanged: 14-step median
+75.295 → 78.121 ms, maximum 186.282 → 157.870 ms, exact images. No scrolling
+speedup is claimed. Four terrain/topology and six city/forest edits pass independent
+full-redraw comparisons; these instrumented barriers remain correctness evidence.
+The map path is unchanged by the final unit-window correction. Busy samples retain
+at least 1754 MiB free virtual address space and a 1682 MiB largest free region;
+peak ready unit content is 64.6 MiB within its 128 MiB cap. These are sampled
+process values, not a universal memory peak guarantee.
+
+Validation covers the production build, CPU queue/lease/cancellation/validity tests,
+existing native camera publication tests, the six native replay groups and a final
+unit day/night rerun after the scheduling correction. The initial full test sweep
+had one stale worker-test stub compile failure; that stub was updated and its
+whole test module passed. No injected source changed, so no injected compile was
+needed. Evidence tools now allow an explicitly changed renderer DLL while still
+requiring identical verified harness/assets; timing-only runs explicitly mark
+trace-path evidence unavailable rather than inventing counts. Their rejection
+and missing-trace tests pass.
+
+Remaining costs: cold/unseen poses still compile, every pixel miss still performs
+GPU submission/finishing/readback, and cold/local map barriers remain synchronous.
+The supplied game log does not demonstrate native async-camera activation or
+input-to-display cadence. The native strategic interaction checkpoint remains
+pending; the renderer still never requests a redraw. No new visual difference,
+installation, staging, game launch, Git mutation or deferred-category work occurred.
+
+### User evaluation staging
+
+After the implementation checkpoint, the user requested testing through
+`INSTALL.bat` and authorized a Mac commit followed by a Windows push. The exact
+validated candidate above is now staged at `Renderer/bin/C3XRenderer.dll`; the
+previous DLL remains preserved as `native/build/useful-preparation-20260914/control.dll`.
+Civ III was confirmed closed before staging. No installation or game launch was
+performed. `INSTALL.bat` updates injection but does not build or stage the DLL.
+The new unit CPU preparation is enabled by default with normal game launch.
+At the user's request, the native caller-driven async handoff is also enabled by
+default when its existing hook and exports are available. Normal `INSTALL.bat`
+and game launch require no environment settings or alternate launchers. The
+explicit `C3X_RENDERER_NATIVE_ASYNC=0` diagnostic opt-out remains available.
+This default-selection change does not establish the pending live cadence and
+interaction checkpoint. Missing capabilities still retain the exact path.
+The default-selection change passed `TEST_INJECTED_CODE_COMPILE.bat` on the
+Windows GOG verification link, plus nine native identity/publication checks
+including default activation, diagnostic disable and missing-capability fallback.
+The newly changed live capture is preserved outside the implementation commit.
+
+## Implemented checkpoint: caller-driven native handoff
 
 The user approved the native asynchronous handoff after accepting and staging
 the four-helper neighborhood path below. Preserve that DLL/source as the control
@@ -29,7 +170,7 @@ requiring game-launch authorization; no installation or launch is authorized her
 The user subsequently requested: “Please allow me to test it.” The exact validated
 production candidate is now staged for evaluation at `Renderer/bin/C3XRenderer.dll`,
 SHA-256 `d92d104627d4edf6246fbf53dc042b6c67abbb1419edbe7843b9f0452fa6ed3c`.
-`Renderer/TEST_NATIVE_ASYNC.bat` enables `C3X_RENDERER_NATIVE_ASYNC=1` for its
+`Renderer/TEST_NATIVE_ASYNC.bat` originally enabled `C3X_RENDERER_NATIVE_ASYNC=1` for its
 session and delegates to the existing game-test launcher and `RUN.bat`. That route
 injects the current camera hook when the user starts the game; no installation is
 needed. The prior DLL and staging receipt are under
@@ -42,7 +183,7 @@ in the implementation checkpoint below. Live acceptance remains pending.
 optional exact presentation lease, existing queue integration and ambient producer
 transfer. The GOG `move_camera` inlead is `0x004DF700`; user-requested non-GOG
 addresses remain `0x0`. The patch ledger records the GOG-only limitation. Mode is
-opt-in with `C3X_RENDERER_NATIVE_ASYNC=1`, requires complete world visibility
+enabled by default for user evaluation, requires complete world visibility
 capture, and preserves exact fallback when the display proof fails. No native
 completion notification exists. Full detail and existing visual contracts remain.
 
@@ -633,7 +774,7 @@ permanent GPU residency, an uncaptured game simulation, or every optional backen
 | Spatial selection separate from world construction | Compilation appended active draw lists; circular spans scanned every layer. | Compilation publishes protected handles. A separate assembly consumes current authoritative occurrences; the view index selects actual static pass inputs for damage spans, with exact intersection and ordered deduplication. Current capture remains the admission set. The index is view-scoped; world identity and compiled validity outlive it. Dynamic pose lists retain their small scan. |
 | Compatible submissions through explicit passes | Ordered layers/page limits existed, but selected inputs were incomplete. | Selected static/dynamic inputs feed existing ordered material submissions and bounded 32-page receiver batches. Main/caster/resource ownership and common depth are preserved. This completes representative pass ownership; selected tree placements now feed hardware-instanced color and shadow submissions. Reflection and other object categories retain their existing execution. |
 | GPU reuse, finishing and readback | Incremental output already finished. | Complete for the tested city profile, waves/reflections off and bounded extents. Circular color/depth, sparse restore, incremental finishing, hardware resolve and consolidated readback remain unchanged. Other profiles retain existing output execution. |
-| Caller-driven asynchronous preparation/publication | DLL preparation/publication and exact queued joins existed. | Bounded CPU preparation and exact future ambient publications now run ahead of demand inside the DLL. **Remaining native integration responsibility.** General asynchronous native camera handoff and presented cadence are not implemented. Unmatched current-camera demand still waits for exact output. No renderer notifications, redraw requests, new native hooks or ABI changes. |
+| Caller-driven asynchronous preparation/publication | DLL preparation/publication and exact queued joins existed. | Bounded CPU preparation and exact future ambient publications run ahead of demand inside the DLL. The opt-in GOG native handoff now owns requested/displayed views, the authorized camera hook and exact presentation leases. General input/overlay/picking acceptance remains pending; the supplied live trace does not establish that mode was active. Exact content/visibility/zoom barriers can still wait. CPU unit pose preparation extends shared content to directed native units without changing animation or adding renderer notifications/redraws. |
 
 ## Ownership and invalidation details
 

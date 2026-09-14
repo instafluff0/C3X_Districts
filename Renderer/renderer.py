@@ -893,6 +893,8 @@ def run_tests(category=None, *, integration=False, full=False):
                         "Renderer.native.test_shared_mesh_instances",
                         "Renderer.native.test_frame_publication",
                         "Renderer.native.test_content_preparation",
+                        "Renderer.native.test_unit_pose_content",
+                        "Renderer.native.test_unit_pose_cache",
                         "Renderer.native.test_frame_telemetry",
                         "Renderer.native.test_renderer_trace",
                         "Renderer.native.test_water_coverage",

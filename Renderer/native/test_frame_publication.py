@@ -175,6 +175,12 @@ struct Trace {int level=0;bool buffered=false;void write(char const* stage,char 
 using RendererTrace=Trace;
 struct Footprint {int coordinate=0;struct {int left=0,right=0;} bounds;};
 struct Bodies {
+    double payload_ms=0,pose_ms=0,submission_ms=0,readback_ms=0,output_ms=0;bool pose_content_hit=false;
+    struct Stats {unsigned built=0,consumed=0,cancelled=0,evicted=0,rejected=0,active_peak=0;double cpu_ms=0,wait_ms=0;std::size_t bytes=0,peak_bytes=0;};
+    Stats pose_preparation_statistics(){return {};}
+    std::size_t pose_retained_bytes()const{return 0;}
+    void release_pose_leases(){}
+
     struct Unit {std::vector<std::string> keys;int minimum_canvas=0;};
     std::vector<Unit> units;int image_width=191,image_height=191;
     char const* failure_reason="";bool cache_hit=false,cached=false;std::size_t cache_bytes=0;unsigned keyed_pixels=0,cast_pixels=0;

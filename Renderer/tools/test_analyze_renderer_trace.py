@@ -21,6 +21,19 @@ class TraceTests(unittest.TestCase):
         self.assertEqual(14,report["timings"]["unit-body.call_ms"]["p95_ms"])
         self.assertFalse(usage["workloads"]["zoom"]["hundred_sample_requirement_met"])
 
+    def test_unit_miss_cost_and_mode_evidence(self):
+        report=analyze("""[C3X renderer] ms=999999 stage=unit-cache-only-miss reason=cache-miss-color entries=42 bytes=4096
+[C3X renderer] ms=999999 stage=unit-body id=1 cache_hit=0 ms=40
+[C3X renderer] ms=999999 stage=unit-body id=1 cache_hit=1 ms=0.5
+[C3X renderer] ms=999999 stage=unit-body id=2 cache_hit=0
+""")
+        self.assertEqual(40,report["timings"]["unit-body.miss_call_ms"]["total_ms"])
+        self.assertEqual(.5,report["timings"]["unit-body.hit_call_ms"]["total_ms"])
+        self.assertEqual({"cache-miss-color":1},report["unit_activity"]["miss_reasons"])
+        self.assertEqual(42,report["unit_activity"]["maximum_miss_entries"])
+        self.assertFalse(report["native_handoff_observed"])
+        self.assertTrue(analyze("[C3X renderer] stage=native-handoff")['native_handoff_observed'])
+
     def test_usage_rejects_partial_invalid_and_cross_session_pairs(self):
         report=analyze("""[C3X renderer] process=8 qpc=1 stage=usage-session qpc_frequency=1000
 [C3X renderer] process=8 qpc=10 stage=usage-view request=1 origin_valid=0

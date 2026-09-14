@@ -120,6 +120,7 @@ def main(argv=None):
     parser.add_argument("--prepare-ahead", action="store_true", help="Prepare exact full-detail ambient ticks on the idle renderer worker")
     parser.add_argument("--idle-pace-ms", type=int, choices=range(0,501), default=0, help="Absolute stationary demand cadence; zero uses unpaced demand")
     parser.add_argument("--idle-warmup", type=int, choices=range(10,151), default=10)
+    parser.add_argument("--unit-preparation-workers", type=int, choices=(0,1,2,4), default=None, help="CPU unit-pose preparation; omit for production policy, zero for same-binary control")
     parser.add_argument("--unit-pose-memory", action="store_true", help="Opt-in 256 MiB / 4096-entry exact unit-pose retention")
     parser.add_argument("--unit-pose-memory-mib", type=int, choices=(256,512), default=256, help="Bounded pose-pixel budget when --unit-pose-memory is enabled")
     parser.add_argument("--idle-units", type=int, choices=(0,8,24,64), default=0,
@@ -307,6 +308,7 @@ def main(argv=None):
            "C3X_RENDERER_PREVIEW_DISTANT_STEPS": str(args.distant_steps) if args.scenario == "distant" else "",
            "C3X_RENDERER_PREVIEW_IDLE_STEPS": str(args.idle_steps) if args.scenario == "idle" else "",
            "C3X_RENDERER_PREVIEW_IDLE_UNITS": str(args.idle_units),
+           "C3X_RENDERER_UNIT_PREPARATION": "" if args.unit_preparation_workers is None else str(args.unit_preparation_workers),
            "C3X_RENDERER_PREVIEW_UNIT_ACTIONS": args.unit_actions,
            "C3X_RENDERER_CPU_PREPARATION": "" if args.preparation_defaults else str(args.cpu_preparation_workers),
            "C3X_RENDERER_WORLD_PREPARATION": "" if args.preparation_defaults else "1" if args.world_preparation else "0",
@@ -476,18 +478,19 @@ exit $childCode
             r"^CONTENT_EDIT_END status=pass checks=6 independent_full_redraw=1$",content_log,re.M))
         if not completion["content_edit_correctness_pass"]:
             completion["returncode"]=1;result["returncode"]=1
-    if args.local_region_revisions:
+    completion["trace_path_validation"]="performed" if args.instrumentation=="diagnostic" else "unavailable-timing-mode"
+    if args.local_region_revisions and args.instrumentation=="diagnostic":
         trace_log=(out/"renderer.log").read_text(errors="replace") if (out/"renderer.log").is_file() else ""
         completion["local_region_revision_frames"]=len(re.findall(
             r"stage=render-region-cache .*local_revisions=1(?:\s|$)",trace_log))
         if not completion["local_region_revision_frames"]:
             completion["returncode"]=1;result["returncode"]=1
-    if args.shared_scene_surface or args.automatic_scene_surface:
+    if (args.shared_scene_surface or args.automatic_scene_surface) and args.instrumentation=="diagnostic":
         trace_log=(out/"renderer.log").read_text(errors="replace") if (out/"renderer.log").is_file() else ""
         completion["shared_scene_surface_frames"]=len(re.findall(r"stage=shared-scene-surface ",trace_log))
         if not completion["shared_scene_surface_frames"]:
             completion["returncode"]=1;result["returncode"]=1
-    if args.prepared_resource_pass and not (args.shared_scene_surface or args.automatic_scene_surface):
+    if args.prepared_resource_pass and not (args.shared_scene_surface or args.automatic_scene_surface) and args.instrumentation=="diagnostic":
         trace_log=(out/"renderer.log").read_text(errors="replace") if (out/"renderer.log").is_file() else ""
         completion["resource_material_variant_frames"]=len(re.findall(
             r"stage=animation-frame .*resource_material_variants=1(?:\s|$)",trace_log))

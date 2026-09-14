@@ -4,6 +4,7 @@
 #include "unit_animation_runtime.h"
 #include "navigation_options.h"
 #include "unit_shadow.h"
+#include "unit_pose_content.h"
 #include "environment_refresh/unit_shader.h"
 
 namespace c3x_renderer {
@@ -12,7 +13,7 @@ namespace c3x_renderer {
 // or native window presentation are owned here. The caller supplies the canvas.
 class UnitBodyRenderer {
 public:
-    struct Mesh { AnimationMesh animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
+    struct Mesh { std::shared_ptr<AnimationMesh const> animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Part { unsigned mesh=0,texture=0,address=0; unsigned material_textures[4]={UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX}; float material_model=0; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
     struct Action { std::string name; bool loop=false,ambient=false,allow_exit_clip=false;
@@ -27,6 +28,7 @@ public:
     int image_width=0,image_height=0;
     bool cache_hit=false;
     char const* failure_reason="none";
+    double payload_ms=0,pose_ms=0,submission_ms=0,readback_ms=0,output_ms=0;
     std::size_t cache_bytes=0;
     std::size_t pose_cache_budget=8u*1024u*1024u,pose_cache_entries=128;
     std::size_t cached_pose_entries() const {return cache.size();}
@@ -57,6 +59,7 @@ public:
 
     template<class T> void release(T*& p) { if(p) {p->Release();p=nullptr;} }
     void reset_gpu() {
+        reset_pose_preparation();
         for(auto & mesh:meshes) release(mesh.indices);
         for(auto & texture:textures) release(texture.view);
         release(vertex);release(pixel);release(layout);release(settings);release(beauty_frame);release(vertices);
@@ -103,7 +106,8 @@ public:
         configure_pose_cache(pose_memory>=256,pose_memory==512);
         for(auto& saved:cache)if(saved.key==key) {
             saved.used=++serial;pixels=saved.pixels;image_width=w;image_height=h;
-            cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";return true;
+            cache_hit=true;cast_pixels=saved.cast_pixels;failure_reason="none";
+            schedule_pose_content(request,*found,*action,pose,key);return true;
         }
         for(auto const& saved:cache)if(saved.key.unit==key.unit && saved.key.action==key.action &&
            saved.key.cursor==key.cursor) {
@@ -119,33 +123,11 @@ public:
         return false;
     }
 
-    // Authored tangent sampling. Source vertex directions use the linear
-    // skin matrix, independently normalized as in the inspected object VS.
-    std::vector<std::array<std::array<float,3>,2>> sample_animation_frames(AnimationMesh const& mesh,double phase) {
-        double frame=std::clamp(phase,0.0,1.0)*(mesh.frames-1);
-        unsigned first=std::min(mesh.frames-1,unsigned(frame));
-        unsigned second=std::min(mesh.frames-1,first+1);float fraction=float(frame-first);
-        std::vector<std::array<std::array<float,3>,2>> out(mesh.vertices.size());
-        for(std::size_t i=0;i<mesh.vertices.size();++i) {
-            auto const& v=mesh.vertices[i];
-            for(unsigned basis=0;basis<2;++basis) {
-                auto const& source=basis?v.bitangent:v.tangent;auto & result=out[i][basis];
-                for(unsigned influence=0;influence<4;++influence) {
-                    if(v.weights[influence]==0)continue;
-                    auto a=mesh.palettes.data()+(std::size_t(first)*mesh.bones+v.joints[influence])*16;
-                    auto b=mesh.palettes.data()+(std::size_t(second)*mesh.bones+v.joints[influence])*16;
-                    for(unsigned axis=0;axis<3;++axis)for(unsigned c=0;c<3;++c)
-                        result[axis]+=v.weights[influence]*source[c]*(a[c*4+axis]+(b[c*4+axis]-a[c*4+axis])*fraction);
-                }
-                float length=std::sqrt(result[0]*result[0]+result[1]*result[1]+result[2]*result[2]);
-                for(unsigned axis=0;axis<3;++axis)result[axis]=length>1e-12f?result[axis]/length:source[axis];
-            }
-        }
-        return out;
-    }
-
     template<class Prepare>
     bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare) {
+        payload_ms=pose_ms=submission_ms=readback_ms=output_ms=0;
+        LARGE_INTEGER stage_begin={},stage_end={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&stage_begin);
+        auto elapsed=[&](){QueryPerformanceCounter(&stage_end);double ms=1000.0*(stage_end.QuadPart-stage_begin.QuadPart)/frequency.QuadPart;stage_begin=stage_end;return ms;};
         if(restore_cached(request))return true;
         cache_hit=false;keyed_pixels=cast_pixels=0;failure_reason="invalid-request-or-device";
         if(!device || !context || request.struct_size!=sizeof(request) ||
@@ -190,15 +172,14 @@ public:
         }
         failure_reason="animation-payload-load";
         if(!prepare(*action))return false;
+        payload_ms=elapsed();
         failure_reason="gpu-target-setup";
         // Pack-selected material supersampling changes scratch resolution only.
         // Native placement, clipping, readback and cached sprite sizes stay exact.
         int samples=found->sample_scale;
         if((samples!=1 && samples!=2 && samples!=4) || !ensure(device,w,h,samples,found->minimum_canvas?1536:128))return false;
         auto environment=evaluate_environment(float(request.hour),request.season);
-        float cosine=std::cos((found->yaw_offset+float(request.direction%8)*45)*.01745329252f);
-        float sine=std::sin((found->yaw_offset+float(request.direction%8)*45)*.01745329252f);
-        float zoom=pose.projection_scale,scale=found->scale;
+        float zoom=pose.projection_scale;
         float clear_color[4]={};context->OMSetRenderTargets(1,&linear.target,linear.depth);
         context->ClearRenderTargetView(linear.target,clear_color);
         context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH,1,0);
@@ -207,21 +188,10 @@ public:
         context->IASetInputLayout(layout);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
         context->PSSetConstantBuffers(0,1,&settings);
-        std::vector<std::vector<FeatureSourceVertex>> poses(action->parts.size());
-        std::vector<std::vector<UnitShadow::Point>> positions(action->parts.size());
-        std::vector<UnitShadow::Point> all_points;
-        failure_reason="pose-sampling";
-        for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
-            auto const& part=action->parts[part_index];
-            if(part.mesh>=meshes.size() || !sample_animation_mesh(meshes[part.mesh].animation,
-                pose.phase*meshes[part.mesh].animation.duration,false,poses[part_index]))return false;
-            for(auto const& p:poses[part_index]) {
-                UnitShadow::Point point={(p.position[0]*cosine-p.position[1]*sine)*scale,
-                    (p.position[0]*sine+p.position[1]*cosine)*scale,(p.position[2]+found->offset_z)*scale};
-                positions[part_index].push_back(point);all_points.push_back(point);
-            }
-        }
-        UnitShadow shadow(found->minimum_canvas?1536:128);
+        submission_ms+=elapsed();
+        auto prepared=prepare_pose_content(request,*found,*action,pose,key);
+        if(!prepared){failure_reason="pose-content";return false;}
+        auto const& shadow=prepared->shadow;
         // Selected BeautyStudies response, driven by the same native phase as
         // the existing pose-local caster. No independent sun or animation clock.
         auto noon=evaluate_environment(12,0);
@@ -239,59 +209,15 @@ public:
         beauty[16]=float(shadow.extent);
         context->UpdateSubresource(beauty_frame,0,nullptr,beauty,0,0);
         context->PSSetConstantBuffers(1,1,&beauty_frame);context->PSSetSamplers(1,1,&samplers[3]);
-        if(!shadow.fit(all_points,light[0],light[1])){failure_reason="pose-envelope";return false;}
-        for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
-            auto const& mesh=meshes[action->parts[part_index].mesh];auto const& points=positions[part_index];
-            for(std::size_t i=0;i<mesh.animation.indices.size();i+=3)
-                shadow.triangle(points[mesh.animation.indices[i]],points[mesh.animation.indices[i+1]],points[mesh.animation.indices[i+2]]);
-        }
+        pose_ms+=elapsed();
         context->UpdateSubresource(shadow_texture,0,nullptr,shadow.heights.data(),shadow.extent*4,0);
         context->PSSetShaderResources(1,1,&shadow_view);
-        std::vector<std::array<float,17>> upload;
         for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
             auto const& part=action->parts[part_index];
-            auto const& posed=poses[part_index];
             failure_reason="missing-part-or-texture";
             if(part.mesh>=meshes.size() || part.texture>=textures.size() || !textures[part.texture].view)return false;
             auto & mesh=meshes[part.mesh];
-            upload.resize(posed.size());
-            auto frames=sample_animation_frames(mesh.animation,pose.phase);
-
-            for(std::size_t i=0;i<posed.size();++i) {
-                auto const& p=posed[i];
-                float x=(p.position[0]*cosine-p.position[1]*sine)*scale;
-                float y=(p.position[0]*sine+p.position[1]*cosine)*scale,z=(p.position[2]+found->offset_z)*scale;
-                float sx=float(pose.anchor_x-request.body_x)+(x-y)*64*zoom;
-                float sy=float(pose.anchor_y-request.body_y)+(x+y)*32*zoom-z*(150.f*128/224)*zoom;
-                auto normal=lighting::object_normal(p.normal[0]*cosine-p.normal[1]*sine,
-                    p.normal[0]*sine+p.normal[1]*cosine,p.normal[2]);
-                upload[i]={2*sx/w-1,1-2*sy/h,.5f-(x+y)*.05f-z*.001f,
-                    normal[0],normal[1],normal[2],p.uv[0],p.uv[1],z,
-                    (x-shadow.dx*z-shadow.left)/shadow.width,(y-shadow.dy*z-shadow.top)/shadow.height};
-                for(unsigned basis=0;basis<2;++basis) {
-                    auto f=frames[i][basis];
-                    auto direction=lighting::object_normal(f[0]*cosine-f[1]*sine,f[0]*sine+f[1]*cosine,f[2]);
-                    for(unsigned axis=0;axis<3;++axis)upload[i][11+basis*3+axis]=direction[axis];
-                }
-            }
-            // The ground plane hides buried anatomy/stowed equipment. Bound
-            // the visible polygon, including intersections of crossing edges,
-            // so clipping never extends beyond Civ III's native dirty region.
-            failure_reason="visible-body-outside-native-sprite";
-            auto inside=[&](float x,float y){return x>=2.f/w-1 && x<=1-2.f/w && y>=2.f/h-1 && y<=1-2.f/h;};
-            for(std::size_t i=0;i<mesh.animation.indices.size();i+=3) {
-                for(unsigned edge=0;edge<3;++edge) {
-                    auto const& a=upload[mesh.animation.indices[i+edge]];
-                    auto const& b=upload[mesh.animation.indices[i+(edge+1)%3]];
-                    // Some terminal clips send a mount offscreen. The GPU
-                    // still clips strictly to this same native-sized target.
-                    if(!action->allow_exit_clip && a[8]>=0 && !inside(a[0],a[1]))return false;
-                    if(!action->allow_exit_clip && (a[8]<0)!=(b[8]<0)) {
-                        float t=a[8]/(a[8]-b[8]);
-                        if(!inside(a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])))return false;
-                    }
-                }
-            }
+            auto const& upload=prepared->uploads[part_index];
             failure_reason="gpu-geometry-upload";
             UINT bytes=UINT(upload.size()*sizeof(upload[0]));
             if(bytes>capacity) {
@@ -301,8 +227,8 @@ public:
                 if(FAILED(device->CreateBuffer(&d,nullptr,&vertices)))return false;capacity=bytes;
             }
             if(!mesh.indices) {
-                D3D11_BUFFER_DESC d={};d.ByteWidth=UINT(mesh.animation.indices.size()*4);d.Usage=D3D11_USAGE_IMMUTABLE;
-                d.BindFlags=D3D11_BIND_INDEX_BUFFER;D3D11_SUBRESOURCE_DATA data={};data.pSysMem=mesh.animation.indices.data();
+                D3D11_BUFFER_DESC d={};d.ByteWidth=UINT(mesh.animation->indices.size()*4);d.Usage=D3D11_USAGE_IMMUTABLE;
+                d.BindFlags=D3D11_BIND_INDEX_BUFFER;D3D11_SUBRESOURCE_DATA data={};data.pSysMem=mesh.animation->indices.data();
                 if(FAILED(device->CreateBuffer(&d,&data,&mesh.indices)))return false;
             }
             D3D11_MAPPED_SUBRESOURCE mapped={};
@@ -330,14 +256,16 @@ public:
             context->IASetIndexBuffer(mesh.indices,DXGI_FORMAT_R32_UINT,0);
             context->PSSetShaderResources(0,1,&textures[part.texture].view);
             context->PSSetSamplers(0,1,&samplers[part.address]);
-            context->DrawIndexed(UINT(mesh.animation.indices.size()),0,0);
+            context->DrawIndexed(UINT(mesh.animation->indices.size()),0,0);
         }
         ID3D11ShaderResourceView* empty[6]={};context->PSSetShaderResources(0,6,empty);
         failure_reason="gpu-body-readback";
         transfer.draw(context,linear,target,environment.exposure,samples);
         context->OMSetRenderTargets(0,nullptr,nullptr);context->CopyResource(readback,output);
+        submission_ms+=elapsed();
         D3D11_MAPPED_SUBRESOURCE mapped={};
         if(FAILED(context->Map(readback,0,D3D11_MAP_READ,0,&mapped)))return false;
+        readback_ms=elapsed();
         pixels.resize(std::size_t(w)*h);
         cast_pixels=0;
         for(int y=0;y<h;++y)for(int x=0;x<w;++x) {
@@ -352,6 +280,7 @@ public:
             pixels[std::size_t(y)*w+x]=(combined<<24)|(((p[2]*alpha+127)/255)<<16)|(((p[1]*alpha+127)/255)<<8)|((p[0]*alpha+127)/255);
         }
         context->Unmap(readback,0);image_width=w;image_height=h;
+        output_ms=elapsed();
         // This optional owner retains exact posed pixels across native anchors
         // and repeated authored loops. Admission failure leaves this completed
         // body available for the current draw; it never drops a visible unit.
@@ -430,6 +359,115 @@ private:
     };
     struct Cached {Key key;std::uint64_t used;std::vector<std::uint32_t> pixels;unsigned cast_pixels;};
     std::vector<Cached> cache;std::uint64_t serial=0;
+    using PoseKey=std::array<int,10>;
+    using PosePreparation=render_core::ContentPreparation<PoseKey,UnitPoseInput,UnitPoseContent>;
+    PosePreparation pose_preparation;
+    struct RetainedPose {PoseKey key;std::shared_ptr<UnitPoseContent const> value;};
+    std::deque<RetainedPose> retained_poses;
+    struct ObservedPose {int id;PoseKey key;};
+    std::deque<ObservedPose> observed_poses;
+    std::size_t retained_pose_bytes=0;
+    bool pose_preparation_configured=false;
+    PoseKey content_key(Key const& key) const {
+        return {int(key.unit),key.action,key.direction,key.cursor,key.frames,key.width,key.height,key.scale_milli,key.hour,key.season};
+    }
+    unsigned preparation_workers() const {
+        char value[16]={};auto n=GetEnvironmentVariableA("C3X_RENDERER_UNIT_PREPARATION",value,sizeof(value));
+        if(!n)return NavigationOptions::enabled(GetEnvironmentVariableA,"C3X_RENDERER_WORLD_REGIONS")?2u:0u;
+        return n<sizeof(value)?(std::strcmp(value,"1")==0?1u:std::strcmp(value,"2")==0?2u:std::strcmp(value,"4")==0?4u:0u):0u;
+    }
+    UnitPoseInput pose_input(c3x_renderer_unit_v1 const& request,Unit const& unit,Action const& action,
+                             UnitAnimationPose const& pose,Key const& key) const {
+        UnitPoseInput input;input.phase=pose.phase;input.direction=key.direction;input.width=key.width;input.height=key.height;
+        input.anchor_x=pose.anchor_x-request.body_x;input.anchor_y=pose.anchor_y-request.body_y;input.zoom=pose.projection_scale;
+        auto light=lighting::key_light(evaluate_environment(float(request.hour),request.season));
+        input.light_x=light.direction[0];input.light_y=light.direction[1];
+        input.source.scale=unit.scale;input.source.yaw_offset=unit.yaw_offset;input.source.offset_z=unit.offset_z;
+        input.source.allow_exit_clip=action.allow_exit_clip;input.source.shadow_extent=unit.minimum_canvas?1536:128;
+        for(auto const& part:action.parts) {
+            if(part.mesh>=meshes.size() || !meshes[part.mesh].animation){input.source.meshes.clear();return input;}
+            input.source.meshes.push_back(meshes[part.mesh].animation);
+        }
+        return input;
+    }
+    bool preparation_fits(UnitPoseInput const& input) const {
+        // Bound each helper's result and intermediate pose/position/tangent
+        // scratch before dispatch, independently of the shared asset budget.
+        std::size_t bytes=std::size_t(input.source.shadow_extent)*input.source.shadow_extent*4;
+        for(auto const& mesh:input.source.meshes)bytes+=mesh->vertices.size()*208;
+        return !input.source.meshes.empty() && bytes<=24u*1024u*1024u;
+    }
+    void schedule_pose_content(c3x_renderer_unit_v1 const& request,Unit const& unit,Action const& action,
+                               UnitAnimationPose const& pose,Key const& key) {
+        auto workers=preparation_workers();if(!workers)return;
+        try {
+            MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);
+            if(!GlobalMemoryStatusEx(&memory) || memory.ullAvailVirtual<(512u+160u+24u*workers)*1024ull*1024ull) {
+                reset_pose_preparation();return;
+            }
+            auto current=content_key(key);
+            auto observed=std::find_if(observed_poses.begin(),observed_poses.end(),[&](auto const& item){return item.id==request.unit_id;});
+            bool advancing=observed!=observed_poses.end();
+            if(advancing && observed->key==current)return; // No autonomous cursor or repeated frozen predictions.
+            if(advancing)observed_poses.erase(observed);
+            if(observed_poses.size()>=128)observed_poses.pop_front();
+            observed_poses.push_back({request.unit_id,current});
+            auto input=pose_input(request,unit,action,pose,key);
+            if(!preparation_fits(input))return;
+            if(!pose_preparation_configured){
+                pose_preparation.configure({},UnitPoseCompiler{},workers,{},128u*1024u*1024u);
+                pose_preparation_configured=true;
+            }
+            Key next=key;next.cursor=action.loop?(key.cursor+1)%key.frames:std::min(key.cursor+1,key.frames-1);
+            if(next.cursor==key.cursor)return;
+            // A single next-pose window fits the active native set. Retaining
+            // two distant predictions per unit displaced work due this frame.
+            if(std::any_of(cache.begin(),cache.end(),[&](auto const& p){return p.key==next;}))return;
+            auto prepared_key=content_key(next);
+            if(std::any_of(retained_poses.begin(),retained_poses.end(),[&](auto const& p){return p.key==prepared_key;}))return;
+            input.phase=action.loop?double(next.cursor)/key.frames:(key.frames==1?1.0:double(next.cursor)/(key.frames-1));
+            pose_preparation.offer({prepared_key,input},32,advancing);
+        }catch(...){} // Optional preparation cannot make a native draw fail.
+    }
+    std::shared_ptr<UnitPoseContent const> prepare_pose_content(c3x_renderer_unit_v1 const& request,Unit const& unit,
+                                Action const& action,UnitAnimationPose const& pose,Key const& key) {
+        auto wanted=content_key(key);pose_content_hit=false;
+        std::shared_ptr<UnitPoseContent const> value;
+        if(preparation_workers()) {
+            auto found=std::find_if(retained_poses.begin(),retained_poses.end(),[&](auto const& p){return p.key==wanted;});
+            if(found!=retained_poses.end()) {
+                value=found->value;auto saved=*found;retained_poses.erase(found);retained_poses.push_back(std::move(saved));
+            }else value=pose_preparation.take(wanted,true);
+            pose_content_hit=bool(value);
+        }
+        if(!value) {
+            std::atomic<bool> cancelled{false};auto input=pose_input(request,unit,action,pose,key);
+            if(input.source.meshes.empty())return {};
+            value=UnitPoseCompiler{}(input,cancelled,0);
+        }
+        if(value && preparation_workers()) {
+            try {
+            constexpr std::size_t budget=32u*1024u*1024u;
+            bool existing=std::any_of(retained_poses.begin(),retained_poses.end(),[&](auto const& p){return p.key==wanted;});
+            if(!existing && value->bytes()<=budget) {
+                while(!retained_poses.empty() && retained_pose_bytes>budget-value->bytes()) {
+                    retained_pose_bytes-=retained_poses.front().value->bytes();retained_poses.pop_front();
+                }
+                retained_poses.push_back({wanted,value});retained_pose_bytes+=value->bytes();
+            }
+            schedule_pose_content(request,unit,action,pose,key);
+            }catch(...){} // Retention remains optional after exact compilation.
+        }
+        return value;
+    }
+public:
+    bool pose_content_hit=false;
+    auto pose_preparation_statistics(){return pose_preparation.statistics();}
+    std::size_t pose_retained_bytes() const{return retained_pose_bytes;}
+    void release_pose_leases(){pose_preparation.clear();pose_preparation_configured=false;observed_poses.clear();}
+    void reset_pose_preparation(){release_pose_leases();retained_poses.clear();retained_pose_bytes=0;}
+private:
+
     ID3D11VertexShader *vertex=nullptr;ID3D11PixelShader *pixel=nullptr;ID3D11InputLayout *layout=nullptr;
     ID3D11Buffer *settings=nullptr,*beauty_frame=nullptr,*vertices=nullptr;UINT capacity=0;
     ID3D11SamplerState *samplers[4]={};ID3D11RasterizerState *raster=nullptr;

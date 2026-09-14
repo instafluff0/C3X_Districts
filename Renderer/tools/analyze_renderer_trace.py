@@ -91,6 +91,8 @@ def analyze(text: str) -> dict:
     usage_events = []
     unit_ids, unit_actions = set(), Counter()
     unit_hits = unit_misses = 0
+    unit_reasons = Counter()
+    unit_peak_entries = unit_peak_bytes = 0
     for line in text.splitlines():
         if "[C3X renderer]" not in line:
             continue
@@ -99,6 +101,14 @@ def analyze(text: str) -> dict:
         stages[stage] += 1
         if stage.startswith("usage-"):
             usage_events.append(fields)
+        if stage == "unit-cache-only-miss":
+            unit_reasons[fields.get("reason", "unknown")] += 1
+            for field in ("entries", "bytes"):
+                if fields.get(field, "").isdigit():
+                    if field == "entries":
+                        unit_peak_entries = max(unit_peak_entries, int(fields[field]))
+                    else:
+                        unit_peak_bytes = max(unit_peak_bytes, int(fields[field]))
         if stage == "unit-body":
             if "id" in fields:
                 unit_ids.add((fields.get("process"), fields["id"]))
@@ -113,6 +123,9 @@ def analyze(text: str) -> dict:
                     elapsed = float(duration[1])
                     if math.isfinite(elapsed) and elapsed >= 0:
                         timings["unit-body.call_ms"].append(elapsed)
+                        hit = fields.get("cache_hit")
+                        if hit in ("0", "1"):
+                            timings[f"unit-body.{'hit' if hit == '1' else 'miss'}_call_ms"].append(elapsed)
                 except ValueError:
                     pass
         for name, value in fields.items():
@@ -139,6 +152,7 @@ def analyze(text: str) -> dict:
         samples.sort()
         distributions[key] = {
             "samples": len(samples),
+            "total_ms": sum(samples),
             "p50_ms": samples[math.ceil(len(samples) * 0.50) - 1],
             "p95_ms": samples[math.ceil(len(samples) * 0.95) - 1],
             "max_ms": samples[-1],
@@ -149,7 +163,10 @@ def analyze(text: str) -> dict:
         "peak_gpu_buffer_bytes": peak_buffer_bytes, "timings": distributions,
         "usage": usage_summary(usage_events),
         "unit_activity": {"distinct_logged_ids": len(unit_ids), "draws_by_action": dict(unit_actions),
-                          "pose_hits": unit_hits, "pose_misses": unit_misses},
+                          "pose_hits": unit_hits, "pose_misses": unit_misses,
+                          "miss_reasons": dict(unit_reasons), "maximum_miss_entries": unit_peak_entries,
+                          "maximum_miss_bytes": unit_peak_bytes},
+        "native_handoff_observed": bool(stages["native-handoff"] or stages["camera-begin"]),
         "note": "Readback includes pending GPU execution. Summary-mode traces are sampled; percentiles describe logged samples only.",
     }
 

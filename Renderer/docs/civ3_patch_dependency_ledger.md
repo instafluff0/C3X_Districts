@@ -50,9 +50,13 @@ vtable for a capture-only request traversal. No completion callback or redraw ho
 is added. `required_user_action: []` for the authorized GOG table addition.
 
 Without the inlead or any optional presentation export, async mode stays disabled
-and the existing exact path remains. The candidate mode is currently selected by
-`C3X_RENDERER_NATIVE_ASYNC=1`; live displayed-view validation is still required
-before a shipping-default claim. Candidate compile/replay does not authorize
+and the existing exact path remains. The user requested an `INSTALL.bat`-only workflow with no environment settings;
+the existing mode now defaults on when the hook and exports are available.
+`C3X_RENDERER_NATIVE_ASYNC=0` remains a diagnostic opt-out. This changes only
+selection in `injected_code.c`, reusing `Main_Screen_Form_move_camera` and the
+existing m71/m19 capture/publication symbols; no CSV or address changes are
+needed. `required_user_action: []`. Live displayed-view validation remains pending;
+enabling the default does not certify actual interaction cadence. Candidate compile/replay does not authorize
 installation or launching Civ III.
 
 The native request-identity handoff changes `C3X.h`/`injected_code.c` and adds the

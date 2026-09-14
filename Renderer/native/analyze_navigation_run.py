@@ -690,7 +690,8 @@ def inspect(directory, *, retained_profile=False):
     if memory:
         report["sampled_address_space_not_peak"] = {k: min(int(r[k]) for r in memory)
                                                    for k in ("available_virtual", "largest_free_region")}
-    trace = (directory / "renderer.log").read_text().splitlines()
+    trace_path = directory / "renderer.log"
+    trace = [] if receipt.get("instrumentation_mode")=="timing" and not trace_path.exists() else trace_path.read_text().splitlines()
     if scenario=="session":
         # Initial map render is followed by the timed synchronous calls, then
         # independent snapshot replays. Never use the last N trace records:
@@ -823,12 +824,18 @@ def inspect(directory, *, retained_profile=False):
     return receipt, report
 
 
-def compare(reference, candidate, *, retained_profile=False):
+def compare(reference, candidate, *, retained_profile=False, different_renderer=False):
     before, old = inspect(reference,retained_profile=retained_profile)
     after, new = inspect(candidate,retained_profile=retained_profile)
-    if before["binaries"] != after["binaries"] or before["inputs"] != after["inputs"]:
-        raise ValueError("Paired evidence requires identical binaries and runtime inputs")
-    controls = {"native_handoff", "preparation_defaults", "world_preparation", "cpu_preparation_workers", "prepare_ahead", "dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view", "preparation_mode",
+    binaries_match = before["binaries"] == after["binaries"]
+    if different_renderer:
+        # Connected architecture builds may replace the DLL, while the harness
+        # and every runtime asset/capture remain the reproducible control.
+        binaries_match = ({k:v for k,v in before["binaries"].items() if k != "C3XRenderer.dll"} ==
+                          {k:v for k,v in after["binaries"].items() if k != "C3XRenderer.dll"})
+    if not binaries_match or before["inputs"] != after["inputs"]:
+        raise ValueError("Paired evidence requires matching harness binaries and runtime inputs; DLL changes require explicit different_renderer")
+    controls = {"unit_preparation_workers", "native_handoff", "preparation_defaults", "world_preparation", "cpu_preparation_workers", "prepare_ahead", "dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view", "preparation_mode",
                 "backdrop_control", "wave_control", "composition_casters_control", "backdrop_dependencies", "unit_pose_memory", "unit_pose_memory_mib", "composition_receiver_index", "mountain_samples", "material_samples", "production_defaults"}
     ignored = controls | {"out", "binaries"}
     # Receipts made before these opt-in witnesses existed represent their
@@ -836,7 +843,7 @@ def compare(reference, candidate, *, retained_profile=False):
     defaults={"native_handoff":False,"preparation_defaults":False,"world_preparation":False,"scroll_prepare_ms":0,"cpu_preparation_workers":0,"prepare_ahead":False,"idle_pace_ms":0,"idle_steps":100,"idle_units":0,"idle_warmup":10,"dense_scene":False,"unit_actions":"idle"}
     if {k: v for k, v in (defaults|before["args"]).items() if k not in ignored} != {k: v for k, v in (defaults|after["args"]).items() if k not in ignored}:
         raise ValueError("Paired cameras or quality settings differ")
-    env_controls = {"C3X_RENDERER_PREVIEW_NATIVE_HANDOFF", "C3X_RENDERER_WORLD_PREPARATION", "C3X_RENDERER_CPU_PREPARATION", "C3X_RENDERER_PREPARE_AHEAD", "C3X_RENDERER_REGION_DEPENDENCY_CONTROL", "C3X_RENDERER_REGION_INDEX_CONTROL",
+    env_controls = {"C3X_RENDERER_UNIT_PREPARATION", "C3X_RENDERER_PREVIEW_NATIVE_HANDOFF", "C3X_RENDERER_WORLD_PREPARATION", "C3X_RENDERER_CPU_PREPARATION", "C3X_RENDERER_PREPARE_AHEAD", "C3X_RENDERER_REGION_DEPENDENCY_CONTROL", "C3X_RENDERER_REGION_INDEX_CONTROL",
                     "C3X_RENDERER_CENTER_SHORE_CONTROL", "C3X_RENDERER_WORLD_REGIONS_CONTROL",
                     "C3X_RENDERER_BACKDROP_REUSE_CONTROL", "C3X_RENDERER_WAVE_REUSE_CONTROL",
                     "C3X_RENDERER_BACKDROP_DEPENDENCIES",
@@ -862,7 +869,9 @@ def compare(reference, candidate, *, retained_profile=False):
             old["camera_requests"] != new["camera_requests"]):
         raise ValueError("Paired environment or camera requests differ")
     exact=old["images"]==new["images"]
-    result={"reference":old,"candidate":new,"all_images_exact":exact}
+    result={"reference":old,"candidate":new,"all_images_exact":exact,
+            "renderer_binary_changed":before["binaries"]!=after["binaries"],
+            "verified_binaries":{"reference":before["binaries"],"candidate":after["binaries"]}}
     if old["scenario"]=="replay":
         baseline,oracle=(old,new) if old["preparation"]["mode"]=="baseline" else (new,old)
         streams_identical=old["camera_requests"]==new["camera_requests"]
@@ -1043,10 +1052,11 @@ def main():
     parser.add_argument("candidate", type=Path)
     parser.add_argument("--reference", type=Path)
     parser.add_argument("--retained-profile", action="store_true", help="Explicitly analyze the matched retained city profile with waves/reflections disabled; never a general-profile pass")
+    parser.add_argument("--different-renderer", action="store_true", help="Permit a changed renderer DLL only; retain matching verified harness and runtime inputs")
     parser.add_argument("--case-reference", type=Path, help="Independent fresh process for persistent case output reproduction")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    result = compare_session_reference(args.case_reference,args.candidate) if args.case_reference else compare(args.reference, args.candidate,retained_profile=args.retained_profile) if args.reference else inspect(args.candidate,retained_profile=args.retained_profile)[1]
+    result = compare_session_reference(args.case_reference,args.candidate) if args.case_reference else compare(args.reference, args.candidate,retained_profile=args.retained_profile,different_renderer=args.different_renderer) if args.reference else inspect(args.candidate,retained_profile=args.retained_profile)[1]
     args.out.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({"report": str(args.out), "all_images_exact": result.get("all_images_exact"),
                       "timing": result.get("candidate", result)["timing"]["ms"]}))

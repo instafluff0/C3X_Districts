@@ -27154,8 +27154,8 @@ ensure_custom_renderer_loaded ()
 		char async_option[8] = {0};
 		if (get_environment != NULL) get_environment ("C3X_RENDERER_NATIVE_ASYNC", async_option, sizeof async_option);
 #ifdef Main_Screen_Form_move_camera
-		// Evaluation mode until the native displayed-view checkpoint is observed.
-		is->custom_renderer_async_enabled = strcmp (async_option, "1") == 0 &&
+		// Default caller-driven handoff; retain an explicit diagnostic opt-out.
+		is->custom_renderer_async_enabled = strcmp (async_option, "0") != 0 &&
 			is->custom_renderer_render_view != NULL && is->custom_renderer_camera_begin != NULL &&
 			is->custom_renderer_camera_poll != NULL && is->custom_renderer_camera_present != NULL &&
 			is->custom_renderer_camera_cancel != NULL;

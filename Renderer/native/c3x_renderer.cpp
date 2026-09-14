@@ -3137,7 +3137,7 @@ public:
                 for(unsigned i=0;i<bodies.meshes.size();++i) {
                     auto const& m=bodies.meshes[i];
                     bool pinned=std::any_of(action.parts.begin(),action.parts.end(),[&](auto const& p){return p.mesh==i;});
-                    if(m.bytes && !pinned && m.used<oldest){oldest=m.used;mesh_id=int(i);texture_id=-1;}
+                    if(m.bytes && !pinned && m.animation.use_count()<=1 && m.used<oldest){oldest=m.used;mesh_id=int(i);texture_id=-1;}
                 }
                 for(unsigned i=0;i<bodies.textures.size();++i) {
                     auto const& t=bodies.textures[i];
@@ -3150,7 +3150,14 @@ public:
                 } else if(texture_id>=0) {
                     auto & t=bodies.textures[texture_id];bodies.resident_bytes-=t.bytes;t.bytes=0;
                     bodies.release(t.view);std::vector<std::uint8_t>().swap(t.dds);
-                } else return false;
+                } else {
+                    // Immutable CPU jobs pin animation assets in the existing
+                    // 96 MiB owner. Revoke optional leases before denying a
+                    // demanded payload; no unaccounted shadow asset cache.
+                    bool leased=std::any_of(bodies.meshes.begin(),bodies.meshes.end(),[](auto const& m){return m.animation.use_count()>1;});
+                    if(!leased)return false;
+                    bodies.release_pose_leases();
+                }
             }
             return true;
         };
@@ -3167,7 +3174,7 @@ public:
                 std::size_t bytes=decoded.vertices.capacity()*sizeof(c3x_renderer::AnimationVertex)+
                     decoded.indices.capacity()*sizeof(std::uint32_t)*2+decoded.palettes.capacity()*sizeof(float);
                 if(!reserve(bytes))return false;
-                mesh.animation=std::move(decoded);mesh.bytes=bytes;bodies.resident_bytes+=bytes;++loads;
+                mesh.animation=std::make_shared<c3x_renderer::AnimationMesh const>(std::move(decoded));mesh.bytes=bytes;bodies.resident_bytes+=bytes;++loads;
             }
             mesh.used=used;
             unsigned material_ids[]={part.texture,part.material_textures[0],part.material_textures[1],part.material_textures[2],part.material_textures[3]};
@@ -10114,6 +10121,16 @@ public:
         if (!running)
             return;
         drain_camera_locked(lock);
+        renderer_state.unit_bodies.release_pose_leases();
+        if(renderer_state.trace.level) {
+            auto stats=renderer_state.unit_bodies.pose_preparation_statistics();char detail[384];
+            std::snprintf(detail,sizeof(detail),"built=%llu consumed=%llu cancelled=%llu evicted=%llu rejected=%llu cpu_ms=%.3f join_ms=%.3f peak_ready_bytes=%zu retained_bytes=%zu active_peak=%u",
+                static_cast<unsigned long long>(stats.built),static_cast<unsigned long long>(stats.consumed),
+                static_cast<unsigned long long>(stats.cancelled),static_cast<unsigned long long>(stats.evicted),
+                static_cast<unsigned long long>(stats.rejected),stats.cpu_ms,stats.wait_ms,stats.peak_bytes,
+                renderer_state.unit_bodies.pose_retained_bytes(),stats.active_peak);
+            renderer_state.trace.write("unit-preparation-summary",detail,true);
+        }
         submit_locked(lock, Command::reset);
         stop_requested = true;
         wake.notify_one();
@@ -10607,18 +10624,18 @@ private:
                 lock.unlock();finished_frame.clear();prepared_camera.clear();lock.lock();
                 continue;
             }
-            if(!has_job && !stop_requested && !camera_paused && !camera_pending && renderer_state.scene_guard_pending()) {
-                if(wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;}))continue;
-                lock.unlock();
-                try{renderer_state.prepare_scene_guard(foreground_pending);}catch(...){renderer_state.scene_guard_failed=true;}
-                lock.lock();continue;
-            }
             if(!has_job && !stop_requested && !camera_paused && !camera_pending && ahead_pending()) {
                 // Allow bursty foreground callers to take priority before a new
                 // non-preemptible GPU submission. Demand wakes this wait early.
                 wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;});
                 if(!has_job && !camera_pending && !stop_requested)prepare_ahead(lock);
                 continue;
+            }
+            if(!has_job && !stop_requested && !camera_paused && !camera_pending && renderer_state.scene_guard_pending()) {
+                if(wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;}))continue;
+                lock.unlock();
+                try{renderer_state.prepare_scene_guard(foreground_pending);}catch(...){renderer_state.scene_guard_failed=true;}
+                lock.lock();continue;
             }
             if (!has_job && !stop_requested && !camera_paused && warm_cursor < warm_order.size()) {
                 // Yield between individual tiles. A foreground request wakes
@@ -10739,6 +10756,13 @@ private:
                 result=renderer_state.unit_bodies.render(renderer_state.device,renderer_state.context,job_unit,
                     [&](auto const& action){return renderer_state.prepare_unit_action(action);})
                     ? C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+                if(renderer_state.trace.level) {
+                    auto& body=renderer_state.unit_bodies;auto prep=body.pose_preparation_statistics();char detail[512];
+                    std::snprintf(detail,sizeof(detail),"payload_ms=%.3f pose_ms=%.3f submission_ms=%.3f readback_ms=%.3f output_ms=%.3f prepared=%u built=%llu consumed=%llu cumulative_cpu_ms=%.3f cumulative_join_ms=%.3f ready_bytes=%zu retained_bytes=%zu active_peak=%u",
+                        body.payload_ms,body.pose_ms,body.submission_ms,body.readback_ms,body.output_ms,body.pose_content_hit?1u:0u,
+                        static_cast<unsigned long long>(prep.built),static_cast<unsigned long long>(prep.consumed),prep.cpu_ms,prep.wait_ms,prep.bytes,body.pose_retained_bytes(),prep.active_peak);
+                    renderer_state.trace.write("unit-stages",detail,true);
+                }
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
             } else if(command==Command::benchmark_trim) {
                 auto publication_bytes=publication.bytes()+camera_ready.bytes();

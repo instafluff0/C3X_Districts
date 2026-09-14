@@ -19,7 +19,7 @@
 namespace c3x_renderer { namespace render_core {
 template<class Key,class Input,class Result> class ContentPreparation {
 public:
-    struct Job {Key key;Input input;};
+    struct Job {Key key;Input input;bool urgent=false;};
     using Compile=std::function<std::unique_ptr<Result>(Input const&,std::atomic<bool> const&,unsigned)>;
     struct Statistics {
         std::uint64_t built=0,consumed=0,cancelled=0,rejected=0,evicted=0,invalidated=0;
@@ -29,7 +29,7 @@ public:
     };
     static constexpr std::size_t byte_limit=16u*1024u*1024u,job_limit=8192;
 private:
-    struct Ready {Key key;std::unique_ptr<Result> value;};
+    struct Ready {Key key;std::unique_ptr<Result> value;bool urgent=false;};
     std::mutex mutex;
     std::condition_variable wake,completed;
     std::vector<std::thread> workers;
@@ -40,6 +40,7 @@ private:
     Key demand_key{};
     std::array<bool,6> active{};
     std::array<Key,6> active_key{};
+    std::array<bool,6> active_urgent{};
     Compile compile;
     std::deque<Job> pending;
     std::deque<Ready> ready;
@@ -47,10 +48,10 @@ private:
     void run(unsigned worker) {
         std::unique_lock<std::mutex> lock(mutex);
         for(;;){
-            wake.wait(lock,[&]{return stopping || (!paused && worker<worker_limit && !pending.empty() && ((demanded && pending.front().key==demand_key) || (stats.bytes<capacity_limit/2)));});
+            wake.wait(lock,[&]{return stopping || (!paused && worker<worker_limit && !pending.empty() && ((demanded && pending.front().key==demand_key) || pending.front().urgent || (stats.bytes<capacity_limit/2)));});
             if(stopping)return;
             Job job=std::move(pending.front());pending.pop_front();
-            active[worker]=true;active_key[worker]=job.key;
+            active[worker]=true;active_key[worker]=job.key;active_urgent[worker]=job.urgent;
             stats.active_peak=std::max(stats.active_peak,unsigned(std::count(active.begin(),active.end(),true)));
             lock.unlock();auto begin=std::chrono::steady_clock::now();
             std::unique_ptr<Result> value;
@@ -65,13 +66,14 @@ private:
                     auto bytes=value->bytes();
                     while(!ready.empty() && (stats.bytes+bytes>capacity_limit || ready.size()>=job_limit)){
                         // Protect the result being joined by the sole consumer.
-                        auto victim=ready.begin();
+                        auto victim=std::find_if(ready.begin(),ready.end(),[&](auto const& item){return !item.urgent && !(demanded && item.key==demand_key);});
+                        if(victim==ready.end())victim=ready.begin();
                         if(demanded && victim->key==demand_key)++victim;
                         if(victim==ready.end())break;
                         stats.bytes-=victim->value->bytes();ready.erase(victim);++stats.evicted;
                     }
                     if(stats.bytes+bytes<=capacity_limit){
-                        ready.push_back({job.key,std::move(value)});
+                        ready.push_back({job.key,std::move(value),active_urgent[worker]});
                         stats.bytes+=bytes;stats.peak_bytes=std::max(stats.peak_bytes,stats.bytes);++stats.built;
                     }else ++stats.rejected;
                 }else ++stats.rejected;
@@ -131,6 +133,28 @@ public:
         if(pending.empty() || stopping)return;
         while(workers.size()<worker_limit){auto index=unsigned(workers.size());workers.emplace_back([this,index]{run(index);});}
         cancel=false;paused=false;wake.notify_all();
+    }
+    // Append independently owned immutable inputs without revoking other readers.
+    // Borrowed world-input callers continue using pause/configure/resume.
+    bool offer(Job job,std::size_t limit,bool urgent=false) {
+        std::lock_guard<std::mutex> lock(mutex);
+        if(stopping || !compile || limit>job_limit)return false;
+        job.urgent=urgent;
+        for(auto& item:ready)if(item.key==job.key){item.urgent|=urgent;return true;}
+        auto insert_position=[&](){return std::find_if(pending.begin(),pending.end(),[](auto const& item){return !item.urgent;});};
+        for(auto it=pending.begin();it!=pending.end();++it)if(it->key==job.key){
+            if(urgent && !it->urgent){it->urgent=true;auto position=insert_position();if(position!=pending.end() && position<it)std::rotate(position,it,std::next(it));}
+            wake.notify_all();return true;
+        }
+        for(unsigned i=0;i<active.size();++i)if(active[i] && active_key[i]==job.key){active_urgent[i]|=urgent;return true;}
+        if(!limit)return false;
+        if(pending.size()>=limit){if(!urgent)return false;pending.pop_back();}
+        // Older advancing-unit predictions are due before a newly offered
+        // next frame. Keep their FIFO order; speculative fixed-unit work follows.
+        if(urgent)pending.insert(insert_position(),std::move(job));
+        else pending.push_back(std::move(job));
+        while(workers.size()<worker_limit){auto index=unsigned(workers.size());workers.emplace_back([this,index]{run(index);});}
+        cancel=false;paused=false;wake.notify_all();return true;
     }
     std::unique_ptr<Result> take(Key const& key,bool caller_compiles_pending=false){
         auto begin=std::chrono::steady_clock::now();
