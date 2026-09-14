@@ -13,7 +13,7 @@ using namespace c3x_renderer::render_core;
 struct Result {int value;std::size_t size;std::size_t bytes()const{return size;}};
 using Pool=ContentPreparation<int,int,Result>;
 int main(){
- for(unsigned count:{1u,2u,4u}){
+ for(unsigned count:{1u,2u,4u,6u}){
   Pool pool;std::mutex mutex;std::set<unsigned> seen;std::atomic<int> concurrent{0},peak{0};
   auto compiler=[&](int const& input,std::atomic<bool>const& stop,unsigned worker){
    {std::lock_guard<std::mutex> lock(mutex);seen.insert(worker);}
@@ -54,6 +54,15 @@ int main(){
   while(pool.statistics().built==built){assert(std::chrono::steady_clock::now()<deadline);std::this_thread::yield();}
   assert(pool.take(0)->value==0);assert(pool.take(50)->value==50);
   assert(pool.statistics().evicted>0);pool.clear();
+ }
+ // A larger reservoir still obeys demand and shrinking drops old storage.
+ {Pool pool;auto compiler=[](int const& input,auto const&,unsigned){
+   return std::make_unique<Result>(Result{input,20u*1024u*1024u});};
+  pool.configure({{1,1},{2,2},{3,3}},compiler,6,{},64u*1024u*1024u);pool.resume();
+  assert(pool.take(1));assert(pool.take(2));pool.pause();
+  assert(pool.statistics().peak_bytes<=64u*1024u*1024u);
+  pool.configure({{4,4}},compiler,1);assert(pool.statistics().bytes==0);
+  pool.resume();assert(!pool.take(4));pool.clear();
  }
  // The renderer may take a queued task for immediate foreground compilation.
  {Pool pool;std::atomic<bool> entered{false},release{false};std::atomic<int> calls{0};

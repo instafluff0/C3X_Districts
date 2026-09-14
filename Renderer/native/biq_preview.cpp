@@ -1204,6 +1204,15 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             std::vector<unsigned char> previous=references.front();
             int previous_offset=0;
             bool sequence_ok=true;
+            char preparation_delay[16]={};
+            GetEnvironmentVariableA("C3X_RENDERER_SCROLL_PREPARE_MS",preparation_delay,sizeof(preparation_delay));
+            unsigned opportunity=unsigned(std::clamp(std::atoi(preparation_delay),0,10000));
+            if(opportunity){
+                LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+                Sleep(opportunity);QueryPerformanceCounter(&end);
+                std::printf("SCROLL_PREPARATION opportunity_ms=%u actual_ms=%.3f\n",opportunity,
+                    double(end.QuadPart-begin.QuadPart)*1000/frequency.QuadPart);
+            }
             for(std::size_t step=0;step<offsets.size() && sequence_ok;++step) {
                 int offset=offsets[step];
                 center_x=saved_center_x+offset;center_y=saved_center_y;

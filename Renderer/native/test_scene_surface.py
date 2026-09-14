@@ -4,6 +4,39 @@ from Renderer.native.native_cpp_test import run_cpp
 
 
 class SceneSurfaceTests(unittest.TestCase):
+    def test_static_guard_coverage_and_sample_transfers(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/scene_guard.h"
+#include <cassert>
+struct Rect {int left,top,right,bottom;};
+using namespace c3x_renderer::render_core;
+int main(){
+ SceneGuard<Rect> guard;assert(!guard.configure(5000,8));assert(guard.configure(53,37));
+ auto original=guard.pending;auto visible=guard.select({{16,8,35,29}});assert(!visible.empty());
+ guard.commit(visible);assert(guard.pending<original && guard.pending>0);
+ assert(guard.select({{16,8,35,29}}).empty());
+ while(guard.pending){auto batch=guard.select({},128);assert(!batch.empty());
+  unsigned area=0;for(auto r:batch)area+=(r.right-r.left)*(r.bottom-r.top);assert(area<=128);guard.commit(batch);}
+ guard.invalidate({{0,0,1,1},{52,36,53,37}});assert(guard.pending==2);
+ guard.invalidate_all();assert(guard.pending==original);guard.reset();assert(guard.pending==0);
+ assert(guard.configure(1024,1024));auto bounded=guard.select({},128u*1024u);
+ assert(bounded.size()==1 && bounded[0].bottom==128);guard.reset();
+ for(int w:{16,37,128})for(int h:{19,64})for(int pad:{8,24})
+ for(int x:{-123,0,1,999})for(int y:{-111,0,25}){
+  std::vector<unsigned> visits(w*h);
+  for(auto t:scene_guard_transfers<Rect>(w,h,pad,x,y,{{0,0,w,h}}))
+   for(int row=t.rect.top;row<t.rect.bottom;++row)for(int col=t.rect.left;col<t.rect.right;++col){
+    assert(++visits[row*w+col]==1);int sx=col-t.x,sy=row-t.y;
+    assert(sx>=0 && sx<w+pad*2 && sy>=0 && sy<h+pad*2);
+    auto mod=[](int a,int n){return (a%n+n)%n;};
+    int lx=mod(col+x,w),ly=mod(row+y,h);
+    assert(sx==mod(lx+pad-x,w+pad*2));assert(sy==mod(ly+pad-y,h+pad*2));
+   }
+  for(auto v:visits)assert(v==1);
+ }
+}
+''')
+
     def test_incremental_filter_matches_full_circular_convolution(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/scene_surface.h"

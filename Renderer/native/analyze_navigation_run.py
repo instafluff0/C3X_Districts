@@ -122,6 +122,14 @@ def endpoint_accounting(lines, trace_lines=()):
         request["scene_work"]=({k:int(scene[0][k]) for k in
             ("static_reused","translated","damage_rects","static_selected","dynamic_selected","batches","target_bytes","resolves","readbacks")}
             if scene_spans else None)
+        guard=[r for r in matching if r["stage"]=="scene-guard-submit" and r.get("background")=="0"]
+        request["static_margin_demand_work"]={
+            "pixels":sum(int(r["pixels"]) for r in guard),
+            "selected_inputs":sum(int(r["selected"]) for r in guard),
+            "batches":sum(int(r["batches"]) for r in guard)}
+        if request["scene_work"] and guard:
+            request["scene_work"]["static_selected"]+=request["static_margin_demand_work"]["selected_inputs"]
+            request["scene_work"]["batches"]+=request["static_margin_demand_work"]["batches"]
         # Separate command-stream spans from CPU submission/wait/copy. They
         # overlap: never add GPU spans to CPU Map wait or renderer wall time.
         animation_cpu=[r for r in matching if r["stage"]=="animation-phases"]
@@ -252,6 +260,21 @@ def preparation_accounting(trace,args):
             "last_counters":cpu_prepared[-1]}
         if any(int(r["peak_bytes"])>int(r["ready_cap"]) for r in cpu_prepared):
             raise ValueError("CPU content preparation budget exceeded")
+    if args.get("world_preparation"):
+        submitted=[fields(l) for l in trace if "stage=scene-guard-submit " in l]
+        background=[fields(l) for l in trace if "stage=scene-guard-prepared " in l]
+        report["static_world_preparation"]={
+            "scope":"all traced static submissions including foreground demand, warmup and unused margin; GPU completion time is not inferred from CPU submission",
+            "submitted_native_pixels":sum(int(r["pixels"]) for r in submitted),
+            "background_native_pixels":sum(int(r["pixels"]) for r in submitted if r.get("background")=="1"),
+            "foreground_native_pixels":sum(int(r["pixels"]) for r in submitted if r.get("background")=="0"),
+            "selected_inputs":sum(int(r["selected"]) for r in submitted),
+            "batches":sum(int(r["batches"]) for r in submitted),
+            "background_steps":len(background),
+            "background_cpu_submission_ms":sum(float(r["submit_ms"]) for r in background),
+            "background_failures":sum(r["ok"]!="1" for r in background),
+            "maximum_static_target_bytes":max((int(r["target_bytes"]) for r in submitted),default=0),
+            "gpu_completion_ms":None}
     return report
 
 
@@ -796,15 +819,15 @@ def compare(reference, candidate, *, retained_profile=False):
     after, new = inspect(candidate,retained_profile=retained_profile)
     if before["binaries"] != after["binaries"] or before["inputs"] != after["inputs"]:
         raise ValueError("Paired evidence requires identical binaries and runtime inputs")
-    controls = {"cpu_preparation_workers", "prepare_ahead", "dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view", "preparation_mode",
+    controls = {"preparation_defaults", "world_preparation", "cpu_preparation_workers", "prepare_ahead", "dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view", "preparation_mode",
                 "backdrop_control", "wave_control", "composition_casters_control", "backdrop_dependencies", "unit_pose_memory", "unit_pose_memory_mib", "composition_receiver_index", "mountain_samples", "material_samples", "production_defaults"}
     ignored = controls | {"out", "binaries"}
     # Receipts made before these opt-in witnesses existed represent their
     # disabled defaults. Nondefault scene/unit settings still must match.
-    defaults={"cpu_preparation_workers":0,"prepare_ahead":False,"idle_pace_ms":0,"idle_steps":100,"idle_units":0,"idle_warmup":10,"dense_scene":False,"unit_actions":"idle"}
+    defaults={"preparation_defaults":False,"world_preparation":False,"scroll_prepare_ms":0,"cpu_preparation_workers":0,"prepare_ahead":False,"idle_pace_ms":0,"idle_steps":100,"idle_units":0,"idle_warmup":10,"dense_scene":False,"unit_actions":"idle"}
     if {k: v for k, v in (defaults|before["args"]).items() if k not in ignored} != {k: v for k, v in (defaults|after["args"]).items() if k not in ignored}:
         raise ValueError("Paired cameras or quality settings differ")
-    env_controls = {"C3X_RENDERER_CPU_PREPARATION", "C3X_RENDERER_PREPARE_AHEAD", "C3X_RENDERER_REGION_DEPENDENCY_CONTROL", "C3X_RENDERER_REGION_INDEX_CONTROL",
+    env_controls = {"C3X_RENDERER_WORLD_PREPARATION", "C3X_RENDERER_CPU_PREPARATION", "C3X_RENDERER_PREPARE_AHEAD", "C3X_RENDERER_REGION_DEPENDENCY_CONTROL", "C3X_RENDERER_REGION_INDEX_CONTROL",
                     "C3X_RENDERER_CENTER_SHORE_CONTROL", "C3X_RENDERER_WORLD_REGIONS_CONTROL",
                     "C3X_RENDERER_BACKDROP_REUSE_CONTROL", "C3X_RENDERER_WAVE_REUSE_CONTROL",
                     "C3X_RENDERER_BACKDROP_DEPENDENCIES",
@@ -824,7 +847,7 @@ def compare(reference, candidate, *, retained_profile=False):
         # Each manifest and its actual case identities were verified by inspect.
         # Only the locations of immutable session files differ across directories.
         env_controls.update(("C3X_RENDERER_PREVIEW_SESSION","C3X_RENDERER_SESSION_INPUTS"))
-    env_defaults={"C3X_RENDERER_PREVIEW_IDLE_PACE_MS":"0","C3X_RENDERER_PREVIEW_IDLE_STEPS":"","C3X_RENDERER_PREVIEW_IDLE_UNITS":"0","C3X_RENDERER_PREVIEW_IDLE_WARMUP":"10","C3X_RENDERER_PREVIEW_DENSE_SCENE":"","C3X_RENDERER_PREVIEW_UNIT_ACTIONS":"idle"}
+    env_defaults={"C3X_RENDERER_WORLD_PREPARATION":"0","C3X_RENDERER_SCROLL_PREPARE_MS":"0","C3X_RENDERER_PREVIEW_IDLE_PACE_MS":"0","C3X_RENDERER_PREVIEW_IDLE_STEPS":"","C3X_RENDERER_PREVIEW_IDLE_UNITS":"0","C3X_RENDERER_PREVIEW_IDLE_WARMUP":"10","C3X_RENDERER_PREVIEW_DENSE_SCENE":"","C3X_RENDERER_PREVIEW_UNIT_ACTIONS":"idle"}
     if ({k: v for k, v in (env_defaults|before.get("environment", {})).items() if k not in env_controls} !=
             {k: v for k, v in (env_defaults|after.get("environment", {})).items() if k not in env_controls} or
             old["camera_requests"] != new["camera_requests"]):

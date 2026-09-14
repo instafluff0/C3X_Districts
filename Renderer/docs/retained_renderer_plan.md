@@ -1,6 +1,176 @@
 # Retained world → view → submission implementation
 
-## Current implementation: bounded concurrent preparation
+## Active implementation: prepared world neighborhood
+
+The user authorized completing preparation through GPU-ready surrounding scenery
+on the resized VM (8 logical CPUs, 15,025,766,400 physical-memory bytes). This
+supersedes the preceding recommendation to do general native async handoff next.
+The previous full-detail DLL and source are preserved under
+`Renderer/native/build/world-preparation-20260913/`. Recompare on this hardware;
+the earlier four-core timings do not establish a worker-count choice here.
+
+Connected design:
+
+1. Extend the existing CPU compiler pool to six helpers, with configurable bounded
+   result storage and demand priority. Consume ready results through the existing
+   complete tile compiler/upload owner. Prepare complete surrounding terrain,
+   cities, vegetation and infrastructure; parallelize expensive pure compilation
+   and keep GPU work under its existing owner. Do not add a second scene framework.
+2. Batch neighborhood adoption under one immutable captured-world lease instead
+   of repeatedly entering the entire frame setup for single-tile preparation.
+   Keep content across view changes; local proofs and GPU residency govern reuse.
+   Prioritize all-side proximity, then motion direction, within captured appearance.
+3. Separate a persistent static color/depth margin from the viewport-sized dynamic
+   and finishing surface. Select static pass inputs into the margin during idle
+   opportunities. Foreground demand draws missing visible coverage first; idle
+   work fills surrounding coverage. Use existing materials, shared depth, source
+   shadow selection and compatible submissions, without recursive regional scenes.
+4. Retain exact native pixels/coverage/occurrence publication. Unknown appearance,
+   visibility, changed gameplay and native unit actions cannot be predicted into
+   display ownership. General native async camera handoff remains deferred.
+
+Validate ownership/cancellation and independent cold redraws, then compare cold
+construction, stationary animation, idle-to-scroll, reversals, continuous scrolling
+and local changes. Record preparation duration, coverage, useful adoption, waste,
+GPU submission/completion and checked result latency separately. Preparation does
+not itself imply throughput improvement. Preserve full detail, closed resolve
+findings, unreliable Parallels GPU timestamps and the 512 MiB contiguous address
+headroom floor. Size the static margin from a joint target budget; extra VM RAM
+does not enlarge the 32-bit process address space.
+
+### Implemented candidate and measured checkpoint
+
+The user accepted the displayed full-detail comparison: “Looks great. I want to
+use it and have it be as fast as possible. I accept.” The connected path is now
+enabled by default for eligible shared-scene views. Set
+`C3X_RENDERER_WORLD_PREPARATION=0` to reproduce the existing control. Four CPU
+helpers are the measured default choice; `C3X_RENDERER_CPU_PREPARATION=0|1|2|4|6` permits reproduction. Six
+helpers did not outperform four on the resized VM. This is full-detail scenery
+preparation, unrelated to the game's worker units.
+
+- The existing CPU compiler admits up to 8192 captured jobs, prioritizes demand,
+  and uses a 64 MiB ready reservoir for this path (16 MiB for the control).
+  Configuration supports bounded reservoirs through 128 MiB; active compilation,
+  private scratch and thread stacks remain additional owned storage.
+- The existing GPU owner adopts complete neighboring tiles in groups of four
+  under one captured-input lease, while pure terrain helpers continue compiling.
+  Cities, vegetation bodies and infrastructure use their existing complete
+  compilers/uploads. They have not acquired separate parallel compilers.
+  Proximity in every direction precedes motion preference. The existing 64 MiB
+  prefetched-geometry limit and residency/eviction owners remain authoritative.
+- Selected static passes fill a persistent circular color/depth margin. A dirty
+  cell owns coverage only; it owns no miniature scene, mesh or render target.
+  Foreground requests fill missing visible samples; bounded background batches
+  fill the remaining margin without finishing or readback. Viewport-sized
+  animation, hardware resolve, incremental finishing and output ownership remain.
+- Joint targets are capped at 1408 MiB versus the control's 1152 MiB. The margin
+  is at most 256 native pixels per side, reduced to 192 at 2240×1192. Lowest
+  sampled contiguous free address space across candidate witnesses was about
+  1253 MiB, above the existing 512 MiB floor. This is sampled headroom, not a
+  proof of peak memory or permission to enlarge a 32-bit process indefinitely.
+
+Final same-binary comparisons are in
+`Renderer/native/build/world-preparation-20260913/{idle-scroll,continuous,idle,edit,workers}-comparison.json`.
+The binary/source control is `world-preparation-build5`; verified runs have
+unchanged sources, inputs and binaries. Dense scrolling uses 28 checked requests
+per arm (two 14-move sequences), not a hundred-sample tail-latency claim.
+
+| Whole-request measurement | Two-helper control | Four-helper candidate |
+| --- | ---: | ---: |
+| Dense scroll after equal 3000 ms idle opportunity, median / p95 | 109.67 / 184.40 ms | 68.51 / 145.31 ms |
+| Continuous dense scroll, median / p95 | 94.54 / 161.12 ms | 79.20 / 156.03 ms |
+| Stationary prepared animation, median / p95, 30 demands after warmup | 0.539 / 1.139 ms | 0.499 / 0.685 ms |
+| Two visible local edits, checked request latency | 784.23 / 729.60 ms | 648.11 / 669.61 ms |
+
+The scrolling medians improve about 38% and 16% in these final pairs. Earlier
+same-input controls ranged from 94.2–109.7 ms after idle and 94.5–105.7 ms without
+it; do not present one pair as a precise hardware-independent percentage. Cold
+construction remains roughly 7–8 seconds with no consistent improvement. Six
+helpers measured 69.91 ms scrolling median and 177.30 ms p95 after idle, versus
+four's 68.51/145.31 ms. More helpers are not automatically better.
+
+Work actually removed from demand in the idle-scroll pair: tile builds drop
+from 752 to 564; selected static inputs submitted during the 28 requests drop
+from 12,336 to 4,833. The first nearby moves submit no static geometry. The
+candidate also submits 8.75 million background native pixels across the traced
+warmup/cases/horizons, including unused work; this is not free. Background CPU
+submission totals 529 ms over 72 batches. Those durations neither measure GPU
+completion nor add to request latency. Stationary delivery was already prepared
+by the preceding implementation: its sub-millisecond wait does not mean the
+underlying animated GPU frame became sub-millisecond. Composition/finishing and
+completion remain the main warm-request cost; continuous scrolling still has
+foreground compilation, and cold load/upload remains expensive.
+
+### Correctness and review status
+
+The production checkpoint passes 269 tests (one existing skip), all six native
+replay groups, and 582 lifecycle / 288 body draws in each day/night unit witness.
+The focused new preparation/coverage/accounting checks also pass. The prior opt-in
+DLL (`21106fc708013903806e8d042a6e856d878f9af6d96bbfd16b04fff39b6b3bac`)
+also passes the public-API dense replay with preparation enabled and produces
+exactly the benchmark candidate's pixels. It is isolated under
+`Renderer/native/build/world-preparation-production/`. The first
+whole-suite attempt lacked VM process permissions for three Windows-only tests
+and exposed one outdated support-ring test harness declaration; the declaration
+was updated and the complete approved VM-enabled rerun passed.
+
+After acceptance, the default-enabled production build again passed 269 tests
+(one existing skip) and all six native replay groups. Public-API dense and
+boundary replays with both preparation controls unset verified four helpers,
+background coverage preparation, exact accepted dense pixels and six passing
+boundary checks. The exact tested DLL was staged to `Renderer/bin/C3XRenderer.dll`:
+`d1f31de5919a0879c873dc2e1ab0a7b689c012783629c3086a0fa5db0136fa8f`.
+Receipts and the previous staged DLL are preserved under
+`Renderer/native/build/world-preparation-20260913/`; see
+`accepted-default-staging.json`. The user's live capture remains unchanged.
+No installation, game launch or Git mutation was performed.
+
+The final candidate passes all six boundary checks, four topology changes and
+six fixed-topology city/vegetation content changes against independent cold
+renders. Dense repeat cameras are exact, with no fallback or device recovery.
+Four/six-helper images are identical. Existing output coverage, native overlays,
+picking, visibility and caller ownership remain authoritative. No injected
+source or patch-table change is needed.
+
+**Visual acceptance received.** Against the full-detail control, the dense
+initial/result image changes 6122 of 2,670,080 pixels (0.23%), maximum channel
+change 62. See the preserved `visual-comparison.png` and `visual-difference.json`
+in the evidence directory. A bounded static-only diagnostic still changes 6201
+pixels, so animated composition does not explain it. Preserving the original
+viewport projection arithmetic did not change a single candidate pixel; that
+extra machinery was removed. The remaining difference belongs to static surface
+addressing/submission, with finer attribution unresolved. Its visual acceptance
+comes from the user’s review, not from full asset detail or warm/cold consistency.
+The user accepted this comparison at the strategic visual checkpoint and
+therefore authorized normal staging under `Renderer/README.md`. No references
+were replaced. The measured four-helper path is now the shipping default;
+verification exercises unset environment controls rather than relying on an
+opt-in flag. Installation and game launch remain outside this authorization.
+
+Other preserved findings: the first connected build redirected explicit MSAA
+attachments through the legacy target helper; explicit scene passes now retain
+caller-supplied targets. A bounded dirty-batch limit initially returned unmerged
+scan rows; joining them reduced background submission overhead. Build/replay
+failures and both diagnostics remain in the evidence directory. Parallels GPU
+timestamps/event-query limitations remain closed findings, not speed evidence.
+
+### Responsibilities after this change
+
+| Architectural responsibility | Actual ownership and remaining scope |
+| --- | --- |
+| Persistent world/instances and reusable content | Existing `CapturedScene`, `ResidentContent`, shared assets and local instance handles remain the sole owners. The new producer populates those owners ahead of selection; GPU eviction does not erase world identity. Known captured surroundings can be prepared without guessing camera direction. Unknown future appearance/gameplay is not invented. |
+| Local content validity | Existing world/coast/river/appearance proofs govern compilation and adoption. Static coverage uses complete footprint changes plus environment, viewport, depth and device context. Failure dirties the target; changed content must pass current proofs before reuse. Tested responsibilities are complete for the owned map categories. |
+| World → view selection | Construction publishes handles; current occurrences assemble the pass inputs and the spatial index selects real submissions. A captured view plus bounded margin defines selection, separately from world identity. Not every world mesh must stay on the GPU. |
+| Compatible pass submission | Existing material ordering, shared mesh instances and 32-page shadow batches are reused. Explicit scene targets are now caller-owned; foreground and background use the same static submission path. Separate city/body parallel compilers are not claimed. |
+| GPU color/depth and output | Persistent static margin plus viewport-sized dynamic/finishing surfaces is implemented for the bounded city profile with waves/reflections off. Other profiles retain existing execution. The displayed static shading differences have been accepted. |
+| Caller-driven asynchronous integration | Renderer workers, cancellation, copied snapshots and exact eligible idle publications exist. General native camera begin/poll/publication handoff remains an explicit integration responsibility. Civ III still calls; the renderer does not notify it or request redraws. |
+
+Deferred wonders/Districts, native unit-action ownership and source-asset
+contracts are unchanged. No Civ III install/launch or Git operation is part of
+this checkpoint. Future work should address the remaining native handoff or a
+measured producer/submission bottleneck; do not restart an output-helper queue.
+
+## Previous implementation: bounded concurrent preparation
 
 The default full-detail path now has **two CPU helpers**, plus the existing render
 thread and single GPU owner. Helpers compile ground, surface details, relief and

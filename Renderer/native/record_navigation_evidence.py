@@ -114,7 +114,9 @@ def main(argv=None):
                         help="Cold baseline or complete untimed retained preparation for replay/session")
     parser.add_argument("--replay-samples-per-phase", type=int, choices=range(1,101), default=25)
     parser.add_argument("--idle-steps", type=int, choices=range(1,1001), default=100)
-    parser.add_argument("--cpu-preparation-workers", type=int, choices=(0,1,2,4), default=0, help="Bounded CPU world-content preparation workers; zero retains the control compiler")
+    parser.add_argument("--cpu-preparation-workers", type=int, choices=(0,1,2,4,6), default=0, help="Bounded CPU world-content preparation workers; zero retains the control compiler")
+    parser.add_argument("--world-preparation", action="store_true", help="Prepare complete surrounding content and static color/depth")
+    parser.add_argument("--scroll-prepare-ms", type=int, choices=range(0,10001), default=0, help="Idle opportunity before the first scroll request")
     parser.add_argument("--prepare-ahead", action="store_true", help="Prepare exact full-detail ambient ticks on the idle renderer worker")
     parser.add_argument("--idle-pace-ms", type=int, choices=range(0,501), default=0, help="Absolute stationary demand cadence; zero uses unpaced demand")
     parser.add_argument("--idle-warmup", type=int, choices=range(10,151), default=10)
@@ -194,6 +196,7 @@ def main(argv=None):
     parser.add_argument("--wave-control", action="store_true", help="Rebuild coast-cell wave buffers for independent comparisons")
     parser.add_argument("--composition-casters-control", action="store_true", help="Rebuild caster preparation independently for each animation region")
     parser.add_argument("--animation-readback-atlas", action="store_true", help="Pack exact animated blocks into a compact staging atlas before CPU readback")
+    parser.add_argument("--preparation-defaults", action="store_true", help="Leave world preparation and CPU helper selection unset to verify shipping defaults")
     args = parser.parse_args(argv)
     if (args.shared_scene_surface or args.automatic_scene_surface) and (args.waves!="0" or not args.reflection_ablation):
         parser.error("Shared scene surface requires waves and reflections disabled")
@@ -301,7 +304,9 @@ def main(argv=None):
            "C3X_RENDERER_PREVIEW_IDLE_STEPS": str(args.idle_steps) if args.scenario == "idle" else "",
            "C3X_RENDERER_PREVIEW_IDLE_UNITS": str(args.idle_units),
            "C3X_RENDERER_PREVIEW_UNIT_ACTIONS": args.unit_actions,
-           "C3X_RENDERER_CPU_PREPARATION": str(args.cpu_preparation_workers),
+           "C3X_RENDERER_CPU_PREPARATION": "" if args.preparation_defaults else str(args.cpu_preparation_workers),
+           "C3X_RENDERER_WORLD_PREPARATION": "" if args.preparation_defaults else "1" if args.world_preparation else "0",
+           "C3X_RENDERER_SCROLL_PREPARE_MS": str(args.scroll_prepare_ms),
            "C3X_RENDERER_PREPARE_AHEAD": "1" if args.prepare_ahead else "0",
            "C3X_RENDERER_PREVIEW_IDLE_PACE_MS": str(args.idle_pace_ms),
            "C3X_RENDERER_PREVIEW_IDLE_WARMUP": str(args.idle_warmup),

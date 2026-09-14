@@ -200,9 +200,11 @@ struct RendererState {
     std::vector<unsigned> pixels,flags;
     std::atomic<unsigned> entered{0},cancelled{0},resets{0};
     std::atomic<bool> hold{false};
-    bool animate_pixels=false,fail_render=false;
+    bool animate_pixels=false,fail_render=false,world_preparation=false,scene_guard_failed=false;
+    bool scene_guard_pending()const{return false;}
+    bool prepare_scene_guard(std::atomic<bool> const&){return true;}
     bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1& out,int=-1,
-                std::atomic<bool> const* stop=nullptr,std::uint64_t=0){
+                std::atomic<bool> const* stop=nullptr,std::uint64_t=0,unsigned const* =nullptr,unsigned=0){
         ++entered;
         while(hold.load()){
             if(stop && stop->load()){++cancelled;return false;}

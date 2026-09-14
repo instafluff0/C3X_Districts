@@ -85,11 +85,11 @@ Output PS(float4 position:SV_Position,uint sample:SV_SampleIndex){
     bool draw(ID3D11DeviceContext* context,LinearTarget const& target,
               ID3D11ShaderResourceView* color,ID3D11ShaderResourceView* old_depth,
               int dx,int dy,std::vector<D3D11_RECT> const& dirty,
-              std::vector<D3D11_RECT> const* regions=nullptr){
+              std::vector<D3D11_RECT> const* regions=nullptr,unsigned source_width=0,unsigned source_height=0){
         if(dirty.size()>16)return false;
         struct Constants{int move_extent[4],metadata[4];D3D11_RECT dirty[16];} values={};
         values.move_extent[0]=dx*2;values.move_extent[1]=dy*2;
-        values.move_extent[2]=int(target.width);values.move_extent[3]=int(target.height);values.metadata[0]=int(dirty.size());
+        values.move_extent[2]=int(source_width?source_width:target.width);values.move_extent[3]=int(source_height?source_height:target.height);values.metadata[0]=int(dirty.size());
         std::copy(dirty.begin(),dirty.end(),values.dirty);context->UpdateSubresource(settings,0,nullptr,&values,0,0);
         context->OMSetRenderTargets(1,&target.target,target.depth);context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
         context->OMSetDepthStencilState(depth,0);context->RSSetState(rasterizer);

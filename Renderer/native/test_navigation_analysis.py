@@ -215,6 +215,14 @@ class NavigationAnalysisTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"coverage"):
             preparation_accounting([],{"cpu_preparation_workers":2})
 
+    def test_static_preparation_does_not_claim_gpu_completion(self):
+        trace=["stage=scene-guard-submit pixels=128 selected=3 batches=2 target_bytes=4096",
+               "stage=scene-guard-prepared ok=1 submit_ms=2 pending_cells=0 readbacks=0"]
+        result=preparation_accounting(trace,{"world_preparation":True})["static_world_preparation"]
+        self.assertEqual(128,result["submitted_native_pixels"])
+        self.assertEqual(1,result["background_steps"])
+        self.assertIsNone(result["gpu_completion_ms"])
+
     def test_retained_scope_does_not_waive_other_quality_gates(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=self.fixture(Path(temporary)/"run")

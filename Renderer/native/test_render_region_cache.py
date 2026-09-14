@@ -145,7 +145,7 @@ int main(){assert(eligible(false));assert(!eligible(true));}
 #include <vector>
 #include <cassert>
 std::vector<unsigned> select(c3x_renderer_frame_v1 const& frame,int region_input_ring,bool prewarming=false,int prewarm_index=-1,bool offload_prefetch=false,bool guarded_prefetch=false){
- bool pickup_profile=true;std::vector<unsigned> result;
+ bool pickup_profile=true,batch_preparing=false;std::vector<unsigned> result;
  for(c3x_renderer_u32 index=0;index<frame.tile_count;++index){
   auto const& tile=frame.tiles[index];
 ''' + predicate + r'''

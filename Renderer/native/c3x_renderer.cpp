@@ -45,6 +45,7 @@
 #include "render_core/resource_instances.h"
 #include "render_core/scene_depth.h"
 #include "render_core/scene_surface.h"
+#include "render_core/scene_guard.h"
 #include "render_core/coastal_waves.h"
 #include "render_core/relief_query.h"
 #include "render_core/exact_point_cache.h"
@@ -511,6 +512,10 @@ public:
     std::int64_t scene_static_depth_origin=0;
     bool scene_overlap=false;int scene_dx=0,scene_dy=0;
     std::vector<D3D11_RECT> scene_damage;
+    c3x_renderer::render_core::SceneGuard<D3D11_RECT> scene_guard;
+    c3x_renderer::render_core::RenderRegionKey scene_guard_context;
+    int scene_guard_pad=0;bool scene_guard_failed=false;
+    std::uint64_t scene_guard_depth_origin=0;
     int scene_region_size=128;
     int scene_region_height=128;
     bool cull_empty_water=false;
@@ -543,9 +548,11 @@ public:
     std::string fidelity_root;
     c3x_renderer::fidelity::Natural natural;
     c3x_renderer::fidelity::TerrainPreparation terrain_preparation;
-    std::array<c3x_renderer::fidelity::TerrainCompileScratch,4> terrain_scratch;
+    std::array<c3x_renderer::fidelity::TerrainCompileScratch,6> terrain_scratch;
     c3x_renderer::fidelity::TerrainCompileScratch foreground_terrain_scratch;
     unsigned cpu_terrain_workers=0;
+    bool world_preparation=false;
+    std::size_t cpu_preparation_budget=16u*1024u*1024u;
     RendererTrace trace;
     c3x_renderer::render_core::GpuFrameTelemetry gpu_telemetry;
     bool profiling=false;
@@ -922,7 +929,7 @@ public:
 
     void reset_targets() {
         scene_restore.reset();
-        scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
+        scene_scratch.reset();scene_guard.reset();scene_guard_context.clear();scene_guard_pad=0;scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         cancel_pixel_preparation();
         linear_frame.reset(); linear_block.reset(); reflection.linear.reset();region_reflection.linear.reset();region_glow.linear.reset();
         pixel_blocks.clear();
@@ -942,7 +949,7 @@ public:
     }
 
     void clear_resource_backdrops() {
-        scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
+        scene_scratch.reset();scene_guard.reset();scene_guard_context.clear();scene_guard_pad=0;scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         for(auto & block:resource_backdrops){release(block.color);release(block.depth);}
         resource_backdrops.clear();resource_backdrop_epoch=0;resource_backdrop_bytes=0;
     }
@@ -3949,102 +3956,21 @@ public:
         return true;
     }
 
-    bool compose_scene_surface(GeometryDrawView dynamic) {
-        // Failure cannot certify partially changed attachments for later reuse.
-        struct Transaction {
-            std::uint64_t& signature;bool complete=false;
-            ~Transaction(){if(!complete)signature=0;}
-        } transaction{scene_static_signature};
-        // One scene-linear working set, independent of raster cache cells.
-        // Sparse static backup: color/depth only; finishing targets belong to Glow.
-        auto& glow=region_glow;
-        unsigned w=unsigned(width)+8,h=unsigned(height)+8;
-        std::size_t target_bytes=std::size_t(w)*h*432u;
-        if(!city_profile || !c3x_renderer::render_core::scene_surface_extent(width,height) ||
-           target_bytes>1152u*1024u*1024u || reflection.enabled) {
-            trace.write("scene-surface-failed","bounded no-reflection view/target contract",true);return false;
-        }
-        if(glow.native_extent!=w || glow.native_height!=h || !glow.linear.color){
-            scene_scratch.reset();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
-        }
-        if(!glow.ensure(device,fidelity_root,w,h,true) || !scene_scratch.ensure(device,w*2,h*2,true,false) ||
-           !scene_restore.ensure(device))return false;
-        auto& linear=glow.linear;
-        ViewportShaderSettings settings=geometry_viewport_settings;
-        settings.translation[0]+=4;settings.translation[1]+=4;
-        settings.inverse_size[0]=1.f/w;settings.inverse_size[1]=1.f/h;
-        D3D11_RECT view={0,0,LONG(w),LONG(h)};
+    bool submit_scene_pass(GeometryDrawView inputs,std::vector<unsigned> const& order,bool dynamic_pass,
+            c3x_renderer::render_core::LinearTarget& target,c3x_renderer::city_fidelity::Glow& glow,
+            ViewportShaderSettings const& settings,unsigned w,unsigned h,std::vector<D3D11_RECT> const& physical_rectangles,
+            unsigned& batches,unsigned& selected_static,unsigned& selected_dynamic,unsigned& selection_candidates,unsigned& selection_scans) {
         using Shadow=c3x_renderer::render_core::SourceShadow;
         std::vector<Shadow::Caster> casters;Shadow::PreparedCasters prepared;
         auto prepared_ptr=prepare_shadow_submission(geometry_vertex_buffers,casters,prepared);
-        LARGE_INTEGER begin={},static_end={},dynamic_end={},finish_end={},ready={},copied={};
-        QueryPerformanceCounter(&begin);
-        bool restored=scene_static_signature==cached_signature.complete;
-        bool translated=!restored && scene_overlap && scene_static_signature && scene_static_depth_origin==scene_depth_origin;
-        std::vector<D3D11_RECT> static_rectangles=translated?scene_damage:std::vector<D3D11_RECT>{view};
         auto spans=c3x_renderer::render_core::scene_spans<D3D11_RECT>(int(w),int(h),region_origin_x,region_origin_y);
-        auto physical=[&](std::vector<D3D11_RECT> const& logical){
-            std::vector<D3D11_RECT> result;
-            for(auto span:spans)for(auto r:logical){
-                r={std::max(span.rect.left,r.left+span.x),std::max(span.rect.top,r.top+span.y),
-                   std::min(span.rect.right,r.right+span.x),std::min(span.rect.bottom,r.bottom+span.y)};
-                if(r.left<r.right && r.top<r.bottom)result.push_back(r);
-            }return result;
-        };
-        unsigned batches=0,selected_static=0,selected_dynamic=0,selection_candidates=0,selection_scans=0;
-        // The working attachment contains the last composed scene. The spare
-        // owns only the static samples underneath its animated damage. Restore
-        // those samples before accepting camera damage or a new pose.
-        context->OMSetRenderTargets(0,nullptr,nullptr);
-        if(restored || translated){
-            if(!scene_dynamic_damage.empty() && !scene_restore.draw(context,linear,scene_scratch.samples,
-                scene_scratch.depth_samples,0,0,{},&scene_dynamic_damage))return false;
-            if(translated){
-                auto dirty=physical(static_rectangles);
-                // Clear only exposed/invalidated physical spans. All unchanged
-                // static samples stay at their original world-relative address.
-                for(auto rect:dirty){std::vector<D3D11_RECT> one={rect};
-                    if(!scene_restore.draw(context,linear,scene_scratch.samples,
-                        scene_scratch.depth_samples,0,0,one,&one))return false;}
-            }
-        }else{
-            float clear[4]={};context->ClearRenderTargetView(linear.target,clear);
-            context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
-        }
-        std::vector<D3D11_RECT> dynamic_damage;
-        for(auto layer:{geometry_shadow,geometry_feature})for(auto item:dynamic[layer]){
-            auto rect=item.bounds();int dx=item.translation_x()+int(settings.translation[0]),dy=item.translation_y()+int(settings.translation[1]);
-            rect={std::max<LONG>(0,rect.left+dx-4),std::max<LONG>(0,rect.top+dy-4),
-                  std::min<LONG>(w,rect.right+dx+4),std::min<LONG>(h,rect.bottom+dy+4)};
-            if(rect.left<rect.right && rect.top<rect.bottom)dynamic_damage.push_back(rect);
-        }
-        // Union damage into disjoint scan bands; no duplicate translucent draws
-        // or repeated finishing. These are scissors, never miniature scenes.
-        auto disjoint=[&](std::vector<D3D11_RECT> const& inputs){
-            return c3x_renderer::render_core::scene_damage_union(int(w),int(h),inputs);
-        };
-        dynamic_damage=disjoint(physical(dynamic_damage));
-        auto finish_damage=scene_dynamic_damage;
-        finish_damage.insert(finish_damage.end(),dynamic_damage.begin(),dynamic_damage.end());
-        char output_control[8]={};GetEnvironmentVariableA("C3X_RENDERER_INCREMENTAL_OUTPUT",output_control,sizeof(output_control));
-        bool incremental_output=std::strcmp(output_control,"0")!=0;
-        if(incremental_output && translated){
-            auto support=c3x_renderer::render_core::scene_filter_damage(int(w),int(h),physical(static_rectangles),4);
-            finish_damage.insert(finish_damage.end(),support.begin(),support.end());
-        }
-        // Animated bounds already carry the four-pixel lens margin above.
-        // Expanding them again needlessly increases every stationary update.
-        finish_damage=(restored || (incremental_output && translated))?disjoint(finish_damage):std::vector<D3D11_RECT>{view};
-        // Preserve production layer/occurrence order. Batches change only when
-        // selected receivers would exceed the existing 32 shadow-page slots.
-        auto submit=[&](GeometryDrawView inputs,std::vector<unsigned> const& order,bool dynamic_pass){
             for(auto span:spans){
             ViewportShaderSettings pass_settings=settings;
             pass_settings.translation[0]+=float(span.x);pass_settings.translation[1]+=float(span.y);
             std::vector<D3D11_RECT> rectangles;
-            for(auto rect:dynamic_pass?std::vector<D3D11_RECT>{view}:static_rectangles){
-                rect={std::max(span.rect.left,rect.left+span.x),std::max(span.rect.top,rect.top+span.y),
-                      std::min(span.rect.right,rect.right+span.x),std::min(span.rect.bottom,rect.bottom+span.y)};
+            for(auto rect:physical_rectangles){
+                rect={std::max(span.rect.left,rect.left),std::max(span.rect.top,rect.top),
+                      std::min(span.rect.right,rect.right),std::min(span.rect.bottom,rect.bottom)};
                 if(rect.left<rect.right && rect.top<rect.bottom)rectangles.push_back(rect);
             }
             if(rectangles.empty())continue;
@@ -4073,7 +3999,7 @@ public:
                 if(pages.empty())return true;
                 if(!prepare_receiver_shadows(geometry_vertex_buffers,pass_settings,{span.rect},false,casters,prepared_ptr,nullptr,&pages))return false;
                 bool ok=dynamic_pass?submit_prepared_resource_region(selected,pass_settings,span.rect,&glow):
-                    submit_geometry(selected,rectangles,pass_settings,glow.target,linear.depth,int(w),int(h),nullptr,
+                    submit_geometry(selected,rectangles,pass_settings,target.target,target.depth,int(w),int(h),nullptr,
                         true,false,nullptr,false,&casters,prepared_ptr,128,0,0,false,true);
                 for(auto& layer:selected)layer.clear();pages.clear();++batches;return ok;
             };
@@ -4107,32 +4033,187 @@ public:
                 bool any=false;for(auto const& values:selected)any=any || !values.empty();
                 if(any && pages.empty()){
                     bool ok=dynamic_pass?submit_prepared_resource_region(selected,pass_settings,span.rect,&glow):
-                        submit_geometry(selected,rectangles,pass_settings,glow.target,linear.depth,int(w),int(h),nullptr,
+                        submit_geometry(selected,rectangles,pass_settings,target.target,target.depth,int(w),int(h),nullptr,
                             true,false,nullptr,false,&casters,prepared_ptr,128,0,0,false,true);
                     if(!ok)return false;for(auto& values:selected)values.clear();++batches;
                 }else if(!flush())return false;
             }
             }
             return true;
+    }
+
+    std::vector<unsigned> static_scene_order() const {
+        std::vector<unsigned> order={geometry_underlay,geometry_land,geometry_natural_terrain,geometry_natural_mountain,geometry_natural_decal};
+        for(unsigned layer=geometry_natural_forest0;layer<geometry_layer_count;++layer)order.push_back(layer);
+        for(auto layer:{geometry_bed,geometry_water,geometry_river,geometry_shadow,geometry_route})order.push_back(layer);
+        for(unsigned i=0;i<cliff_bundle.assets.size();++i)order.push_back(geometry_cliff0+i);
+        for(auto layer:{geometry_feature,geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall})order.push_back(layer);
+        return order;
+    }
+
+    bool draw_scene_guard(std::vector<D3D11_RECT> const& rectangles,bool background=false) {
+        if(rectangles.empty())return true;
+        auto& glow=region_glow;
+        ViewportShaderSettings settings=geometry_viewport_settings;
+        settings.translation[0]+=4+scene_guard_pad;settings.translation[1]+=4+scene_guard_pad;
+        settings.inverse_size[0]=1.f/scene_guard.width;settings.inverse_size[1]=1.f/scene_guard.height;
+        for(auto rect:rectangles){std::vector<D3D11_RECT> one={rect};
+            if(!scene_restore.draw(context,scene_scratch,glow.linear.samples,glow.linear.depth_samples,0,0,one,&one))return false;
+        }
+        std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
+        for(auto const& item:geometry_vertex_buffers[geometry_city])if(item.content().city_lighting){
+            auto pointer=item.content().city_lighting.get();
+            if(std::find(lights.begin(),lights.end(),pointer)==lights.end())lights.push_back(pointer);
+        }
+        if(!cities.lights(context,lights))return false;
+        unsigned batches=0,selected=0,dynamic=0,candidates=0,scans=0;
+        if(!submit_scene_pass(geometry_vertex_buffers,static_scene_order(),false,scene_scratch,glow,settings,
+            unsigned(scene_guard.width),unsigned(scene_guard.height),rectangles,batches,selected,dynamic,candidates,scans))return false;
+        scene_guard.commit(rectangles);
+        std::size_t prepared_pixels=0;for(auto r:rectangles)prepared_pixels+=std::size_t(r.right-r.left)*(r.bottom-r.top);
+        char detail[224];sprintf_s(detail,"background=%u pixels=%zu selected=%u batches=%u pending_cells=%zu pad=%d target_bytes=%zu",
+            unsigned(background),prepared_pixels,selected,batches,scene_guard.pending,scene_guard_pad,scene_scratch.bytes());
+        trace.write("scene-guard-submit",detail,true);return true;
+    }
+
+    bool scene_guard_pending() const {
+        return world_preparation && shared_scene_surface && scene_guard_pad && !scene_guard_failed &&
+            scene_guard.pending && scene_scratch.color && cache_valid;
+    }
+    bool prepare_scene_guard(std::atomic<bool> const& cancelled) {
+        if(!scene_guard_pending() || cancelled.load(std::memory_order_relaxed))return true;
+        auto rectangles=scene_guard.select({},128u*1024u);
+        LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+        bool ok=draw_scene_guard(rectangles,true);
+        if(!ok){scene_guard.invalidate_all();scene_guard_failed=true;}
+        // Submit to the existing GPU owner without readback or a completion wait.
+        // A later foreground request executes after these commands in order.
+        context->Flush();QueryPerformanceCounter(&end);
+        char detail[160];sprintf_s(detail,"ok=%u submit_ms=%.3f pending_cells=%zu readbacks=0",
+            unsigned(ok),trace.milliseconds(end.QuadPart-begin.QuadPart),scene_guard.pending);
+        trace.write("scene-guard-prepared",detail,true);return ok;
+    }
+
+    bool compose_scene_surface(GeometryDrawView dynamic) {
+        // Failure cannot certify partially changed attachments for later reuse.
+        struct Transaction {
+            std::uint64_t& signature;bool complete=false;
+            ~Transaction(){if(!complete)signature=0;}
+        } transaction{scene_static_signature};
+        // One scene-linear working set, independent of raster cache cells.
+        // Sparse static backup: color/depth only; finishing targets belong to Glow.
+        auto& glow=region_glow;
+        unsigned w=unsigned(width)+8,h=unsigned(height)+8;
+        std::size_t target_bytes=std::size_t(w)*h*240u+std::size_t(w+scene_guard_pad*2)*(h+scene_guard_pad*2)*192u;
+        if(!city_profile || !c3x_renderer::render_core::scene_surface_extent(width,height) ||
+           target_bytes>(world_preparation?1408u:1152u)*1024u*1024u || reflection.enabled) {
+            trace.write("scene-surface-failed","bounded no-reflection view/target contract",true);return false;
+        }
+        if(glow.native_extent!=w || glow.native_height!=h || !glow.linear.color){
+            scene_scratch.reset();scene_guard.invalidate_all();scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;
+        }
+        if(!glow.ensure(device,fidelity_root,w,h,true) || !scene_scratch.ensure(device,(w+scene_guard_pad*2)*2,(h+scene_guard_pad*2)*2,true,false) ||
+           !scene_restore.ensure(device))return false;
+        auto& linear=glow.linear;
+        ViewportShaderSettings settings=geometry_viewport_settings;
+        settings.translation[0]+=4;settings.translation[1]+=4;
+        settings.inverse_size[0]=1.f/w;settings.inverse_size[1]=1.f/h;
+        D3D11_RECT view={0,0,LONG(w),LONG(h)};
+        LARGE_INTEGER begin={},static_end={},dynamic_end={},finish_end={},ready={},copied={};
+        QueryPerformanceCounter(&begin);
+        bool restored=scene_static_signature==cached_signature.complete;
+        bool translated=!restored && scene_overlap && scene_static_signature && scene_static_depth_origin==scene_depth_origin;
+        std::vector<D3D11_RECT> static_rectangles=translated?scene_damage:std::vector<D3D11_RECT>{view};
+        auto spans=c3x_renderer::render_core::scene_spans<D3D11_RECT>(int(w),int(h),region_origin_x,region_origin_y);
+        auto physical=[&](std::vector<D3D11_RECT> const& logical){
+            std::vector<D3D11_RECT> result;
+            for(auto span:spans)for(auto r:logical){
+                r={std::max(span.rect.left,r.left+span.x),std::max(span.rect.top,r.top+span.y),
+                   std::min(span.rect.right,r.right+span.x),std::min(span.rect.bottom,r.bottom+span.y)};
+                if(r.left<r.right && r.top<r.bottom)result.push_back(r);
+            }return result;
         };
-        if(!restored){
+        unsigned batches=0,selected_static=0,selected_dynamic=0,selection_candidates=0,selection_scans=0;
+        // The working attachment contains the last composed scene. The spare
+        // owns only the static samples underneath its animated damage. Restore
+        // those samples before accepting camera damage or a new pose.
+        context->OMSetRenderTargets(0,nullptr,nullptr);
+        if(!scene_guard_pad && (restored || translated)){
+            if(!scene_dynamic_damage.empty() && !scene_restore.draw(context,linear,scene_scratch.samples,
+                scene_scratch.depth_samples,0,0,{},&scene_dynamic_damage))return false;
+            if(translated){
+                auto dirty=physical(static_rectangles);
+                // Clear only exposed/invalidated physical spans. All unchanged
+                // static samples stay at their original world-relative address.
+                for(auto rect:dirty){std::vector<D3D11_RECT> one={rect};
+                    if(!scene_restore.draw(context,linear,scene_scratch.samples,
+                        scene_scratch.depth_samples,0,0,one,&one))return false;}
+            }
+        }else if(!scene_guard_pad){
+            float clear[4]={};context->ClearRenderTargetView(linear.target,clear);
+            context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,0);
+        }
+        std::vector<D3D11_RECT> dynamic_damage;
+        for(auto layer:{geometry_shadow,geometry_feature})for(auto item:dynamic[layer]){
+            auto rect=item.bounds();int dx=item.translation_x()+int(settings.translation[0]),dy=item.translation_y()+int(settings.translation[1]);
+            rect={std::max<LONG>(0,rect.left+dx-4),std::max<LONG>(0,rect.top+dy-4),
+                  std::min<LONG>(w,rect.right+dx+4),std::min<LONG>(h,rect.bottom+dy+4)};
+            if(rect.left<rect.right && rect.top<rect.bottom)dynamic_damage.push_back(rect);
+        }
+        // Union damage into disjoint scan bands; no duplicate translucent draws
+        // or repeated finishing. These are scissors, never miniature scenes.
+        auto disjoint=[&](std::vector<D3D11_RECT> const& inputs){
+            return c3x_renderer::render_core::scene_damage_union(int(w),int(h),inputs);
+        };
+        dynamic_damage=disjoint(physical(dynamic_damage));
+        auto finish_damage=scene_dynamic_damage;
+        finish_damage.insert(finish_damage.end(),dynamic_damage.begin(),dynamic_damage.end());
+        char output_control[8]={};GetEnvironmentVariableA("C3X_RENDERER_INCREMENTAL_OUTPUT",output_control,sizeof(output_control));
+        bool incremental_output=std::strcmp(output_control,"0")!=0;
+        if(incremental_output && translated){
+            auto support=c3x_renderer::render_core::scene_filter_damage(int(w),int(h),physical(static_rectangles),4);
+            finish_damage.insert(finish_damage.end(),support.begin(),support.end());
+        }
+        // Animated bounds already carry the four-pixel lens margin above.
+        // Expanding them again needlessly increases every stationary update.
+        finish_damage=(restored || (incremental_output && translated))?disjoint(finish_damage):std::vector<D3D11_RECT>{view};
+        // Preserve production layer/occurrence order. Batches change only when
+        // selected receivers would exceed the existing 32 shadow-page slots.
+        auto submit=[&](GeometryDrawView inputs,std::vector<unsigned> const& order,bool dynamic_pass){
+            auto rectangles=dynamic_pass?std::vector<D3D11_RECT>{view}:physical(static_rectangles);
+            return submit_scene_pass(inputs,order,dynamic_pass,linear,glow,settings,w,h,rectangles,
+                batches,selected_static,selected_dynamic,selection_candidates,selection_scans);
+        };
+        if(!scene_guard_pad && !restored){
             std::vector<c3x_renderer::city_fidelity::Lighting const*> lights;
             for(auto const& item:geometry_vertex_buffers[geometry_city])if(item.content().city_lighting){
                 auto pointer=item.content().city_lighting.get();
                 if(std::find(lights.begin(),lights.end(),pointer)==lights.end())lights.push_back(pointer);
             }
             if(!cities.lights(context,lights))return false;
-            std::vector<unsigned> order={geometry_underlay,geometry_land,geometry_natural_terrain,geometry_natural_mountain,geometry_natural_decal};
-            for(unsigned layer=geometry_natural_forest0;layer<geometry_layer_count;++layer)order.push_back(layer);
-            for(auto layer:{geometry_bed,geometry_water,geometry_river,geometry_shadow,geometry_route})order.push_back(layer);
-            for(unsigned i=0;i<cliff_bundle.assets.size();++i)order.push_back(geometry_cliff0+i);
-            for(auto layer:{geometry_feature,geometry_site,geometry_mine,geometry_farm,geometry_city,geometry_wall})order.push_back(layer);
+            auto order=static_scene_order();
             if(!submit(geometry_vertex_buffers,order,false))return false;
             context->OMSetRenderTargets(0,nullptr,nullptr);
 
             scene_static_signature=cached_signature.complete;scene_static_depth_origin=scene_depth_origin;
         }
-        if(!dynamic_damage.empty() && !scene_restore.draw(context,scene_scratch,linear.samples,
+        if(scene_guard_pad){
+            auto visible=c3x_renderer::render_core::scene_physical<D3D11_RECT>(scene_guard.width,scene_guard.height,
+                region_origin_x,region_origin_y,{{scene_guard_pad,scene_guard_pad,LONG(w)+scene_guard_pad,LONG(h)+scene_guard_pad}});
+            auto missing=scene_guard.select(visible);
+            if(!draw_scene_guard(missing))return false;
+            auto restore=scene_dynamic_damage;
+            if(!restored){auto changed=translated?physical(static_rectangles):std::vector<D3D11_RECT>{view};
+                restore.insert(restore.end(),changed.begin(),changed.end());}
+            restore=disjoint(restore);
+            for(auto transfer:c3x_renderer::render_core::scene_guard_transfers<D3D11_RECT>(int(w),int(h),scene_guard_pad,
+                region_origin_x,region_origin_y,restore)){
+                std::vector<D3D11_RECT> one={transfer.rect};
+                if(!scene_restore.draw(context,linear,scene_scratch.samples,scene_scratch.depth_samples,
+                    transfer.x,transfer.y,{},&one,scene_scratch.width,scene_scratch.height))return false;
+            }
+            scene_static_signature=cached_signature.complete;scene_static_depth_origin=scene_depth_origin;
+        }else if(!dynamic_damage.empty() && !scene_restore.draw(context,scene_scratch,linear.samples,
             linear.depth_samples,0,0,{},&dynamic_damage))return false;
         scene_dynamic_damage=std::move(dynamic_damage);
         QueryPerformanceCounter(&static_end);
@@ -4215,8 +4296,8 @@ public:
         for(auto rect:copies)for(int y=rect.top;y<rect.bottom;++y)std::memcpy(output.data()+std::size_t(y)*width+rect.left,
             static_cast<unsigned char*>(mapped.pData)+std::size_t(y)*mapped.RowPitch+rect.left*4,std::size_t(rect.right-rect.left)*4);
         if(!copies.empty())context->Unmap(readback_texture,0);QueryPerformanceCounter(&copied);
-        char detail[768];sprintf_s(detail,"static_reused=%u translated=%u damage_rects=%zu static_selected=%u dynamic_selected=%u batches=%u target_bytes=%zu target_cap=1207959552 resolves=%u readbacks=%u full_surface_copies=0 dynamic_damage_rects=%zu copied_rects=%zu static_submit_ms=%.3f dynamic_submit_ms=%.3f finish_submit_ms=%.3f completion_wait_ms=%.3f cpu_copy_ms=%.3f",
-            unsigned(restored),unsigned(translated),static_rectangles.size(),selected_static,selected_dynamic,batches,target_bytes,unsigned(!finish_damage.empty()),unsigned(!copies.empty()),scene_dynamic_damage.size(),copies.size(),
+        char detail[768];sprintf_s(detail,"static_reused=%u translated=%u damage_rects=%zu static_selected=%u dynamic_selected=%u batches=%u target_bytes=%zu target_cap=%zu resolves=%u readbacks=%u full_surface_copies=0 dynamic_damage_rects=%zu copied_rects=%zu static_submit_ms=%.3f dynamic_submit_ms=%.3f finish_submit_ms=%.3f completion_wait_ms=%.3f cpu_copy_ms=%.3f",
+            unsigned(restored),unsigned(translated),static_rectangles.size(),selected_static,selected_dynamic,batches,target_bytes,std::size_t(world_preparation?1408u:1152u)*1024u*1024u,unsigned(!finish_damage.empty()),unsigned(!copies.empty()),scene_dynamic_damage.size(),copies.size(),
             trace.milliseconds(static_end.QuadPart-begin.QuadPart),trace.milliseconds(dynamic_end.QuadPart-static_end.QuadPart),
             trace.milliseconds(finish_end.QuadPart-dynamic_end.QuadPart),trace.milliseconds(ready.QuadPart-finish_end.QuadPart),trace.milliseconds(copied.QuadPart-ready.QuadPart));
         trace.write("shared-scene-surface",detail,true);memory_sample("shared-scene-complete");
@@ -5334,7 +5415,9 @@ public:
         };
         ID3D11RenderTargetView * destination = target;
         c3x_renderer::render_core::LinearTarget * linear = nullptr;
-        if (pickup_profile) {
+        // Selected scene passes already name their exact MSAA color/depth
+        // destination. Only legacy bitmap submissions acquire an intermediate.
+        if (pickup_profile && !scene_surface_pass) {
             ID3D11Resource * resource = nullptr;
             target->GetResource(&resource);
             ID3D11Texture2D * texture = nullptr;
@@ -5940,7 +6023,8 @@ public:
 
     bool render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output,
                 int prewarm_index = -1, std::atomic<bool> const * foreground_pending = nullptr,
-                std::uint64_t prewarm_signature = 0) {
+                std::uint64_t prewarm_signature = 0,
+                unsigned const* preparation_indices=nullptr,unsigned preparation_count=0) {
         // Source mutation is exclusive; CPU jobs resume once this request has
         // established its world inputs, and may continue while GPU work runs.
         struct PreparationLease {
@@ -5949,12 +6033,14 @@ public:
             ~PreparationLease(){try{preparation.resume();}catch(...){preparation.clear();}}
         } preparation_lease(terrain_preparation);
         bool const prewarming = prewarm_index >= 0;
+        bool const batch_preparing=prewarming && preparation_indices && preparation_count;
         if (prewarming) prepared_footprint = {};
         auto cancelled = [&] { return foreground_pending && foreground_pending->load(std::memory_order_relaxed); };
         if (cancelled()) return false;
         if (prewarming && (static_cast<unsigned>(prewarm_index) >= frame.tile_count ||
             (frame.tiles[prewarm_index].tile_flags & C3X_RENDERER_TILE_PREFETCH) == 0 ||
             !cache_valid || cancelled())) return false;
+        if(prewarming)terrain_preparation.resume();
         LARGE_INTEGER started = {}, finished = {};
         QueryPerformanceCounter(&started);
         frame_geometry_ticks = frame_draw_ticks = frame_readback_ticks = 0;
@@ -6084,7 +6170,11 @@ public:
         if(patch_pixels!=next_patch_pixels){patch_pixels=next_patch_pixels;++content_revision;}
         patch_detail=c3x_renderer::fidelity::PatchDetail(frame.tile_width,patch_pixels);
         char cpu_option[8]={};GetEnvironmentVariableA("C3X_RENDERER_CPU_PREPARATION",cpu_option,sizeof(cpu_option));
-        unsigned requested_workers=!cpu_option[0]?2u:std::strcmp(cpu_option,"4")==0?4u:std::strcmp(cpu_option,"2")==0?2u:std::strcmp(cpu_option,"1")==0?1u:0u;
+        char preparation_option[8]={};GetEnvironmentVariableA("C3X_RENDERER_WORLD_PREPARATION",preparation_option,sizeof(preparation_option));
+        // Accepted full-detail neighborhood path; zero preserves the reproducible control.
+        world_preparation=std::strcmp(preparation_option,"0")!=0 && shared_scene_surface;
+        cpu_preparation_budget=(world_preparation?64u:16u)*1024u*1024u;
+        unsigned requested_workers=!cpu_option[0]?(world_preparation?4u:2u):std::strcmp(cpu_option,"6")==0?6u:std::strcmp(cpu_option,"4")==0?4u:std::strcmp(cpu_option,"2")==0?2u:std::strcmp(cpu_option,"1")==0?1u:0u;
         if(cpu_terrain_workers!=requested_workers){terrain_preparation.clear();cpu_terrain_workers=requested_workers;}
         bool const cpu_terrain_enabled=cpu_terrain_workers && fidelity_profile && retained_world;
         bool const animated_view=frame_has_resource_animation(frame);
@@ -6530,7 +6620,7 @@ public:
                     auto cancelled=[&]{return stop.load(std::memory_order_relaxed) ||
                         (foreground_pending && foreground_pending->load(std::memory_order_relaxed));};
                     return compile_terrain(input,terrain_scratch[worker],cancelled);
-                },cpu_terrain_workers,std::move(needed));
+                },cpu_terrain_workers,std::move(needed),cpu_preparation_budget);
                 terrain_preparation.resume();
             }catch(...){terrain_preparation.clear();}
         }
@@ -6629,14 +6719,16 @@ public:
             (std::strcmp(prefetch_foreground_control,"1")==0 ||
              std::strcmp(prefetch_foreground_control,"2")==0);
         int const prefetch_guard_tiles=std::strcmp(prefetch_foreground_control,"2")==0?2:0;
-        for (c3x_renderer_u32 index = 0; index < frame.tile_count; ++index) {
+        for (c3x_renderer_u32 preparation_slot = 0; preparation_slot < (batch_preparing?preparation_count:frame.tile_count); ++preparation_slot) {
+            c3x_renderer_u32 index=batch_preparing?preparation_indices[preparation_slot]:preparation_slot;
+            if(index>=frame.tile_count)return false;
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
             bool const guarded_prefetch=prefetch_guard_tiles!=0 &&
                 tile.anchor_x+frame.tile_width>=-prefetch_guard_tiles*frame.tile_width &&
                 tile.anchor_x<=frame.target_width+prefetch_guard_tiles*frame.tile_width &&
                 tile.anchor_y+frame.tile_height>=-prefetch_guard_tiles*frame.tile_height &&
                 tile.anchor_y<=frame.target_height+prefetch_guard_tiles*frame.tile_height;
-            if (prewarming ? static_cast<int>(index) != prewarm_index :
+            if (prewarming ? ((tile.tile_flags&C3X_RENDERER_TILE_PREFETCH)==0 || (!batch_preparing && static_cast<int>(index) != prewarm_index)) :
                 (tile.tile_flags & (C3X_RENDERER_TILE_RENDER |
                     (pickup_profile && (!offload_prefetch || guarded_prefetch) ? C3X_RENDERER_TILE_PREFETCH : 0))) == 0) continue;
             if(!prewarming && pickup_profile && (tile.tile_flags&C3X_RENDERER_TILE_RENDER)==0) {
@@ -6713,16 +6805,17 @@ public:
             }
             auto persistent_instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));
             std::array<std::uint64_t,20> compile_context={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(frame.target_width),std::uint64_t(frame.target_height),std::uint64_t(frame.tile_width),std::uint64_t(frame.tile_height),std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(content_revision),std::uint64_t(device_generation),std::uint64_t(pickup_profile?0:frame.hour),std::uint64_t(pickup_profile?0:frame.season),(std::uint64_t(base_ground_grid)<<32)|patch_detail.identity(),std::uint64_t(draw_record_count<=512?0:draw_record_count<=768?1:draw_record_count<=2048?2:3),std::uint64_t(river_context),std::uint64_t(persistent_instance?persistent_instance->revision:0),std::uint64_t(c3x_renderer::render_core::render_core_revision),std::uint64_t(pickup_profile)};
-            if(retained_world && !prewarming && persistent_instance){
+            if(retained_world && (!prewarming || world_preparation) && persistent_instance){
                 auto validation_begin=std::chrono::steady_clock::now();
                 auto ready=resident_content.resolve(persistent_instance->compiled);
                 bool valid=ready && ready->compile_context==compile_context && tile_content_valid(*ready,tile);
                 frame_tile_validation_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-validation_begin).count();
                 if(valid){
-                    ready->last_used=tile_geometry_epoch;
+                    ready->last_used=prewarming?tile_geometry_epoch-1:tile_geometry_epoch;
                     if(auto shared=resident_content.resolve(ready->natural_content))shared->last_used=tile_geometry_epoch;
                     if(ready->replaces_resource)build_replacement[index]|=C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
-                    geometry_cache.tile_keys[index]=ready->binding;
+                    if(prewarming){topology_cache.attach(tile,ready->binding);prepared_footprint=tile_footprint(*ready,tile);}
+                    else geometry_cache.tile_keys[index]=ready->binding;
                     ++frame_tiles_reused;++frame_instances_ready;
                     continue;
                 }
@@ -6877,7 +6970,7 @@ public:
                 for(auto it=candidates.first;it!=candidates.second;++it)
                     if(&it->second!=bound && reuse_tile(it->second)){reused_tile=true;break;}
             }
-            if(reused_tile){if(prewarming)return true;continue;}
+            if(reused_tile){if(prewarming && !batch_preparing)return true;continue;}
             frame_tile_validation_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-validation_started).count();
             ++frame_tiles_built;
             std::vector<ResourceAnchor> tile_resource_anchors;
@@ -8604,7 +8697,7 @@ public:
             }
             // World-space GPU data may outlive any particular camera entry.
             // Pin the owner before ground uploads can evict other entries.
-            bool cache_natural=fidelity_profile && tile.city_id<0 && !prewarming;
+            bool cache_natural=fidelity_profile && tile.city_id<0 && (!prewarming || world_preparation);
             bool share_natural=cache_natural && share_world_meshes;
             auto shared_natural=tile_geometry_cache.find(natural_key);
             bool shared_hit=share_natural && shared_natural!=tile_geometry_cache.end() && shared_natural->second.shared_natural;
@@ -8866,6 +8959,7 @@ public:
                 topology_cache.attach(tile,inserted->second.binding);
                 prefetched_geometry_bytes += inserted->second.byte_count;
                 prepared_footprint = tile_footprint(inserted->second, tile);
+                if(batch_preparing)continue;
                 return true;
             }
             geometry_cache.tile_keys[index]=inserted->second.binding;
@@ -8998,14 +9092,31 @@ public:
         QueryPerformanceCounter(&geometry_finished);
         frame_geometry_ticks = geometry_finished.QuadPart - started.QuadPart;
         if(cpu_terrain_enabled){auto stats=terrain_preparation.statistics();char detail[384];
-            sprintf_s(detail,"workers=%u active_peak=%u built=%llu consumed=%llu cancelled=%llu rejected=%llu evicted=%llu invalidated=%llu ready_bytes=%zu peak_bytes=%zu pending=%zu cpu_ms=%.3f wait_ms=%.3f ready_cap=16777216",
+            sprintf_s(detail,"workers=%u active_peak=%u built=%llu consumed=%llu cancelled=%llu rejected=%llu evicted=%llu invalidated=%llu ready_bytes=%zu peak_bytes=%zu pending=%zu cpu_ms=%.3f wait_ms=%.3f ready_cap=%zu",
                 cpu_terrain_workers,stats.active_peak,stats.built,stats.consumed,stats.cancelled,stats.rejected,stats.evicted,stats.invalidated,
-                stats.bytes,stats.peak_bytes,stats.pending,stats.cpu_ms,stats.wait_ms);
+                stats.bytes,stats.peak_bytes,stats.pending,stats.cpu_ms,stats.wait_ms,cpu_preparation_budget);
             trace.write("cpu-content-preparation",detail,true);
         }
         trace.write("geometry-ready", frame_cache_path);
         if(cancelled())return false;
         memory_sample("geometry-ready");
+        if(shared_scene_surface && world_preparation){
+            int pad=256;unsigned w=unsigned(width)+8,h=unsigned(height)+8;
+            while(pad && std::size_t(w)*h*240u+std::size_t(w+pad*2)*(h+pad*2)*192u>1408u*1024u*1024u)pad-=32;
+            bool compatible=scene_guard_pad==pad && scene_guard_context==region_context &&
+                scene_guard_depth_origin==std::uint64_t(scene_depth_origin) && scene_static_signature==cached_signature.complete;
+            scene_guard_pad=pad;scene_guard_failed=false;
+            if(!scene_guard.configure(int(w)+pad*2,int(h)+pad*2))return false;
+            auto previous=bitmap_footprints,current=current_footprints;
+            for(auto& f:previous){f.anchor_x+=pad+4;f.anchor_y+=pad+4;}
+            for(auto& f:current){f.anchor_x+=pad+4;f.anchor_y+=pad+4;}
+            int dx=0,dy=0;std::vector<c3x_renderer::PixelRect> damage;
+            if(compatible && c3x_renderer::scroll_damage(previous,current,scene_guard.width,scene_guard.height,dx,dy,damage,0)){
+                std::vector<D3D11_RECT> logical;for(auto r:damage)logical.push_back({r.left,r.top,r.right,r.bottom});
+                scene_guard.invalidate(c3x_renderer::render_core::scene_physical(scene_guard.width,scene_guard.height,region_origin_x,region_origin_y,logical));
+            }else scene_guard.invalidate_all();
+            scene_guard_context=region_context;scene_guard_depth_origin=std::uint64_t(scene_depth_origin);
+        }else if(scene_guard_pad){scene_guard_pad=0;scene_guard.reset();scene_guard_context.clear();scene_scratch.reset();scene_static_signature=0;}
         if(shared_scene_surface){
             scene_overlap=false;scene_damage.clear();
             std::vector<c3x_renderer::PixelRect> damage;
@@ -10308,12 +10419,13 @@ private:
             int distance_y = std::max({top-y, y-bottom, 0}) * 2 / warm_frame.tile_height;
             int away = ((direction_x > 0 && x < left) || (direction_x < 0 && x > right) ||
                         (direction_y > 0 && y < top) || (direction_y < 0 && y > bottom)) ? 16 : 0;
-            return std::max(distance_x, distance_y) + away;
+            return renderer_state.world_preparation?std::max(distance_x,distance_y)*32+away:
+                std::max(distance_x,distance_y)+away;
         };
         std::stable_sort(warm_order.begin(), warm_order.end(), [&](unsigned a, unsigned b) {
             return priority(a) < priority(b);
         });
-        unsigned limit=renderer_state.pickup_profile?512u:384u;
+        unsigned limit=renderer_state.world_preparation?8192u:renderer_state.pickup_profile?512u:384u;
         if (warm_order.size() > limit) warm_order.resize(limit);
         if (warm_order.empty()) renderer_state.start_pixel_preparation();
     }
@@ -10418,6 +10530,12 @@ private:
                 lock.unlock();finished_frame.clear();lock.lock();
                 continue;
             }
+            if(!has_job && !stop_requested && !camera_paused && !camera_pending && renderer_state.scene_guard_pending()) {
+                if(wake.wait_for(lock,std::chrono::milliseconds(2),[this]{return has_job || camera_pending || stop_requested;}))continue;
+                lock.unlock();
+                try{renderer_state.prepare_scene_guard(foreground_pending);}catch(...){renderer_state.scene_guard_failed=true;}
+                lock.lock();continue;
+            }
             if(!has_job && !stop_requested && !camera_paused && !camera_pending && ahead_pending()) {
                 // Allow bursty foreground callers to take priority before a new
                 // non-preemptible GPU submission. Demand wakes this wait early.
@@ -10432,13 +10550,15 @@ private:
                     return has_job || camera_pending || stop_requested;
                 })) continue;
                 unsigned index = warm_order[warm_cursor];
+                unsigned batch=renderer_state.world_preparation?unsigned(std::min<std::size_t>(4,warm_order.size()-warm_cursor)):1;
                 lock.unlock();
                 LARGE_INTEGER begin = {}, end = {};
                 QueryPerformanceCounter(&begin);
                 c3x_renderer_output_v1 unused = {};
                 bool ok = false;
                 try {
-                    ok = renderer_state.render(warm_frame, unused, static_cast<int>(index), &foreground_pending, warm_signature);
+                    ok = renderer_state.render(warm_frame, unused, static_cast<int>(index), &foreground_pending, warm_signature,
+                        batch>1?warm_order.data()+warm_cursor:nullptr,batch);
                 } catch (...) {
                     // Optional idle work cannot terminate Civ III on scratch
                     // allocation failure. Published frame state was never changed.
@@ -10463,7 +10583,7 @@ private:
                 if (foreground_pending.load(std::memory_order_relaxed)) {
                     if (!ok) ++cancelled_tiles;
                 } else {
-                    if (ok) ++warm_cursor;
+                    if (ok) warm_cursor+=batch;
                     else {
                         unavailable_tiles = static_cast<unsigned>(warm_order.size()-warm_cursor);
                         warm_cursor = warm_order.size(); // bounded cache pressure is not a game failure

@@ -34,11 +34,12 @@ private:
     std::condition_variable wake,completed;
     std::vector<std::thread> workers;
     unsigned worker_limit=1;
+    std::size_t capacity_limit=byte_limit;
     std::atomic<bool> cancel{false};
     bool paused=true,stopping=false,demanded=false;
     Key demand_key{};
-    std::array<bool,4> active{};
-    std::array<Key,4> active_key{};
+    std::array<bool,6> active{};
+    std::array<Key,6> active_key{};
     Compile compile;
     std::deque<Job> pending;
     std::deque<Ready> ready;
@@ -46,7 +47,7 @@ private:
     void run(unsigned worker) {
         std::unique_lock<std::mutex> lock(mutex);
         for(;;){
-            wake.wait(lock,[&]{return stopping || (!paused && worker<worker_limit && !pending.empty() && ((demanded && pending.front().key==demand_key) || (stats.bytes<byte_limit/2)));});
+            wake.wait(lock,[&]{return stopping || (!paused && worker<worker_limit && !pending.empty() && ((demanded && pending.front().key==demand_key) || (stats.bytes<capacity_limit/2)));});
             if(stopping)return;
             Job job=std::move(pending.front());pending.pop_front();
             active[worker]=true;active_key[worker]=job.key;
@@ -60,16 +61,16 @@ private:
                 if(cancel.load(std::memory_order_relaxed)){
                     ++stats.cancelled;
                     if(!stopping)pending.push_front(std::move(job));
-                }else if(value && value->bytes()<=byte_limit){
+                }else if(value && value->bytes()<=capacity_limit){
                     auto bytes=value->bytes();
-                    while(!ready.empty() && (stats.bytes+bytes>byte_limit || ready.size()>=job_limit)){
+                    while(!ready.empty() && (stats.bytes+bytes>capacity_limit || ready.size()>=job_limit)){
                         // Protect the result being joined by the sole consumer.
                         auto victim=ready.begin();
                         if(demanded && victim->key==demand_key)++victim;
                         if(victim==ready.end())break;
                         stats.bytes-=victim->value->bytes();ready.erase(victim);++stats.evicted;
                     }
-                    if(stats.bytes+bytes<=byte_limit){
+                    if(stats.bytes+bytes<=capacity_limit){
                         ready.push_back({job.key,std::move(value)});
                         stats.bytes+=bytes;stats.peak_bytes=std::max(stats.peak_bytes,stats.bytes);++stats.built;
                     }else ++stats.rejected;
@@ -105,9 +106,10 @@ public:
     }
     // Must be called while paused. Jobs own scalar capture data; shared assets
     // and world inputs remain borrowed under the caller's explicit read lease.
-    void configure(std::deque<Job> jobs,Compile next,unsigned count=1,std::vector<Key> needed={}){
+    void configure(std::deque<Job> jobs,Compile next,unsigned count=1,std::vector<Key> needed={},std::size_t budget=byte_limit){
         std::lock_guard<std::mutex> lock(mutex);
-        if(!paused || std::any_of(active.begin(),active.end(),[](bool value){return value;}) || jobs.size()>job_limit || count<1 || count>4)throw std::logic_error("CPU preparation lease/budget");
+        if(!paused || std::any_of(active.begin(),active.end(),[](bool value){return value;}) || jobs.size()>job_limit || count<1 || count>6 || budget<byte_limit || budget>128u*1024u*1024u)throw std::logic_error("CPU preparation lease/budget");
+        if(capacity_limit!=budget){ready.clear();stats.bytes=stats.peak_bytes=0;capacity_limit=budget;}
         std::sort(needed.begin(),needed.end());
         auto required=[&](Key const& key){return std::binary_search(needed.begin(),needed.end(),key);};
         bool immediate=std::any_of(jobs.begin(),jobs.end(),[&](auto const& job){return required(job.key);});
@@ -115,7 +117,7 @@ public:
             // Old speculative content cannot close the producer gate while a
             // newly selected view needs compilation. Protect ready demand and
             // keep half the refill watermark for useful speculative survivors.
-            while(stats.bytes>byte_limit/4){
+            while(stats.bytes>capacity_limit/4){
                 auto victim=std::find_if(ready.begin(),ready.end(),[&](auto const& item){return !required(item.key);});
                 if(victim==ready.end())break;
                 stats.bytes-=victim->value->bytes();ready.erase(victim);++stats.evicted;
