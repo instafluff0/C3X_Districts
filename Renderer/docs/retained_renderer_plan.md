@@ -116,23 +116,52 @@ was slightly slower than two and used more aggregate compiler time.
 The CPU compiler changes 13 of 2,670,080 pixels by one channel level in the dense
 control comparison. This is a new recorded precision difference, not an approved
 visual change or a detail cut. Worker counts agree with one another; full-detail
-controls, assets and fixed references are preserved.
+controls, assets and fixed references are preserved. Inspect the
+[control image](../native/build/ahead-ownership-dense-control/zoom.bmp.case0.bmp)
+and [candidate image](../native/build/ahead-ownership-dense-candidate/zoom.bmp.case0.bmp);
+the archived difference receipt records the exact count and maximum channel delta.
 
 The full checkpoint before the final scheduler/ownership corrections passed 268
 tests (one existing skip), scrolling, reduced zoom, wrapping, resource
 animation/scroll/removal and day/night unit bodies/lifecycle/terrain parity.
-The old unit witness incorrectly expected identity-driven idle phases; it also
+The final native content fixture passes four topology changes and six city/forest
+appearance changes against independent cold renders; the latter hold topology
+revision fixed. The old unit witness incorrectly expected identity-driven idle phases; it also
 failed against `starting.dll`. It now supplies distinct native cursors and checks
 that identity/time cannot change a fixed cursor. Production unit behavior is
-unchanged. Current corrections pass 48 focused executable tests; final production
-integration verification and evaluation staging are recorded below when completed.
-No installation, game launch, Git mutation or native asynchronous camera integration
-is included in this work.
+unchanged. Final corrections pass 48 focused executable tests and the production
+full checkpoint: **269 tests (one existing skip), plus all six native replay
+groups** for scrolling, reduced zoom, wrapping, resources and day/night units.
+Each unit replay passes 582 lifecycle draws, 288 body draws and exact post-unit
+terrain parity. The production receipt is preserved as
+`ahead-preparation-20260913/production-integration.json` beneath the build directory.
 
-## Current implementation: shared geometry and terrain patches
+### Evaluation delivery
 
-The user selected **full detail** for Civ III evaluation. The verified staged DLL
-uses the original terrain density (`C3X_RENDERER_PATCH_PIXELS=0` by default), with
+The verified production candidate is staged at `Renderer/bin/C3XRenderer.dll`
+under the user's earlier request to finalize changes for Civ III testing. It is
+an **evaluation build**, not visual acceptance or a live-game pass. Candidate,
+archived production DLL and staged DLL have SHA-256
+`0bdf99e7e405a34a1e49cd5899d84ab95e1fce35e2ceb51803fe1873eb262f65`.
+The rollback is `Renderer/native/build/ahead-preparation-20260913/starting.dll`,
+SHA-256 `ae7a7306adbe756af8c4b9cd73375ea242b616570ec95bd423d6b8143e22b70e`.
+`delivery.json`, `production-integration.json`, `ownership-acceptance-summary.json`
+and matched comparison files in that same evidence folder record provenance.
+The user's live scene remains unchanged. No installation, game launch, Git mutation
+by the agent or native asynchronous camera integration is included in this work.
+
+The next larger responsibility is the caller-driven native asynchronous camera
+handoff below: prepare authoritative snapshots and adopt complete results on later
+Civ III calls while keeping displayed pixels, overlays, visibility and picking
+consistent. This targets native blocking and presentation ownership; the measured
+GPU/completion cost remains a throughput limit. Additional worker count or new
+speculation strategies need useful-work and complete-result evidence.
+
+
+## Completed foundation: shared geometry and terrain patches
+
+The user selected **full detail** for Civ III evaluation. The shared-mesh checkpoint
+staged the original terrain density (`C3X_RENDERER_PATCH_PIXELS=0` by default), with
 shared connectivity and tree instancing enabled in the eligible retained profile.
 Reduced-detail measurements remain preserved diagnostics, not the delivery mode.
 There is no temporary low-detail image or automatic refinement in this build.
@@ -187,7 +216,7 @@ shader-cache warmups, transport failures and the one dense run overlapping CPU
 tests remain preserved; final acceptance timings run without builds or tests.
 
 
-### Final shared-mesh comparison and delivery
+### Historical shared-mesh comparison and delivery
 
 The preserved starting source/binary and final `shared-instances-stream-build`
 use the same art, definitions, world data and request sequences. Sixteen enumerated
