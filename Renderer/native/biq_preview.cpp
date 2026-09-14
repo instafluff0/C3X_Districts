@@ -295,6 +295,8 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     char dense_option[8]={};bool dense_scene=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DENSE_SCENE",dense_option,sizeof(dense_option))!=0;
     std::vector<std::array<int,2>> resource_sites;
     std::vector<std::array<int,2>> city_object_sites;
+    char prepared_area_option[8]={};
+    bool prepared_view_fixture=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_PREPARED_VIEW",prepared_area_option,sizeof(prepared_area_option))!=0;
     auto capture_view = [&]() {
     if(timing_enabled)QueryPerformanceCounter(&capture_begin);
     int center_raw_x = center_x * tile_width / 2;
@@ -307,7 +309,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         int render_x = source.x + wrap_copy * map_width;
         int anchor_x = render_x * tile_width / 2 + shift_x;
         int anchor_y = source.y * tile_height / 2 + shift_y;
-        int margin=pickup?tile_width*6:96,vertical=pickup?tile_height*6:128;
+        int margin=pickup?tile_width*(prepared_view_fixture?12:6):96,vertical=pickup?tile_height*(prepared_view_fixture?12:6):128;
         if (anchor_x + tile_width < -margin || anchor_x > target_width + margin ||
             anchor_y + tile_height < -vertical || anchor_y > target_height + vertical)
             continue;
@@ -328,8 +330,8 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             ? C3X_RENDERER_TILE_TOPOLOGY_HALO : C3X_RENDERER_TILE_RENDER;
         if(pickup && (anchor_x+tile_width<0 || anchor_x>target_width || anchor_y+tile_height<0 || anchor_y>target_height))
             tile.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO|C3X_RENDERER_TILE_PREFETCH;
-        if(pickup && (anchor_x+tile_width < -tile_width*4 || anchor_x>target_width+tile_width*4 ||
-            anchor_y+tile_height < -tile_height*4 || anchor_y>target_height+tile_height*4))
+        if(pickup && (anchor_x+tile_width < -tile_width*(prepared_view_fixture?8:4) || anchor_x>target_width+tile_width*(prepared_view_fixture?8:4) ||
+            anchor_y+tile_height < -tile_height*(prepared_view_fixture?8:4) || anchor_y>target_height+tile_height*(prepared_view_fixture?8:4)))
             tile.tile_flags=C3X_RENDERER_TILE_TOPOLOGY_HALO;
         tile.resource_id = tile.resource_class = tile.tile_building_id = tile.barbarian_tribe_id = -1;
         tile.city_id = tile.city_owner_id = tile.city_size = tile.city_culture_group = tile.city_era = -1;
@@ -493,8 +495,8 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     if(native_handoff && (!camera_present_view || !camera_begin_view || !camera_poll_view || !render_view || background_camera)) {
         std::fputs("native handoff witness requires presentation exports and its own queue policy\n",stderr);return 1;
     }
-    bool handoff_front=false;
-    int handoff_x=center_x,handoff_y=center_y,handoff_width=tile_width;
+    auto prepare_nearby_view=reinterpret_cast<c3x_renderer_prepare_nearby_view_fn>(GetProcAddress(module,"c3x_renderer_prepare_nearby_view"));
+    c3x_renderer_i64 handoff_ticket=0;
     c3x_renderer_i64 handoff_clock=0;
     unsigned camera_case=0;
     auto render_checked = [&](c3x_renderer_frame_v1 const* input, c3x_renderer_output_v1* result) {
@@ -502,66 +504,27 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         if(timing_enabled)QueryPerformanceCounter(&caller_enter);
         int code=C3X_RENDERER_RESULT_ERROR;
         if(native_handoff) {
-            // The same caller-owned policy as the injected bridge: recapture the
-            // displayed world, hold only proven complete pixels, and poll on the
-            // next simulated native call. This is a DLL/capture witness, not a
-            // measurement of Civ III's actual draw or input scheduling cadence.
+            // Match the current injected policy: the camera is already native
+            // state. Only fresh current-camera pixels may be acquired.
             LARGE_INTEGER begin={},frequency={},ended={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&begin);
-            auto requested_capture_begin=capture_begin,requested_capture_end=capture_end;
-            bool requested_fresh=fresh_capture;
             c3x_renderer_camera_identity_v1 identity={1,2,3,input->world_topology_revision};
             c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),input,identity};
             c3x_renderer_camera_view_v1 shown={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(shown)};
-            unsigned calls=0,holds=0;double max_call_ms=0; c3x_renderer_i64 ticket=0;
-            auto keep_current=[&]() {
-                int x=center_x,y=center_y;center_x=handoff_x;center_y=handoff_y;
-                auto captured=capture_view();center_x=x;center_y=y;
-                auto display=*input;display.tiles=captured.data();display.tile_count=unsigned(captured.size());
-                c3x_renderer_camera_request_v1 check={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(check),&display,identity};
-                int status=camera_present_view(&check,&shown);
-                if(status==C3X_RENDERER_RESULT_OK && !preview_ownership(display,shown.output))return int(C3X_RENDERER_RESULT_ERROR);
-                return status;
-            };
-            bool projection=handoff_front && handoff_width==input->tile_width;
-            bool same_camera=projection && handoff_x==center_x && handoff_y==center_y;
-            LARGE_INTEGER entered={},returned={};QueryPerformanceCounter(&entered);
-            int held=projection?keep_current():camera_present_view(&request,&shown);
+            if(handoff_ticket){
+                auto status=camera_poll_view(handoff_ticket,&shown);
+                if(status!=C3X_RENDERER_RESULT_PENDING)handoff_ticket=0;
+            }
+            int held=camera_present_view(&request,&shown);
+            if(held==C3X_RENDERER_RESULT_OK){*result=shown.output;code=held;handoff_clock=shown.frame.presentation_time_ticks;}
+            else {code=render_view(&request,result);handoff_clock=input->presentation_time_ticks;handoff_ticket=0;}
+            bool preparing=code==C3X_RENDERER_RESULT_OK && prepare_nearby_view && prepare_nearby_view(&request)==C3X_RENDERER_RESULT_OK;
             auto quantum=(std::max)(c3x_renderer_i64(1),input->presentation_frequency/15);
-            if(held==C3X_RENDERER_RESULT_OK && same_camera &&
-               (shown.output.visible_animation_count==0 || shown.frame.presentation_time_ticks/quantum==input->presentation_time_ticks/quantum)) {
-                *result=shown.output;code=C3X_RENDERER_RESULT_OK;handoff_clock=shown.frame.presentation_time_ticks;
-            } else if(held!=C3X_RENDERER_RESULT_OK || !projection) {
-                code=render_view(&request,result);handoff_clock=input->presentation_time_ticks;
-            } else {
-                code=camera_begin_view(&request,&ticket);++holds;
-            }
-            QueryPerformanceCounter(&returned);++calls;
-            max_call_ms=double(returned.QuadPart-entered.QuadPart)*1000/frequency.QuadPart;
-            auto limit=GetTickCount64()+120000;
-            while(code==C3X_RENDERER_RESULT_PENDING && GetTickCount64()<limit) {
-                Sleep(16);QueryPerformanceCounter(&entered);
-                c3x_renderer_camera_view_v1 ready={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(ready)};
-                code=camera_poll_view(ticket,&ready);
-                if(code==C3X_RENDERER_RESULT_OK) {
-                    auto expected=*input;expected.tiles=ready.frame.tiles;expected.world_topology=nullptr;expected.world_topology_count=0;
-                    if(std::memcmp(&ready.identity,&identity,sizeof(identity)) || std::memcmp(&ready.frame,&expected,sizeof(expected)) ||
-                       std::memcmp(ready.frame.tiles,input->tiles,input->tile_count*sizeof(*input->tiles)))return int(C3X_RENDERER_RESULT_ERROR);
-                    *result=ready.output;handoff_clock=ready.frame.presentation_time_ticks;
-                }else if(code==C3X_RENDERER_RESULT_PENDING) {
-                    if(keep_current()!=C3X_RENDERER_RESULT_OK) {
-                        code=render_view(&request,result);handoff_clock=input->presentation_time_ticks;
-                    }else ++holds;
-                }
-                QueryPerformanceCounter(&returned);++calls;
-                max_call_ms=(std::max)(max_call_ms,double(returned.QuadPart-entered.QuadPart)*1000/frequency.QuadPart);
-            }
+            if(!preparing && !handoff_ticket && result->visible_animation_count && handoff_clock/quantum!=input->presentation_time_ticks/quantum)
+                camera_begin_view(&request,&handoff_ticket);
             QueryPerformanceCounter(&ended);
-            std::printf("NATIVE_HANDOFF case=%u calls=%u holds=%u max_call_ms=%.3f exact_ms=%.3f clock_age_ms=%.3f result=%d\n",
-                camera_case++,calls,holds,max_call_ms,double(ended.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
-                double(input->presentation_time_ticks-handoff_clock)*1000/input->presentation_frequency,code);
-            capture_begin=requested_capture_begin;capture_end=requested_capture_end;fresh_capture=requested_fresh;
-            handoff_front=code==C3X_RENDERER_RESULT_OK;
-            if(handoff_front){handoff_x=center_x;handoff_y=center_y;handoff_width=tile_width;}
+            std::printf("NATIVE_HANDOFF case=%u calls=1 holds=%u exact_ms=%.3f clock_age_ms=%.3f result=%d prepared_policy=%u current_camera=1\n",
+                camera_case++,unsigned(held==C3X_RENDERER_RESULT_OK),double(ended.QuadPart-begin.QuadPart)*1000/frequency.QuadPart,
+                double(input->presentation_time_ticks-handoff_clock)*1000/input->presentation_frequency,code,unsigned(preparing));
         } else if(background_camera) {
             LARGE_INTEGER begin={},accepted={},finished={},frequency={};QueryPerformanceFrequency(&frequency);
             c3x_renderer_i64 ticket=0,obsolete=0;
@@ -771,7 +734,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     char navigation_option[16]={};
     bool navigation_benchmark=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_NAVIGATION",navigation_option,sizeof(navigation_option))!=0;
     char scroll_option[64]={};
-    bool scroll_ablation=!topology_edits && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SCROLL_ABLATION",scroll_option,sizeof(scroll_option))!=0;
+    bool scroll_ablation=!topology_edits && !prepared_view_fixture && GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SCROLL_ABLATION",scroll_option,sizeof(scroll_option))!=0;
     char distant_option[16]={};
     int distant_steps=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DISTANT_STEPS",distant_option,sizeof(distant_option))?std::clamp(std::atoi(distant_option),0,1000):0;
     char idle_option[16]={};
@@ -809,6 +772,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         std::printf("CAMERA memory available_virtual=%llu largest_free_region=%zu total_virtual=%llu\n",
             values.first,values.second,memory.ullTotalVirtual);
     };
+    #include "prepared_view_preview.h"
     #include "retained_replay_preview.h"
     #include "busy_session_preview.h"
     if(ok && ambient_async) {
@@ -1560,7 +1524,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         ok=ok && (idle_steps==1 || changes>0);
         std::printf("IDLE_END status=%s changed_frames=%u\n",ok?"pass":"FAIL",changes);
     }
-    if(ok && animate && !topology_edits && !ambient_async && !zoom_benchmark && !navigation_benchmark && !scroll_ablation && !distant_steps && !idle_steps && !busy_session) {
+    if(ok && animate && !prepared_view_fixture && !topology_edits && !ambient_async && !zoom_benchmark && !navigation_benchmark && !scroll_ablation && !distant_steps && !idle_steps && !busy_session) {
         // Exercise animation after an immutable viewport LRU restore, not only
         // after the unchanged-current-view fast path.
         auto initial=static_cast<unsigned char const*>(output.bgra_pixels);

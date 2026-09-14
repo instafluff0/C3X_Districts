@@ -186,7 +186,8 @@ def main(argv=None):
     parser.add_argument("--tight-natural-bounds", action="store_true", help="Use actual projected natural mesh extrema for culling")
     parser.add_argument("--region-input-ring", type=int, choices=(2,4), default=2, help="Use this many tiles of current captured appearance support")
     parser.add_argument("--world-regions-control", action="store_true", help="Draw identical full regions independently without caching")
-    parser.add_argument("--native-handoff", action="store_true", help="Recapture displayed views and poll full-detail results at a simulated 16 ms native-call cadence")
+    parser.add_argument("--native-handoff", action="store_true", help="Use fresh current-camera capture, nonblocking presentation and exact fallback")
+    parser.add_argument("--prepared-view-fixture", action="store_true", help="Validate nearby prepared camera crops against independent full-detail renders")
     parser.add_argument("--camera-view", action="store_true", help="Exercise the versioned camera queue and exact publication identity")
     parser.add_argument("--three-zoom-memory", action="store_true", help="Opt-in bounded 64 MiB viewport / 832 MiB MSAA backdrop retention experiment")
     parser.add_argument("--water-coverage", action="store_true", help="Omit provably empty water/bed passes and unused reflections")
@@ -220,6 +221,8 @@ def main(argv=None):
         parser.error("--unit-actions realistic requires --scenario ambient or idle and --idle-units")
     if args.scenario in ("replay","session") and (not args.idle_units or not args.dense_scene or args.waves!="1" or args.reflection_ablation or args.camera_view or args.tile_width!=128 or args.unit_actions!="mixed"):
         parser.error("A busy replay/session starts at width 128 and requires units, mixed actions, --dense-scene, waves/reflections on and the synchronous native-compatible render API")
+    if args.prepared_view_fixture and (not args.native_handoff or args.scenario!="scroll"):
+        parser.error("Prepared views require scroll and native handoff")
     if args.native_handoff and (args.camera_view or args.scenario not in ("scroll","idle","zoom") or args.case_repeats):
         parser.error("Native handoff witness requires one-shot scroll, idle or zoom, without the legacy camera queue")
     if args.case_repeats and (args.scenario!="scroll" or args.idle_units or args.camera_view):
@@ -299,6 +302,7 @@ def main(argv=None):
            "C3X_RENDERER_COMPOSITION_CASTERS_CONTROL": "1" if args.composition_casters_control else "0",
            "C3X_RENDERER_ANIMATION_READBACK_ATLAS": "1" if args.animation_readback_atlas else "0",
            "C3X_RENDERER_PREVIEW_RESIDENT_STEPS": str(args.resident_steps),
+           "C3X_RENDERER_PREVIEW_PREPARED_VIEW": "1" if args.prepared_view_fixture else "",
            "C3X_RENDERER_PREVIEW_NATIVE_HANDOFF": "1" if args.native_handoff else "",
            "C3X_RENDERER_CAMERA_PREVIEW": "0", "C3X_RENDERER_PREVIEW_CAMERA_QUEUE": "1" if args.camera_view else "",
            "C3X_RENDERER_PREVIEW_CAMERA_VIEW": "1" if args.camera_view else "",
@@ -459,6 +463,16 @@ exit $childCode
     completion["sources_unchanged"]=all((ROOT/name).is_file() and digest(ROOT/name)==value for name,value in source_before.items())
     completion["binaries_unchanged"] = all(digest(out / name)==value for name,value in receipt["binaries"].items())
     completion["images"] = {p.name: digest(p) for p in sorted(out.glob("*.bmp")) if p.is_file()}
+    if args.prepared_view_fixture:
+        area_log=(out/"benchmark.log").read_text(errors="replace")
+        completion["prepared_view_correctness_pass"]=bool(re.search(
+            r"^PREPARED_VIEW_END status=pass .* samples=9 ",area_log,re.M)) and bool(re.search(
+            r"^PREPARED_PACED_END status=pass samples=48",area_log,re.M))
+        completion["visual_acceptance"]="required" if "visual_review=required" in area_log else "unchanged"
+        completion["prepared_view_samples"]=[dict(re.findall(r"(\w+)=([^ ]+)",line)) for line in area_log.splitlines()
+            if line.startswith(("PREPARED_VIEW sample=","PREPARED_PACED sample=","PREPARED_VIEW opportunity="))]
+        if not completion["prepared_view_correctness_pass"]:
+            completion["returncode"]=1;result["returncode"]=1
     if args.ambient_boundary:
         ambient_log=((out/"benchmark.log").read_text(errors="replace") if (out/"benchmark.log").is_file() else "")
         completion["ambient_boundary_correctness_pass"]=bool(re.search(

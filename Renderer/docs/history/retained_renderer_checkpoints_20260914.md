@@ -1187,3 +1187,95 @@ reflection instancing remains outside the measured profile.
 Future performance work should address the measured geometry construction and GPU
 completion costs; this change does not reopen output-helper experiments or expand
 native ownership, wonders, or Districts scope.
+
+
+## Demand-priority checkpoint (9c5e9033)
+
+The September 14 user trace contains 3,612 unit draws, 767 map completions and
+518 intermediate visual refreshes. Faster cadence is active; this is not an FPS
+measurement or an input-to-display comparison. Detailed debugger logging perturbs
+latency, and phase percentiles describe the captured session rather than a matched
+control. Only 26 complete DLL usage pairs were captured; do not generalize their
+camera/idle distributions to an acceptance benchmark.
+
+| Logged work | Observation |
+| --- | --- |
+| Unit draws | 97.3% pose hits; median 0.750 ms, p95 1.379 ms across all draws. The 97 misses have median 64.482 ms, p95 160.616 ms. Hits can still include a preparation wait. |
+| Cold demanded poses | Median CPU pose phase 38.811 ms. Cache efficiency does not remove first-use preparation or its queue wait. |
+| Prepared map publication | 572 consumptions; median wait 0.372 ms, p95 0.626 ms. |
+| Map completions | Median 9.443 ms, p95 18.637 ms; initial 5.698 s load and a later 5.020 s rebuild dominate the maximum. |
+| Speculative unit jobs | 125 jobs produced pixels; 633 produced none. Near one 203.829 ms Worker request, two jobs took 55.443 and 81.623 ms before demand ran. |
+
+Two ownership defects are corrected in the current candidate:
+
+1. A waiting unit draw or drain reserves the next GPU turn under the queue mutex.
+   Cancellation alone previously allowed the worker to admit another optional job
+   before the caller reacquired the mutex. Existing `camera_paused` is the worker's
+   admission gate; this does not pause or modify the native camera. Cached CPU
+   publications remain usable independently.
+2. Recursive cliff cancellation has a distinct exception type. Camera cancellation
+   now retires its partial draw assembly and preserves resident content, matching
+   the ordinary cancelled return. Real exceptions still reset and now log their
+   message. The live five-second rebuild followed a runtime exception and device
+   reload at an unchanged view/world; the old cancellation path demonstrably causes
+   such resets, but that trace lacks the exception message to prove this was its cause.
+
+No assets, animation timing, detail, raster policy, worker counts or memory budgets
+change. Submitted GPU work remains non-preemptible; demand can still wait for the
+current speculative job. Both regressions fail with the previous behavior and pass
+with the fixes, including reset/drain and real-error fallback. Native sources and
+patch addresses are unchanged.
+
+Validation: production Windows build, 22 targeted contracts, the actual worker
+contract under MSVC/x86, and day/night native-unit/underlay/terrain replays pass.
+Both controls pass four topology and six appearance edits against independent
+redraws. All 146 busy/idle comparison images and 12 diagnostic images are exact;
+both 14-step dense-scroll runs pass exact revisits. No native source changed,
+so a new injected compile is unnecessary. No game install/launch or reference change.
+
+| Whole-request workload | Control mean / p95 | Candidate mean / p95 |
+| --- | --- | --- |
+| Busy eight-unit mixed actions, 80 requests each across reversed run order | 240.02 / 293.41 ms | 135.77 / 174.74 ms |
+| Warm realistic idle, 60 requests each, 67 ms caller pacing | 4.02 / 6.20 ms | 3.78 / 5.20 ms |
+| Dense scroll, 14 offsets each | 241.58 / 598.29 ms | 248.44 / 591.69 ms |
+
+The busy comparison improves mean whole-request time by 43.4%; warm idle and dense
+scrolling show no substantial demonstrated gain. Two visible terrain edits average
+651.27 → 628.89 ms, too few samples for a speed claim. These are 1119×1192 harness
+requests with the existing 15 Hz animation clock, not native displayed FPS.
+Whole idle requests include map, output copy and all eight bodies; warmup and saved
+BMP writes are outside the interval. Cold initialization remains separate.
+
+A bounded diagnostic (10 warmup plus 10 measured frames, 160 body draws each)
+resolves the phase shift: speculative finished poses fall 133 → 26 while demanded
+misses rise 36 → 135. Total finished builds fall only 169 → 161. CPU helper
+consumptions at the last logged snapshots rise 31 → 121. The measured gain is mainly
+better scheduling and useful concurrent preparation, not 43% less rendering work.
+In the timing runs, mean map-phase cost falls 212.69 → 55.27 ms while unit cost rises
+27.20 → 80.36 ms; judging either phase alone would misrepresent the result.
+Diagnostic timings are excluded from the performance comparison.
+
+The tested candidate is staged for ordinary `INSTALL.bat`; DLL SHA-256
+`dd83f651e84101831d02a058878588ce1b1f7a5161bceed1f7c9281e2cb3f165`.
+Local evidence, invocation manifests, immutable control/candidate binaries and
+receipts: `Renderer/native/build/demand-priority/`.
+
+## Prepared-area rejected mechanisms
+
+The separate small foreground / larger background targets regressed paced nearby
+requests to 464.82 ms versus 51.28 ms. Expired ambient snapshots caused cancellation
+and repeated target/backdrop reconstruction. A shared working extent lowered mean
+to 23.36 ms; holding its world placement during small camera changes lowered it
+further. A self-imposed 250 ms ambient-age rejection still introduced occasional
+235 ms synchronous stalls despite valid static content. Static content validity
+and ambient freshness now remain separate, with the actual sample clock returned.
+
+The first caller-side crop implementation regressed warm idle 3.76 → 8.41 ms.
+Worker-produced centered publications and an exact fresh-capture lease reduce this
+to 4.54 ms; this is still no idle speedup. Enlarged raster output differs from the
+old viewport output at full detail. Natural-only and shadow-disabled diagnostics
+retain differences; do not repeat that attribution campaign without a new mechanism.
+Original viewport depth units are preserved when enlarging the working height.
+The remaining raster difference requires visual review and is not accepted by
+inference from earlier comparisons. Prototype binaries and logs are preserved
+under `native/build/prepared-scroll/`; the committed source control is `9c5e9033`.

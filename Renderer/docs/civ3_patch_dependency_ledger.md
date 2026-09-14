@@ -24,6 +24,15 @@ edit other CSV entries or `ref/Civ3Conquests.h`.
 
 ## Current action
 
+Prepared nearby-view delivery adds optional DLL export
+`c3x_renderer_prepare_nearby_view(camera_request const*) -> int`. Existing m71/m19
+capture/composition calls it after a successful current-camera composite. The DLL
+copies the snapshot; later native calls acquire a validated crop through the
+existing `camera_present_view` export. No callback, camera swap, CSV entry or new
+native address is needed; `required_user_action: []`. Missing capability retains
+the existing exact fallback and ambient queue. Validation/staging status is in the
+[retained plan](retained_renderer_plan.md).
+
 The visual-cadence candidate uses the existing `on_timer_0x9F6500` inlead,
 `Animator_update` definition and m71/m19 capture/composition. Civ III's native
 Timer posts coalesced `WM_USER+1` messages to its game thread; renderer completion

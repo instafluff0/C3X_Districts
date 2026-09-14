@@ -41,6 +41,7 @@
 #include "render_core/terrain_query.h"
 #include "render_core/world_coast.h"
 #include "render_core/captured_scene.h"
+#include "prepared_view_area.h"
 #include "render_core/geometry_draws.h"
 #include "render_core/resource_instances.h"
 #include "render_core/scene_depth.h"
@@ -492,6 +493,9 @@ std::size_t json_member_position(std::vector<std::uint8_t> const& data,
 
 class RendererState {
 public:
+    // Geometry/depth units belong to the native viewport, independently of
+    // the larger working surface used for optional nearby preparation.
+    int content_view_width=0,content_view_height=0;
     std::size_t viewport_cache_budget=default_viewport_cache_budget;
     std::size_t resource_backdrop_cache_budget=default_resource_backdrop_cache_budget;
     c3x_renderer::UnitBodyRenderer unit_bodies;
@@ -3504,7 +3508,7 @@ public:
                 float placement[]={cosine,sine,animation.scale,c3x_renderer::lighting::object_height_to_world,
                     animation.offset[0],animation.offset[1],animation.offset[2],anchor.ground,
                     center_x,center_y,anchor.world_u+anchor.u,anchor.world_v+1-anchor.v,
-                    half_w,half_h,projection,float(frame.target_height)};
+                    half_w,half_h,projection,float(content_view_height)};
                 std::copy(std::begin(placement),std::end(placement),values);
                 c3x_renderer::render_core::pack_resource_pose(pose,animation.mesh.bones,values);
                 context->Unmap(pool.vertices,0);uploaded+=bytes;
@@ -3536,7 +3540,7 @@ public:
                 float feature_height=lz*150.f/.82f;
                 float sx=center_x+(lx-ly)*half_w,sy=center_y+(lx+ly)*half_h-lz*150.f*projection;
                 float depth=center_y+anchor.ground*relief+(lx+ly)*half_h+
-                    anchor.ground*relief*.75f+feature_height*.0012f*frame.target_height;
+                    anchor.ground*relief*.75f+feature_height*.0012f*content_view_height;
                 auto & v=vertices[i];
                 auto normal=c3x_renderer::lighting::object_normal(
                     source.normal[0]*cosine-source.normal[1]*sine,
@@ -4777,11 +4781,11 @@ public:
             c3x_renderer_frame_v1 const& frame,int ground,bool skip_shore,bool separate,bool indexed,bool heights) const {
         c3x_renderer::fidelity::TerrainCompileInput input;
         input.tile_x=tile.tile_x;input.tile_y=tile.tile_y;input.real_terrain_type=tile.real_terrain_type;input.ground=ground;
-        input.tile_width=frame.tile_width;input.tile_height=frame.tile_height;input.target_height=frame.target_height;
+        input.tile_width=frame.tile_width;input.tile_height=frame.tile_height;input.target_height=content_view_height;
         input.world_revision=frame.world_topology_revision;input.detail=patch_detail;
         input.river_ready=river_assets_ready;input.skip_flat_shore=skip_shore;input.separate_relief=separate;input.indexed=indexed;input.retain_height=heights;
         input.key={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(tile.real_terrain_type)*32+unsigned(ground),
-            std::uint64_t(frame.tile_width),std::uint64_t(frame.tile_height),std::uint64_t(frame.target_height),std::uint64_t(content_revision),
+            std::uint64_t(frame.tile_width),std::uint64_t(frame.tile_height),std::uint64_t(content_view_height),std::uint64_t(content_revision),
             std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
             std::uint64_t(frame.world_wrap_x)*2+unsigned(frame.world_wrap_y),std::uint64_t(patch_detail.identity()),
             std::uint64_t(skip_shore)*16+unsigned(separate)*8+unsigned(indexed)*4+unsigned(heights)*2+unsigned(river_assets_ready)};
@@ -4796,6 +4800,18 @@ public:
             c3x_renderer::fidelity::TerrainCompileInput const& input,
             c3x_renderer::fidelity::TerrainCompileScratch& scratch,std::function<bool()> cancelled,bool bounded=true) {
         return c3x_renderer::fidelity::compile_terrain_surfaces(natural,terrain_textures,world_coast,input,scratch,cancelled,bounded);
+    }
+
+    std::vector<std::uint64_t> prepared_view_dependencies() const {
+        std::vector<std::uint64_t> result;
+        for(auto const& item:tile_geometry_cache){auto const& tile=item.second;
+            if(tile.last_used!=tile_geometry_epoch)continue;
+            if(!tile.shared_natural)result.push_back(topology_cache.key(tile.tile_x,tile.tile_y));
+            for(auto const& d:tile.dependencies)result.push_back(d.first);
+            for(auto const& d:tile.appearance_dependencies)result.push_back(d.first);
+            for(auto const& d:tile.anchor_dependencies)result.push_back(d.first);
+        }
+        return result;
     }
 
     bool tile_content_valid(CachedTileGeometry& cached,c3x_renderer_tile_v1 const& tile) {
@@ -6033,7 +6049,13 @@ public:
     bool render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output,
                 int prewarm_index = -1, std::atomic<bool> const * foreground_pending = nullptr,
                 std::uint64_t prewarm_signature = 0,
-                unsigned const* preparation_indices=nullptr,unsigned preparation_count=0) {
+                unsigned const* preparation_indices=nullptr,unsigned preparation_count=0,
+                c3x_renderer_frame_v1 const* content_view=nullptr) {
+        auto const& content_source=content_view?*content_view:frame;
+        if(content_view_width!=content_source.target_width || content_view_height!=content_source.target_height){
+            cache_valid=false;geometry_cache.clear();clear_resource_backdrops();
+        }
+        content_view_width=content_source.target_width;content_view_height=content_source.target_height;
         // Source mutation is exclusive; CPU jobs resume once this request has
         // established its world inputs, and may continue while GPU work runs.
         struct PreparationLease {
@@ -6365,9 +6387,9 @@ public:
         auto & build_replacement = prewarming ? prewarm_replacement : replacement_tile_flags;
         auto & build_fallback = prewarming ? prewarm_fallback : fallback_tile_indices;
         c3x_renderer_u32 draw_record_count = 0;
-        for (c3x_renderer_u32 i = 0; i < frame.tile_count; ++i)
-            if ((frame.tiles[i].tile_flags & C3X_RENDERER_TILE_TOPOLOGY_HALO) == 0 ||
-                (frame.tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER) != 0) ++draw_record_count;
+        for (c3x_renderer_u32 i = 0; i < content_source.tile_count; ++i)
+            if ((content_source.tiles[i].tile_flags & C3X_RENDERER_TILE_TOPOLOGY_HALO) == 0 ||
+                (content_source.tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER) != 0) ++draw_record_count;
         int const base_ground_grid = frame.tile_width >= 96 ?
             (draw_record_count <= 768 ? 16 : 12) : 8;
         c3x_renderer_i64 ground_ticks=0,feature_ticks=0,cliff_ticks=0,upload_ticks=0;
@@ -6458,7 +6480,7 @@ public:
         }
         frame_settings.hour = static_cast<float>(frame.hour);
         reflection.height_pixels=112.f*.82f*float(frame.tile_width)/224.f;
-        reflection.depth_metric=112.f*.0016f*float(frame.target_height);
+        reflection.depth_metric=112.f*.0016f*float(content_view_height);
         region_reflection.height_pixels=reflection.height_pixels;region_reflection.depth_metric=reflection.depth_metric;
         region_reflection.enabled=reflection.enabled;region_glow.gain=city_glow.gain;
         ViewportShaderSettings viewport_settings = {};
@@ -6498,7 +6520,7 @@ public:
         }
         viewport_settings.inverse_size[0] = 1.0f / c3x_renderer::power_of_two_extent(frame.target_width);
         viewport_settings.inverse_size[1] = 1.0f / c3x_renderer::power_of_two_extent(frame.target_height);
-        viewport_settings.reserved[0] = static_cast<float>(frame.target_height);
+        viewport_settings.reserved[0] = static_cast<float>(content_view_height);
         if (!prewarming) geometry_viewport_settings = viewport_settings;
         if(!prewarming && (world_regions || shared_scene_surface)){
             region_origin_x=frame.tile_count?std::int64_t(frame.tiles[0].anchor_x)-std::int64_t(frame.tiles[0].tile_x)*frame.tile_width/2:0;
@@ -6813,7 +6835,7 @@ public:
                 }
             }
             auto persistent_instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));
-            std::array<std::uint64_t,20> compile_context={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(frame.target_width),std::uint64_t(frame.target_height),std::uint64_t(frame.tile_width),std::uint64_t(frame.tile_height),std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(content_revision),std::uint64_t(device_generation),std::uint64_t(pickup_profile?0:frame.hour),std::uint64_t(pickup_profile?0:frame.season),(std::uint64_t(base_ground_grid)<<32)|patch_detail.identity(),std::uint64_t(draw_record_count<=512?0:draw_record_count<=768?1:draw_record_count<=2048?2:3),std::uint64_t(river_context),std::uint64_t(persistent_instance?persistent_instance->revision:0),std::uint64_t(c3x_renderer::render_core::render_core_revision),std::uint64_t(pickup_profile)};
+            std::array<std::uint64_t,20> compile_context={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(content_view_width),std::uint64_t(content_view_height),std::uint64_t(frame.tile_width),std::uint64_t(frame.tile_height),std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(content_revision),std::uint64_t(device_generation),std::uint64_t(pickup_profile?0:frame.hour),std::uint64_t(pickup_profile?0:frame.season),(std::uint64_t(base_ground_grid)<<32)|patch_detail.identity(),std::uint64_t(draw_record_count<=512?0:draw_record_count<=768?1:draw_record_count<=2048?2:3),std::uint64_t(river_context),std::uint64_t(persistent_instance?persistent_instance->revision:0),std::uint64_t(c3x_renderer::render_core::render_core_revision),std::uint64_t(pickup_profile)};
             if(retained_world && (!prewarming || world_preparation) && persistent_instance){
                 auto validation_begin=std::chrono::steady_clock::now();
                 auto ready=resident_content.resolve(persistent_instance->compiled);
@@ -6929,7 +6951,7 @@ public:
             };
             mix_tile(tile.tile_x); mix_tile(tile.tile_y);
             mix_tile(tile_content_signature(tile));
-            mix_tile(frame.target_width); mix_tile(frame.target_height);
+            mix_tile(content_view_width); mix_tile(content_view_height);
             mix_tile(frame.tile_width); mix_tile(frame.tile_height);
             mix_tile(frame.world_wrap_x ? frame.world_width_tiles : 0);
             mix_tile(frame.world_wrap_y ? frame.world_height_tiles : 0);
@@ -7975,7 +7997,7 @@ public:
                         feature_projection_scale / relief_projection_scale;
                     float depth =
                         base_ground_y + ground_height_pixels * 0.75f +
-                        feature_height_tiles * 0.0012f * static_cast<float>(frame.target_height);
+                        feature_height_tiles * 0.0012f * static_cast<float>(content_view_height);
                     transformed[vertex_index] = Vertex{
                         ndc_x(screen_x), ndc_y(screen_y), depth,
                         source.uv[0], source.uv[1], 1.0f,
@@ -8282,7 +8304,7 @@ public:
                                 feature_projection_scale / relief_projection_scale;
                             float depth =
                                 base_ground_y + ground_height_pixels * 0.75f +
-                        feature_height_tiles * 0.0012f * static_cast<float>(frame.target_height);
+                        feature_height_tiles * 0.0012f * static_cast<float>(content_view_height);
                             transformed[vertex_index] = Vertex{
                                 ndc_x(screen_x), ndc_y(screen_y), depth,
                                 source.uv[0], source.uv[1], 1.0f,
@@ -8417,7 +8439,7 @@ public:
                             feature_projection_scale / relief_projection_scale;
                         float depth =
                             base_ground_y + ground_height_pixels * 0.75f +
-                        feature_height_tiles * 0.0012f * static_cast<float>(frame.target_height);
+                        feature_height_tiles * 0.0012f * static_cast<float>(content_view_height);
                         transformed[vertex_index] = Vertex{
                             ndc_x(screen_x), ndc_y(screen_y), depth,
                             source.uv[0], source.uv[1], 1.0f,
@@ -8665,7 +8687,7 @@ public:
                     },
                     cancelled);
                 c3x_renderer::fidelity::GroundProjection cliff_projection{
-                    int(cu),int(cr),half_w,half_h,relief_projection_scale,float(frame.target_height)};
+                    int(cu),int(cr),half_w,half_h,relief_projection_scale,float(content_view_height)};
                 for(auto const& instance:placements) {
                     auto const& asset=cliff_bundle.assets[instance.asset];
                     c3x_renderer::render_core::CliffTransform transform(instance,cliff_vertical_basis);
@@ -8771,11 +8793,11 @@ public:
                 pending_natural.world_dependencies.assign(world_dependencies.begin(),world_dependencies.end());
                 pending_natural.used=tile_geometry_epoch;pending_natural.tile_width=frame.tile_width;
                 pending_natural.tile_height=frame.tile_height;
-                pending_natural.target_height=frame.target_height;
+                pending_natural.target_height=content_view_height;
                 pending_natural.tile_x=tile.tile_x;pending_natural.tile_y=tile.tile_y;
             }
             c3x_renderer::fidelity::GroundProjection natural_projection{(tile.tile_x+tile.tile_y)/2,
-                (tile.tile_x-tile.tile_y)/2,half_w,half_h,relief_projection_scale,float(frame.target_height)};
+                (tile.tile_x-tile.tile_y)/2,half_w,half_h,relief_projection_scale,float(content_view_height)};
             QueryPerformanceCounter(&phase_end);cliff_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
             if (cancelled()) return false;
             CachedTileGeometry compiled;
@@ -8858,7 +8880,7 @@ public:
                 auto const* cached_mesh=natural_layer && natural_hit?&natural_found->second.layers[layer-geometry_natural_terrain]:nullptr;
                 auto* record_mesh=natural_layer && cache_natural && !natural_hit && !retain_ground_grids?&pending_natural.layers[layer-geometry_natural_terrain]:nullptr;
                 bool reproject=natural_hit && (natural_found->second.tile_width!=frame.tile_width ||
-                    natural_found->second.tile_height!=frame.tile_height || natural_found->second.target_height!=frame.target_height);
+                    natural_found->second.tile_height!=frame.tile_height || natural_found->second.target_height!=content_view_height);
                 if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer], prewarming, compiled.byte_count, foreground_pending, layer>=geometry_feature && layer<geometry_natural_terrain, natural_layer,
                         record_mesh,cached_mesh,reproject?&natural_projection:nullptr,
                         layer<=geometry_river?&ground_indices[layer]:
@@ -9915,6 +9937,38 @@ public:
         std::unique_lock<std::mutex> lock(state_mutex);
         native_presentation=true;isolated_publication=true;camera_preview_enabled=false;
         auto current=*request.frame;
+        nearby_presented=false;
+        bool acquired=false;
+        if(nearby_available && nearby.map.output.bgra_pixels) {
+            auto exact_capture=[&](PublishedMapFrame const& candidate){
+                auto normalized=current;normalized.dirty_flags=candidate.frame.dirty_flags;
+                return candidate.output.bgra_pixels && current.presentation_time_ticks>=candidate.frame.presentation_time_ticks &&
+                    candidate.matches_static_view(normalized) &&
+                    !std::memcmp(&candidate.identity,&request.identity,sizeof(request.identity)) &&
+                    current.world_topology_count==nearby.topology.size() && current.world_topology &&
+                    !std::memcmp(current.world_topology,nearby.topology.data(),nearby.topology.size()*4);
+            };
+            if(publication.frame.presentation_time_ticks==nearby.input.presentation_time_ticks && exact_capture(publication))acquired=true;
+            else if(nearby.center.frame.presentation_time_ticks==nearby.input.presentation_time_ticks && exact_capture(nearby.center)){
+                publication.swap(nearby.center);acquired=true;
+            } else acquired=nearby.project(current,request.identity,publication);
+        }
+        if(acquired) {
+            completed_output=publication.output;completed_identity=request.identity;
+            completed_result=C3X_RENDERER_RESULT_OK;
+            completed_resources=nearby.map.output.visible_animation_count>nearby.input.visible_animation_count?
+                nearby.map.output.visible_animation_count-nearby.input.visible_animation_count:0;
+            completed_phase_x=publication.phase_x;completed_phase_y=publication.phase_y;
+            publication.scene_signature=c3x_renderer::terrain_frame_signature(current,
+                publication.output.content_revision,publication.output.device_generation).complete;
+            completed_resource_clock=RendererState::resource_clock(publication.frame);
+            completed_scene_signature=publication.scene_signature;
+            nearby_presented=true;
+            view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+            view.identity=publication.identity;view.frame=publication.frame;
+            return_current_bitmap(current,view.output,"prepared-current-camera");
+            return C3X_RENDERER_RESULT_OK;
+        }
         // Dirty flags are scheduling hints. Complete fresh occurrences and the
         // native world/visibility revisions below establish content validity.
         current.dirty_flags=publication.frame.dirty_flags;
@@ -9930,6 +9984,44 @@ public:
         view.frame=publication.frame;
         return_current_bitmap(*request.frame,view.output,"native-displayed-view");
         return C3X_RENDERER_RESULT_OK;
+    }
+
+    // The caller supplies a fresh authoritative snapshot after composition.
+    // One cancellable job fills the same renderer's bounded larger working view.
+    int prepare_nearby_view(c3x_renderer_camera_request_v1 const& request) {
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::unique_lock<std::mutex> lock(state_mutex);
+        auto const& frame=*request.frame;
+        char option[8]={};GetEnvironmentVariableA("C3X_RENDERER_PREPARED_VIEW",option,sizeof(option));
+        if(!native_presentation || !nearby_available || std::strcmp(option,"0")==0 ||
+           !frame.world_topology || !frame.world_topology_count || frame.world_topology_count>1024u*1024u || frame.tile_count>8192 || !frame.tile_count || !frame.tiles ||
+           frame.target_width>2240 || frame.target_height>1192 ||
+           (frame.target_width>2224 && frame.target_height>1176))return C3X_RENDERER_RESULT_ERROR;
+        if(ahead_active || area_pending)return C3X_RENDERER_RESULT_OK;
+        if(nearby_presented && nearby.centered(frame) &&
+           (nearby.map.output.visible_animation_count<=nearby.input.visible_animation_count || RendererState::resource_clock(frame)==RendererState::resource_clock(nearby.input)))
+            return C3X_RENDERER_RESULT_OK;
+        clear_ahead();
+        if(nearby_presented && nearby.centered(frame)) {
+            // Fresh proof has validated this complete contributor set. Animate
+            // in its existing world placement; small camera moves only select
+            // a crop and must not reconstruct the surrounding static surface.
+            ahead_tiles=nearby.source_tiles;ahead_topology=nearby.topology;
+            ahead_frame=nearby.input;
+            ahead_frame.target_width=nearby.viewport_width;ahead_frame.target_height=nearby.viewport_height;
+            ahead_frame.clip_left=frame.clip_left;ahead_frame.clip_top=frame.clip_top;
+            ahead_frame.clip_right=frame.clip_right;ahead_frame.clip_bottom=frame.clip_bottom;
+            ahead_frame.presentation_time_ticks=frame.presentation_time_ticks;
+            ahead_frame.visible_animation_count=frame.visible_animation_count;
+        } else {
+            ahead_tiles.assign(frame.tiles,frame.tiles+frame.tile_count);
+            ahead_topology.assign(frame.world_topology,frame.world_topology+frame.world_topology_count);
+            ahead_frame=frame;
+        }
+        ahead_identity=request.identity;
+        ahead_frame.tiles=ahead_tiles.data();ahead_frame.world_topology=ahead_topology.data();
+        area_pending=true;ahead_cancelled.store(false,std::memory_order_relaxed);
+        wake.notify_one();return C3X_RENDERER_RESULT_OK;
     }
 
 private:
@@ -10202,6 +10294,8 @@ private:
     bool camera_preview_enabled=false;
     bool ambient_async_enabled=false;
     bool native_presentation=false;
+    c3x_renderer::PreparedViewArea<PublishedMapFrame> nearby;
+    bool nearby_available=false,nearby_presented=false,area_pending=false;
     bool unit_pixels_enabled=false,unit_pixels_active=false,unit_pixels_turn=true;
     c3x_renderer::render_core::UnitFramePreparation unit_pixels_queue;
     std::uint64_t unit_pixels_built=0,unit_pixels_hits=0,unit_pixels_batches=0;
@@ -10288,10 +10382,10 @@ private:
     void snapshot_memory(char const* phase) {
         if(!renderer_state.profiling)return;
         char detail[384];std::snprintf(detail,sizeof(detail),
-            "phase=%s active_tiles=%zu pending_tiles=%zu warm_tiles=%zu active_topology=%zu pending_topology=%zu warm_topology=%zu front=%zu ready=%zu active=%u pending=%u paused=%u",
+            "phase=%s active_tiles=%zu pending_tiles=%zu warm_tiles=%zu active_topology=%zu pending_topology=%zu warm_topology=%zu front=%zu ready=%zu nearby=%zu area_building=%u active=%u pending=%u paused=%u",
             phase,job_tiles.capacity()*sizeof(c3x_renderer_tile_v1),camera_pending_tiles.capacity()*sizeof(c3x_renderer_tile_v1),
             warm_tiles.capacity()*sizeof(c3x_renderer_tile_v1),job_world_topology.capacity()*4,
-            camera_pending_topology.capacity()*4,warm_world_topology.capacity()*4,publication.bytes(),camera_ready.bytes(),
+            camera_pending_topology.capacity()*4,warm_world_topology.capacity()*4,publication.bytes(),camera_ready.bytes(),nearby.bytes(),unsigned(ahead_active),
             unsigned(camera_active),unsigned(camera_pending),unsigned(camera_paused));
         renderer_state.trace.write("memory-worker",detail,true);
     }
@@ -10371,6 +10465,7 @@ private:
     }
 
     void clear_ahead() {
+        area_pending=false;
         for(auto& ready:ahead_ready)if(ready.output.bgra_pixels){++ahead_discarded;ready.clear();}
         std::vector<c3x_renderer_tile_v1>().swap(ahead_tiles);
         std::vector<c3x_renderer_u32>().swap(ahead_topology);
@@ -10422,6 +10517,7 @@ private:
 
     void start_ahead() {
         clear_ahead();
+        if(native_presentation && nearby_available)return;
         if(!ahead_enabled || !job_stable_view || ambient_async_enabled || !renderer_state.can_prepare_ambient() ||
            completed_result!=C3X_RENDERER_RESULT_OK || !publication.output.bgra_pixels ||
            completed_output.bgra_pixels!=publication.output.bgra_pixels ||
@@ -10444,6 +10540,7 @@ private:
     }
 
     bool ahead_pending() const {
+        if(area_pending)return !ahead_cancelled.load(std::memory_order_relaxed);
         if(ahead_requested<0 || ahead_next<0 || ahead_next>ahead_requested+2 ||
            ahead_cancelled.load(std::memory_order_relaxed))return false;
         auto payload=(std::uint64_t(ahead_frame.target_width)*ahead_frame.target_height+std::uint64_t(ahead_frame.tile_count)*2)*4+
@@ -10457,6 +10554,32 @@ private:
     // Only publication adoption runs on the caller. No native pointer, callback,
     // sleep-driven animation clock or second D3D context crosses this boundary.
     void prepare_ahead(std::unique_lock<std::mutex>& lock) {
+        if(area_pending) {
+            ahead_active=true;area_pending=false;
+            lock.unlock();
+            LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+            c3x_renderer::PreparedViewArea<PublishedMapFrame> built;
+            bool ok=false;
+            try {
+                if(built.prepare(ahead_frame,ahead_identity)) {
+                    c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(output)};
+                    ok=renderer_state.render(built.input,output,-1,&ahead_cancelled,0,nullptr,0,&ahead_frame) &&
+                        !ahead_cancelled.load(std::memory_order_relaxed) &&
+                        built.finish(output,renderer_state.prepared_view_dependencies());
+                }
+            }catch(std::exception const& error){renderer_state.trace.write("prepared-area-error",error.what(),true);}
+            catch(...){} // Cancellation or unavailable optional content keeps the native front.
+            if(!ok){renderer_state.geometry_cache.clear();renderer_state.clear_geometry_vertex_buffers();}
+            QueryPerformanceCounter(&end);lock.lock();
+            if(ok && !ahead_cancelled.load(std::memory_order_relaxed))nearby.swap(built);
+            else if(!ok && !ahead_cancelled.load(std::memory_order_relaxed))nearby_available=false;
+            char detail[256];std::snprintf(detail,sizeof(detail),"ok=%u cancelled=%u width=%d height=%d bytes=%zu area_owners_cap=%zu prepare_ms=%.3f",
+                unsigned(ok),unsigned(ahead_cancelled.load()),ahead_frame.target_width,ahead_frame.target_height,
+                nearby.bytes(),decltype(nearby)::budget*2,renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart));
+            renderer_state.trace.write("prepared-area",detail,true);
+            ahead_active=false;completed.notify_all();return;
+        }
+
         auto quantum=std::max<c3x_renderer_i64>(1,ahead_frame.presentation_frequency/15);
         if(ahead_next>INT64_MAX/quantum){ahead_requested=-1;return;}
         auto frame=ahead_frame;frame.presentation_time_ticks=ahead_next*quantum;
@@ -10817,6 +10940,9 @@ private:
             lock.unlock();
             int result = C3X_RENDERER_RESULT_ERROR;
             c3x_renderer_output_v1 output = {};
+            c3x_renderer::PreparedViewArea<PublishedMapFrame> rendered_area;
+            PublishedMapFrame rendered_crop;
+            bool rendered_area_ready=false;
             try {
             if (command == Command::configure_pack) {
                 result = renderer_state.configure_pack(
@@ -10831,7 +10957,23 @@ private:
                     ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_ERROR;
             } else if (command == Command::render) {
                 output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
-                if (renderer_state.render(job_frame, output)) {
+                // One working extent for demand and preparation. Alternating
+                // viewport and area targets destroys the GPU-resident backdrop
+                // whenever an animated prepared frame ages out.
+                auto render_requested=[&]{
+                    char option[8]={};GetEnvironmentVariableA("C3X_RENDERER_PREPARED_VIEW",option,sizeof(option));
+                    if(native_presentation && renderer_state.shared_scene_surface && std::strcmp(option,"0")!=0 &&
+                       rendered_area.prepare(job_frame,job_camera_identity)) {
+                        if(renderer_state.render(rendered_area.input,output,-1,nullptr,0,nullptr,0,&job_frame) &&
+                           rendered_area.finish(output,renderer_state.prepared_view_dependencies()) &&
+                           rendered_area.project(job_frame,job_camera_identity,rendered_crop)) {
+                            output=rendered_crop.output;rendered_area_ready=true;return true;
+                        }
+                        rendered_area.clear();rendered_crop.clear();
+                    }
+                    return renderer_state.render(job_frame,output);
+                };
+                if (render_requested()) {
                     result = C3X_RENDERER_RESULT_OK;
                 } else {
                     renderer_state.trace.write("reset", "device and all caches", true);
@@ -10917,8 +11059,9 @@ private:
             }
             if(command!=Command::unit) {
             if(command==Command::render && result==C3X_RENDERER_RESULT_OK){
-                completed_phase_x=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_x;
-                completed_phase_y=renderer_state.cached_tiles.empty()?0:renderer_state.cached_tiles.front().anchor_y;
+                if(rendered_area_ready){nearby.swap(rendered_area);nearby_presented=true;}
+                completed_phase_x=job_frame.tile_count?job_frame.tiles[0].anchor_x:0;
+                completed_phase_y=job_frame.tile_count?job_frame.tiles[0].anchor_y:0;
                 bool const preparing_ahead=ahead_enabled && job_stable_view &&
                     renderer_state.can_prepare_ambient() && job_frame.presentation_frequency>0;
                 if(isolated_publication || preparing_ahead){
@@ -10943,7 +11086,11 @@ private:
                 c3x_renderer::terrain_frame_signature(job_frame,output.content_revision,output.device_generation).complete:0;
             completed_result = result;
             }
-            if(command==Command::render && result==C3X_RENDERER_RESULT_OK)start_ahead();
+            if(command==Command::render && result==C3X_RENDERER_RESULT_OK){
+                char area_option[8]={};GetEnvironmentVariableA("C3X_RENDERER_PREPARED_VIEW",area_option,sizeof(area_option));
+                nearby_available=renderer_state.shared_scene_surface && std::strcmp(area_option,"0")!=0;
+                start_ahead();
+            }else if(command!=Command::unit){nearby.clear();nearby_available=false;}
             last_job_result=result;
             completed_job_sequence = sequence;
             job_command = Command::none;
@@ -11111,6 +11258,15 @@ extern "C" __declspec(dllexport) int c3x_renderer_camera_begin_view(
     if(!request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || request->struct_size!=sizeof(*request) ||
        !ticket || !valid_frame(request->frame,&output))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     return get_renderer_worker().camera_begin(*request->frame,*ticket,request->identity);
+}
+
+extern "C" __declspec(dllexport) int c3x_renderer_prepare_nearby_view(
+    c3x_renderer_camera_request_v1 const* request) {
+    c3x_renderer_output_v1 output={C3X_RENDERER_API_VERSION,sizeof(output)};
+    if(!request || request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION || request->struct_size!=sizeof(*request) ||
+       !valid_frame(request->frame,&output))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try {return get_renderer_worker().prepare_nearby_view(*request);}
+    catch(...) {return C3X_RENDERER_RESULT_ERROR;}
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_camera_poll_view(

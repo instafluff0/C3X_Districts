@@ -183,7 +183,7 @@ Main_Screen_Form* p_main_screen_form=&screen;
 struct Clock {long long QuadPart=0;};
 ''' + view + r'''
 struct State {
- bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false;
+ bool custom_renderer_async_enabled=true,custom_renderer_display_valid=false,custom_renderer_nearby_preparing=false;
  bool custom_renderer_draw_in_progress=false,custom_renderer_async_drawing=false,custom_renderer_async_presented=false;
  bool custom_renderer_capture_only=false,custom_renderer_capture_failed=false,custom_renderer_capture_world_topology=true;
  int custom_renderer_zoom_tile_width=128,custom_renderer_tile_count=0;

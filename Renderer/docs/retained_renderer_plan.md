@@ -26,7 +26,7 @@ permanent GPU residency or knowledge of uncaptured gameplay.
 | World → view selection | Compilation publishes handles. Current authoritative occurrences assemble passes; a spatial contributor index selects static inputs with exact intersection and ordered deduplication. | The index is view-scoped; dynamic poses use small scans. Native unit bodies arrive individually rather than as a complete active-unit pass. |
 | Compatible submission | Shared meshes, tree instances, ordered materials, common depth and bounded shadow-page batches feed the same foreground/background map path. | Units still submit demanded misses individually. Optional reflection and other profiles retain their existing execution. |
 | GPU reuse and output | Persistent static margin, viewport dynamic surfaces, sparse restore, incremental finishing, hardware resolve and consolidated readback serve the tested city profile with waves/reflections off. | Other profiles retain existing execution. Unit prediction batches at most two finished poses through one staging readback; demanded misses are not a consolidated pass. |
-| Preparation and native delivery | Bounded CPU helpers prepare content/poses; one GPU owner prepares nearby static coverage, future map states and unit pixels. Copied snapshots, exact validity and pull publication connect to native calls. GOG has a gated 33 ms unit visual opportunity and 66 ms original callback deadline. | General nonblocking scrolling and complete active-unit demand collection remain integration work. Camera changes are immediate with exact demand fallback. Actual displayed FPS and interaction correctness are not established by callback counts. |
+| Preparation and native delivery | Bounded CPU helpers prepare content/poses; one GPU owner prepares nearby static coverage, future map states and unit pixels. Copied snapshots, exact validity and pull publication connect to native calls. GOG has a gated 33 ms unit visual opportunity and 66 ms original callback deadline. | Prepared nearby cameras now acquire exact-current-camera crops without GPU waits. Cold/outside-area scrolling and complete active-unit demand collection remain integration work. Camera changes stay immediate with exact demand fallback. Actual displayed FPS and interaction correctness are not established by callback counts. |
 
 The native adapter uses the existing timer/Animator entry points, preserves the
 elapsed accumulator and visual gate, and skips gameplay advancement on intermediate
@@ -35,97 +35,105 @@ authored frames/duration; inactive unselected units freeze. Directed actions kee
 native cursors and anchors. No copied animator, second presenter or camera swapping.
 Exact GOG capabilities, guards and fallbacks: [patch ledger](civ3_patch_dependency_ledger.md).
 
-## Latest live evidence and connected correction
+## Latest live evidence and current implementation
 
-The September 14 user trace contains 3,612 unit draws, 767 map completions and
-518 intermediate visual refreshes. Faster cadence is active; this is not an FPS
-measurement or an input-to-display comparison. Detailed debugger logging perturbs
-latency, and phase percentiles describe the captured session rather than a matched
-control. Only 26 complete DLL usage pairs were captured; do not generalize their
-camera/idle distributions to an acceptance benchmark.
+The latest user trace has one initial device load, no mid-session reload and no
+camera-error/cancellation records. Its 2,007 unit draws include 1,922 pose hits
+(95.8%); the 85 misses have median 60.759 ms and p95 127.338 ms. Prepared map
+consumption is already quick: 269 returns, median 0.369 ms, p95 0.663 ms.
+Of only 24 complete DLL usage pairs, 13 nearby-camera requests have median
+156.315 ms and maximum 359.497 ms. Ten stationary requests have median 35.932 ms
+and maximum 243.143 ms. These debugger observations prioritize remaining stalls;
+they are neither matched benchmarks nor displayed FPS. The earlier ownership fix
+and its measured 43.4% busy-request gain remain in the checkpoint history.
 
-| Logged work | Observation |
-| --- | --- |
-| Unit draws | 97.3% pose hits; median 0.750 ms, p95 1.379 ms across all draws. The 97 misses have median 64.482 ms, p95 160.616 ms. Hits can still include a preparation wait. |
-| Cold demanded poses | Median CPU pose phase 38.811 ms. Cache efficiency does not remove first-use preparation or its queue wait. |
-| Prepared map publication | 572 consumptions; median wait 0.372 ms, p95 0.626 ms. |
-| Map completions | Median 9.443 ms, p95 18.637 ms; initial 5.698 s load and a later 5.020 s rebuild dominate the maximum. |
-| Speculative unit jobs | 125 jobs produced pixels; 633 produced none. Near one 203.829 ms Worker request, two jobs took 55.443 and 81.623 ms before demand ran. |
+The current step is caller-driven nonblocking nearby scrolling. A fresh native
+capture must acquire full-detail pixels at the **actual current camera**; otherwise
+it uses the existing exact synchronous fallback. No old-camera substitution,
+notification, native terrain fallback or new patch symbol is introduced.
 
-Two ownership defects are corrected in the current candidate:
+Implemented design:
 
-1. A waiting unit draw or drain reserves the next GPU turn under the queue mutex.
-   Cancellation alone previously allowed the worker to admit another optional job
-   before the caller reacquired the mutex. Existing `camera_paused` is the worker's
-   admission gate; this does not pause or modify the native camera. Cached CPU
-   publications remain usable independently.
-2. Recursive cliff cancellation has a distinct exception type. Camera cancellation
-   now retires its partial draw assembly and preserves resident content, matching
-   the ordinary cancelled return. Real exceptions still reset and now log their
-   message. The live five-second rebuild followed a runtime exception and device
-   reload at an unchanged view/world; the old cancellation path demonstrably causes
-   such resets, but that trace lacks the exception message to prove this was its cause.
+- One committed surrounding area and one in-flight replacement use the existing
+  GPU owner, passes, demand priority and cancellation gate. Foreground and
+  background use the same working extent; small camera changes leave its world
+  placement fixed. Existing compiled content, static color/depth and incremental
+  output remain reusable across animation refreshes.
+- Native viewport geometry/depth units and existing detail tiers remain separate
+  from working dimensions. Padding is at most 128 pixels per axis within
+  2240×1192. Each finished CPU area, including its ready centered view, is capped
+  at 32 MiB; existing front/snapshot/temporary allocations are additional.
+- Fresh capture validates complete topology, identity/visibility, local dependency
+  content, projection/detail and anchor translation. Only full captured appearance
+  grants newly visible ownership. Current occurrences receive remapped flags.
+  An identical centered capture leases its already finished image directly.
+- The optional preparation export follows successful native composition. It copies
+  input before ownership merging and replaces redundant native ambient queueing.
+  No new patch address or callback is introduced. Unknown content, ambiguous wrapped
+  occurrences, unsupported dimensions and failed preparation retain exact fallback.
+- Static validity is independent of ambient sample freshness. A delayed producer
+  may hold its honest old map-animation sample while the camera advances through
+  valid coverage; authored playback catches up using the caller's clock. Native
+  unit animation, overlays, visibility and picking retain their existing owners.
 
-No assets, animation timing, detail, raster policy, worker counts or memory budgets
-change. Submitted GPU work remains non-preemptible; demand can still wait for the
-current speculative job. Both regressions fail with the previous behavior and pass
-with the fixes, including reset/drain and real-error fallback. Native sources and
-patch addresses are unchanged.
+## Validation and measured effects
 
-Validation: production Windows build, 22 targeted contracts, the actual worker
-contract under MSVC/x86, and day/night native-unit/underlay/terrain replays pass.
-Both controls pass four topology and six appearance edits against independent
-redraws. All 146 busy/idle comparison images and 12 diagnostic images are exact;
-both 14-step dense-scroll runs pass exact revisits. No native source changed,
-so a new injected compile is unnecessary. No game install/launch or reference change.
+Windows production build, 50 focused contracts, the actual worker under MSVC/x86,
+injected compilation and day/night unit/underlay replays pass. Nine prepared
+cameras match an independent reconstruction of the same prepared area exactly.
+Four topology and six appearance edits match independent redraws. The wider
+14-step sequence passes exact camera revisits, with no fallback tiles or recovery.
 
-| Whole-request workload | Control mean / p95 | Candidate mean / p95 |
+| Whole consumer request | Control mean / p95 | Candidate mean / p95 |
 | --- | --- | --- |
-| Busy eight-unit mixed actions, 80 requests each across reversed run order | 240.02 / 293.41 ms | 135.77 / 174.74 ms |
-| Warm realistic idle, 60 requests each, 67 ms caller pacing | 4.02 / 6.20 ms | 3.78 / 5.20 ms |
-| Dense scroll, 14 offsets each | 241.58 / 598.29 ms | 248.44 / 591.69 ms |
+| Nearby real-clock scrolling, 48 calls, 67 ms opportunities | 55.31 / 79.17 ms | 11.45 / 14.57 ms |
+| Warm realistic idle, eight bodies, 60 calls | 3.76 / 5.28 ms | 4.54 / 5.13 ms |
+| Wider 14-step scrolling with coverage misses | 219.18 / 479.02 ms | 216.66 / 387.27 ms |
 
-The busy comparison improves mean whole-request time by 43.4%; warm idle and dense
-scrolling show no substantial demonstrated gain. Two visible terrain edits average
-651.27 → 628.89 ms, too few samples for a speed claim. These are 1119×1192 harness
-requests with the existing 15 Hz animation clock, not native displayed FPS.
-Whole idle requests include map, output copy and all eight bodies; warmup and saved
-BMP writes are outside the interval. Cold initialization remains separate.
+These are 1119×900 harness capture/render/copy requests, not displayed game FPS.
+All 48 nearby calls acquired prepared current-camera pixels; oldest map sample
+was 183 ms. Initial dense rendering increases 6.04 → 7.35 s. Warm idle has a
+0.78 ms mean overhead and no demonstrated speedup; wider scrolling shows no
+substantial mean gain. Native unit body work is included in the idle endpoint.
 
-A bounded diagnostic (10 warmup plus 10 measured frames, 160 body draws each)
-resolves the phase shift: speculative finished poses fall 133 → 26 while demanded
-misses rise 36 → 135. Total finished builds fall only 169 → 161. CPU helper
-consumptions at the last logged snapshots rise 31 → 121. The measured gain is mainly
-better scheduling and useful concurrent preparation, not 43% less rendering work.
-In the timing runs, mean map-phase cost falls 212.69 → 55.27 ms while unit cost rises
-27.20 → 80.36 ms; judging either phase alone would misrepresent the result.
-Diagnostic timings are excluded from the performance comparison.
+A separate bounded diagnostic distinguishes work reduction from off-thread work:
+48 → 44 map jobs, 75,326 → 3,474 static selected submissions including guard fill,
+and all 44 candidate surfaces reuse static color/depth. Geometry builds/uploads
+are zero in both. Dynamic selections increase 3,376 → 3,696 and resolved-pixel
+accounting rises 192 → 283 million. Candidate area jobs total 1.288 s including
+CPU publication, while control map-render intervals alone total 1.794 s. These
+instrumented wall intervals explain the mechanism, not an independent GPU timing
+claim. Maximum observed area ownership is 15.32 MiB; recorded free contiguous
+address space remains at least 1.60 GiB in the x86 harness, not a live-game guarantee.
 
-The tested candidate is staged for ordinary `INSTALL.bat`; DLL SHA-256
-`dd83f651e84101831d02a058878588ce1b1f7a5161bceed1f7c9281e2cb3f165`.
-Local evidence, invocation manifests, immutable control/candidate binaries and
-receipts: `Renderer/native/build/demand-priority/`.
+**Visual review remains pending.** Full detail is retained, but the new working
+surface changes 8,028 of 1,007,100 pixels (0.80%) against the control; maximum channel
+delta is 126, mean absolute channel delta 0.042/255. Independent prepared builds
+and camera revisits agree. This is new raster variation, not covered by earlier
+acceptance. [Local comparison](../native/build/prepared-scroll/visual-comparison.png).
+No reference was replaced. The exact tested DLL is staged for evaluation;
+installation and launch remain the user's actions through ordinary `INSTALL.bat`.
 
-## Next architectural step
+Local receipts, binaries, logs and invocation manifests are in
+`Renderer/native/build/prepared-scroll/`. Candidate SHA-256:
+`4cbdfa93b44a7f41d18280db3932d216dc794ece15d08a3dfd1cfdcb3d85e8be`.
 
-Finish demanded-unit pass preparation: collect the eligible active poses at a
-verified native visual boundary, resolve exact content keys once, prepare missing
-CPU poses concurrently, then feed compatible GPU submissions and consolidated
-readback. Reuse existing playback, caches and submission owners; the native body
-call remains the final authority for placement, underlay and exact fallback.
-Establish a clean collector before adding more workers or extending prediction.
-If no narrow collector exists, retain the current call/return boundary.
+## Next responsibility
 
-Evaluate total frame/request cost, cold actions and sustained demand alongside warm
-idle, dense scrolling and local edits. Track wasted preparation and interruption
-separately. Do not claim a speedup from cache hits or shorter caller waits alone.
-Resolve any further full-reset cause from the new exception diagnostic before
-expanding GPU speculation. Native presentation/overlays/picking remain a strategic
-integration checkpoint; the user's current log is reused rather than requested again.
+Validate actual GOG camera cadence, overlays/picking and unit interactions at this
+strategic integration checkpoint. General coverage is still bounded: a cold view,
+content change or jump outside prepared coverage can block. The next architectural
+extension should broaden resident static coverage while selecting a narrower
+animated/output working set; the diagnostic shows why simply animating a larger
+area or adding workers is not sufficient. Complete active-unit demand collection
+remains separate work, supported by the live trace's expensive uncached poses.
 
 ## Preserved controls and closed findings
 
-- Pre-change source: `a504a106`; staged control DLL SHA-256
+- Current reproducible control: `9c5e9033`, DLL
+  `dd83f651e84101831d02a058878588ce1b1f7a5161bceed1f7c9281e2cb3f165`,
+  preserved in `native/build/prepared-scroll/control/`.
+- Earlier source: `a504a106`; staged control DLL SHA-256
   `549daee21744e6724ae9b5080cb2b14714e9f89cab9d663c63411a9c4abca028`.
   Exact control binaries are retained in `native/build/demand-priority/control/`.
 - [Earlier checkpoints](history/retained_renderer_checkpoints_20260914.md) preserve

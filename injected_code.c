@@ -26870,6 +26870,8 @@ unload_custom_renderer ()
 	is->custom_renderer_camera_begin = NULL;
 	is->custom_renderer_camera_poll = NULL;
 	is->custom_renderer_camera_present = NULL;
+	is->custom_renderer_prepare_nearby = NULL;
+	is->custom_renderer_nearby_preparing = false;
 	is->custom_renderer_camera_cancel = NULL;
 	is->custom_renderer_camera_ticket = 0;
 	is->custom_renderer_display_clock = 0;
@@ -27163,6 +27165,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_camera_begin = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_begin_view");
 		is->custom_renderer_camera_poll = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_poll_view");
 		is->custom_renderer_camera_present = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_present_view");
+		is->custom_renderer_prepare_nearby = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_prepare_nearby_view");
 		is->custom_renderer_camera_cancel = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_camera_cancel");
 		char async_option[8] = {0};
 		if (get_environment != NULL) get_environment ("C3X_RENDERER_NATIVE_ASYNC", async_option, sizeof async_option);
@@ -27888,6 +27891,10 @@ composite_custom_renderer_frame ()
 	}
 	if (result == C3X_RENDERER_RESULT_OK) {
 		is->custom_renderer_async_presented = true;
+		// Copy this exact native capture before replacement flags are merged.
+		// Preparation completion never calls Civ III or asks for a redraw.
+		if (is->custom_renderer_async_drawing && is->custom_renderer_prepare_nearby != NULL)
+			is->custom_renderer_nearby_preparing = is->custom_renderer_prepare_nearby (&request) == C3X_RENDERER_RESULT_OK;
 		// Transfer category ownership only after this exact frame has rendered and
 		// composited successfully. Mapping intent alone never suppresses native art.
 		for (int n = 0; n < is->custom_renderer_tile_count; n++)
@@ -29611,7 +29618,7 @@ queue_custom_renderer_native_view (Map_Renderer * target, int viewer, struct cus
 {
 	// One active request survives intervening calls. The next available slot
 	// captures the newest demand, so there is no stale FIFO or cancellation storm.
-	if (is->custom_renderer_camera_ticket != 0 || ! is->custom_renderer_async_presented) return;
+	if (is->custom_renderer_nearby_preparing || is->custom_renderer_camera_ticket != 0 || ! is->custom_renderer_async_presented) return;
 	long long animation_quantum = is->custom_renderer_qpc_frequency.QuadPart / 15;
 	if (animation_quantum < 1) animation_quantum = 1;
 	if (view->camera_x == is->custom_renderer_display_view.camera_x &&
@@ -29721,6 +29728,7 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 	}
 	is->custom_renderer_async_drawing = async_view;
 	is->custom_renderer_async_presented = false;
+	is->custom_renderer_nearby_preparing = false;
 
 	is->custom_renderer_draw_in_progress = true;
 	if (! is->custom_renderer_redraw_pending)
