@@ -586,7 +586,7 @@ def verify_behavior_output(behavior, output):
                     "UNIT repeated native cursor: pass", "UNIT retained terrain unchanged: pass",
                     "UNIT post-draw terrain parity: pass", "UNIT config-off preserves canvas: pass",
                     "UNIT action interruption and held endpoint: pass draws=582",
-                    "UNIT independent ambient phases and exact repeat: pass"]
+                    "UNIT independent native cursors and exact repeat: pass"]
         for zoom in (0, 1):
             required.append(f"UNIT magenta underlay parity zoom={zoom}")
             for mode in ("RGB555", "RGB565"):
@@ -892,6 +892,7 @@ def run_tests(category=None, *, integration=False, full=False):
                         "Renderer.native.test_world_view_submission",
                         "Renderer.native.test_shared_mesh_instances",
                         "Renderer.native.test_frame_publication",
+                        "Renderer.native.test_content_preparation",
                         "Renderer.native.test_frame_telemetry",
                         "Renderer.native.test_renderer_trace",
                         "Renderer.native.test_water_coverage",

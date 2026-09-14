@@ -1,5 +1,134 @@
 # Retained world → view → submission implementation
 
+## Current implementation: bounded concurrent preparation
+
+The default full-detail path now has **two CPU helpers**, plus the existing render
+thread and single GPU owner. Helpers compile ground, surface details, relief and
+vegetation floors from resident shared assets and captured world inputs. Each has
+private river/query/layout scratch. Results carry world, coast and river proofs;
+adoption validates them before entering the existing compiled-world owner and
+selected pass submission. The render thread compiles unstarted demanded work
+itself and joins already-running work, avoiding duplicate builders.
+
+CPU preparation is bounded to the captured render/prefetch inputs (at most 8192
+jobs), a 16 MiB completed-content reservoir and two river pages per worker. Active
+results stop at an 8 MiB buffer threshold; capacity growth can cross it before the
+next cancellation check. Byte-based backpressure leaves workers useful while the
+GPU owner consumes earlier content. Newly selected demand gets priority over
+unneeded speculative results; valid ready demand is protected, and stale CPU
+results are rejected before they can suppress replacement jobs. Scratch, active results, thread stacks and
+existing GPU owners are additional memory, not part of the reservoir claim.
+Configuration, world mutation, reset and benchmark reset join CPU readers before
+changing their borrowed inputs. No game pointer or D3D context reaches a helper. Preparation selection and view
+assembly share one complete per-frame validity receipt, keyed by geometry epoch
+and occurrence anchor. GPU residency is still checked on every use; the 24-byte
+receipt is charged to the compiled-content budget. Only stable eligible views
+acquire an isolated front for speculative GPU work; moving-camera synchronous
+results keep their existing borrowed-output lifetime.
+
+After successive authoritative requests confirm a stationary view, the GPU owner
+also prepares at most two future quantized resource-animation frames. Each uses
+the existing full-detail scene/pass/finishing path and owns immutable pixels.
+Consumption requires exact camera, ordered appearance/topology, native identity,
+environment and time-bucket agreement. Foreground changes cancel the horizon;
+camera movement does not start it. Snapshot plus speculative publications share
+a 32 MiB cap. There is no wall-clock game loop, game-state prediction or redraw
+callback. Caller consumption alone advances the finite horizon.
+
+`C3X_RENDERER_CPU_PREPARATION=0|1|2|4` selects the control or helper count; unset
+means two. `C3X_RENDERER_PREPARE_AHEAD=0` disables future frames; unset enables
+them only for the eligible retained city profile with waves/reflections disabled.
+The current custom game configuration already selects that profile. Full terrain
+density, meshes, shaders, native overlays, visibility and picking remain intact.
+
+This is scene preparation, unrelated to Civ III worker units. Cities, tree bodies,
+infrastructure and units retain their existing content/pose owners; they have not
+all acquired new parallel compilers. General caller-driven native asynchronous
+camera handoff is still an integration responsibility. A camera miss still waits
+for its requested result. No injected changes or new patch symbols are needed.
+
+Preserved control/source and all new evidence are under
+`Renderer/native/build/ahead-preparation-20260913/`; the original staged full-detail
+DLL is `starting.dll`. The first shallow queue made cold rendering slower even
+with four helpers. Replacing tile-count backpressure with byte-based admission
+and allowing the foreground to take unstarted tasks is a materially different
+scheduler: matched corrected runs reduced the initial dense request from
+12.170 s to 7.567 s with two helpers, versus 7.730 s with four. Dense scrolling
+remained about 90–100 ms. Four helpers offered no useful gain on the four-core VM.
+The corrected scaling run retained more than 1.5 GB of contiguous address headroom. No GPU timestamp
+claim is made; the known Parallels timestamps remain unreliable.
+
+The shallow queue and the first combined `ahead-final-*` comparison are retained
+as rejected controls. The combined path initially slowed visible edits because
+speculative content blocked new demand. Priority admission corrected that. A
+bounded endpoint diagnostic then attributed about 5.7 ms of moving-camera cost to
+an isolated output copy performed even when no future rendering was scheduled.
+Stable-view ownership removed that cost. Per-frame validity receipts avoid checking
+the same content twice, but neither correction establishes a scrolling win.
+
+### Final matched work-ahead comparison
+
+`ahead-ownership-build` is the source-matched benchmark build. Runs named
+`ahead-ownership-{dense,idle,edit}-{control,candidate}` use identical binaries,
+assets, definitions and authoritative requests. The control explicitly disables
+both new strategies; the candidate enables two CPU helpers and exact work ahead.
+The city profile uses full detail, waves/reflections off, at 2240 × 1192 pixels.
+
+| Complete result | Control | Two helpers + work ahead | Interpretation |
+| --- | ---: | ---: | --- |
+| Dense initial view, assets loaded and scene reset; two cases | 11.777, 11.933 s | 7.141, 7.048 s | About 40% less latency; serial surface compilation overlaps across workers. |
+| Dense scroll, 28 requests; median / p95 | 87.822 / 154.080 ms | 94.997 / 165.754 ms | Slower; mean 97.095 → 100.434 ms. No scrolling-speedup claim. |
+| Two visible topology edits; mean | 1372.933 ms | 746.723 ms | About 46% less latency; each checked against an independent cold render. |
+| Two distant topology edits; mean | 52.346 ms | 56.355 ms | Slightly slower; no local-edit gain claimed for this case. |
+| Stationary resource animation, 30 requests at 67 ms cadence; median / p95 | 34.302 / 39.800 ms | 0.590 / 0.854 ms | Preparation moved ahead of demand; not a throughput gain. |
+
+A same-compiler idle control with helpers enabled and future frames disabled took
+31.786 ms median; all 30 images match the prepared publications exactly. The
+candidate actually performed 40 future renders, cancelled one and consumed 39,
+including warmup: 1532.076 ms of traced work, median 36.707 ms per preparation.
+Two consumptions joined active work. Future frames built/uploaded no geometry.
+The 67 ms schedule uses absolute deadlines; saved bitmaps can delay demand. In
+the same-compiler pair, median deadline-to-completion was 45.082 → 8.567 ms,
+including those delays. This is standalone scheduling evidence, not native FPS.
+The earlier unpaced witness also passed exact parity, but bitmap writes outside
+API calls provide preparation time; its lower waits cannot be called higher FPS.
+
+CPU helpers preserve vertex counts, detail, pass selection and GPU work. They
+remove compilation from the serial consumer when a proven result is available;
+the first dense construction adopted 813 helper results. Jobs already running are
+joined, and demanded unstarted jobs can be compiled by the consumer. The final
+repeated dense run records 2815 adoptions including bootstrap/cold cases and
+scrolling. These are reuse counts, not additional speedup evidence. The GPU owner
+still performs requested rendering and readback. Dense scrolling remains dominated
+by completion waits (roughly 44 ms median in the control); more CPU workers cannot
+remove that cost. Do not expand helper count or another output-helper experiment
+on the strength of cache-hit counts.
+
+The maximum completed CPU reservoir in this pair was 12,722,492 bytes of its
+16 MiB cap; exact future-frame ownership peaked at 24,278,372 bytes of its 32 MiB
+cap. The final dense candidate retained at least 1,520,304,128 bytes (1.42 GiB)
+of contiguous free address space. Across the eight final workloads the minimum
+was 1,368,051,712 bytes (1.27 GiB), above the 512 MiB floor. Private scratch, active
+builds and thread stacks are additional to the preparation caps. Four helpers
+remain an explicit measured option, not the default: their corrected cold result
+was slightly slower than two and used more aggregate compiler time.
+
+The CPU compiler changes 13 of 2,670,080 pixels by one channel level in the dense
+control comparison. This is a new recorded precision difference, not an approved
+visual change or a detail cut. Worker counts agree with one another; full-detail
+controls, assets and fixed references are preserved.
+
+The full checkpoint before the final scheduler/ownership corrections passed 268
+tests (one existing skip), scrolling, reduced zoom, wrapping, resource
+animation/scroll/removal and day/night unit bodies/lifecycle/terrain parity.
+The old unit witness incorrectly expected identity-driven idle phases; it also
+failed against `starting.dll`. It now supplies distinct native cursors and checks
+that identity/time cannot change a fixed cursor. Production unit behavior is
+unchanged. Current corrections pass 48 focused executable tests; final production
+integration verification and evaluation staging are recorded below when completed.
+No installation, game launch, Git mutation or native asynchronous camera integration
+is included in this work.
+
 ## Current implementation: shared geometry and terrain patches
 
 The user selected **full detail** for Civ III evaluation. The verified staged DLL
@@ -132,7 +261,7 @@ input discovery excludes directories beneath `build`. The new shared path replac
 baked trees in its eligible profile; there is no separate renderer framework.
 
 
-### Recommended next architectural step
+### Remaining native integration recommendation
 
 Complete the native caller-driven asynchronous preparation/publication handoff,
 including the displayed-view contract described in
@@ -181,7 +310,7 @@ permanent GPU residency, an uncaptured game simulation, or every optional backen
 | Spatial selection separate from world construction | Compilation appended active draw lists; circular spans scanned every layer. | Compilation publishes protected handles. A separate assembly consumes current authoritative occurrences; the view index selects actual static pass inputs for damage spans, with exact intersection and ordered deduplication. Current capture remains the admission set. The index is view-scoped; world identity and compiled validity outlive it. Dynamic pose lists retain their small scan. |
 | Compatible submissions through explicit passes | Ordered layers/page limits existed, but selected inputs were incomplete. | Selected static/dynamic inputs feed existing ordered material submissions and bounded 32-page receiver batches. Main/caster/resource ownership and common depth are preserved. This completes representative pass ownership; selected tree placements now feed hardware-instanced color and shadow submissions. Reflection and other object categories retain their existing execution. |
 | GPU reuse, finishing and readback | Incremental output already finished. | Complete for the tested city profile, waves/reflections off and bounded extents. Circular color/depth, sparse restore, incremental finishing, hardware resolve and consolidated readback remain unchanged. Other profiles retain existing output execution. |
-| Caller-driven asynchronous preparation/publication | DLL preparation/publication and exact queued joins existed. | **Remaining native integration responsibility.** General asynchronous native camera handoff and presented cadence are not implemented. Unmatched current-camera demand still waits for exact output. No renderer notifications, redraw requests, new native hooks or ABI changes. |
+| Caller-driven asynchronous preparation/publication | DLL preparation/publication and exact queued joins existed. | Bounded CPU preparation and exact future ambient publications now run ahead of demand inside the DLL. **Remaining native integration responsibility.** General asynchronous native camera handoff and presented cadence are not implemented. Unmatched current-camera demand still waits for exact output. No renderer notifications, redraw requests, new native hooks or ABI changes. |
 
 ## Ownership and invalidation details
 

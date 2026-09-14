@@ -150,8 +150,10 @@ int main(){
 using HDC=void*;
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=std::chrono::steady_clock::now().time_since_epoch().count();}
-bool ambient_mode=false;
+bool ambient_mode=false,ahead_mode=false;
+std::atomic<unsigned> ahead_completed{0},ahead_consumed{0};
 unsigned GetEnvironmentVariableA(char const* name,char* out,std::size_t){
+    if(!std::strcmp(name,"C3X_RENDERER_PREPARE_AHEAD")){std::strcpy(out,ahead_mode?"1":"0");return 1;}
     if(ambient_mode && !std::strcmp(name,"C3X_RENDERER_SYNC_AMBIENT")){std::strcpy(out,"1");return 1;}
     return 0;
 }
@@ -169,7 +171,7 @@ void adoption_checkpoint(){++adoption_entered;}
 std::atomic<bool> hold_publication{false};
 std::atomic<unsigned> publication_entered{0};
 void publication_checkpoint(){++publication_entered;while(hold_publication.load())std::this_thread::yield();}
-struct Trace {int level=0;bool buffered=false;void write(char const*,char const*,bool=false){} double milliseconds(long long value){return double(value)/1000000;}};
+struct Trace {int level=0;bool buffered=false;void write(char const* stage,char const*,bool=false){if(!std::strcmp(stage,"ahead-prepared"))++ahead_completed;if(!std::strcmp(stage,"ahead-consumed"))++ahead_consumed;} double milliseconds(long long value){return double(value)/1000000;}};
 using RendererTrace=Trace;
 struct Footprint {int coordinate=0;struct {int left=0,right=0;} bounds;};
 struct Bodies {
@@ -188,6 +190,7 @@ struct RendererState {
     int device=0,context=0;
     unsigned cache_hits=0,device_recoveries=0,frame_tiles_built=0,prepared_blocks=0,visible_resource_animations=0;
     unsigned ambient_count() const {return visible_resource_animations;}
+    bool can_prepare_ambient() const {return animate_pixels && visible_resource_animations;}
     std::size_t prefetched_geometry_bytes=0,tile_geometry_cache_bytes=0;
     std::uint64_t requested_signature=0;
     struct {std::size_t bytes=0;} pixel_blocks;
@@ -558,6 +561,86 @@ int main(){
         assert(pull.render(f,out)==C3X_RENDERER_RESULT_OK);
         pull.reset_and_stop();assert(pull.camera_poll(last,out)==C3X_RENDERER_RESULT_SUPERSEDED);
     }
+
+    ahead_mode=true;
+    {
+        RendererState state;state.visible_resource_animations=1;state.animate_pixels=true;
+        RendererWorker pull(state);c3x_renderer_camera_identity_v1 epochs={3,4,5,6};
+        f.api_version=C3X_RENDERER_API_VERSION;f.struct_size=sizeof(f);
+        f.tiles=&tile;f.tile_count=1;f.presentation_frequency=15;f.presentation_time_ticks=19;
+        f.target_width=64;f.target_height=32;tile.anchor_x=7;topology=42;
+        auto prepared=ahead_completed.load();auto consumed=ahead_consumed.load();
+        auto copies=publication_entered.load();
+        assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        assert(publication_entered.load()==copies);
+        // A changed view does not compete with scrolling for future GPU work.
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));assert(ahead_completed.load()==prepared);
+        f.presentation_time_ticks=20;
+        assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        auto first=out;auto original=static_cast<unsigned const*>(out.bgra_pixels)[0];
+        assert(publication_entered.load()>copies);
+        until([&]{return ahead_completed.load()>=prepared+2;});
+        assert(state.entered.load()==4); // Finite horizon; no autonomous clock loop.
+        assert(static_cast<unsigned const*>(first.bgra_pixels)[0]==original);
+        for(unsigned i=0;i<20;++i)assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        assert(state.entered.load()==4);
+        // Caller buffers can change address without changing their identity.
+        auto copy=tile;auto world=topology;f.tiles=&copy;f.world_topology=&world;
+        f.presentation_time_ticks=21;
+        assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        assert(ahead_consumed.load()==consumed+1);
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==(7u^42u^21u));
+        assert(out.replacement_tile_flags[0]==copy.tile_flags && !out.geometry_tiles_built);
+        // Consume the exact second slot even if the new horizon is in flight.
+        f.presentation_time_ticks=22;
+        assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==(7u^42u^22u));
+        // Changed appearance/topology/epochs reject ready work, even with the
+        // same nominal topology revision. All four native epochs are checked.
+        auto reject=[&](){
+            auto hits=ahead_consumed.load();
+            assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+            assert(ahead_consumed.load()==hits);
+            assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==(unsigned(copy.anchor_x)^world^unsigned(f.presentation_time_ticks)));
+        };
+        ++world;++f.presentation_time_ticks;reject();
+        ++copy.visibility_mask;++f.presentation_time_ticks;reject();
+        ++copy.anchor_x;++f.presentation_time_ticks;reject();
+        ++epochs.visibility_epoch;++f.presentation_time_ticks;reject();
+        ++epochs.scene_epoch;++f.presentation_time_ticks;reject();
+        ++epochs.viewer_epoch;++f.presentation_time_ticks;reject();
+        ++epochs.map_epoch;++f.presentation_time_ticks;reject();
+        copies=publication_entered.load();
+        ++copy.anchor_x;++f.presentation_time_ticks;reject();
+        assert(publication_entered.load()==copies); // Camera takeover borrows exact synchronous output.
+        --f.presentation_time_ticks;reject(); // Clock reversal is never a future hit.
+        // An active matching prediction is joined, not executed twice.
+        pull.reset_and_stop();state.hold=false;
+        f.presentation_time_ticks=99;prepared=ahead_completed.load();
+        assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        f.presentation_time_ticks=100;
+        assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);
+        state.hold=true;
+        auto entered=state.entered.load();
+        until([&]{return state.entered.load()>entered;});
+        f.presentation_time_ticks=101;std::atomic<bool> returned{false};
+        auto before=state.entered.load();
+        std::thread caller([&]{assert(pull.render(f,out,epochs)==C3X_RENDERER_RESULT_OK);returned=true;});
+        state.hold=false;caller.join();
+        assert(returned && static_cast<unsigned const*>(out.bgra_pixels)[0]==(unsigned(copy.anchor_x)^world^101u));
+        assert(state.entered.load()<=before+1); // At most the next speculative tick.
+        // Uncached unit takeover and reset retire work without hanging or
+        // freeing the immutable front while a caller can still blit it.
+        state.hold=true;before=state.entered.load();
+        until([&]{return state.entered.load()>before || ahead_completed.load()>=prepared+2;});
+        state.unit_bodies.cached=false;
+        assert(pull.draw_unit(unit,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
+        auto saved=static_cast<unsigned const*>(out.bgra_pixels)[0];
+        assert(pull.blit(out,reinterpret_cast<HDC>(1))==C3X_RENDERER_RESULT_OK);
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==saved);
+        pull.reset_and_stop();
+    }
+    ahead_mode=false;
 }
 '''
         run_cpp(program, sources=("Renderer/native/environment_runtime.cpp",))

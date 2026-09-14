@@ -11,6 +11,11 @@ world content and pass boundaries. They add no native hooks or ABI fields;
 `required_user_action: []`. The optional terrain detail policy does not alter
 picking, visibility or native replacement ownership.
 
+CPU scene-content preparation and exact ambient work ahead remain inside the DLL.
+They reuse the existing render/render-view requests and native identity epochs;
+no injected source, ABI field, patch symbol or address changes are needed.
+`required_user_action: []`. Worker completion has no game callback or redraw path.
+
 This is the current boundary and outstanding-request record, not a campaign
 history. Read `civ_prog_objects.csv` and the actual injected wrappers before
 claiming a capability is available. Agents must not edit that CSV or

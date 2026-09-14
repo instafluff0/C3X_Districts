@@ -71,6 +71,11 @@ def endpoint_accounting(lines, trace_lines=()):
         call=(d-c)*scale
         known=sum(phases.values())
         matching=[r for r in trace if c<=int(r["qpc"])<=d]
+        calls=[r for r in matching if r["stage"]=="call-endpoints"]
+        # An owned publication can return while the GPU worker completes
+        # another tick. Its trace is real work, but is not a nested caller span.
+        if len(calls)==1 and calls[0].get("queued")=="0":
+            matching=[r for r in matching if r["stage"] in ("call-endpoints","ahead-consumed")]
         render=[r for r in matching if r["stage"]=="render-begin"]
         sequence=render[0].get("sequence") if len(render)==1 else None
         gpu=[r for r in trace if r["stage"]=="gpu-timing" and r.get("sample_sequence")==sequence] if sequence else []
@@ -223,7 +228,34 @@ def session_accounting(lines, trace_lines=()):
             "performance_claim":"setup amortization only; no gameplay performance pass"}
 
 
-def inspect(directory):
+def preparation_accounting(trace,args):
+    report={}
+    prepared=[fields(l) for l in trace if "stage=ahead-prepared " in l]
+    consumed=[fields(l) for l in trace if "stage=ahead-consumed " in l]
+    if args.get("prepare_ahead"):
+        report["work_ahead"]={"scope":"all traced work including warmup and unused horizon; demand times remain separate",
+            "completed":sum(r.get("ok")=="1" and r.get("cancelled")=="0" for r in prepared),
+            "cancelled_or_failed":sum(r.get("ok")!="1" or r.get("cancelled")!="0" for r in prepared),
+            "consumed":len(consumed),"joined_active":sum(r.get("joined")=="1" for r in consumed),
+            "render_ms_total":sum(float(r["ms"]) for r in prepared),
+            "render_ms":distribution([float(r["ms"]) for r in prepared]) if prepared else None,
+            "maximum_owned_bytes":max((int(r["bytes"]) for r in prepared),default=0),
+            "geometry_built":sum(int(r["geometry_built"]) for r in prepared),
+            "geometry_upload_bytes":sum(int(r["upload_bytes"]) for r in prepared)}
+        if any(int(r["bytes"])>int(r["cap"]) for r in prepared):raise ValueError("Work-ahead budget exceeded")
+    cpu_prepared=[fields(l) for l in trace if "stage=cpu-content-preparation " in l]
+    if args.get("cpu_preparation_workers"):
+        if not cpu_prepared:raise ValueError("CPU preparation diagnostic coverage missing")
+        report["cpu_content_preparation"]={"scope":"sampled cumulative counters at geometry checkpoints; cpu_ms sums elapsed compiler durations across workers, not process CPU time or request wall time",
+            "workers":args["cpu_preparation_workers"],
+            "maximum_ready_bytes":max(int(r["peak_bytes"]) for r in cpu_prepared),
+            "last_counters":cpu_prepared[-1]}
+        if any(int(r["peak_bytes"])>int(r["ready_cap"]) for r in cpu_prepared):
+            raise ValueError("CPU content preparation budget exceeded")
+    return report
+
+
+def inspect(directory, *, retained_profile=False):
     receipt = json.loads((directory / "inputs.json").read_text())
     completion = json.loads((directory / "evidence.json").read_text())
     if ((directory / "completion.txt").read_text().strip() != "0" or
@@ -238,10 +270,14 @@ def inspect(directory):
             raise ValueError("Binary changed after verification")
     args = receipt["args"]
     env = receipt.get("environment", {})
-    if (receipt.get("quality_mode", "current") != "current" or args.get("region_diagnostics") or args.get("reflection_ablation") or
+    scoped_retained=(retained_profile and args.get("reflection_ablation") and args.get("waves")=="0" and
+        (args.get("automatic_scene_surface") or args.get("shared_scene_surface")) and
+        env.get("C3X_RENDERER_REFLECTION_CONTROL")=="1" and env.get("C3X_RENDERER_WAVES")=="0" and
+        receipt.get("quality_mode")=="diagnostic_reflections_disabled")
+    if (not scoped_retained and (receipt.get("quality_mode", "current") != "current" or args.get("reflection_ablation")) or args.get("region_diagnostics") or
             args.get("content_edit_fixture") or env.get("C3X_RENDERER_PREVIEW_CONTENT_EDITS") == "1" or
             args.get("output_completion_probe") or env.get("C3X_RENDERER_OUTPUT_COMPLETION_PROBE") == "1" or
-            env.get("C3X_RENDERER_REGION_DIAGNOSTICS") == "1" or env.get("C3X_RENDERER_REFLECTION_CONTROL") == "1" or
+            env.get("C3X_RENDERER_REGION_DIAGNOSTICS") == "1" or (not scoped_retained and env.get("C3X_RENDERER_REFLECTION_CONTROL") == "1") or
             args.get("diagnostic_animation","full")!="full" or env.get("C3X_RENDERER_DIAGNOSTIC_ANIMATION","full")!="full"):
         raise ValueError("Diagnostic ablation/logging is not performance evidence")
     lines = (directory / "benchmark.log").read_text().splitlines()
@@ -249,8 +285,20 @@ def inspect(directory):
         report=session_accounting(lines,(directory/"renderer.log").read_text().splitlines() if (directory/"renderer.log").exists() else [])
         manifest=receipt["case_manifest"]
         if len(report["cases"])!=manifest["repeats"]:raise ValueError("Changed case count")
+        local_edits=args.get("topology_edit_fixture",False)
+        if local_edits:
+            edits=[fields(l) for l in lines if l.startswith("TOPOLOGY_EDIT ")]
+            if (len(report["cases"])!=1 or len(edits)!=4 or completion.get("topology_edit_correctness_pass") is not True or
+                edits!=completion.get("topology_edits") or
+                [r["site"] for r in edits]!=["distant","distant","visible","visible"] or
+                any(r["exact"]!="1" or int(r["step"])!=i for i,r in enumerate(edits)) or
+                not any(l.startswith("TOPOLOGY_EDIT_END status=pass checks=4 independent_full_redraw=1") for l in lines)):
+                raise ValueError("Incomplete local-edit independent proof")
+            report["local_edits"]=edits
         for i,case in enumerate(report["cases"]):
-            if case["request_offsets"]!=manifest["request"]["offsets"] or case["endpoints"]["playback_samples"]!=len(case["request_offsets"]):
+            expected_offsets=[] if local_edits else manifest["request"]["offsets"]
+            expected_samples=8 if local_edits else len(expected_offsets)
+            if case["request_offsets"]!=expected_offsets or case["endpoints"]["playback_samples"]!=expected_samples:
                 raise ValueError("Changed persistent request sequence")
             if case["identity"]!={"id":manifest["case_id"]+f"-{i}","config":manifest["config_id"],
                                   "request_digest":manifest["request_digest"],"reset":manifest["reset"],"warmup":manifest["warmup"]}:
@@ -261,7 +309,15 @@ def inspect(directory):
         report["images"]={n:completion["images"][n] for n in names}
         report["repeated_images_exact"]=all(report["images"][n]==report["images"]["zoom.bmp.case0.bmp"+(".result.bmp" if n.endswith(".result.bmp") else "")] for n in names)
         report["wrapper_timing_ms"]=completion.get("wrapper_timing_ms")
-        report["timing"]={"ms":distribution([r["request_to_checked_result_ms"] for c in report["cases"] for r in c["endpoints"]["requests"][1:]])}
+        timed=[r for c in report["cases"] for r in c["endpoints"]["requests"][1::2 if local_edits else 1]]
+        report["timing"]={"ms":distribution([r["request_to_checked_result_ms"] for r in timed])}
+        if local_edits:
+            report["independent_check_ms"]=[r["request_to_checked_result_ms"] for c in report["cases"] for r in c["endpoints"]["requests"][2::2]]
+        report["scenario"]="scroll_cases"
+        report["profile_scope"]="retained city profile, waves/reflections disabled" if scoped_retained else "current"
+        report["camera_requests"]=([[r[k] for k in ("step","site","x","y","revision")] for r in edits] if local_edits else
+                                   [case["request_offsets"] for case in report["cases"]])
+        report.update(preparation_accounting((directory/"renderer.log").read_text().splitlines(),args))
         return receipt,report
     if not lines or not lines[-1].startswith("BIQ ") or "0 fallback" not in lines[-1]:
         raise ValueError("Missing completed zero-fallback witness")
@@ -473,7 +529,8 @@ def inspect(directory):
             raise ValueError("Image dimensions differ from measured viewport")
         images[name] = hashlib.sha256(body).hexdigest()
     measured = rows[1:] if scenario == "zoom" else rows
-    report = {"endpoint": "standalone animation completed render; no native presentation" if scenario in ("animation","idle") else "standalone capture plus completed render; no native presentation",
+    report = {"profile_scope":"retained city profile, waves/reflections disabled" if scoped_retained else "declared current profile",
+              "endpoint": "standalone animation completed render; no native presentation" if scenario in ("animation","idle") else "standalone capture plus completed render; no native presentation",
               "endpoint_accounting": endpoint_accounting(lines,(directory/"renderer.log").read_text().splitlines() if (directory/"renderer.log").exists() else []),
               "wrapper_timing_ms":completion.get("wrapper_timing_ms"),
               "scenario": scenario, "viewport": [args["width"], args["height"]],
@@ -554,6 +611,16 @@ def inspect(directory):
             "completed_updates_per_second":count*1000/float(timed_ends[0]["wall_ms"]),
             "note":"The scripted producer advances while synchronous rendering blocks. Continuous slots coalesce; queued_discrete_v1 retains ordered zoom/minimap actions and reports their delay. This is a simulated input model, not native input handling. Missing phases remain missing; independent snapshot checks cannot turn them into a workload pass. Initial DLL load/configuration precedes the separately timed initial map render."}
     if scenario == "idle":
+        pace=args.get("idle_pace_ms",0)
+        pacing=[fields(l) for l in lines if l.startswith("IDLE_PACING ")]
+        if pace and (len(pacing)!=1 or pacing[0].get("period_ms")!=str(pace)):
+            raise ValueError("Missing declared idle cadence")
+        report["clock"]=(f"absolute {pace} ms demand cadence; " if pace else "unpaced demand; ")+"15 Hz authored pose samples"
+        deadlines=[fields(l) for l in lines if l.startswith("IDLE_DEADLINE ")]
+        if pace:
+            if len(deadlines)!=count or [int(r["step"]) for r in deadlines]!=list(range(count)):
+                raise ValueError("Missing paced demand completion endpoints")
+            report["demand_deadlines"]={k:distribution([float(r[k]) for r in deadlines]) for k in ("late_ms","complete_ms")}
         observed_changes=sum(images[image_names[i]]!=images[image_names[i-1]] for i in range(1,count))
         if observed_changes!=int(ends[0]["changed_frames"]) or (count>1 and observed_changes==0):
             raise ValueError("Idle images do not establish changing poses")
@@ -676,6 +743,7 @@ def inspect(directory):
         report["preparation"]["incomplete_owners"]=missing
         report["preparation"]["coverage"]="perfect" if mode=="oracle" and not missing else "partial" if mode=="oracle" else "baseline"
         return receipt,report
+    report.update(preparation_accounting(trace,args))
     measured_sequences=None
     if scenario=="idle":
         # The bounded trace may end early. Match actual measured clocks instead
@@ -723,20 +791,20 @@ def inspect(directory):
     return receipt, report
 
 
-def compare(reference, candidate):
-    before, old = inspect(reference)
-    after, new = inspect(candidate)
+def compare(reference, candidate, *, retained_profile=False):
+    before, old = inspect(reference,retained_profile=retained_profile)
+    after, new = inspect(candidate,retained_profile=retained_profile)
     if before["binaries"] != after["binaries"] or before["inputs"] != after["inputs"]:
         raise ValueError("Paired evidence requires identical binaries and runtime inputs")
-    controls = {"dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view", "preparation_mode",
+    controls = {"cpu_preparation_workers", "prepare_ahead", "dependency_control", "index_control", "center_shore_control", "world_regions_control", "three_zoom_memory", "camera_view", "preparation_mode",
                 "backdrop_control", "wave_control", "composition_casters_control", "backdrop_dependencies", "unit_pose_memory", "unit_pose_memory_mib", "composition_receiver_index", "mountain_samples", "material_samples", "production_defaults"}
     ignored = controls | {"out", "binaries"}
     # Receipts made before these opt-in witnesses existed represent their
     # disabled defaults. Nondefault scene/unit settings still must match.
-    defaults={"idle_steps":100,"idle_units":0,"idle_warmup":10,"dense_scene":False,"unit_actions":"idle"}
+    defaults={"cpu_preparation_workers":0,"prepare_ahead":False,"idle_pace_ms":0,"idle_steps":100,"idle_units":0,"idle_warmup":10,"dense_scene":False,"unit_actions":"idle"}
     if {k: v for k, v in (defaults|before["args"]).items() if k not in ignored} != {k: v for k, v in (defaults|after["args"]).items() if k not in ignored}:
         raise ValueError("Paired cameras or quality settings differ")
-    env_controls = {"C3X_RENDERER_REGION_DEPENDENCY_CONTROL", "C3X_RENDERER_REGION_INDEX_CONTROL",
+    env_controls = {"C3X_RENDERER_CPU_PREPARATION", "C3X_RENDERER_PREPARE_AHEAD", "C3X_RENDERER_REGION_DEPENDENCY_CONTROL", "C3X_RENDERER_REGION_INDEX_CONTROL",
                     "C3X_RENDERER_CENTER_SHORE_CONTROL", "C3X_RENDERER_WORLD_REGIONS_CONTROL",
                     "C3X_RENDERER_BACKDROP_REUSE_CONTROL", "C3X_RENDERER_WAVE_REUSE_CONTROL",
                     "C3X_RENDERER_BACKDROP_DEPENDENCIES",
@@ -748,7 +816,15 @@ def compare(reference, candidate):
                     "C3X_RENDERER_COMPOSITION_CASTERS_CONTROL", "C3X_RENDERER_THREE_ZOOM_MEMORY", "C3X_RENDERER_TRACE_FILE",
                     "C3X_RENDERER_PREVIEW_CAMERA_QUEUE", "C3X_RENDERER_PREVIEW_CAMERA_VIEW",
                     "C3X_RENDERER_PREVIEW_PREPARATION_MODE"}
-    env_defaults={"C3X_RENDERER_PREVIEW_IDLE_STEPS":"","C3X_RENDERER_PREVIEW_IDLE_UNITS":"0","C3X_RENDERER_PREVIEW_IDLE_WARMUP":"10","C3X_RENDERER_PREVIEW_DENSE_SCENE":"","C3X_RENDERER_PREVIEW_UNIT_ACTIONS":"idle"}
+    if before.get("case_manifest") or after.get("case_manifest"):
+        a,b=before.get("case_manifest"),after.get("case_manifest")
+        if not a or not b or ({k:v for k,v in a.items() if k!="config_id"} !=
+                              {k:v for k,v in b.items() if k!="config_id"}):
+            raise ValueError("Paired persistent request manifests differ")
+        # Each manifest and its actual case identities were verified by inspect.
+        # Only the locations of immutable session files differ across directories.
+        env_controls.update(("C3X_RENDERER_PREVIEW_SESSION","C3X_RENDERER_SESSION_INPUTS"))
+    env_defaults={"C3X_RENDERER_PREVIEW_IDLE_PACE_MS":"0","C3X_RENDERER_PREVIEW_IDLE_STEPS":"","C3X_RENDERER_PREVIEW_IDLE_UNITS":"0","C3X_RENDERER_PREVIEW_IDLE_WARMUP":"10","C3X_RENDERER_PREVIEW_DENSE_SCENE":"","C3X_RENDERER_PREVIEW_UNIT_ACTIONS":"idle"}
     if ({k: v for k, v in (env_defaults|before.get("environment", {})).items() if k not in env_controls} !=
             {k: v for k, v in (env_defaults|after.get("environment", {})).items() if k not in env_controls} or
             old["camera_requests"] != new["camera_requests"]):
@@ -934,10 +1010,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("candidate", type=Path)
     parser.add_argument("--reference", type=Path)
+    parser.add_argument("--retained-profile", action="store_true", help="Explicitly analyze the matched retained city profile with waves/reflections disabled; never a general-profile pass")
     parser.add_argument("--case-reference", type=Path, help="Independent fresh process for persistent case output reproduction")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    result = compare_session_reference(args.case_reference,args.candidate) if args.case_reference else compare(args.reference, args.candidate) if args.reference else inspect(args.candidate)[1]
+    result = compare_session_reference(args.case_reference,args.candidate) if args.case_reference else compare(args.reference, args.candidate,retained_profile=args.retained_profile) if args.reference else inspect(args.candidate,retained_profile=args.retained_profile)[1]
     args.out.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({"report": str(args.out), "all_images_exact": result.get("all_images_exact"),
                       "timing": result.get("candidate", result)["timing"]["ms"]}))

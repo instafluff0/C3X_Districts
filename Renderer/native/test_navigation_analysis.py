@@ -6,7 +6,7 @@ import struct
 import tempfile
 import unittest
 
-from Renderer.native.analyze_navigation_run import compare, digest, distribution, inspect, endpoint_accounting, session_accounting, read_dense_diagnostic_case
+from Renderer.native.analyze_navigation_run import compare, digest, distribution, inspect, endpoint_accounting, session_accounting, read_dense_diagnostic_case, preparation_accounting
 
 
 class NavigationAnalysisTests(unittest.TestCase):
@@ -199,6 +199,35 @@ class NavigationAnalysisTests(unittest.TestCase):
             self.assertEqual(5602,report["session"]["post_input_settle_ms"])
             (root/"benchmark.log").write_text("\n".join(lines).replace("input_event=1","input_event=2"))
             with self.assertRaisesRegex(ValueError,"event order"):inspect(root)
+
+    def test_preparation_accounts_for_all_work_separately(self):
+        trace=["stage=ahead-prepared ok=1 cancelled=0 ms=40 geometry_built=0 upload_bytes=0 bytes=100 cap=200",
+               "stage=ahead-prepared ok=0 cancelled=1 ms=10 geometry_built=1 upload_bytes=64 bytes=0 cap=200",
+               "stage=ahead-consumed joined=0",
+               "stage=cpu-content-preparation peak_bytes=120 ready_cap=200 consumed=3 cpu_ms=90"]
+        report=preparation_accounting(trace,{"prepare_ahead":True,"cpu_preparation_workers":2})
+        self.assertEqual(50,report["work_ahead"]["render_ms_total"])
+        self.assertEqual(1,report["work_ahead"]["cancelled_or_failed"])
+        self.assertEqual(1,report["work_ahead"]["consumed"])
+        self.assertEqual(120,report["cpu_content_preparation"]["maximum_ready_bytes"])
+        with self.assertRaisesRegex(ValueError,"budget"):
+            preparation_accounting([trace[-1].replace("peak_bytes=120","peak_bytes=201")],{"cpu_preparation_workers":2})
+        with self.assertRaisesRegex(ValueError,"coverage"):
+            preparation_accounting([],{"cpu_preparation_workers":2})
+
+    def test_retained_scope_does_not_waive_other_quality_gates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=self.fixture(Path(temporary)/"run")
+            receipt=json.loads((root/"inputs.json").read_text())
+            receipt.update(quality_mode="diagnostic_reflections_disabled")
+            receipt["args"].update(reflection_ablation=True,automatic_scene_surface=True)
+            receipt["environment"].update(C3X_RENDERER_REFLECTION_CONTROL="1",C3X_RENDERER_WAVES="0")
+            (root/"inputs.json").write_text(json.dumps(receipt))
+            with self.assertRaisesRegex(ValueError,"ablation"):inspect(root)
+            inspect(root,retained_profile=True)
+            receipt["args"]["diagnostic_animation"]="none"
+            (root/"inputs.json").write_text(json.dumps(receipt))
+            with self.assertRaisesRegex(ValueError,"ablation"):inspect(root,retained_profile=True)
 
     def fixture(self, root):
         root.mkdir()

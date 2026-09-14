@@ -560,7 +560,7 @@ int main(){
             self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         append = "    void append_tile_geometry(" + source.split(
-            "    void append_tile_geometry(", 1)[1].split("    bool tile_content_valid(", 1)[0]
+            "    void append_tile_geometry(", 1)[1].split("    c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input(", 1)[0]
         program = r'''
 #include <array>
 #include <cassert>

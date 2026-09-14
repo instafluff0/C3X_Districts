@@ -7,6 +7,9 @@
 #include "../../../native/source_fidelity/river_corridor.h"
 namespace c3x_renderer { namespace fidelity {
 struct NaturalWorld : NaturalData {
+    // CPU preparation borrows immutable decoded assets while owning independent
+    // river pages and query proofs. Reset/pause ends this source read lease.
+    NaturalData const* borrowed_data=nullptr;
     using Dependencies=std::unordered_map<std::size_t,std::uint32_t>;
     using CellKey=std::array<int,4>; // source page, then sampled world cell
     struct PageInputs {
@@ -110,6 +113,7 @@ struct NaturalWorld : NaturalData {
         return bytes;
     }
     std::vector<RiverPage> river_pages;
+    unsigned river_page_limit=16;
     render_core::WorldTopology const*river_world=nullptr;
     std::uint64_t river_epoch=0;
     std::int64_t river_revision=-1;
@@ -123,7 +127,7 @@ struct NaturalWorld : NaturalData {
         for(auto&p:river_pages)if(p.c==pc && p.r==pr){p.used=river_epoch;return p;}
         // Sixteen 8x8 pages, each with a four-cell authoritative support halo.
         // Distant jumps evict LRU fields instead of building the whole map.
-        if(river_pages.size()==16){auto it=std::min_element(river_pages.begin(),river_pages.end(),[](auto const&a,auto const&b){return a.used<b.used;});river_pages.erase(it);}
+        if(river_pages.size()>=std::max(1u,std::min(16u,river_page_limit))){auto it=std::min_element(river_pages.begin(),river_pages.end(),[](auto const&a,auto const&b){return a.used<b.used;});river_pages.erase(it);}
         RiverPage page;page.c=pc;page.r=pr;page.used=river_epoch;
         auto const&w=*river_world;auto dims=w.dimensions();hydro::Field field;
         Dependencies inputs;
@@ -141,7 +145,7 @@ struct NaturalWorld : NaturalData {
             if(dims.wrap_x)rx=render_core::mod(rx,dims.width);if(dims.wrap_y)ry=render_core::mod(ry,dims.height);
             return Tile{rx,ry,c,r,bits!=0xffffffffu?int((bits>>8)&255):-1};};
         page.field=std::make_shared<river::Corridor>();
-        page.field->build(field,[&](double u,double v){return height(float(u),float(v),lookup);});
+        page.field->build(field,[&](double u,double v){return (borrowed_data?*borrowed_data:static_cast<NaturalData const&>(*this)).height(float(u),float(v),lookup);});
         page.cells->inputs->values.assign(inputs.begin(),inputs.end());
         river_pages.push_back(std::move(page));return river_pages.back();
     }

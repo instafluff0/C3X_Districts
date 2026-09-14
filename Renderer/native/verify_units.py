@@ -53,7 +53,7 @@ def main():
             "ANIMATION scroll parity: pass", "ANIMATION removal parity: pass",
             "UNIT config-off preserves canvas: pass", "UNIT RGB555 clipped zoom=0",
             "UNIT action interruption and held endpoint: pass draws=582",
-            "UNIT independent ambient phases and exact repeat: pass",
+            "UNIT independent native cursors and exact repeat: pass",
             "UNIT RGB555 magenta clipped parity zoom=0 status=pass", "UNIT RGB555 magenta clipped parity zoom=1 status=pass",
             "UNIT RGB565 magenta clipped parity zoom=0 status=pass", "UNIT RGB565 magenta clipped parity zoom=1 status=pass",
             "UNIT RGB555 clipped zoom=1", "UNIT RGB565 clipped zoom=0", "UNIT RGB565 clipped zoom=1")

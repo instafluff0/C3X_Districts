@@ -114,6 +114,9 @@ def main(argv=None):
                         help="Cold baseline or complete untimed retained preparation for replay/session")
     parser.add_argument("--replay-samples-per-phase", type=int, choices=range(1,101), default=25)
     parser.add_argument("--idle-steps", type=int, choices=range(1,1001), default=100)
+    parser.add_argument("--cpu-preparation-workers", type=int, choices=(0,1,2,4), default=0, help="Bounded CPU world-content preparation workers; zero retains the control compiler")
+    parser.add_argument("--prepare-ahead", action="store_true", help="Prepare exact full-detail ambient ticks on the idle renderer worker")
+    parser.add_argument("--idle-pace-ms", type=int, choices=range(0,501), default=0, help="Absolute stationary demand cadence; zero uses unpaced demand")
     parser.add_argument("--idle-warmup", type=int, choices=range(10,151), default=10)
     parser.add_argument("--unit-pose-memory", action="store_true", help="Opt-in 256 MiB / 4096-entry exact unit-pose retention")
     parser.add_argument("--unit-pose-memory-mib", type=int, choices=(256,512), default=256, help="Bounded pose-pixel budget when --unit-pose-memory is enabled")
@@ -298,6 +301,9 @@ def main(argv=None):
            "C3X_RENDERER_PREVIEW_IDLE_STEPS": str(args.idle_steps) if args.scenario == "idle" else "",
            "C3X_RENDERER_PREVIEW_IDLE_UNITS": str(args.idle_units),
            "C3X_RENDERER_PREVIEW_UNIT_ACTIONS": args.unit_actions,
+           "C3X_RENDERER_CPU_PREPARATION": str(args.cpu_preparation_workers),
+           "C3X_RENDERER_PREPARE_AHEAD": "1" if args.prepare_ahead else "0",
+           "C3X_RENDERER_PREVIEW_IDLE_PACE_MS": str(args.idle_pace_ms),
            "C3X_RENDERER_PREVIEW_IDLE_WARMUP": str(args.idle_warmup),
            "C3X_RENDERER_UNIT_POSE_MEMORY": ("512" if args.unit_pose_memory_mib==512 else "1") if args.unit_pose_memory else "0",
            "C3X_RENDERER_PREVIEW_DENSE_SCENE": "1" if args.dense_scene else "",

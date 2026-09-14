@@ -35,6 +35,17 @@ spatially selected pass inputs. Full MSAA resolve and general native asynchronou
 handoff remain explicit limits. The retained plan records the scoped completion
 assessment, controls, complete-request measurements and precision constraints.
 
+Full-detail CPU surface compilation now has a bounded helper pool sharing immutable
+assets and world inputs, with private river/query/layout scratch per worker.
+Source mutation joins readers; locally proven results enter the existing compiled
+world owner before selected pass submission. The renderer thread can compile
+unstarted demanded work while helpers prepare other captured instances. One GPU
+owner also prepares a finite horizon of exact ambient frames after a stationary
+view is confirmed; later matching calls consume immutable publications. These
+mechanisms do not complete Civ III's general asynchronous camera handoff, predict
+game state, or add redraw callbacks. See the retained plan for controls and measured
+scope; helper count alone is not a speedup claim.
+
 ## Firm principles
 
 - **Authoritative C3X ownership.** C3X owns game state, visibility, anchors, camera,

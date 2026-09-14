@@ -1,9 +1,52 @@
 """World validity and spatial selection use production owners, without a GPU."""
 import unittest
 from Renderer.native.native_cpp_test import run_cpp
+from Renderer.lab.platform import ROOT
 
 
 class WorldViewSubmissionTests(unittest.TestCase):
+    def test_one_frame_proof_rechecks_anchors_epochs_and_gpu_residency(self):
+        source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
+        validate="    bool tile_content_valid("+source.split("    bool tile_content_valid(",1)[1].split("    bool restore_viewport_geometry(",1)[0]
+        run_cpp(r'''
+#include <cassert>
+#include <array>
+#include <cstdint>
+#include <vector>
+struct c3x_renderer_tile_v1 {int anchor_x=3,anchor_y=4;};
+struct Handle {int generation=1;};
+struct CachedTileGeometry {
+ bool shared_natural=false;Handle natural_content;
+ std::uint64_t validity_epoch=0;int validity_anchor_x=0,validity_anchor_y=0;bool validity=false;
+ std::vector<std::pair<unsigned,unsigned>> appearance_dependencies{{0,1}},dependencies{{0,42}},coast_dependencies{{0,1}},world_dependencies{{0,7}};
+ std::vector<std::pair<unsigned,std::array<int,2>>> anchor_dependencies{{0,{10,20}}};int river_dependencies=1;
+};
+struct State {
+ std::uint64_t tile_geometry_epoch=1;
+ struct Residents {CachedTileGeometry shared;bool alive=true;Residents(){shared.shared_natural=true;}
+  CachedTileGeometry* resolve(Handle){return alive?&shared:nullptr;}}resident_content;
+ struct Topology {struct Record{unsigned semantic=42;struct {int anchor_x=13,anchor_y=24;}occurrence;}record;
+  unsigned appearance_revision(unsigned){return 1;}Record*current(unsigned){return &record;}}topology_cache;
+ struct World {unsigned value=7,reads=0;unsigned node_revision(unsigned){++reads;return 1;}
+  World&world(){return *this;}unsigned at(unsigned){++reads;return value;}}world_coast;
+ struct Rivers {int calls=0;bool valid(int){++calls;return true;}}natural;
+'''+validate+r'''
+};
+int main(){
+ State state;CachedTileGeometry cached;c3x_renderer_tile_v1 tile;
+ assert(state.tile_content_valid(cached,tile));auto reads=state.world_coast.reads;
+ assert(state.tile_content_valid(cached,tile));assert(state.world_coast.reads==reads && state.natural.calls==1);
+ ++tile.anchor_x;assert(!state.tile_content_valid(cached,tile));
+ --tile.anchor_x;assert(state.tile_content_valid(cached,tile));assert(state.natural.calls==2);
+ state.resident_content.alive=false;assert(!state.tile_content_valid(cached,tile));
+ state.resident_content.alive=true;assert(state.tile_content_valid(cached,tile));
+ ++state.tile_geometry_epoch;state.world_coast.value=8;assert(!state.tile_content_valid(cached,tile));
+ ++state.tile_geometry_epoch;state.world_coast.value=7;assert(state.tile_content_valid(cached,tile));
+ state.tile_geometry_epoch=0;reads=state.world_coast.reads;
+ assert(state.tile_content_valid(cached,tile));assert(state.tile_content_valid(cached,tile));assert(state.world_coast.reads>reads);
+}
+''')
+
     def test_river_cell_proofs_preserve_exact_values_and_local_validity(self):
         run_cpp(r'''
 #include "Renderer/lab/shared/natural/world.h"

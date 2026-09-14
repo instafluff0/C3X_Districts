@@ -707,6 +707,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     int distant_steps=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DISTANT_STEPS",distant_option,sizeof(distant_option))?std::clamp(std::atoi(distant_option),0,1000):0;
     char idle_option[16]={};
     int idle_steps=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_IDLE_STEPS",idle_option,sizeof(idle_option))?std::clamp(std::atoi(idle_option),0,1000):0;
+    int idle_pace_ms=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_IDLE_PACE_MS",idle_option,sizeof(idle_option))?std::clamp(std::atoi(idle_option),0,500):0;
     int idle_warmup=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_IDLE_WARMUP",idle_option,sizeof(idle_option))?std::clamp(std::atoi(idle_option),10,150):10;
     char session_option[8]={};
     bool busy_session=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_BUSY_SESSION",session_option,sizeof(session_option)) && std::strcmp(session_option,"1")==0;
@@ -1385,7 +1386,13 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             idle_steps,idle_warmup,center_x,center_y,tile_width,idle_unit_count,int(dense_scene),cities_count,roads_count,
             farms_count,mines_count,camps_count,resources_count,
             mixed_unit_actions?"mixed":realistic_unit_actions?"realistic":"idle");
+        LARGE_INTEGER idle_origin={};QueryPerformanceCounter(&idle_origin);
+        std::printf("IDLE_PACING period_ms=%d includes_wait_in_request=0 absolute_deadlines=1\n",idle_pace_ms);
         for(int step=-idle_warmup;step<idle_steps && ok;++step) {
+            auto deadline=idle_origin.QuadPart+c3x_renderer_i64(step+idle_warmup+1)*idle_pace_ms*frequency.QuadPart/1000;
+            if(idle_pace_ms){LARGE_INTEGER now={};
+                do{QueryPerformanceCounter(&now);if(now.QuadPart+frequency.QuadPart/500<deadline)Sleep(1);else if(now.QuadPart<deadline)Sleep(0);}while(now.QuadPart<deadline);
+            }
             frame.presentation_time_ticks=1000000+c3x_renderer_i64(step+idle_warmup+1)*frame.presentation_frequency/15;
             LARGE_INTEGER begin={},map_end={},copy_end={},end={};QueryPerformanceCounter(&begin);
             int code=render_checked(&frame,&output);QueryPerformanceCounter(&map_end);
@@ -1463,6 +1470,8 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                 double(copy_end.QuadPart-map_end.QuadPart)*1000/frequency.QuadPart,
                 double(end.QuadPart-copy_end.QuadPart)*1000/frequency.QuadPart,idle_unit_count,moving_units,attacking_units,fortifying_units,idling_units,
                 selected_units,working_units,directed_units);
+            if(idle_pace_ms)std::printf("IDLE_DEADLINE step=%d late_ms=%.3f complete_ms=%.3f\n",step,
+                double(begin.QuadPart-deadline)*1000/frequency.QuadPart,double(end.QuadPart-deadline)*1000/frequency.QuadPart);
             camera_memory();std::fflush(stdout);
             if(ok)ok=write_bmp((std::string(argv[5])+".idle"+std::to_string(step)+".bmp").c_str(),composed);
         }
@@ -2012,14 +2021,14 @@ bool preview_units(HMODULE module,char const* path,int hour) {
     HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&bits,nullptr,0);
     if(!dc || !bitmap){if(bitmap)DeleteObject(bitmap);if(dc)DeleteDC(dc);return false;}
     auto old=SelectObject(dc,bitmap);bool ok=true;unsigned drawn=0;
-    // Three equal-facing warriors at one clock must have distinct ambient
-    // poses. A repeated identity/time must reproduce its exact pixels.
+    // Three equal-facing warriors at one clock follow independent native cursors.
+    // Unit identity and wall time must not override the supplied native phase.
     std::vector<std::uint32_t> ambient_sheet(573*191,0xff565b62u);
     std::vector<std::vector<std::uint32_t>> ambient_images;
     for(int i=0;i<3 && ok;++i) {
         std::fill_n(static_cast<std::uint32_t*>(bits),1024*1152,0xff565b62u);
         c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Warrior");
-        unit.unit_id=10000+i;unit.action=1;unit.direction=3;unit.frame_count=16;
+        unit.unit_id=10000+i;unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=i*5;
         unit.sprite_width=unit.sprite_height=191;unit.body_x=unit.body_y=100;
         unit.presentation_frequency=1000000;unit.presentation_time_ticks=1000000;unit.hour=hour;
         unit.display_color_rgb=0x205bdd;ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK;GdiFlush();
@@ -2030,9 +2039,13 @@ bool preview_units(HMODULE module,char const* path,int hour) {
         std::fill_n(values,1024*1152,0xff565b62u);
         ok=draw(&unit,dc)==C3X_RENDERER_RESULT_OK && ok;GdiFlush();
         ok=ok && std::memcmp(current.data(),bits,current.size()*4)==0;
+        auto same_phase=unit;same_phase.unit_id+=1000;same_phase.presentation_time_ticks+=500000;
+        std::fill_n(values,1024*1152,0xff565b62u);
+        ok=draw(&same_phase,dc)==C3X_RENDERER_RESULT_OK && ok;GdiFlush();
+        ok=ok && std::memcmp(current.data(),bits,current.size()*4)==0;
         ambient_images.push_back(std::move(current));
     }
-    std::printf("UNIT independent ambient phases and exact repeat: %s\n",ok?"pass":"FAIL");
+    std::printf("UNIT independent native cursors and exact repeat: %s\n",ok?"pass":"FAIL");
     if(ok) {
         c3x_renderer_output_v1 sheet={};sheet.width=573;sheet.height=191;sheet.stride_bytes=573*4;sheet.bgra_pixels=ambient_sheet.data();
         ok=write_bmp((std::string(path)+".ambient-phases.bmp").c_str(),sheet);

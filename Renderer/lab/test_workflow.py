@@ -377,7 +377,7 @@ class BehaviorWitnessTests(unittest.TestCase):
                "UNIT repeated native cursor: pass", "UNIT retained terrain unchanged: pass",
                "UNIT post-draw terrain parity: pass", "UNIT config-off preserves canvas: pass",
                "UNIT action interruption and held endpoint: pass draws=582",
-               "UNIT independent ambient phases and exact repeat: pass"]
+               "UNIT independent native cursors and exact repeat: pass"]
         for zoom in (0,1):
             lines.append(f"UNIT magenta underlay parity zoom={zoom}")
             for mode in ("RGB555","RGB565"):
@@ -386,7 +386,7 @@ class BehaviorWitnessTests(unittest.TestCase):
         complete="\n".join(lines)
         renderer.verify_behavior_output("units",complete)
         for invalid in (complete.replace("draws=582","draws=564"),
-                        complete.replace("UNIT independent ambient phases and exact repeat: pass", "")):
+                        complete.replace("UNIT independent native cursors and exact repeat: pass", "")):
             with self.assertRaisesRegex(ValueError,"Incomplete native unit"):
                 renderer.verify_behavior_output("units",invalid)
 
