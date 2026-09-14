@@ -8,7 +8,7 @@
 
 struct RendererTrace {
     std::mutex write_mutex;
-    int level = 2;
+    int level = 1; // Aggregate gameplay evidence; per-submission detail is an explicit diagnostic.
     FILE * file = nullptr;
     std::size_t bytes = 0;
     bool buffered = false;

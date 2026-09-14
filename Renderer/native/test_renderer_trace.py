@@ -25,7 +25,7 @@ std::vector<std::string> lines;
 char const* trace_level="2";long long clock_ticks=0;bool buffered=false;
 DWORD GetEnvironmentVariableA(char const* name,char* out,unsigned size){
  if(!std::strcmp(name,"C3X_RENDERER_TRACE_BUFFERED") && buffered){std::strcpy(out,"1");return 1;}
- if(std::strcmp(name,"C3X_RENDERER_TRACE"))return 0;
+ if(std::strcmp(name,"C3X_RENDERER_TRACE") || !trace_level)return 0;
  assert(std::strlen(trace_level)<size);std::strcpy(out,trace_level);return std::strlen(out);
 }
 void QueryPerformanceFrequency(LARGE_INTEGER* out){out->QuadPart=1000000;}
@@ -58,7 +58,12 @@ int main(){
  auto count=lines.size();trace_level="0";RendererTrace disabled;
  assert(disabled.usage_view(frame)==0);disabled.usage_result(1,1,0,output);disabled.write("test","",true);
  assert(lines.size()==count);
- trace_level="2";buffered=true;
+ // Ordinary gameplay samples detail; errors/aggregate endpoints remain visible.
+ trace_level=nullptr;RendererTrace summary;assert(summary.level==1);
+ count=lines.size();for(int i=0;i<100;++i)summary.write("source-shadow","detail",false);
+ assert(lines.size()==count);clock_ticks+=1000000;summary.write("unit-body","sample",false);
+ assert(lines.size()==count+1);summary.write("error","visible",true);assert(lines.size()==count+2);
+ count=lines.size();trace_level="2";buffered=true;
  RendererTrace buffered_trace;
  assert(lines.size()==count && !buffered_trace.pending.empty());
  buffered_trace.file_limit=buffered_trace.pending.size()+1024;

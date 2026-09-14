@@ -21663,6 +21663,9 @@ CityLocValidity __fastcall patch_Map_check_city_location (Map * this, int edx, i
 void __fastcall
 patch_Main_GUI_set_up_unit_command_buttons (Main_GUI * this)
 {
+	// Treat native command reconstruction as one UI operation for renderer scheduling.
+	bool previous_modal = is->custom_renderer_modal;
+	is->custom_renderer_modal = true;
 	// Recompute resources now if needed because of a trade deal involving mill inputs. In rare cases the change in deals might affect a mill that
 	// produces a resource that's used for a worker job.
 	recompute_resources_if_necessary ();
@@ -21712,6 +21715,7 @@ patch_Main_GUI_set_up_unit_command_buttons (Main_GUI * this)
 			}
 		}
 	}
+	is->custom_renderer_modal = previous_modal;
 }
 
 void 
@@ -36413,6 +36417,16 @@ bool __fastcall patch_Advisor_Base_Form_foreign_m95  (Advisor_Base_Form * this) 
 bool __fastcall patch_Advisor_Base_Form_cultural_m95 (Advisor_Base_Form * this) { on_open_advisor (AK_CULTURAL); return Advisor_Base_Form_cultural_m95 (this); }
 bool __fastcall patch_Advisor_Base_Form_science_m95  (Advisor_Base_Form * this) { on_open_advisor (AK_SCIENCE) ; return Advisor_Base_Form_science_m95  (this); }
 
+// Keep renderer scheduling suspended through Advisor construction and its native dialog loop.
+void __fastcall
+patch_Advisor_GUI_open (Advisor_GUI * this, int edx, AdvisorKind kind)
+{
+	bool previous_modal = is->custom_renderer_modal;
+	is->custom_renderer_modal = true;
+	Advisor_GUI_open (this, edx, kind);
+	is->custom_renderer_modal = previous_modal;
+}
+
 void __fastcall
 patch_Main_Screen_Form_open_quick_build_chooser (Main_Screen_Form * this, int edx, City * city, int mouse_x, int mouse_y)
 {
@@ -41461,14 +41475,10 @@ is_skippable_popup (char * text_key)
 int __fastcall
 patch_PopupForm_impl_begin_showing_popup (PopupForm * this)
 {
-	bool previous_renderer_modal = is->custom_renderer_modal;
-	is->custom_renderer_modal = true;
 	if (is_online_game () ||
 	    (! is->current_config.convert_some_popups_into_online_mp_messages) ||
 	    (! is_skippable_popup (this->text_key))) {
-		int tr = PopupForm_impl_begin_showing_popup (this);
-		is->custom_renderer_modal = previous_renderer_modal;
-		return tr;
+		return PopupForm_impl_begin_showing_popup (this);
 	}
 
 	else {
@@ -41484,7 +41494,6 @@ patch_PopupForm_impl_begin_showing_popup (PopupForm * this)
 
 		this->field_1BF0[0xE4] = saved_flags;
 		*p_preferences = saved_prefs;
-		is->custom_renderer_modal = previous_renderer_modal;
 
 		return tr;
 	}
@@ -45609,7 +45618,8 @@ custom_renderer_scheduler_tick ()
 	HWND focused_window = (GetFocus != NULL) ? GetFocus () : NULL;
 	if (focused_window != NULL)
 		input.state_flags |= C3X_RENDERER_SCHEDULER_FOCUSED;
-	if (is->custom_renderer_modal)
+	// The outer show_popup scope outlives its begin_showing_popup setup helper.
+	if (is->custom_renderer_modal || is->paused_for_popup)
 		input.state_flags |= C3X_RENDERER_SCHEDULER_MODAL;
 	if (is->custom_renderer_draw_in_progress)
 		input.state_flags |= C3X_RENDERER_SCHEDULER_DRAWING;
@@ -45723,7 +45733,7 @@ bool
 custom_renderer_has_visual_work ()
 {
 	if (! is->current_config.enable_custom_rendering || is->custom_renderer_init_state != IS_OK ||
-	    is->custom_renderer_qpc_frequency.QuadPart <= 0 || is->custom_renderer_modal ||
+	    is->custom_renderer_qpc_frequency.QuadPart <= 0 || is->custom_renderer_modal || is->paused_for_popup ||
 	    is->custom_renderer_draw_in_progress || p_main_screen_form->is_now_loading_game ||
 	    *p_player_bits == 0 || is->saved_tile_count >= 0 || is_online_game () ||
 	    GetFocus == NULL || GetFocus () == NULL ||

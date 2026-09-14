@@ -18,11 +18,40 @@ no injected source, ABI field, patch symbol or address changes are needed.
 
 This is the current boundary and outstanding-request record, not a campaign
 history. Read `civ_prog_objects.csv` and the actual injected wrappers before
-claiming a capability is available. The camera entry and the five visual-cadence
-entries below are explicit user exceptions to the CSV editing restriction. Do not
-edit other CSV entries or `ref/Civ3Conquests.h`.
+claiming a capability is available. The camera, five visual-cadence and Advisor
+entries below are explicit user exceptions to the CSV editing restriction.
+Do not edit other CSV entries or `ref/Civ3Conquests.h`.
 
 ## Current action
+
+The user authorized a direct Advisor lifecycle patch for the reported flicker.
+`Advisor_GUI_open` changes from `ignore` to `inlead`, wrapping the original with
+save/set/restore of `custom_renderer_modal`. This suspends extra renderer scheduling
+and 33 ms visual refreshes during construction and the native dialog loop, including
+nested page switches. Native painting, messages and ordinary timer behavior remain
+owned by Civ III. The page-specific m95 hooks cannot cover the complete lifetime.
+
+- Signature: `void (__fastcall *)(Advisor_GUI * this, int edx, AdvisorKind kind)`.
+- Existing table addresses: GOG `0x49D070`, Steam `0x4A3AF0`, PCGames `0x49D100`.
+  GOG entry, stack argument, page-construction call, modal-dialog call and return
+  were checked against the original executable; other mappings are unchanged and
+  were not newly verified. No new address was inferred.
+- Verification: nested lifecycle/cadence contract and approved injected compilation.
+  Actual Advisor painting remains a live integration checkpoint.
+- Missing-hook fallback: existing native rendering; renderer-added scheduling would
+  lack this Advisor suspension. `required_user_action: []` under this authorization.
+
+The same suspension now honors existing `paused_for_popup`, owned by
+`patch_show_popup` / `WITH_PAUSE_FOR_POPUP`, instead of setting/clearing a shorter
+pause inside `PopupForm_impl_begin_showing_popup`. That helper returns before the
+outer native popup finishes layout/dialog handling. Existing
+`Main_GUI_set_up_unit_command_buttons` (`inlead`, GOG `0x550BB0`, Steam `0x55BCE0`,
+PCGames `0x550B60`; `void (__fastcall *)(Main_GUI * this)`) saves/sets/restores the
+same renderer guard around its complete native/mod button reconstruction.
+`show_popup` already has `inlead` at GOG `0x611530`, Steam `0x62DAF0`, PCGames
+`0x611460`, signature `int (__fastcall *)(void * this, int edx, int param_1, int param_2)`.
+These reuse existing symbols and state; no CSV changes, new timer, delayed repaint,
+parent-form inspection or drawing interception. `required_user_action: []`.
 
 Zoom preparation adds optional DLL export `c3x_renderer_prepare_view(camera_request const*, int query_only) -> int`.
 The existing compositor supplies copied prospective anchors through

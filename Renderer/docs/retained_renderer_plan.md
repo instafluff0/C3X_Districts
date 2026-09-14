@@ -11,7 +11,8 @@ supersedes the former single-experiment queue.
 Preserve AGENTS.md, native overlays/visibility/picking, generic assets, accepted
 visual contracts and deferred wonders/Districts. Tested DLL staging is authorized;
 installation and launch remain the user's actions through ordinary `INSTALL.bat`,
-without environment settings. No new native patch address is needed for this step.
+without environment settings. The authorized Advisor lifecycle hook reuses its
+existing patch-table addresses; see the patch ledger.
 
 ## Actual code responsibilities
 
@@ -30,7 +31,8 @@ GPU residency or knowledge of uncaptured gameplay.
 Native selected idle/work loops preserve source frames/duration; inactive unselected
 units freeze. Directed actions keep native cursors/anchors. The authorized GOG
 adapter offers unit visuals at 33 ms, preserves native advancement at 66 ms and
-map sampling at 15 Hz. No copied animator or competing presenter. See the
+map sampling at 15 Hz. Extra work suspends during guarded native UI operations.
+No copied animator or competing presenter. See the
 [patch ledger](civ3_patch_dependency_ledger.md) for capabilities and fallbacks.
 
 ## Completed world/view and zoom extension
@@ -56,70 +58,66 @@ donor is refreshed periodically, with age used for scheduling rather than static
 invalidation. Current requests take priority over unfinished future zoom builds.
 This is reuse plus preparation, not fully projection-independent world compilation.
 
-## Validation and measured effects
+## Current regression checkpoint
 
-Production Windows build, 54 focused contracts, actual worker and native zoom
-adapter under MSVC/x86, injected compilation and day/night unit/underlay replays
-pass. Nine prepared cameras and three selected-animation positions match independent
-same-area redraws. Four topology and six appearance edits pass independent redraws;
-the wider 14-step sequence passes exact revisits without fallback tiles or recovery.
-All three zoom images exactly match the accepted control; full detail and existing
-accepted raster behavior are preserved. No asset/reference was changed.
+The supplied game log has 2,135 map passes (median 12.05 ms, p95 173.60 ms,
+maximum 4.59 s), 900 cancelled unfinished area jobs, and over 54,000 source-shadow
+and unit-body detail lines. These are logged native intervals, not displayed FPS
+or a matched performance comparison. Debugger overhead is not isolated.
 
-Control: source `02ff301b`, DLL
-`4cbdfa93b44a7f41d18280db3932d216dc794ece15d08a3dfd1cfdcb3d85e8be`.
-Candidate DLL:
-`cec59b1b243c8fffd076430968d972a147c80196682ae86a713ffc4800820dea`.
+`patch_Advisor_GUI_open` saves/sets/restores the existing modal guard across native
+construction and the dialog loop. The renderer now also honors `paused_for_popup`,
+which already covers the whole outer popup routine; the shorter setup-helper guard
+was removed. The existing unit-command setup hook scopes the same suspension over
+button reconstruction. These are function-lifetime guards, with no timeout or
+change to native painting. Default tracing samples detail instead of emitting every
+submission/cache hit. Full detail, pixel blending and worker scheduling stay unchanged.
 
-| Whole consumer request | Control | Candidate |
-| --- | --- | --- |
-| First closer zooms after preparation opportunity | 1,790.81 / 2,302.34 ms | 6.21 / 6.64 ms |
-| Repeated zooms, six visits, mean / maximum | 602.68 / 689.26 ms | 6.94 / 8.12 ms |
-| Nearby paced scrolling, 48 calls, mean / p95 | 11.39 / 14.14 ms | 11.39 / 14.78 ms |
-| Warm idle, eight bodies, 60 calls, mean / p95 | 4.85 / 6.75 ms | 5.29 / 6.63 ms |
-| Wider scrolling with coverage misses, 14 steps, mean / maximum | 222.07 / 396.23 ms | 220.05 / 388.68 ms |
+Windows build, nested Advisor/cadence contract, actual x86 worker/zoom adapter,
+approved injected compilation, GDI handoff and day/night unit replays pass.
+Nine prepared camera images at 1440×900 match the preserved control byte for byte;
+their independent redraw differences are identical to that control. Three selected
+animation positions pass their redraw checks. Black bars did not reproduce there.
+Immediate native CPU reads/erasure also pass with the old and new GDI paths: the
+GDI batching hypothesis is unconfirmed, and no flush workaround was added.
 
-Endpoints include capture, render/acquisition and actual CPU output copy; idle also
-includes all eight bodies. They are 1119×900 harness requests, not native displayed
-FPS. Both zoom arms have a separate five-second preparation opportunity. Candidate
-uses it to build future views; it is not counted as faster construction. That
-harness interval has no continuous gameplay callbacks: actual readiness depends
-on current demand, and a zoom requested before preparation finishes can still block.
-Cold initial dense render is 7.54 → 7.33 s in the zoom pair, without a claimed gain.
+A trial one-second delay before retrying cancelled speculative views was removed:
+48 scrolling requests averaged 13.30 ms with and without it. It did not justify an
+additional timing policy. Exact trial binaries, invocations and measurements remain
+in `native/build/native-regressions/comparison.json`; they are not the final build.
 
-Nearby/idle have no demonstrated speedup. Maximum sampled map age grows
-263 → 681 ms in paced scrolling while cold alternatives compete, and 133 → 333 ms
-in warm idle. Current-priority correction removed the earlier four-second hold,
-but quick requests do not guarantee equally fresh animation. Native unit timing
-is unchanged. General jumps remain dominated by compilation and GPU completion.
+Final whole-request mean/p95 is 13.30/16.81 → 13.31/16.29 ms for 48 scrolling calls
+and 5.62/7.07 → 5.50/7.07 ms for 60 eight-body idle calls. No speedup is established.
+The preserved control is source `d3acf940`, DLL `cec59b1b…820dea`; the staged final
+DLL is `ccc5c1dd…d2817b`. Full hashes, `final-comparison.json` and
+`final-staging-receipt.json` are in `native/build/native-regressions/`. Ordinary `INSTALL.bat`
+is the user's test path. Actual Advisor/popup/button painting and the reported
+black bars/shadow flicker remain the native integration checkpoint. Passive
+`map-black-span` diagnostics distinguish black source pixels from later composition;
+black map margins can be legitimate. No new visual acceptance or live speedup is
+claimed, and no game was launched.
 
-A bounded 20-call idle diagnostic records 19 map jobs in both, zero builds/uploads
-and static submissions, 532 dynamic selections and 122.35 million resolved pixels
-in both. Fifteen candidate updates avoid copying the entire wide CPU donor.
-Finishing lanes are 1.38 → 1.46 million; background area wall intervals total
-423 → 385 ms. This attributes skipped CPU publication work, not a broad draw/GPU
-speedup. Final x86 runs retain at least 1.45 GiB free contiguous address space;
-that is harness headroom, not a live-game guarantee.
-
-Exact binaries, input/source receipts, invocation manifests and summaries are in
-`native/build/world-view-zoom/`. Final candidate runs have suffix `v12`; matched
-controls use `control-final-{zoom,scroll,idle}-v10` and `control-final-wide-v11`.
-`comparison-v12.json` and `selection-diagnostic-v12.json` record the results.
-The exact candidate is staged in `Renderer/bin/` for ordinary `INSTALL.bat`;
-`staging-receipt.json` records source hashes and checks. No install or game launch
-was performed.
+Prior world/view/zoom evidence remains in `native/build/world-view-zoom/`:
+`comparison-v12.json`, `selection-diagnostic-v12.json` and final `v12` runs preserve
+full measurements and source/binary identities. Prepared first closer zooms went
+from 1.79/2.30 s to 6–7 ms after a separate five-second preparation opportunity;
+nearby scrolling/idle did not improve and cold construction remained expensive.
+The 20-call diagnostic retained 19 map jobs, zero geometry builds/uploads/static
+submissions, and 122.35 million resolved pixels in both; reduced CPU donor copying
+was not a broad GPU speedup. GPU timestamps remain unreliable.
 
 ## Next responsibility
 
-Make remaining city/route/improvement content projection independent and retain
+First verify native Advisor/popup/button behavior and resolve the black-bar/shadow
+source at the native composition boundary. Then make remaining
+city/route/improvement content projection independent and retain
 world-level spatial membership feeding selected passes. This reduces the cold
 preparation itself and helps views outside finished coverage; retaining more
 raster images or adding workers alone cannot remove the measured geometry cost.
 Preserve the working prepared-view handoff while extending its coverage. Complete
-active-unit demand collection remains separate: the latest live trace's 85 pose
-misses have median 60.76 ms and p95 127.34 ms despite 95.8% hits. Neither mechanism
-has established live displayed FPS. Native zoom/camera cadence and overlay/picking
-acceptance remain the strategic game checkpoint, through the user's installation.
+active-unit demand collection remains separate: individual pose misses still block
+native demand. Neither mechanism has established live displayed FPS. Native
+zoom/camera cadence and overlay/picking acceptance remain the strategic game checkpoint, through the user's installation.
 
 ## Preserved controls and closed findings
 

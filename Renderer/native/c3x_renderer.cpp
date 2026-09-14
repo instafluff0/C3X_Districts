@@ -9352,6 +9352,7 @@ class MapBlitter {
     unsigned blit_destination_green_mask = 0;
     c3x_renderer::ColorRoundingTable blit_round5{}, blit_round6{};
     bool blit_rounding_ready = false;
+    int last_black_x=-1,last_black_y=-1,last_black_length=0;
 public:
     MapBlitter() = default;
     MapBlitter(MapBlitter const&) = delete;
@@ -9425,6 +9426,27 @@ public:
             blit_round5=c3x_renderer::color_rounding_table(31);
             blit_round6=c3x_renderer::color_rounding_table(63);
             blit_rounding_ready=true;
+        }
+        // Bounded live diagnostic: distinguish a black strip already present
+        // in renderer output from later native erasure/composition. Sampling
+        // every eighth row catches the reported 16/32-pixel bars without a
+        // second full-image traversal or recording native/UI pixels.
+        if(trace.level){
+            int black_x=-1,black_y=-1,black_length=0;
+            for(int y=output.clip_top;y<output.clip_bottom;y+=8){
+                auto row=reinterpret_cast<std::uint32_t const*>(static_cast<std::uint8_t const*>(output.bgra_pixels)+std::size_t(y)*output.stride_bytes);
+                int run=0;
+                for(int x=output.clip_left;x<output.clip_right;++x){
+                    run=(row[x]&0x00ffffffu)?0:run+1;
+                    if(run>=32 && run>black_length){black_x=x-run+1;black_y=y;black_length=run;}
+                }
+            }
+            if(black_x!=last_black_x || black_y!=last_black_y || black_length!=last_black_length){
+                char detail[192];std::snprintf(detail,sizeof(detail),"x=%d y=%d length=%d width=%d height=%d source=renderer-map sample_rows=8",
+                    black_x,black_y,black_length,output.width,output.height);
+                trace.write("map-black-span",detail,true);
+                last_black_x=black_x;last_black_y=black_y;last_black_length=black_length;
+            }
         }
         auto const& green_rounding=green_mask==0x7e0?blit_round6:blit_round5;
         std::size_t row_bytes = static_cast<std::size_t>(
@@ -10298,7 +10320,7 @@ public:
                 request.unit_id,request.unit_key,request.action,request.action_cursor,request.frame_count,
                 request.direction,result,unsigned(cached.prepared),static_cast<unsigned long long>(unit_pixels_hits),keyed,cached.cast_pixels,
                 renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart));
-            renderer_state.trace.write("unit-body",detail,true);
+            renderer_state.trace.write("unit-body",detail,result!=C3X_RENDERER_RESULT_OK);
             return result;
         }
         {

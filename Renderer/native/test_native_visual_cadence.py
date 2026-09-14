@@ -15,6 +15,7 @@ class NativeVisualCadenceTests(unittest.TestCase):
             'Units_Image_Data_advance_animations':('inlead',0x00405FC0),
             'p_native_timer_inhibited':('define',0x0072C2C4),
             'p_native_game_ending':('define',0x00CC37BC),
+            'Advisor_GUI_open':('inlead',0x0049D070),
         }
         found=set()
         for row in csv.reader((ROOT/'civ_prog_objects.csv').read_text().replace('\t',' ').splitlines(),skipinitialspace=True):
@@ -23,7 +24,8 @@ class NativeVisualCadenceTests(unittest.TestCase):
             self.assertNotIn(row[4],found)
             found.add(row[4])
             self.assertEqual((row[0],int(row[1],0)),expected[row[4]])
-            self.assertEqual([int(row[2],0),int(row[3],0)],[0,0])
+            other_builds=[0x4A3AF0,0x49D100] if row[4]=='Advisor_GUI_open' else [0,0]
+            self.assertEqual([int(row[2],0),int(row[3],0)],other_builds)
         self.assertEqual(found,set(expected))
 
     def test_gog_bytes_and_four_argument_abi(self):
@@ -34,6 +36,8 @@ class NativeVisualCadenceTests(unittest.TestCase):
     def test_production_cadence_preserves_advancement_guards_and_lifecycle(self):
         source=(ROOT/'injected_code.c').read_text()
         body=source[source.index('// The intermediate native visual call'):source.index('void __fastcall\npatch_Units_Image_Data_load_animated_effect')]
+        advisor=source[source.index('void __fastcall\npatch_Advisor_GUI_open'):source.index('void __fastcall\npatch_Main_Screen_Form_open_quick_build_chooser')]
+        body=advisor+body
         unload=source.split('unload_custom_renderer ()\n{',1)[1].split('\tis->custom_renderer_frame_active = false;',1)[0]
         unload=unload.split('\tis->custom_renderer_native_timer_due.QuadPart = 0;',1)[0]+'\tis->custom_renderer_native_timer_due.QuadPart = 0;'
         # Compile-only fixture for the real TCC/native layouts, using the same
@@ -41,7 +45,7 @@ class NativeVisualCadenceTests(unittest.TestCase):
         definitions={}
         needed={'p_main_screen_form','p_player_bits','p_debug_mode_bits','Animator_update','on_timer_0x9F6500',
                 'p_main_animation_timer','Timer_reset_and_activate','Units_Image_Data_advance_animations',
-                'p_native_timer_inhibited','p_native_game_ending'}
+                'p_native_timer_inhibited','p_native_game_ending','Advisor_GUI_open'}
         for row in csv.reader((ROOT/'civ_prog_objects.csv').read_text().replace('\t',' ').splitlines(),skipinitialspace=True):
             row=[item.strip() for item in row]
             if len(row)==6 and row[4] in needed:definitions[row[4]]=(row[5],row[1])
@@ -75,6 +79,8 @@ void clear_active_custom_tile_animation_effects ();
 #define Units_Image_Data_advance_animations advance
 #define p_native_timer_inhibited inhibited_ptr
 #define p_native_game_ending ending_ptr
+struct Advisor_GUI {};enum AdvisorKind {AK_DOMESTIC,AK_TRADE};
+void Advisor_GUI_open(Advisor_GUI*,int,AdvisorKind);
 struct LARGE_INTEGER {long long QuadPart=0;};
 struct Unit {struct {int ID=1;struct {struct {int current_anim_type=13;} summary;} Animation;} Body;};
 struct Animator {int field_18E4[22]{};int field_1AE0=0,field_1AE4=0;Unit* Units[1024]{};int Units_Count=0,Units2_Count=0;};
@@ -86,7 +92,7 @@ Timer timer;auto timer_ptr=&timer;
 int inhibited=0,ending=0,players=1;auto inhibited_ptr=&inhibited;auto ending_ptr=&ending;auto p_player_bits=&players;
 struct State {
  struct {bool enable_custom_rendering=true,enable_custom_rendered_units=true,enable_custom_animations=false;} current_config;
- int custom_renderer_init_state=1,saved_tile_count=-1;bool custom_renderer_modal=false,custom_renderer_draw_in_progress=false;
+ int custom_renderer_init_state=1,saved_tile_count=-1;bool custom_renderer_modal=false,paused_for_popup=false,custom_renderer_draw_in_progress=false;
  bool custom_renderer_fast_timer=false,custom_renderer_visual_only=false,custom_renderer_timer_running=false;
  bool custom_renderer_redraw_pending=false;unsigned custom_renderer_requested_frames=0,custom_renderer_presented_frames=0;
  unsigned custom_renderer_visible_animation_count=0;
@@ -130,6 +136,14 @@ void on_timer_0x9F6500(){
  ++native_calls;if(!inhibited && !ending && !online)Animator_update(&screen.animator);
 }
 ''' + body.replace('this','self') + '\nvoid unload_cadence(){\n' + unload + '\n}\n' + r'''
+void Advisor_GUI_open(Advisor_GUI* self,int edx,AdvisorKind kind){
+ assert(self && edx==17 && state.custom_renderer_modal);
+ assert(!custom_renderer_has_visual_work());
+ now+=66000;unsigned before=visual_draws;patch_on_timer_0x9F6500();
+ assert(timer.duration==66 && visual_draws==before);
+ if(kind==AK_DOMESTIC)patch_Advisor_GUI_open(self,edx,AK_TRADE);
+ assert(state.custom_renderer_modal);
+}
 int main(){
  Unit worker;screen.animator.Units[0]=&worker;screen.animator.Units_Count=1;
  screen.animator.field_1AE0=int(now);
@@ -138,6 +152,12 @@ int main(){
  assert(native_seconds>1.979 && native_seconds<1.981);
  assert(!state.custom_renderer_visual_only && !state.custom_renderer_timer_running);
  assert(!*(bool*)(screen.animator.field_18E4+0xd));
+ // Advisor construction, page switches and nested dialogs suspend extra work.
+ Advisor_GUI advisor;
+ patch_Advisor_GUI_open(&advisor,17,AK_DOMESTIC);assert(!state.custom_renderer_modal);
+ state.custom_renderer_modal=true;patch_Advisor_GUI_open(&advisor,17,AK_TRADE);assert(state.custom_renderer_modal);
+ state.custom_renderer_modal=false;
+ now+=66000;patch_on_timer_0x9F6500();assert(timer.duration==33);
  // Ordinary native updates between timer callbacks remain authoritative.
  now+=10000;Animator_update(&screen.animator);unsigned before=advance_calls;
  now+=23000;reenter=true;patch_on_timer_0x9F6500();assert(advance_calls==before && !reenter);
@@ -152,6 +172,7 @@ int main(){
  qpc_ok=false;stopped();qpc_ok=true;resumed();
  timer.callback_fn_2=reinterpret_cast<void*>(1);stopped();timer.callback_fn_2=nullptr;resumed();
  state.custom_renderer_modal=true;stopped();state.custom_renderer_modal=false;resumed();
+ state.paused_for_popup=true;stopped();state.paused_for_popup=false;resumed();
  focus=false;stopped();focus=true;resumed();
  screen.is_now_loading_game=true;stopped();screen.is_now_loading_game=false;resumed();
  players=0;stopped();players=1;resumed();

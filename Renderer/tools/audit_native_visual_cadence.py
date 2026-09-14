@@ -20,6 +20,9 @@ def audit(path):
             if start<=rva and rva+size<=start+length:return data[raw+rva-start:raw+rva-start+size]
         raise ValueError('address outside file-backed image')
     checks={
+        # Advisor entry/one stack argument, page construction, modal dialog and return.
+        0x49d070:'568bf1e8b8e4fdff',0x49d095:'8b7c240c',
+        0x49d1ae:'ff927c010000',0x49d205:'ff9010010000',0x49d239:'5ec20400',
         0x4de5c0:'a1c4c27200',0x4de5d0:'a1bc37cc00',
         0x4de6c0:'6a426a426a0168c0e54d00b900659f00',
         0x6205d0:'8b4424108b542408',0x6205f6:'c21000',

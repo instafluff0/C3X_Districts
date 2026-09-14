@@ -919,7 +919,7 @@ int BitBlt(HDC destination,int x,int y,int width,int height,HDC source,int sx,in
         source->selected->pixels.data()+(sy+row)*source->selected->width+sx,std::size_t(width)*4);
     return 1;
 }
-struct Trace {void write(char const*,char const*,bool){}};
+struct Trace {int level=0;void write(char const*,char const*,bool){}};
 ''' + body + r'''
 int main(){
     HDC destination=CreateCompatibleDC(nullptr);BITMAPINFO info={};
