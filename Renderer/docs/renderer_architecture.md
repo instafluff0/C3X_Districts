@@ -31,16 +31,19 @@ Camera changes select exposed/static damage and ordered dynamic passes; they do
 not translate the whole scene. Finishing updates affected output with exact filter
 support. Persistent captured world identity is now separate from observations;
 local content proofs and a ready-instance path feed separate view assembly and
-spatially selected pass inputs. Full MSAA resolve remains an explicit limit. Native camera movement now remains
-an exact barrier after the displayed/requested bridge failed the live scrolling
-checkpoint. Stationary publication and CPU preparation remain asynchronous;
-general native async scrolling is unfinished. The retained plan records the scoped completion
-assessment, controls, complete-request measurements and precision constraints.
+spatially selected pass inputs. Full MSAA resolve remains an explicit limit.
+Fresh native captures can now acquire exact-current-camera crops inside prepared
+coverage and retain bounded alternative zoom views. Cold/outside-coverage demand
+still uses an exact barrier. Selected animated/output refreshes keep wider static
+coverage reusable, with pending output damage and honest per-publication clocks.
+The retained plan records measured scope, budgets and remaining freshness limits.
 
 Full-detail CPU surface compilation now has a bounded helper pool sharing immutable
 assets and world inputs, with private river/query/layout scratch per worker.
 Source mutation joins readers; locally proven results enter the existing compiled
-world owner before selected pass submission. The renderer thread can compile
+world owner before selected pass submission. World records retain bounded borrowed
+projection variants; legacy projected compilation and a view-scoped spatial index
+remain partial implementations of the destination. The renderer thread can compile
 unstarted demanded work while helpers prepare other captured instances. One GPU
 owner also prepares a finite horizon of exact ambient frames after a stationary
 view is confirmed; later matching calls consume immutable publications. These
@@ -57,7 +60,7 @@ warm idle requests already take roughly 4 ms and native idle cadence remains
 about 15 Hz in the previous game observations. A user-authorized GOG timer/animator
 adapter now enables 33 ms selected/working-unit visual opportunities while native
 advancement stays at 66 ms and map cadence remains unchanged. Enabled injection
-checks pass; actual delivery cadence and broader asynchronous scrolling still
+checks pass; actual delivery cadence and coverage beyond prepared views still
 require native integration validation.
 Unit playback now has a bounded instance owner fed by explicit native selection:
 frozen idle/fidget units generate no future pose work; selected idle and active
@@ -117,7 +120,7 @@ simulator or duplicate category implementations.
 | Asset registry and scene compiler | Share assets; compile changed terrain, connectivity and compound object composition into reusable content. | Existing pack loaders, fidelity adapters, `CachedTileGeometry` and shared natural world meshes in `native/c3x_renderer.cpp`. Regular terrain patches share canonical connectivity. Immutable tree placements refer to resident generic source meshes; local exclusions and surface dependencies remain with compiled world content. |
 | View builder | Select eligible wrapped occurrences and build pass-specific draw lists. | Separate assembly of current authoritative occurrences feeds `native/render_core/geometry_draws.h`. The retained profile uses the view-scoped contributor index for actual spatial pass selection, then ordered compatible submissions within the shadow-page limit. Its source world and compiled proofs survive view/index retirement. |
 | GPU renderer | Own the immediate D3D11 context, GPU lifetimes, uploads and pass execution. | Existing renderer worker, `draw_cached_geometry()` and `submit_geometry()`; the retained profile owns circular scene/depth and incremental finishing. Animated resources share resident meshes with separate pose/placement. Selected forests use hardware instancing in color and shadow passes, retaining the existing material order and page limit. Other object categories and reflection profiles retain their existing submissions. |
-| Compositor bridge | Publish and consume complete compatible results at the native map boundary. | The injected compositor supplies native lifecycle/visibility identity to ordinary DLL publication selection; identical queued and compatible ambient work can be consumed on native demand. General asynchronous camera handoff and live acceptance remain unfinished. |
+| Compositor bridge | Publish and consume complete compatible results at the native map boundary. | The injected compositor supplies native lifecycle/visibility identity to ordinary DLL publication selection; identical queued and compatible ambient work can be consumed on native demand. Prepared nearby/zoom coverage uses exact pull acquisition; general cold/outside-coverage handoff and live acceptance remain unfinished. |
 
 The fallback regional path still traverses layer chunks for each rectangle and
 includes recursive regional/reflection work. The retained profile selects explicit

@@ -24,6 +24,14 @@ edit other CSV entries or `ref/Civ3Conquests.h`.
 
 ## Current action
 
+Zoom preparation adds optional DLL export `c3x_renderer_prepare_view(camera_request const*, int query_only) -> int`.
+The existing compositor supplies copied prospective anchors through
+`prepare_custom_renderer_zoom_views`; query/admission never authorizes pixels.
+Only fresh native capture can acquire a result. Existing zoom conversion and m71/m19
+boundaries are reused, with no new hook, signature/address change or CSV entry;
+`required_user_action: []`. A missing export retains exact demand rendering.
+
+
 Prepared nearby-view delivery adds optional DLL export
 `c3x_renderer_prepare_nearby_view(camera_request const*) -> int`. Existing m71/m19
 capture/composition calls it after a successful current-camera composite. The DLL

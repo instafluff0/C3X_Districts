@@ -62,6 +62,15 @@ int main(){
     f.visible_animation_count=20;assert(area.project(f,epochs,result));
     assert(result.pixels.data()==pointer && result.output.visible_animation_count==21);
     f.visible_animation_count=0;assert(area.project(f,epochs,result));
+    // A newer selected viewport never advances the untouched wider donor.
+    auto fresh_pixels=pixels;for(auto& pixel:fresh_pixels)pixel^=255;
+    auto sample=output;sample.bgra_pixels=fresh_pixels.data();f.presentation_time_ticks=180;
+    assert(area.project(f,epochs,area.center,&sample,180));
+    assert(area.center.frame.presentation_time_ticks==180 && area.input.presentation_time_ticks==100);
+    assert(area.center.pixels.front()==(result.pixels.front()^255));
+    assert(area.project(f,epochs,result) && result.frame.presentation_time_ticks==100);
+    assert(!area.project(f,epochs,result,&sample,181));
+    f.presentation_time_ticks=100;
     auto old=result.pixels;
     auto reject=[&]{assert(!area.project(f,epochs,result));assert(result.pixels==old);};
     tiles.front().city_id=4;reject();tiles.front().city_id=-1; // dependency outside visible region

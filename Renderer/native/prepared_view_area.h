@@ -79,7 +79,8 @@ template<class Publication> struct PreparedViewArea {
     // Static content validity and ambient sample freshness are independent.
     // A delayed ambient refresh may hold its actual old sample; it must not
     // force the native camera to wait for a still-valid world image.
-    bool project(c3x_renderer_frame_v1 const& current,c3x_renderer_camera_identity_v1 epochs,Publication& result) const {
+    bool project(c3x_renderer_frame_v1 const& current,c3x_renderer_camera_identity_v1 epochs,Publication& result,
+                 c3x_renderer_output_v1 const* sample=nullptr,c3x_renderer_i64 sample_ticks=0) const {
         if(!map.output.bgra_pixels || std::memcmp(&identity,&epochs,sizeof(epochs)) ||
            current.target_width!=viewport_width || current.target_height!=viewport_height ||
            current.tile_width!=input.tile_width || current.tile_height!=input.tile_height ||
@@ -122,8 +123,13 @@ template<class Publication> struct PreparedViewArea {
                std::int64_t(old.anchor_x)-tile.anchor_x!=x || std::int64_t(old.anchor_y)-tile.anchor_y!=y)return false;
             replacements[i]=map.replacements[n];
         }
+        auto const& sampled=sample?*sample:map.output;
+        auto sampled_ticks=sample?sample_ticks:input.presentation_time_ticks;
+        if(sampled.content_revision!=map.output.content_revision || sampled.device_generation!=map.output.device_generation ||
+           sampled.width!=input.target_width || sampled.height!=input.target_height || !sampled.bgra_pixels ||
+           sampled_ticks>current.presentation_time_ticks)return false;
         auto normalized=current;normalized.dirty_flags=result.frame.dirty_flags;
-        if(result.output.bgra_pixels && result.frame.presentation_time_ticks==input.presentation_time_ticks &&
+        if(result.output.bgra_pixels && result.frame.presentation_time_ticks==sampled_ticks &&
            result.output.content_revision==map.output.content_revision && result.output.device_generation==map.output.device_generation &&
            !std::memcmp(&result.identity,&epochs,sizeof(epochs)) && result.matches_static_view(normalized)) {
             result.output.visible_animation_count=current.visible_animation_count+
@@ -133,15 +139,15 @@ template<class Publication> struct PreparedViewArea {
             return true;
         }
         std::vector<std::uint32_t> pixels(std::size_t(viewport_width)*viewport_height);
-        for(int row=0;row<viewport_height;++row)std::copy_n(map.pixels.data()+std::size_t(row+y)*input.target_width+x,
+        for(int row=0;row<viewport_height;++row)std::copy_n(reinterpret_cast<std::uint32_t const*>(static_cast<unsigned char const*>(sampled.bgra_pixels)+std::size_t(row+y)*sampled.stride_bytes)+x,
             viewport_width,pixels.data()+std::size_t(row)*viewport_width);
-        auto output=map.output;output.visible_animation_count=current.visible_animation_count+
+        auto output=sampled;output.visible_animation_count=current.visible_animation_count+
             (map.output.visible_animation_count>input.visible_animation_count?map.output.visible_animation_count-input.visible_animation_count:0);
         output.width=viewport_width;output.height=viewport_height;output.stride_bytes=viewport_width*4;
         output.clip_left=current.clip_left;output.clip_top=current.clip_top;
         output.clip_right=current.clip_right;output.clip_bottom=current.clip_bottom;
         output.bgra_pixels=pixels.data();output.replacement_tile_count=current.tile_count;output.replacement_tile_flags=replacements.data();
-        auto frame=current;frame.presentation_time_ticks=input.presentation_time_ticks;
+        auto frame=current;frame.presentation_time_ticks=sampled_ticks;
         return result.capture(output,current.tile_count?current.tiles[0].anchor_x:0,
             current.tile_count?current.tiles[0].anchor_y:0,&frame,epochs);
     }

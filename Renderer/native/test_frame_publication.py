@@ -208,6 +208,7 @@ struct Bodies {
     template<class F> bool render(int,int,c3x_renderer_unit_v1 const&,F,void* =nullptr,unsigned=1){demand_executed=true;return true;}
     bool blit(HDC,int,int,HDC){return true;}void reset_gpu(){}
 };
+struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
     struct Terrain {bool configured=false;std::vector<std::uint8_t> dds;};
     std::array<Terrain,14> terrain_textures;
@@ -234,7 +235,7 @@ struct RendererState {
     bool scene_guard_pending()const{return false;}
     bool prepare_scene_guard(std::atomic<bool> const&){return true;}
     bool render(c3x_renderer_frame_v1 const& f,c3x_renderer_output_v1& out,int=-1,
-                std::atomic<bool> const* stop=nullptr,std::uint64_t=0,unsigned const* =nullptr,unsigned=0,c3x_renderer_frame_v1 const* =nullptr){
+                std::atomic<bool> const* stop=nullptr,std::uint64_t=0,unsigned const* =nullptr,unsigned=0,c3x_renderer_frame_v1 const* =nullptr,D3D11_RECT const* =nullptr){
         ++entered;
         if(throw_failure)throw std::runtime_error("fixture runtime failure");
         if(f.presentation_time_ticks==101)++target_clock_entries;
@@ -772,6 +773,59 @@ int main(){
         assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
         pull.reset_and_stop();assert(state.cancelled.load()>0);
         assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
+    }
+    // Prospective views are copied, share bounded publication ownership and
+    // return through fresh-capture validation without another renderer entry.
+    {
+        RendererState state;RendererWorker pull(state);state.shared_scene_surface=true;
+        auto base=f;auto observed=tile;observed.tile_x=observed.tile_y=20;
+        observed.anchor_x=observed.anchor_y=0;observed.tile_flags=C3X_RENDERER_TILE_RENDER;
+        base.tiles=&observed;base.target_width=128;base.target_height=96;base.tile_width=128;base.tile_height=64;
+        c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&base,{1,2,3,4}};
+        c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
+        assert(pull.render(base,out,request.identity)==C3X_RENDERER_RESULT_OK);
+        auto other=base;other.tile_width=160;other.tile_height=80;request.frame=&other;
+        assert(pull.prepare_view(request,true)==C3X_RENDERER_RESULT_PENDING);
+        auto entries=state.entered.load();state.hold=true;
+        assert(pull.prepare_view(request,false)==C3X_RENDERER_RESULT_OK);
+        until([&]{return state.entered.load()>entries;});
+        assert(pull.prepare_view(request,true)==C3X_RENDERER_RESULT_OK);
+        state.hold=false;
+        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK;});
+        request.frame=&base;
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
+        entries=state.entered.load();request.frame=&other;
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK && state.entered.load()==entries);
+        ++observed.visibility_mask;
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
+        pull.reset_and_stop();
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
+    }
+    // Current-view animation interrupts speculative compilation. Its immutable
+    // snapshot gets priority and interrupted content can resume afterward.
+    {
+        RendererState state;RendererWorker pull(state);state.shared_scene_surface=true;
+        state.visible_resource_animations=1;state.animate_pixels=true;
+        auto base=f;auto observed=tile;observed.tile_x=observed.tile_y=20;
+        observed.anchor_x=observed.anchor_y=0;observed.tile_flags=C3X_RENDERER_TILE_RENDER;
+        base.tiles=&observed;base.target_width=128;base.target_height=96;base.tile_width=128;base.tile_height=64;
+        base.presentation_frequency=1000;base.presentation_time_ticks=100;
+        c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&base,{1,2,3,4}};
+        c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+        pull.camera_present_view(request,view);assert(pull.render(base,out,request.identity)==C3X_RENDERER_RESULT_OK);
+        auto future=base;future.tile_width=160;future.tile_height=80;request.frame=&future;
+        auto entered=state.entered.load();state.hold_clock=100;
+        assert(pull.prepare_view(request,false)==C3X_RENDERER_RESULT_OK);
+        until([&]{return state.entered.load()>entered;});
+        request.frame=&base;base.presentation_time_ticks=250;
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
+        assert(pull.prepare_nearby_view(request)==C3X_RENDERER_RESULT_OK);
+        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK && view.frame.presentation_time_ticks==250;});
+        assert(state.cancelled.load()>0);state.hold_clock=-1;
+        request.frame=&future;
+        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK;});
+        pull.reset_and_stop();
     }
     // Recursive source compilation can unwind on supersession. That must
     // retire the partial assembly without reloading assets or world content.

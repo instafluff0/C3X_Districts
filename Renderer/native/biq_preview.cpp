@@ -474,6 +474,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     auto camera_poll=reinterpret_cast<c3x_renderer_camera_poll_fn>(GetProcAddress(module,"c3x_renderer_camera_poll"));
     bool camera_view=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_CAMERA_VIEW",camera_option,sizeof(camera_option))!=0;
     auto camera_begin_view=reinterpret_cast<c3x_renderer_camera_begin_view_fn>(GetProcAddress(module,"c3x_renderer_camera_begin_view"));
+    auto prepare_view=reinterpret_cast<c3x_renderer_prepare_view_fn>(GetProcAddress(module,"c3x_renderer_prepare_view"));
     auto render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
     auto camera_poll_view=reinterpret_cast<c3x_renderer_camera_poll_view_fn>(GetProcAddress(module,"c3x_renderer_camera_poll_view"));
     bool ambient_async=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_AMBIENT_ASYNC",camera_option,sizeof(camera_option))!=0;
@@ -499,6 +500,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     c3x_renderer_i64 handoff_ticket=0;
     c3x_renderer_i64 handoff_clock=0;
     unsigned camera_case=0;
+    bool prepare_view_family=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_VIEW_FAMILY",camera_option,sizeof(camera_option))!=0;
     auto render_checked = [&](c3x_renderer_frame_v1 const* input, c3x_renderer_output_v1* result) {
         LARGE_INTEGER caller_enter={},caller_return={},correct_done={};
         if(timing_enabled)QueryPerformanceCounter(&caller_enter);
@@ -518,6 +520,20 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             if(held==C3X_RENDERER_RESULT_OK){*result=shown.output;code=held;handoff_clock=shown.frame.presentation_time_ticks;}
             else {code=render_view(&request,result);handoff_clock=input->presentation_time_ticks;handoff_ticket=0;}
             bool preparing=code==C3X_RENDERER_RESULT_OK && prepare_nearby_view && prepare_nearby_view(&request)==C3X_RENDERER_RESULT_OK;
+            if(preparing && prepare_view_family && prepare_view){
+                auto caller_capture_begin=capture_begin,caller_capture_end=capture_end;bool caller_fresh_capture=fresh_capture;
+                int saved_width=tile_width,saved_height=tile_height;
+                for(int level:{128,160,192})if(level!=input->tile_width){
+                    auto future=*input;future.tile_width=level;future.tile_height=level/2;
+                    auto prospective_request=request;prospective_request.frame=&future;
+                    if(prepare_view(&prospective_request,1)!=C3X_RENDERER_RESULT_PENDING)continue;
+                    tile_width=level;tile_height=level/2;auto captured=capture_view();
+                    future.tiles=captured.data();future.tile_count=unsigned(captured.size());
+                    prepare_view(&prospective_request,0);
+                }
+                tile_width=saved_width;tile_height=saved_height;
+                capture_begin=caller_capture_begin;capture_end=caller_capture_end;fresh_capture=caller_fresh_capture;
+            }
             auto quantum=(std::max)(c3x_renderer_i64(1),input->presentation_frequency/15);
             if(!preparing && !handoff_ticket && result->visible_animation_count && handoff_clock/quantum!=input->presentation_time_ticks/quantum)
                 camera_begin_view(&request,&handoff_ticket);
@@ -1155,13 +1171,35 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         bool supported=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_SUPPORTED_ZOOMS",supported_option,sizeof(supported_option)) && std::strcmp(supported_option,"1")==0;
         std::vector<int> levels=supported?std::vector<int>{128,192,160}:std::vector<int>{128,96,64,192,160};
         std::vector<std::vector<unsigned char>> reference(levels.size());
+        char prepare_option[16]={};GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ZOOM_PREPARE_MS",prepare_option,sizeof(prepare_option));
+        int prepare_ms=std::clamp(std::atoi(prepare_option),0,10000);
+        if(prepare_ms){
+            LARGE_INTEGER started={},ended={};QueryPerformanceCounter(&started);
+            auto saved_frame=frame;int saved_width=tile_width,saved_height=tile_height;
+            if(prepare_view && native_handoff)for(auto level:levels)if(level!=tile_width){
+                tile_width=level;tile_height=level/2;auto prospective=capture_view();
+                auto future=frame;future.tile_width=level;future.tile_height=level/2;
+                future.tiles=prospective.data();future.tile_count=unsigned(prospective.size());
+                c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&future,{1,2,3,future.world_topology_revision}};
+                prepare_view(&request,0);
+            }
+            tile_width=saved_width;tile_height=saved_height;frame=saved_frame;
+            Sleep(DWORD(prepare_ms));QueryPerformanceCounter(&ended);
+            std::printf("ZOOM_PREPARATION opportunity_ms=%d elapsed_ms=%.3f prospective_api=%u\n",prepare_ms,
+                double(ended.QuadPart-started.QuadPart)*1000/frequency.QuadPart,unsigned(prepare_view!=nullptr));
+        }
+
         for(int cycle=0;cycle<camera_cycles && ok;++cycle)for(std::size_t level=0;level<levels.size() && ok;++level){
             LARGE_INTEGER begin={},captured={},end={};QueryPerformanceCounter(&begin);
             tile_width=levels[level];tile_height=tile_width/2;tiles=capture_view();
             frame.tile_width=tile_width;frame.tile_height=tile_height;
             frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
             QueryPerformanceCounter(&captured);
-            int code=render_checked(&frame,&output);QueryPerformanceCounter(&end);
+            int code=render_checked(&frame,&output);
+            std::vector<unsigned char> delivered;
+            if(code==C3X_RENDERER_RESULT_OK && output.bgra_pixels){auto source=static_cast<unsigned char const*>(output.bgra_pixels);
+                delivered.assign(source,source+std::size_t(output.stride_bytes)*output.height);}
+            QueryPerformanceCounter(&end);
             ok=code==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0;
             std::printf("ZOOM cycle=%d width=%d result=%d tiles=%u built=%u reused=%u cache_bytes=%u recoveries=%u ms=%.3f capture_ms=%.3f geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f\n",
                 cycle,tile_width,code,output.rendered_tile_count,output.geometry_tiles_built,output.geometry_tiles_reused,

@@ -1276,6 +1276,52 @@ to 4.54 ms; this is still no idle speedup. Enlarged raster output differs from t
 old viewport output at full detail. Natural-only and shadow-disabled diagnostics
 retain differences; do not repeat that attribution campaign without a new mechanism.
 Original viewport depth units are preserved when enlarging the working height.
-The remaining raster difference requires visual review and is not accepted by
-inference from earlier comparisons. Prototype binaries and logs are preserved
+The user subsequently explicitly accepted this raster difference; it was not
+accepted by inference from earlier comparisons. Prototype binaries and logs are preserved
 under `native/build/prepared-scroll/`; the committed source control is `9c5e9033`.
+
+
+## Accepted nearby-area control (02ff301b)
+
+DLL `4cbdfa93b44a7f41d18280db3932d216dc794ece15d08a3dfd1cfdcb3d85e8be`
+completed caller-driven prepared nearby scrolling. Against `9c5e9033`, whole
+nearby requests averaged 55.31 → 11.45 ms (48 calls); warm eight-body idle
+3.76 → 4.54 ms (60 calls), and wider 14-step scrolling 219.18 → 216.66 ms.
+Initial dense rendering increased 6.04 → 7.35 s. This did not establish game FPS,
+an idle speedup or general nonblocking coverage. The independent reconstruction,
+nine prepared cameras, four topology edits and six appearance edits passed.
+
+The bounded diagnostic recorded 48 → 44 map jobs, 75,326 → 3,474 static selected
+submissions, zero geometry builds/uploads in both, and 192 → 283 million resolved
+pixels. The area owner reached 15.32 MiB; x86 free contiguous space stayed at least
+1.60 GiB in that harness. Full detail was retained. The user explicitly accepted
+the working-surface raster difference: 8,028/1,007,100 pixels (0.80%), maximum
+channel delta 126, mean absolute channel delta 0.042/255. No reference was replaced.
+Evidence and immutable binaries remain in `native/build/prepared-scroll/`.
+
+## World/view and zoom: rejected intermediate mechanisms
+
+The final control is `02ff301b`, with evidence in `native/build/world-view-zoom/`.
+Preserve intermediate binaries and receipts; they are not candidate acceptance data.
+
+- Nested future-view captures initially overwrote parent timing endpoints (v7).
+  Saving/restoring capture timing fixed ordering; exclude the invalid report.
+- The first selected-refresh oracle polled without subsequent preparation calls
+  (v9). It timed out at the first position. The corrected fixture repeats the
+  actual caller protocol and validates stationary, horizontal and diagonal output.
+- Unprioritized future zoom preparation (v10) held the map ambient sample for
+  4,018.648 ms despite fast camera returns. Current-view refresh now interrupts
+  unfinished speculation at existing safe points, then resumes useful preparation.
+- Blanket finishing on selected-window changes (v11) inflated a 20-call idle
+  diagnostic from 1.38 to 13.95 million finishing lanes and background area wall
+  work from 423 to 603 ms. The final pending-damage owner retains unfinished
+  off-view spans; final work is 1.46 million lanes and 385 ms, with exact references.
+- The v10 directories named `wide` ran a single four-column ablation, not the
+  14-step sequence. Final wider comparison uses `control-final-wide-v11` and
+  `candidate-final-wide-v12`, both with `--scroll-sequence`.
+
+The earlier unprepared control zoom witness measured 1.69/2.21 s for first closer
+views and 0.48–0.80 s for repeat visits. Capture took below 2 ms; initial closer
+geometry phases took 1.37/1.79 s. Preparation removes this work from the request;
+it does not eliminate cold construction. Parallels GPU timestamps remain unusable
+for attribution. Current results and remaining responsibilities live in the plan.

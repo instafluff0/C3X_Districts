@@ -24,6 +24,10 @@ int main(){
  submit();auto key=scene.key(2,2);assert(scene.appearance_revision(key));auto revision=scene.retained(key)->revision;
  assert(revision && scene.current(key)->occurrence.city_id==17);
  scene.attach(full,{2,10});assert(scene.retained(key)->compiled.generation==10);
+ scene.attach(full,{3,11});scene.attach(full,{4,12});scene.attach(full,{2,10});
+ assert(scene.retained(key)->compiled_views[0].generation==10);
+ assert(scene.retained(key)->compiled_views[1].generation==12);
+ assert(scene.retained(key)->compiled_views[2].generation==11);
  // Current lookup owns the entire selected record, including authoritative anchors.
  input[0].city_id=99;assert(scene.current(key)->occurrence.city_id==17);
  input[0]=full;input[0].tile_x-=100;input[0].anchor_x=900;
@@ -50,6 +54,7 @@ int main(){
  input={edited};submit();assert(scene.retained(key)->revision>revision);
  auto removed_revision=scene.retained(key)->revision;
  assert(!scene.retained(key)->compiled.generation);
+ for(auto handle:scene.retained(key)->compiled_views)assert(!handle.generation);
  assert(scene.retained(key)->appearance.city_id==-1 && scene.current(key)->semantic==108);
  assert(!(scene.current(key)->occurrence.tile_flags&C3X_RENDERER_TILE_RENDER));
  input[0].anchor_y=123;submit();assert(scene.retained(key)->revision==removed_revision);

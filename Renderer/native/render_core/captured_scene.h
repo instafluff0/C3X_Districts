@@ -15,6 +15,8 @@ public:
         c3x_renderer_tile_v1 appearance={};
         std::uint64_t revision=0;
         ContentHandle compiled;
+        // Bounded projection variants borrow the same resident content owner.
+        ContentHandle compiled_views[3]={};
     };
     struct Observation {
         c3x_renderer_tile_v1 occurrence={};
@@ -113,6 +115,7 @@ public:
             if(!record.revision || std::memcmp(&next,&record.appearance,sizeof(next))){
                 if(serial==~std::uint64_t(0))return false;
                 record.appearance=next;record.revision=++serial;record.compiled={};
+                for(auto& variant:record.compiled_views)variant={};
             }
         }
         return bytes()<=budget;
@@ -133,7 +136,13 @@ public:
         auto id=key(tile.tile_x,tile.tile_y);auto found=records.find(id);
         if(!current(id) || found==records.end() || !found->second.revision)return;
         auto appearance=content(tile);
-        if(!std::memcmp(&appearance,&found->second.appearance,sizeof(appearance)))found->second.compiled=handle;
+        if(!std::memcmp(&appearance,&found->second.appearance,sizeof(appearance))){
+            auto& record=found->second;record.compiled=handle;
+            unsigned position=2;
+            for(unsigned i=0;i<3;++i)if(record.compiled_views[i]==handle){position=i;break;}
+            for(unsigned i=position;i>0;--i)record.compiled_views[i]=record.compiled_views[i-1];
+            record.compiled_views[0]=handle;
+        }
     }
     Record const* retained(std::uint64_t id) const {
         auto found=records.find(id);return found==records.end()?nullptr:&found->second;

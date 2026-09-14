@@ -201,6 +201,8 @@ def main(argv=None):
     parser.add_argument("--composition-casters-control", action="store_true", help="Rebuild caster preparation independently for each animation region")
     parser.add_argument("--animation-readback-atlas", action="store_true", help="Pack exact animated blocks into a compact staging atlas before CPU readback")
     parser.add_argument("--preparation-defaults", action="store_true", help="Leave world preparation and CPU helper selection unset to verify shipping defaults")
+    parser.add_argument("--zoom-prepare-ms", type=int, choices=range(0,10001), default=0, metavar="0..10000", help="Caller opportunity for prospective zoom views; counted separately")
+    parser.add_argument("--prepare-view-family", action="store_true", help="Exercise prospective zoom admission during native caller requests")
     args = parser.parse_args(argv)
     if (args.shared_scene_surface or args.automatic_scene_surface) and (args.waves!="0" or not args.reflection_ablation):
         parser.error("Shared scene surface requires waves and reflections disabled")
@@ -308,6 +310,8 @@ def main(argv=None):
            "C3X_RENDERER_PREVIEW_CAMERA_VIEW": "1" if args.camera_view else "",
            "C3X_RENDERER_PREVIEW_AMBIENT_ASYNC": "1" if args.scenario == "ambient" else "",
            "C3X_RENDERER_PREVIEW_AMBIENT_BOUNDARY": "1" if args.ambient_boundary else "",
+           "C3X_RENDERER_PREVIEW_VIEW_FAMILY": "1" if args.prepare_view_family else "",
+           "C3X_RENDERER_PREVIEW_ZOOM_PREPARE_MS": str(args.zoom_prepare_ms),
            "C3X_RENDERER_PREVIEW_SUPPORTED_ZOOMS": "1" if args.scenario == "zoom" else "",
            "C3X_RENDERER_PREVIEW_CYCLES": str(args.cycles),
            "C3X_RENDERER_PREVIEW_DISTANT_STEPS": str(args.distant_steps) if args.scenario == "distant" else "",

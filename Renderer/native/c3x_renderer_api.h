@@ -384,6 +384,10 @@ typedef int (*c3x_renderer_camera_present_view_fn)(struct c3x_renderer_camera_re
 // The caller keeps polling camera_present_view with fresh authoritative captures.
 // Other results retain the existing exact render/camera-queue path. No callback.
 typedef int (*c3x_renderer_prepare_nearby_view_fn)(struct c3x_renderer_camera_request_v1 const *);
+// Optional prospective view, supplied by the caller. Query checks admission only:
+// PENDING requests a snapshot; OK means present/queued. Submission copies input.
+// Pixels still require camera_present_view with fresh authoritative capture.
+typedef int (*c3x_renderer_prepare_view_fn)(struct c3x_renderer_camera_request_v1 const *, int query_only);
 typedef int (*c3x_renderer_blit_fn)(struct c3x_renderer_output_v1 const *, void * destination_hdc);
 typedef int (*c3x_renderer_unit_draw_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc);
 /* Optional extension: native underlay resolves color-key canvas antialiasing. */

@@ -79,6 +79,38 @@ if(ok && prepared_view_fixture) {
             prepared_exact+=same;ok=ok && same;
         }
     } else ok=ok && exact==samples.size();
+    auto oracle_clock=frame.presentation_time_ticks;
+    if(ok && prepare_view && prepare_nearby_view){
+        auto base=frame;
+        for(unsigned position:{0u,1u,2u}){
+            auto selected=base;selected.tiles=samples[position].tiles.data();selected.tile_count=unsigned(samples[position].tiles.size());
+            selected.presentation_time_ticks=oracle_clock+(position+1)*frame.presentation_frequency/15;
+            c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&selected,{1,2,3,frame.world_topology_revision}};
+            c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+            camera_present_view(&request,&view);prepare_nearby_view(&request);
+            auto deadline=GetTickCount64()+30000;bool refreshed=false;
+            do {refreshed=camera_present_view(&request,&view)==C3X_RENDERER_RESULT_OK && view.frame.presentation_time_ticks==selected.presentation_time_ticks;
+                // Civ III asks for preparation again after each successful
+                // composite; a poll alone intentionally schedules no redraw.
+                if(!refreshed){prepare_nearby_view(&request);Sleep(33);}
+            }while(!refreshed && GetTickCount64()<deadline);
+            std::vector<unsigned char> partial;
+            if(refreshed){auto data=static_cast<unsigned char const*>(view.output.bgra_pixels);partial.assign(data,data+std::size_t(view.output.stride_bytes)*view.output.height);}
+            reset();handoff_ticket=0;ok=ok && set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK;
+            frame=base;frame.presentation_time_ticks=selected.presentation_time_ticks;
+            int code=render_checked(&frame,&output);
+            bool exact_partial=refreshed && code==C3X_RENDERER_RESULT_OK && camera_present_view(&request,&view)==C3X_RENDERER_RESULT_OK &&
+                partial.size()==std::size_t(view.output.stride_bytes)*view.output.height && !std::memcmp(partial.data(),view.output.bgra_pixels,partial.size());
+            std::printf("SELECTED_VIEW_REFERENCE position=%u status=%s refreshed=%u\n",position,exact_partial?"pass":"FAIL",unsigned(refreshed));
+            if(refreshed && !exact_partial){auto diagnostic=view.output;diagnostic.bgra_pixels=partial.data();
+                write_bmp((std::string(argv[5])+".selected-refresh-"+std::to_string(position)+".bmp").c_str(),diagnostic);
+                write_bmp((std::string(argv[5])+".selected-reference-"+std::to_string(position)+".bmp").c_str(),view.output);}
+            ok=ok && exact_partial;
+        }
+    }else if(ok && prepare_nearby_view){
+        frame.presentation_time_ticks=oracle_clock+3*frame.presentation_frequency/15;
+        ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK;
+    }
     std::printf("PREPARED_VIEW_END status=%s exact_prepared=%u control_exact=%u samples=%zu visual_review=%s\n",
         ok?"pass":"fail",prepared_exact,exact,samples.size(),exact==samples.size()?"unchanged":"required");
     // Separately timed, real elapsed animation clock. No file writes or oracle
