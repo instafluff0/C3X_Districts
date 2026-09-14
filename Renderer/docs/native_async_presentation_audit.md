@@ -11,8 +11,10 @@ that ordering and rejects completed old-camera/old-projection tickets, including
 camera changes bypassing the movement hook. General nonblocking scrolling is
 still unfinished; the game remains the sole caller and camera owner.
 
-A separate unit visual-cadence candidate is implemented but disabled pending the
-five symbols in [the patch ledger](civ3_patch_dependency_ledger.md). It reuses the
+The user authorized the five unit visual-cadence symbols on September 14, 2026;
+[the patch ledger](civ3_patch_dependency_ledger.md) records their addition and the
+enabled injection smoke test. The ordinary `INSTALL.bat` enables the eligible
+33 ms unit visual cadence. Actual in-game delivery remains unverified. It reuses the
 native timer/animator, preserves native advancement and keeps map cadence unchanged.
 The renderer does not notify the game. See [the retained plan](retained_renderer_plan.md)
 for the verified ABI, lifecycle tests and rejected global map-rate measurement.

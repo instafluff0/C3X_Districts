@@ -8,6 +8,24 @@ ROOT=Path(__file__).resolve().parents[2]
 
 
 class NativeVisualCadenceTests(unittest.TestCase):
+    def test_authorized_gog_symbols_enable_the_native_branch(self):
+        expected={
+            'p_main_animation_timer':('define',0x009F6500),
+            'Timer_reset_and_activate':('define',0x006205D0),
+            'Units_Image_Data_advance_animations':('inlead',0x00405FC0),
+            'p_native_timer_inhibited':('define',0x0072C2C4),
+            'p_native_game_ending':('define',0x00CC37BC),
+        }
+        found=set()
+        for row in csv.reader((ROOT/'civ_prog_objects.csv').read_text().replace('\t',' ').splitlines(),skipinitialspace=True):
+            row=[item.strip() for item in row]
+            if len(row)!=6 or row[4] not in expected:continue
+            self.assertNotIn(row[4],found)
+            found.add(row[4])
+            self.assertEqual((row[0],int(row[1],0)),expected[row[4]])
+            self.assertEqual([int(row[2],0),int(row[3],0)],[0,0])
+        self.assertEqual(found,set(expected))
+
     def test_gog_bytes_and_four_argument_abi(self):
         original=ROOT/'Renderer/native/build/unit-audit-original.exe'
         if not original.exists():self.skipTest('local GOG executable required for byte audit')
@@ -18,21 +36,16 @@ class NativeVisualCadenceTests(unittest.TestCase):
         body=source[source.index('// The intermediate native visual call'):source.index('void __fastcall\npatch_Units_Image_Data_load_animated_effect')]
         unload=source.split('unload_custom_renderer ()\n{',1)[1].split('\tis->custom_renderer_frame_active = false;',1)[0]
         unload=unload.split('\tis->custom_renderer_native_timer_due.QuadPart = 0;',1)[0]+'\tis->custom_renderer_native_timer_due.QuadPart = 0;'
-        # Compile-only fixture for the real TCC/native layouts. The proposed
-        # symbols exist only in this generated input, never in the patch table.
+        # Compile-only fixture for the real TCC/native layouts, using the same
+        # authorized table definitions as the enabled injected build.
         definitions={}
-        needed={'p_main_screen_form','p_player_bits','p_debug_mode_bits','Animator_update','on_timer_0x9F6500'}
+        needed={'p_main_screen_form','p_player_bits','p_debug_mode_bits','Animator_update','on_timer_0x9F6500',
+                'p_main_animation_timer','Timer_reset_and_activate','Units_Image_Data_advance_animations',
+                'p_native_timer_inhibited','p_native_game_ending'}
         for row in csv.reader((ROOT/'civ_prog_objects.csv').read_text().replace('\t',' ').splitlines(),skipinitialspace=True):
             row=[item.strip() for item in row]
             if len(row)==6 and row[4] in needed:definitions[row[4]]=(row[5],row[1])
         self.assertEqual(set(definitions),needed)
-        definitions.update({
-            'p_main_animation_timer':('Timer *','0x009F6500'),
-            'Timer_reset_and_activate':('void (__fastcall *) (Timer *, int, void *, void *, int, int)','0x006205D0'),
-            'Units_Image_Data_advance_animations':('void (__fastcall *) (Units_Image_Data *, int, float, Unit **, int, void *)','0x00405FC0'),
-            'p_native_timer_inhibited':('int *','0x0072C2C4'),
-            'p_native_game_ending':('int *','0x00CC37BC'),
-        })
         typed='#include "stdio.h"\n#include "C3X.h"\n#define __ 0\n'
         typed+='\n'.join(f'#define {name} (({kind}){address})' for name,(kind,address) in definitions.items())
         typed+='''

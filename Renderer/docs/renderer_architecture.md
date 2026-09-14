@@ -54,7 +54,11 @@ has priority; up to two compatible unit outputs share one staging readback.
 This completes preparation through pixels for the representative unit path,
 without moving D3D or native GDI ownership. Short-window pose stalls improve, but
 warm idle requests already take roughly 4 ms and native idle cadence remains
-about 15 Hz. Higher presentation cadence is unfinished native integration work.
+about 15 Hz in the previous game observations. A user-authorized GOG timer/animator
+adapter now enables 33 ms selected/working-unit visual opportunities while native
+advancement stays at 66 ms and map cadence remains unchanged. Enabled injection
+checks pass; actual delivery cadence and broader asynchronous scrolling still
+require native integration validation.
 Unit playback now has a bounded instance owner fed by explicit native selection:
 frozen idle/fidget units generate no future pose work; selected idle and active
 work loops preserve authored source duration/frames. Directed actions keep native

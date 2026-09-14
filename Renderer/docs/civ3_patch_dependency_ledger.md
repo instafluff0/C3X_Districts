@@ -18,9 +18,9 @@ no injected source, ABI field, patch symbol or address changes are needed.
 
 This is the current boundary and outstanding-request record, not a campaign
 history. Read `civ_prog_objects.csv` and the actual injected wrappers before
-claiming a capability is available. The camera entry below is the explicit user
-exception to the CSV editing restriction. Do not edit other CSV entries or
-`ref/Civ3Conquests.h`.
+claiming a capability is available. The camera entry and the five visual-cadence
+entries below are explicit user exceptions to the CSV editing restriction. Do not
+edit other CSV entries or `ref/Civ3Conquests.h`.
 
 ## Current action
 
@@ -35,10 +35,12 @@ Intermediate draws skip the single native animation advancement service and
 preserve its elapsed-time accumulator. Native camera/canvas construction remains
 inside `Animator_update`; no copied animator implementation is introduced.
 
-`required_user_action`: authorize the following **five** additions to
-`civ_prog_objects.csv`. The file has **not** been changed. All addresses below
-are verified against the local unmodified GOG x86 executable; Steam and PCGames.de
-must stay `0x0` until verified. These entries are GOG-only, like the existing
+`required_user_action: []` for the following **five** additions to
+`civ_prog_objects.csv`. The user authorized adding these verified addresses and
+enabling faster cadence on September 14, 2026. All five entries are now present.
+The VM's installed unmodified GOG executable matches the audited binary exactly
+(SHA256 `838df6f8b3518d5f5f7ff50c7c7add715628ffabbd37221d0bcc7f080afc2746`).
+Steam and PCGames.de remain `0x0` until verified. These entries are GOG-only, like the existing
 camera inlead; the current patcher cannot install a zero-address inlead elsewhere.
 
 | Symbol | Kind | GOG address | Signature/type | Capability |
@@ -59,8 +61,10 @@ Fallback: without all five symbols, compile-time gates keep the current 66 ms
 callback. Runtime eligibility excludes shutdown, suspension, loading, modal,
 online, unfocused, drawing, pending native unit reconciliation and special
 interaction modes. A stopped native timer is never resurrected. No faster live
-cadence is certified until the entries are authorized and the game checkpoint
-passes. This replaces the earlier audit's incomplete conclusion that crossing
+cadence is certified until the game checkpoint passes. The enabled patch table
+and inlead pass the approved compile/injection smoke test. The ordinary
+`INSTALL.bat` now activates the eligible faster cadence without extra settings;
+installation and launching the game remain user actions. This replaces the earlier audit's incomplete conclusion that crossing
 50 ms necessarily runs game work on the multimedia thread: the verified normal
 transport posts back to the game thread when `callback_fn_2` is null.
 

@@ -1,6 +1,6 @@
 # Retained world → view → submission implementation
 
-## Implemented candidate: native unit visual cadence and current-camera publication
+## Enabled for GOG testing: native unit visual cadence and current-camera publication
 
 The candidate creates a 33 ms visual opportunity for selected/working custom
 unit bodies on Civ III's existing animation timer while retaining a 66 ms deadline
@@ -21,9 +21,15 @@ resurrected. No worker completion notification, second presenter or copied loop.
 Five concrete GOG capabilities are required: the native Timer object, its
 reset/activate routine, the animation advancement inlead, and the original
 callback's suspension/shutdown guards. Exact signatures, addresses and fallbacks
-are in [the patch ledger](civ3_patch_dependency_ledger.md). The CSV is unchanged;
-**the faster cadence remains disabled pending authorization**. Current fallback
-smoke compilation cannot certify the absent inlead's actual injection.
+are in [the patch ledger](civ3_patch_dependency_ledger.md). The user authorized
+adding all five and enabling faster cadence on September 14, 2026. The entries
+are now present, with Steam/PCGames.de addresses at `0x0`. The enabled injected
+code and new inlead pass the approved compile/injection smoke test. The installed
+unmodified GOG executable exactly matches the audited binary.
+
+**Ready for the user's ordinary `INSTALL.bat` test**, with no environment settings
+or replacement DLL needed. The 33 ms cadence activates automatically for eligible
+selected/working units after installation. Actual in-game delivery remains unverified.
 
 The camera adapter removes the obsolete displayed/requested camera swapping and
 unused requested-camera state. Polling may select pixels only for the actual
@@ -63,10 +69,10 @@ the staged control remains `549daee21744e6724ae9b5080cb2b14714e9f89cab9d663c6341
 Evidence, rejected patch/binaries, paired receipts and the original GOG audit are
 under `native/build/native-visual-cadence/`.
 
-Remaining: authorize the five symbols and verify the actual native cadence and
-interaction boundary; then measure complete native requests before choosing
+Remaining: verify the actual native cadence and interaction boundary after the
+user installs; then measure complete native requests before choosing
 consolidated active-unit submission/readback or broader map cadence. The current
-checkpoint establishes a gated delivery mechanism, not a demonstrated in-game
+checkpoint enables the delivery mechanism for GOG testing, not a demonstrated in-game
 speedup or a completed native asynchronous scrolling path.
 
 
@@ -99,7 +105,8 @@ recursively from speculative GPU work. Already executing optional work may finis
 The source-clock correction does not remove Civ III's roughly 66 ms presentation
 limit. At that cadence a 30 Hz clip is sampled at the proper speed, but every
 source sample cannot be displayed. Faster caller-driven rendering remains a
-separate integration responsibility; the timer has not been changed.
+separate integration responsibility at that checkpoint. The later authorized
+unit-cadence integration is recorded above.
 
 Validation: production build, 60 targeted checks and approved injected smoke
 compilation pass. Native

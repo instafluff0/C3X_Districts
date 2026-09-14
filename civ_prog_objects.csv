@@ -1016,3 +1016,8 @@ ignore,	   0x670234,	0x68D2E0,	0x670234,	"Tile_m27_Check_Shield_Bonus",			"bool 
 ignore,	   0x5f3448,	0x6032DF,	0x5F3378,	"CHECK_SHIELD_BONUS_TO_CAN_SPAWN_RES_RETURN",	"int"
 
 inlead,    0x4DF700,	0x0,		0x0,		"Main_Screen_Form_move_camera",	"void (__fastcall *) (Main_Screen_Form * this, int edx, int x, int y, int reason, bool update_bounds)"
+define,    0x009F6500,	0x0,		0x0,		"p_main_animation_timer",	"Timer *"
+define,    0x006205D0,	0x0,		0x0,		"Timer_reset_and_activate",	"void (__fastcall *) (Timer * this, int edx, void * callback_fn, void * callback_param, int duration, int resolution)"
+inlead,    0x00405FC0,	0x0,		0x0,		"Units_Image_Data_advance_animations",	"void (__fastcall *) (Units_Image_Data * this, int edx, float elapsed, Unit ** units, int count, void * effects)"
+define,    0x0072C2C4,	0x0,		0x0,		"p_native_timer_inhibited",	"int *"
+define,    0x00CC37BC,	0x0,		0x0,		"p_native_game_ending",	"int *"
