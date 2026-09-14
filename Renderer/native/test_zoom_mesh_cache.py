@@ -292,7 +292,7 @@ namespace c3x_renderer {namespace render_core {struct SourceShadow {
 enum {geometry_land=1,geometry_feature=2,geometry_natural_decal=3,geometry_layer_count=5};
 struct CachedVertexChunk {
  struct {long left=0,top=0,right=0,bottom=0;} bounds;
- int translation_x=0,translation_y=0;float natural_projection[4]={};
+ int translation_x=0,translation_y=0;float natural_projection[4]={}; unsigned projection_kind=0;int source_tile_width=128;
  struct {void const* value=nullptr;void const* get()const{return value;}} instances;float instance_material=40;
  int buffer=7,indices=8,index_count=9,index_format=16,vertex_stride=64;
  unsigned version=10,city_material=0xffffffffu;bool animation_texture=false;
@@ -395,7 +395,7 @@ struct State {
  std::uint64_t tile_content_signature(Tile const&) const{return 3;}
  bool run(int x,bool record){
   tile.tile_x=x;tile.anchor_x=x*64;
-  bool retain_ground_grids=true,prewarming=false;
+  bool world_ground=false,retain_ground_grids=true,prewarming=false;
   struct Node {int lattice_x,lattice_y,degree,touches_water;};
   std::vector<Node const*> local_river_nodes;
   c3x_renderer::fidelity::NaturalWorld::CellInputs river_dependencies;
@@ -576,7 +576,7 @@ struct CachedVertexChunk {
  CachedVertexChunk(CachedVertexChunk const&)=delete;
  CachedVertexChunk& operator=(CachedVertexChunk const&)=delete;
  CachedVertexChunk(CachedVertexChunk&&)=default;
- Ref *buffer=nullptr,*indices=nullptr;int translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={};};
+ Ref *buffer=nullptr,*indices=nullptr;int translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned projection_kind=0;int source_tile_width=128;};
 #include "Renderer/native/render_core/geometry_draws.h"
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
@@ -597,6 +597,7 @@ struct State {
  struct Scene {void attach(c3x_renderer_tile_v1 const&,Handle){}} topology_cache;
  std::vector<Anchor> resource_anchors;std::vector<int> geometry_footprints;
  GeometryDrawView::Records geometry_vertex_buffers;
+ void index_world_content(CachedTileGeometry const&){}
  int tile_footprint(CachedTileGeometry const&,c3x_renderer_tile_v1 const&){return 1;}
  GeometryDrawRecord project_natural_chunk(GeometryDrawRecord chunk,c3x_renderer_tile_v1 const&){chunk.natural_projection[0]=1;return chunk;}
 ''' + append + r'''
@@ -659,7 +660,7 @@ using Handle=c3x_renderer::render_core::ContentHandle;
 #include <unordered_map>
 #include <vector>
 constexpr int geometry_layer_count=3,geometry_natural_terrain=1;
-struct CachedVertexChunk {int id,translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={};};
+struct CachedVertexChunk {int id,translation_x=0,translation_y=0;struct {long left=0,top=0,right=0,bottom=0;} bounds;float natural_projection[4]={}; unsigned projection_kind=0;int source_tile_width=128;};
 #include "Renderer/native/render_core/geometry_draws.h"
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
@@ -723,7 +724,7 @@ int main(){
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         project = "GeometryDrawRecord project_natural_chunk(" + source.split(
             "GeometryDrawRecord project_natural_chunk(", 1)[1].split(
-            "    c3x_renderer::TileFootprint tile_footprint", 1)[0]
+            "    void index_world_content", 1)[0]
         program = r'''
 #include <cassert>
 #include <climits>
@@ -734,7 +735,7 @@ struct c3x_renderer_tile_v1 {int tile_x,tile_y;};
 struct CachedVertexChunk {
  int translation_x=0,translation_y=0;
  c3x_renderer::render_core::ProjectedMeshBounds projected_bounds;
- float natural_projection[4]={};
+ float natural_projection[4]={}; unsigned projection_kind=0;int source_tile_width=128;
  struct {float low[3],high[3];} world_bounds;
  struct {LONG left,top,right,bottom;} bounds;
 };
@@ -743,7 +744,7 @@ constexpr int geometry_layer_count=1;
 using GeometryDrawRecord=c3x_renderer::render_core::GeometryDrawRecord<CachedVertexChunk>;
 using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<CachedVertexChunk,geometry_layer_count>;
 using GeometryDrawReference=GeometryDrawView::Reference;
-struct State {int shadow_tile_width=128,shadow_tile_height=64,height=1192;bool tight_natural_bounds=false;
+struct State {int content_view_height=900;int shadow_tile_width=128,shadow_tile_height=64,height=1192;bool tight_natural_bounds=false;
 ''' + project + r'''
 };
 int main(){
@@ -754,6 +755,10 @@ int main(){
   auto chunk=state.project_natural_chunk(stored,{15,47});
   assert(chunk.natural_projection[0]==31 && chunk.natural_projection[1]==-16);
   assert(chunk.natural_projection[2]==width && chunk.natural_projection[3]==height);
+  stored.projection_kind=4;auto authored=state.project_natural_chunk(stored,{15,47});
+  assert(authored.natural_projection[3]==state.content_view_height);
+  assert(authored.bounds.left==chunk.bounds.left && authored.bounds.bottom==chunk.bounds.bottom);
+  stored.projection_kind=0;
   c3x_renderer::fidelity::GroundProjection project{31,-16,width*.5f,width*.25f,width/224.f*.82f,float(height)};
   for(int i=0;i<10000;i++){
    float x=30.5f+(i%101)/100.f*3,y=-17.25f+(i%103)/102.f*2.55f,z=-.03f+(i%107)/106.f*1.76f;
@@ -854,7 +859,7 @@ using Vertex=c3x_renderer::fidelity::MapVertex;
 using UINT=unsigned;
 ''' + retained + r'''
 int main(){
- bool ground_hit=false,retain_ground_grids=false,prewarming=false,reuse_nested_ground_grids=true;
+ bool world_ground=false,ground_hit=false,retain_ground_grids=false,prewarming=false,reuse_nested_ground_grids=true;
  std::unordered_map<int,CachedGroundTile> retained_cache;
  auto retained_ground=retained_cache.end();
  std::vector<CachedGroundGrid> pending_ground_grids;
@@ -971,6 +976,7 @@ struct State {
     std::size_t tile_geometry_runtime_budget=100,tile_geometry_cache_capacity=2048;
     unsigned tile_geometry_epoch=3,frame_tiles_evicted=0,cache_evictions=0;
     void release_geometry_vertex_buffers(int&){}
+    void release_resident_content(Item& owner){resident_content.release(owner.binding);}
 ''' + eviction + r'''
 };
 int main(){

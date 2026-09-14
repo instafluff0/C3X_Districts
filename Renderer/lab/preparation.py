@@ -33,6 +33,7 @@ def input_paths(root):
     paths.update(("Renderer/lab/preparation.py",
         "Renderer/native/render_core/generate_shaders.py",
         "Renderer/native/render_core/shadow_receiver.hlsl",
+        "Renderer/native/render_core/world_projection.hlsl",
         "Renderer/native/render_core/terrain_scene.hlsl",
         "Renderer/native/render_core/source_caster.hlsl",
         "Renderer/native/source_fidelity/shadow_adapter.hlsl",

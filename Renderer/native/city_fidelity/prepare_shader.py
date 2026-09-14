@@ -4,6 +4,30 @@ import hashlib,json
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[2];LAB=ROOT/'Renderer/lab/shared'
 
+def world_projection(source,read):
+    source=source.replace('    float2 c3x_viewport_reserved;\n};',
+        '    float2 c3x_viewport_reserved;\n    float4 c3x_content_projection;\n};\n'+
+        read(HERE.parent/'render_core/world_projection.hlsl'))
+    source=source.replace('PixelInput VSIntegrated(IntegratedVertexInput input)\n{',
+        'PixelInput VSIntegrated(IntegratedVertexInput input)\n{\n    input.position=project_world_content(input.position,input.q6_world.xyz,c3x_content_projection,c3x_viewport_translation_padding);')
+    source=source.replace('input.position=packed.position;',
+        'input.position=project_world_content(packed.position,packed.world,c3x_content_projection,c3x_viewport_translation_padding);')
+    source=source.replace('i.position=p.position;',
+        'i.position=project_world_content(p.position,p.world,c3x_content_projection,c3x_viewport_translation_padding);')
+    for name in ('p','input'):
+        source=source.replace('float base='+name+'.position.y+h*NativeReflection.x;',
+            'float base=project_world_content('+name+'.position,'+name+'.world,c3x_content_projection,c3x_viewport_translation_padding).y+h*NativeReflection.x;')
+    if 'VSReflection(IntegratedVertexInput input)' in source:
+        source=source.replace('project_world_content(input.position,input.world,c3x_content_projection,c3x_viewport_translation_padding)',
+            'project_world_content(input.position,input.q6_world.xyz,c3x_content_projection,c3x_viewport_translation_padding)')
+    source=source.replace('    input.position=project_world_content(input.position,input.q6_world.xyz,c3x_content_projection,c3x_viewport_translation_padding);',
+        '    input.position=project_world_content(input.position,input.q6_world.xyz,c3x_content_projection,c3x_viewport_translation_padding);\n'
+        '    if(c3x_content_projection.z>0 && c3x_viewport_translation_padding>2.5 && c3x_viewport_translation_padding<3.5){\n'
+        '        input.geometry_normal=normalize(float3(input.geometry_normal.xy/c3x_content_projection.z,input.geometry_normal.z));\n'
+        '        input.river_data.y*=c3x_content_projection.z;\n    }')
+    return source
+
+
 def main():
     pins={}
     def read(p):
@@ -117,6 +141,7 @@ float4 PSNativeCityReflectionEmission(FeaturePixelInput p):SV_Target {
  clip(p.material_index-99.5);p.material_index+=100;return PSNativeCityBody(p).color;
 }
 '''
+    source=world_projection(source,read)
     (HERE/'city.hlsl').write_text(source)
     (HERE/'feature.hlsl').write_text(source)
     hydro=read(HERE.parent/'environment_refresh/hydrology.hlsl')
@@ -131,6 +156,7 @@ float4 PSResourceShadow(PixelInput input):SV_Target {
  input.panel=1;input.surface_kind=15;return PSIntegrated(input);
 }
 '''
+    hydro=world_projection(hydro,read)
     (HERE/'hydrology.hlsl').write_text(hydro)
     resource_skin=read(LAB/'shaders/objects/resource_skinning.hlsl')
     (HERE/'resource_body.hlsl').write_text(source+'\n'+resource_skin)

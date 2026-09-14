@@ -9,6 +9,7 @@
     "Renderer/lab/shared/shaders/objects/city_scene_material.hlsl": "75923e050f689869868b2eaebd21a7f71ea951e6e8091b9fbdc9610b36c24eaa",
     "Renderer/lab/shared/shaders/lighting/city_environment.hlsl": "3707899aa52eadadf6de30f76f69bc3d7afd69bed96130b376410229dc8bcea9",
     "Renderer/lab/shared/shaders/objects/settlement_ground.hlsl": "a21447d01e7b1b9738cfbb766b5173778c0bea8d2a7e87a3cec3c02f94ceca31",
+    "Renderer/native/render_core/world_projection.hlsl": "5f30cecf1cab7189560c0d986e7c81483964a92148cbe9660772851d8272cdc3",
     "Renderer/native/environment_refresh/hydrology.hlsl": "3b1500b1a8ffb7ea4d6198dac1db51b1915c6818da645d2063ab414f16e0137a",
     "Renderer/lab/shared/shaders/objects/resource_skinning.hlsl": "b11aa9a5dbefb8cac2145f425c9c671e35ff4c1ffa6608ea3d35234ba77280ee",
     "Renderer/native/environment_refresh/terrain.hlsl": "0ec9e5ae610411250b125d56eb618bfc9b4066f2377fe3f75632742e5371bba2",

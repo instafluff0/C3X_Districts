@@ -3365,7 +3365,26 @@ cbuffer C3XViewportSettings : register(b1)
     float c3x_viewport_translation_padding;
     float2 c3x_inverse_viewport_size;
     float2 c3x_viewport_reserved;
+    float4 c3x_content_projection;
 };
+// b1 supplies the native occurrence, independently of immutable source content.
+// Kind 1 (and existing natural bindings) projects world positions; kind 2
+// preserves feature depth; kind 3 scales normalized ground geometry.
+float3 project_world_content(float3 position, float3 world, float4 projection, float kind) {
+    if(projection.z==0) return position;
+    float width=projection.z,h=world.z*112-2.5;
+    if(kind>2.5 && kind<3.5) return position*width;
+    if(kind>1.5 && kind<2.5) {
+        float relief=width/224*.82;
+        float2 xy=position.xy*width;
+        float base=xy.y+h*relief;
+        return float3(xy,base+(h-position.z)*relief*.75+position.z*.0012*projection.w);
+    }
+    float dx=world.x-projection.x,dy=world.y-projection.y;
+    float base=(dx-dy+1)*width*.25;
+    return float3((dx+dy)*width*.5,base-h*(width/224*.82),base+h*.0016*projection.w);
+}
+
 
 struct IntegratedVertexInput
 {
@@ -3424,6 +3443,11 @@ float2 translated_position(IntegratedVertexInput input)
 
 PixelInput VSIntegrated(IntegratedVertexInput input)
 {
+    input.position=project_world_content(input.position,input.q6_world.xyz,c3x_content_projection,c3x_viewport_translation_padding);
+    if(c3x_content_projection.z>0 && c3x_viewport_translation_padding>2.5 && c3x_viewport_translation_padding<3.5){
+        input.geometry_normal=normalize(float3(input.geometry_normal.xy/c3x_content_projection.z,input.geometry_normal.z));
+        input.river_data.y*=c3x_content_projection.z;
+    }
     if(c3x_viewport_reserved.y>0)input.surface_kind=c3x_viewport_reserved.y;
     PixelInput output;
     output.position = float4(translated_position(input),
@@ -3461,7 +3485,7 @@ struct PackedFeatureInput {
 FeaturePixelInput VSIntegratedFeature(PackedFeatureInput packed)
 {
  IntegratedVertexInput input=(IntegratedVertexInput)0;
- input.position=packed.position;input.uv=packed.uv;input.geometry_normal=packed.normal;
+ input.position=project_world_content(packed.position,packed.world,c3x_content_projection,c3x_viewport_translation_padding);input.uv=packed.uv;input.geometry_normal=packed.normal;
  input.base_terrain=packed.material;input.q6_world=float4(packed.world,1);
     FeaturePixelInput output;
     output.position = float4(translated_position(input),
@@ -3482,7 +3506,7 @@ PixelInput VSReflection(IntegratedVertexInput input) {
  PixelInput o=VSIntegrated(input);
  float h=max(0,input.q6_world.z-NativeReflection.z);
  o.position.y-=h*NativeReflection.x*4*c3x_inverse_viewport_size.y;
- float base=input.position.y+h*NativeReflection.x;
+ float base=project_world_content(input.position,input.q6_world.xyz,c3x_content_projection,c3x_viewport_translation_padding).y+h*NativeReflection.x;
  o.position.z=clamp(.5-(floor((base-h*NativeReflection.y)*256+.5)/256+c3x_viewport_depth_translation)/16384,.001,.999);
  return o;
 }

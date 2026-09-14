@@ -802,6 +802,34 @@ int main(){
         pull.reset_and_stop();
         assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_PENDING);
     }
+    // Actual camera motion cancels a different prospective zoom immediately,
+    // even within one animation quantum. A stable view can offer it again.
+    {
+        RendererState state;RendererWorker pull(state);state.shared_scene_surface=true;
+        state.visible_resource_animations=1;state.animate_pixels=true;
+        auto base=f;auto observed=tile;observed.tile_x=observed.tile_y=20;
+        observed.anchor_x=observed.anchor_y=0;observed.tile_flags=C3X_RENDERER_TILE_RENDER;
+        base.tiles=&observed;base.target_width=128;base.target_height=96;base.tile_width=128;base.tile_height=64;
+        base.presentation_frequency=1000;base.presentation_time_ticks=100;
+        c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&base,{1,2,3,4}};
+        c3x_renderer_camera_view_v1 view={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(view)};
+        pull.camera_present_view(request,view);assert(pull.render(base,out,request.identity)==C3X_RENDERER_RESULT_OK);
+        auto future=base;auto future_tile=observed;future.tiles=&future_tile;
+        future.tile_width=160;future.tile_height=80;request.frame=&future;
+        auto entered=state.entered.load();state.hold_clock=100;
+        assert(pull.prepare_view(request,false)==C3X_RENDERER_RESULT_OK);
+        until([&]{return state.entered.load()>entered;});
+        observed.anchor_x-=16;base.presentation_time_ticks=101;request.frame=&base;
+        assert(pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK);
+        assert(pull.prepare_nearby_view(request)==C3X_RENDERER_RESULT_OK);
+        until([&]{return state.cancelled.load()>0;});
+        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK && view.frame.presentation_time_ticks==101;});
+        request.frame=&future;assert(pull.prepare_view(request,true)==C3X_RENDERER_RESULT_PENDING);
+        state.hold_clock=-1;
+        assert(pull.prepare_view(request,false)==C3X_RENDERER_RESULT_OK);
+        until([&]{return pull.camera_present_view(request,view)==C3X_RENDERER_RESULT_OK;});
+        pull.reset_and_stop();
+    }
     // Current-view animation interrupts speculative compilation. Its immutable
     // snapshot gets priority and interrupted content can resume afterward.
     {

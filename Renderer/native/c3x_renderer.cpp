@@ -35,6 +35,7 @@
 #include "pixel_block_cache.h"
 #include "render_core/render_region_cache.h"
 #include "render_core/region_contributor_index.h"
+#include "render_core/world_pass_index.h"
 #include "render_core/center_shore_cache.h"
 #include "render_core/projected_mesh_bounds.h"
 #include "color_quantization.h"
@@ -215,6 +216,10 @@ struct CachedVertexChunk {
     float city_atlas[4]={};
     std::shared_ptr<c3x_renderer::city_fidelity::Lighting> city_lighting;
     float natural_projection[4] = {};
+    // 1: natural world; 2: normalized feature/height; 3: normalized ground;
+    // 4: authored world content with the viewport-defined depth basis.
+    unsigned projection_kind=0;
+    int source_tile_width=0;
 };
 
 struct PendingCityChunk {
@@ -305,6 +310,8 @@ struct CachedTileGeometry {
     // Bindings borrow the existing owner; eviction invalidates their generation.
     c3x_renderer::render_core::ContentHandle binding, natural_content;
     bool shared_natural = false;
+    bool world_objects=false,world_ground=false;
+    int source_tile_width=0;
     std::vector<std::pair<std::uint64_t,std::uint64_t>> appearance_dependencies;
     int tile_x = 0, tile_y = 0;
     std::vector<ResourceAnchor> resource_anchors;
@@ -544,6 +551,12 @@ public:
     c3x_renderer::render_core::RenderRegionKey region_context;
     c3x_renderer::render_core::SourceShadow::PreparedCasters retained_region_casters;
     c3x_renderer::render_core::RegionContributorIndex region_contributors;
+    c3x_renderer::render_core::WorldPassIndex world_pass_index;
+    std::unordered_map<std::uintptr_t,std::vector<std::pair<unsigned,unsigned>>> world_pass_occurrences;
+    bool world_pass_affine=false;
+    double world_pass_x=0,world_pass_y=0;
+    float world_pass_reflection=0;
+
     c3x_renderer::render_core::CenterShoreCache center_shore_cache;
     double frame_center_shore_ms=0;
     std::size_t frame_region_hits=0,frame_region_misses=0,frame_region_hit_pixels=0,frame_region_rejected=0;
@@ -618,7 +631,7 @@ public:
     std::map<unsigned,ID3D11Buffer*> terrain_patch_indices;
     std::size_t terrain_patch_index_bytes=0;
     unsigned frame_patch_index_reuses=0;
-    unsigned frame_instances_ready=0;
+    unsigned frame_instances_ready=0,frame_world_object_hits=0,frame_world_object_builds=0;
     std::uint64_t requested_signature = 0;
     char const * frame_cache_path = "cold";
     c3x_renderer_i64 frame_geometry_ticks = 0, frame_draw_ticks = 0, frame_readback_ticks = 0;
@@ -905,7 +918,7 @@ public:
                 return a.second.last_used<b.second.last_used;});
             tile_geometry_cache_bytes-=oldest->second.byte_count;
             if(oldest->second.prefetched)prefetched_geometry_bytes-=oldest->second.byte_count;
-            release_geometry_vertex_buffers(oldest->second.buffers);resident_content.release(oldest->second.binding);tile_geometry_cache.erase(oldest);
+            release_geometry_vertex_buffers(oldest->second.buffers);release_resident_content(oldest->second);tile_geometry_cache.erase(oldest);
             ++result.capacity_geometry_evictions;
         }
         if(oracle_limits)result.capacity_pose_evictions=unit_bodies.benchmark_limit_pose_cache();
@@ -4004,7 +4017,7 @@ public:
             if(indexed){
                 std::vector<Item> found;
                 for(auto const& rect:rectangles){
-                    if(!region_contributors.query_rectangle(0,rect.left-int(pass_settings.translation[0]),
+                    if(!query_region_inputs(0,rect.left-int(pass_settings.translation[0]),
                         rect.top-int(pass_settings.translation[1]),rect.right-rect.left,rect.bottom-rect.top,found) ||
                         candidates.size()+found.size()>region_contributors.budget/(2*sizeof(Item))){indexed=false;break;}
                     candidates.insert(candidates.end(),found.begin(),found.end());
@@ -4264,6 +4277,9 @@ public:
         char selection_detail[192];sprintf_s(selection_detail,"indexed_candidates=%u scanned_candidates=%u selected_static=%u selected_dynamic=%u batches=%u world_records=%zu world_bytes=%zu instances_ready=%u",
             selection_candidates,selection_scans,selected_static,selected_dynamic,batches,topology_cache.size(),topology_cache.bytes(),frame_instances_ready);
         trace.write("world-view-submission",selection_detail,true);
+        sprintf_s(selection_detail,"object_builds=%u object_reuses=%u spatial_bytes=%zu spatial_view_entries=%zu affine=%u",
+            frame_world_object_builds,frame_world_object_hits,world_pass_index.bytes(),world_pass_occurrences.size(),unsigned(world_pass_affine));
+        trace.write("world-content",selection_detail,true);
         char instance_detail[256];sprintf_s(instance_detail,"enabled=%u mesh_bytes=%zu color_instance_bytes=%zu color_batches=%u shadow_instance_bytes=%zu shadow_batches=%u color_discards=%u shadow_discards=%u",
                 unsigned(tree_instances_enabled),natural.instance_mesh_bytes,natural.instance_stream.bytes,natural.instance_stream.uploads,
                 source_shadow.instance_stream.bytes,source_shadow.instance_stream.uploads,natural.instance_stream.discards,source_shadow.instance_stream.discards);
@@ -4482,11 +4498,16 @@ public:
         for(auto& layer:geometry_vertex_buffers)std::vector<GeometryDrawRecord>().swap(layer);
     }
 
+    void release_resident_content(CachedTileGeometry& owner){
+        if(owner.shared_natural)world_pass_index.erase(owner.version);
+        resident_content.release(owner.binding);
+    }
+
     void clear_tile_geometry_cache() {
         natural_mesh_cache.clear();natural_mesh_cache_bytes=0;
         ground_grid_cache.clear();ground_grid_cache_bytes=0;
         topology_cache = {};
-        resident_content.clear();
+        resident_content.clear();world_pass_index.clear();world_pass_occurrences.clear();world_pass_affine=false;
         cancel_pixel_preparation();
         pixel_blocks.clear();
         bitmap_footprints.clear();
@@ -4531,7 +4552,7 @@ public:
             tile_geometry_cache_bytes -= oldest->second.byte_count;
             if (oldest->second.prefetched) prefetched_geometry_bytes -= oldest->second.byte_count;
             release_geometry_vertex_buffers(oldest->second.buffers);
-            resident_content.release(oldest->second.binding);tile_geometry_cache.erase(oldest);
+            release_resident_content(oldest->second);tile_geometry_cache.erase(oldest);
             ++frame_tiles_evicted;
             if (cache_evictions != 0xffffffffu) ++cache_evictions;
         }
@@ -4544,7 +4565,7 @@ public:
                               std::atomic<bool> const * foreground_pending = nullptr, bool compact_feature = false, bool natural_vertex = false,
                               NaturalMesh* record=nullptr,NaturalMesh const* cached=nullptr,
                               c3x_renderer::fidelity::GroundProjection const* projection=nullptr,
-                              std::vector<UINT> const* grid_indices=nullptr) {
+                              std::vector<UINT> const* grid_indices=nullptr, unsigned projection_kind=0) {
         if (vertices.empty() && (!cached || cached->vertices.empty())) return true;
         std::size_t vertex_stride = pickup_profile ? (natural_vertex?92u:compact_feature?48u:sizeof(Vertex)) : 120u;
         std::size_t hash_stride = pickup_profile ? sizeof(Vertex) : 120u;
@@ -4586,6 +4607,7 @@ public:
         }
         }
         CachedVertexChunk chunk;
+        chunk.projection_kind=projection_kind;chunk.source_tile_width=(projection_kind==2 || projection_kind==3)?128:shadow_tile_width;
         chunk.bounds = {LONG_MAX, LONG_MAX, LONG_MIN, LONG_MIN};
         chunk.version=tile_geometry_version; chunk.vertex_stride=static_cast<UINT>(vertex_stride);
         for(unsigned i=0;i<3;++i){chunk.world_bounds.low[i]=1e9f;chunk.world_bounds.high[i]=-1e9f;}
@@ -4628,7 +4650,7 @@ public:
             prefetched_geometry_bytes -= oldest->second.byte_count;
             tile_geometry_cache_bytes -= oldest->second.byte_count;
             release_geometry_vertex_buffers(oldest->second.buffers);
-            resident_content.release(oldest->second.binding);tile_geometry_cache.erase(oldest);
+            release_resident_content(oldest->second);tile_geometry_cache.erase(oldest);
             ++frame_tiles_evicted;
             if (cache_evictions != 0xffffffffu) ++cache_evictions;
         }
@@ -4650,6 +4672,12 @@ public:
         D3D11_SUBRESOURCE_DATA initial = {};
         std::vector<std::uint8_t> frozen_vertices;
         initial.pSysMem = packed.data();
+        // Preserve source feature height in z; xy is a local, zoom-independent
+        // basis. World position, materials and source-shadow inputs are intact.
+        if(projection_kind==2 || projection_kind==3)for(auto& v:packed){
+            v.x/=float(chunk.source_tile_width);v.y/=float(chunk.source_tile_width);
+            if(projection_kind==3){v.z/=128.f;v.river_branch_count/=128.f;}
+        }
         if(natural_vertex) {
             frozen_vertices.resize(packed.size()*92);
             for(std::size_t i=0;i<packed.size();++i){auto const&v=packed[i];
@@ -4716,8 +4744,16 @@ public:
 
     GeometryDrawRecord project_natural_chunk(GeometryDrawRecord chunk, c3x_renderer_tile_v1 const& record) {
         int c=(record.tile_x+record.tile_y)/2,r=(record.tile_x-record.tile_y)/2;
+        if(chunk.content().projection_kind==2 || chunk.content().projection_kind==3){
+            float scale=float(shadow_tile_width)/float(chunk.content().source_tile_width);
+            chunk.bounds={LONG(std::floor(chunk.bounds.left*scale))-2,LONG(std::floor(chunk.bounds.top*scale))-2,
+                LONG(std::ceil(chunk.bounds.right*scale))+2,LONG(std::ceil(chunk.bounds.bottom*scale))+2};
+            chunk.natural_projection[0]=float(c);chunk.natural_projection[1]=float(r);
+            chunk.natural_projection[2]=float(shadow_tile_width);chunk.natural_projection[3]=float(content_view_height);
+            return chunk;
+        }
         chunk.natural_projection[0]=float(c);chunk.natural_projection[1]=float(r);
-        chunk.natural_projection[2]=float(shadow_tile_width);chunk.natural_projection[3]=float(height);
+        chunk.natural_projection[2]=float(shadow_tile_width);chunk.natural_projection[3]=float(chunk.content().projection_kind==4?content_view_height:height);
         if(tight_natural_bounds && chunk.content().projected_bounds.valid && shadow_tile_height*2==shadow_tile_width){
             auto bounds=chunk.content().projected_bounds.project(c,r,shadow_tile_width);
             chunk.bounds={bounds[0],bounds[1],bounds[2],bounds[3]};return chunk;
@@ -4737,6 +4773,20 @@ public:
         return chunk;
     }
 
+    void index_world_content(CachedTileGeometry const& owner){
+        if(!owner.world_objects)return;
+        c3x_renderer_tile_v1 record={};record.tile_x=owner.tile_x;record.tile_y=owner.tile_y;
+        for(auto const& layer:owner.buffers)for(auto const& source:layer){
+            auto key=reinterpret_cast<std::uintptr_t>(&source);
+            if(world_pass_index.contains(key))continue;
+            auto draw=project_natural_chunk(GeometryDrawRecord(source),record);
+            double radius=source.city_lighting?1.25:.125; // lighting plus fixed filter/bounds guard
+            double scale=1./shadow_tile_width,x=owner.tile_x*.5,y=owner.tile_y*.25;
+            if(!world_pass_index.add(owner.version,key,x+draw.bounds.left*scale-radius,y+draw.bounds.top*scale-radius,
+                x+draw.bounds.right*scale+radius,y+draw.bounds.bottom*scale+radius))return;
+        }
+    }
+
     c3x_renderer::TileFootprint tile_footprint(CachedTileGeometry const & tile,
                                              c3x_renderer_tile_v1 const & record) {
         int anchor_x = record.anchor_x, anchor_y = record.anchor_y;
@@ -4749,7 +4799,7 @@ public:
         auto include=[&](auto const& buffers,bool natural_world){
         for (auto const & layer : buffers)
             for (auto const & source_chunk : layer) {
-                GeometryDrawRecord chunk=natural_world?project_natural_chunk(source_chunk,record):GeometryDrawRecord(source_chunk);
+                GeometryDrawRecord chunk=(natural_world || source_chunk.projection_kind)?project_natural_chunk(source_chunk,record):GeometryDrawRecord(source_chunk);
                 footprint.bounds.left = std::min(footprint.bounds.left, static_cast<int>(chunk.bounds.left));
                 footprint.bounds.top = std::min(footprint.bounds.top, static_cast<int>(chunk.bounds.top));
                 footprint.bounds.right = std::max(footprint.bounds.right, static_cast<int>(chunk.bounds.right));
@@ -4807,7 +4857,7 @@ public:
             // a time copied the entire layer again for every visible tile.
             for (auto const& source_chunk : source.buffers[layer]) {
                 GeometryDrawRecord chunk(source_chunk);
-                if(natural_world)chunk=project_natural_chunk(chunk,record);
+                if(natural_world || source_chunk.projection_kind)chunk=project_natural_chunk(chunk,record);
                 chunk.translation_x = anchor_x - source.anchor_x;
                 chunk.translation_y = anchor_y - source.anchor_y;
                 geometry_vertex_buffers[layer].push_back(chunk);
@@ -4818,19 +4868,22 @@ public:
         };
         append(tile,false);
         if(auto natural_tile=resident_content.resolve(tile.natural_content))
-            if(natural_tile->shared_natural)append(*natural_tile,true);
+            if(natural_tile->shared_natural){index_world_content(*natural_tile);append(*natural_tile,true);}
         topology_cache.attach(record,tile.binding);
     }
 
     c3x_renderer::fidelity::TerrainCompileInput terrain_compile_input(c3x_renderer_tile_v1 const& tile,
-            c3x_renderer_frame_v1 const& frame,int ground,bool skip_shore,bool separate,bool indexed,bool heights) const {
+            c3x_renderer_frame_v1 const& frame,int ground,bool skip_shore,bool separate,bool indexed,bool heights,bool world_content=false) const {
         c3x_renderer::fidelity::TerrainCompileInput input;
         input.tile_x=tile.tile_x;input.tile_y=tile.tile_y;input.real_terrain_type=tile.real_terrain_type;input.ground=ground;
         input.tile_width=frame.tile_width;input.tile_height=frame.tile_height;input.target_height=content_view_height;
+        if(world_content){
+            input.tile_width=128;input.tile_height=64;input.target_height=128;
+        }
         input.world_revision=frame.world_topology_revision;input.detail=patch_detail;
         input.river_ready=river_assets_ready;input.skip_flat_shore=skip_shore;input.separate_relief=separate;input.indexed=indexed;input.retain_height=heights;
         input.key={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(tile.real_terrain_type)*32+unsigned(ground),
-            std::uint64_t(frame.tile_width),std::uint64_t(frame.tile_height),std::uint64_t(content_view_height),std::uint64_t(content_revision),
+            std::uint64_t(input.tile_width),std::uint64_t(input.tile_height),std::uint64_t(input.target_height),std::uint64_t(content_revision),
             std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
             std::uint64_t(frame.world_wrap_x)*2+unsigned(frame.world_wrap_y),std::uint64_t(patch_detail.identity()),
             std::uint64_t(skip_shore)*16+unsigned(separate)*8+unsigned(indexed)*4+unsigned(heights)*2+unsigned(river_assets_ready)};
@@ -4884,8 +4937,10 @@ public:
         for (auto const & dependency : cached.anchor_dependencies) {
             auto current = topology_cache.current(dependency.first);
             if (current == nullptr ||
-                current->occurrence.anchor_x - tile.anchor_x != dependency.second[0] ||
-                current->occurrence.anchor_y - tile.anchor_y != dependency.second[1]) valid = false;
+                std::int64_t(current->occurrence.anchor_x-tile.anchor_x)*(cached.world_ground?cached.source_tile_width:1) !=
+                    std::int64_t(dependency.second[0])*(cached.world_ground?shadow_tile_width:1) ||
+                std::int64_t(current->occurrence.anchor_y-tile.anchor_y)*(cached.world_ground?cached.source_tile_width:1) !=
+                    std::int64_t(dependency.second[1])*(cached.world_ground?shadow_tile_width:1)) valid = false;
         }
         cached.validity=valid && natural.valid(cached.river_dependencies);
         cached.validity_epoch=tile_geometry_epoch;
@@ -4939,13 +4994,48 @@ public:
                  chunk.bounds().bottom+dy+high+radius<=rect.top || chunk.bounds().top+dy+low-radius>=rect.bottom);
     }
 
+    bool query_region_inputs(unsigned pass,int left,int top,unsigned extent_x,unsigned extent_y,
+            std::vector<std::pair<unsigned,unsigned>>& output){
+        if(!region_contributors.query_rectangle(pass,left,top,extent_x,extent_y,output))return false;
+        if(!world_pass_affine)return true;
+        std::vector<c3x_renderer::render_core::WorldPassIndex::Key> keys;
+        double scale=1./shadow_tile_width;
+        double margin=pass?world_pass_reflection:0;
+        if(!world_pass_index.query((left-world_pass_x)*scale,(top-world_pass_y-margin)*scale,
+            (left+double(extent_x)-world_pass_x)*scale,(top+double(extent_y)-world_pass_y)*scale,keys))return false;
+        for(auto key:keys){auto found=world_pass_occurrences.find(key);if(found==world_pass_occurrences.end())continue;
+            if(output.size()+found->second.size()>region_contributors.budget/(2*sizeof(output[0])))return false;
+            output.insert(output.end(),found->second.begin(),found->second.end());
+        }
+        std::sort(output.begin(),output.end());output.erase(std::unique(output.begin(),output.end()),output.end());return true;
+    }
+    bool query_region_inputs(unsigned pass,int left,int top,unsigned extent,
+            std::vector<std::pair<unsigned,unsigned>>& output){return query_region_inputs(pass,left,top,extent,extent,output);}
+
     void prepare_region_contributors(GeometryDrawView buffers) {
         if(region_contributors.ready && region_contributors.tile_width==shadow_tile_width &&
            region_contributors.reflection_height==reflection.height_pixels)return;
-        region_contributors.clear();
+        region_contributors.clear();world_pass_occurrences.clear();world_pass_affine=false;world_pass_reflection=0;
         try {
+            bool first=true,affine=shadow_tile_width>=32;
+            for(unsigned layer=0;layer<geometry_layer_count;++layer)for(unsigned i=0;i<buffers[layer].size();++i){
+                auto const& chunk=buffers[layer][i];auto key=reinterpret_cast<std::uintptr_t>(&chunk.content());
+                if(!world_pass_index.contains(key))continue;
+                auto const& p=chunk.natural_projection();
+                double x=chunk.translation_x()-(p[0]+p[1])*shadow_tile_width*.5;
+                double y=chunk.translation_y()-(p[0]-p[1])*shadow_tile_width*.25;
+                if(first){world_pass_x=x;world_pass_y=y;first=false;}
+                else if(x!=world_pass_x || y!=world_pass_y)affine=false;
+                if(world_pass_occurrences.size()>=c3x_renderer::render_core::WorldPassIndex::budget/256){affine=false;break;}
+                world_pass_occurrences[key].push_back({layer,i});
+                world_pass_reflection=std::max(world_pass_reflection,
+                    2*reflection.height_pixels*std::max(0.f,chunk.content().world_bounds.high[2]-2.5f/112.f));
+            }
+            world_pass_affine=affine && !first;
+            if(!world_pass_affine)world_pass_occurrences.clear();
             for(unsigned pass=0;pass<2;++pass)for(unsigned layer=0;layer<geometry_layer_count;++layer)
                 for(unsigned i=0;i<buffers[layer].size();++i){auto const& chunk=buffers[layer][i];
+                    if(world_pass_affine && world_pass_occurrences.count(reinterpret_cast<std::uintptr_t>(&chunk.content())))continue;
                     int radius=layer==geometry_city && chunk.content().city_lighting?int(std::ceil(shadow_tile_width*.85f))+8:0;
                     float low=pass?2*reflection.height_pixels*std::max(0.f,chunk.content().world_bounds.low[2]-2.5f/112.f):0;
                     float high=pass?2*reflection.height_pixels*std::max(0.f,chunk.content().world_bounds.high[2]-2.5f/112.f):0;
@@ -4971,7 +5061,7 @@ public:
         if(composition_receiver_index && buffers.is(geometry_vertex_buffers) && rectangles.size()==1 &&
            region_contributors.tile_width==shadow_tile_width && region_contributors.reflection_height==reflection.height_pixels) {
             auto const& rect=rectangles[0];
-            try {indexed=region_contributors.query(reflected?1u:0u,rect.left-int(settings.translation[0]),
+            try {indexed=query_region_inputs(reflected?1u:0u,rect.left-int(settings.translation[0]),
                 rect.top-int(settings.translation[1]),std::max(rect.right-rect.left,rect.bottom-rect.top),candidates);}
             catch(...) {}
         }
@@ -5007,7 +5097,7 @@ public:
             key.push_back(0x726567696f6e0000ull+pass);
             std::vector<c3x_renderer::render_core::RegionContributorIndex::Item> candidates;
             bool indexed=false;
-            try{indexed=region_contributors.query(pass,-int(local.translation[0]),-int(local.translation[1]),extent,candidates);}catch(...){}
+            try{indexed=query_region_inputs(pass,-int(local.translation[0]),-int(local.translation[1]),extent,candidates);}catch(...){}
             auto contribute=[&](unsigned layer,GeometryDrawReference const& chunk){
                 if(layer==geometry_city && chunk.content().city_lighting &&
                    chunk_intersects_region(chunk,local,rect,pass!=0,int(std::ceil(shadow_tile_width*.85f))+8)){
@@ -5132,6 +5222,7 @@ public:
             if(!chunk_intersects_region(chunk,viewport_settings,rect,reflection_pass))continue;
             ViewportShaderSettings settings = viewport_settings;
             std::copy(std::begin(chunk.natural_projection()),std::end(chunk.natural_projection()),settings.natural_projection);
+            settings.padding=float(chunk.content().projection_kind);
             if(pickup_profile)settings.reserved[1]=layer==geometry_underlay?.5f:layer==geometry_bed?4.f:layer==geometry_water?5.f:0.f;
             settings.translation[0] += static_cast<float>(chunk.translation_x());
             settings.translation[1] += static_cast<float>(chunk.translation_y());
@@ -6240,7 +6331,7 @@ public:
             }
         }
         }
-        frame_tiles_built = frame_tiles_reused = frame_tiles_evicted = frame_instances_ready = frame_patch_index_reuses = 0;
+        frame_tiles_built = frame_tiles_reused = frame_tiles_evicted = frame_instances_ready = frame_patch_index_reuses = frame_world_object_hits = frame_world_object_builds = 0;
         frame_natural_hits=0;
         frame_ground_grid_hits=0;
         char world_control[8]={};GetEnvironmentVariableA("C3X_RENDERER_RETAINED_WORLD",world_control,sizeof(world_control));
@@ -6479,6 +6570,9 @@ public:
             &cliff_vertices[0], &cliff_vertices[1], &cliff_vertices[2], &cliff_vertices[3],
             &cliff_vertices[4], &cliff_vertices[5], &cliff_vertices[6], &cliff_vertices[7]};
         for(unsigned i=0;i<25;i++)tile_layers[geometry_natural_terrain+i]=&natural_vertices[i];
+        bool const world_objects=city_profile && retained_world && share_world_meshes &&
+            frame.tile_height*2==frame.tile_width;
+        bool const world_ground=world_objects && frame.tile_width>=96;
         float half_w = static_cast<float>(frame.tile_width) * 0.5f;
         float half_h = static_cast<float>(frame.tile_height) * 0.5f;
         auto ndc_x = [](float x) { return x; };
@@ -6691,7 +6785,7 @@ public:
                 auto instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));
                 auto cached=instance?resident_content.resolve(instance->compiled):nullptr;
                 if(cached && cached->compile_context[17]==instance->revision && tile_content_valid(*cached,tile))continue;
-                auto input=terrain_compile_input(tile,frame,ground_type(tile),skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples);
+                auto input=terrain_compile_input(tile,frame,ground_type(tile),skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
                 if(tile.tile_flags&C3X_RENDERER_TILE_RENDER)needed.push_back(input.key);
                 if(keys.insert(input.key).second && !terrain_preparation.contains(input.key,
                     [&](auto const& result){return terrain_result_valid(result);}))jobs.push_back({input.key,input});
@@ -6871,7 +6965,7 @@ public:
                 // Include that radius plus the whole tile rectangle's diameter:
                 // if any point responds, its nearest node is closer than every
                 // omitted node at ALL vertices, preserving interpolation too.
-                c3x_renderer::RiverNodeWindow node_window(frame.tile_width, frame.tile_height);
+                c3x_renderer::RiverNodeWindow node_window(world_ground?96:frame.tile_width, world_ground?48:frame.tile_height);
                 for (RiverNode const & node : river_nodes)
                     if (node_window.contains(node.lattice_x-tile.tile_x, node.lattice_y-tile.tile_y))
                         local_river_nodes.push_back(&node);
@@ -6884,7 +6978,7 @@ public:
                 }
             }
             auto persistent_instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));
-            std::array<std::uint64_t,20> compile_context={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(content_view_width),std::uint64_t(content_view_height),std::uint64_t(frame.tile_width),std::uint64_t(frame.tile_height),std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(content_revision),std::uint64_t(device_generation),std::uint64_t(pickup_profile?0:frame.hour),std::uint64_t(pickup_profile?0:frame.season),(std::uint64_t(base_ground_grid)<<32)|patch_detail.identity(),std::uint64_t(draw_record_count<=512?0:draw_record_count<=768?1:draw_record_count<=2048?2:3),std::uint64_t(river_context),std::uint64_t(persistent_instance?persistent_instance->revision:0),std::uint64_t(c3x_renderer::render_core::render_core_revision),std::uint64_t(pickup_profile)};
+            std::array<std::uint64_t,20> compile_context={std::uint64_t(tile.tile_x),std::uint64_t(tile.tile_y),std::uint64_t(world_ground?0:content_view_width),std::uint64_t(world_ground?0:content_view_height),std::uint64_t(world_ground?96:frame.tile_width),std::uint64_t(world_ground?48:frame.tile_height),std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(content_revision),std::uint64_t(device_generation),std::uint64_t(pickup_profile?0:frame.hour),std::uint64_t(pickup_profile?0:frame.season),(std::uint64_t(world_ground?0:base_ground_grid)<<32)|patch_detail.identity(),std::uint64_t(world_ground?0:draw_record_count<=512?0:draw_record_count<=768?1:draw_record_count<=2048?2:3),std::uint64_t(river_context),std::uint64_t(persistent_instance?persistent_instance->revision:0),std::uint64_t(c3x_renderer::render_core::render_core_revision),std::uint64_t(pickup_profile)};
             if(retained_world && (!prewarming || world_preparation) && persistent_instance){
                 auto validation_begin=std::chrono::steady_clock::now();
                 CachedTileGeometry* ready=nullptr;
@@ -7004,8 +7098,8 @@ public:
             };
             mix_tile(tile.tile_x); mix_tile(tile.tile_y);
             mix_tile(tile_content_signature(tile));
-            mix_tile(content_view_width); mix_tile(content_view_height);
-            mix_tile(frame.tile_width); mix_tile(frame.tile_height);
+            mix_tile(world_ground?0:content_view_width); mix_tile(world_ground?0:content_view_height);
+            mix_tile(world_ground?96:frame.tile_width); mix_tile(world_ground?48:frame.tile_height);
             mix_tile(frame.world_wrap_x ? frame.world_width_tiles : 0);
             mix_tile(frame.world_wrap_y ? frame.world_height_tiles : 0);
             mix_tile(frame.world_wrap_x); mix_tile(frame.world_wrap_y);
@@ -7015,7 +7109,7 @@ public:
                 mix_tile(frame.world_width_tiles); mix_tile(frame.world_height_tiles);
             }
             if (!pickup_profile) { mix_tile(frame.hour); mix_tile(frame.season); }
-            mix_tile(tile_ground_grid); mix_tile(shadow_grid);
+            mix_tile(tile_ground_grid); mix_tile(world_ground?0:shadow_grid);
             if(pickup_profile)mix_tile(flat_grid);
             for(auto node:local_river_nodes){mix_tile(node->lattice_x);mix_tile(node->lattice_y);
                 mix_tile(node->degree);mix_tile(node->touches_water);}
@@ -7228,8 +7322,8 @@ public:
                                           : node.degree == 1u && node.touches_water);
                     if (!selected)
                         continue;
-                    float delta_x = (point_x - static_cast<float>(node.lattice_x)) * half_w;
-                    float delta_y = (point_y - static_cast<float>(node.lattice_y)) * half_h;
+                    float delta_x = (point_x - static_cast<float>(node.lattice_x)) * (world_ground?64.f:half_w);
+                    float delta_y = (point_y - static_cast<float>(node.lattice_y)) * (world_ground?32.f:half_h);
                     distance = std::min(distance,
                         std::sqrt(delta_x * delta_x + delta_y * delta_y));
                 }
@@ -7886,7 +7980,7 @@ public:
                     ? river_distance(tile, u, v) : 1000.0f;
                 auto owner_material = pickup_profile && terrain_conforming_surface
                     ? pickup_ground_at(world_u,world_v).owner : std::array<float,4>{};
-                return Vertex{
+                Vertex vertex{
                     ndc_x(ground_x), ndc_y(ground_y - h), depth,
                     point.material_u, point.material_v,
                     1.0f, normal_x, normal_y, normal_z,
@@ -7908,6 +8002,13 @@ public:
                     static_cast<float>(point.shore.rocky), static_cast<float>(point.shore.depth),
                     owner_material[0], owner_material[1], owner_material[2], owner_material[3]
                 };
+                if(world_ground){
+                    float elevation=relief_sample[0]*(128.f/224.f*.82f),base=(u+v)*32.f;
+                    vertex.x=64.f+(u-v)*64.f;vertex.y=base-elevation;vertex.z=base+elevation*.75f;
+                    if(terrain_conforming_surface){vertex.normal_x=-point.normal_delta[0]/.012f;
+                        vertex.normal_y=point.normal_delta[1]/.012f;vertex.normal_z=1;}
+                }
+                return vertex;
             };
             // Retain the actual wrapped occurrence: vertices contain raw world
             // coordinates/UVs, not just canonical gameplay identity.
@@ -7923,7 +8024,7 @@ public:
                     ground_signature=(ground_signature^std::uint64_t(value))*1099511628211ull;
             }
             auto retained_ground=ground_grid_cache.find(ground_key);
-            bool ground_hit=retain_ground_grids && !prewarming && retained_ground!=ground_grid_cache.end() &&
+            bool ground_hit=retain_ground_grids && !world_ground && !prewarming && retained_ground!=ground_grid_cache.end() &&
                 retained_ground->second.signature==ground_signature;
             if(ground_hit && !natural.valid(retained_ground->second.river_dependencies))ground_hit=false;
             if(ground_hit)for(auto const& dependency:retained_ground->second.dependencies){
@@ -7960,7 +8061,7 @@ public:
                         int stride=grid.sample_stride(subdivisions);
                         if(stride){cached_grid=&grid;cached_stride=stride;break;}
                     }
-                bool record=retain_ground_grids && !prewarming && indices && !cached_grid;
+                bool record=retain_ground_grids && !world_ground && !prewarming && indices && !cached_grid;
                 CachedGroundGrid pending;
                 if(record){pending.layer=layer;pending.divisions=subdivisions;pending.samples.resize(grid_vertices.size());}
                 if(cached_grid)++frame_ground_grid_hits;
@@ -8047,7 +8148,8 @@ public:
                     float base_ground_y = center_y + ground_height_pixels +
                         (local_x + local_y) * half_h;
                     float feature_height_tiles = local_z * 150.0f *
-                        feature_projection_scale / relief_projection_scale;
+                        (world_objects?128.f/224.f:feature_projection_scale) /
+                        (world_objects?128.f/224.f*.82f:relief_projection_scale);
                     float depth =
                         base_ground_y + ground_height_pixels * 0.75f +
                         feature_height_tiles * 0.0012f * static_cast<float>(content_view_height);
@@ -8067,6 +8169,11 @@ public:
                         vertex.world_y = tile_world_v + 1.0f - local_v - local_y;
                         vertex.world_z = (ground_sample[0] + 2.5f + feature_height_tiles) / 112.0f;
                         vertex.world_valid = 1.0f;
+                        if(world_objects){
+                            vertex.x=64.f+(local_u-local_v)*64.f+(local_x-local_y)*64.f;
+                            vertex.y=((local_u+local_v)*32.f-ground_sample[0]*(128.f/224.f*.82f))+(local_x+local_y)*32.f-local_z*150.f*(128.f/224.f);
+                            vertex.z=feature_height_tiles;
+                        }
                         auto normal=c3x_renderer::lighting::object_normal(normal_x,normal_y,source.normal[2]);
                         vertex.normal_x=normal[0];vertex.normal_y=normal[1];vertex.normal_z=normal[2];
                     }
@@ -8140,6 +8247,8 @@ public:
                         vertex.world_y = tile_world_v + 1.0f - route_v;
                         vertex.world_z = (ground_sample[0] + 2.5f) / 112.0f;
                         vertex.world_valid = 1.0f;
+                        if(world_objects){vertex.x=64.f+(route_u-route_v)*64.f;
+                            vertex.y=(route_u+route_v)*32.f-ground_sample[0]*(128.f/224.f*.82f);vertex.z=0;}
                     }
                     return vertex;
                 };
@@ -8158,7 +8267,66 @@ public:
             // underlay, raised land, submerged bed, then transparent water.
             // Keeping these pass-major vectors prevents a later land tile
             // from overwriting an earlier neighbor's continuous shoreline.
+            // A hit must carry its dependency observations into the ordinary
+            // GPU tile cache. Never reuse samples across authoritative edits.
+            std::uint64_t natural_key=1469598103934665603ull;
+            for(auto value:{std::uint64_t(std::uint32_t(tile.tile_x)),std::uint64_t(std::uint32_t(tile.tile_y)),
+                    tile_content_signature(tile),content_revision,retained_world?std::uint64_t(0):std::uint64_t(frame.world_topology_revision),
+                    std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
+                    std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y),std::uint64_t(world_ground),std::uint64_t(patch_detail.identity()),world_ground?river_context:std::uint64_t(0)})
+                natural_key=(natural_key^value)*1099511628211ull;
+            // Forest exclusions consume neighboring city composition, while
+            // the ordinary topology dependency map intentionally omits it.
+            if(tile.real_terrain_type==7)for(int dr=-2;dr<=2;++dr)for(int dc=-2;dc<=2;++dc){
+                int c=(tile.tile_x+tile.tile_y)/2+dc,r=(tile.tile_x-tile.tile_y)/2+dr;
+                auto neighbor=topology_cache.current(coordinate_key(c+r,c-r));
+                auto value=neighbor!=nullptr && neighbor->occurrence.city_id>=0?
+                    tile_content_signature(neighbor->occurrence):0;
+                natural_key=(natural_key^value)*1099511628211ull;
+            }
+            // World-space GPU data may outlive any particular camera entry.
+            // Pin the owner before ground uploads can evict other entries.
+            bool cache_natural=fidelity_profile && tile.city_id<0 && (!prewarming || world_preparation);
+            bool share_natural=(cache_natural || world_objects) && share_world_meshes;
+            auto shared_natural=tile_geometry_cache.find(natural_key);
+            bool shared_hit=share_natural && shared_natural!=tile_geometry_cache.end() && shared_natural->second.shared_natural && shared_natural->second.world_objects==world_objects && shared_natural->second.world_ground==world_ground;
+            if(shared_hit && !natural.valid(shared_natural->second.river_dependencies))shared_hit=false;
+            if(shared_hit)for(auto const& dependency:shared_natural->second.appearance_dependencies)
+                if(topology_cache.appearance_revision(dependency.first)!=dependency.second){shared_hit=false;break;}
+            if(shared_hit)for(auto const& dependency:shared_natural->second.dependencies){
+                auto current=topology_cache.current(dependency.first);
+                if((current==nullptr?0:current->semantic)!=dependency.second){shared_hit=false;break;}
+            }
+            if(shared_hit)for(auto const& dependency:shared_natural->second.coast_dependencies)
+                if(world_coast.node_revision(dependency.first)!=dependency.second){shared_hit=false;break;}
+            if(shared_hit)for(auto const& dependency:shared_natural->second.world_dependencies)
+                if(world_coast.world().at(dependency.first)!=dependency.second){shared_hit=false;break;}
+            if(shared_hit && world_objects)for(auto const& dependency:shared_natural->second.anchor_dependencies){
+                auto current=topology_cache.current(dependency.first);
+                auto basis=shared_natural->second.source_tile_width;
+                if(!current || std::int64_t(current->occurrence.anchor_x-tile.anchor_x)*basis!=std::int64_t(dependency.second[0])*frame.tile_width ||
+                    std::int64_t(current->occurrence.anchor_y-tile.anchor_y)*basis!=std::int64_t(dependency.second[1])*frame.tile_width){shared_hit=false;break;}
+            }
+            if(share_natural && !shared_hit && shared_natural!=tile_geometry_cache.end()){
+                if(shared_natural->second.shared_natural && shared_natural->second.last_used!=tile_geometry_epoch){
+                    tile_geometry_cache_bytes-=shared_natural->second.byte_count;
+                    release_resident_content(shared_natural->second);tile_geometry_cache.erase(shared_natural);
+                }else share_natural=false; // Do not replace a pinned owner or a colliding ordinary key.
+            }
+            if(shared_hit && world_objects){
+                tile_resource_anchors=shared_natural->second.resource_anchors;
+                if(shared_natural->second.replaces_resource)build_replacement[index]|=C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED;
+            }
+            if(shared_hit){
+                auto& cached=shared_natural->second;cached.last_used=tile_geometry_epoch;
+                if(animated_view)cached.animation_epoch=tile_geometry_epoch;
+                river_dependencies.insert(cached.river_dependencies.begin(),cached.river_dependencies.end());
+                dependencies.insert(cached.dependencies.begin(),cached.dependencies.end());
+                coast_dependencies.insert(cached.coast_dependencies.begin(),cached.coast_dependencies.end());
+                world_dependencies.insert(cached.world_dependencies.begin(),cached.world_dependencies.end());
+            }
             QueryPerformanceCounter(&phase_time);
+            if(!world_ground || !shared_hit){
             append_ground_layer(underlay_vertices, 0.5f, flat_grid, &ground_indices[geometry_underlay]);
             if (ground < 11 && (!fidelity_profile || draw_marsh))
                 append_ground_layer(land_vertices, 1.0f, tile_ground_grid, &ground_indices[geometry_land]);
@@ -8178,6 +8346,7 @@ public:
                 append_ground_layer(shadow_vertices, 10.0f,
                                     shadow_grid);
             }
+            } // complete world-ground hit
             if(!pending_ground_grids.empty()){
                 CachedGroundTile incoming;
                 incoming.signature=ground_signature;incoming.used=tile_geometry_epoch;incoming.x=tile.tile_x;incoming.y=tile.tile_y;
@@ -8215,6 +8384,8 @@ public:
             QueryPerformanceCounter(&phase_end);ground_ticks+=phase_end.QuadPart-phase_time.QuadPart;
             phase_time=phase_end;
             if (cancelled()) return false;
+            if(world_objects){if(shared_hit)++frame_world_object_hits;else ++frame_world_object_builds;}
+            if(!world_objects || !shared_hit){
             if (route_assets_ready && (tile.road_mask != 0 || tile.railroad_mask != 0)) {
                 constexpr int route_offsets[4][2] = {
                     {1, -1}, {2, 0}, {1, 1}, {0, 2}
@@ -8354,7 +8525,8 @@ public:
                             float base_ground_y = center_y + ground_height_pixels +
                                 (local_x + local_y) * half_h;
                             float feature_height_tiles = local_z * 150.0f *
-                                feature_projection_scale / relief_projection_scale;
+                        (world_objects?128.f/224.f:feature_projection_scale) /
+                        (world_objects?128.f/224.f*.82f:relief_projection_scale);
                             float depth =
                                 base_ground_y + ground_height_pixels * 0.75f +
                         feature_height_tiles * 0.0012f * static_cast<float>(content_view_height);
@@ -8375,6 +8547,11 @@ public:
                         vertex.world_y = tile_world_v + 1.0f - v - local_y;
                         vertex.world_z = (ground_sample[0] + 2.5f + feature_height_tiles) / 112.0f;
                         vertex.world_valid = 1.0f;
+                        if(world_objects){
+                            vertex.x=64.f+(u-v)*64.f+(local_x-local_y)*64.f;
+                            vertex.y=((u+v)*32.f-ground_sample[0]*(128.f/224.f*.82f))+(local_x+local_y)*32.f-local_z*150.f*(128.f/224.f);
+                            vertex.z=feature_height_tiles;
+                        }
                         auto normal=c3x_renderer::lighting::object_normal(normal_x,normal_y,source.normal[2]);
                         vertex.normal_x=normal[0];vertex.normal_y=normal[1];vertex.normal_z=normal[2];
                     }
@@ -8489,7 +8666,8 @@ public:
                         float base_ground_y = center_y + ground_height_pixels +
                             (local_x + local_y) * half_h;
                         float feature_height_tiles = local_z * 150.0f *
-                            feature_projection_scale / relief_projection_scale;
+                        (world_objects?128.f/224.f:feature_projection_scale) /
+                        (world_objects?128.f/224.f*.82f:relief_projection_scale);
                         float depth =
                             base_ground_y + ground_height_pixels * 0.75f +
                         feature_height_tiles * 0.0012f * static_cast<float>(content_view_height);
@@ -8509,6 +8687,11 @@ public:
                         vertex.world_y = owner_world_v + 1.0f - local_v - local_y;
                         vertex.world_z = (ground_sample[0] + 2.5f + feature_height_tiles) / 112.0f;
                         vertex.world_valid = 1.0f;
+                        if(world_objects){
+                            vertex.x=float(owner->anchor_x-tile.anchor_x)*128.f/frame.tile_width+64.f+(local_u-local_v)*64.f+(local_x-local_y)*64.f;
+                            vertex.y=float(owner->anchor_y-tile.anchor_y)*128.f/frame.tile_width+((local_u+local_v)*32.f-ground_sample[0]*(128.f/224.f*.82f))+(local_x+local_y)*32.f-local_z*150.f*(128.f/224.f);
+                            vertex.z=feature_height_tiles;
+                        }
                         auto normal=c3x_renderer::lighting::object_normal(normal_x,normal_y,source.normal[2]);
                         vertex.normal_x=normal[0];vertex.normal_y=normal[1];vertex.normal_z=normal[2];
                     }
@@ -8722,7 +8905,8 @@ public:
                 // Imported cliff bodies use the same vertical projection as
                 // every other feature, then convert to the shared relief-world
                 // height used by placement, depth, shadows and water.
-                float cliff_vertical_basis=150.f/112.f*feature_projection_scale/relief_projection_scale;
+                float cliff_vertical_basis=150.f/112.f*(world_objects?128.f/224.f:feature_projection_scale)/
+                    (world_objects?128.f/224.f*.82f:relief_projection_scale);
                 auto placements=c3x_renderer::render_core::cliff_placements(
                     world_coast.world().dimensions(),int(cu),int(cr),world_lookup,
                     [&](int c,int r){ return world_coast.world().index(c,r); },
@@ -8759,57 +8943,10 @@ public:
                     for(auto i:asset.indices)cliff_vertices[instance.asset].push_back(transformed[i]);
                 }
             }
+            } // immutable routes and objects already resident on a world hit
             std::array<std::vector<c3x_renderer::fidelity::MeshInstance>,22> forest_instances;
             std::array<c3x_renderer::render_core::SourceShadow::Bounds,22> forest_bounds;
             std::array<c3x_renderer::render_core::ProjectedMeshBounds,22> forest_projected;
-            // A hit must carry its dependency observations into the ordinary
-            // GPU tile cache. Never reuse samples across authoritative edits.
-            std::uint64_t natural_key=1469598103934665603ull;
-            for(auto value:{std::uint64_t(std::uint32_t(tile.tile_x)),std::uint64_t(std::uint32_t(tile.tile_y)),
-                    tile_content_signature(tile),content_revision,retained_world?std::uint64_t(0):std::uint64_t(frame.world_topology_revision),
-                    std::uint64_t(frame.world_width_tiles),std::uint64_t(frame.world_height_tiles),
-                    std::uint64_t(frame.world_wrap_x),std::uint64_t(frame.world_wrap_y)})
-                natural_key=(natural_key^value)*1099511628211ull;
-            // Forest exclusions consume neighboring city composition, while
-            // the ordinary topology dependency map intentionally omits it.
-            if(tile.real_terrain_type==7)for(int dr=-2;dr<=2;++dr)for(int dc=-2;dc<=2;++dc){
-                int c=(tile.tile_x+tile.tile_y)/2+dc,r=(tile.tile_x-tile.tile_y)/2+dr;
-                auto neighbor=topology_cache.current(coordinate_key(c+r,c-r));
-                auto value=neighbor!=nullptr && neighbor->occurrence.city_id>=0?
-                    tile_content_signature(neighbor->occurrence):0;
-                natural_key=(natural_key^value)*1099511628211ull;
-            }
-            // World-space GPU data may outlive any particular camera entry.
-            // Pin the owner before ground uploads can evict other entries.
-            bool cache_natural=fidelity_profile && tile.city_id<0 && (!prewarming || world_preparation);
-            bool share_natural=cache_natural && share_world_meshes;
-            auto shared_natural=tile_geometry_cache.find(natural_key);
-            bool shared_hit=share_natural && shared_natural!=tile_geometry_cache.end() && shared_natural->second.shared_natural;
-            if(shared_hit && !natural.valid(shared_natural->second.river_dependencies))shared_hit=false;
-            if(shared_hit)for(auto const& dependency:shared_natural->second.appearance_dependencies)
-                if(topology_cache.appearance_revision(dependency.first)!=dependency.second){shared_hit=false;break;}
-            if(shared_hit)for(auto const& dependency:shared_natural->second.dependencies){
-                auto current=topology_cache.current(dependency.first);
-                if((current==nullptr?0:current->semantic)!=dependency.second){shared_hit=false;break;}
-            }
-            if(shared_hit)for(auto const& dependency:shared_natural->second.coast_dependencies)
-                if(world_coast.node_revision(dependency.first)!=dependency.second){shared_hit=false;break;}
-            if(shared_hit)for(auto const& dependency:shared_natural->second.world_dependencies)
-                if(world_coast.world().at(dependency.first)!=dependency.second){shared_hit=false;break;}
-            if(share_natural && !shared_hit && shared_natural!=tile_geometry_cache.end()){
-                if(shared_natural->second.shared_natural && shared_natural->second.last_used!=tile_geometry_epoch){
-                    tile_geometry_cache_bytes-=shared_natural->second.byte_count;
-                    resident_content.release(shared_natural->second.binding);tile_geometry_cache.erase(shared_natural);
-                }else share_natural=false; // Do not replace a pinned owner or a colliding ordinary key.
-            }
-            if(shared_hit){
-                auto& cached=shared_natural->second;cached.last_used=tile_geometry_epoch;
-                if(animated_view)cached.animation_epoch=tile_geometry_epoch;
-                river_dependencies.insert(cached.river_dependencies.begin(),cached.river_dependencies.end());
-                dependencies.insert(cached.dependencies.begin(),cached.dependencies.end());
-                coast_dependencies.insert(cached.coast_dependencies.begin(),cached.coast_dependencies.end());
-                world_dependencies.insert(cached.world_dependencies.begin(),cached.world_dependencies.end());
-            }
             auto natural_found=natural_mesh_cache.find(natural_key);
             bool natural_hit=fidelity_profile && natural_found!=natural_mesh_cache.end();
             if(natural_hit && !natural.valid(natural_found->second.river_dependencies))natural_hit=false;
@@ -8858,6 +8995,10 @@ public:
             compiled.replaces_resource = (build_replacement[index] & C3X_RENDERER_TILE_CUSTOM_RESOURCE_REPLACED) != 0;
             compiled.signature = tile_signature;
             compiled.compile_context=compile_context;
+            compiled.world_objects=world_objects;compiled.world_ground=world_ground;compiled.source_tile_width=frame.tile_width;
+            if(shared_hit && world_objects)for(auto const& d:shared_natural->second.anchor_dependencies)
+                anchor_dependencies.push_back({d.first,{int(std::int64_t(d.second[0])*frame.tile_width/shared_natural->second.source_tile_width),
+                    int(std::int64_t(d.second[1])*frame.tile_width/shared_natural->second.source_tile_width)}});
             compiled.tile_x=tile.tile_x;compiled.tile_y=tile.tile_y;
             compiled.version = ++tile_geometry_version;
             compiled.anchor_x = 0;
@@ -8887,13 +9028,14 @@ public:
             // Compute before cache_geometry_layer moves the flat grid into its
             // immutable buffer. Retained tiles carry the resulting absent
             // layers with the same coast/semantic dependencies as that grid.
-            bool water_coverage=!cull_empty_water || !environment_profile ||
+            bool water_coverage=(world_ground && shared_hit) || !cull_empty_water || !environment_profile ||
                 c3x_renderer::render_core::water_surface_can_contribute(underlay_vertices);
             for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
+                if(world_ground && shared_hit)continue;
                 if(layer==geometry_city && !city_chunks.empty()){
                     for(auto&part:city_chunks){
                         if(part.vertices.empty())continue;
-                        if(!cache_geometry_layer(part.vertices,compiled.buffers[layer],prewarming,compiled.byte_count,foreground_pending,false,false)){
+                        if(!cache_geometry_layer(part.vertices,compiled.buffers[layer],prewarming,compiled.byte_count,foreground_pending,false,false,nullptr,nullptr,nullptr,nullptr,world_objects?4u:0u)){
                             tile_geometry_cache_bytes-=compiled.byte_count;return false;
                         }
                         auto&chunk=compiled.buffers[layer].back();chunk.city_material=part.material;chunk.city_environment=part.environment;
@@ -8912,7 +9054,7 @@ public:
                     continue;
                 }
                 bool natural_layer=layer>=geometry_natural_terrain;
-                if(natural_layer && shared_hit)continue;
+                if(shared_hit && (natural_layer || (world_objects && layer>=geometry_route)))continue;
                 if(layer>=geometry_natural_forest0 && !forest_instances[layer-geometry_natural_forest0].empty()){
                     unsigned body=unsigned(layer-geometry_natural_forest0);
                     auto&instances=forest_instances[body];
@@ -8938,7 +9080,9 @@ public:
                         record_mesh,cached_mesh,reproject?&natural_projection:nullptr,
                         layer<=geometry_river?&ground_indices[layer]:
                         index_natural_grids && (layer==geometry_natural_terrain || layer==geometry_natural_terrain+2)
-                            ?&natural_grid_indices[layer==geometry_natural_terrain?0:1]:nullptr)) {
+                            ?&natural_grid_indices[layer==geometry_natural_terrain?0:1]:nullptr,
+                        world_ground && layer<geometry_route?3u:world_objects && layer>=geometry_route && layer<geometry_natural_terrain?
+                            (layer>=geometry_cliff0?4u:2u):(world_objects && natural_layer?1u:0u))) {
                     char detail[256];sprintf_s(detail,"tile=%d,%d layer=%u vertices=%u bytes=%llu cap=%llu built=%u reused=%u prewarming=%u",
                         tile.tile_x,tile.tile_y,unsigned(layer),unsigned(tile_layers[layer]->size()),
                         static_cast<unsigned long long>(tile_geometry_cache_bytes),static_cast<unsigned long long>(tile_geometry_cache_budget),
@@ -8984,10 +9128,14 @@ public:
                 if(!shared_hit){
                     CachedTileGeometry shared;
                     shared.shared_natural=true;shared.signature=natural_key;
+                    shared.world_objects=world_objects;shared.world_ground=world_ground;shared.source_tile_width=frame.tile_width;
+                    shared.tile_x=tile.tile_x;shared.tile_y=tile.tile_y;
                     shared.version=compiled.version;shared.last_used=tile_geometry_epoch;
                     if(animated_view)shared.animation_epoch=tile_geometry_epoch;
                     try {
                         shared.appearance_dependencies=compiled.appearance_dependencies;
+                        if(world_objects){shared.resource_anchors=compiled.resource_anchors;shared.replaces_resource=compiled.replaces_resource;
+                            shared.anchor_dependencies=compiled.anchor_dependencies;}
                         shared.dependencies=compiled.dependencies;
                         shared.coast_dependencies=compiled.coast_dependencies;
                         shared.river_dependencies=compiled.river_dependencies;
@@ -9000,13 +9148,20 @@ public:
                         shared.appearance_dependencies.capacity()*sizeof(shared.appearance_dependencies[0])+
                         shared.dependencies.capacity()*sizeof(shared.dependencies[0])+
                         shared.coast_dependencies.capacity()*sizeof(shared.coast_dependencies[0])+
-                        shared.world_dependencies.capacity()*sizeof(shared.world_dependencies[0]);
+                        shared.world_dependencies.capacity()*sizeof(shared.world_dependencies[0])+
+                        shared.anchor_dependencies.capacity()*sizeof(shared.anchor_dependencies[0])+
+                        shared.resource_anchors.capacity()*sizeof(ResourceAnchor);
                     if(!make_tile_cache_room(metadata)){
                         tile_geometry_cache_bytes-=compiled.byte_count;return false;
                     }
-                    for(std::size_t layer=geometry_natural_terrain;layer<geometry_layer_count;++layer){
+                    for(std::size_t layer=world_ground?0:world_objects?geometry_route:geometry_natural_terrain;layer<geometry_layer_count;++layer){
                         shared.buffers[layer]=std::move(compiled.buffers[layer]);
                         for(auto const& chunk:shared.buffers[layer])shared.byte_count+=chunk.byte_count;
+                    }
+                    if(world_objects && !shared.buffers[geometry_city].empty() && shared.buffers[geometry_city].front().city_lighting){
+                        auto const& light=*shared.buffers[geometry_city].front().city_lighting;
+                        auto bytes=sizeof(light)+light.lights.capacity()*sizeof(light.lights[0])+light.blockers.capacity()*sizeof(light.blockers[0]);
+                        shared.byte_count+=bytes;
                     }
                     compiled.byte_count-=shared.byte_count;
                     shared.byte_count+=metadata;tile_geometry_cache_bytes+=metadata;
@@ -10012,6 +10167,17 @@ public:
         std::unique_lock<std::mutex> lock(state_mutex);
         native_presentation=true;isolated_publication=true;camera_preview_enabled=false;
         auto current=*request.frame;
+        auto prior_request=current;prior_request.dirty_flags=publication.frame.dirty_flags;
+        prospective_view_allowed=!publication.output.bgra_pixels || publication.matches_static_view(prior_request);
+        if(!prospective_view_allowed){
+            // Camera/content demand owns the working view. Abandon unstarted
+            // alternate pixels during motion; compiled world content survives.
+            prospective_views.erase(std::remove_if(prospective_views.begin(),prospective_views.end(),
+                [&](auto const& queued){return queued.frame.tile_width!=current.tile_width;}),prospective_views.end());
+            if(ahead_active && ahead_prospective && ahead_frame.tile_width!=current.tile_width){
+                ahead_view_superseded=true;ahead_cancelled.store(true,std::memory_order_relaxed);
+            }
+        }
         nearby_presented=false;
         bool acquired=false;
         if(nearby_available && nearby.input.tile_width!=current.tile_width){
@@ -10081,7 +10247,7 @@ public:
             // Caller-driven priority: do not let speculative zoom construction
             // starve the map the game is currently asking to animate.
             if(ahead_active && ahead_prospective && nearby_presented && frame.presentation_frequency>0 &&
-               frame.presentation_time_ticks-publication.frame.presentation_time_ticks>=frame.presentation_frequency/10){
+               (!prospective_view_allowed || frame.presentation_time_ticks-publication.frame.presentation_time_ticks>=frame.presentation_frequency/10)){
                 if(!pending_refresh){
                     auto snapshot=std::make_unique<ProspectiveView>();snapshot->frame=frame;snapshot->identity=request.identity;
                     snapshot->tiles.assign(frame.tiles,frame.tiles+frame.tile_count);
@@ -10137,6 +10303,7 @@ public:
         for(auto const& queued:prospective_views)if(matches(queued.frame,queued.identity))return C3X_RENDERER_RESULT_OK;
         if(query_only)return C3X_RENDERER_RESULT_PENDING;
         auto payload=std::size_t(frame.tile_count)*sizeof(c3x_renderer_tile_v1)+std::size_t(frame.world_topology_count)*4;
+        if(!prospective_view_allowed)return C3X_RENDERER_RESULT_PENDING;
         std::size_t bytes=payload;for(auto const& queued:prospective_views)bytes+=queued.tiles.size()*sizeof(c3x_renderer_tile_v1)+queued.topology.size()*4;
         if(prospective_views.size()>=2 || bytes>16u*1024u*1024u)return C3X_RENDERER_RESULT_PENDING;
         ProspectiveView snapshot; snapshot.frame=frame;snapshot.identity=request.identity;
@@ -10423,7 +10590,7 @@ private:
     };
     std::deque<ProspectiveView> prospective_views;
     std::unique_ptr<ProspectiveView> pending_refresh;
-    bool ahead_prospective=false;
+    bool ahead_prospective=false,prospective_view_allowed=true,ahead_view_superseded=false;
     static constexpr std::size_t retained_view_budget=64u*1024u*1024u;
     c3x_renderer_frame_v1 ahead_selected_frame={};
     std::vector<c3x_renderer_tile_v1> ahead_selected_tiles;
@@ -10636,7 +10803,7 @@ private:
     }
 
     void clear_ahead() {
-        area_pending=false;ahead_prospective=false;
+        area_pending=false;ahead_prospective=false;ahead_view_superseded=false;
         for(auto& ready:ahead_ready)if(ready.output.bgra_pixels){++ahead_discarded;ready.clear();}
         std::vector<c3x_renderer_tile_v1>().swap(ahead_tiles);
         std::vector<c3x_renderer_u32>().swap(ahead_topology);
@@ -10774,7 +10941,7 @@ private:
             if(!ok){renderer_state.geometry_cache.clear();renderer_state.clear_geometry_vertex_buffers();}
             QueryPerformanceCounter(&end);lock.lock();
             if(ok && !ahead_selected)retain_view(built);
-            if(!ok && ahead_prospective && ahead_cancelled.load(std::memory_order_relaxed) && prospective_views.size()<2){
+            if(!ok && ahead_prospective && !ahead_view_superseded && prospective_view_allowed && ahead_cancelled.load(std::memory_order_relaxed) && prospective_views.size()<2){
                 ProspectiveView retry;retry.frame=ahead_frame;retry.identity=ahead_identity;
                 retry.tiles=ahead_tiles;retry.topology=ahead_topology;
                 prospective_views.push_front(std::move(retry));

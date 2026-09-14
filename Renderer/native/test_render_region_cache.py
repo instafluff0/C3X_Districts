@@ -93,6 +93,7 @@ int main(){
     def test_region_index_is_conservative_ordered_and_bounded(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/region_contributor_index.h"
+#include "Renderer/native/render_core/world_pass_index.h"
 #include <cassert>
 using Index=c3x_renderer::render_core::RegionContributorIndex;
 int main(){
@@ -237,6 +238,7 @@ int main(){
         run_cpp(r'''
 #include "Renderer/native/render_core/render_region_cache.h"
 #include "Renderer/native/render_core/region_contributor_index.h"
+#include "Renderer/native/render_core/world_pass_index.h"
 #include "Renderer/native/render_core/projected_mesh_bounds.h"
 #include "Renderer/lab/shared/natural/instance.h"
 #include <cassert>
@@ -289,6 +291,7 @@ int main(){
 #include <vector>
 #include "Renderer/native/render_core/render_region_cache.h"
 #include "Renderer/native/render_core/region_contributor_index.h"
+#include "Renderer/native/render_core/world_pass_index.h"
 #include "Renderer/native/render_core/projected_mesh_bounds.h"
 #include "Renderer/lab/shared/natural/instance.h"
 using UINT=unsigned;using DXGI_FORMAT=unsigned;constexpr unsigned DXGI_FORMAT_R32_UINT=42;
@@ -322,6 +325,9 @@ struct State{
  std::array<std::vector<CachedVertexChunk>,geometry_layer_count> geometry_vertex_buffers;
  std::array<double,3> frame_region_phase_ms{};
  c3x_renderer::render_core::RegionContributorIndex region_contributors;
+ c3x_renderer::render_core::WorldPassIndex world_pass_index;
+ std::unordered_map<std::uintptr_t,std::vector<std::pair<unsigned,unsigned>>> world_pass_occurrences;
+ bool world_pass_affine=false;double world_pass_x=0,world_pass_y=0;float world_pass_reflection=0;
 ''' + methods + r'''
 };
 int main(){

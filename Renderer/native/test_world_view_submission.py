@@ -16,12 +16,13 @@ class WorldViewSubmissionTests(unittest.TestCase):
 struct c3x_renderer_tile_v1 {int anchor_x=3,anchor_y=4;};
 struct Handle {int generation=1;};
 struct CachedTileGeometry {
- bool shared_natural=false;Handle natural_content;
+ bool shared_natural=false,world_ground=false;int source_tile_width=128;Handle natural_content;
  std::uint64_t validity_epoch=0;int validity_anchor_x=0,validity_anchor_y=0;bool validity=false;
  std::vector<std::pair<unsigned,unsigned>> appearance_dependencies{{0,1}},dependencies{{0,42}},coast_dependencies{{0,1}},world_dependencies{{0,7}};
  std::vector<std::pair<unsigned,std::array<int,2>>> anchor_dependencies{{0,{10,20}}};int river_dependencies=1;
 };
 struct State {
+ int shadow_tile_width=128;
  std::uint64_t tile_geometry_epoch=1;
  struct Residents {CachedTileGeometry shared;bool alive=true;Residents(){shared.shared_natural=true;}
   CachedTileGeometry* resolve(Handle){return alive?&shared:nullptr;}}resident_content;
@@ -44,6 +45,12 @@ int main(){
  ++state.tile_geometry_epoch;state.world_coast.value=7;assert(state.tile_content_valid(cached,tile));
  state.tile_geometry_epoch=0;reads=state.world_coast.reads;
  assert(state.tile_content_valid(cached,tile));assert(state.tile_content_valid(cached,tile));assert(state.world_coast.reads>reads);
+ // A world binding follows exact native anchor ratios across projection changes.
+ cached.world_ground=true;state.tile_geometry_epoch=10;state.shadow_tile_width=192;
+ state.topology_cache.record.occurrence.anchor_x=18;state.topology_cache.record.occurrence.anchor_y=34;
+ assert(state.tile_content_valid(cached,tile));
+ ++state.tile_geometry_epoch;++state.topology_cache.record.occurrence.anchor_x;
+ assert(!state.tile_content_valid(cached,tile));
 }
 ''')
 

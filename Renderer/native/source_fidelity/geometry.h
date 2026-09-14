@@ -23,7 +23,7 @@ if(fidelity_profile) {
         return ground_surface(project_natural,u,v,height_natural,shore_sample_at,material_weights_for);
     };
     if(cpu_terrain_enabled) {
-        auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples);
+        auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
         auto prepared=terrain_preparation.take(input.key,true);
         if(prepared && !terrain_result_valid(*prepared))prepared.reset();
         if(!prepared)prepared=compile_terrain(input,foreground_terrain_scratch,cancelled,false);

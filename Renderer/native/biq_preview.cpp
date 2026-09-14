@@ -1222,6 +1222,26 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                 std::printf("ZOOM parity width=%d changed=%zu error=%llu status=%s\n",tile_width,changed,error,ok?"pass":"FAIL");
             }
         }
+        // The timing sequence retains world content. Separately rebuild each
+        // synchronous zoom from an empty scene to detect invalid cross-view reuse.
+        if(ok && !native_handoff)for(std::size_t level=0;level<levels.size() && ok;++level){
+            tile_width=levels[level];tile_height=tile_width/2;tiles=capture_view();
+            frame.tile_width=tile_width;frame.tile_height=tile_height;
+            frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());
+            reset();ok=set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK &&
+                render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && !output.device_recoveries && !output.fallback_tile_count;
+            std::size_t changed=0;unsigned maximum=0;unsigned long long error=0;
+            if(ok){auto pixels=static_cast<unsigned char const*>(output.bgra_pixels);
+                if(reference[level].size()!=std::size_t(output.stride_bytes)*output.height)ok=false;
+                else for(std::size_t i=0;i<reference[level].size();++i){
+                    unsigned delta=unsigned(std::abs(int(reference[level][i])-int(pixels[i])));
+                    changed+=delta!=0;maximum=maximum>delta?maximum:delta;error+=delta;
+                }
+            }
+            ok=ok && changed==0;
+            std::printf("ZOOM redraw width=%d changed=%zu max=%u error=%llu result=%u\n",tile_width,changed,maximum,error,unsigned(ok));
+            if(ok)write_bmp((std::string(argv[5])+".fresh-z"+std::to_string(tile_width)+".bmp").c_str(),output);
+        }
     }
     if(ok && navigation_benchmark) {
         LARGE_INTEGER frequency={};QueryPerformanceFrequency(&frequency);
@@ -1794,14 +1814,21 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
             }
             frame.tiles=tiles.data();frame.tile_count=unsigned(tiles.size());frame.dirty_flags=C3X_RENDERER_DIRTY_SCENE|C3X_RENDERER_DIRTY_STATIC_MAP;
             auto revision=frame.world_topology_revision;
+            LARGE_INTEGER edit_begin={},edit_end={},edit_frequency={};QueryPerformanceFrequency(&edit_frequency);
+            QueryPerformanceCounter(&edit_begin);
             ok=render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && output.fallback_tile_count==0 && output.device_recoveries==0;
+            QueryPerformanceCounter(&edit_end);
             if(!ok)break;
+            double edit_ms=double(edit_end.QuadPart-edit_begin.QuadPart)*1000/edit_frequency.QuadPart;
+            auto edit_built=output.geometry_tiles_built,edit_reused=output.geometry_tiles_reused;
+            double edit_geometry_ms=double(output.geometry_ticks)*1000/edit_frequency.QuadPart;
             auto candidate=pixels();auto ownership=flags();auto animations=output.visible_animation_count;
             auto warm=output;warm.bgra_pixels=candidate.data();
             reset();ok=set_definitions(argv[2],argv[3],nullptr,custom_path)==C3X_RENDERER_RESULT_OK &&
                 render_checked(&frame,&output)==C3X_RENDERER_RESULT_OK && !output.device_recoveries && !output.fallback_tile_count;
             bool exact=ok && pixels()==candidate && flags()==ownership && output.visible_animation_count==animations;
-            std::printf("CONTENT_EDIT step=%u exact=%u topology_unchanged=%u city=%d\n",step,unsigned(exact),unsigned(frame.world_topology_revision==revision),original[site].city_id);
+            std::printf("CONTENT_EDIT step=%u exact=%u topology_unchanged=%u city=%d total_ms=%.3f geometry_ms=%.3f built=%u reused=%u\n",
+                step,unsigned(exact),unsigned(frame.world_topology_revision==revision),original[site].city_id,edit_ms,edit_geometry_ms,edit_built,edit_reused);
             if(!exact){write_bmp((std::string(argv[5])+".content-candidate.bmp").c_str(),warm);
                 write_bmp((std::string(argv[5])+".content-reference.bmp").c_str(),output);ok=false;break;}
             ++checks;

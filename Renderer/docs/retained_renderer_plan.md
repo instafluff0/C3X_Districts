@@ -21,9 +21,9 @@ GPU residency or knowledge of uncaptured gameplay.
 
 | Responsibility | Implemented ownership | Remaining limits |
 | --- | --- | --- |
-| Persistent world/instances | `CapturedScene` retains canonical appearance, revisions and three non-owning compiled projection handles. `ResidentContent` and shared assets own reusable content independently of observations and camera departure. | Captured surroundings only. Legacy city/route/improvement compilation still depends on projection; variants reuse completed work rather than removing that dependency. Units have a separate playback/pose owner. |
-| Local validity | Appearance, semantic neighbors, city exclusions, coast/world samples and river-cell proofs guard compiled hits. Local changes retire known-invalid alternate views; fresh capture validates every publication. | Asset/device/world-basis changes remain global. Unobserved appearance cannot authorize output. |
-| World → view selection | Current authoritative occurrences assemble passes; a spatial contributor index selects static inputs. Animated body/shadow/filter bounds are selected against the requested viewport independently of surrounding static coverage. | Static index remains view-scoped. Dynamic selection uses small scans. No complete native active-unit pass yet. |
+| Persistent world/instances | `CapturedScene` retains canonical appearance/revisions and borrowed compiled handles. `ResidentContent` owns complete reusable ground, city, route, improvement and natural content independently of observations and camera departure. | Complete tile reuse covers the full-detail 2:1 city profile at native zooms (128/160/192; admitted class ≥96). Other bases retain existing paths. Captured surroundings only; units retain their separate playback/pose owner. |
+| Local validity | Appearance, semantic neighbors, city exclusions, coast/world samples, river-cell proofs and exact scaled native-anchor dependencies guard complete compiled hits. Local changes retire known-invalid alternate views; fresh capture validates every publication. | Asset/device/world-basis changes remain global. Unobserved appearance cannot authorize output. |
+| World → view selection | Immutable content owns persistent bounded world-cell membership. Current authoritative occurrences supply eligibility; selected inputs feed existing ordered passes. Animated body/shadow/filter bounds are selected independently of surrounding static coverage. | Non-affine and unindexed inputs use the existing view index. Dynamic selection uses small scans. No complete native active-unit pass yet. |
 | Compatible submission | Shared meshes, tree instancing, ordered materials, common depth and bounded shadow-page batches serve foreground and background through the same path. | Individual demanded unit misses and optional reflection profiles retain their existing execution. |
 | GPU/output reuse | Stable surrounding static color/depth, selected animation, sparse restore, pending finish damage and consolidated readback. Selected updates publish only their fresh viewport; untouched donor margins keep their true old clock. | GPU allocation and full hardware MSAA resolve still cover the wide working surface. Physical targets are not narrowed. Tested retained profile has waves/reflections off. |
 | Preparation/native delivery | Bounded CPU helpers and one GPU owner prepare copied nearby/zoom views and unit poses. Fresh native requests pull compatible publications. Current refresh can interrupt unfinished prospective work at safe points. | Cold/outside-coverage views still use exact blocking fallback. Submitted GPU work is not preemptible; preparation can delay ambient freshness. Native delivery is implemented for prepared coverage, not general nonblocking scrolling. |
@@ -56,46 +56,27 @@ Selected refreshes preserve static output outside damage. Pending off-view damag
 is bounded and finished when selected; it cannot resurrect an old pose. The wider
 donor is refreshed periodically, with age used for scheduling rather than static
 invalidation. Current requests take priority over unfinished future zoom builds.
-This is reuse plus preparation, not fully projection-independent world compilation.
+The complete world-content owner now also removes standard-zoom recompilation;
+these bounded prepared views continue to own distinct finished pixels.
 
-## Current regression checkpoint
+## Native UI checkpoint remains independent
 
-The supplied game log has 2,135 map passes (median 12.05 ms, p95 173.60 ms,
-maximum 4.59 s), 900 cancelled unfinished area jobs, and over 54,000 source-shadow
-and unit-body detail lines. These are logged native intervals, not displayed FPS
-or a matched performance comparison. Debugger overhead is not isolated.
+The prior game log contained 2,135 map passes (12.05 ms median, 173.60 ms p95,
+4.59 s maximum), 900 cancelled area jobs and over 54,000 detail lines. Native
+Advisor, outer-popup and command-button function-lifetime guards now suspend extra
+renderer work during UI construction; default tracing samples detail. No timeout,
+GDI flush or native painting replacement was added. These hooks are unchanged here.
+Actual Advisor/popup/button painting and the reported black bars/shadow flicker
+remain the user's native checkpoint; passive `map-black-span` diagnostics remain.
 
-`patch_Advisor_GUI_open` saves/sets/restores the existing modal guard across native
-construction and the dialog loop. The renderer now also honors `paused_for_popup`,
-which already covers the whole outer popup routine; the shorter setup-helper guard
-was removed. The existing unit-command setup hook scopes the same suspension over
-button reconstruction. These are function-lifetime guards, with no timeout or
-change to native painting. Default tracing samples detail instead of emitting every
-submission/cache hit. Full detail, pixel blending and worker scheduling stay unchanged.
-
-Windows build, nested Advisor/cadence contract, actual x86 worker/zoom adapter,
-approved injected compilation, GDI handoff and day/night unit replays pass.
-Nine prepared camera images at 1440×900 match the preserved control byte for byte;
-their independent redraw differences are identical to that control. Three selected
-animation positions pass their redraw checks. Black bars did not reproduce there.
-Immediate native CPU reads/erasure also pass with the old and new GDI paths: the
-GDI batching hypothesis is unconfirmed, and no flush workaround was added.
-
-A trial one-second delay before retrying cancelled speculative views was removed:
-48 scrolling requests averaged 13.30 ms with and without it. It did not justify an
-additional timing policy. Exact trial binaries, invocations and measurements remain
-in `native/build/native-regressions/comparison.json`; they are not the final build.
-
-Final whole-request mean/p95 is 13.30/16.81 → 13.31/16.29 ms for 48 scrolling calls
-and 5.62/7.07 → 5.50/7.07 ms for 60 eight-body idle calls. No speedup is established.
-The preserved control is source `d3acf940`, DLL `cec59b1b…820dea`; the staged final
-DLL is `ccc5c1dd…d2817b`. Full hashes, `final-comparison.json` and
-`final-staging-receipt.json` are in `native/build/native-regressions/`. Ordinary `INSTALL.bat`
-is the user's test path. Actual Advisor/popup/button painting and the reported
-black bars/shadow flicker remain the native integration checkpoint. Passive
-`map-black-span` diagnostics distinguish black source pixels from later composition;
-black map margins can be legitimate. No new visual acceptance or live speedup is
-claimed, and no game was launched.
+The prior UI build established no performance gain: scrolling mean/p95
+13.30/16.81 → 13.31/16.29 ms; eight-body idle 5.62/7.07 → 5.50/7.07 ms.
+A one-second speculative retry delay was rejected (13.30 ms either way).
+Control `d3acf940`/`cec59b1b…820dea`, checkpoint DLL `ccc5c1dd…d2817b`, full
+hashes, comparisons and staging receipt remain in `native/build/native-regressions/`.
+Its nine prepared camera images matched control, and unit/GDI/injection checks
+passed. Independent prepared-area differences predate this step; no live UI or
+speedup acceptance is inferred. No game was launched.
 
 Prior world/view/zoom evidence remains in `native/build/world-view-zoom/`:
 `comparison-v12.json`, `selection-diagnostic-v12.json` and final `v12` runs preserve
@@ -106,18 +87,80 @@ The 20-call diagnostic retained 19 map jobs, zero geometry builds/uploads/static
 submissions, and 122.35 million resolved pixels in both; reduced CPU donor copying
 was not a broad GPU speedup. GPU timestamps remain unreliable.
 
-## Next responsibility
+## Complete representative world → view → pass path
 
-First verify native Advisor/popup/button behavior and resolve the black-bar/shadow
-source at the native composition boundary. Then make remaining
-city/route/improvement content projection independent and retain
-world-level spatial membership feeding selected passes. This reduces the cold
-preparation itself and helps views outside finished coverage; retaining more
-raster images or adding workers alone cannot remove the measured geometry cost.
-Preserve the working prepared-view handoff while extending its coverage. Complete
-active-unit demand collection remains separate: individual pose misses still block
-native demand. Neither mechanism has established live displayed FPS. Native
-zoom/camera cadence and overlay/picking acceptance remain the strategic game checkpoint, through the user's installation.
+The existing resident owner now stores full tile content. Ground uses a canonical
+128-pixel basis; natural/city meshes use world coordinates; legacy features retain
+their separate height/depth rule. Shader occurrences apply the current native
+anchor, zoom and viewport depth basis. Unchanged standard zooms bypass all tile
+compilation and upload. Full detail, source assets and pass ordering are preserved.
+The redundant projected CPU ground-grid cache is bypassed for this path.
+
+`WorldPassIndex` retains immutable content membership in normalized isometric
+cells. Eviction removes membership and invalidates borrowed handles. A fresh view
+proves an affine native-anchor basis and supplies observed eligible occurrences;
+queries merge these with residual inputs before compatible submission. Its 16 MiB
+membership cap and bounded view map fall back to the existing bounds selection.
+No retained world record grants visibility or replacement ownership.
+
+CPU terrain preparation uses the same camera-independent input basis. Completed
+work remains useful across nearby views/zooms and interrupted prospective jobs.
+This does not move all object compilation to helpers: first-time city/route/object
+construction still runs on the GPU owner, and residency remains bounded.
+
+A bounded diagnostic exposed a new interaction: faster alternate-zoom compilation
+let speculative GPU jobs replace the single current working surface during camera
+motion. Prepared scrolling rose from 13.43 to 15.99 ms mean and sampled map age
+from 596 to 2,047 ms; the instrumented repeat reproduced it. Current camera/content
+changes now supersede unstarted other-zoom pixel jobs; completed world content
+survives. Fresh offers resume after a stable view, and already prepared zooms remain
+available. This is request-based admission, without a new timer or native hook.
+The rejected intermediate is preserved in `candidate-v9` and the paired
+`*-scroll-diagnostic` evidence directories.
+
+Control: source `f511a547`, DLL `ccc5c1dd…d2817b`, preserved with its original
+harness in `native/build/world-content/control/`. Matched comparisons use that DLL
+and the candidate with the same updated harness/runtime shader inputs; old bindings
+leave the new projection branches inactive. No output-helper optimization or new
+native patch is part of this step. Results and the final staging receipt are kept
+in `native/build/world-content/`; the existing native UI checkpoint remains pending.
+General nonblocking cold/outside-coverage scrolling and complete active-unit demand
+collection remain separate integration responsibilities.
+
+## Final measured checkpoint
+
+Final DLL `55276aec…f196ca`; control `ccc5c1dd…d2817b`. Whole-request timings
+use 1440×900 except the 640×480 local-edit fixture. Setup, warmup and independent
+redraw oracles are excluded. `native/build/world-content/final-comparison.json`
+and `final-invocations-v12.json` preserve exact samples, inputs and binary hashes.
+
+| Workload | Control → final | Interpretation |
+| --- | --- | --- |
+| First closer zooms, 192 / 160 | 1,282 / 1,697 → 193 / 294 ms | 6.7× / 5.8× faster; 363 / 479 tile builds become zero. |
+| Dense scrolling, 14 calls, mean / p95 | 169.29 / 469.63 → 171.03 / 469.01 ms | No gain; newly exposed content still requires compilation. |
+| Local city/forest edits, six render calls, mean | 43.06 → 44.20 ms | No gain; two affected tiles rebuilt, 261 reused. |
+| Prepared scrolling, 48 calls, mean / p95 | 14.16 / 18.99 → 16.76 / 20.41 ms | Caller latency regresses; maximum sampled map age improves 606 → 311 ms. |
+| Eight-body idle, 60 calls, mean / p95 | 5.53 / 7.03 → 5.42 / 7.16 ms | No established gain. |
+
+The correction removes the two-second speculative freshness stall, with the
+remaining scrolling latency/freshness tradeoff explicit. Cold initial construction
+and warm zoom GPU completion remain expensive; a broader live speedup is not
+established. CPU helpers are disabled for zoom/dense/edit work-elimination cases;
+prepared scrolling/idle use production defaults. No reduced detail or new targets.
+Across the three standard zooms, geometry residency is 388 → 234 MB; persistent
+membership peaks at 5.51 MB in the measured diagnostic cases. The final cases retain
+at least 1.39 GB of contiguous 32-bit address space, above the 512 MiB floor.
+
+Windows build, x86 worker/index execution, 30 focused local contracts, night/wrap/
+small-zoom and 288-pose unit checks pass. All three standard zooms and ten local
+edits match independent redraws exactly. The smaller-zoom fallback has one total
+channel-level error within its existing tolerance. New control-image precision
+differences are recorded: 1–23 pixels, at most three channel levels; prepared views
+have 0–2 changed pixels, at most two levels. The intermediate cliff depth-basis
+error was corrected. Existing prepared-area versus cold-render differences remain;
+references and prior visual acceptances are unchanged. The evaluation comparison
+is `native/build/world-content/visual-comparison.png`; visual acceptance of these
+new precision differences remains the user's decision.
 
 ## Preserved controls and closed findings
 
