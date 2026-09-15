@@ -60,6 +60,20 @@ public:
         Iterator begin() const {return {this,0};}
         Iterator end() const {return {this,count};}
     };
+    // Immutable pass membership for one borrowed view. It lives within the
+    // owner's lease; no resource references or visibility survive view teardown.
+    struct Pass {
+        std::array<bool,Layers> selected{};
+        std::size_t size=0;
+        bool any()const{return size!=0;}
+        bool has(std::size_t layer)const{return selected[layer];}
+        std::size_t count()const{return size;}
+    };
+    Pass pass()const{
+        Pass result;
+        if(*this)for(std::size_t i=0;i<Layers;++i){result.selected[i]=!(*this)[i].empty();result.size+=result.selected[i];}
+        return result;
+    }
     GeometryDrawView(std::nullptr_t=nullptr){}
     GeometryDrawView(Records const& value):records(&value){}
     GeometryDrawView(Chunks const& value):chunks(&value){}

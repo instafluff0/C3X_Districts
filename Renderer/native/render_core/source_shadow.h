@@ -38,6 +38,7 @@ public:
         DXGI_FORMAT index_format=DXGI_FORMAT_R32_UINT;
         ID3D11Buffer *vertices=nullptr,*indices=nullptr;
         unsigned count=0,stride=0,layer=0;
+        unsigned vertex_offset=0,index_offset=0;
         unsigned binding=0xffffffffu;
         std::uint64_t version=0;
         Bounds bounds;
@@ -165,11 +166,11 @@ public:
         bool build(std::vector<Caster> const& casters,std::array<float,12> const& projection,bool retain=false) {
             std::vector<std::uint64_t> inputs;
             constexpr std::size_t input_cap=8u*1024u*1024u;
-            if(retain && casters.size()<=input_cap/(18*sizeof(std::uint64_t)))try {
-                inputs.reserve(casters.size()*18);
+            if(retain && casters.size()<=input_cap/(20*sizeof(std::uint64_t)))try {
+                inputs.reserve(casters.size()*20);
                 for(auto const& c:casters){
                     for(auto value:{c.version,std::uint64_t(c.layer),std::uint64_t(c.index_format),std::uint64_t(c.binding),
-                        std::uint64_t(c.count),std::uint64_t(c.stride),std::uint64_t(reinterpret_cast<std::uintptr_t>(c.vertices)),
+                        std::uint64_t(c.count),std::uint64_t(c.stride),std::uint64_t(c.vertex_offset),std::uint64_t(c.index_offset),std::uint64_t(reinterpret_cast<std::uintptr_t>(c.vertices)),
                         std::uint64_t(reinterpret_cast<std::uintptr_t>(c.indices))})inputs.push_back(value);
                     for(auto values:{c.bounds.low,c.bounds.high,c.offset})for(unsigned j=0;j<3;++j){
                         std::uint32_t bits;std::memcpy(&bits,values+j,4);inputs.push_back(bits);
@@ -344,8 +345,8 @@ public:
                 }
                 context->VSSetShader(vertex,nullptr,0);
                 context->IASetInputLayout(c.stride==92?natural_layout:c.stride==48?feature_layout:layout);
-                UINT stride=c.stride,offset=0;context->IASetVertexBuffers(0,1,&c.vertices,&stride,&offset);
-                context->IASetIndexBuffer(c.indices,c.index_format,0);context->DrawIndexed(c.count,0,0);++draws;
+                UINT stride=c.stride,offset=c.vertex_offset;context->IASetVertexBuffers(0,1,&c.vertices,&stride,&offset);
+                context->IASetIndexBuffer(c.indices,c.index_format,c.index_offset);context->DrawIndexed(c.count,0,0);++draws;
             }
             page={key.first,key.second,hash,epoch};++rebuilt;
         }

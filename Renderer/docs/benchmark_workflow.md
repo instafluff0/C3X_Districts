@@ -72,6 +72,11 @@ A `--benchmark` receipt's CPU/GPU arms compare routes within the supplied DLL;
 comparing old/new implementations additionally requires separate preserved DLL
 runs with equivalent settings. Capture is outside that harness's timed requests;
 its receipt states this limit. Do not label the result complete input-to-display.
+`FRAME_SAMPLE` QPC boundaries locate the corresponding aggregate renderer trace.
+`geometry_ms` includes content assembly, uploads and possible driver waits;
+`draw_ms` excludes later shared-scene composition and is not total GPU time.
+Selected-pass `selection_ms` includes caster/receiver preparation. Use these spans
+for bounded attribution alongside whole-request and desktop-completion results.
 
 Navigation session resets include `process_cold`, `assets_loaded` and
 `prepared_resident`; inspect reset receipts rather than assuming all caches are
@@ -109,6 +114,12 @@ without a materially different implementation and reason:
 - Transparent wave overlays lacked required scene/depth context.
 - An index removed 98% of bounds tests but regressed total frame time.
 - Raising map sampling globally to 30 Hz regressed warm request cost.
+- Empty-pass filtering and parameter streaming alone did not reliably improve
+  whole scrolling requests. Compatible layer grouping removed real submission work,
+  but exposed content construction/upload as the larger remaining cost.
+- Expanding terrain workers into the outer topology halo, including a demand-first
+  revision, increased cache pressure/scrolling cost. That expansion was removed;
+  revisit only with a different reuse/working-set mechanism.
 
 These findings constrain mechanisms, not all future batching or retained rendering.
 Detailed old tooling proposals remain recoverable from Git at `c1360ea9`; they

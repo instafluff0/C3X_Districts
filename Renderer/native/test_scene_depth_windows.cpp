@@ -8,6 +8,8 @@
 #include <cstring>
 #include <vector>
 #include <array>
+#include "render_core/draw_parameter_stream.h"
+#include "render_core/immutable_mesh_upload.h"
 
 int main(){
     std::setvbuf(stdout,nullptr,_IONBF,0);
@@ -63,19 +65,51 @@ int main(){
     context->VSSetConstantBuffers(1,1,&viewport_buffer);context->PSSetConstantBuffers(0,1,&color_buffer);
     UINT stride=48,offset=0;context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
     context->OMSetDepthStencilState(depth_state,0);context->RSSetState(rasterizer);
-    float world_depth_offset=0;
+    float world_depth_offset=0;bool streamed=false,packed_mesh=false,narrow_mesh=false;unsigned parameter_index=0;
+    c3x_renderer::render_core::DrawParameterStream parameters;
     auto view=[&](int top,int height,float depth_translation){
         float settings[12]={0,-float(top),depth_translation+world_depth_offset,0,1.f/128,1.f/height,128,0};
-        context->UpdateSubresource(viewport_buffer,0,nullptr,settings,0,0);
+        if(streamed){
+            std::array<std::array<float,12>,256> batch{};
+            // Unused entries deliberately disagree. Exercise the final legal
+            // range and DISCARD while previous commands still borrow the buffer.
+            for(auto& record:batch)record[0]=10000;
+            unsigned index=std::array<unsigned,3>{0,17,255}[parameter_index++%3];
+            std::memcpy(batch[index].data(),settings,sizeof(settings));
+            assert(!parameters.upload(batch.data(),0) && !parameters.upload(batch.data(),257));
+            assert(parameters.upload(batch.data(),256));parameters.bind(1,index);
+        }else{
+            context->VSSetConstantBuffers(1,1,&viewport_buffer);
+            context->UpdateSubresource(viewport_buffer,0,nullptr,settings,0,0);
+        }
         D3D11_VIEWPORT vp={0,float(top),128,float(height),0,1};context->RSSetViewports(1,&vp);
     };
     auto quad=[&](float left,float right,float z,bool green){
         std::array<std::array<float,12>,6> data={};
         float points[6][2]={{left,0},{right,0},{left,128},{left,128},{right,0},{right,128}};
         for(unsigned i=0;i<6;++i){data[i][0]=points[i][0];data[i][1]=points[i][1];data[i][2]=z+points[i][1]*.25f;data[i][7]=1;}
-        context->UpdateSubresource(vertices,0,nullptr,data.data(),0,0);
+        ID3D11Buffer* allocation=nullptr;
+        unsigned vertex_range=0,index_range=0;
+        if(packed_mesh){
+            c3x_renderer::render_core::ImmutableMeshUpload upload;
+            // Deliberately unsuitable first range: drawing offset zero must
+            // disagree with the independent ordinary color/depth witness.
+            std::array<unsigned char,13> poison{};poison.fill(0xff);
+            assert(upload.append(poison.data(),poison.size())==0);
+            vertex_range=upload.append(data.data(),sizeof(data));
+            std::uint16_t narrow_indices[]={0,1,2,3,4,5};unsigned wide_indices[]={0,1,2,3,4,5};
+            index_range=narrow_mesh?upload.append(narrow_indices,sizeof(narrow_indices)):upload.append(wide_indices,sizeof(wide_indices));
+            assert(vertex_range%4==0 && index_range%4==0);
+            assert(upload.create(device,&allocation));
+            context->IASetVertexBuffers(0,1,&allocation,&stride,&vertex_range);
+            context->IASetIndexBuffer(allocation,narrow_mesh?DXGI_FORMAT_R16_UINT:DXGI_FORMAT_R32_UINT,index_range);
+        }else{
+            context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
+            context->UpdateSubresource(vertices,0,nullptr,data.data(),0,0);
+        }
         float tint[4]={green?0.f:1.f,green?1.f:0.f,0,1};context->UpdateSubresource(color_buffer,0,nullptr,tint,0,0);
-        context->Draw(6,0);
+        if(packed_mesh){context->DrawIndexed(6,0,0);allocation->Release();}
+        else context->Draw(6,0);
     };
     auto render=[&](bool common_consumer,bool legacy_depth,bool coplanar){
         float clear[4]={0,0,0,0};context->ClearRenderTargetView(target,clear);context->ClearDepthStencilView(dsv,D3D11_CLEAR_DEPTH,1,0);
@@ -107,5 +141,33 @@ int main(){
         assert(render(true,false,true)==coplanar);
     }
     std::puts("PASS common-depth occlusion and identical coplanar draws across seven origin shifts");
-    context->ClearState();vertices->Release();color_buffer->Release();viewport_buffer->Release();rasterizer->Release();depth_state->Release();readback->Release();resolved->Release();dsv->Release();depth->Release();target->Release();color->Release();layout->Release();ps->Release();vs->Release();context->Release();device->Release();
+    if(parameters.available(device,context)){
+        streamed=true;
+        for(float origin:{-4096.f,-128.f,0.f,636.f,4096.f}){
+            world_depth_offset=origin;
+            assert(render(false,false,false)==ordinary && render(true,false,false)==ordinary);
+            assert(render(false,false,true)==coplanar && render(true,false,true)==coplanar);
+        }
+        assert(parameters.uploads>32 && parameters.records==parameters.uploads*256);
+        parameters.clear();assert(parameters.available(device,context));
+        world_depth_offset=0;assert(render(true,false,false)==ordinary);
+        std::puts("PASS selected parameter stream: exact color/depth, first/middle/last ranges, DISCARD lifetimes and reset");
+    }else std::puts("UNAVAILABLE constant-buffer offsets: ordinary binding contract retained");
+    packed_mesh=true;
+    for(bool narrow:{false,true})for(bool stream:{false,true}){
+        narrow_mesh=narrow;streamed=stream && parameters.available(device,context);
+        for(float origin:{-4096.f,0.f,4096.f}){
+            world_depth_offset=origin;
+            assert(render(false,false,false)==ordinary && render(true,false,false)==ordinary);
+            assert(render(false,false,true)==coplanar && render(true,false,true)==coplanar);
+        }
+    }
+    {
+        c3x_renderer::render_core::ImmutableMeshUpload upload;unsigned value=0;
+        try{upload.append(&value,upload.limit+1);assert(false);}catch(std::length_error const&){}
+        try{upload.append(nullptr,1);assert(false);}catch(std::length_error const&){}
+        assert(upload.size()==0);
+    }
+    std::puts("PASS immutable content allocation: nonzero vertex/index ranges, both index widths, in-flight release, exact color/depth with parameter streams");
+    parameters.clear();context->ClearState();vertices->Release();color_buffer->Release();viewport_buffer->Release();rasterizer->Release();depth_state->Release();readback->Release();resolved->Release();dsv->Release();depth->Release();target->Release();color->Release();layout->Release();ps->Release();vs->Release();context->Release();device->Release();
 }

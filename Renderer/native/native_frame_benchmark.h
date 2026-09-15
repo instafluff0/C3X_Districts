@@ -113,10 +113,11 @@ if(!performance_frames.empty()){
             QueryPerformanceCounter(&submit_done);verify(SUCCEEDED(finish_desktop()),"whole-frame desktop completion");QueryPerformanceCounter(&end);
             if(captured.step>=8){auto const& output=displayed.output;
                 double age=1000.*double(requested.presentation_time_ticks-displayed.frame.presentation_time_ticks)/double(requested.presentation_frequency);
-                std::printf("FRAME_SAMPLE workload=%d block=%d route=%s step=%d request_ms=%.3f desktop_ms=%.3f map_ms=%.3f units_ms=%.3f UI_present_prepare_ms=%.3f sample_age_ms=%.3f builds=%u reused=%u upload_bytes=%u tiles=%u\n",
+                std::printf("FRAME_SAMPLE workload=%d block=%d route=%s step=%d request_ms=%.3f desktop_ms=%.3f map_ms=%.3f units_ms=%.3f UI_present_prepare_ms=%.3f sample_age_ms=%.3f builds=%u reused=%u upload_bytes=%u tiles=%u geometry_ms=%.3f draw_ms=%.3f readback_ms=%.3f begin_qpc=%lld end_qpc=%lld\n",
                     workload,block,resident?"GPU":"CPU",captured.step,milliseconds(submit_done.QuadPart-begin.QuadPart),milliseconds(end.QuadPart-begin.QuadPart),
                     milliseconds(map_done.QuadPart-begin.QuadPart),milliseconds(units_done.QuadPart-map_done.QuadPart),milliseconds(submit_done.QuadPart-units_done.QuadPart),
-                    age,output.geometry_tiles_built,output.geometry_tiles_reused,output.geometry_upload_bytes,requested.tile_count);
+                    age,output.geometry_tiles_built,output.geometry_tiles_reused,output.geometry_upload_bytes,requested.tile_count,
+                    milliseconds(output.geometry_ticks),milliseconds(output.draw_ticks),milliseconds(output.readback_ticks),begin.QuadPart,submit_done.QuadPart);
             }
         }
         if(resident){

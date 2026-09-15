@@ -285,7 +285,7 @@ int main(){
 #include <cstdint>
 namespace c3x_renderer {namespace render_core {struct SourceShadow {
  struct Bounds {float low[3]={1,2,3},high[3]={4,5,6};};
- struct Caster {int vertices=0,indices=0,count=0,index_format=0,stride=0;
+ struct Caster {int vertices=0,indices=0,count=0,index_format=0,stride=0;unsigned vertex_offset=0,index_offset=0;
   void const* instances=nullptr;float instance_material=40;
   unsigned layer=0,version=0,binding=0;Bounds bounds;float offset[2]={};};
 };}}
@@ -294,7 +294,7 @@ struct CachedVertexChunk {
  struct {long left=0,top=0,right=0,bottom=0;} bounds;
  int translation_x=0,translation_y=0;float natural_projection[4]={}; unsigned projection_kind=0;int source_tile_width=128;
  struct {void const* value=nullptr;void const* get()const{return value;}} instances;float instance_material=40;
- int buffer=7,indices=8,index_count=9,index_format=16,vertex_stride=64;
+ int buffer=7,indices=8,index_count=9,index_format=16,vertex_stride=64;unsigned vertex_offset=128,index_offset=768;
  unsigned version=10,city_material=0xffffffffu;bool animation_texture=false;
  c3x_renderer::render_core::SourceShadow::Bounds world_bounds;
 };
@@ -340,6 +340,7 @@ int main(){
    for(int x=wx?-1:0;x<=(wx?1:0);++x){
     auto const& c=out[index++];assert(c.vertices==body && c.indices==8 && c.count==9);
     assert(c.index_format==16 && c.stride==64 && c.bounds.low[2]==3 && c.bounds.high[2]==6);
+    assert(c.vertex_offset==128 && c.index_offset==768);
     assert(c.offset[0]==(x*100+y*80)*.5f && c.offset[1]==(x*100-y*80)*.5f);
     if(body==500)assert(c.binding==10001 && c.version==10);
     else assert(c.version==unsigned(body+100));

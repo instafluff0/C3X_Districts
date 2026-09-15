@@ -30,7 +30,7 @@ class VolcanoFixtureTests(unittest.TestCase):
 
     def test_production_ownership_follows_tiles_and_wraps(self):
         import subprocess
-        source = (renderer.ROOT / 'Renderer/native/source_fidelity/geometry.h').read_text()
+        source = (renderer.ROOT / 'Renderer/native/source_fidelity/terrain_mesh_body.h').read_text()
         body = source[source.index('    std::vector<std::array<float,2>> volcano_centers;'):
                       source.index('    record_natural_phase(2);')]
         program = r'''#include <array>

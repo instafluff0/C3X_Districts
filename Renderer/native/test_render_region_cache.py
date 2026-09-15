@@ -305,7 +305,7 @@ struct Lighting {
 } namespace render_core {
 struct SourceShadow {
  struct Bounds{float low[3]={},high[3]={};};
- struct Caster{void *vertices=nullptr,*indices=nullptr;unsigned count=0,stride=0;Bounds bounds;float offset[3]={};std::uint64_t version=1;unsigned layer=0,index_format=42,binding=0xffffffffu;};
+ struct Caster{void *vertices=nullptr,*indices=nullptr;unsigned count=0,stride=0,vertex_offset=0,index_offset=0;Bounds bounds;float offset[3]={};std::uint64_t version=1;unsigned layer=0,index_format=42,binding=0xffffffffu;};
  std::array<float,12> basis{};
 ''' + preparation + r'''
 };}}

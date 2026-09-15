@@ -9,18 +9,20 @@ struct Natural : NaturalWorld {
     ID3D11VertexShader* vs[3]={};ID3D11PixelShader* ps[3]={};
     ID3D11InputLayout* layout[3]={};ID3D11Buffer* frames[3]={};
     ID3D11DepthStencilState*decal_depth=nullptr;
-    struct InstanceMesh {ID3D11Buffer*vertices=nullptr,*indices=nullptr;unsigned count=0;};
+    struct InstanceMesh {ID3D11Buffer*vertices=nullptr,*indices=nullptr;unsigned count=0;ID3D11Buffer*material=nullptr;};
     std::vector<InstanceMesh> instance_meshes;
     std::size_t instance_mesh_bytes=0;
     ID3D11VertexShader*instance_vs=nullptr;ID3D11InputLayout*instance_layout=nullptr;
-    ID3D11Buffer*instance_material=nullptr;
+    std::array<std::array<ID3D11ShaderResourceView*,31>,2> surface_bindings{};
+    std::vector<std::array<ID3D11ShaderResourceView*,31>> body_bindings;
     render_core::InstanceStream instance_stream;
     std::wstring instance_path;
     bool ready=false;
     template<class T>void drop(T*&p){if(p)p->Release();p=nullptr;}
     void reset(){
-        instance_stream.clear();drop(instance_vs);drop(instance_layout);drop(instance_material);
-        for(auto&m:instance_meshes){drop(m.vertices);drop(m.indices);}instance_meshes.clear();instance_mesh_bytes=0;
+        instance_stream.clear();drop(instance_vs);drop(instance_layout);
+        for(auto&m:instance_meshes){drop(m.vertices);drop(m.indices);drop(m.material);}instance_meshes.clear();instance_mesh_bytes=0;
+        surface_bindings={};body_bindings.clear();
         drop(decal_depth);reset_world();for(auto&p:textures)drop(p);textures.clear();fields.clear();materials.clear();bodies.clear();recipes.clear();surface_recipes.clear();surface_vertices.clear();
         for(int i=0;i<3;i++){drop(vs[i]);drop(ps[i]);drop(layout[i]);drop(frames[i]);}ready=false;}
     ~Natural(){reset();}
@@ -57,6 +59,11 @@ struct Natural : NaturalWorld {
         }
         D3D11_DEPTH_STENCIL_DESC depth={};depth.DepthEnable=TRUE;depth.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ZERO;depth.DepthFunc=D3D11_COMPARISON_LESS_EQUAL;
         if(FAILED(device->CreateDepthStencilState(&depth,&decal_depth)))return false;
+        // Immutable descriptors borrow textures from this asset owner. Clear
+        // them with that owner; view selection only chooses an existing bundle.
+        for(unsigned i=0;i<2;++i)surface_bindings[i]=compile_binding(i,0);
+        body_bindings.resize(bodies.size());
+        for(unsigned i=0;i<bodies.size();++i)body_bindings[i]=compile_binding(2,i);
         ready=true;return true;
     }
     bool ensure_instance_mesh(ID3D11Device*device,unsigned body){
@@ -67,9 +74,8 @@ struct Natural : NaturalWorld {
             if(errors){OutputDebugStringA(static_cast<char const*>(errors->GetBufferPointer()));drop(errors);}
             if(SUCCEEDED(hr))hr=device->CreateVertexShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&instance_vs);
             if(SUCCEEDED(hr))hr=render_core::create_instance_layout(device,code,&instance_layout);
-            drop(code);D3D11_BUFFER_DESC d={};d.ByteWidth=32;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
-            if(SUCCEEDED(hr))hr=device->CreateBuffer(&d,nullptr,&instance_material);
-            if(FAILED(hr)){drop(instance_vs);drop(instance_layout);drop(instance_material);return false;}
+            drop(code);
+            if(FAILED(hr)){drop(instance_vs);drop(instance_layout);return false;}
         }
         if(instance_meshes.empty())instance_meshes.resize(bodies.size());
         auto&m=instance_meshes[body];if(m.vertices)return true;
@@ -80,28 +86,28 @@ struct Natural : NaturalWorld {
             indices.push_back(found->second);
         }
         std::size_t bytes=vertices.size()*sizeof(BodyVertex)+indices.size()*sizeof(unsigned);
-        if(instance_mesh_bytes+bytes>32u*1024u*1024u)return false;
+        if(instance_mesh_bytes+bytes+32>32u*1024u*1024u)return false;
         D3D11_BUFFER_DESC d={};d.ByteWidth=UINT(vertices.size()*sizeof(BodyVertex));d.Usage=D3D11_USAGE_IMMUTABLE;d.BindFlags=D3D11_BIND_VERTEX_BUFFER;
         D3D11_SUBRESOURCE_DATA input={};input.pSysMem=vertices.data();
         if(FAILED(device->CreateBuffer(&d,&input,&m.vertices)))return false;
         d.ByteWidth=UINT(indices.size()*sizeof(unsigned));d.BindFlags=D3D11_BIND_INDEX_BUFFER;input.pSysMem=indices.data();
         if(FAILED(device->CreateBuffer(&d,&input,&m.indices))){drop(m.vertices);return false;}
-        m.count=unsigned(indices.size());instance_mesh_bytes+=bytes;return true;
+        auto const& material=materials[bodies[body].material];
+        float values[]={1,material.repeat?2.f:0.f,material.channels[3]!=0xffffffffu?1.f:0.f,
+            material.channels[4]!=0xffffffffu?1.f:0.f,float(material.tint),material.channels[6]!=0xffffffffu?1.f:0.f,0,0};
+        d.ByteWidth=sizeof(values);d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;input.pSysMem=values;
+        if(FAILED(device->CreateBuffer(&d,&input,&m.material))){drop(m.vertices);drop(m.indices);return false;}
+        m.count=unsigned(indices.size());instance_mesh_bytes+=bytes+sizeof(values);return true;
     }
     void bind_instances(ID3D11DeviceContext*c,unsigned body){
-        auto const&m=materials[bodies[body].material];float values[]={1,m.repeat?2.f:0.f,m.channels[3]!=0xffffffffu?1.f:0.f,
-            m.channels[4]!=0xffffffffu?1.f:0.f,float(m.tint),m.channels[6]!=0xffffffffu?1.f:0.f,0,0};
-        c->UpdateSubresource(instance_material,0,nullptr,values,0,0);
-        c->VSSetConstantBuffers(9,1,&instance_material);c->VSSetShader(instance_vs,nullptr,0);c->IASetInputLayout(instance_layout);
+        c->VSSetConstantBuffers(9,1,&instance_meshes[body].material);c->VSSetShader(instance_vs,nullptr,0);c->IASetInputLayout(instance_layout);
     }
     void update(ID3D11DeviceContext*c,EnvironmentState const&e,float const*light){
         auto values=frame_settings(e,light);
         for(unsigned i=0;i<3;i++)c->UpdateSubresource(frames[i],0,nullptr,&values[i],0,0);
     }
-    void bind(ID3D11DeviceContext*c,unsigned provider,unsigned body=0){
-        c->VSSetShader(vs[provider],nullptr,0);c->PSSetShader(ps[provider],nullptr,0);
-        c->IASetInputLayout(layout[provider]);c->PSSetConstantBuffers(0,1,&frames[provider]);
-        ID3D11ShaderResourceView*views[31]={};
+    std::array<ID3D11ShaderResourceView*,31> compile_binding(unsigned provider,unsigned body){
+        std::array<ID3D11ShaderResourceView*,31> views{};
         if(provider==0)for(unsigned i=0;i<31;i++)views[i]=textures[terrain[i]];
         if(provider==1){
             for(unsigned i=0;i<13;i++)views[i]=textures[mountain[i]];
@@ -118,8 +124,14 @@ struct Natural : NaturalWorld {
             views[30]=textures[terrain[30]];
         }
         if(provider==2){auto const&m=materials[bodies[body].material];for(unsigned i=0;i<7;i++)if(m.channels[i]!=0xffffffffu)views[i+3]=textures[m.channels[i]];}
+        return views;
+    }
+    void bind(ID3D11DeviceContext*c,unsigned provider,unsigned body=0){
+        c->VSSetShader(vs[provider],nullptr,0);c->PSSetShader(ps[provider],nullptr,0);
+        c->IASetInputLayout(layout[provider]);c->PSSetConstantBuffers(0,1,&frames[provider]);
+        auto const& views=provider==2?body_bindings[body]:surface_bindings[provider];
         // t17 is always the shared atlas, never the source specular channel.
-        c->PSSetShaderResources(0,17,views);c->PSSetShaderResources(18,13,views+18);
+        c->PSSetShaderResources(0,17,views.data());c->PSSetShaderResources(18,13,views.data()+18);
     }
 };
 } }

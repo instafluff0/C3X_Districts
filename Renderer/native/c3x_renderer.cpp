@@ -51,6 +51,8 @@
 #include "render_core/captured_scene.h"
 #include "prepared_view_area.h"
 #include "render_core/geometry_draws.h"
+#include "render_core/draw_parameter_stream.h"
+#include "render_core/immutable_mesh_upload.h"
 #include "render_core/resource_instances.h"
 #include "render_core/scene_depth.h"
 #include "render_core/scene_surface.h"
@@ -208,6 +210,7 @@ struct CachedVertexChunk {
     UINT index_count = 0;
     DXGI_FORMAT index_format = DXGI_FORMAT_R32_UINT;
     UINT vertex_stride = 120;
+    UINT vertex_offset = 0, index_offset = 0;
     std::size_t byte_count = 0;
     int translation_x = 0, translation_y = 0;
     D3D11_RECT bounds = {};
@@ -615,6 +618,9 @@ public:
 
     std::size_t sampled_geometry_bucket=~std::size_t(0);
     std::uint64_t frame_draw_calls=0,frame_parameter_updates=0,frame_bounds_tests=0;
+    std::uint64_t frame_pass_setups=0,frame_active_layers=0;
+    double frame_geometry_issue_ms=0,frame_scene_select_ms=0,frame_scene_execute_ms=0;
+    unsigned frame_content_uploads=0;
     unsigned frame_caster_preparations=0;
     std::size_t frame_post_lanes=0;
     void memory_sample(char const* phase) {
@@ -662,6 +668,7 @@ public:
     ID3D11InputLayout * feature_input_layout = nullptr;
     ID3D11Buffer * terrain_settings_buffer = nullptr;
     ID3D11Buffer * viewport_settings_buffer = nullptr;
+    c3x_renderer::render_core::DrawParameterStream draw_parameters;
     ID3D11Buffer * world_settings_buffer = nullptr;
     ID3D11Buffer * shadow_settings_buffer = nullptr;
     bool pickup_profile = false;
@@ -696,6 +703,8 @@ public:
     c3x_renderer::FeatureBundle feature_bundle;
     std::array<std::vector<std::uint8_t>, 8> feature_texture_dds;
     std::array<ID3D11ShaderResourceView *, 8> feature_texture_views = {};
+    std::array<ID3D11ShaderResourceView*,128> material_views{};
+    bool material_views_valid=false;
     // Extra terrain channels not already represented by TerrainTexture are
     // held here and bound to the shared shader's stable register contract.
     std::array<std::vector<std::uint8_t>, 19> terrain_extra_dds;
@@ -1019,6 +1028,7 @@ public:
     }
 
     void reset() {
+        material_views={};material_views_valid=false;
         gpu_composition.reset();
         terrain_preparation.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
@@ -1106,6 +1116,7 @@ public:
         release(input_layout); release(feature_input_layout);
         release(resource_body_vertex_shader);release(resource_shadow_vertex_shader);release(resource_input_layout);
         release(terrain_settings_buffer);
+        draw_parameters.clear();
         release(viewport_settings_buffer);
         release(world_settings_buffer); release(shadow_settings_buffer);
         linear_output.reset();
@@ -1551,6 +1562,7 @@ public:
     }
 
     void clear_terrain_assets() {
+        material_views={};material_views_valid=false;
         terrain_preparation.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
         for (TerrainTexture & texture : terrain_textures) {
@@ -2660,6 +2672,7 @@ public:
             return !required;
         if (device == nullptr || dds.size() < 156)
             return false;
+        material_views_valid=false;
         std::uint32_t width_px = read_u32(dds, 16);
         std::uint32_t height_px = read_u32(dds, 12);
         std::uint32_t mip_count = std::max(1u, read_u32(dds, 28));
@@ -4019,6 +4032,7 @@ public:
             c3x_renderer::render_core::LinearTarget& target,c3x_renderer::city_fidelity::Glow& glow,
             ViewportShaderSettings const& settings,unsigned w,unsigned h,std::vector<D3D11_RECT> const& physical_rectangles,
             unsigned& batches,unsigned& selected_static,unsigned& selected_dynamic,unsigned& selection_candidates,unsigned& selection_scans) {
+        auto select_begin=std::chrono::steady_clock::now();double execute_ms=0;
         using Shadow=c3x_renderer::render_core::SourceShadow;
         std::vector<Shadow::Caster> casters;Shadow::PreparedCasters prepared;
         auto prepared_ptr=prepare_shadow_submission(geometry_vertex_buffers,casters,prepared);
@@ -4055,11 +4069,13 @@ public:
             std::vector<Shadow::Bounds> receivers;
             std::size_t selected_bytes=0;
             auto flush=[&](){
-                if(pages.empty())return true;
-                if(!prepare_receiver_shadows(geometry_vertex_buffers,pass_settings,{span.rect},false,casters,prepared_ptr,nullptr,&pages))return false;
+                if(!GeometryDrawView(selected).pass().any())return true;
+                if(!pages.empty() && !prepare_receiver_shadows(geometry_vertex_buffers,pass_settings,{span.rect},false,casters,prepared_ptr,nullptr,&pages))return false;
+                auto execute_begin=std::chrono::steady_clock::now();
                 bool ok=dynamic_pass?submit_prepared_resource_region(selected,pass_settings,span.rect,&glow):
                     submit_geometry(selected,rectangles,pass_settings,target.target,target.depth,int(w),int(h),nullptr,
                         true,false,nullptr,false,&casters,prepared_ptr,128,0,0,false,true);
+                execute_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-execute_begin).count();
                 for(auto& layer:selected)layer.clear();pages.clear();++batches;return ok;
             };
             for(auto layer:order){
@@ -4088,16 +4104,14 @@ public:
                     if(selected_bytes>4u*1024u*1024u)return false;
                     if(dynamic_pass)++selected_dynamic;else ++selected_static;
                 }
-                // Explicit material/pass ordering is preserved across batches.
-                bool any=false;for(auto const& values:selected)any=any || !values.empty();
-                if(any && pages.empty()){
-                    bool ok=dynamic_pass?submit_prepared_resource_region(selected,pass_settings,span.rect,&glow):
-                        submit_geometry(selected,rectangles,pass_settings,target.target,target.depth,int(w),int(h),nullptr,
-                            true,false,nullptr,false,&casters,prepared_ptr,128,0,0,false,true);
-                    if(!ok)return false;for(auto& values:selected)values.clear();++batches;
-                }else if(!flush())return false;
+                // Keep adjacent pass inputs together while their receiver page
+                // union fits. The executor preserves this exact layer order;
+                // only incompatible shadow bindings force a submission split.
             }
+            if(!flush())return false;
             }
+            frame_scene_execute_ms+=execute_ms;
+            frame_scene_select_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-select_begin).count()-execute_ms;
             return true;
     }
 
@@ -4393,6 +4407,10 @@ public:
             trace.milliseconds(static_end.QuadPart-begin.QuadPart),trace.milliseconds(dynamic_end.QuadPart-static_end.QuadPart),
             trace.milliseconds(finish_end.QuadPart-dynamic_end.QuadPart),trace.milliseconds(ready.QuadPart-finish_end.QuadPart),trace.milliseconds(copied.QuadPart-ready.QuadPart));
         trace.write("shared-scene-surface",detail,true);memory_sample("shared-scene-complete");
+        sprintf_s(detail,"content_uploads=%u setups=%llu layers=%llu draws=%llu parameter_updates=%llu bounds_tests=%llu parameter_uploads=%u parameter_records=%u issue_ms=%.3f selection_ms=%.3f execute_ms=%.3f",
+            frame_content_uploads,frame_pass_setups,frame_active_layers,frame_draw_calls,frame_parameter_updates,frame_bounds_tests,draw_parameters.uploads,draw_parameters.records,
+            frame_geometry_issue_ms,frame_scene_select_ms,frame_scene_execute_ms);
+        trace.write("selected-pass-submission",detail,true);
         sprintf_s(detail,"incremental=%u resolve_pixels=%zu finish_rects=%zu readback_rects=%zu",
             unsigned(incremental_output),resolved_pixels,finish_damage.size(),copies.size());
         trace.write("scene-output",detail,true);
@@ -4593,7 +4611,8 @@ public:
         return true;
     }
 
-    bool cache_geometry_layer(std::vector<Vertex> & vertices,
+    bool cache_geometry_layer(c3x_renderer::render_core::ImmutableMeshUpload& upload,
+                              std::vector<Vertex> & vertices,
                               std::vector<CachedVertexChunk> & output,
                               bool prefetch = false, std::size_t pending_bytes = 0,
                               std::atomic<bool> const * foreground_pending = nullptr, bool compact_feature = false, bool natural_vertex = false,
@@ -4675,7 +4694,7 @@ public:
             }
         }
         chunk.byte_count = packed.size() * vertex_stride + (shared_grid?0:index_bytes);
-        while (prefetch && prefetched_geometry_bytes + pending_bytes + chunk.byte_count > 64u*1024u*1024u) {
+        while (prefetch && prefetched_geometry_bytes + pending_bytes + chunk.byte_count + 3u > 64u*1024u*1024u) {
             auto oldest = tile_geometry_cache.end();
             for (auto it = tile_geometry_cache.begin(); it != tile_geometry_cache.end(); ++it)
                 if (it->second.prefetched && it->second.last_used < tile_geometry_epoch-1 &&
@@ -4688,7 +4707,7 @@ public:
             ++frame_tiles_evicted;
             if (cache_evictions != 0xffffffffu) ++cache_evictions;
         }
-        if (!make_tile_cache_room(chunk.byte_count)) return false;
+        if (!make_tile_cache_room(chunk.byte_count+3u)) return false;
         if (prefetch && foreground_pending->load(std::memory_order_relaxed)) return false;
         if(profiling && sampled_geometry_bucket!=tile_geometry_cache_bytes/(32u*1024u*1024u)){
             sampled_geometry_bucket=tile_geometry_cache_bytes/(32u*1024u*1024u);
@@ -4739,35 +4758,24 @@ public:
                 std::memcpy(frozen_vertices.data() + i*vertex_stride, &packed[i], vertex_stride);
             initial.pSysMem = frozen_vertices.data();
         }
-        HRESULT buffer_result=device->CreateBuffer(&desc, &initial, &chunk.buffer);
-        if (FAILED(buffer_result)) {
-            MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);GlobalMemoryStatusEx(&memory);
-            char detail[192];sprintf_s(detail,"kind=vertex hr=%08lx bytes=%u virtual_available=%llu",
-                static_cast<unsigned long>(buffer_result),desc.ByteWidth,memory.ullAvailVirtual);
-            trace.write("mesh-buffer-failed",detail,true);return false;
-        }
+        auto before=upload.size();
+        chunk.vertex_offset=upload.append(initial.pSysMem,desc.ByteWidth);
         auto shared=terrain_patch_indices.find(shared_grid);
         if(shared_grid && shared!=terrain_patch_indices.end()){
             chunk.indices=shared->second;chunk.indices->AddRef();++frame_patch_index_reuses;
-        }else{
-        if(shared_grid && (terrain_patch_index_bytes+index_bytes>4u*1024u*1024u || !make_tile_cache_room(chunk.byte_count+index_bytes))){release(chunk.buffer);return false;}
-        desc.ByteWidth = static_cast<UINT>(index_bytes);
-        desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-        initial.pSysMem = narrow_indices.empty() ? static_cast<void const*>(indices.data()) : narrow_indices.data();
-        buffer_result=device->CreateBuffer(&desc, &initial, &chunk.indices);
-        if (FAILED(buffer_result)) {
-            MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);GlobalMemoryStatusEx(&memory);
-            char detail[192];sprintf_s(detail,"kind=index hr=%08lx bytes=%u virtual_available=%llu",
-                static_cast<unsigned long>(buffer_result),desc.ByteWidth,memory.ullAvailVirtual);
-            trace.write("mesh-buffer-failed",detail,true);
-            release(chunk.buffer);
-            return false;
-        }
-        if(shared_grid){
-            try{terrain_patch_indices.emplace(shared_grid,chunk.indices);}catch(...){release(chunk.indices);release(chunk.buffer);throw;}
+        }else if(shared_grid){
+            if(terrain_patch_index_bytes+index_bytes>4u*1024u*1024u || !make_tile_cache_room(chunk.byte_count+index_bytes))return false;
+            desc.ByteWidth=static_cast<UINT>(index_bytes);desc.BindFlags=D3D11_BIND_INDEX_BUFFER;
+            initial.pSysMem=narrow_indices.data();
+            if(FAILED(device->CreateBuffer(&desc,&initial,&chunk.indices)))return false;
+            try{terrain_patch_indices.emplace(shared_grid,chunk.indices);}catch(...){release(chunk.indices);throw;}
             chunk.indices->AddRef();terrain_patch_index_bytes+=index_bytes;frame_upload_bytes+=index_bytes;
+        }else{
+            chunk.index_offset=upload.append(narrow_indices.empty()?static_cast<void const*>(indices.data()):narrow_indices.data(),index_bytes);
         }
-        }
+        // Charge alignment once with its content, including a preceding narrow
+        // index range. Shared flat-layer aliases carry zero additional bytes.
+        chunk.byte_count=upload.size()-before;
         tile_geometry_cache_bytes += chunk.byte_count;
         frame_upload_bytes += chunk.byte_count;
         output.push_back(chunk);
@@ -5201,6 +5209,8 @@ public:
             GeometryDrawView buffers,
             std::vector<D3D11_RECT> const & rectangles, ViewportShaderSettings const & viewport_settings,
             std::atomic<bool> const * cancellation, bool reflection_pass=false) {
+        if(buffers[layer].empty())return true;
+        auto issue_begin=std::chrono::steady_clock::now();
         AnimationGpu::Pass gpu_phase(animation_gpu,context,layer==geometry_shadow?AnimationGpu::shadow:AnimationGpu::body,
             profiling && (layer==geometry_shadow || layer==geometry_feature) && !buffers[layer].empty());
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
@@ -5249,9 +5259,64 @@ public:
             if(!flush())return false;
             first=true;continue;
         }
+        using Parameters=c3x_renderer::render_core::DrawParameterStream;
+        std::array<ViewportShaderSettings,Parameters::limit> parameters;
+        std::vector<GeometryDrawReference> selected;selected.reserve(Parameters::limit);
+        bool streamed=draw_parameters.available(device,context);
+        auto flush=[&](){
+            if(selected.empty())return true;
+            if(streamed && !draw_parameters.upload(parameters.data(),unsigned(selected.size())))return false;
+            auto issue=[&](GeometryDrawReference const& chunk,ViewportShaderSettings const& settings,unsigned index){
+                if(streamed)draw_parameters.bind(1,index);
+                else if(first || std::memcmp(&previous,&settings,sizeof(settings))!=0){
+                    context->UpdateSubresource(viewport_settings_buffer,0,nullptr,&settings,0,0);
+                    ++frame_parameter_updates;previous=settings;first=false;
+                }
+                UINT stride = chunk.content().vertex_stride, offset = chunk.content().vertex_offset;
+                context->IASetVertexBuffers(0, 1, &chunk.content().buffer, &stride, &offset);
+                context->IASetIndexBuffer(chunk.content().indices, chunk.content().index_format, chunk.content().index_offset);
+                if(chunk.content().city_material!=0xffffffffu){
+                    ID3D11SamplerState*samplers[]={natural_wrap,natural_clamp};context->PSSetSamplers(0,2,samplers);
+                    context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
+                    cities.bind(context,chunk.content().city_material,chunk.content().city_environment,chunk.content().city_atlas,reflection_pass,false);
+                    context->DrawIndexed(chunk.content().index_count,0,0);
+                    ++frame_draw_calls;
+                    if(!cities.library.materials[chunk.content().city_material].ground){
+                        cities.bind(context,chunk.content().city_material,chunk.content().city_environment,chunk.content().city_atlas,reflection_pass,true);
+                        context->DrawIndexed(chunk.content().index_count,0,0);
+                        ++frame_draw_calls;
+                    }
+                    context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
+                    return;
+                }
+                if(city_profile && layer==geometry_city){
+                    context->IASetInputLayout(feature_input_layout);
+                    context->VSSetShader(reflection_pass?reflection.vs[1]:feature_vertex_shader,nullptr,0);
+                    context->PSSetShader(reflection_pass?reflection.ps[1]:feature_pixel_shader,nullptr,0);
+                    context->PSSetShaderResources(116,4,city_emissive_views.data());context->PSSetShaderResources(124,4,city_base_views.data());
+                    ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);
+                }
+                if (chunk.content().animation_texture) context->PSSetShaderResources(116,1,&chunk.content().animation_texture);
+                if(chunk.content().resource_instance){
+                    context->IASetInputLayout(resource_input_layout);
+                    context->VSSetConstantBuffers(8,1,&chunk.content().resource_instance);
+                    context->VSSetConstantBuffers(2,1,&shadow_settings_buffer);
+                    context->VSSetShader(layer==geometry_shadow?resource_shadow_vertex_shader:resource_body_vertex_shader,nullptr,0);
+                }
+                context->DrawIndexed(chunk.content().index_count, 0, 0);
+                ++frame_draw_calls;
+                if(chunk.content().resource_instance){
+                    context->IASetInputLayout(layer==geometry_shadow?input_layout:feature_input_layout);
+                    context->VSSetShader(layer==geometry_shadow?vertex_shader:feature_vertex_shader,nullptr,0);
+                }
+                if (chunk.content().animation_texture) context->PSSetShaderResources(116,1,resource_texture_views.data());
+            };
+            for(unsigned i=0;i<selected.size();++i)issue(selected[i],parameters[i],i);
+            selected.clear();return true;
+        };
         for (GeometryDrawReference const & chunk : buffers[layer]) {
             ++frame_bounds_tests;
-            if (cancellation && cancellation->load(std::memory_order_relaxed)) return false;
+            if(cancellation && cancellation->load(std::memory_order_relaxed))return false;
             if(reflection_pass && chunk.content().animation_texture)continue;
             if(!chunk_intersects_region(chunk,viewport_settings,rect,reflection_pass))continue;
             ViewportShaderSettings settings = viewport_settings;
@@ -5261,53 +5326,16 @@ public:
             settings.translation[0] += static_cast<float>(chunk.translation_x());
             settings.translation[1] += static_cast<float>(chunk.translation_y());
             settings.depth_translation = city_profile?viewport_settings.depth_translation+float(chunk.translation_y()):settings.translation[1];
-            if (first || std::memcmp(&previous, &settings, sizeof(settings)) != 0) {
-                context->UpdateSubresource(viewport_settings_buffer, 0, nullptr, &settings, 0, 0);
-                ++frame_parameter_updates;
-                previous = settings;
-                first = false;
-            }
-            UINT stride = chunk.content().vertex_stride, offset = 0;
-            context->IASetVertexBuffers(0, 1, &chunk.content().buffer, &stride, &offset);
-            context->IASetIndexBuffer(chunk.content().indices, chunk.content().index_format, 0);
-            if(chunk.content().city_material!=0xffffffffu){
-                ID3D11SamplerState*samplers[]={natural_wrap,natural_clamp};context->PSSetSamplers(0,2,samplers);
-                context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
-                cities.bind(context,chunk.content().city_material,chunk.content().city_environment,chunk.content().city_atlas,reflection_pass,false);
-                context->DrawIndexed(chunk.content().index_count,0,0);
-                ++frame_draw_calls;
-                if(!cities.library.materials[chunk.content().city_material].ground){
-                    cities.bind(context,chunk.content().city_material,chunk.content().city_environment,chunk.content().city_atlas,reflection_pass,true);
-                    context->DrawIndexed(chunk.content().index_count,0,0);
-                    ++frame_draw_calls;
-                }
-                context->OMSetBlendState(blend_state,nullptr,0xffffffffu);context->OMSetDepthStencilState(depth_state,0);
-                continue;
-            }
-            if(city_profile && layer==geometry_city){
-                context->IASetInputLayout(feature_input_layout);
-                context->VSSetShader(reflection_pass?reflection.vs[1]:feature_vertex_shader,nullptr,0);
-                context->PSSetShader(reflection_pass?reflection.ps[1]:feature_pixel_shader,nullptr,0);
-                context->PSSetShaderResources(116,4,city_emissive_views.data());context->PSSetShaderResources(124,4,city_base_views.data());
-                ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);
-            }
-            if (chunk.content().animation_texture) context->PSSetShaderResources(116,1,&chunk.content().animation_texture);
-            if(chunk.content().resource_instance){
-                context->IASetInputLayout(resource_input_layout);
-                context->VSSetConstantBuffers(8,1,&chunk.content().resource_instance);
-                context->VSSetConstantBuffers(2,1,&shadow_settings_buffer);
-                context->VSSetShader(layer==geometry_shadow?resource_shadow_vertex_shader:resource_body_vertex_shader,nullptr,0);
-            }
-            context->DrawIndexed(chunk.content().index_count, 0, 0);
-            ++frame_draw_calls;
-            if(chunk.content().resource_instance){
-                context->IASetInputLayout(layer==geometry_shadow?input_layout:feature_input_layout);
-                context->VSSetShader(layer==geometry_shadow?vertex_shader:feature_vertex_shader,nullptr,0);
-            }
-            if (chunk.content().animation_texture) context->PSSetShaderResources(116,1,resource_texture_views.data());
+            parameters[selected.size()]=settings;selected.push_back(chunk);
+            if(selected.size()==Parameters::limit && !flush())return false;
         }
+        if(!flush())return false;
+        // Other shader owners (including the existing forest instance stream)
+        // retain their ordinary b1 buffer contract across selected pass calls.
+        if(streamed)context->VSSetConstantBuffers(1,1,&viewport_settings_buffer);
         }
         if(city_profile && layer==geometry_city){ID3D11SamplerState*samplers[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,samplers);}
+        frame_geometry_issue_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-issue_begin).count();
         return true;
     }
 
@@ -5330,6 +5358,7 @@ public:
                 for(int wx=dims.wrap_x?-1:0;wx<=(dims.wrap_x?1:0);++wx) {
                     Shadow::Caster c;c.vertices=chunk.content().buffer;c.indices=chunk.content().indices;c.count=chunk.content().index_count;
                     c.index_format=chunk.content().index_format;
+                    c.vertex_offset=chunk.content().vertex_offset;c.index_offset=chunk.content().index_offset;
                     c.instances=chunk.content().instances.get();c.instance_material=chunk.content().instance_material;
                     c.stride=chunk.content().vertex_stride;c.layer=layer;c.version=chunk.content().version;c.bounds=chunk.content().world_bounds;
                     if(chunk.content().city_material!=0xffffffffu)c.binding=10000+chunk.content().city_material;
@@ -5474,6 +5503,73 @@ public:
         D3D11_BOX box={unsigned(output_damage.left),unsigned(output_damage.top),0,unsigned(output_damage.right),unsigned(output_damage.bottom),1};
         context->CopySubresourceRegion(block_texture,0,box.left-4,box.top-4,0,city_glow.native,0,&box);
         return true;
+    }
+
+    std::array<ID3D11ShaderResourceView*,128> const& compiled_material_views(){
+        if(material_views_valid)return material_views;
+        auto& views=material_views;views={};
+        TerrainTexture const & grass = terrain_textures[2];
+        TerrainTexture const & plains = terrain_textures[1];
+        TerrainTexture const & desert = terrain_textures[0];
+        TerrainTexture const & hills = terrain_textures[5];
+        TerrainTexture const & mountain = terrain_textures[6];
+        TerrainTexture const & marsh = terrain_textures[9];
+        TerrainTexture const & coast = terrain_textures[11];
+        TerrainTexture const & ocean = terrain_textures[13];
+        views[0] = grass.view; views[1] = grass.material_height_view; views[2] = grass.specular_view;
+        views[3] = mountain.material_height_view; views[4] = mountain.material_height_view;
+        views[5] = mountain.material_height_view;
+        views[6] = mountain.view; views[7] = mountain.elevated_view;
+        views[8] = mountain.relief_layer_views[0];
+        views[9] = mountain.material_height_view; views[10] = mountain.specular_view;
+        views[11] = coast.relief_layer_views[0]; views[12] = terrain_extra_views[0];
+        views[13] = terrain_extra_views[1]; views[14] = coast.relief_layer_views[1];
+        views[15] = terrain_extra_views[2]; views[16] = terrain_extra_views[3];
+        views[17] = coast.view; views[18] = ocean.view;
+        views[19] = coast.material_height_view;
+        for (std::size_t index = 0; index < coast.water_surface_views.size(); ++index)
+            views[20 + index] = coast.water_surface_views[index];
+        for (std::size_t index = 0; index < 4; ++index)
+            views[25 + index] = feature_texture_views[index];
+        views[29] = coast.specular_view; views[30] = ocean.material_height_view;
+        views[31] = ocean.specular_view;
+        for (std::size_t index = 0; index < 13; ++index)
+            views[32 + index] = terrain_extra_views[4 + index];
+        views[45] = plains.view; views[46] = plains.material_height_view;
+        views[47] = plains.specular_view;
+        views[48] = desert.view; views[49] = desert.material_height_view;
+        views[50] = desert.specular_view; views[51] = hills.material_height_view;
+        views[52] = dune_surface.view; views[53] = dune_surface.material_height_view;
+        views[54] = dune_surface.specular_view; views[55] = dune_decal_base_view;
+        views[56] = dune_decal_height_view;
+        for (std::size_t index = 1; index < mountain.relief_layer_views.size(); ++index)
+            views[56 + index] = mountain.relief_layer_views[index];
+        views[61] = terrain_extra_views[17]; views[62] = terrain_extra_views[18];
+        views[63] = marsh.view; views[64] = marsh.material_height_view;
+        views[65] = marsh.specular_view; views[66] = marsh_decal_base_view;
+        views[67] = marsh_decal_height_view; views[68] = marsh_decal_specular_view;
+        views[69] = volcano_base_view; views[70] = volcano_height_view;
+        views[71] = volcano_active_base_view; views[72] = volcano_active_specular_view;
+        views[73] = water_clutter_base_view; views[74] = water_clutter_height_view;
+        views[75] = grass_clutter_base_view; views[76] = grass_clutter_height_view;
+        views[77] = plains_clutter_base_view; views[78] = plains_clutter_height_view;
+        for (std::size_t index = 0; index < river_surface_views.size(); ++index)
+            views[79 + index] = river_surface_views[index];
+        for (std::size_t index = 0; index < river_rock_texture_views.size(); ++index)
+            views[89 + index] = river_rock_texture_views[index];
+        TerrainTexture const & tundra = terrain_textures[3];
+        views[94] = tundra.view;
+        views[95] = tundra.material_height_view;
+        views[96] = tundra.specular_view;
+        for (std::size_t index = 0; index < route_texture_views.size(); ++index)
+            views[98 + index] = route_texture_views[index];
+        for (std::size_t index = 0; index < bridge_texture_views.size(); ++index)
+            views[108 + index] = bridge_texture_views[index];
+        for (std::size_t index = 0; index < resource_texture_views.size(); ++index)
+            views[116 + index] = resource_texture_views[index];
+        for (std::size_t index = 0; index < city_base_views.size(); ++index)
+            views[124 + index] = city_base_views[index];
+        material_views_valid=true;return material_views;
     }
 
     bool submit_geometry(GeometryDrawView buffers,
@@ -5685,79 +5781,22 @@ public:
             if(!cities.lights(context,active)){trace.write("city-composition-failed","facade block capacity; no truncation",true);return false;}
         }
 
-        bool has_cached_geometry = false;
-        for (std::size_t layer=0;layer<geometry_layer_count;++layer)
-            has_cached_geometry = has_cached_geometry || !buffers[layer].empty();
-        if (has_cached_geometry) {
-            context->IASetInputLayout(input_layout);
-            context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-            context->VSSetShader(vertex_shader, nullptr, 0);
-            context->PSSetShader(pixel_shader, nullptr, 0);
+        auto pass=buffers.pass();
+        if (pass.any()) {
+            ++frame_pass_setups;frame_active_layers+=pass.count();
+            bool base_pass=false,cliff_pass=false;
+            for(unsigned layer=0;layer<geometry_natural_terrain;++layer)base_pass=base_pass || pass.has(layer);
+            for(unsigned layer=geometry_cliff0;layer<geometry_natural_terrain;++layer)cliff_pass=cliff_pass || pass.has(layer);
+            if(base_pass){
+                context->IASetInputLayout(input_layout);
+                context->VSSetShader(vertex_shader, nullptr, 0);
+                context->PSSetShader(pixel_shader, nullptr, 0);
+            }
             // Register-for-register match with the frozen approved terrain
             // shader. No production-only palette remains in this binding path.
-            std::array<ID3D11ShaderResourceView *, 128> views = {};
-            TerrainTexture const & grass = terrain_textures[2];
-            TerrainTexture const & plains = terrain_textures[1];
-            TerrainTexture const & desert = terrain_textures[0];
-            TerrainTexture const & hills = terrain_textures[5];
-            TerrainTexture const & mountain = terrain_textures[6];
-            TerrainTexture const & marsh = terrain_textures[9];
-            TerrainTexture const & coast = terrain_textures[11];
-            TerrainTexture const & ocean = terrain_textures[13];
-            views[0] = grass.view; views[1] = grass.material_height_view; views[2] = grass.specular_view;
-            views[3] = mountain.material_height_view; views[4] = mountain.material_height_view;
-            views[5] = mountain.material_height_view;
-            views[6] = mountain.view; views[7] = mountain.elevated_view;
-            views[8] = mountain.relief_layer_views[0];
-            views[9] = mountain.material_height_view; views[10] = mountain.specular_view;
-            views[11] = coast.relief_layer_views[0]; views[12] = terrain_extra_views[0];
-            views[13] = terrain_extra_views[1]; views[14] = coast.relief_layer_views[1];
-            views[15] = terrain_extra_views[2]; views[16] = terrain_extra_views[3];
-            views[17] = coast.view; views[18] = ocean.view;
-            views[19] = coast.material_height_view;
-            for (std::size_t index = 0; index < coast.water_surface_views.size(); ++index)
-                views[20 + index] = coast.water_surface_views[index];
-            for (std::size_t index = 0; index < 4; ++index)
-                views[25 + index] = feature_texture_views[index];
-            views[29] = coast.specular_view; views[30] = ocean.material_height_view;
-            views[31] = ocean.specular_view;
-            for (std::size_t index = 0; index < 13; ++index)
-                views[32 + index] = terrain_extra_views[4 + index];
-            views[45] = plains.view; views[46] = plains.material_height_view;
-            views[47] = plains.specular_view;
-            views[48] = desert.view; views[49] = desert.material_height_view;
-            views[50] = desert.specular_view; views[51] = hills.material_height_view;
-            views[52] = dune_surface.view; views[53] = dune_surface.material_height_view;
-            views[54] = dune_surface.specular_view; views[55] = dune_decal_base_view;
-            views[56] = dune_decal_height_view;
-            for (std::size_t index = 1; index < mountain.relief_layer_views.size(); ++index)
-                views[56 + index] = mountain.relief_layer_views[index];
-            views[61] = terrain_extra_views[17]; views[62] = terrain_extra_views[18];
-            views[63] = marsh.view; views[64] = marsh.material_height_view;
-            views[65] = marsh.specular_view; views[66] = marsh_decal_base_view;
-            views[67] = marsh_decal_height_view; views[68] = marsh_decal_specular_view;
-            views[69] = volcano_base_view; views[70] = volcano_height_view;
-            views[71] = volcano_active_base_view; views[72] = volcano_active_specular_view;
-            views[73] = water_clutter_base_view; views[74] = water_clutter_height_view;
-            views[75] = grass_clutter_base_view; views[76] = grass_clutter_height_view;
-            views[77] = plains_clutter_base_view; views[78] = plains_clutter_height_view;
-            for (std::size_t index = 0; index < river_surface_views.size(); ++index)
-                views[79 + index] = river_surface_views[index];
-            for (std::size_t index = 0; index < river_rock_texture_views.size(); ++index)
-                views[89 + index] = river_rock_texture_views[index];
-            TerrainTexture const & tundra = terrain_textures[3];
-            views[94] = tundra.view;
-            views[95] = tundra.material_height_view;
-            views[96] = tundra.specular_view;
-            for (std::size_t index = 0; index < route_texture_views.size(); ++index)
-                views[98 + index] = route_texture_views[index];
-            for (std::size_t index = 0; index < bridge_texture_views.size(); ++index)
-                views[108 + index] = bridge_texture_views[index];
-            for (std::size_t index = 0; index < resource_texture_views.size(); ++index)
-                views[116 + index] = resource_texture_views[index];
-            for (std::size_t index = 0; index < city_base_views.size(); ++index)
-                views[124 + index] = city_base_views[index];
-            context->PSSetShaderResources(0, static_cast<UINT>(views.size()), views.data());
+            auto const& views=compiled_material_views();
+            if(base_pass)context->PSSetShaderResources(0, static_cast<UINT>(views.size()), views.data());
+            context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             ID3D11SamplerState * samplers[] = {fidelity_profile?natural_wrap:terrain_sampler, fidelity_profile?natural_clamp:decal_sampler};
             context->PSSetSamplers(0, 2, samplers);
             context->PSSetConstantBuffers(0, 1, &terrain_settings_buffer);
@@ -5780,9 +5819,14 @@ public:
                 unsigned fixed_natural_layers[]={geometry_natural_terrain,
                     geometry_natural_mountain,geometry_natural_decal};
                 for(unsigned layer:fixed_natural_layers){
+                    if(!pass.has(layer))continue;
                     unsigned provider=layer<=geometry_natural_decal?0:layer==geometry_natural_mountain?1:2;
                     context->OMSetDepthStencilState(layer==geometry_natural_decal?natural.decal_depth:depth_state,0);
                     natural.bind(context,provider,provider==2?layer-geometry_natural_forest0:0);
+                    // Terrain and mountain surface shaders also consume these
+                    // shared volcanic textures outside the natural t0-t30 pack.
+                    context->PSSetShaderResources(69,1,views.data()+69);
+                    context->PSSetShaderResources(71,1,views.data()+71);
                     if(provider==0){
                         // The generated face meets these same selected rock
                         // bodies; use their material instead of a brown seam.
@@ -5792,15 +5836,18 @@ public:
                     if(!draw(static_cast<GeometryLayer>(layer)))return false;
                 }
                 for(unsigned layer=geometry_natural_forest0;layer<geometry_layer_count;layer++){
+                    if(!pass.has(layer))continue;
                     context->OMSetDepthStencilState(depth_state,0);
                     natural.bind(context,2,layer-geometry_natural_forest0);
                     if(!draw(static_cast<GeometryLayer>(layer)))return false;
                 }
+                if(base_pass){
                 context->OMSetDepthStencilState(depth_state,0);
                 context->PSSetShaderResources(0,UINT(views.size()),views.data());
                 context->PSSetShaderResources(25,1,&source_shadow.view);
                 context->PSSetConstantBuffers(0,1,&terrain_settings_buffer);
                 context->VSSetShader(vertex_shader,nullptr,0);context->PSSetShader(pixel_shader,nullptr,0);
+                }
             }
             if(environment_profile && !reflection_pass){
                 ID3D11ShaderResourceView*view=active_reflection.enabled?active_reflection.linear.view:nullptr;
@@ -5823,13 +5870,14 @@ public:
             }
             if(environment_profile)context->PSSetShaderResources(121,1,views.data()+121);
             if(fidelity_profile){ID3D11SamplerState*retained[]={terrain_sampler,decal_sampler};context->PSSetSamplers(0,2,retained);}
-            if (pickup_profile) {
-                context->PSSetShaderResources(17,1,&source_shadow.view);
+            if(pickup_profile)context->PSSetShaderResources(17,1,&source_shadow.view);
+            if (pickup_profile && cliff_pass) {
                 context->VSSetShader(feature_vertex_shader, nullptr, 0);
                 context->PSSetShader(feature_pixel_shader, nullptr, 0);
                 ID3D11SamplerState* cliff_sampler=fidelity_profile?natural_clamp:decal_sampler;
                 context->PSSetSamplers(0,1,&cliff_sampler);
                 for (unsigned i=0;i<cliff_bundle.assets.size();++i) {
+                    if(!pass.has(geometry_cliff0+i))continue;
                     auto texture_index=cliff_bundle.assets[i].texture_index;
                     context->PSSetShaderResources(25,4,cliff_views.data()+texture_index);
                     if (!draw(static_cast<GeometryLayer>(geometry_cliff0+i))) return false;
@@ -6265,6 +6313,9 @@ public:
         profiling=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",profile_option,sizeof(profile_option)) &&
             std::strcmp(profile_option,"1")==0;
         frame_draw_calls=frame_parameter_updates=frame_bounds_tests=0;
+        draw_parameters.uploads=draw_parameters.records=0;frame_content_uploads=0;
+        frame_pass_setups=frame_active_layers=0;
+        frame_geometry_issue_ms=frame_scene_select_ms=frame_scene_execute_ms=0;
         frame_caster_preparations=0;frame_post_lanes=0;
         frame_region_hits=frame_region_misses=frame_region_hit_pixels=frame_region_rejected=0;
         frame_region_phase_ms={};frame_tile_validation_ms=frame_tile_append_ms=frame_topology_ms=0;
@@ -9063,17 +9114,20 @@ public:
             tile_geometry_cache_bytes += metadata_bytes;
             compiled.byte_count = metadata_bytes;
             try {
+            std::array<c3x_renderer::render_core::ImmutableMeshUpload,2> mesh_uploads;
+            auto shared_start=share_natural?(world_ground?0:world_objects?geometry_route:geometry_natural_terrain):geometry_layer_count;
             // Compute before cache_geometry_layer moves the flat grid into its
             // immutable buffer. Retained tiles carry the resulting absent
             // layers with the same coast/semantic dependencies as that grid.
             bool water_coverage=(world_ground && shared_hit) || !cull_empty_water || !environment_profile ||
                 c3x_renderer::render_core::water_surface_can_contribute(underlay_vertices);
             for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
+                auto& mesh_upload=mesh_uploads[layer>=shared_start?1:0];
                 if(world_ground && shared_hit)continue;
                 if(layer==geometry_city && !city_chunks.empty()){
                     for(auto&part:city_chunks){
                         if(part.vertices.empty())continue;
-                        if(!cache_geometry_layer(part.vertices,compiled.buffers[layer],prewarming,compiled.byte_count,foreground_pending,false,false,nullptr,nullptr,nullptr,nullptr,world_objects?4u:0u)){
+                        if(!cache_geometry_layer(mesh_upload,part.vertices,compiled.buffers[layer],prewarming,compiled.byte_count,foreground_pending,false,false,nullptr,nullptr,nullptr,nullptr,world_objects?4u:0u)){
                             tile_geometry_cache_bytes-=compiled.byte_count;return false;
                         }
                         auto&chunk=compiled.buffers[layer].back();chunk.city_material=part.material;chunk.city_environment=part.environment;
@@ -9087,7 +9141,7 @@ public:
                     // kind is the per-draw b1 value; no duplicate allocation.
                     compiled.buffers[layer]=compiled.buffers[geometry_underlay];
                     for(auto& chunk:compiled.buffers[layer]){
-                        chunk.buffer->AddRef();chunk.indices->AddRef();chunk.byte_count=0;
+                        if(chunk.buffer)chunk.buffer->AddRef();if(chunk.indices)chunk.indices->AddRef();chunk.byte_count=0;
                     }
                     continue;
                 }
@@ -9114,7 +9168,7 @@ public:
                 auto* record_mesh=natural_layer && cache_natural && !natural_hit && !retain_ground_grids?&pending_natural.layers[layer-geometry_natural_terrain]:nullptr;
                 bool reproject=natural_hit && (natural_found->second.tile_width!=frame.tile_width ||
                     natural_found->second.tile_height!=frame.tile_height || natural_found->second.target_height!=content_view_height);
-                if (!cache_geometry_layer(*tile_layers[layer], compiled.buffers[layer], prewarming, compiled.byte_count, foreground_pending, layer>=geometry_feature && layer<geometry_natural_terrain, natural_layer,
+                if (!cache_geometry_layer(mesh_upload,*tile_layers[layer], compiled.buffers[layer], prewarming, compiled.byte_count, foreground_pending, layer>=geometry_feature && layer<geometry_natural_terrain, natural_layer,
                         record_mesh,cached_mesh,reproject?&natural_projection:nullptr,
                         layer<=geometry_river?&ground_indices[layer]:
                         index_natural_grids && (layer==geometry_natural_terrain || layer==geometry_natural_terrain+2)
@@ -9131,6 +9185,20 @@ public:
                     return false;
                 }
                 for (auto const & chunk : compiled.buffers[layer]) compiled.byte_count += chunk.byte_count;
+            }
+            // Keep allocation boundaries equal to residency/eviction owners:
+            // camera-specific layers and shared world content can retire alone.
+            for(unsigned owner=0;owner<2;++owner)if(mesh_uploads[owner].size()){
+                ID3D11Buffer* allocation=nullptr;
+                if(!mesh_uploads[owner].create(device,&allocation)){
+                    tile_geometry_cache_bytes-=compiled.byte_count;return false;
+                }
+                for(unsigned layer=0;layer<geometry_layer_count;++layer)if(unsigned(layer>=shared_start)==owner)
+                    for(auto& chunk:compiled.buffers[layer])if(!chunk.buffer){
+                    chunk.buffer=allocation;allocation->AddRef();
+                    if(!chunk.indices){chunk.indices=allocation;allocation->AddRef();}
+                }
+                allocation->Release();++frame_content_uploads;
             }
             for(auto&indices:natural_grid_indices)indices.clear();
             } catch (...) {

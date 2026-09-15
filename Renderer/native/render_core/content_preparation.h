@@ -141,7 +141,11 @@ public:
         if(capacity_limit!=budget){ready.clear();stats.bytes=stats.peak_bytes=0;capacity_limit=budget;}
         std::sort(needed.begin(),needed.end());
         auto required=[&](Key const& key){return std::binary_search(needed.begin(),needed.end(),key);};
-        bool immediate=std::any_of(jobs.begin(),jobs.end(),[&](auto const& job){return required(job.key);});
+        // Selection owns urgency for this lease, including surviving results.
+        // Queue position alone cannot bypass speculative refill backpressure.
+        for(auto& job:jobs)job.urgent=required(job.key);
+        for(auto& item:ready)item.urgent=required(item.key);
+        bool immediate=std::any_of(jobs.begin(),jobs.end(),[](auto const& job){return job.urgent;});
         if(immediate){
             // Old speculative content cannot close the producer gate while a
             // newly selected view needs compilation. Protect ready demand and

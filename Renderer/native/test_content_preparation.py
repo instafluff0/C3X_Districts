@@ -1,6 +1,7 @@
 """Exercise the production CPU queue, leases, pressure and shared compiler."""
 import unittest
 from Renderer.native.native_cpp_test import run_cpp
+from Renderer.lab.platform import ROOT
 
 
 class ContentPreparationTests(unittest.TestCase):
@@ -14,7 +15,8 @@ struct Result {int value;std::size_t size;std::size_t bytes()const{return size;}
 using Pool=ContentPreparation<int,int,Result>;
 int main(){
  for(unsigned count:{1u,2u,4u,6u}){
-  Pool pool;std::mutex mutex;std::set<unsigned> seen;std::atomic<int> concurrent{0},peak{0};
+  std::mutex mutex;std::set<unsigned> seen;std::atomic<int> concurrent{0},peak{0};
+  Pool pool; // Joins before the compiler's borrowed synchronization owners die.
   auto compiler=[&](int const& input,std::atomic<bool>const& stop,unsigned worker){
    {std::lock_guard<std::mutex> lock(mutex);seen.insert(worker);}
    int active=++concurrent,old=peak;while(active>old && !peak.compare_exchange_weak(old,active)){}
@@ -77,6 +79,31 @@ int main(){
   entered=true;while(!stop)std::this_thread::yield();left=true;return std::make_unique<Result>(Result{1,1});
  });pool.resume();while(!entered)std::this_thread::yield();}
  assert(left);
+}
+''')
+
+    def test_selected_view_fills_budget_without_serial_consumer_demand(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/content_preparation.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Result {int value;std::size_t bytes()const{return 3u*1024u*1024u;}};
+using Pool=ContentPreparation<int,int,Result>;
+int main(){
+ Pool pool;auto compile=[](int const& input,auto const&,unsigned){return std::make_unique<Result>(Result{input});};
+ // Current dependencies exceed the speculative half-budget watermark but fit
+ // the real budget. All must prepare before the GPU owner requests any result.
+ pool.configure({{90,90},{1,1},{2,2},{3,3},{4,4},{5,5}},compile,2,{1,2,3,4,5});pool.resume();
+ auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+ while(pool.statistics().built<5){assert(std::chrono::steady_clock::now()<deadline);std::this_thread::yield();}
+ pool.pause();assert(pool.statistics().pending==1);assert(pool.statistics().evicted==0);
+ assert(pool.statistics().bytes==15u*1024u*1024u);
+ for(int key=1;key<=5;++key)assert(pool.contains(key,[](auto const&){return true;}));
+ // A new selection replaces urgency; useful selected ready content survives,
+ // previous-view content can be evicted, and no new speculative work runs full.
+ pool.configure({{91,91},{6,6}},compile,1,{5,6});pool.resume();
+ assert(pool.take(6)->value==6);pool.pause();assert(pool.contains(5,[](auto const&){return true;}));
+ assert(pool.statistics().peak_bytes<=Pool::byte_limit);pool.clear();
 }
 ''')
 

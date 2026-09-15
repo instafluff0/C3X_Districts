@@ -121,7 +121,7 @@ int main(){
 #include <cmath>
 struct Shadow {
     struct Bounds{float low[3]={},high[3]={};};
-    struct Caster{void *vertices=nullptr,*indices=nullptr;unsigned count=0,stride=0;Bounds bounds;float offset[3]={};std::uint64_t version=1;unsigned layer=0,index_format=42,binding=0xffffffffu;};
+    struct Caster{void *vertices=nullptr,*indices=nullptr;unsigned count=0,stride=0,vertex_offset=0,index_offset=0;Bounds bounds;float offset[3]={};std::uint64_t version=1;unsigned layer=0,index_format=42,binding=0xffffffffu;};
     std::array<float,12> basis{};
     static std::array<float,4> project(''' + body + r'''
 };
@@ -179,6 +179,8 @@ int main(){
     copied[0].layer++;changed_input();
     copied[0].index_format++;changed_input();
     copied[0].stride++;changed_input();
+    copied[0].vertex_offset+=48;changed_input();
+    copied[0].index_offset+=4;changed_input();
     copied[0].count++;changed_input();
     copied[0].vertices=reinterpret_cast<void*>(1);changed_input();
     basis[0]+=1;changed_input();

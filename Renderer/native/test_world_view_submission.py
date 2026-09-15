@@ -127,6 +127,91 @@ int main(){
 }
 ''')
 
+    def test_production_batches_compatible_layers_and_splits_only_at_capacity(self):
+        source=(ROOT/"Renderer/native/c3x_renderer.cpp").read_text()
+        submit="    bool submit_scene_pass("+source.split("    bool submit_scene_pass(",1)[1].split("    std::vector<unsigned> static_scene_order()",1)[0]
+        run_cpp(r'''
+#include <algorithm>
+#include <cassert>
+#include <chrono>
+#include <set>
+#include "Renderer/native/render_core/geometry_draws.h"
+#include "Renderer/native/render_core/scene_surface.h"
+#include "Renderer/native/render_core/region_contributor_index.h"
+using LONG=int;
+struct D3D11_RECT {int left,top,right,bottom;};
+struct ViewportShaderSettings {float translation[2]={};};
+namespace c3x_renderer {namespace render_core {
+struct SourceShadow {
+ struct Caster{};struct PreparedCasters{};using Bounds=std::set<std::pair<int,int>>;
+ static Bounds required_pages(std::vector<Bounds> const& inputs,int){Bounds out;for(auto const& in:inputs)out.insert(in.begin(),in.end());return out;}
+};
+struct LinearTarget {int target=0,depth=0;};
+}namespace city_fidelity {struct Glow{};}}
+struct Chunk {D3D11_RECT bounds={0,0,128,128};int translation_x=0,translation_y=0;float natural_projection[4]={};int id=0;
+ c3x_renderer::render_core::SourceShadow::Bounds world_bounds;};
+using GeometryDrawView=c3x_renderer::render_core::GeometryDrawView<Chunk,4>;
+using GeometryDrawRecord=GeometryDrawView::Record;
+using Shadow=c3x_renderer::render_core::SourceShadow;
+struct State {
+ int region_origin_x=0,region_origin_y=0,shadow_basis=0,geometry_shadow=3;bool retained_world=false;
+ GeometryDrawView::Records geometry_vertex_buffers;
+ c3x_renderer::render_core::RegionContributorIndex region_contributors;
+ double frame_scene_execute_ms=0,frame_scene_select_ms=0;
+ std::vector<int> issued;std::vector<std::size_t> page_counts;unsigned submissions=0;
+ Shadow::PreparedCasters* prepare_shadow_submission(GeometryDrawView,std::vector<Shadow::Caster>&,Shadow::PreparedCasters& p){return &p;}
+ bool query_region_inputs(int,int,int,int,int,std::vector<c3x_renderer::render_core::RegionContributorIndex::Item>&){return false;}
+ bool chunk_intersects_region(GeometryDrawView::Reference item,ViewportShaderSettings const&,D3D11_RECT const&,bool){return item.content().id>=0;}
+ template<class T> bool prepare_receiver_shadows(GeometryDrawView,ViewportShaderSettings const&,std::vector<D3D11_RECT> const&,bool,std::vector<Shadow::Caster> const&,T*,std::nullptr_t,Shadow::Bounds const* pages){page_counts.push_back(pages->size());return true;}
+ template<class... T> bool submit_geometry(GeometryDrawView::Records const& selected,T const&...){
+  ++submissions;for(auto const& layer:selected)for(auto const& item:layer)issued.push_back(item.content().id);return true;}
+ bool submit_prepared_resource_region(GeometryDrawView::Records const& selected,ViewportShaderSettings const&,D3D11_RECT const&,c3x_renderer::city_fidelity::Glow*){return submit_geometry(selected);}
+'''+submit+r'''
+};
+int main(){
+ GeometryDrawView::Chunks inputs;
+ for(int n=0;n<16;++n){Chunk c;c.id=n;c.world_bounds={{n,0}};inputs[0].push_back(c);}
+ Chunk shared;shared.id=16;shared.world_bounds={{0,0}};inputs[1].push_back(shared);
+ for(int n=16;n<33;++n){Chunk c;c.id=n+1;c.world_bounds={{n,0}};inputs[2].push_back(c);}
+ Chunk shadow;shadow.id=34;inputs[3].push_back(shadow);Chunk hidden;hidden.id=-1;inputs[1].push_back(hidden);
+ State state;ViewportShaderSettings settings;c3x_renderer::render_core::LinearTarget target;c3x_renderer::city_fidelity::Glow glow;
+ auto run=[&](bool dynamic){unsigned batches=0,selected=0,animated=0,candidates=0,scans=0;
+  bool ok=state.submit_scene_pass(inputs,{0,1,2,3},dynamic,target,glow,settings,128,128,{{0,0,128,128}},batches,selected,animated,candidates,scans);
+  assert(ok && batches==2 && state.submissions==2 && (dynamic?animated:selected)==35);
+  assert(state.page_counts==std::vector<std::size_t>({32,1}));
+  for(int i=0;i<35;++i)assert(state.issued[i]==i);
+ };
+ run(false);state=State{};run(true);
+ // A pass containing only nonreceivers still executes exactly once.
+ for(auto& layer:inputs)layer.clear();inputs[3].push_back(shadow);state=State{};
+ unsigned a=0,b=0,c=0,d=0,e=0;
+ assert(state.submit_scene_pass(inputs,{3},false,target,glow,settings,128,128,{{0,0,128,128}},a,b,c,d,e));
+ assert(a==1 && state.issued==std::vector<int>{34} && state.page_counts.empty());
+}
+''')
+
+    def test_selected_pass_membership_borrows_exact_occurrences(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/geometry_draws.h"
+#include <cassert>
+struct Chunk {std::array<int,4> bounds{};int translation_x=0,translation_y=0;float natural_projection[4]={};int mesh=0;};
+using View=c3x_renderer::render_core::GeometryDrawView<Chunk,4>;
+int main(){
+ assert(!View{}.pass().any());View::Chunks owners;owners[2].push_back({});owners[2][0].mesh=7;
+ View owned(owners);assert(owned.pass().count()==1 && owned.pass().has(2));
+ View::Records selected;auto record=View::Record(owners[2][0]);record.translation_x=128;
+ selected[2].push_back(record);record.translation_x=-128;selected[2].push_back(record);
+ View view(selected);assert(view.pass().count()==1 && !view.pass().has(0));
+ assert(&view[2][0].content()==&owners[2][0] && &view[2][1].content()==&owners[2][0]);
+ assert(view[2][0].translation_x()==128 && view[2][1].translation_x()==-128);
+ // Rebuild selection within its lease. Membership follows content, never a
+ // stale retained visibility flag; wrapped occurrences preserve native order.
+ selected[0].push_back(record);assert(view.pass().count()==2);
+ selected[2].clear();assert(view.pass().count()==1 && !view.pass().has(2));
+ selected[0].clear();assert(!view.pass().any());owners[2].clear();
+}
+''')
+
     def test_rectangular_pass_selection_preserves_order_and_all_overhangs(self):
         run_cpp(r'''
 #include "Renderer/native/render_core/region_contributor_index.h"

@@ -8,11 +8,10 @@ Scrolling should usually select/draw reusable content; nearby preparation helps
 without making every possible destination image a prerequisite for fast movement.
 Full detail, authored animation and native ownership remain unchanged.
 
-**Active next deliverable: milestone 1.** The user released the documentation
-pause. On implementation continuation, proceed through the production path below;
-choose routine implementation details without another planning/approval gate.
-The first attribution check belongs inside that work, not a new open-ended
-research/tooling phase. Milestones are connected outcomes, not four promised short
+**Active deliverable: milestone 1.** Its replacement static submission path is
+implemented and validated; its whole-request performance criterion remains open.
+Continue the missing-content responsibility identified below without another
+planning/approval gate. Milestones are connected outcomes, not promised short
 passes. [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
 
@@ -20,12 +19,12 @@ passes. [Architecture](renderer_architecture.md) owns the design;
 
 | Original responsibility | Implemented foundation | Remaining responsibility |
 | --- | --- | --- |
-| Persistent world/instances | Camera-independent tile content, shared assets, revisioned unit instances, bounded residency | Broader compact shared-mesh instances and reusable GPU submission descriptions |
+| Persistent world/instances | Camera-independent content, shared assets/forest meshes, revisioned units, immutable mesh ranges and material bindings, bounded residency | Remove remaining foreground construction of missing content; broaden mesh sharing where useful |
 | Local validity | Captured appearance/dependency revisions, unit revision/despawn proofs | Preserve complete validity through migrated representations; refine authoritative change publication where useful |
-| Spatial selection | World pass membership, native occurrences/anchors, clipping/wrapping | Selected inputs that directly feed compatible submissions across migrated content |
-| Compatible passes | Terrain/object grouping, forest instancing, GPU unit shadows, exact native composition | Broader instancing/state grouping and collected dynamic/unit submission |
+| Spatial selection | World pass index and native/wrapped occurrences feed replacement static submissions directly | Collected dynamic/unit pass inputs |
+| Compatible passes | Compatible static layers, shared material bindings, batched occurrence parameters/uploads, forest instancing, exact native composition | Collected dynamic/unit execution; additional sharing guided by cost |
 | GPU reuse/output | Resident admitted map/poses, static color/depth, incremental finishing and native composition | Direct dynamic scene execution; reduce per-pose and full-map work where measured |
-| Async integration | Bounded content/pose/view preparation and independent visual timer | Coherent general nonblocking camera/content publication; UI-thread stalls remain |
+| Async integration | Bounded content/pose/view preparation, selected-work urgency and independent visual timer | Complete GPU-ready content preparation; coherent general nonblocking camera/content publication |
 
 Independent frames use the existing HWND presenter without native redraw requests.
 Civ III's original gameplay timer is unchanged. Map animation still enters the
@@ -95,28 +94,42 @@ including navigation, animation and UI transitions. A 33 ms timer is not 30 FPS;
 
 ## Current evidence and implementation handoff
 
-Code checkpoint: `c1360ea9`. Tested DLL staged for ordinary `INSTALL.bat`:
-`3a024a15dd79843a8da7cccc8657474674a31ac26a9fa403165e5c67ae88bf8a`.
-The user installs/launches; no environment setup is required. Existing staging
-permission persists, but this documentation task does not stage or launch anything.
+**Completed:** selected static inputs now use compiled material bundles, bounded
+parameter streams and compatible layer submissions. Changed mesh ranges share
+immutable allocations within their existing residency owners. The old per-layer
+allocation and unconditional layer-flush paths are replaced. Current worker demand
+is explicitly prioritized. Full detail, dependency validity, native ownership and
+config-off behavior are preserved; no new hooks or visual concessions were added.
 
-Automated independent frames and native UI/ownership tests pass; live validation
-of decoupling remains pending. Latest whole-request GPU means: 9.52 ms idle,
-51.19 ms scrolling, 11.45 ms local change versus control 8.95 / 47.58 / 10.73 ms.
-Map work accounts for 44.1 of 51.2 ms scrolling, without resolving CPU versus GPU
-attribution. Independent frames average 17.60 ms request / 29.04 ms desktop
-completion. Decoupling is a capability gain, not a demonstrated foreground speedup.
+**Measured:** the full-detail 1120×1192 connected fixture includes map, eight units,
+native UI and final transfer (capture remains outside timing). Latest original DLL
+versus candidate GPU request means / p95, 64 samples per workload:
 
-[Checkpoint evidence](history/retained_renderer_checkpoints_20260915.md) preserves
-sample counts, tails, tests, binary/receipt identities and expensive findings.
-First implementation deliverable: make selected static map pass inputs feed reusable
-GPU rendering descriptions and compatible submissions, extending existing world
-validity and worker ownership. Use one dense scrolling fixture to distinguish
-construction, selection, submission and downstream rendering cost, then choose
-the representative shared-instance conversion within that path. Compare the full
-replacement on idle animation, scrolling and a local edit against the preserved
-control. This defines the deliverable; exact batch boundaries, worker count and
-GPU recording strategy remain measured implementation choices. Complete this
-connected deliverable, adapt mechanisms when evidence warrants it, and update this
-handoff with capabilities, measured effects and the next unfinished responsibility.
-No additional milestone or output-helper detour is implied.
+| Workload | Original (ms) | Candidate (ms) |
+| --- | --- | --- |
+| Stationary animation | 9.68 / 15.89 | 9.08 / 15.03 |
+| Dense scrolling | 56.06 / 99.90 | 55.88 / 104.41 |
+| Local change | 11.62 / 33.86 | 11.40 / 37.89 |
+
+Scrolling mean is effectively unchanged; its median improved but tails did not.
+This is **not a demonstrated whole-request speedup**. Submission/allocation work
+fell, while content preparation still averages 31.2 ms of the 55.9 ms request.
+Outer-halo CPU speculation regressed scrolling and was removed. Exact control
+pixels, native UI/ownership and independent-frame tests pass; sampled contiguous
+32-bit headroom is 1.47 GiB. These fixtures do not establish live-game acceptance.
+
+**Next unfinished responsibility:** complete preparation of missing world content
+into GPU-ready geometry, bounds, dependency proofs and upload ranges, leaving
+bounded adoption on the GPU owner. Existing terrain workers still return raw mesh
+vectors, and object assembly/packing still runs in the foreground. Extend the
+existing compilers and validity owners; do not add another speculative coverage
+queue or output-helper detour. Keep milestone 1 performance acceptance open until
+the complete workload improves. Direct dynamic/unit scene execution remains
+milestone 2; general coherent nonblocking native camera publication remains 3.
+
+Candidate DLL `9b7a72e935d6b39100767f3f544287c7352e94431d63cc5fda641e25a7e8e722`
+is staged for ordinary `INSTALL.bat`; the user installs/launches. No installation
+or game launch was performed. Original rollback DLL and all intermediate results
+remain preserved. [Submission checkpoint](history/selected_submissions_20260915.md)
+records exact controls, receipts, tests and rejected mechanisms;
+[earlier evidence](history/retained_renderer_checkpoints_20260915.md) remains valid.

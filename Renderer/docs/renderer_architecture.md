@@ -60,6 +60,17 @@ water, depth, painter-order and native overlay contracts. Group only compatible
 submissions. Keep full detail and authored animation speed; projected-size removal,
 LOD or other new appearance changes require separate visual consideration.
 
+The static production path borrows compiled material bundles and mesh ranges from
+their existing asset/content owners. Changed meshes share an immutable allocation
+within each residency owner; camera-specific and shared world content never share
+an allocation across independent eviction lifetimes. Selected occurrences retain
+their native projection. Adjacent pass layers share a submission while their
+receiver-shadow pages fit; draw parameters upload in bounded batches. Color,
+reflection and shadow consumers use the same mesh ranges and established order.
+Unique terrain/city/infrastructure meshes remain valid retained representations;
+forest instances additionally share source geometry. This does not require every
+object category to use the same mesh representation.
+
 Explicit passes name inputs, outputs and dependencies for static/dynamic geometry,
 shadows, reflections, water, finishing and composition. This is not a replacement
 pass order. Static color/depth can be reused only with valid contributors, lighting,

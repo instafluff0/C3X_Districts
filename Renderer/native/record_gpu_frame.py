@@ -100,7 +100,7 @@ def main():
             for route in ('CPU','GPU'):
                 selected=[r for r in samples if r['workload']==str(workload) and r['route']==route]
                 summary={'workload':workload,'route':route,'samples':len(selected)}
-                for key in ('request_ms','desktop_ms','map_ms','units_ms','UI_present_prepare_ms','sample_age_ms'):
+                for key in ('request_ms','desktop_ms','map_ms','units_ms','UI_present_prepare_ms','sample_age_ms','geometry_ms','draw_ms','readback_ms'):
                     values=sorted(float(r[key]) for r in selected if key in r)
                     if values:summary[key]={'mean':statistics.mean(values),'median':statistics.median(values),'p95':values[min(len(values)-1,int(len(values)*.95))],'max':max(values)}
                 groups.append(summary)
