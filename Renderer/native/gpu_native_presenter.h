@@ -11,6 +11,7 @@ class NativePresenter {
     ComPtr<ID3D11Texture2D> back,display;
     ComPtr<ID3D11RenderTargetView> target;
     std::vector<unsigned short> native_pixels;
+    std::vector<unsigned> fallback_pixels;
     unsigned native_format=1;
     ComPtr<ID3D11Texture2D> native_upload;ComPtr<ID3D11ShaderResourceView> native_view;
     ImageDisplay native_program;
@@ -18,13 +19,19 @@ class NativePresenter {
 public:
     bool initialized=false;
     bool caller_thread()const{return !owner||owner==GetCurrentThreadId();}
-    void reset(){native_pixels.clear();native_view.Reset();native_upload.Reset();target.Reset();display.Reset();back.Reset();swap.Reset();window=nullptr;owner=0;width=height=0;initialized=false;}
+    void reset(){fallback_pixels.clear();native_pixels.clear();native_view.Reset();native_upload.Reset();target.Reset();display.Reset();back.Reset();swap.Reset();window=nullptr;owner=0;width=height=0;initialized=false;}
     // Switching a partial transfer back to GDI must preserve the last displayed
     // pixels outside its rectangle. The CPU compatibility route already owns
     // these bytes; no GPU readback or repaint request is needed.
     void release_native(){
-        auto hwnd=window;auto w=width,h=height,format=native_format;auto pixels=std::move(native_pixels);
+        auto hwnd=window;auto w=width,h=height,format=native_format;auto pixels=std::move(native_pixels);auto rgb=std::move(fallback_pixels);
         reset();
+        if(hwnd&&IsWindow(hwnd)&&rgb.size()==std::size_t(w)*h){
+            auto dc=GetDC(hwnd);if(dc){BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+                info.bmiHeader.biWidth=LONG(w);info.bmiHeader.biHeight=-LONG(h);info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
+                SetDIBitsToDevice(dc,0,0,w,h,0,0,0,h,rgb.data(),&info,DIB_RGB_COLORS);GdiFlush();ReleaseDC(hwnd,dc);}
+            return;
+        }
         if(hwnd&&IsWindow(hwnd)&&pixels.size()==std::size_t((w+1)&~1u)*h){
             auto dc=GetDC(hwnd);if(dc){struct Info {BITMAPINFOHEADER header;DWORD masks[3];} info={};info.header.biSize=sizeof(BITMAPINFOHEADER);
                 info.header.biWidth=LONG(w);info.header.biHeight=-LONG(h);info.header.biPlanes=1;info.header.biBitCount=16;info.header.biCompression=BI_BITFIELDS;
@@ -32,6 +39,23 @@ public:
                 SetDIBitsToDevice(dc,0,0,w,h,0,0,0,h,pixels.data(),reinterpret_cast<BITMAPINFO*>(&info),DIB_RGB_COLORS);GdiFlush();ReleaseDC(hwnd,dc);}
         }
     }
+    // Worker-only, and only on an explicit return to native drawing. The live
+    // GPU path has no CPU display shadow; transfer exactly the last displayed
+    // surface, rather than the possibly newer native working canvas.
+    bool preserve_display(ID3D11DeviceContext* context){
+        if(!initialized||!display||!native_pixels.empty())return true;
+        if(!context)return false;
+        ComPtr<ID3D11Device> device;display->GetDevice(&device);
+        D3D11_TEXTURE2D_DESC desc={};display->GetDesc(&desc);
+        desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=0;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;desc.MiscFlags=0;
+        ComPtr<ID3D11Texture2D> stage;checked(device->CreateTexture2D(&desc,nullptr,&stage));
+        std::vector<unsigned> pixels(std::size_t(width)*height);
+        context->CopyResource(stage.Get(),display.Get());D3D11_MAPPED_SUBRESOURCE mapped={};
+        checked(context->Map(stage.Get(),0,D3D11_MAP_READ,0,&mapped));
+        for(unsigned y=0;y<height;++y)std::memcpy(pixels.data()+std::size_t(y)*width,static_cast<char*>(mapped.pData)+std::size_t(y)*mapped.RowPitch,width*4);
+        context->Unmap(stage.Get(),0);fallback_pixels=std::move(pixels);return true;
+    }
+    void gpu_written(){native_pixels.clear();fallback_pixels.clear();}
     bool matches(HWND hwnd,ID3D11Device* device,unsigned w,unsigned h){
         if(!swap||window!=hwnd||owner!=GetCurrentThreadId()||width!=w||height!=h)return false;
         ComPtr<ID3D11Device> existing;back->GetDevice(&existing);return device==existing.Get();

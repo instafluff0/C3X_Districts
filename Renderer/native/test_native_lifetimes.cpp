@@ -9,6 +9,7 @@ HMODULE tracking_load(char const*){return LoadLibraryA(tracking_candidate);}
 
 DWORD WINAPI escape_lifetime(void* object){RECT area={0,0,16,16};auto image=static_cast<JGL_Image*>(object);
     return DWORD(reinterpret_cast<Fill>(image->vtable[17])(image,&area,int(0x80001234u)));}
+int deny_native_access(int,void*,void*,void const*,void const*,unsigned){return -1;}
 int main(int argc,char** argv){
     if(argc!=3)return 2;
     try {
@@ -50,6 +51,14 @@ int main(int argc,char** argv){
         auto thread=CreateThread(nullptr,0,escape_lifetime,images[1],0,nullptr);verify(thread!=nullptr,"foreign native caller");
         verify(WaitForSingleObject(thread,10000)==WAIT_OBJECT_0,"foreign draw completion");CloseHandle(thread);verify(!query(images[1]),"foreign drawing invalidates exclusive ownership");
         for(auto image:images){reinterpret_cast<Destroy>(image->vtable[0])(image,1);verify(!query(image),"destroyed lifetime retired");}
+        auto denied=create(graph,nullptr,1);verify(reinterpret_cast<Init>(denied->vtable[1])(denied,16,16,16,1)==0,"barrier-failure native image");
+        state.custom_renderer_native_image=deny_native_access;
+        verify(!reinterpret_cast<Get>(denied->vtable[3])(denied,0,0),"failed GPU barrier cannot expose a stale pixel pointer");
+        verify(!reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(denied->vtable[4])(denied),"failed GPU barrier cannot expose stale bits");
+        verify(!reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(denied->vtable[10])(denied),"failed GPU barrier cannot expose a stale native DC");
+        verify(reinterpret_cast<Init>(denied->vtable[1])(denied,32,32,16,1)==-1,"failed drain defers native reinitialization");
+        verify(reinterpret_cast<Destroy>(denied->vtable[0])(denied,1)==denied,"failed drain defers destruction while owner retains image identity");
+        state.custom_renderer_native_image=nullptr;reinterpret_cast<Destroy>(denied->vtable[0])(denied,1);
         // Exhaustion cannot evict proof for an existing image or invent it for
         // the unrecorded extra object. Registry records never dereference IDs.
         for(unsigned i=1;i<=1024;++i)verify(state.custom_renderer_native_lifetime(C3X_NATIVE_INIT,reinterpret_cast<void*>(std::uintptr_t(i)),0)==1,"bounded registry admission");

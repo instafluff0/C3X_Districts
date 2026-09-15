@@ -455,3 +455,76 @@ The next GDI boundary is concrete: audited JGL text slot 46 (`0x1de0`) calls
 `TextOutA` (IAT `0x6802c`), then releases its DC; slot 42 (`0x1d10`) selects the
 font through `SelectObject` (IAT `0x68054`). These are verified native operations,
 not newly enabled hooks or permission to infer arbitrary DC lease lifetimes.
+
+## Startup evidence and destination demand
+
+`patch_init_floating_point` loads the optional lifetime service before native
+constructors, with a pinned module reference separate from scenario renderer
+ownership. The service records successful INIT and invalidates on destruction,
+reinit, public pointer/DC escape or foreign-thread access. It never dereferences
+native pointers; its 1024-entry limit rejects overflow without evicting live proof.
+Audited private copy/fill/sprite/text/metadata leases do not escape. Font/color/text
+slots are listed in the patch ledger; text still executes its original GDI body.
+
+`bbcdc78503ff4d72b1b0f8d37e3c9288` passes the actual extracted bootstrap and lifetime
+contracts, including config-off native pixels and scene detach. The injected smoke
+and 44 native contracts pass. `321cb836e6b94cd7850c2a33576c34c6` connects this evidence
+to demand-based adapter admission at 1440×900: canvases exist and receive native
+drawing before GPU attachment, then map/copy/unit/popup/final-display operations
+remain resident. Unused surfaces allocate nothing; older unobserved and escaped
+surfaces are rejected. This closes the fixture's attachment-order assumption; it
+does not enable the live resident map endpoint or prove game performance.
+
+The GPU presentation API now separates intentional window discard (action 1)
+from return to native GDI (action 2). The latter snapshots the **last displayed**
+GPU surface on the existing worker, releases DXGI on the native thread, and restores
+that image before native partial drawing resumes. Normal GPU presentation keeps
+no CPU shadow and incurs no new readback. This fallback uses one bounded BGRA
+snapshot plus staging surface (at most 21.4 MB transient at the supported maximum
+extent); compatibility presentation reuses its existing CPU display shadow.
+Final connected receipts `0aed12fe601840cea167343110f2cf5c` (1440×900) and
+`08ff79542d404f6fa17db3a66f1ab5e8` (640×480) verify map-family-only admission and
+preservation of displayed pixels despite newer working-canvas content, followed
+by a native partial GDI update. Device-loss reconstruction remains unresolved: a
+failed readback is not permission to publish stale native pixels.
+
+The broad build's base native smoke now passes ticket reuse for identical camera
+requests, adoption by synchronous demand, and fencing of changed requests; its
+older always-new-ticket assertions were obsolete. The separate approved-terrain
+boundary witness still fails (2,755 pixels above its tolerance); the preserved
+`a79fb579…dec552` control also fails (2,226 pixels). Counts differ, so this is not a
+byte-parity proof or a clean full-suite result. The visual threshold is unchanged;
+logs are preserved with the admission/handoff checkpoint.
+
+## Production native map owner
+
+`native_composition_owner.h` connects the tested adapter/worker to the live DLL
+exports. `composite_custom_renderer_frame` prepares the resident map, applies its
+existing replacement validator, then commits without a destination HDC or CPU
+bitmap. Rejection cancels the pending insertion. Existing JGL hooks route copy,
+fill, sprite, unit and final transfer operations through this owner. Configuration,
+reset and detach drain while native images and the GPU session still exist.
+
+`707e940f1cd74782aaa7f96b56489b57` (640×480) and
+`06afb80d775e496fa9898860d5f89144` (1440×900) execute the production exports through
+real JGL images: pre-map initialization, prepare/cancel, wrong-target rejection,
+current metadata, unchanged CPU map storage after commit, copies, actual units,
+next-view reuse, exact displayed pixels and reset handoff. Unsupported surface
+sizes and GPU image pressure reject admission for the existing CPU path, preserving
+the prior ticket. They retain the existing
+producer's stationary/animation/scroll/local-edit checks. These are work-removal
+and correctness witnesses, not game cadence or whole-request performance evidence.
+
+Native text/GDI currently restores CPU ownership, so ordinary labels still bring
+readback back into the path. Cold unit finishing, asynchronous GPU publication and
+device-loss reconstruction remain incomplete. Failed native barriers return a
+negative result; hooks deny stale leases rather than allowing native drawing from
+old pixels. The older staged DLL is unchanged. No CSV addition or game launch.
+
+The final candidate compiles; injected compilation and all 44 native contracts
+pass. The extracted dispatch contract exercises resident success, CPU admission
+fallback, hard-error propagation and unchanged identity epochs. Lifetime receipt
+`ffae5513509f4ac69d604d8040ff4f59` additionally checks that failed barriers deny
+pixel/bits/DC access and defer native reinit/destruction. These guards are not
+reconstruction after device loss. No broader terrain-suite reclassification or
+new visual acceptance is implied.

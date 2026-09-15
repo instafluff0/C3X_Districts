@@ -404,14 +404,15 @@ struct c3x_renderer_native_observation {
     int left, top, right, bottom;
 };
 typedef int (*c3x_renderer_native_observe_fn)(struct c3x_renderer_native_observation const *);
-/* Caller-thread native backend seam. The live loader binds final-transfer
-   compatibility only; exclusive image ownership remains separately admitted.
+/* Caller-thread native backend seam. Resident map prepare activates exclusive
+   image ownership; before admission, final transfer uses CPU compatibility.
    Caller-thread-only, synchronous borrowed pointers. COPY/FILL/IMAGE_DRAW returning 1 means
    completed submission with native success (0); 0 requires current CPU storage.
    PRESENT passes Graphsy as source and its final rectangle as source_rect; 1
    consumes the native transfer, 0 requires releasing GPU window ownership before
    original JGL/DC fallback. Other operations return 0. DRAIN precedes detachment.
-   A backend must drain before removal; it cannot fail open with stale CPU pixels. */
+   A backend must drain before removal; it cannot fail open with stale CPU pixels.
+   Negative results deny native access after a failed ownership barrier. */
 enum { C3X_NATIVE_IMAGE_DRAIN = 100, C3X_NATIVE_IMAGE_REINIT = 101, C3X_NATIVE_IMAGE_CLIP = 102, C3X_NATIVE_IMAGE_PRESENT = 103, C3X_NATIVE_IMAGE_PALETTE = 104, C3X_NATIVE_UNIT_DRAW = 105, C3X_NATIVE_IMAGE_TEXT_STATE = 106, C3X_NATIVE_TEXT = 107 };
 /* Process-lifetime, read-only tracking. No scene/device/configuration required.
    VERIFY with null image establishes the owner; MAP queries eligibility. */
@@ -419,6 +420,12 @@ typedef int (*c3x_renderer_native_lifetime_fn)(int operation, void * image, int 
 typedef int (*c3x_renderer_native_image_fn)(int operation, void * image, void * source,
     void const * source_rect, void const * destination_rect, unsigned color);
 
+
+/* Prepare returns resident-map metadata; C3X validates replacement ownership
+   before COMMIT inserts it. CANCEL leaves native image pixels unchanged. */
+enum { C3X_NATIVE_MAP_PREPARE=0, C3X_NATIVE_MAP_COMMIT=1, C3X_NATIVE_MAP_CANCEL=2 };
+typedef int (*c3x_renderer_native_map_fn)(int action, void * image,
+    struct c3x_renderer_camera_request_v1 const *, struct c3x_renderer_output_v1 *);
 
 typedef int (*c3x_renderer_blit_fn)(struct c3x_renderer_output_v1 const *, void * destination_hdc);
 typedef int (*c3x_renderer_unit_draw_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc);

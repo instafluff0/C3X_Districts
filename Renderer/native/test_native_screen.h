@@ -13,7 +13,7 @@ bool final_ui_drawn=false;
 int present_native_image(void* image,void* graph,void const* rect){
     c3x_renderer_gpu_present_v1 request={sizeof(request)};
     auto id=screen_adapter->display_image(image);
-    if(!id){request.action=1;verify(screen_present(&request)==C3X_RENDERER_RESULT_OK,"release GPU window before native fallback");return 0;}
+    if(!id){request.action=2;verify(screen_present(&request)==C3X_RENDERER_RESULT_OK,"preserve displayed GPU pixels before native fallback");return 0;}
     verify(final_ui_drawn,"final native UI precedes GPU transfer");
     auto dc=*reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138);
     request.window=WindowFromDC(dc);request.ticket=screen_frame.ticket;request.image=std::int64_t(id);
@@ -55,14 +55,24 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     auto create=reinterpret_cast<Create>(gt[31]);auto root=create(graph,nullptr,1);
     int w=frame.width,h=frame.height;RECT full={0,0,w,h};
     verify(reinterpret_cast<Init>(root->vtable[1])(root,w,h,16,1)==0,"screen root init");
-    c3x_native_images::Adapter<WorkerClient> owner(gpu,root->vtable[4],root->vtable[9]);adapter=&owner;
-    screen_adapter=&owner;screen_client=&gpu;screen_present=present;screen_frame=frame;screen_graph=graph;
+    void* original_bits=root->vtable[4];void* original_release=root->vtable[9];
+    HMODULE renderer_module=nullptr;verify(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(live),&renderer_module)!=FALSE,"native renderer module");
+    auto lifetime=reinterpret_cast<c3x_renderer_native_lifetime_fn>(GetProcAddress(renderer_module,"c3x_renderer_native_lifetime"));
+    verify(lifetime!=nullptr,"startup lifetime export");lifetime(C3X_NATIVE_VERIFY,nullptr,0);
     capture.write=log_line;state.custom_renderer_native_observe=observe;set_custom_renderer_native_probe(root);
-    verify(state.custom_renderer_native_probe_active,"attach actual image and Graphsy final hooks");state.custom_renderer_native_image=translate;
-    native_present_image=present_native_image;present_fn=complete_native_ui;
+    verify(state.custom_renderer_native_probe_active,"attach actual image and Graphsy final hooks");
+    state.custom_renderer_native_lifetime=lifetime;
+    // Real game images can precede the first map demand. Observe their native
+    // initialization and drawing before constructing any GPU adapter.
     JGL_Image* canvases[3];
     for(auto& canvas:canvases){canvas=create(graph,nullptr,1);verify(reinterpret_cast<Init>(canvas->vtable[1])(canvas,w,h,16,1)==0,"fresh native surface");
         verify(reinterpret_cast<Fill>(canvas->vtable[17])(canvas,&full,int(0x80000000u))==0,"clear native surface");}
+    c3x_native_images::Adapter<WorkerClient> owner(gpu,original_bits,original_release,lifetime);adapter=&owner;
+    verify(!owner.admit(root),"unobserved older surface rejected at GPU demand");
+    for(auto canvas:canvases)verify(!owner.image(canvas),"observed unused surfaces have no GPU allocations");
+    screen_adapter=&owner;screen_client=&gpu;screen_present=present;screen_frame=frame;screen_graph=graph;
+    state.custom_renderer_native_image=translate;native_present_image=present_native_image;present_fn=complete_native_ui;
+    verify(reinterpret_cast<Fill>(canvases[2]->vtable[17])(canvases[2],&full,int(0x80001234u))==0&&!owner.image(canvases[2]),"unrelated native fill does not acquire GPU residency");
     auto scene=canvases[0],screen_surface=canvases[1],save=canvases[2];screen_image=screen_surface;screen.JGL.Image=screen_surface;
     struct NativePcx {void* unused;JGL_Image* image;} pcx={nullptr,screen_surface};
     auto old_screen=*reinterpret_cast<void**>(static_cast<char*>(graph)+0x148);auto old_dc=*reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138);
@@ -70,12 +80,12 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     verify(owner.insert_map(scene,Id(frame.map_image),{0,0,w,h},0,0,phase_x,phase_y),"full-color map native insertion");
     auto copy=[&](JGL_Image* from,JGL_Image* to,RECT area){verify(reinterpret_cast<Copy>(from->vtable[16])(from,to,&area,&area)==0,"native family copy");};
     copy(scene,screen_surface,full);
+    verify(owner.owns(scene)&&owner.owns(screen_surface)&&!owner.image(save),"startup evidence admits only demanded map and screen destinations");
     RECT popup={43,47,121,113};copy(screen_surface,save,popup);
     verify(reinterpret_cast<Fill>(screen_surface->vtable[17])(screen_surface,&popup,int(0x80007fffu))==0,"native popup draw");copy(save,screen_surface,popup);
     std::vector<unsigned> expected(map,map+std::size_t(w)*h),observed(expected.size());
     // The native unit adapter consumes these actual JGL image identities; it
     // must not acquire either CPU DC before composing and presenting the unit.
-    HMODULE renderer_module=nullptr;verify(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(live),&renderer_module)!=FALSE,"native unit renderer module");
     auto unit_gpu=reinterpret_cast<c3x_renderer_gpu_unit_fn>(GetProcAddress(renderer_module,"c3x_renderer_gpu_unit"));
     auto unit_cpu=reinterpret_cast<c3x_renderer_unit_draw_expanded_fn>(GetProcAddress(renderer_module,"c3x_renderer_unit_draw_expanded"));
     c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Warrior");unit.unit_id=732;
@@ -149,6 +159,19 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     RECT partial={43,47,121,113};last_transfer=partial;final_ui_drawn=false;patch_JGL_present_screen(&partial);
     for(int y=partial.top;y<partial.bottom;++y)for(int x=partial.left;x<partial.right;++x)expected[y*w+x]=0xffff0000u;
     capture_display(expected);verify(screen_transfers==2&&owner.stats().readbacks==0,"partial transfer uses retained GPU display");
+    // Partial native handoff must retain full-color displayed pixels, including
+    // those outside the native update that differ from the current red canvas.
+    c3x_renderer_gpu_present_v1 handoff={sizeof(handoff)};handoff.action=2;
+    verify(present(&handoff)==C3X_RENDERER_RESULT_OK,"preserve owned GPU display during GDI handoff");
+    preserve_gdi_display=true;
+    // The retained presentation texture is gone; prevent the capture oracle
+    // from implicitly recreating it from the newer native working image.
+    auto saved_native_image=screen_surface;screen_surface=nullptr;
+    capture_display(expected);
+    verify(SetWindowPos(window,HWND_TOPMOST,0,0,0,0,SWP_NOSIZE|SWP_NOACTIVATE)!=FALSE,"expose native handoff update");
+    verify(PatBlt(dc,partial.left,partial.top,partial.right-partial.left,partial.bottom-partial.top,BLACKNESS)!=FALSE,"native partial drawing after GPU handoff");GdiFlush();
+    for(int y=partial.top;y<partial.bottom;++y)for(int x=partial.left;x<partial.right;++x)expected[y*w+x]=0xff000000u;
+    capture_display(expected);screen_surface=saved_native_image;preserve_gdi_display=false;
     // Re-creation requires a complete first transfer, never a partly initialized
     // screen. A retired image is rejected, then a full native request recovers.
     c3x_renderer_gpu_present_v1 retry={sizeof(retry)};retry.action=1;verify(present(&retry)==C3X_RENDERER_RESULT_OK,"release before re-creation");
@@ -174,6 +197,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     auto retained=reinterpret_cast<Get>(screen_surface->vtable[7])(screen_surface,0,0);
     auto stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(screen_surface)+0x40);
     reinterpret_cast<Release>(screen_surface->vtable[9])(screen_surface,1);
+    verify(!owner.admit(screen_surface),"retained CPU pointer prevents readmission after GPU drain");
     for(int y=0;y<h;++y)for(int x=0;x<w;++x)retained[y*stride+x]=std::uint16_t((x+y)&0x7fff);
     auto native_expected=[&](){std::vector<unsigned> rgb(std::size_t(w)*h);
         for(int y=0;y<h;++y)for(int x=0;x<w;++x){unsigned word=retained[y*stride+x],r=(word>>10)&31,g=(word>>5)&31,b=word&31;
@@ -252,9 +276,64 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     verify(!state.custom_renderer_native_image,"live config-off drains before native GDI");capture_display(expected);
     preserve_gdi_display=false;
     std::puts("PASS live native screen: existing CPU surfaces, retained-pointer edits, exact full/partial display, interleaved map publication, observation expiry and config-off fallback");
+    // Exercise the production owner/export, replacing the fixture's adapter
+    // callback. Native surfaces precede map demand; prepare/cancel leaves their
+    // CPU pixels unchanged and commit shares ownership with actual JGL copies.
+    {
+        auto native_map=reinterpret_cast<c3x_renderer_native_map_fn>(GetProcAddress(renderer_module,"c3x_renderer_native_map"));
+        verify(native_map!=nullptr,"production resident native map export");
+        state.current_config.enable_custom_rendering=true;state.custom_renderer_native_image=live;
+        JGL_Image* live_images[2];
+        for(auto& image:live_images){image=create(graph,nullptr,1);verify(reinterpret_cast<Init>(image->vtable[1])(image,w,h,16,1)==0,"production native image init");
+            verify(reinterpret_cast<Fill>(image->vtable[17])(image,&full,int(0x80001234u))==0,"production native pre-map contents");}
+        auto raw_unchanged=[&](){auto words=reinterpret_cast<unsigned short*(__thiscall*)(void*)>(original_bits)(live_images[0]);
+            auto stride_words=*reinterpret_cast<int*>(reinterpret_cast<char*>(live_images[0])+0x40);bool same=words!=nullptr;
+            if(words)for(int y=0;y<h;++y)for(int x=0;x<w;++x)same=same&&words[y*stride_words+x]==0x1234;
+            reinterpret_cast<Release>(original_release)(live_images[0],1);return same;};
+        c3x_renderer_output_v1 meta={C3X_RENDERER_API_VERSION,sizeof(meta)};
+        auto tiny=create(graph,nullptr,1);verify(reinterpret_cast<Init>(tiny->vtable[1])(tiny,4,4,16,1)==0,"unsupported native GPU extent");
+        auto tiny_frame=*demand.frame;tiny_frame.target_width=tiny_frame.target_height=tiny_frame.clip_right=tiny_frame.clip_bottom=4;tiny_frame.clip_left=tiny_frame.clip_top=0;
+        auto tiny_request=demand;tiny_request.frame=&tiny_frame;
+        verify(native_map(C3X_NATIVE_MAP_PREPARE,tiny,&tiny_request,&meta)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"unsupported GPU surface returns admission rejection for CPU fallback");
+        reinterpret_cast<Destroy>(tiny->vtable[0])(tiny,1);
+        verify(native_map(C3X_NATIVE_MAP_PREPARE,root,&demand,&meta)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"unobserved map target declines before preparation");
+        verify(native_map(C3X_NATIVE_MAP_PREPARE,live_images[0],&demand,&meta)==C3X_RENDERER_RESULT_OK&&!meta.bgra_pixels&&raw_unchanged(),"resident prepare returns metadata without native pixel writes");
+        verify(native_map(C3X_NATIVE_MAP_COMMIT,live_images[1],nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"wrong destination cannot commit prepared map");
+        verify(native_map(C3X_NATIVE_MAP_CANCEL,live_images[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK&&raw_unchanged(),"rejected ownership can cancel without publishing");
+        verify(native_map(C3X_NATIVE_MAP_COMMIT,live_images[0],nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"cancelled map cannot commit");
+        screen_surface=live_images[1];screen_image=screen_surface;screen.JGL.Image=screen_surface;pcx.image=screen_surface;
+        auto live_frame=*demand.frame;auto live_request=demand;live_request.frame=&live_frame;
+        std::vector<c3x_renderer_tile_v1> live_tiles(live_frame.tiles,live_frame.tiles+live_frame.tile_count);live_frame.tiles=live_tiles.data();
+        for(int step=0;step<2;++step){
+            if(step)for(auto& tile:live_tiles){tile.anchor_x-=13;tile.anchor_y+=7;}
+            c3x_renderer_output_v1 control={C3X_RENDERER_API_VERSION,sizeof(control)};
+            verify(render_view(&live_request,&control)==C3X_RENDERER_RESULT_OK,"production native map independent CPU oracle");
+            auto pixels=static_cast<unsigned const*>(control.bgra_pixels);expected.assign(pixels,pixels+std::size_t(w)*h);
+            std::vector<unsigned> ownership(control.replacement_tile_flags,control.replacement_tile_flags+control.replacement_tile_count);
+            meta={C3X_RENDERER_API_VERSION,sizeof(meta)};
+            verify(native_map(C3X_NATIVE_MAP_PREPARE,live_images[0],&live_request,&meta)==C3X_RENDERER_RESULT_OK&&!meta.bgra_pixels&&
+                meta.replacement_tile_count==ownership.size()&&std::equal(ownership.begin(),ownership.end(),meta.replacement_tile_flags),"production prepare ownership matches current capture");
+            verify(native_map(C3X_NATIVE_MAP_COMMIT,live_images[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK&&raw_unchanged(),"production native commit keeps map CPU storage untouched");
+            copy(live_images[0],screen_surface,full);
+            int bounds[4]={};
+            UnitOracleDib unit_oracle(w,h,0);std::copy(expected.begin(),expected.end(),static_cast<unsigned*>(unit_oracle.pixels));int expected_bounds[4]={};
+            verify(unit_cpu(&unit,unit_oracle.dc,unit_oracle.dc,expected_bounds)==C3X_RENDERER_RESULT_OK,"production owned unit CPU oracle");GdiFlush();
+            verify(live(C3X_NATIVE_UNIT_DRAW,screen_surface,screen_surface,&unit,bounds,0)==1&&std::equal(bounds,bounds+4,expected_bounds),"production unit callback uses same map owner");
+            for(unsigned n=0;n<expected.size();++n)expected[n]=static_cast<unsigned*>(unit_oracle.pixels)[n]|0xff000000u;
+            for(int y=9;y<27;++y)for(int x=7;x<31;++x)expected[y*w+x]=0xff00ff00u;
+            last_transfer=full;final_ui_drawn=false;patch_JGL_present_screen(&full);live_active=true;capture_display(expected);
+        }
+        // Reset must drain before the renderer retires its image session, while
+        // the native surfaces and final window still exist.
+        reset();live_active=false;preserve_gdi_display=true;capture_display(expected);preserve_gdi_display=false;
+        for(auto image:live_images)reinterpret_cast<Destroy>(image->vtable[0])(image,1);
+        screen_surface=canvases[1];screen_image=screen_surface;screen.JGL.Image=screen_surface;pcx.image=screen_surface;
+        std::puts("PASS production native map owner: prepare/validate/commit, cancelled ownership, unchanged CPU map, native copies, units, exact final display, next-view session and reset handoff");
+    }
     set_custom_renderer_native_probe(nullptr);native_present_image=nullptr;present_fn=native_present;screen.JGL.Image=nullptr;
     *reinterpret_cast<void**>(static_cast<char*>(graph)+0x148)=old_screen;*reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138)=old_dc;
     for(auto canvas:canvases)reinterpret_cast<Destroy>(canvas->vtable[0])(canvas,1);reinterpret_cast<Destroy>(root->vtable[0])(root,1);
+    state.custom_renderer_native_lifetime=nullptr;set_custom_renderer_native_probe(nullptr);
     reinterpret_cast<void(__thiscall*)(void*)>(gt[49])(graph);
     for(auto palette:palettes)reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(reinterpret_cast<char*>(jgl)+0x3cf10)(palette,1);
     reinterpret_cast<void(__thiscall*)(void*,unsigned)>(gt[0])(graph,1);FreeLibrary(jgl);ReleaseDC(window,dc);DestroyWindow(window);UnregisterClassA(wc.lpszClassName,wc.hInstance);

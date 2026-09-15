@@ -18,23 +18,23 @@ but cannot identify its later copies into the screen canvas. Both capabilities
 must exist before observation attaches. `required_user_action: []`.
 
 The permanent injected wrappers optionally observe hash-pinned JGL image slots
-0/1/3/4/10/13/16/17/33 and sprite slot 17. They preserve native return values, storage,
+0/1/3/4/10/13/16/17/33/42/43/44/45/46 and sprite slot 17. They preserve native return values, storage,
 leases and drawing. Pixel aliases 5/7 and bits alias 8 already call the observed
 core slots; do not hook them twice. The [probe audit](gpu_composition_probe.md)
 records DLL RVAs, signatures, binary hash and bounded capture. Runtime module
-slots are checked before patching and restored on unload/capture completion;
+slots are checked before patching; the startup tracker retains them across scene unload, while observation-only attachment restores them on detach;
 these DLL RVAs are not CSV addresses. No renderer callback requests a redraw.
 Missing exports, unsupported executable capabilities or a mismatched DLL leave
-the current CPU composition path. GPU destination substitution is not enabled. The user subsequently authorized
+the current CPU composition path. GPU destination substitution is enabled only after resident-map admission in the candidate source. The user subsequently authorized
 staging observation DLL `038faec0…0be2e2`; the subsequent compatibility evaluation
 `a79fb579…dec552` is staged, without install/game launch.
 The independent packed GPU executor uses no additional hooks or CSV entries:
-`required_user_action: []`. Real destination admission remains pending live coverage.
+`required_user_action: []`. The production owner now consumes observed lifetime evidence; actual game coverage remains pending.
 The adapter adds `patch_JGL_Image_clip`: concrete JGL slot 13, DLL RVA `0x1a40`,
 `int (__fastcall *)(JGL_Image *, int edx, RECT *)`. Its audited private HDC lease
 updates clip metadata only; the native body/return value remain authoritative.
 This runtime slot is verified/restored with the others, not a CSV entry. The caller-thread seam also supports the live completed-screen compatibility
-callback described below. Exclusive GPU destination admission remains isolated.
+callback described below. Resident map demand activates exclusive destination admission.
 No additional executable address is required.
 Resident-map publication and composition add optional `c3x_renderer_gpu_render`
 and `c3x_renderer_gpu_images` DLL exports, driven by existing `RendererWorker`.
@@ -52,8 +52,8 @@ The optional callback consumes the complete transfer or leaves original JGL/DC
 fallback; table protection and restoration include this slot. No CSV address is
 added: it is a hash-pinned runtime DLL slot, admitted through existing GOG-only
 capabilities. `required_user_action: []`. The loader now resolves
-`c3x_renderer_native_image`, whose live implementation consumes only the completed
-screen transfer and drain operations. It never skips native pixel drawing.
+`c3x_renderer_native_image`, which uses completed-screen compatibility before
+resident map admission and routes native operations through its GPU owner afterward.
 Observation expiry does not detach the live transfer owner; config-off/unload
 releases presentation before original GDI resumes. The older staged observer is
 preserved as the rollback control. The wrapper preserves original palette
@@ -67,7 +67,7 @@ arguments to the image adapter before native fallback. JGL sprite slot 17 remain
 RVA `0x8180`, signature `int (__thiscall *)(JGLSprite *, JGL_Image *, int x,
 int y, void *palette)`. Ordinary 8/16-bit and row-trimmed 8-bit sources pass exact
 native tests; unsupported scaling/key modes restore native ownership. No new
-table entry or address is needed. Live exclusive admission remains pending;
+table entry or address is needed. The production owner routes these operations;
 `required_user_action: []`.
 
 `forward_custom_unit_body` now offers the captured unit and native destination /
@@ -75,9 +75,41 @@ underlay identities through `C3X_NATIVE_UNIT_DRAW` before acquiring either DC.
 The existing normal/reduced unit-body hooks and signatures are unchanged; GPU
 success returns the same expanded erase bounds. The optional
 `c3x_renderer_gpu_unit` DLL export reuses playback/pose ownership and composes on
-the existing GPU worker. The live compatibility callback still declines this
-operation until exclusive surface admission is connected. No CSV change is
+the existing GPU worker. The production native owner consumes this operation for
+admitted images; before admission, the CPU compatibility path remains available. No CSV change is
 needed; `required_user_action: []`. Injected compilation passes.
+
+The existing `patch_init_floating_point` now starts read-only lifetime observation
+before native canvas construction. It pins one renderer DLL reference independently
+of scenario/configuration ownership, and tracks at most 1024 live image identities.
+Missing exports leave the older staged DLL unchanged. GPU admission uses successful
+INIT evidence; external bits/DC access or a foreign thread revokes it until reinit.
+Private native operations preserve it. Config-off draws still execute native code.
+The connected fixture admits pre-map canvases on demand, without startup GPU storage.
+
+These additional hash-verified image slots preserve original GDI text state/drawing:
+
+| Injected wrapper | Slot / DLL RVA | Original `__thiscall` arguments after `JGL_Image *` |
+| --- | --- | --- |
+| `patch_JGL_Image_font` | 42 / `0x1d10` | `void *font` |
+| `patch_JGL_Image_default_font` | 43 / `0x1d40` | none |
+| `patch_JGL_Image_text_index` | 44 / `0x1db0` | `int color` |
+| `patch_JGL_Image_text_rgb` | 45 / `0x1d70` | `int r, int g, int b` |
+| `patch_JGL_Image_text` | 46 / `0x1de0` | `int x, int y, char const *text, int count` |
+
+All return `int`; injected wrappers add the unused fastcall `edx` argument.
+Slot 46 offers typed text to composition before its original private DC lease;
+GPU text execution remains pending. These use the audited GOG JGL hash and existing
+GOG executable guards. No CSV additions; `required_user_action: []`.
+
+`composite_custom_renderer_frame` now calls the optional DLL export
+`c3x_renderer_native_map(int action, void *image, camera_request const *, output *)`
+through a cdecl pointer. PREPARE returns resident metadata; existing ownership
+validation precedes COMMIT, and rejection CANCELs without inserting pixels.
+No new executable address is needed. Reset/configuration/detach drain the same
+native owner. Negative barrier results deny native bits/DC leases and defer native
+reinit/destruction rather than exposing stale storage; recovery is not yet complete.
+The injected smoke and connected production-owner harness pass. `required_user_action: []`.
 
 The accepted retained world/view/submission implementation was renderer-only. Persistent
 appearance, local dependency proofs and selected passes use the existing

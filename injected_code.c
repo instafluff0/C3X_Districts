@@ -19822,12 +19822,13 @@ translate_custom_renderer_native (int operation, JGL_Image * image, void * sourc
 {
 	if (is->custom_renderer_native_lifetime != NULL)
 		is->custom_renderer_native_lifetime (operation, image, is->custom_renderer_native_operation);
-	// The live callback consumes only final screen transfer. Native pixel
-	// drawing remains authoritative; exclusive GPU images use separate admission.
+	// Surface admission comes from observed lifetime evidence and map demand.
+	// A failed GPU barrier must not expose stale native pixels to a CPU caller.
 	if (is->custom_renderer_native_image == NULL) return 0;
 	if (! custom_renderer_native_probe_on ()) {
-		is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0);
+		if (is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0) < 0) return -1;
 		is->custom_renderer_native_image = NULL;
+		is->custom_renderer_native_map = NULL;
 		return 0;
 	}
 	// Audited clip metadata only: its private HDC never exposes image pixels.
@@ -19861,7 +19862,7 @@ observe_custom_renderer_native (int operation, JGL_Image * image, void * peer, R
 void * __fastcall
 patch_JGL_Image_destroy (JGL_Image * image, int edx, unsigned flags)
 {
-	translate_custom_renderer_native (C3X_NATIVE_DESTROY, image, NULL, NULL, NULL, 0);
+	if (translate_custom_renderer_native (C3X_NATIVE_DESTROY, image, NULL, NULL, NULL, 0) < 0) return image;
 	observe_custom_renderer_native (C3X_NATIVE_DESTROY, image, NULL, NULL);
 	return ((void * (__fastcall *) (JGL_Image *, int, unsigned))is->custom_renderer_jgl_original[0]) (image, __, flags);
 }
@@ -19869,7 +19870,7 @@ patch_JGL_Image_destroy (JGL_Image * image, int edx, unsigned flags)
 int __fastcall
 patch_JGL_Image_init (JGL_Image * image, int edx, int width, int height, int bits, int mode)
 {
-	translate_custom_renderer_native (C3X_NATIVE_IMAGE_REINIT, image, NULL, NULL, NULL, 0);
+	if (translate_custom_renderer_native (C3X_NATIVE_IMAGE_REINIT, image, NULL, NULL, NULL, 0) < 0) return -1;
 	int result = ((int (__fastcall *) (JGL_Image *, int, int, int, int, int))is->custom_renderer_jgl_original[1]) (image, __, width, height, bits, mode);
 	if (result == 0) {
 		observe_custom_renderer_native (C3X_NATIVE_INIT, image, NULL, NULL);
@@ -19881,7 +19882,7 @@ patch_JGL_Image_init (JGL_Image * image, int edx, int width, int height, int bit
 void * __fastcall
 patch_JGL_Image_pixel_3 (JGL_Image * image, int edx, int x, int y)
 {
-	translate_custom_renderer_native (C3X_NATIVE_PIXEL, image, NULL, NULL, NULL, 0);
+	if (translate_custom_renderer_native (C3X_NATIVE_PIXEL, image, NULL, NULL, NULL, 0) < 0) return NULL;
 	observe_custom_renderer_native (C3X_NATIVE_PIXEL, image, NULL, NULL);
 	return ((void * (__fastcall *) (JGL_Image *, int, int, int))is->custom_renderer_jgl_original[3]) (image, __, x, y);
 }
@@ -19889,7 +19890,7 @@ patch_JGL_Image_pixel_3 (JGL_Image * image, int edx, int x, int y)
 void * __fastcall
 patch_JGL_Image_bits (JGL_Image * image)
 {
-	translate_custom_renderer_native (C3X_NATIVE_BITS, image, NULL, NULL, NULL, 0);
+	if (translate_custom_renderer_native (C3X_NATIVE_BITS, image, NULL, NULL, NULL, 0) < 0) return NULL;
 	observe_custom_renderer_native (C3X_NATIVE_BITS, image, NULL, NULL);
 	return ((void * (__fastcall *) (JGL_Image *))is->custom_renderer_jgl_original[4]) (image);
 }
@@ -19897,7 +19898,7 @@ patch_JGL_Image_bits (JGL_Image * image)
 HDC __fastcall
 patch_JGL_Image_acquire_dc (JGL_Image * image)
 {
-	translate_custom_renderer_native (C3X_NATIVE_DC, image, NULL, NULL, NULL, 0);
+	if (translate_custom_renderer_native (C3X_NATIVE_DC, image, NULL, NULL, NULL, 0) < 0) return NULL;
 	observe_custom_renderer_native (C3X_NATIVE_DC, image, NULL, NULL);
 	return ((HDC (__fastcall *) (JGL_Image *))is->custom_renderer_jgl_original[10]) (image);
 }
@@ -20107,8 +20108,9 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 		return;
 	}
 	if (is->custom_renderer_native_image != NULL) {
-		is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0);
+		if (is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0) < 0) return;
 		is->custom_renderer_native_image = NULL;
+		is->custom_renderer_native_map = NULL;
 	}
 	// Startup tracking remains read-only across scene/configuration unload.
 	if (is->custom_renderer_native_lifetime != NULL) return;
@@ -27396,8 +27398,10 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	unsigned flags = C3X_RENDERER_UNIT_STATE_CAPTURED;
 	if (display_unit == p_main_screen_form->Current_Unit) flags |= C3X_RENDERER_UNIT_SELECTED;
 	// The resident path consumes native image identities before any CPU DC lease.
-	int result = translate_custom_renderer_native (C3X_NATIVE_UNIT_DRAW, image, underlay,
-		(RECT *)&draw, (RECT *)body_bounds, flags) ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_ERROR;
+	int submitted = translate_custom_renderer_native (C3X_NATIVE_UNIT_DRAW, image, underlay,
+		(RECT *)&draw, (RECT *)body_bounds, flags);
+	if (submitted < 0) return false;
+	int result = submitted ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_ERROR;
 	if (result != C3X_RENDERER_RESULT_OK) {
 		HDC dc = image->vtable->acquire_dc (image);
 		if (dc == NULL) return false;
@@ -27565,6 +27569,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_blit = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_blit");
 		is->custom_renderer_native_observe = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_observe");
 		is->custom_renderer_native_image = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_image");
+		is->custom_renderer_native_map = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_map");
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
 		is->custom_renderer_unit_draw_playback = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_playback");
@@ -28238,18 +28243,28 @@ composite_custom_renderer_frame ()
 	struct c3x_renderer_camera_view_v1 displayed = {0};
 	displayed.version = C3X_RENDERER_CAMERA_VIEW_VERSION;
 	displayed.struct_size = sizeof displayed;
-	if (is->custom_renderer_async_drawing)
-		render_result = is->custom_renderer_camera_present (&request, &displayed);
-	if (render_result == C3X_RENDERER_RESULT_OK) {
-		output = displayed.output;
-		is->custom_renderer_display_clock = displayed.frame.presentation_time_ticks;
-	} else {
-		// A fresh complete capture failed the display proof. Do not expose stale
-		// content or a partial preview; exact render also drains incompatible work.
-		is->custom_renderer_camera_ticket = 0;
-		render_result = is->custom_renderer_render_view != NULL ?
-			is->custom_renderer_render_view (&request, &output) : is->custom_renderer_render (&frame, &output);
+	int resident_result = C3X_RENDERER_RESULT_BAD_ARGUMENT;
+	if (is->custom_renderer_native_map != NULL && is->custom_renderer_native_lifetime != NULL && custom_renderer_native_probe_on ())
+		resident_result = is->custom_renderer_native_map (C3X_NATIVE_MAP_PREPARE, image, &request, &output);
+	bool gpu_map = resident_result == C3X_RENDERER_RESULT_OK;
+	if (gpu_map) {
+		render_result = resident_result;
 		is->custom_renderer_display_clock = frame.presentation_time_ticks;
+	} else if (resident_result != C3X_RENDERER_RESULT_BAD_ARGUMENT) render_result = resident_result;
+	else {
+		if (is->custom_renderer_async_drawing)
+			render_result = is->custom_renderer_camera_present (&request, &displayed);
+		if (render_result == C3X_RENDERER_RESULT_OK) {
+			output = displayed.output;
+			is->custom_renderer_display_clock = displayed.frame.presentation_time_ticks;
+		} else {
+			// A fresh complete capture failed the display proof. Do not expose stale
+			// content or a partial preview; exact render also drains incompatible work.
+			is->custom_renderer_camera_ticket = 0;
+			render_result = is->custom_renderer_render_view != NULL ?
+				is->custom_renderer_render_view (&request, &output) : is->custom_renderer_render (&frame, &output);
+			is->custom_renderer_display_clock = frame.presentation_time_ticks;
+		}
 	}
 	if (is->custom_renderer_presented_frames == 0)
 		log_custom_renderer_event ("render-done", render_result);
@@ -28263,6 +28278,7 @@ composite_custom_renderer_frame ()
 		return false;
 	}
 	if (! validate_custom_renderer_replacement_ownership (&output)) {
+		if (gpu_map) is->custom_renderer_native_map (C3X_NATIVE_MAP_CANCEL, image, NULL, NULL);
 		char detail[256];
 		unsigned int unexpected_halo = 0;
 		if (output.replacement_tile_flags != NULL && output.replacement_tile_count == (unsigned int)is->custom_renderer_tile_count)
@@ -28278,8 +28294,8 @@ composite_custom_renderer_frame ()
 	if (output.renderer_cpu_ticks > is->custom_renderer_max_render_ticks)
 		is->custom_renderer_max_render_ticks = output.renderer_cpu_ticks;
 
-	HDC destination = image->vtable->acquire_dc (image);
-	if (destination == NULL) {
+	HDC destination = gpu_map ? NULL : image->vtable->acquire_dc (image);
+	if (! gpu_map && destination == NULL) {
 		log_custom_renderer_event ("target-dc", C3X_RENDERER_RESULT_ERROR);
 		return false;
 	}
@@ -28287,11 +28303,12 @@ composite_custom_renderer_frame ()
 	QueryPerformanceCounter (&blit_started);
 	if (is->custom_renderer_presented_frames == 0)
 		log_custom_renderer_event ("blit-start", C3X_RENDERER_RESULT_OK);
-	int result = is->custom_renderer_blit (&output, destination);
+	int result = gpu_map ? is->custom_renderer_native_map (C3X_NATIVE_MAP_COMMIT, image, NULL, NULL) :
+		is->custom_renderer_blit (&output, destination);
 	if (is->custom_renderer_presented_frames == 0)
 		log_custom_renderer_event ("blit-done", result);
 	QueryPerformanceCounter (&blit_finished);
-	image->vtable->release_dc (image, __, 1);
+	if (destination != NULL) image->vtable->release_dc (image, __, 1);
 	long long blit_ticks = blit_finished.QuadPart - blit_started.QuadPart;
 	if (blit_ticks > is->custom_renderer_max_blit_ticks)
 		is->custom_renderer_max_blit_ticks = blit_ticks;
@@ -28306,8 +28323,8 @@ composite_custom_renderer_frame ()
 		char message[960];
 		double ticks_to_ms = 1000.0 / is->custom_renderer_qpc_frequency.QuadPart;
 		snprintf (message, sizeof message,
-			"[C3X renderer] qpc=%lld frame=%u stage=composite result=%d capture_ms=%.3f render_wait_ms=%.3f blit_ms=%.3f invalidations=%u built=%u reused=%u evicted=%u cache_bytes=%u upload_bytes=%u reused_pixels=%u drawn_pixels=%u prefetch_pending=%u prefetch_unavailable=%u prefetch_bytes=%u block_pixels=%u blocks_pending=%u blocks_built=%u block_bytes=%u halo_records=%d prefetch_records=%d target=%dx%d zoom_tile=%dx%d hour=%d season=%d clip=%d,%d,%d,%d\n",
-			blit_finished.QuadPart, is->custom_renderer_presented_frames, result,
+			"[C3X renderer] qpc=%lld frame=%u stage=composite result=%d gpu_map=%u capture_ms=%.3f render_wait_ms=%.3f blit_ms=%.3f invalidations=%u built=%u reused=%u evicted=%u cache_bytes=%u upload_bytes=%u reused_pixels=%u drawn_pixels=%u prefetch_pending=%u prefetch_unavailable=%u prefetch_bytes=%u block_pixels=%u blocks_pending=%u blocks_built=%u block_bytes=%u halo_records=%d prefetch_records=%d target=%dx%d zoom_tile=%dx%d hour=%d season=%d clip=%d,%d,%d,%d\n",
+			blit_finished.QuadPart, is->custom_renderer_presented_frames, result, (unsigned)gpu_map,
 			capture_ticks * ticks_to_ms, (blit_started.QuadPart - capture_finished.QuadPart) * ticks_to_ms,
 			blit_ticks * ticks_to_ms, output.frame_invalidation_flags,
 			output.geometry_tiles_built, output.geometry_tiles_reused, output.geometry_tiles_evicted,

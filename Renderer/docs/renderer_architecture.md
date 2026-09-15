@@ -14,40 +14,35 @@ This is design guidance, not a claim that these capabilities already exist or
 an instruction to rewrite the renderer.
 
 The authorized [GPU composition implementation](gpu_composition_probe.md) now
-connects resident maps, actual native image hooks and native-driven GPU display
-in the isolated JGL harness. It does not yet replace the shipping bitmap bridge.
-The same bounded native ownership adapter submits copied packets to the existing
-GPU worker. Native pointers/HDCs stay on the caller; escaped CPU access restores
-exact native words and permanently relinquishes that destination lifetime.
-Map/screen copy and popup-save families retain paired native-word and full-color
-images. Native UI colors expand over unchanged BGRA map pixels; 555/565 rounding
-serves compatibility and fallback only. Ordinary native copies propagate both.
-Ordinary 8/16-bit and row-trimmed 8-bit sprite draws use explicit coverage;
-indexed 254/255 are transparent regardless of their palette colors. Intervening
-CPU map/unit requests preserve the GPU image session, and failed map allocation
-preserves its prior publication. Reset/configuration still retire GPU ownership.
-The audited Graphsy final-transfer slot runs after native tooltip/cursor drawing.
-An optional export prepares its retained display on the GPU worker and presents
-on the native window's caller thread, with no new window or redraw scheduling.
-Partial transfers preserve untouched screen pixels; config-off releases the swap
-chain and restores native images before the original GDI transfer resumes.
-The live loader now binds a conservative final-transfer callback: existing native
-surfaces retain CPU ownership, and their completed 555/565 pixels upload directly
-to an R16 GPU source. The shared display pass expands native colors to BGRA; it
-also displays full-color resident maps without quantization in the owned-image
-fixture. Partial transfers preserve the previous displayed image. A CPU shadow of
-that displayed image permits immediate GDI fallback without exposing unfinished
-native screen pixels outside the requested rectangle. Busy preparation falls back
-without cancellation; UI transfers preserve map publications and unit queues.
-This enables native-driven GPU presentation, not exclusive GPU map composition:
-the live map still uses its existing asynchronous bitmap/readback path. Admission
-of existing map/screen lifetimes and remaining map-dependent sprite/unit/access
-operations are the next work needed to remove that boundary. No live speedup is
-claimed; the current transfer comparison and evaluation status are in the probe.
-The unit adapter now bypasses destination/underlay CPU copies for admitted images.
-It reuses existing native playback and prepared poses, blending paired native-word
-and full-color results in one GPU operation. Cold pose output remains CPU-owned;
-the shipping compatibility callback has not enabled exclusive surface admission.
+connects the production native map owner to the retained renderer. The injected
+map boundary prepares resident output, checks native replacement ownership, then
+commits pixels into its admitted map canvas. One caller-owned adapter routes
+native image copies, sprites, prepared units and final transfer through the
+existing GPU worker. Native pointers/HDCs stay on the caller; only owned commands
+and source pixels cross that boundary.
+
+Startup observation certifies complete native lifetimes. GPU admission follows
+map demand and copy/save dependencies; unrelated static UI can stay CPU-generated.
+Escaped public pointers/DCs revoke eligibility until reinit. Paired native-word
+and full-color images preserve native key/clip/fallback behavior while retaining
+BGRA map color. Indexed sprites use index-based coverage (254/255 transparent).
+CPU map/unit requests preserve the GPU image session; configuration/reset drain
+native images before retiring it.
+
+The audited Graphsy transfer follows native tooltip/cursor drawing and presents
+through the existing window on its caller thread. GPU partial transfers retain
+untouched displayed pixels. Explicit GDI handoff snapshots the last displayed
+image before release, independently of newer working-canvas pixels; normal GPU
+presentation has no CPU shadow. Before resident admission, the optional callback
+retains completed-CPU-screen compatibility presentation.
+
+The production owner passes connected JGL tests, including cancelled publication,
+unchanged CPU map storage, a second view and reset handoff. This is not completion
+of all-GPU gameplay: native text/GDI and unsupported sprites still force CPU
+barriers, cold unit finishing still reads back, and device-loss reconstruction is
+unfinished. Current resident demand blocks for exact GPU publication; asynchronous
+GPU publication and whole-request performance remain to validate. The staged DLL
+still uses CPU map publication. See the retained plan for current scope.
 
 ## Authority and migration
 

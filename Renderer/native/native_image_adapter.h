@@ -17,6 +17,7 @@ template<class Backend> class Adapter {
     struct Image {void* native=nullptr;Id gpu=0,detail=0;unsigned width=0,height=0;Format format=Format::rgb555;
         bool owned=false,dirty=false,cpu_uploaded=false;std::uint64_t revision=0;std::vector<std::uint32_t> cpu;};
     Backend& gpu;
+    c3x_renderer_native_lifetime_fn lifetime;
     void* get_bits;void* release_bits;DWORD thread=GetCurrentThreadId();
     std::array<Image,32> images={};std::uint64_t cpu_bytes=0;
     static constexpr std::uint64_t cpu_budget=64u*1024u*1024u;
@@ -161,18 +162,32 @@ template<class Backend> class Adapter {
             // Reestablish CPU-upload revision validity only on its next source use.
             image.cpu_uploaded=false;
         }
-        // Never reacquire GPU destination ownership within this native lifetime:
-        // a previously returned pointer or DC may be retained after release.
+        // Public access revokes startup evidence permanently until reinit. An
+        // audited private native fallback can be admitted again after it finishes;
+        // refresh then uploads its actual CPU result before any GPU drawing.
         if(image.detail){gpu.destroy(image.detail);image.detail=0;}
         image.owned=false;
     }
 public:
-    Adapter(Backend& g,void* bits,void* release):gpu(g),get_bits(bits),release_bits(release){}
+    Adapter(Backend& g,void* bits,void* release,c3x_renderer_native_lifetime_fn evidence=nullptr):gpu(g),lifetime(evidence),get_bits(bits),release_bits(release){}
     ~Adapter(){for(auto& image:images)if(image.native)forget(image);if(sprite_image)gpu.destroy(sprite_image);}
     Adapter(Adapter const&)=delete;Adapter& operator=(Adapter const&)=delete;
     // Call drain while native objects/device still exist. A synchronization/device
     // failure is terminal for this isolated backend, never a stale-pixel fallback.
     void drain(){for(auto& image:images)if(image.native){cpu_ownership(image);forget(image);}if(sprite_image)gpu.destroy(sprite_image);sprite_image=0;sprite_pixels.clear();}
+    // Admission follows an actual destination demand. Startup observation proves
+    // the entire lifetime even when its INIT preceded this GPU session. Sources
+    // and unused canvases do not allocate resident destination pairs at startup.
+    bool admit(void* object){
+        if(GetCurrentThreadId()!=thread)throw std::runtime_error("native admission thread changed");
+        auto d=find(object);if(d&&d->owned)return true;
+        if(!lifetime||!lifetime(C3X_NATIVE_MAP,object,0))return false;
+        // No takeover during even a private outstanding native lease.
+        if(field(object,0x4c4)||field(object,0x4c8))return false;
+        if(!d)d=create(object,false);
+        if(!d||!refresh(*d))return false;
+        d->owned=true;return true;
+    }
     int operation(int op,void* object,void* source,void const* source_rect,void const* target_rect,unsigned color){
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native GPU adapter thread changed");
         auto destination=find(object);
@@ -180,12 +195,16 @@ public:
         if(op==C3X_NATIVE_DESTROY){if(destination)forget(*destination);return 0;}
         if(op==C3X_NATIVE_IMAGE_REINIT){if(destination){cpu_ownership(*destination);forget(*destination);}return 0;}
         if(op==C3X_NATIVE_INIT){
-            // Admission is only for a successful fresh lifetime observed after
-            // attachment. Preexisting images always enter as CPU-owned sources.
+            // The startup service records INIT independently. The legacy fixture
+            // without that service can admit only fresh observed native images.
             if(destination)forget(*destination);
-            destination=create(object,true);if(destination&&!refresh(*destination))forget(*destination);return 0;
+            if(!lifetime){destination=create(object,true);if(destination&&!refresh(*destination))forget(*destination);}return 0;
         }
         if(op==C3X_NATIVE_PIXEL||op==C3X_NATIVE_BITS||op==C3X_NATIVE_DC){if(destination)cpu_ownership(*destination);return 0;}
+        // Extend the map/save/display family only along an owned transfer.
+        // Unrelated UI fills/sprites remain CPU-generated; they enter as upload
+        // sources if subsequently drawn onto the resident map family.
+        if(op==C3X_NATIVE_COPY){auto input=find(source);if(input&&input->owned){admit(object);destination=find(object);}}
         if(op==C3X_NATIVE_SPRITE){
             if(destination&&destination->owned&&draw_sprite(*destination,source,source_rect,target_rect))return 1;
             if(destination)cpu_ownership(*destination);++counters.fallbacks;return 0;
@@ -251,7 +270,7 @@ public:
     // destination, using the same world-anchored rounding as the CPU blitter.
     bool insert_map(void* p,Id map,Rect area,int source_x,int source_y,int phase_x,int phase_y){
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native map adapter thread changed");
-        auto d=find(p);if(!d||!d->owned)return false;
+        if(!admit(p))return false;auto d=find(p);
         Command c={Kind::quantize,d->gpu,map,area,rect(static_cast<char*>(p)+0x44),source_x,source_y,
             (unsigned(phase_x)&7u)|((unsigned(phase_y)&7u)<<3)};
         if(!full_color(*d))return false;
@@ -260,7 +279,7 @@ public:
     }
     bool draw_unit(c3x_renderer_gpu_unit_fn draw,std::int64_t ticket,c3x_renderer_unit_v1 const& unit,void* target,void* background,int* bounds,unsigned flags){
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native unit adapter thread changed");
-        auto d=find(target);if(!draw||!bounds||!d||!d->owned)return false;
+        if(!draw||!bounds||!admit(target))return false;auto d=find(target);
         auto b=find(background);if(!b)b=create(background,false);
         if(!b||b->format!=d->format)return false;
         if(!b->owned&&!refresh(*b))return false;

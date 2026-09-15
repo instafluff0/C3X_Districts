@@ -14,69 +14,49 @@ installation and launch remain the user's actions through ordinary `INSTALL.bat`
 without environment settings. The authorized Advisor lifecycle hook reuses its
 existing patch-table addresses; see the patch ledger.
 
-## Current GPU composition investigation
+## Current GPU integration
 
-The user authorized the bounded [GPU composition probe](gpu_composition_probe.md)
-and necessary verified patch-table additions. The standalone path passes exact
-RGB composition and native JGL fill/copy checks. HDC-only replacement cannot cover
-native pixel-writing operations. GPU destination paths eliminate application map
-readback in the fixture, but variable completion stalls prevent a reliable speedup
-estimate. Typed pass-through JGL access/copy/fill/sprite
-hooks and a verified GOG final-transfer hook feed a bounded caller-thread capture that
-records map/screen identities, attempted copy dependencies and unattributed CPU
-access, flushing diagnostics after native transfer. It preserves existing pixels
-and UI timing ownership; it does not yet remove readback or establish live coverage.
-The intended next boundary is hybrid composition: retain CPU-generated static UI
-textures and translate the operations that depend on the animated map, preserving
-native demand and complete UI transactions. This is not a wholesale UI rewrite.
-Observation control `038faec0…0be2e2` passed native-hook execution and exact
-production-scene parity; the later compatibility evaluation `a79fb579…dec552`
-is staged with user permission. Meanwhile the reusable packed GPU
-executor replaces the isolated prototype's earlier GPU arm: bounded resident
-images, source revisions and exact copy/fill/key/invert/save/restore transactions.
-Native 16-bit and full-frame RGB oracle checks validate admitted operations.
-The actual injected hooks now execute admitted copies, fills, ordinary keyed
-images and ordinary 8/16-bit or row-trimmed 8-bit sprites through
-`native_image_adapter.h` in the isolated JGL harness. Indexed sprites skip indices
-254/255, independently of palette RGB. Fresh
-lifetimes own GPU destinations; escaped CPU pixels/HDCs force a synchronized,
-permanent return to CPU ownership. Complete word comparisons catch retained-pointer
-source edits and skip unchanged uploads. Clip metadata has its own direct hook.
-The existing GPU worker now accepts GPU-only map demand and copied composition
-packets. It unwraps the finished retained surface on the GPU, imports an immutable
-map into the shared packed-image executor and publishes a ticket plus native
-ownership metadata. UI images survive subsequent GPU frames and intervening CPU
-map/unit requests; image packets preserve unit playback and prepared views. Failed
-map admission preserves the previous map/ticket. Stale tickets and map writes
-reject. CPU fallback invalidates its stale bitmap before rendering again.
-Native adapter packets reach this same worker, with up to 2048 consecutive
-commands per packet and explicit CPU barriers. Paired native-word/full-color
-map/screen images propagate through native copies and popup save/restore; native
-UI expands over the original BGRA map. The actual Graphsy final-transfer hook now
-feeds optional GPU presentation after native final UI drawing. Window lifecycle
-and Present stay on the native caller thread; display preparation stays on the
-existing GPU worker. Full/partial displayed RGB, palette side effects, recreation
-and config-off restoration pass connected JGL tests at 1440×900 with no normal
-execution readbacks. This is not a measured game speedup.
-The live loader now binds the completed-screen compatibility endpoint. Native
-pixel drawing remains authoritative; packed 555/565 uploads and GPU expansion
-replace the final GDI transfer when admitted. Busy workers, unsupported windows
-and failures use immediate native fallback; partial handoffs preserve the last
-displayed image. Map publications, nearby preparation and unit queues survive UI
-transfers. Normal INSTALL.bat can use the staged evaluation build without settings.
-The live map producer still reads back. Next is actual map/screen lifetime admission
-and remaining map-dependent sprite/unit/access coverage, connecting the tested
-full-color resident producer without those compatibility copies. This final-transfer
-integration is not completion of the readback-free architecture. Native UI/scrolling
-validation and whole-request game comparison remain pending.
+The [GPU composition implementation](gpu_composition_probe.md) now has a production
+native owner. `composite_custom_renderer_frame` offers its authoritative capture
+through resident-map prepare, validates the returned replacement flags, then
+commits the GPU map without acquiring a CPU destination DC. Cancelled validation
+does not insert pixels. Unsupported admission retains the existing bitmap path;
+a GPU failure does not authorize stale native pixels.
 
-Custom-unit composition now uses the same GPU image owner: native-word and
-full-color destinations blend prepared bodies/shadows against resident underlays,
-with exact native key/clip/erase behavior and no background readback. The native
-unit hook offers this route before any DC lease. Live surface admission remains
-unconnected; cold unit pose finishing still uses the existing CPU publication.
-The remaining connection covers early surface lifetimes, native GDI/unsupported
-sprite operations and recovery, followed by whole-request game validation.
+Startup lifetime evidence admits the map and its copy/save family on demand.
+Unused canvases allocate no GPU images; unrelated UI fills remain CPU-generated
+sources. External pointer/DC access revokes eligibility until reinit. One caller
+owner routes native copies, sprites, prepared units and final Graphsy transfer to
+the existing GPU worker, with paired native-word/full-color images. Indexed sprite
+indices 254/255 are transparent independently of palette RGB. Map colors retain
+the original BGRA precision. No renderer callback notifies Civ III or requests a
+draw; the native transfer follows final tooltip/cursor drawing.
+
+Reset, configuration and detach drain this owner before retiring its GPU session.
+Partial GPU-to-GDI handoff preserves the last displayed image outside the native
+update; only that explicit fallback snapshots the display. Failed barriers deny
+native leases and defer reinitialization/destruction; device-loss reconstruction
+is still incomplete. The existing 64 MiB composition budget and bounded startup
+registry remain in force.
+
+The production exports pass connected JGL tests at 640×480 and 1440×900: cancelled
+publication, exact metadata, unchanged CPU map storage, native copies/units,
+second-view reuse, displayed pixels and reset handoff. Native dispatch tests check
+the actual injected branch and its epoch/clock/fallback behavior. This demonstrates
+normal-path work removal in the harness, not a measured game speedup.
+
+**Remaining:** native text/GDI and unsupported sprite execution still demote
+surfaces to CPU ownership; cold unit pose finishing still reads back. Resident
+map demand currently blocks for exact GPU publication rather than adopting the
+existing asynchronous CPU camera result. Complete these responsibilities and
+recovery, then measure whole requests and validate native interactions. The full
+legacy terrain suite still has a boundary mismatch also present in the control;
+its threshold and evidence are preserved in the probe.
+
+The staged evaluation remains `a79fb579…dec552`, the completed-CPU-screen GPU
+transfer path. The connected resident owner is candidate source, not an all-GPU
+build ready for gameplay. Original observer `038faec0…0be2e2`, performance controls,
+rejected approaches and unreliable Parallels timestamp findings remain preserved.
 
 ## Actual code responsibilities
 

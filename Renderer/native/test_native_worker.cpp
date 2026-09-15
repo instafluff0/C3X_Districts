@@ -24,7 +24,7 @@ bool native_worker_contract(char const* path,c3x_renderer_gpu_images_fn images,c
         for(unsigned n=0;n<32;++n){auto id=gpu.create(2,2,Format::bgra32);if(!id)break;saturated.push_back(id);}
         verify(!saturated.empty()&&saturated.size()<32,"bounded GPU image admission");
         auto unavailable=view;c3x_renderer_output_v1 rejected_map={C3X_RENDERER_API_VERSION,sizeof(rejected_map)};
-        verify(render(&request,&unavailable,&rejected_map)!=C3X_RENDERER_RESULT_OK,"map admission fails at image limit");
+        verify(render(&request,&unavailable,&rejected_map)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"map image limit selects CPU fallback without retiring the old ticket");
         verify(gpu.readback(canvas,observed.data(),observed.size())&&std::all_of(observed.begin(),observed.end(),[&](unsigned c){return c==fill.color;}),"failed publication preserves preceding native pixels and ticket");
         for(auto id:saturated)gpu.destroy(id);
         auto next=view;next.ticket++;next.session++;bool rejected=false;

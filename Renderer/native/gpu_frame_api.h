@@ -43,7 +43,7 @@ struct c3x_renderer_gpu_result_v1 {
 };
 struct c3x_renderer_gpu_present_v1 {
     unsigned struct_size;
-    int action; /* 0 present, 1 release native window ownership */
+    int action; /* 0 present, 1 discard window, 2 preserve displayed pixels and hand off to native GDI */
     c3x_renderer_i64 ticket,image;
     void* window; /* HWND identity only; must belong to the calling thread */
     int width,height,area[4];

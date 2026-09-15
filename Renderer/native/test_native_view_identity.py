@@ -75,7 +75,12 @@ struct Bic {MapData Map;} bic;Bic* p_bic_data=&bic;
 Tile null_tile{&vtable};Tile* p_null_tile=&null_tile;
 std::vector<Tile> tiles(5000,Tile{&vtable});int absent=-1;
 Tile* tile_at(int x,int y){int at=(y*bic.Map.Width+x)/2;return at==absent?p_null_tile:&tiles.at(at);}
-unsigned modern_calls=0,legacy_calls=0;c3x_renderer_camera_identity_v1 received{};
+unsigned modern_calls=0,legacy_calls=0,resident_calls=0;c3x_renderer_camera_identity_v1 received{};
+int resident_result=C3X_RENDERER_RESULT_OK;bool probe=true;
+bool custom_renderer_native_probe_on(){return probe;}
+int resident(int action,void* image,c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
+ assert(action==C3X_NATIVE_MAP_PREPARE&&image&&r);++resident_calls;received=r->identity;return resident_result;
+}
 int modern(c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
  assert(r->version==C3X_RENDERER_CAMERA_VIEW_VERSION && r->struct_size==sizeof(*r));received=r->identity;++modern_calls;return 7;
 }
@@ -86,6 +91,8 @@ struct State {
  long long custom_renderer_display_clock=0,custom_renderer_camera_ticket=0;
  c3x_renderer_render_view_fn custom_renderer_render_view=modern;
  c3x_renderer_render_fn custom_renderer_render=legacy;
+ c3x_renderer_native_map_fn custom_renderer_native_map=nullptr;
+ c3x_renderer_native_lifetime_fn custom_renderer_native_lifetime=nullptr;
  unsigned* custom_renderer_world_topology=nullptr;
  unsigned long long* custom_renderer_world_visibility=nullptr;
  int custom_renderer_world_topology_count=0,custom_renderer_tile_count=0,custom_renderer_viewer_civ_id=-1;
@@ -95,7 +102,7 @@ struct State {
 } state;State* is=&state;
 ''' + world + '\nbool viewer(int visible_to_civ_id){\n' + viewer + '\nreturn true;}\nvoid retire(){\n' + retire + r'''
 }
-int demand(){c3x_renderer_frame_v1 frame={};frame.world_topology_revision=is->custom_renderer_world_topology_revision;c3x_renderer_output_v1 output={};
+int demand(){void* image=is;c3x_renderer_frame_v1 frame={};frame.presentation_time_ticks=77;frame.world_topology_revision=is->custom_renderer_world_topology_revision;c3x_renderer_output_v1 output={};
 ''' + dispatch + r'''
  return render_result;
 }
@@ -144,6 +151,17 @@ int main(){
  assert(state.custom_renderer_map_epoch==2 && !state.custom_renderer_viewer_epoch && state.custom_renderer_viewer_civ_id==-1);
  state.custom_renderer_render_view=nullptr;assert(demand()==9 && legacy_calls==1 && modern_calls==1);
  bic.Map={4,4};assert(capture_custom_renderer_world_topology() && !state.custom_renderer_world_visibility); // Older DLL compatibility.
+ // The real map dispatch carries the same epochs through the resident owner,
+ // and only an admission rejection permits the existing CPU path.
+ state.custom_renderer_render_view=modern;state.custom_renderer_native_map=resident;
+ state.custom_renderer_native_lifetime=[](int,void*,int){return 1;};
+ assert(demand()==C3X_RENDERER_RESULT_OK&&resident_calls==1&&modern_calls==1&&legacy_calls==1);
+ assert(state.custom_renderer_display_clock==77&&received.map_epoch==state.custom_renderer_map_epoch);
+ resident_result=C3X_RENDERER_RESULT_DEVICE_ERROR;
+ assert(demand()==C3X_RENDERER_RESULT_DEVICE_ERROR&&modern_calls==1&&legacy_calls==1);
+ resident_result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
+ assert(demand()==7&&modern_calls==2&&resident_calls==3);
+ probe=false;assert(demand()==7&&modern_calls==3&&resident_calls==3);
  std::free(state.custom_renderer_world_topology);
 }
 ''')

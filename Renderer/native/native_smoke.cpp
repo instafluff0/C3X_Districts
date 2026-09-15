@@ -1745,9 +1745,12 @@ int main(int argc, char ** argv) {
         }
         return code;
     };
-    if(camera_begin(&frame,&obsolete)!=C3X_RENDERER_RESULT_PENDING || obsolete<=0 ||
-       camera_begin(&frame,&ticket)!=C3X_RENDERER_RESULT_PENDING || ticket<=obsolete)
-        return fail("camera begin did not issue monotonic tickets");
+    auto obsolete_frame=frame;--obsolete_frame.clip_right;
+    if(camera_begin(&obsolete_frame,&obsolete)!=C3X_RENDERER_RESULT_PENDING || obsolete<=0 ||
+       camera_begin(&obsolete_frame,&ticket)!=C3X_RENDERER_RESULT_PENDING || ticket!=obsolete)
+        return fail("identical camera demand did not retain its ticket");
+    if(camera_begin(&frame,&ticket)!=C3X_RENDERER_RESULT_PENDING || ticket<=obsolete)
+        return fail("changed camera demand did not issue a newer ticket");
     auto unchanged=output;
     if(camera_poll(obsolete,&output)!=C3X_RENDERER_RESULT_SUPERSEDED ||
        std::memcmp(&unchanged,&output,sizeof(output))!=0)
@@ -1770,9 +1773,13 @@ int main(int argc, char ** argv) {
        camera_poll(ticket,&output)!=C3X_RENDERER_RESULT_SUPERSEDED)
         return fail("camera cancellation did not fence result");
     if(camera_begin(&frame,&ticket)!=C3X_RENDERER_RESULT_PENDING || render(&frame,&output)!=C3X_RENDERER_RESULT_OK ||
+       camera_poll(ticket,&output)!=C3X_RENDERER_RESULT_OK ||
+       hash_pixels(output.bgra_pixels,large_byte_count)!=expected_camera_hash)
+        return fail("synchronous demand did not adopt the identical camera result");
+    if(camera_begin(&obsolete_frame,&ticket)!=C3X_RENDERER_RESULT_PENDING || render(&frame,&output)!=C3X_RENDERER_RESULT_OK ||
        camera_poll(ticket,&output)!=C3X_RENDERER_RESULT_SUPERSEDED ||
        hash_pixels(output.bgra_pixels,large_byte_count)!=expected_camera_hash)
-        return fail("synchronous camera takeover failed");
+        return fail("synchronous changed demand did not supersede the obsolete camera result");
     auto invalid_camera=frame;invalid_camera.tile_count=8193;
     auto saved_ticket=ticket;
     if(camera_begin(&invalid_camera,&ticket)!=C3X_RENDERER_RESULT_BAD_ARGUMENT || ticket!=saved_ticket)

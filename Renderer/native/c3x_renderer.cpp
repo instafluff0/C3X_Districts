@@ -35,6 +35,7 @@
 #include "native_screen_bridge.h"
 #include "native_observation.h"
 #include "native_lifetime_registry.h"
+#include "native_composition_owner.h"
 #include "asset_content_hash.h"
 #include "scroll_damage.h"
 #include "river_node_locality.h"
@@ -9985,6 +9986,11 @@ public:
         start_locked();drain_camera_locked(lock);
         if(!gpu_presenter.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(request.action==1){gpu_presenter.reset();return C3X_RENDERER_RESULT_OK;}
+        if(request.action==2){
+            gpu_present=request;int result=submit_locked(lock,Command::gpu_present);
+            if(result==C3X_RENDERER_RESULT_OK)gpu_presenter.release_native();
+            return result;
+        }
         auto* session=renderer_state.gpu_composition.get();
         if(!session||session->current_ticket()!=request.ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
         bool full=request.area[0]<=0&&request.area[1]<=0&&request.area[2]>=request.width&&request.area[3]>=request.height;
@@ -10598,9 +10604,9 @@ public:
             }
             QueryPerformanceCounter(&finished);
             char detail[512];std::snprintf(detail,sizeof(detail),
-                "id=%d key=%.63s action=%d cursor=%d/%d dir=%d result=%d cache_hit=1 cache_only=1 prepared=%u prepared_hits=%llu keyed=%u shadow_pixels=%u ms=%.3f",
+                "id=%d key=%.63s action=%d cursor=%d/%d dir=%d result=%d cache_hit=1 cache_only=%u gpu_composition=%u prepared=%u prepared_hits=%llu keyed=%u shadow_pixels=%u ms=%.3f",
                 request.unit_id,request.unit_key,request.action,request.action_cursor,request.frame_count,
-                request.direction,result,unsigned(cached.prepared),static_cast<unsigned long long>(unit_pixels_hits),keyed,cached.cast_pixels,
+                request.direction,result,gpu_target?0u:1u,gpu_target?1u:0u,unsigned(cached.prepared),static_cast<unsigned long long>(unit_pixels_hits),keyed,cached.cast_pixels,
                 renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart));
             renderer_state.trace.write("unit-body",detail,result!=C3X_RENDERER_RESULT_OK);
             return result;
@@ -11470,18 +11476,23 @@ private:
                     ?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
             }else if(command==Command::gpu_render){
                 gpu_view={sizeof(gpu_view)};gpu_metadata={C3X_RENDERER_API_VERSION,sizeof(gpu_metadata)};
-                struct Mode {RendererState& state;Mode(RendererState& s):state(s){state.gpu_output_mode=true;state.gpu_map_valid=false;state.cpu_output_stale=true;}
-                    ~Mode(){state.gpu_output_mode=false;}} mode(renderer_state);
-                if(renderer_state.render(job_frame,gpu_metadata) && renderer_state.gpu_map_valid && !renderer_state.frame_output_readbacks){
-                    if(!renderer_state.gpu_composition)renderer_state.gpu_composition=std::make_unique<c3x_gpu_images::Session>(renderer_state.device,renderer_state.context);
-                    auto& session=*renderer_state.gpu_composition;
-                    if(session.publish(renderer_state.gpu_map_texture,++renderer_state.gpu_serial)){
-                        gpu_replacements.assign(renderer_state.replacement_tile_flags.begin(),renderer_state.replacement_tile_flags.end());
-                        gpu_fallbacks.assign(renderer_state.fallback_tile_indices.begin(),renderer_state.fallback_tile_indices.end());
-                        gpu_metadata.replacement_tile_flags=gpu_replacements.empty()?nullptr:gpu_replacements.data();
-                        gpu_metadata.fallback_tile_indices=gpu_fallbacks.empty()?nullptr:gpu_fallbacks.data();
-                        gpu_view={sizeof(gpu_view),session.current_ticket(),static_cast<c3x_renderer_i64>(session.map_image()),gpu_metadata.width,gpu_metadata.height,gpu_metadata.device_generation,renderer_state.frame_output_readbacks,gpu_metadata.content_revision,session.session_identity()};
-                        result=C3X_RENDERER_RESULT_OK;
+                bool supported=renderer_state.scene_surface_requested&&renderer_state.city_profile&&!renderer_state.reflection.enabled&&
+                    c3x_renderer::render_core::scene_surface_extent(job_frame.target_width,job_frame.target_height);
+                if(!supported)result=C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                else {
+                    struct Mode {RendererState& state;Mode(RendererState& s):state(s){state.gpu_output_mode=true;state.gpu_map_valid=false;state.cpu_output_stale=true;}
+                        ~Mode(){state.gpu_output_mode=false;}} mode(renderer_state);
+                    if(renderer_state.render(job_frame,gpu_metadata) && renderer_state.gpu_map_valid && !renderer_state.frame_output_readbacks){
+                        if(!renderer_state.gpu_composition)renderer_state.gpu_composition=std::make_unique<c3x_gpu_images::Session>(renderer_state.device,renderer_state.context);
+                        auto& session=*renderer_state.gpu_composition;
+                        if(session.publish(renderer_state.gpu_map_texture,++renderer_state.gpu_serial)){
+                            gpu_replacements.assign(renderer_state.replacement_tile_flags.begin(),renderer_state.replacement_tile_flags.end());
+                            gpu_fallbacks.assign(renderer_state.fallback_tile_indices.begin(),renderer_state.fallback_tile_indices.end());
+                            gpu_metadata.replacement_tile_flags=gpu_replacements.empty()?nullptr:gpu_replacements.data();
+                            gpu_metadata.fallback_tile_indices=gpu_fallbacks.empty()?nullptr:gpu_fallbacks.data();
+                            gpu_view={sizeof(gpu_view),session.current_ticket(),static_cast<c3x_renderer_i64>(session.map_image()),gpu_metadata.width,gpu_metadata.height,gpu_metadata.device_generation,renderer_state.frame_output_readbacks,gpu_metadata.content_revision,session.session_identity()};
+                            result=C3X_RENDERER_RESULT_OK;
+                        }else result=C3X_RENDERER_RESULT_BAD_ARGUMENT; // bounded image admission; preceding ticket remains valid
                     }
                 }
             }else if(command==Command::gpu_images){
@@ -11491,9 +11502,13 @@ private:
                 result=renderer_state.gpu_composition?renderer_state.gpu_composition->compose_unit(gpu_unit,gpu_unit_pose.pixels,gpu_unit_pose.width,gpu_unit_pose.height,job_unit.body_x,job_unit.body_y):C3X_RENDERER_RESULT_SUPERSEDED;
             }else if(command==Command::gpu_present){
                 auto const& p=gpu_present;
-                result=renderer_state.gpu_composition&&renderer_state.gpu_composition->display_to(p.ticket,std::uint64_t(p.image),
-                    gpu_presenter.view(),gpu_presenter.retained(),gpu_presenter.buffer(),p.width,p.height,
-                    {p.area[0],p.area[1],p.area[2],p.area[3]})?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                if(p.action==2)result=gpu_presenter.preserve_display(renderer_state.context)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
+                else {
+                    result=renderer_state.gpu_composition&&renderer_state.gpu_composition->display_to(p.ticket,std::uint64_t(p.image),
+                        gpu_presenter.view(),gpu_presenter.retained(),gpu_presenter.buffer(),p.width,p.height,
+                        {p.area[0],p.area[1],p.area[2],p.area[3]})?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                    if(result==C3X_RENDERER_RESULT_OK)gpu_presenter.gpu_written();
+                }
             }else if (command == Command::configure_pack) {
                 result = renderer_state.configure_pack(
                     optional_path(job_pack_present, job_pack_path))
@@ -11708,11 +11723,21 @@ bool valid_frame(c3x_renderer_frame_v1 const * frame, c3x_renderer_output_v1 con
 
 } // namespace
 
+namespace {
+c3x_native_images::CompositionOwner* native_composition=nullptr;
+bool drain_native_composition(){
+    if(!native_composition)return true;
+    try {native_composition->drain();delete native_composition;native_composition=nullptr;return true;}
+    catch(std::exception const& e){OutputDebugStringA(e.what());return false;}
+}
+}
+
 extern "C" __declspec(dllexport) c3x_renderer_u32 c3x_renderer_get_api_version(void) {
     return C3X_RENDERER_API_VERSION;
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_set_pack_path(char const * pack_path) {
+    if(!drain_native_composition())return C3X_RENDERER_RESULT_DEVICE_ERROR;
     int result = get_renderer_worker().configure_pack(pack_path);
     if (result != C3X_RENDERER_RESULT_OK)
         destroy_renderer_worker();
@@ -11721,6 +11746,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_set_pack_path(char const * pac
 
 extern "C" __declspec(dllexport) int c3x_renderer_set_definition_paths(
     char const * mod_root, char const * default_path, char const * scenario_path, char const * custom_path) {
+    if(!drain_native_composition())return C3X_RENDERER_RESULT_DEVICE_ERROR;
     int result = get_renderer_worker().configure_definitions(
         mod_root, default_path, scenario_path, custom_path);
     if(renderer.trace.level) {
@@ -11852,7 +11878,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_blit(
 }
 
 extern "C" __declspec(dllexport) void c3x_renderer_reset(void) {
-    destroy_renderer_worker();
+    if(drain_native_composition())destroy_renderer_worker();
 }
 
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
@@ -12009,16 +12035,21 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_images(
 // Native/UI thread owns DXGI window operations. The existing worker prepares
 // the complete retained display under the same serialized ownership boundary.
 extern "C" __declspec(dllexport) int c3x_renderer_gpu_present(c3x_renderer_gpu_present_v1 const* request){
-    if(!request||request->struct_size!=sizeof(*request)||request->action<0||request->action>1)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    if(!request||request->struct_size!=sizeof(*request)||request->action<0||request->action>2)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     if(request->action==0&&(request->ticket<=0||request->image<=0||!request->window||request->width<=0||request->height<=0||request->width>2240||request->height>1192||
         request->area[0]>=request->area[2]||request->area[1]>=request->area[3]||request->area[0]>=request->width||request->area[1]>=request->height||request->area[2]<=0||request->area[3]<=0))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     try{return get_renderer_worker().present_gpu(*request);}catch(...){return C3X_RENDERER_RESULT_ERROR;}
 }
 
-// Bound only behind the hash-verified native transfer hooks. This compatibility
-// endpoint never skips native pixel drawing or takes ownership of an existing
-// image. The completed CPU surface is also the immediate failure fallback.
-extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const*,unsigned){
+// Bound behind the hash-verified native hooks. Map preparation activates the
+// exclusive owner; before that, completed CPU screens retain compatibility
+// presentation. A negative result denies CPU access after a failed barrier.
+extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
+    if(operation==C3X_NATIVE_IMAGE_DRAIN){if(!drain_native_composition())return -1;}
+    else if(native_composition&&native_composition->active()){
+        try{return native_composition->operation(operation,image,source,from,to,color);}
+        catch(std::exception const& e){OutputDebugStringA(e.what());return -1;}
+    }
     if(operation!=C3X_NATIVE_IMAGE_PRESENT && operation!=C3X_NATIVE_IMAGE_DRAIN)return 0;
     if(operation==C3X_NATIVE_IMAGE_DRAIN){if(renderer_worker)try{renderer_worker->native_screen(nullptr);}catch(...){}return 0;}
     LARGE_INTEGER began={},captured={},ended={},frequency={};QueryPerformanceCounter(&began);captured=began;
@@ -12060,4 +12091,23 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 
 extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,void* image,int context){
     static c3x_native_images::Lifetimes lifetimes;
     return lifetimes.observe(operation,image,context,GetCurrentThreadId())?1:0;
+}
+
+// The live native map seam uses the same GPU producer and image adapter as the
+// connected fixture. No CPU bitmap is returned for an admitted map publication.
+extern "C" __declspec(dllexport) int c3x_renderer_native_map(int action,void* image,
+    c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output){
+    if(action==C3X_NATIVE_MAP_PREPARE&&(!request||request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||
+        request->struct_size!=sizeof(*request)||!valid_frame(request->frame,output)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    try {
+    if(!native_composition){
+        if(action==C3X_NATIVE_MAP_CANCEL)return C3X_RENDERER_RESULT_OK;
+        if(action!=C3X_NATIVE_MAP_PREPARE||!renderer_worker||!c3x_renderer_native_lifetime(C3X_NATIVE_MAP,image,0))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        auto jgl=GetModuleHandleA("jgl.dll");if(!c3x_native_observation::verified_module(jgl))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        auto base=reinterpret_cast<char*>(jgl);
+        native_composition=new c3x_native_images::CompositionOwner(c3x_renderer_gpu_render,c3x_renderer_gpu_images,c3x_renderer_gpu_present,
+            c3x_renderer_gpu_unit,c3x_renderer_native_lifetime,base+0x1b70,base+0x1b90);
+    }
+    return native_composition->map(action,image,request,output);
+    }catch(std::exception const& e){OutputDebugStringA(e.what());return C3X_RENDERER_RESULT_DEVICE_ERROR;}
 }
