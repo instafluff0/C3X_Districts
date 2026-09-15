@@ -35,6 +35,10 @@ updates clip metadata only; the native body/return value remain authoritative.
 This runtime slot is verified/restored with the others, not a CSV entry. The new
 caller-thread backend seam is deliberately not resolved by the shipping loader;
 only the isolated test binds it. No additional executable address is required.
+Resident-map publication and composition add optional `c3x_renderer_gpu_render`
+and `c3x_renderer_gpu_images` DLL exports, driven by existing `RendererWorker`.
+This step changes no injected sources or executable hooks. The native image adapter
+remains unbound; `required_user_action: []`. Staged observation DLL is preserved.
 
 The accepted retained world/view/submission implementation was renderer-only. Persistent
 appearance, local dependency proofs and selected passes use the existing

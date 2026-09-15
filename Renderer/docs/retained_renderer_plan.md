@@ -40,10 +40,15 @@ image draws through `native_image_adapter.h` in the isolated JGL harness. Fresh
 lifetimes own GPU destinations; escaped CPU pixels/HDCs force a synchronized,
 permanent return to CPU ownership. Complete word comparisons catch retained-pointer
 source edits and skip unchanged uploads. Clip metadata has its own direct hook.
-The live loader leaves this backend unbound: full surface/access coverage, existing
-GPU-worker integration, resident-map input, device-loss recovery and native final
-GPU transfer remain. Source comparison cost is still on the caller; this is a
-correctness checkpoint with demonstrated reuse, not a measured game speedup.
+The existing GPU worker now accepts GPU-only map demand and copied composition
+packets. It unwraps the finished retained surface on the GPU, imports an immutable
+map into the shared packed-image executor and publishes a ticket plus native
+ownership metadata. UI images survive subsequent GPU frames; stale tickets and map
+writes reject. CPU fallback invalidates its stale bitmap before rendering again.
+The live loader remains unbound: connect native adapter packets, complete surface/
+palette/access coverage, device-loss recovery and the native final GPU transfer.
+Source comparison cost is still on the caller. This is demonstrated reuse and
+removed map readback in the integrated renderer fixture, not a game speedup.
 
 ## Actual code responsibilities
 

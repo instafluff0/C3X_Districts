@@ -1,17 +1,22 @@
 #pragma once
-// Audited JGL adapter for the isolated backend. Native pointers and DIB leases
-// stay on this caller thread. Production must supply its existing GPU owner and
-// complete native surface/presentation admission before binding this adapter.
+// Native ownership stays on the caller thread; Backend owns ordered image
+// commands and explicit CPU barriers. No native pointers cross to the GPU worker.
+// Live surface/presentation admission is separate from this tested adapter.
 #include "c3x_renderer_api.h"
-#include "gpu_image_compositor.h"
+#include "gpu_image_commands.h"
+#include <array>
+#include <vector>
+#include <algorithm>
+#include <stdexcept>
+#include <climits>
 
 namespace c3x_native_images {
 using namespace c3x_gpu_images;
 struct Counts {std::uint64_t translated=0,fallbacks=0,readbacks=0,readback_bytes=0,source_checks=0;};
-class Adapter {
+template<class Backend> class Adapter {
     struct Image {void* native=nullptr;Id gpu=0;unsigned width=0,height=0;Format format=Format::rgb555;
         bool owned=false,dirty=false,cpu_uploaded=false;std::uint64_t revision=0;std::vector<std::uint32_t> cpu;};
-    ID3D11Device* device;ID3D11DeviceContext* context;Compositor& gpu;
+    Backend& gpu;
     void* get_bits;void* release_bits;DWORD thread=GetCurrentThreadId();
     std::array<Image,32> images={};std::uint64_t cpu_bytes=0;
     static constexpr std::uint64_t cpu_budget=64u*1024u*1024u;
@@ -62,12 +67,8 @@ class Adapter {
     }
     void cpu_ownership(Image& image){
         if(image.dirty){
-            auto texture=gpu.texture(image.gpu);D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
-            d.Usage=D3D11_USAGE_STAGING;d.BindFlags=0;d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
-            ComPtr<ID3D11Texture2D> stage;checked(device->CreateTexture2D(&d,nullptr,&stage));context->CopyResource(stage.Get(),texture);
-            D3D11_MAPPED_SUBRESOURCE m={};checked(context->Map(stage.Get(),0,D3D11_MAP_READ,0,&m));
-            for(unsigned y=0;y<image.height;++y)std::memcpy(image.cpu.data()+y*image.width,static_cast<char*>(m.pData)+y*m.RowPitch,image.width*4);
-            context->Unmap(stage.Get(),0);
+            if(!gpu.readback(image.gpu,image.cpu.data(),image.cpu.size()))
+                throw std::runtime_error("cannot read current GPU image");
             GdiFlush();auto bits=reinterpret_cast<Get>(get_bits)(image.native);
             if(!bits)throw std::runtime_error("cannot restore native image ownership");
             auto stride=field(image.native,0x40);
@@ -82,7 +83,7 @@ class Adapter {
         image.owned=false;
     }
 public:
-    Adapter(ID3D11Device* d,ID3D11DeviceContext* c,Compositor& g,void* bits,void* release):device(d),context(c),gpu(g),get_bits(bits),release_bits(release){}
+    Adapter(Backend& g,void* bits,void* release):gpu(g),get_bits(bits),release_bits(release){}
     ~Adapter(){for(auto& image:images)if(image.native)forget(image);}
     Adapter(Adapter const&)=delete;Adapter& operator=(Adapter const&)=delete;
     // Call drain while native objects/device still exist. A synchronization/device
@@ -135,6 +136,15 @@ public:
         }
         if(!gpu.submit(&command,1))return fallback();
         destination->dirty=true;++counters.translated;return 1;
+    }
+    // The map is an immutable resident source. Quantize only at the native
+    // destination, using the same world-anchored rounding as the CPU blitter.
+    bool insert_map(void* p,Id map,Rect area,int source_x,int source_y,int phase_x,int phase_y){
+        if(GetCurrentThreadId()!=thread)throw std::runtime_error("native map adapter thread changed");
+        auto d=find(p);if(!d||!d->owned)return false;
+        Command c={Kind::quantize,d->gpu,map,area,rect(static_cast<char*>(p)+0x44),source_x,source_y,
+            (unsigned(phase_x)&7u)|((unsigned(phase_y)&7u)<<3)};
+        if(!gpu.submit(&c,1))return false;d->dirty=true;return true;
     }
     Id image(void* p){auto i=find(p);return i?i->gpu:0;}
     bool owns(void* p){auto i=find(p);return i&&i->owned;}

@@ -22,8 +22,12 @@ ordered packed-pixel operations. The isolated native adapter now translates actu
 hooked copy/fill/keyed-image calls, tracks native lifetimes and restores CPU pixels
 before fallback. Exposed pointers permanently relinquish GPU destination ownership;
 CPU sources are compared completely on use. The live loader leaves the adapter
-unbound until full access coverage, existing GPU-worker ownership, resident-map
-input, device-loss recovery and final native transfer are integrated.
+unbound until full access coverage, device-loss recovery and final native transfer
+are integrated. The existing GPU worker now publishes immutable resident-map
+images and executes copied image/upload/command packets on its immediate context.
+Opaque tickets and native ownership metadata cross the API; COM objects, native
+pointers and HDCs do not. The standalone native adapter still needs its packet
+transport connected to this worker API.
 
 ## Authority and migration
 

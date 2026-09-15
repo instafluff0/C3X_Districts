@@ -294,11 +294,53 @@ and `f684b988aa0344cda21ee179a6ec9fbd` (staged observer compatibility).
 The normal renderer candidate and required
 injected compilation pass; 45 existing UI/cadence/GDI/bridge/view tests pass.
 
-The shipping loader deliberately leaves the new backend seam unbound, preserving
-the staged observation DLL and its optional API. Next connect the existing GPU
-worker and resident map to one native-driven final transfer, after establishing
-complete destination access coverage (including native sprite/palette shadows and
-text). Caller-owned native pointers/HDCs must stay off worker threads. Static UI
-can remain CPU-rasterized and uploaded on change. The current final GDI transfer
-would itself require CPU ownership/readback; it has not been replaced. Live native
-capture remains pending. This checkpoint is not an in-game performance result.
+## Resident map → existing worker → composition
+
+The normal renderer DLL now exposes `c3x_renderer_gpu_render` and
+`c3x_renderer_gpu_images` using `native/gpu_frame_api.h`. The first copies the
+captured request, renders full detail through the existing world/view/pass owners,
+unwraps the circular finished surface into a sampleable GPU texture and imports
+it directly into the packed-image compositor. It returns an opaque map ticket and
+native replacement metadata, with no CPU pixel pointer. Producer readbacks are
+counted and must be zero for success. CPU bitmap validity is explicitly separate;
+returning to CPU rendering rebuilds current pixels, including after GPU failure.
+
+Composition packets create/destroy images, upload revised CPU sources, and submit
+ordered copy/fill/key/invert commands on that same `RendererWorker` and immediate
+context. Caller arrays are copied before queueing; native pointers, HDCs and COM
+objects never cross threads. Maps are immutable. A new GPU frame retires the old
+map/ticket while retaining UI images; CPU demand/configuration/reset retires the
+session. Image and whole-command validation precede mutation. Readback requires an
+explicit request and is reserved here for the oracle or a future native CPU barrier.
+Success establishes GPU command order, not physical completion or scanout.
+
+This path admits the existing bounded city profile without waves/reflections.
+Other profiles retain the current native CPU path. The compositor cap is 64 MiB
+including map/UI images and overlap scratch, plus one BGRA view (at most 10.2 MiB).
+Copied upload/readback buffers each cap at one 2240×1192 image; metadata and command
+queues are bounded. Existing renderer/native/driver allocations are additional.
+No second GPU device, worker pool or presenter is created.
+
+`record_gpu_frame --scene <existing scene.csv>` runs the existing capture/production
+harness against a candidate DLL. Stationary, animation, scrolling and local-change
+cases compare exact pixels and replacement flags, then check GPU UI composition,
+upload reuse, immutable-map rejection, ticket/image lifetimes and exact CPU fallback.
+The test's explicit readback occurs after GPU composition and is counted separately.
+Normal build, matching TCC C/MSVC C++ packet layouts, the existing native JGL
+adapter and 45 UI/cadence/GDI/bridge contracts pass. The 1440×900 checkpoint
+`36e73263463d455080a0490d61fd4a7a` matches all pixels and ownership in four cases;
+528 tiles are visible, 784 captured. The matching 640×480 checkpoint is
+`80da53f379664d76bf34488e4f185751` (263 visible / 592 captured). At 1440×900,
+this avoids 5.18 MB of map readback per refreshed
+frame in this route, while adding bounded GPU unwrap/import work. The isolated
+32-bit process retains a largest free address region of about 2.0 GiB; this is not
+an in-game memory measurement. This validates a real
+renderer-to-compositor path, replacing the earlier CPU-uploaded map seed for this
+fixture; it does not yet measure a native final-presentation speedup.
+
+The staged observation DLL remains intact. The native JGL adapter still needs its
+packet transport connected to these worker exports, complete sprite/palette/text
+and CPU-access coverage, device-loss recovery, and one native-driven GPU final
+transfer. The current GDI final transfer requires CPU pixels and is unchanged.
+Live native capture remains pending. Static UI can remain CPU-rasterized and
+uploaded on change throughout this architecture.

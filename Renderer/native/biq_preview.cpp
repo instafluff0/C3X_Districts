@@ -13,6 +13,7 @@
 #include <string>
 
 #include "c3x_renderer_api.h"
+#include "gpu_frame_api.h"
 #include "benchmark_oracle.h"
 #include "busy_session_plan.h"
 
@@ -788,6 +789,7 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
         std::printf("CAMERA memory available_virtual=%llu largest_free_region=%zu total_virtual=%llu\n",
             values.first,values.second,memory.ullTotalVirtual);
     };
+    #include "gpu_frame_preview.h"
     #include "prepared_view_preview.h"
     #include "retained_replay_preview.h"
     #include "busy_session_preview.h"

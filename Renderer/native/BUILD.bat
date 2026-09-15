@@ -26,6 +26,15 @@ if not exist "..\bin" mkdir "..\bin"
 if not exist "build" mkdir "build"
 if not exist "build\candidate" mkdir "build\candidate"
 
+if /i "%~1"=="gpu-frame" (
+  ..\..\tcc\tcc.exe -m32 -run test_gpu_frame_api.c
+  if errorlevel 1 exit /b 1
+  if not exist "build\gpu-composition" mkdir "build\gpu-composition"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX biq_preview.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_gpu_frame.exe /link /LARGEADDRESSAWARE gdi32.lib
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
 if /i "%~1"=="native-image-adapter" (
   if not exist "build\gpu-composition" mkdir "build\gpu-composition"
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4100 /wd4191 test_native_image_adapter.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_native_image_adapter.exe /link d3d11.lib d3dcompiler.lib gdi32.lib user32.lib bcrypt.lib

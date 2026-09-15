@@ -1,6 +1,7 @@
 #pragma once
 // Ordered packed-pixel operations on a borrowed D3D device/context. No presenter,
 // native pointers, GDI leases, worker scheduling or implicit readback lives here.
+#include "gpu_image_commands.h"
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
@@ -13,11 +14,6 @@
 
 namespace c3x_gpu_images {
 using Microsoft::WRL::ComPtr;
-using Id=std::uint64_t;
-enum class Format { rgb555, rgb565, bgra32 };
-enum class Kind { copy, fill, color_key, invert };
-struct Rect { int left,top,right,bottom; };
-struct Command {Kind kind;Id destination,source;Rect area,clip;int source_x=0,source_y=0;std::uint32_t color=0;};
 struct Counts {std::uint64_t uploads=0,upload_bytes=0,commands=0,snapshots=0,resident_bytes=0;};
 inline void checked(HRESULT hr){if(FAILED(hr))throw std::runtime_error("GPU image operation failed");}
 class Compositor {
@@ -26,7 +22,7 @@ class Compositor {
     struct Constants {int area[4],offset[2];unsigned mode,color;};
     ID3D11Device* device;ID3D11DeviceContext* context;
     std::array<Image,32> images={};Image scratch;Id serial=0;
-    ComPtr<ID3D11ComputeShader> shader;ComPtr<ID3D11Buffer> constants;
+    ComPtr<ID3D11ComputeShader> shader,import_shader;ComPtr<ID3D11Buffer> constants;
     Counts counters;std::uint64_t budget;
     Image* find(Id id){if(!id)return nullptr;for(auto& image:images)if(image.id==id)return &image;return nullptr;}
     static std::uint64_t bytes(Image const& image){return std::uint64_t(image.width)*image.height*4;}
@@ -46,9 +42,12 @@ class Compositor {
         auto d=find(command.destination);if(!d)return false;
         if(command.area.left>command.area.right || command.area.top>command.area.bottom ||
            command.clip.left>command.clip.right || command.clip.top>command.clip.bottom)return false;
-        if(command.kind!=Kind::copy&&command.kind!=Kind::fill&&command.kind!=Kind::color_key&&command.kind!=Kind::invert)return false;
+        if(command.kind!=Kind::copy&&command.kind!=Kind::fill&&command.kind!=Kind::color_key&&command.kind!=Kind::invert&&command.kind!=Kind::quantize)return false;
         if(command.kind==Kind::fill||command.kind==Kind::invert)return d->format==Format::bgra32||command.color<=65535;
-        auto s=find(command.source);if(!s||s->format!=d->format)return false;
+        auto s=find(command.source);if(!s)return false;
+        if(command.kind==Kind::quantize){
+            if(s->format!=Format::bgra32||d->format==Format::bgra32||command.color>63)return false;
+        }else if(s->format!=d->format)return false;
         auto r=selected(command,*d);if(r.left>=r.right||r.top>=r.bottom)return true;
         auto x=std::int64_t(command.source_x)+r.left-command.area.left;
         auto y=std::int64_t(command.source_y)+r.top-command.area.top;
@@ -68,6 +67,14 @@ Texture2D<uint> input_image:register(t0);RWTexture2D<uint> output_image:register
  if(mode==2&&value==color)return;
  if(mode==4&&(value&0xffffff)==(color&0xffffff))return;
  if(mode==3)value^=color;
+ if(mode==5||mode==6){
+   uint2 xy=uint2(at+offset)-uint2(color&7,(color>>3)&7);uint threshold=0;
+   [unroll]for(uint bit=0;bit<3;++bit){uint a=(xy.x>>bit)&1,b=(xy.y>>bit)&1;threshold=(threshold<<2)|((a^b)<<1)|b;}
+   uint3 levels=uint3(31,mode==6?63:31,31);
+   uint3 scaled=uint3(value&255,(value>>8)&255,(value>>16)&255)*levels;
+   uint3 q=scaled/255+uint3((scaled%255)*128>(threshold*2+1)*255);
+   value=q.x|(q.y<<5)|(q.z<<(mode==6?11:10));
+ }
  output_image[at]=value;
 })";
         ComPtr<ID3DBlob> code,error;checked(D3DCompile(source,std::strlen(source),"packed image operations",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error));
@@ -122,7 +129,7 @@ Texture2D<uint> input_image:register(t0);RWTexture2D<uint> output_image:register
                 unsigned value[4]={op.color,op.color,op.color,op.color};context->ClearUnorderedAccessViewUint(d->write.Get(),value);
                 d->cpu_current=false;++counters.commands;continue;
             }
-            Constants p={{r.left,r.top,r.right,r.bottom},{0,0},op.kind==Kind::fill?1u:op.kind==Kind::color_key?(d->format==Format::bgra32?4u:2u):op.kind==Kind::invert?3u:0u,op.color};
+            Constants p={{r.left,r.top,r.right,r.bottom},{0,0},op.kind==Kind::fill?1u:op.kind==Kind::color_key?(d->format==Format::bgra32?4u:2u):op.kind==Kind::invert?3u:op.kind==Kind::quantize?(d->format==Format::rgb565?6u:5u):0u,op.color};
             if(op.kind!=Kind::fill&&op.kind!=Kind::invert){p.offset[0]=int(std::int64_t(op.source_x)-op.area.left);p.offset[1]=int(std::int64_t(op.source_y)-op.area.top);}
             context->UpdateSubresource(constants.Get(),0,nullptr,&p,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
             auto read=s?s->read.Get():nullptr;auto write=d->write.Get();context->CSSetShaderResources(0,1,&read);context->CSSetUnorderedAccessViews(0,1,&write,nullptr);
@@ -131,6 +138,29 @@ Texture2D<uint> input_image:register(t0);RWTexture2D<uint> output_image:register
             // a strictly newer revision to replace this image from CPU content.
             d->cpu_current=false;++counters.commands;
         }return true;
+    }
+    // GPU-to-GPU import of a completed display texture; no staging or CPU seed.
+    bool import_bgra(Id id,ID3D11Texture2D* source){
+        auto destination=find(id);if(!destination||!source||destination->format!=Format::bgra32)return false;
+        D3D11_TEXTURE2D_DESC desc={};source->GetDesc(&desc);
+        if(desc.Width!=destination->width||desc.Height!=destination->height||desc.SampleDesc.Count!=1||
+           desc.Format!=DXGI_FORMAT_B8G8R8A8_UNORM||!(desc.BindFlags&D3D11_BIND_SHADER_RESOURCE))return false;
+        ComPtr<ID3D11Device> source_device;source->GetDevice(&source_device);if(source_device.Get()!=device)return false;
+        if(!import_shader){
+            char const* hlsl=R"(
+Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:register(u0);
+[numthreads(8,8,1)] void main(uint3 at:SV_DispatchThreadID){
+ uint w,h;output_image.GetDimensions(w,h);if(at.x>=w||at.y>=h)return;
+ uint4 c=uint4(round(saturate(input_image.Load(int3(at.xy,0)))*255.0));
+ output_image[at.xy]=c.b|(c.g<<8)|(c.r<<16)|(c.a<<24);
+})";
+            ComPtr<ID3DBlob> code,error;checked(D3DCompile(hlsl,std::strlen(hlsl),"resident map import",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error));
+            checked(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&import_shader));
+        }
+        ComPtr<ID3D11ShaderResourceView> input;checked(device->CreateShaderResourceView(source,nullptr,&input));
+        unbind();auto read=input.Get();auto write=destination->write.Get();context->CSSetShaderResources(0,1,&read);context->CSSetUnorderedAccessViews(0,1,&write,nullptr);
+        context->CSSetShader(import_shader.Get(),nullptr,0);context->Dispatch((desc.Width+7)/8,(desc.Height+7)/8,1);unbind();
+        destination->cpu_current=false;return true;
     }
     ID3D11Texture2D* texture(Id id){auto image=find(id);return image?image->texture.Get():nullptr;}
     ID3D11ShaderResourceView* view(Id id){auto image=find(id);return image?image->read.Get():nullptr;}

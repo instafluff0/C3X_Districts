@@ -29,6 +29,8 @@
 #include "environment_runtime.h"
 #include "terrain_definition_runtime.h"
 #include "renderer_trace.h"
+#include "gpu_frame_api.h"
+#include "gpu_composition_session.h"
 #include "native_observation.h"
 #include "asset_content_hash.h"
 #include "scroll_damage.h"
@@ -507,6 +509,13 @@ public:
     // Output eligibility is separate from the retained static working extent.
     D3D11_RECT selected_output={};
     bool selected_output_active=false,selected_output_changed=false;
+    bool gpu_output_mode=false,cpu_output_stale=false;
+    ID3D11Texture2D* gpu_map_texture=nullptr;
+    bool gpu_map_valid=false;
+    unsigned frame_output_readbacks=0;
+    std::unique_ptr<c3x_gpu_images::Session> gpu_composition;
+    std::int64_t gpu_serial=0;
+
     std::vector<D3D11_RECT> scene_pending_finish;
     std::size_t viewport_cache_budget=default_viewport_cache_budget;
     std::size_t resource_backdrop_cache_budget=default_resource_backdrop_cache_budget;
@@ -959,6 +968,7 @@ public:
         pixel_blocks.clear();
         release(block_readback); release(block_depth); release(block_depth_texture);
         release(block_target); release(block_texture);
+        release(gpu_map_texture);gpu_map_valid=false;
         release(readback_texture);
         release(animation_readback_texture);
         animation_readback_width=animation_readback_height=0;
@@ -1005,6 +1015,7 @@ public:
     }
 
     void reset() {
+        gpu_composition.reset();
         terrain_preparation.clear();
         for(auto& scratch:terrain_scratch)scratch.reset();foreground_terrain_scratch.reset();
         memory_sample("before-reset");
@@ -4330,11 +4341,16 @@ public:
             trace.write("output-completion-probe",detail,true);if(FAILED(hr))return false;
         }
 #endif
+        if(gpu_output_mode && !gpu_map_texture){
+            D3D11_TEXTURE2D_DESC d={};d.Width=width;d.Height=height;d.MipLevels=d.ArraySize=d.SampleDesc.Count=1;
+            d.Format=DXGI_FORMAT_B8G8R8A8_UNORM;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+            if(FAILED(device->CreateTexture2D(&d,nullptr,&gpu_map_texture)))return false;
+        }
         std::vector<D3D11_RECT> copies;
         // Scrolling remaps the retained physical image into the exact current
         // camera bitmap. Transfer is cheap; keep one full readback on view changes
         // rather than adding a staging atlas and CPU bitmap translation.
-        auto copy_damage=selected_output_active?physical({selected_view}):restored?finish_damage:std::vector<D3D11_RECT>{view};
+        auto copy_damage=gpu_output_mode?physical({view}):selected_output_active?physical({selected_view}):restored?finish_damage:std::vector<D3D11_RECT>{view};
         for(auto span:spans)for(auto damage:copy_damage){
             D3D11_RECT rect={std::max<LONG>(span.rect.left,damage.left),std::max<LONG>(span.rect.top,damage.top),
                              std::min<LONG>(span.rect.right,damage.right),std::min<LONG>(span.rect.bottom,damage.bottom)};
@@ -4342,21 +4358,24 @@ public:
                   std::min<LONG>(rect.right,span.x+width+4),std::min<LONG>(rect.bottom,span.y+height+4)};
             if(rect.left>=rect.right || rect.top>=rect.bottom)continue;
             D3D11_BOX box={UINT(rect.left),UINT(rect.top),0,UINT(rect.right),UINT(rect.bottom),1};
-            context->CopySubresourceRegion(readback_texture,0,rect.left-span.x-4,rect.top-span.y-4,0,glow.native,0,&box);
+            context->CopySubresourceRegion(gpu_output_mode?gpu_map_texture:readback_texture,0,rect.left-span.x-4,rect.top-span.y-4,0,glow.native,0,&box);
             copies.push_back({rect.left-span.x-4,rect.top-span.y-4,rect.right-span.x-4,rect.bottom-span.y-4});
         }
         QueryPerformanceCounter(&finish_end);
         D3D11_MAPPED_SUBRESOURCE mapped={};
-        if(!copies.empty() && FAILED(context->Map(readback_texture,0,D3D11_MAP_READ,0,&mapped)))return false;
+        if(!gpu_output_mode && !copies.empty())++frame_output_readbacks;
+        if(!gpu_output_mode && !copies.empty() && FAILED(context->Map(readback_texture,0,D3D11_MAP_READ,0,&mapped)))return false;
         QueryPerformanceCounter(&ready);
         // One persistent composed bitmap also covers animation removal. Output
         // pointer selection must not resurrect a pre-animation CPU bitmap.
         auto& output=pixels;output.resize(std::size_t(width)*height);
-        for(auto rect:copies)for(int y=rect.top;y<rect.bottom;++y)std::memcpy(output.data()+std::size_t(y)*width+rect.left,
+        if(!gpu_output_mode)for(auto rect:copies)for(int y=rect.top;y<rect.bottom;++y)std::memcpy(output.data()+std::size_t(y)*width+rect.left,
             static_cast<unsigned char*>(mapped.pData)+std::size_t(y)*mapped.RowPitch+rect.left*4,std::size_t(rect.right-rect.left)*4);
-        if(!copies.empty())context->Unmap(readback_texture,0);QueryPerformanceCounter(&copied);
+        if(!gpu_output_mode && !copies.empty())context->Unmap(readback_texture,0);
+        if(gpu_output_mode){gpu_map_valid=true;cpu_output_stale=true;}
+        QueryPerformanceCounter(&copied);
         char detail[768];sprintf_s(detail,"static_reused=%u translated=%u damage_rects=%zu static_selected=%u dynamic_selected=%u batches=%u target_bytes=%zu target_cap=%zu resolves=%u readbacks=%u full_surface_copies=0 dynamic_damage_rects=%zu copied_rects=%zu static_submit_ms=%.3f dynamic_submit_ms=%.3f finish_submit_ms=%.3f completion_wait_ms=%.3f cpu_copy_ms=%.3f",
-            unsigned(restored),unsigned(translated),static_rectangles.size(),selected_static,selected_dynamic,batches,target_bytes,std::size_t(world_preparation?1408u:1152u)*1024u*1024u,unsigned(!finish_damage.empty()),unsigned(!copies.empty()),scene_dynamic_damage.size(),copies.size(),
+            unsigned(restored),unsigned(translated),static_rectangles.size(),selected_static,selected_dynamic,batches,target_bytes,std::size_t(world_preparation?1408u:1152u)*1024u*1024u,unsigned(!finish_damage.empty()),unsigned(!gpu_output_mode && !copies.empty()),scene_dynamic_damage.size(),copies.size(),
             trace.milliseconds(static_end.QuadPart-begin.QuadPart),trace.milliseconds(dynamic_end.QuadPart-static_end.QuadPart),
             trace.milliseconds(finish_end.QuadPart-dynamic_end.QuadPart),trace.milliseconds(ready.QuadPart-finish_end.QuadPart),trace.milliseconds(copied.QuadPart-ready.QuadPart));
         trace.write("shared-scene-surface",detail,true);memory_sample("shared-scene-complete");
@@ -4411,7 +4430,7 @@ public:
                 center_shore_cache.hits,center_shore_cache.misses,center_shore_cache.bytes,center_shore_cache.entries.size());
             trace.write("center-shore-cache",detail,false);
         }
-        output.bgra_pixels = ambient_count() && !shared_scene_surface ? resource_pixels.data() : pixels.data();
+        output.bgra_pixels = gpu_output_mode ? nullptr : ambient_count() && !shared_scene_surface ? resource_pixels.data() : pixels.data();
         // Terrain is independent of retained native unit/effect animation.  A
         // cache hit must still report the current frame's animation demand so
         // Civ III keeps driving those overlay planes without rerendering the
@@ -6188,6 +6207,10 @@ public:
                 std::uint64_t prewarm_signature = 0,
                 unsigned const* preparation_indices=nullptr,unsigned preparation_count=0,
                 c3x_renderer_frame_v1 const* content_view=nullptr,D3D11_RECT const* output_selection=nullptr) {
+        if(prewarm_index<0)frame_output_readbacks=0;
+        if(!gpu_output_mode && prewarm_index<0)gpu_composition.reset();
+        if(!gpu_output_mode && cpu_output_stale){cache_valid=false;resource_pixel_signature=0;cpu_output_stale=false;}
+        if(gpu_output_mode)resource_pixel_signature=0; // finish/snapshot the demanded map, never return CPU cache bytes
         selected_output_changed=selected_output_active!=bool(output_selection) ||
             (output_selection && std::memcmp(&selected_output,output_selection,sizeof(*output_selection)));
         if(selected_output_changed)resource_pixel_signature=0;
@@ -6223,6 +6246,7 @@ public:
         if(selected_surface!=shared_scene_surface){
             reset_targets();clear_resource_backdrops();shared_scene_surface=selected_surface;
         }
+        if(gpu_output_mode && (!shared_scene_surface || !city_profile || reflection.enabled))return false;
         ++trace.sequence;
         char profile_option[8]={};
         profiling=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",profile_option,sizeof(profile_option)) &&
@@ -9392,6 +9416,7 @@ public:
         gpu_telemetry.end(context);
         LARGE_INTEGER map_begin={},map_end={};QueryPerformanceCounter(&map_begin);
         D3D11_MAPPED_SUBRESOURCE mapped = {};
+        if(!raster_rects.empty())++frame_output_readbacks;
         HRESULT hr = raster_rects.empty() ? S_OK : context->Map(readback_texture, 0, D3D11_MAP_READ, 0, &mapped);
         QueryPerformanceCounter(&map_end);
         if (FAILED(hr)) {
@@ -9921,6 +9946,36 @@ public:
         job_scenario_path = scenario_path != nullptr ? scenario_path : "";
         job_custom_path = custom_path != nullptr ? custom_path : "";
         return submit_locked(lock, Command::configure_definitions);
+    }
+
+    int render_gpu(c3x_renderer_camera_request_v1 const& request,c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        start_locked();drain_camera_locked(lock);foreground_pending.store(true);
+        job_frame=*request.frame;job_camera_identity=request.identity;
+        job_tiles.clear();job_world_topology.clear();
+        try {
+            if(job_frame.tile_count)job_tiles.assign(job_frame.tiles,job_frame.tiles+job_frame.tile_count);
+            if(job_frame.world_topology_count)job_world_topology.assign(job_frame.world_topology,job_frame.world_topology+job_frame.world_topology_count);
+        }catch(...){foreground_pending.store(false);wake.notify_one();return C3X_RENDERER_RESULT_ERROR;}
+        job_frame.tiles=job_tiles.data();job_frame.world_topology=job_world_topology.data();
+        int result=submit_locked(lock,Command::gpu_render);
+        view=gpu_view;metadata=gpu_metadata;return result;
+    }
+    int images_gpu(c3x_renderer_gpu_images_v1 const& request,c3x_renderer_gpu_result_v1& result,unsigned* readback,unsigned capacity){
+        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        start_locked();drain_camera_locked(lock);
+        gpu_request=request;gpu_pixels.clear();gpu_commands.clear();
+        if(request.action==C3X_GPU_UPLOAD)gpu_pixels.assign(request.pixels,request.pixels+request.pixel_count);
+        for(unsigned n=0;n<request.command_count;++n){auto const& c=request.commands[n];
+            gpu_commands.push_back({c3x_gpu_images::Kind(c.kind),std::uint64_t(c.destination),std::uint64_t(c.source),
+                {c.area[0],c.area[1],c.area[2],c.area[3]},{c.clip[0],c.clip[1],c.clip[2],c.clip[3]},c.source_x,c.source_y,c.color});}
+        gpu_request.pixels=nullptr;gpu_request.commands=nullptr; // worker receives only owned values
+        int code=submit_locked(lock,Command::gpu_images);result=gpu_result;
+        if(code==C3X_RENDERER_RESULT_OK && request.action==C3X_GPU_READBACK){
+            if(gpu_readback.size()>capacity)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            std::copy(gpu_readback.begin(),gpu_readback.end(),readback);
+        }
+        return code;
     }
 
     int render(c3x_renderer_frame_v1 const & frame, c3x_renderer_output_v1 & output,
@@ -10567,6 +10622,8 @@ private:
         configure_pack,
         configure_definitions,
         render,
+        gpu_render,
+        gpu_images,
         unit,
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
         benchmark_trim,
@@ -10574,6 +10631,13 @@ private:
         reset
     };
 
+    c3x_renderer_gpu_frame_v1 gpu_view={sizeof(gpu_view)};
+    c3x_renderer_output_v1 gpu_metadata={C3X_RENDERER_API_VERSION,sizeof(gpu_metadata)};
+    std::vector<unsigned> gpu_replacements,gpu_fallbacks;
+    c3x_renderer_gpu_images_v1 gpu_request={};
+    c3x_renderer_gpu_result_v1 gpu_result={sizeof(gpu_result)};
+    std::vector<unsigned> gpu_pixels,gpu_readback;
+    std::vector<c3x_gpu_images::Command> gpu_commands;
     RendererState & renderer_state;
     LARGE_INTEGER job_timing_begin={},job_timing_rendered={},job_timing_published={};
     MapBlitter map_blitter;
@@ -11319,7 +11383,28 @@ private:
             PublishedMapFrame rendered_crop;
             bool rendered_area_ready=false;
             try {
-            if (command == Command::configure_pack) {
+            if(command!=Command::gpu_render && command!=Command::gpu_images)renderer_state.gpu_composition.reset();
+            if(command==Command::gpu_render){
+                gpu_view={sizeof(gpu_view)};gpu_metadata={C3X_RENDERER_API_VERSION,sizeof(gpu_metadata)};
+                struct Mode {RendererState& state;Mode(RendererState& s):state(s){state.gpu_output_mode=true;state.gpu_map_valid=false;state.cpu_output_stale=true;}
+                    ~Mode(){state.gpu_output_mode=false;}} mode(renderer_state);
+                if(renderer_state.render(job_frame,gpu_metadata) && renderer_state.gpu_map_valid && !renderer_state.frame_output_readbacks){
+                    if(!renderer_state.gpu_composition)renderer_state.gpu_composition=std::make_unique<c3x_gpu_images::Session>(renderer_state.device,renderer_state.context);
+                    auto& session=*renderer_state.gpu_composition;
+                    if(session.publish(renderer_state.gpu_map_texture,++renderer_state.gpu_serial)){
+                        gpu_replacements.assign(renderer_state.replacement_tile_flags.begin(),renderer_state.replacement_tile_flags.end());
+                        gpu_fallbacks.assign(renderer_state.fallback_tile_indices.begin(),renderer_state.fallback_tile_indices.end());
+                        gpu_metadata.replacement_tile_flags=gpu_replacements.empty()?nullptr:gpu_replacements.data();
+                        gpu_metadata.fallback_tile_indices=gpu_fallbacks.empty()?nullptr:gpu_fallbacks.data();
+                        gpu_view={sizeof(gpu_view),session.current_ticket(),static_cast<c3x_renderer_i64>(session.map_image()),gpu_metadata.width,gpu_metadata.height,gpu_metadata.device_generation,renderer_state.frame_output_readbacks,gpu_metadata.content_revision};
+                        result=C3X_RENDERER_RESULT_OK;
+                    }
+                }
+                if(result!=C3X_RENDERER_RESULT_OK)renderer_state.gpu_composition.reset();
+            }else if(command==Command::gpu_images){
+                gpu_result={sizeof(gpu_result)};gpu_readback.clear();
+                result=renderer_state.gpu_composition?renderer_state.gpu_composition->execute(gpu_request,gpu_commands,gpu_pixels,gpu_result,gpu_readback):C3X_RENDERER_RESULT_SUPERSEDED;
+            }else if (command == Command::configure_pack) {
                 result = renderer_state.configure_pack(
                     optional_path(job_pack_present, job_pack_path))
                     ? C3X_RENDERER_RESULT_OK : C3X_RENDERER_RESULT_ERROR;
@@ -11798,4 +11883,35 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_observe(c3x_renderer_na
     static c3x_native_observation::Capture capture;
     try { return capture.observe(event); }
     catch (...) { capture.ended=true; return 0; }
+}
+
+// Optional GPU publication; live native hooks remain unbound until composition
+// coverage and the one native final-transfer owner are ready.
+extern "C" __declspec(dllexport) int c3x_renderer_gpu_render(
+    c3x_renderer_camera_request_v1 const* request,c3x_renderer_gpu_frame_v1* view,c3x_renderer_output_v1* metadata){
+    if(!request||request->version!=C3X_RENDERER_CAMERA_VIEW_VERSION||request->struct_size!=sizeof(*request)||
+       !view||view->struct_size!=sizeof(*view)||!valid_frame(request->frame,metadata)||
+       request->frame->target_width>2240||request->frame->target_height>1192)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    *view={sizeof(*view)};
+    try{return get_renderer_worker().render_gpu(*request,*view,*metadata);}
+    catch(...){return C3X_RENDERER_RESULT_ERROR;}
+}
+extern "C" __declspec(dllexport) int c3x_renderer_gpu_images(
+    c3x_renderer_gpu_images_v1 const* request,c3x_renderer_gpu_result_v1* result,unsigned* readback,unsigned capacity){
+    constexpr unsigned max_pixels=2240u*1192u;
+    if(!request||request->struct_size!=sizeof(*request)||!result||result->struct_size!=sizeof(*result)||
+       request->ticket<=0||request->action<C3X_GPU_CREATE||request->action>C3X_GPU_READBACK||request->pixel_count>max_pixels||
+       request->command_count>2048||(request->command_count&&!request->commands)||
+       (request->action==C3X_GPU_UPLOAD&&(!request->pixels||!request->pixel_count))||
+       (request->action==C3X_GPU_READBACK?(!readback||capacity<request->pixel_count||!capacity):(readback||capacity)))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    bool upload=request->action==C3X_GPU_UPLOAD,submit=request->action==C3X_GPU_SUBMIT;
+    bool create=request->action==C3X_GPU_CREATE,read=request->action==C3X_GPU_READBACK;
+    if((create?(request->format<C3X_GPU_BGRA32||request->format>C3X_GPU_RGB565):request->format!=0)||
+       (!upload && request->pixels)||(!upload && request->revision)||
+       (!upload && !read && request->pixel_count)||(!submit && (request->commands||request->command_count))||
+       (submit && !request->command_count)||(create?(request->width<=0||request->height<=0||request->width>2240||request->height>1192||request->image!=0):(request->width||request->height))||
+       (!create && !submit && request->image<=0)||(read&&!request->pixel_count))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    *result={sizeof(*result)};
+    try{return get_renderer_worker().images_gpu(*request,*result,readback,capacity);}
+    catch(...){return C3X_RENDERER_RESULT_ERROR;}
 }

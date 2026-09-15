@@ -1,0 +1,49 @@
+#pragma once
+#include "gpu_frame_api.h"
+#include "gpu_image_compositor.h"
+namespace c3x_gpu_images {
+// Lives exclusively on RendererWorker, with its existing immediate context.
+// A map is immutable; native composition writes separately owned images.
+class Session {
+    ID3D11Device* device;ID3D11DeviceContext* context;
+    Compositor gpu;Id map=0;std::int64_t ticket=0;std::uint64_t readbacks=0;
+public:
+    Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c){}
+    bool publish(ID3D11Texture2D* texture,std::int64_t serial){
+        ticket=0;if(map)gpu.destroy(map);map=0;
+        D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
+        map=gpu.create(d.Width,d.Height,Format::bgra32);
+        if(!map||!gpu.import_bgra(map,texture))return false;
+        ticket=serial;return true;
+    }
+    Id map_image()const{return map;}
+    std::int64_t current_ticket()const{return ticket;}
+    int execute(c3x_renderer_gpu_images_v1 const& request,std::vector<Command> const& commands,
+                std::vector<unsigned> const& pixels,c3x_renderer_gpu_result_v1& result,std::vector<unsigned>& output){
+        output.clear();result={sizeof(result)};
+        if(!ticket||request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        bool ok=false;Id image=Id(request.image);
+        if(request.action==C3X_GPU_CREATE){image=gpu.create(request.width,request.height,request.format==C3X_GPU_RGB555?Format::rgb555:request.format==C3X_GPU_RGB565?Format::rgb565:Format::bgra32);ok=image!=0;}
+        else if(request.action==C3X_GPU_UPLOAD){ok=image!=map&&request.revision>0&&gpu.upload(image,request.revision,pixels.data(),pixels.size());}
+        else if(request.action==C3X_GPU_DESTROY){ok=image!=map&&gpu.destroy(image);}
+        else if(request.action==C3X_GPU_SUBMIT){
+            for(auto const& c:commands)if(c.destination==map)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            ok=gpu.submit(commands.data(),commands.size());
+        }else if(request.action==C3X_GPU_READBACK){
+            auto texture=gpu.texture(image);if(!texture)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
+            if(std::uint64_t(d.Width)*d.Height>request.pixel_count)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            output.resize(std::size_t(d.Width)*d.Height);
+            d.BindFlags=0;d.Usage=D3D11_USAGE_STAGING;d.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+            ComPtr<ID3D11Texture2D> stage;checked(device->CreateTexture2D(&d,nullptr,&stage));context->CopyResource(stage.Get(),texture);
+            D3D11_MAPPED_SUBRESOURCE data={};checked(context->Map(stage.Get(),0,D3D11_MAP_READ,0,&data));
+            for(unsigned y=0;y<d.Height;++y)std::memcpy(output.data()+std::size_t(y)*d.Width,static_cast<char*>(data.pData)+std::size_t(y)*data.RowPitch,d.Width*4);
+            context->Unmap(stage.Get(),0);++readbacks;ok=true;
+        }
+        auto counts=gpu.stats();result.image=std::int64_t(image);result.pixel_count=unsigned(output.size());
+        result.resident_bytes=std::int64_t(counts.resident_bytes);result.uploads=std::int64_t(counts.uploads);
+        result.commands=std::int64_t(counts.commands);result.readbacks=std::int64_t(readbacks);
+        return ok?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    }
+};
+}
