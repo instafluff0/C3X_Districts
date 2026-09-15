@@ -16,6 +16,44 @@ existing patch-table addresses; see the patch ledger.
 
 ## Current GPU integration
 
+**Current correctness fix:** hook attachment incorrectly called JGL's
+`get_graphsy_object_ptr` export as a getter. It is a factory: it allocates a fresh
+graphics object and replaces both DLL owner globals. Its default bit depth is zero,
+so subsequent default-depth UI canvases become 8-bit. Existing 16-bit canvases
+survive, explaining the selective popup/close-button/checkbox/list corruption.
+The temporary GPU oracle repeated this mistake. Both now borrow the existing,
+hash-verified native owner; no per-control workaround or timing rule is added.
+
+The latest version-3 game log checks 128,505 pixels across 83 draw outcomes with
+zero mismatches; affected popup content reaches 8-bit intermediates with the same
+DIB palette. Earlier raw portrait/checkbox pixels and complete palettes match the
+installed artwork. An isolated TCC regression reproduces the actual bug: hook
+attachment changes the owner and default UI depth from 16 to 8 before the fix;
+afterward both remain unchanged. Prior source/draw-only tests missed this because
+they requested explicit 16-bit surfaces. The connected contract now asserts owner
+continuity and inherited UI depth, including diagnostic execution and detach.
+
+Evaluation DLL `ec963325d4bb…` is staged after connected 1120×1192 GPU/display
+validation and injected compile passed;
+the next game check must start a fresh process because old cached canvases cannot
+be repaired by replacing the DLL on disk. Evidence is preserved under
+`Renderer/native/build/gpu-composition/ui-owner-fix-checkpoint/`; the earlier
+`ui-native-draw-checkpoint` and normal `native-ui-lifecycle-checkpoint` remain controls.
+Temporary diagnostics remain for that check, so do not benchmark this build.
+See [usage logging](live_usage_logging.md).
+
+The game log still reports `composition_active=0`. The separate startup lifetime
+tracker precedes dynamic JGL loading; later hook attachment lacks registration.
+Repair that clean initialization boundary after the corruption checkpoint; do not
+weaken lifetime admission or claim live retained GPU ownership from harness tests.
+
+The earlier version-1 capture's 59 map completions have a 16.78 ms median but a 668.87 ms p95,
+including the 6.15 s initial map. Logged unit cache misses reach 449.93 ms versus
+under 0.90 ms for logged hits. Screen-transfer counters total 5.15 s / 840 calls
+(6.13 ms mean; 297.05 ms maximum), not per-call cumulative-counter percentiles.
+Priorities remain correctness, actual live owner activation, then cold preparation
+and serialized waits. This debug run is not a controlled speed comparison.
+
 The [GPU composition implementation](gpu_composition_probe.md) now has a production
 native owner. `composite_custom_renderer_frame` offers its authoritative capture
 through resident-map prepare, validates the returned replacement flags, then
@@ -23,7 +61,8 @@ commits the GPU map without acquiring a CPU destination DC. Cancelled validation
 does not insert pixels. Unsupported admission retains the existing bitmap path;
 a GPU failure does not authorize stale native pixels.
 
-Startup lifetime evidence admits the map and its copy/save family on demand.
+The implemented owner admits the map and its copy/save family on lifetime evidence;
+the live startup gap above currently prevents that evidence in the supplied capture.
 Unused canvases allocate no GPU images; unrelated UI fills remain CPU-generated
 sources. External pointer/DC access revokes eligibility until reinit. One caller
 owner routes native copies, sprites, cached text, prepared units and final Graphsy transfer to

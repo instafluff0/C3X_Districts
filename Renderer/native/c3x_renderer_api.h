@@ -413,7 +413,7 @@ typedef int (*c3x_renderer_native_observe_fn)(struct c3x_renderer_native_observa
    original JGL/DC fallback. Other operations return 0. DRAIN precedes detachment.
    A backend must drain before removal; it cannot fail open with stale CPU pixels.
    Negative results deny native access after a failed ownership barrier. */
-enum { C3X_NATIVE_IMAGE_DRAIN = 100, C3X_NATIVE_IMAGE_REINIT = 101, C3X_NATIVE_IMAGE_CLIP = 102, C3X_NATIVE_IMAGE_PRESENT = 103, C3X_NATIVE_IMAGE_PALETTE = 104, C3X_NATIVE_UNIT_DRAW = 105, C3X_NATIVE_IMAGE_TEXT_STATE = 106, C3X_NATIVE_TEXT = 107, C3X_NATIVE_SPRITE_BLEND = 108, C3X_NATIVE_TINT = 109, C3X_NATIVE_LINE = 110, C3X_NATIVE_LOOKUP = 111, C3X_NATIVE_SPRITE_LOOKUP = 112, C3X_NATIVE_SPRITE_LOOKUP_OVER = 113, C3X_NATIVE_SPRITE_LOOKUP_SCALED = 114, C3X_NATIVE_SPRITE_STYLE = 115 };
+enum { C3X_NATIVE_IMAGE_DRAIN = 100, C3X_NATIVE_IMAGE_REINIT = 101, C3X_NATIVE_IMAGE_CLIP = 102, C3X_NATIVE_IMAGE_PRESENT = 103, C3X_NATIVE_IMAGE_PALETTE = 104, C3X_NATIVE_UNIT_DRAW = 105, C3X_NATIVE_IMAGE_TEXT_STATE = 106, C3X_NATIVE_TEXT = 107, C3X_NATIVE_SPRITE_BLEND = 108, C3X_NATIVE_TINT = 109, C3X_NATIVE_LINE = 110, C3X_NATIVE_LOOKUP = 111, C3X_NATIVE_SPRITE_LOOKUP = 112, C3X_NATIVE_SPRITE_LOOKUP_OVER = 113, C3X_NATIVE_SPRITE_LOOKUP_SCALED = 114, C3X_NATIVE_SPRITE_STYLE = 115, C3X_NATIVE_SPRITE_COMPLETE = 116 };
 /* Borrowed only for the synchronous native callback; never queued to a worker. */
 struct c3x_renderer_native_sprite_style { void *palette, *table; unsigned color; int mode; float opacity; };
 struct c3x_renderer_native_lookup { void *table, *palette; int percent; void *background; int scale[3]; };

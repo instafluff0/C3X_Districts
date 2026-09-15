@@ -11,6 +11,7 @@ using Backend=c3x_gpu_images::LocalBackend;
 #endif
 using namespace c3x_gpu_images;
 c3x_native_images::Adapter<Backend>* adapter=nullptr;
+c3x_renderer_native_image_fn diagnostic_dispatch=nullptr;
 int (*native_present_image)(void*,void*,void const*)=nullptr;
 int translate(int op,void* object,void* source,void const* from,void const* to,unsigned color){
     if(op==C3X_NATIVE_IMAGE_PRESENT&&native_present_image)return native_present_image(object,source,from);
@@ -21,6 +22,12 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
     try{
         HMODULE jgl=LoadLibraryA(path);verify(c3x_native_observation::verified_module(jgl),"audited JGL");
         auto graph=reinterpret_cast<void*(__cdecl*)()>(GetProcAddress(jgl,"get_graphsy_object_ptr"))();auto gt=*reinterpret_cast<void***>(graph);
+        // A real game has already configured its graphics owner. The misleadingly
+        // named export is a factory, only appropriate for this isolated setup.
+        auto module=reinterpret_cast<char*>(jgl);
+        *reinterpret_cast<int*>(static_cast<char*>(graph)+0x134)=16;
+        auto same_owner=[&]{return *reinterpret_cast<void**>(module+0x70d30)==graph&&
+            *reinterpret_cast<void**>(module+0x70f30)==graph;};
         auto create=reinterpret_cast<Create>(gt[31]);
         constexpr int w=64,h=48;RECT full={0,0,w,h};
         auto root=create(graph,nullptr,1);verify(reinterpret_cast<Init>(root->vtable[1])(root,w,h,16,1)==0,"root init");
@@ -35,7 +42,13 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         auto retained=get(ui,0,0);verify(retained!=nullptr,"retained UI pointer");release(ui,1);
         c3x_native_images::Adapter<Backend> backend(gpu,original[4],original[9]);adapter=&backend;
         capture.write=log_line;state.custom_renderer_native_observe=observe;set_custom_renderer_native_probe(root);
-        verify(state.custom_renderer_native_probe_active,"actual hook attach");state.custom_renderer_native_image=translate;
+        verify(state.custom_renderer_native_probe_active,"actual hook attach");
+        verify(same_owner(),"hook attachment preserves the configured JGL owner");
+        auto default_ui=create(graph,nullptr,1);
+        verify(reinterpret_cast<Init>(default_ui->vtable[1])(default_ui,w,h,0,1)==0&&
+            *reinterpret_cast<int*>(reinterpret_cast<char*>(default_ui)+0x24)==16,"new UI inherits native 16-bit mode after hook attachment");
+        reinterpret_cast<Destroy>(original[0])(default_ui,1);
+        state.custom_renderer_native_image=translate;
         for(auto& image:target){image=create(graph,nullptr,1);verify(reinterpret_cast<Init>(image->vtable[1])(image,w,h,16,1)==0,"admitted init");
             verify(backend.owns(image),"fresh destination admitted");verify(reinterpret_cast<Fill>(image->vtable[17])(image,&full,int(0x80000000u))==0,"GPU clear native return");}
         auto compare=[&](int index,bool cpu=false){GdiFlush();auto expected=get(control[index],0,0);verify(expected!=nullptr,"oracle lease");
@@ -294,6 +307,100 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         colors[17]^=0x7fff;draw_sprite(0,0,sprite_palette);
         indexed[12]=42;draw_sprite(0,0,sprite_palette);
         verify(backend.stats().readbacks==sprite_readbacks,"all palette indices including opaque magenta and transparent 254/255 avoid readback");
+        // The real game can stay on CPU composition for its entire session.
+        // Its diagnostics must work without constructing a map/Adapter owner.
+        c3x_native_images::SpriteDiagnostics cpu_diagnostics;
+        cpu_diagnostics.write=log_line;
+        auto saved_colors=std::vector<unsigned short>(colors,colors+256);
+        auto saved_indices=indexed;
+        cpu_diagnostics.cpu_operation(C3X_NATIVE_SPRITE,&sprite,sprite_palette);
+        verify(cpu_diagnostics.cpu_samples()==1,"CPU-only source sampled without GPU admission");
+        cpu_diagnostics.cpu_operation(C3X_NATIVE_SPRITE,&sprite,sprite_palette);
+        verify(cpu_diagnostics.cpu_samples()==1,"identical CPU source deduplicated");
+        colors[17]^=0x7fff;
+        cpu_diagnostics.cpu_operation(C3X_NATIVE_SPRITE,&sprite,sprite_palette);
+        verify(cpu_diagnostics.cpu_samples()==2,"same-pointer palette change sampled");
+        colors[17]^=0x7fff;
+        c3x_renderer_native_sprite_style diagnostic_style={sprite_palette,nullptr,0,1};
+        cpu_diagnostics.cpu_operation(C3X_NATIVE_SPRITE_STYLE,&sprite,&diagnostic_style);
+        verify(cpu_diagnostics.cpu_samples()==3,"keyed UI has independent sampling budget");
+        if(diagnostic_dispatch){
+            RECT at={0,0,0,0};
+            verify(diagnostic_dispatch(C3X_NATIVE_SPRITE,ui,&sprite,sprite_palette,&at,0)==0,"DLL CPU route keeps native draw ownership without composition");
+            verify(diagnostic_dispatch(C3X_NATIVE_SPRITE_STYLE,ui,&sprite,&diagnostic_style,&at,0)==0,"DLL keyed CPU route remains available before map admission");
+        }
+        verify(std::equal(saved_colors.begin(),saved_colors.end(),colors)&&indexed==saved_indices,"CPU diagnostics preserve sprite and palette bytes");
+        std::puts("PASS CPU-only diagnostics: independent of map admission, palette changes sampled, source bytes preserved");
+        // Check actual CPU destination words before any later image transfer.
+        RECT cpu_anchor={0,0,0,0};
+        verify(original_sprite(&sprite,ui,0,0,sprite_palette)==0,"native CPU sprite for completion oracle");
+        cpu_diagnostics.cpu_result(ui,&sprite,sprite_palette,&cpu_anchor,0);
+        verify(cpu_diagnostics.completed_samples()==1&&cpu_diagnostics.completed_mismatches==0,"native CPU word oracle matches actual JGL draw");
+        auto cpu_words=get(ui,0,0);verify(cpu_words!=nullptr,"CPU completion negative control");
+        auto saved_word=cpu_words[0];cpu_words[0]^=1;release(ui,1);
+        c3x_native_images::SpriteDiagnostics bad_cpu;bad_cpu.write=log_line;
+        bad_cpu.cpu_result(ui,&sprite,sprite_palette,&cpu_anchor,0);
+        verify(bad_cpu.completed_mismatches==1,"native CPU completion oracle detects wrong destination word");
+        cpu_diagnostics.cpu_result(ui,&sprite,sprite_palette,&cpu_anchor,0);
+        verify(cpu_diagnostics.completed_samples()==2&&cpu_diagnostics.completed_mismatches==1,"later bad use of the same source is not deduplicated away");
+        cpu_words=get(ui,0,0);cpu_words[0]=saved_word;release(ui,1);
+        auto indexed_destination=create(graph,nullptr,1);
+        verify(init(indexed_destination,w,h,8,1)==0,"indexed intermediate init");
+        verify(original_sprite(&sprite,indexed_destination,0,0,sprite_palette)==0,"native indexed intermediate draw");
+        cpu_diagnostics.cpu_result(indexed_destination,&sprite,sprite_palette,&cpu_anchor,0);
+        verify(cpu_diagnostics.completed_samples()==3&&cpu_diagnostics.completed_mismatches==1,"indexed intermediate oracle checks raw indices");
+        reinterpret_cast<Destroy>(original[0])(indexed_destination,1);
+        if(diagnostic_dispatch)verify(diagnostic_dispatch(C3X_NATIVE_SPRITE_COMPLETE,ui,&sprite,sprite_palette,&cpu_anchor,0)==0,"live DLL native completion diagnostic returns no drawing ownership");
+        std::puts("PASS native CPU completion oracle: 8-bit indices, 16-bit palette words, deliberately corrupted destination detected");
+        // Advisor calls commonly omit the explicit palette. Exercise both
+        // source-local and Graphsy-default selection against the native helper.
+        auto saved_palette=sprite.d;
+        auto global_owner=reinterpret_cast<void**>(base_address+0x70f48);
+        auto saved_global_owner=*global_owner;
+        void* fixture_owner[2]={nullptr,sprite_palette};
+        *global_owner=fixture_owner;
+        sprite.d=int(reinterpret_cast<std::uintptr_t>(sprite_palette));
+        draw_sprite(2,3,nullptr);
+        sprite.d=0;
+        draw_sprite(-3,2,nullptr);
+        *global_owner=saved_global_owner;sprite.d=saved_palette;
+        std::puts("PASS omitted sprite palette: source-local and Graphsy default match native pixels");
+        // Use JGL's actual sprite allocator/compactor, as PCX slicing does.
+        auto compression=reinterpret_cast<int*>(base_address+0x70d94);int saved_compression=*compression;*compression=1;
+        for(int packing:{0,1})for(auto extent:std::array<std::array<int,2>,4>{{{{16,16}},{{26,30}},{{148,109}},{{708,140}}}}){
+            int sw=extent[0],sh=extent[1];std::vector<unsigned char> art(sw*sh,255);
+            for(int y=0;y<sh;++y)for(int x=0;x<sw;++x)if(x>y%9&&x<sw-y%7&&y%17!=0)art[y*sw+x]=static_cast<unsigned char>((x*79+y*23)%255);
+            JGLSprite sliced={};
+            reinterpret_cast<JGLSprite*(__thiscall*)(JGLSprite*,void*)>(base_address+0x7e80)(&sliced,nullptr);
+            using SpriteInit=int(__thiscall*)(JGLSprite*,void*,int,int,int,int,void*);
+            verify(reinterpret_cast<SpriteInit>(sliced.vtable[1])(&sliced,art.data(),sw,sh,8,packing,sprite_palette)==0,"native sprite source construction");
+            for(int slot:{17,23}){
+                both_fill(2,full,0x80000567u);
+                auto original_draw=slot==17?original_sprite:reinterpret_cast<SpriteDraw>(state.custom_renderer_jgl_blend_original[6]);
+                auto expected=original_draw(&sliced,control[2],2,3,nullptr);
+                verify(reinterpret_cast<SpriteDraw>(sliced.vtable[slot])(&sliced,target[2],2,3,nullptr)==expected,"native constructed sprite return");
+                compare(2);
+                auto detail=backend.display_image(target[2]);std::vector<unsigned> sprite_rgb(w*h);
+                verify(detail&&gpu.readback(detail,sprite_rgb.data(),sprite_rgb.size()),"constructed sprite display oracle");
+                auto words=get(control[2],0,0);int pitch=*reinterpret_cast<int*>(reinterpret_cast<char*>(control[2])+0x40);
+                for(int y=0;y<h;++y)for(int x=0;x<w;++x){unsigned c=words[y*pitch+x];
+                    unsigned expected_rgb=0xff000000u|((c&31)<<3)|((c&31)>>2)|(((c>>5&31)<<3)|(c>>7&7))<<8|(((c>>10&31)<<3)|(c>>12&7))<<16;
+                    verify(sprite_rgb[y*w+x]==expected_rgb,"constructed sprite full-color display matches native");}
+                release(control[2],1);
+            }
+            reinterpret_cast<void(__thiscall*)(JGLSprite*)>(base_address+0x7ed0)(&sliced);
+        }
+        *compression=saved_compression;
+        verify(backend.diagnostic_samples()>0&&!backend.diagnostic_mismatches(),"bounded game sprite oracle agrees with native/GPU fixture");
+        c3x_native_images::SpriteDiagnostics diagnostic_probe;c3x_native_images::SpriteDiagnostics::Sample wrong;
+        wrong.width=w;wrong.height=h;wrong.before.resize(w*h);wrong.expected.resize(w*h);
+        auto oracle_words=get(control[2],0,0);int oracle_stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(control[2])+0x40);
+        for(int y=0;y<h;++y)for(int x=0;x<w;++x)wrong.expected[y*w+x]=oracle_words[y*oracle_stride+x];
+        release(control[2],1);wrong.expected[0]^=1;
+        diagnostic_probe.finish(gpu,backend.image(target[2]),0,wrong);
+        verify(diagnostic_probe.samples==1&&diagnostic_probe.mismatches==1,"diagnostic detects deliberately mismatched expected pixel");compare(2);
+        std::printf("PASS bounded game UI oracle: samples=%u mismatches=%u\n",backend.diagnostic_samples(),backend.diagnostic_mismatches());
+        std::puts("PASS native-constructed UI sprites: raw/compacted, default palettes and full-color displayed pixels");
         auto scales=reinterpret_cast<int*>(base_address+0x6c0fc);
         std::array<int,3> saved_scales={scales[0],scales[1],scales[2]};
         for(auto extent:std::array<std::array<int,3>,7>{{{{1,1,2}},{{3,2,2}},{{2,3,2}},{{7,5,8}},{{13,17,11}},{{2,1,1}},{{1,3,2}}}}){
@@ -609,7 +716,10 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         #ifndef C3X_NATIVE_WORKER_TEST
         verify(gpu.stats().resident_bytes==w*h*8,"drain releases all images, only shared native/full-color overlap scratch remains");
 #endif
-        auto stats=backend.stats();std::printf("PASS hooked native GPU adapter: 6 phases exact native pixels; translated=%llu source_checks=%llu uploads=%llu fallback_readbacks=%llu bytes=%llu; zero readbacks in admitted GPU chain; retained-pointer edits, stretch, CPU access, reinit, config-off and detach pass\n",stats.translated,stats.source_checks,std::uint64_t(gpu.stats().uploads),stats.readbacks,stats.readback_bytes);
+        verify(!backend.diagnostic_mismatches(),"game diagnostic reports no mismatch across complete native fixture");
+        verify(same_owner(),"drawing, diagnostics and detach preserve the native graphics owner");
+        std::puts("PASS JGL owner continuity: hook attachment, default UI bit depth, drawing, diagnostics and detach");
+        auto stats=backend.stats();std::printf("PASS hooked native GPU adapter: 6 phases exact native pixels; translated=%llu source_checks=%llu uploads=%llu fallback_readbacks=%llu bytes=%llu; zero fallback readbacks in admitted GPU chain (explicit diagnostic/oracle reads excluded); retained-pointer edits, stretch, CPU access, reinit, config-off and detach pass\n",stats.translated,stats.source_checks,std::uint64_t(gpu.stats().uploads),stats.readbacks,stats.readback_bytes);
         reinterpret_cast<void(__thiscall*)(void*,unsigned)>(gt[0])(graph,1);FreeLibrary(jgl);return 0;
     }catch(std::exception const& e){std::fprintf(stderr,"FAIL %s\n",e.what());return 1;}
 }

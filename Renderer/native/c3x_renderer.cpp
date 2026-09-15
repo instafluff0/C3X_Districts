@@ -12216,6 +12216,17 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_present(c3x_renderer_gpu_p
 // exclusive owner; before that, completed CPU screens retain compatibility
 // presentation. A negative result denies CPU access after a failed barrier.
 extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
+    if(operation==C3X_NATIVE_SPRITE_COMPLETE){
+        static c3x_native_images::SpriteDiagnostics native_draw_diagnostics;
+        native_draw_diagnostics.cpu_result(image,source,from,to,color);
+        return 0;
+    }
+    if(operation==C3X_NATIVE_IMAGE_PRESENT){
+        static unsigned reported=0;
+        unsigned route=native_composition&&native_composition->active()?2u:1u;
+        if(!(reported&route)){reported|=route;char line[192];std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=ui-diagnostic-route version=3 composition_active=%u cpu_source_sampling=1\n",route==2u);OutputDebugStringA(line);}
+    }
     if(operation==C3X_NATIVE_IMAGE_DRAIN){if(!drain_native_composition())return -1;}
     else if(native_composition&&native_composition->active()){
         try{
@@ -12226,7 +12237,13 @@ extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,voi
         }
         catch(std::exception const& e){OutputDebugStringA(e.what());return -1;}
     }
-    if(operation!=C3X_NATIVE_IMAGE_PRESENT && operation!=C3X_NATIVE_IMAGE_DRAIN)return 0;
+    if(operation!=C3X_NATIVE_IMAGE_PRESENT && operation!=C3X_NATIVE_IMAGE_DRAIN){
+        // Live compatibility sessions can never construct an Adapter. Keep
+        // source diagnostics at the dispatch boundary, before native fallback.
+        static c3x_native_images::SpriteDiagnostics compatibility_diagnostics;
+        compatibility_diagnostics.cpu_operation(operation,source,from);
+        return 0;
+    }
     if(operation==C3X_NATIVE_IMAGE_DRAIN){if(renderer_worker)try{renderer_worker->native_screen(nullptr);}catch(...){}return 0;}
     LARGE_INTEGER began={},captured={},ended={},frequency={};QueryPerformanceCounter(&began);captured=began;
     bool presented=false;std::uint64_t uploaded=0;

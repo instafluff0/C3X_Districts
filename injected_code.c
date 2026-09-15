@@ -20011,6 +20011,8 @@ patch_JGL_Sprite_draw (JGLSprite * sprite, int edx, JGL_Image * destination, int
 	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE, destination, sprite, (RECT *)palette, &anchor, 0)) return 0;
 	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
 	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, int, int, void *))is->custom_renderer_jgl_sprite_original) (sprite, __, destination, x, y, palette);
+	// Diagnostic only: inspect the completed native draw before later copies.
+	translate_custom_renderer_native (C3X_NATIVE_SPRITE_COMPLETE, destination, sprite, (RECT *)palette, &anchor, result);
 	if (observing) is->custom_renderer_native_operation = previous;
 	return result;
 }
@@ -20300,8 +20302,9 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 		if (! is->custom_renderer_native_observe (&check)) { is->custom_renderer_native_probe_rejected = true; return; }
 		void ** table = (void **)(module + 0x68238), ** sprite_table = (void **)(module + 0x68440);
 		for (int n = 0; n < 17; n++) if (table[slots[n]] != module + rvas[n]) { is->custom_renderer_native_probe_rejected = true; return; }
-		void * (__cdecl * get_graph) () = (void * (__cdecl *) ())( *p_GetProcAddress) ((HMODULE)module, "get_graphsy_object_ptr");
-		void * graph = get_graph != NULL ? get_graph () : NULL;
+		// The named export is a factory: calling it replaces JGL's active owner.
+		// Read the existing owner from the hash-verified DLL instead.
+		void * graph = *(void **)(module + 0x70d30);
 		void ** graph_table = graph != NULL ? *(void ***)graph : NULL;
 		if (graph_table != (void **)(module + 0x685f8) || graph_table[41] != module + 0x3baa0) { is->custom_renderer_native_probe_rejected = true; return; }
 		if (table[59] != module + 0x1ca0) { is->custom_renderer_native_probe_rejected = true; return; }

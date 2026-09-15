@@ -42,7 +42,7 @@ def main():
     (build/'native_probe_state.h').write_text(text[start:text.index('\tc3x_renderer_unit_draw_background_fn',start)])
     invocation=uuid.uuid4().hex;out=build/'gpu-composition'/invocation;out.mkdir()
     inputs=[ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',jgl,*[native/n for n in
-        ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','gpu_image_commands.h','test_local_image_backend.h','test_gpu_image_compositor.cpp','native_image_adapter.h','test_native_image_adapter.cpp','native_lifetime_registry.h','test_native_lifetimes.cpp')]]
+        ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','gpu_image_commands.h','test_local_image_backend.h','test_gpu_image_compositor.cpp','native_image_adapter.h','native_sprite_diagnostics.h','test_native_image_adapter.cpp','native_lifetime_registry.h','test_native_lifetimes.cpp')]]
     if observer:inputs.append(observer)
     before={p.relative_to(ROOT).as_posix():digest(p) for p in inputs}
     win=windows_root();winout=win/out.relative_to(ROOT)

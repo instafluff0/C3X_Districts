@@ -1,5 +1,21 @@
 # Civ III patch dependency ledger
 
+The UI-corruption fix changes no native hook or CSV entry. Hook attachment and
+the temporary GPU oracle now read the existing Graphsy owner at JGL RVA `0x70d30`
+in the already hash-verified DLL (`0b0cd514…ff0dbdf2`) instead of calling
+`get_graphsy_object_ptr`. Export RVA `0x3b290` allocates a new object and writes
+both `0x70f30` and `0x70d30`; constructor `0x3b2e0` zeros default bit depth at
+`+0x134`. Image init `0x1800` resolves depth zero through that owner and falls back
+to 8-bit. This is confirmed binary evidence and a reproduced TCC regression.
+The existing `0x685f8` vtable/slot checks still guard attachment. No signature or
+ownership expansion. `required_user_action`: ordinary `INSTALL.bat`, then a fresh
+game process to check the four previously corrupted controls; no address action.
+
+The existing sprite wrapper's diagnostic completion event reads completed pixels
+without claiming ownership. Startup lifetime tracking still precedes JGL loading;
+a clean post-load registration boundary remains necessary for live retained
+composition. Do not admit preexisting images without evidence.
+
 ## Native composition observation — September 14, 2026
 
 The user authorized necessary verified CSV additions. Two GOG-only entries now

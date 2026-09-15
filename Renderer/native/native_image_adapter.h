@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <climits>
+#include "native_sprite_diagnostics.h"
 
 namespace c3x_native_images {
 using namespace c3x_gpu_images;
@@ -23,6 +24,7 @@ template<class Backend> class Adapter {
     std::array<Image,32> images={};std::uint64_t cpu_bytes=0;
     static constexpr std::uint64_t cpu_budget=64u*1024u*1024u;
     Counts counters;
+    SpriteDiagnostics diagnostics;
     Id sprite_image=0;unsigned sprite_width=0,sprite_height=0;
     std::uint64_t sprite_revision=0;std::vector<std::uint32_t> sprite_pixels;
     struct Lookup {Id image=0;std::uint64_t revision=0;std::vector<std::uint16_t> words;};
@@ -240,6 +242,7 @@ template<class Backend> class Adapter {
     }
     bool draw_sprite(Image& destination,void* source,void const* palette,void const* target,void const* lookup=nullptr,Image* background=nullptr,int const* native_scale=nullptr,int style=0,unsigned style_color=0,float opacity=1){
         if(!source||!target)return false;
+        auto requested_palette=palette;
         auto module=reinterpret_cast<char*>(GetModuleHandleA("jgl.dll"));
         if(!module||*static_cast<void***>(source)!=reinterpret_cast<void**>(module+0x68440))return false;
         // Audited slot 17 ordinary and row-trimmed 8-bit sources, plus ordinary
@@ -391,6 +394,7 @@ template<class Backend> class Adapter {
         if(!valid_source)return false;
         // Source/palette bytes, including retained-pointer edits, prove reuse.
         if(!upload_sprite(decoded,unsigned(output_width),unsigned(output_height)))return false;
+        auto diagnostic=!lookup&&destination.format==Format::rgb555?diagnostics.begin(gpu,destination.gpu,destination.detail,destination.native,source,requested_palette,target,style,sprite_pixels):SpriteDiagnostics::Sample{};
         Command sprite_command={Kind::native_sprite,destination.gpu,sprite_image,area,clip};
         Command commands[2]={sprite_command,sprite_command};
         static_assert(int(Kind::native_sprite)==6);
@@ -405,6 +409,7 @@ template<class Backend> class Adapter {
             Command command={Kind::native_lookup,destination.gpu,lookup_image,area,clip,0,0,background||style==3?32u:0u,background?background->gpu:destination.gpu,destination.detail,background?background->detail:destination.detail};
             command.program=sprite_image;if(!gpu.submit(&command,1))return false;
         }else if(!gpu.submit(commands,count))return false;
+        diagnostics.finish(gpu,destination.gpu,destination.detail,diagnostic);
         if(bits==16||trimmed)*reinterpret_cast<unsigned*>(static_cast<char*>(source)+0x28)=trimmed?key&255:key;
         destination.dirty=true;++counters.translated;return true;
     }
@@ -449,6 +454,7 @@ public:
     }
     int operation(int op,void* object,void* source,void const* source_rect,void const* target_rect,unsigned color){
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native GPU adapter thread changed");
+        if(op==C3X_NATIVE_SPRITE_COMPLETE){diagnostics.cpu_result(object,source,source_rect,target_rect,color);return 0;}
         auto destination=find(object);
         if(op==C3X_NATIVE_IMAGE_DRAIN){drain();return 0;}
         if(op==C3X_NATIVE_DESTROY){if(destination)forget(*destination);return 0;}
@@ -496,11 +502,13 @@ public:
         }
         if(op==C3X_NATIVE_SPRITE_STYLE){
             auto input=static_cast<c3x_renderer_native_sprite_style const*>(source_rect);
+            if(!destination||!destination->owned)diagnostics.cpu_source(source,input?input->mode:-1,input?input->palette:nullptr);
             if(destination&&destination->owned&&input&&input->mode>=1&&input->mode<=4&&
                (input->mode!=3||input->table)&&draw_sprite(*destination,source,input->palette,target_rect,input->table,nullptr,nullptr,input->mode,input->color,input->mode==4?input->opacity:1.f))return 1;
             if(destination)cpu_ownership(*destination);++counters.fallbacks;return 0;
         }
         if(op==C3X_NATIVE_SPRITE){
+            if(!destination||!destination->owned)diagnostics.cpu_source(source,0,source_rect);
             if(destination&&destination->owned&&draw_sprite(*destination,source,source_rect,target_rect))return 1;
             if(destination)cpu_ownership(*destination);++counters.fallbacks;return 0;
         }
@@ -643,5 +651,7 @@ public:
     Id image(void* p){auto i=find(p);return i?i->gpu:0;}
     bool owns(void* p){auto i=find(p);return i&&i->owned;}
     Counts stats()const{return counters;}
+    unsigned diagnostic_samples()const{return diagnostics.samples;}
+    unsigned diagnostic_mismatches()const{return diagnostics.mismatches;}
 };
 } // namespace c3x_native_images

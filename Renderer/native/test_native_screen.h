@@ -130,11 +130,14 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         ++capture_number;
         auto dwm=LoadLibraryA("dwmapi.dll");verify(dwm!=nullptr,"desktop completion oracle");auto flush=reinterpret_cast<HRESULT(WINAPI*)()>(GetProcAddress(dwm,"DwmFlush"));
         verify(flush!=nullptr,"desktop completion function");
-        int sw=GetSystemMetrics(SM_CXSCREEN),sh=GetSystemMetrics(SM_CYSCREEN);verify(sw>0&&sh>0,"desktop extent");
+        // The desktop can have a persistent lower-right system watermark.
+        // Expose every source pixel through the upper-left quarter instead;
+        // this changes only test-window placement, never masks mismatches.
+        int sw=GetSystemMetrics(SM_CXSCREEN)/2,sh=GetSystemMetrics(SM_CYSCREEN)/2;verify(sw>0&&sh>0,"desktop capture extent");
         BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=w;info.bmiHeader.biHeight=-h;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
         auto desktop=GetDC(nullptr),capture_dc=CreateCompatibleDC(desktop);void* bits=nullptr;auto bitmap=CreateDIBSection(capture_dc,&info,DIB_RGB_COLORS,&bits,nullptr,0);
         verify(bitmap&&bits,"display oracle allocation");auto old=SelectObject(capture_dc,bitmap);
-        std::vector<unsigned char> seen(pixels.size(),0);std::size_t differences=0;
+        std::vector<unsigned char> seen(pixels.size(),0);std::size_t differences=0;RECT mismatch={w,h,0,0};
         // Move only this test window when it exceeds the desktop. Explicitly
         // replay the last transfer after exposure; no timer/sleep substitutes
         // for a native request or compositor completion. Every pixel is checked.
@@ -153,10 +156,11 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             verify(BitBlt(capture_dc,0,0,cw,ch,desktop,0,0,SRCCOPY)!=FALSE,"capture native final display");GdiFlush();
             for(int yy=0;yy<ch;++yy)for(int xx=0;xx<cw;++xx){auto i=std::size_t(yy+sy)*w+xx+sx;seen[i]=1;
                 if((static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]&0xffffff)!=(pixels[i]&0xffffff)){
-                    if(!differences)std::fprintf(stderr,"display first mismatch capture=%u live=%u x=%d y=%d expected=%08x actual=%08x\n",capture_number,unsigned(live_active),xx+sx,yy+sy,pixels[i],static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]);++differences;}}
+                    if(!differences)std::fprintf(stderr,"display first mismatch capture=%u live=%u x=%d y=%d expected=%08x actual=%08x\n",capture_number,unsigned(live_active),xx+sx,yy+sy,pixels[i],static_cast<unsigned*>(bits)[std::size_t(yy)*w+xx]);++differences;mismatch.left=std::min(mismatch.left,LONG(xx+sx));mismatch.top=std::min(mismatch.top,LONG(yy+sy));
+                    mismatch.right=std::max(mismatch.right,LONG(xx+sx+1));mismatch.bottom=std::max(mismatch.bottom,LONG(yy+sy+1));}}
         }
         SelectObject(capture_dc,old);DeleteObject(bitmap);DeleteDC(capture_dc);ReleaseDC(nullptr,desktop);FreeLibrary(dwm);
-        if(differences)std::fprintf(stderr,"native display RGB differences=%zu client=%d,%d desktop=%d,%d\n",differences,w,h,sw,sh);
+        if(differences)std::fprintf(stderr,"native display RGB differences=%zu client=%d,%d desktop=%d,%d bounds=%ld,%ld,%ld,%ld\n",differences,w,h,sw,sh,mismatch.left,mismatch.top,mismatch.right,mismatch.bottom);
         verify(!differences&&std::all_of(seen.begin(),seen.end(),[](unsigned char value){return value==1;}),"every native final displayed pixel exact");
     };
     capture_display(expected);
