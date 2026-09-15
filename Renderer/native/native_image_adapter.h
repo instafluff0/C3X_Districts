@@ -2,7 +2,7 @@
 // Native ownership stays on the caller thread; Backend owns ordered image
 // commands and explicit CPU barriers. No native pointers cross to the GPU worker.
 // Live surface/presentation admission is separate from this tested adapter.
-#include "c3x_renderer_api.h"
+#include "gpu_frame_api.h"
 #include "gpu_image_commands.h"
 #include <array>
 #include <vector>
@@ -257,6 +257,20 @@ public:
         if(!full_color(*d))return false;
         Command commands[2]={c,c};commands[1].kind=Kind::copy;commands[1].destination=d->detail;commands[1].color=0;
         if(!gpu.submit(commands,2))return false;d->dirty=true;return true;
+    }
+    bool draw_unit(c3x_renderer_gpu_unit_fn draw,std::int64_t ticket,c3x_renderer_unit_v1 const& unit,void* target,void* background,int* bounds,unsigned flags){
+        if(GetCurrentThreadId()!=thread)throw std::runtime_error("native unit adapter thread changed");
+        auto d=find(target);if(!draw||!bounds||!d||!d->owned)return false;
+        auto b=find(background);if(!b)b=create(background,false);
+        if(!b||b->format!=d->format)return false;
+        if(!b->owned&&!refresh(*b))return false;
+        if(b->detail&&!full_color(*d))return false;
+        auto clip=rect(static_cast<char*>(target)+0x44);
+        c3x_renderer_gpu_unit_v1 request={sizeof(request),ticket,std::int64_t(d->gpu),std::int64_t(b->gpu),std::int64_t(d->detail),std::int64_t(b->detail),{clip.left,clip.top,clip.right,clip.bottom},flags};
+        gpu.flush();int result=draw(&unit,&request,bounds);
+        if(result==C3X_RENDERER_RESULT_OK){d->dirty=true;++counters.translated;return true;}
+        if(result!=C3X_RENDERER_RESULT_BAD_ARGUMENT)throw std::runtime_error("GPU unit composition failed; native pixels cannot be published");
+        cpu_ownership(*d);if(b!=d)cpu_ownership(*b);return false;
     }
     Id display_image(void* p){
         if(GetCurrentThreadId()!=thread)throw std::runtime_error("native display adapter thread changed");

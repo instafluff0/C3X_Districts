@@ -19,9 +19,11 @@ def main():
     parser.add_argument('--jgl',type=Path,required=True)
     parser.add_argument('--gpu',action='store_true',help='Validate the packed GPU executor against actual JGL images')
     parser.add_argument('--adapter',action='store_true',help='Execute actual hooked JGL operations on the GPU with CPU ownership barriers')
+    parser.add_argument('--lifetimes',action='store_true',help='Execute startup tracking and native lifetime/escape contracts')
     parser.add_argument('--observer-dll',type=Path,help='Also execute the staged observation export with the current hooks')
     args=parser.parse_args()
-    if args.gpu and args.adapter:parser.error('choose one backend contract')
+    if sum([args.gpu,args.adapter,args.lifetimes])>1:parser.error('choose one backend contract')
+    if args.lifetimes and not args.observer_dll:parser.error('lifetime contract requires --observer-dll with the candidate renderer')
     if args.observer_dll and (args.gpu or args.adapter):parser.error('observer DLL requires pass-through contract')
     observer=args.observer_dll.resolve() if args.observer_dll else None
     if observer and any(c in str(observer.relative_to(ROOT)) for c in '\r\n"%&|<>^!'):parser.error('unsupported observer path')
@@ -32,12 +34,15 @@ def main():
         parser.error('unrecognized JGL binary')
     native=ROOT/'Renderer/native';build=native/'build'
     text=(ROOT/'injected_code.c').read_text()
+    if args.lifetimes:
+        start=text.index('void\nstart_custom_renderer_native_tracking ()')
+        (build/'native_tracking_bootstrap.h').write_text(text[start:text.index('void\npatch_init_floating_point ()',start)])
     (build/'native_probe_hooks.h').write_text(text[text.index('// JGL observation hooks:'):text.index('// End JGL observation hooks.')])
     text=(ROOT/'C3X.h').read_text();start=text.index('\tc3x_renderer_native_observe_fn')
     (build/'native_probe_state.h').write_text(text[start:text.index('\tc3x_renderer_unit_draw_background_fn',start)])
     invocation=uuid.uuid4().hex;out=build/'gpu-composition'/invocation;out.mkdir()
     inputs=[ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',jgl,*[native/n for n in
-        ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','gpu_image_commands.h','test_local_image_backend.h','test_gpu_image_compositor.cpp','native_image_adapter.h','test_native_image_adapter.cpp')]]
+        ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','gpu_image_commands.h','test_local_image_backend.h','test_gpu_image_compositor.cpp','native_image_adapter.h','test_native_image_adapter.cpp','native_lifetime_registry.h','test_native_lifetimes.cpp')]]
     if observer:inputs.append(observer)
     before={p.relative_to(ROOT).as_posix():digest(p) for p in inputs}
     win=windows_root();winout=win/out.relative_to(ROOT)
@@ -46,6 +51,8 @@ def main():
     marker='PASS GPU native operations:' if args.gpu else 'PASS actual injected JGL hooks:'
     if args.adapter:
         mode='native-image-adapter';executable='test_native_image_adapter.exe';marker='PASS hooked native GPU adapter:'
+    if args.lifetimes:
+        mode='native-lifetimes';executable='test_native_lifetimes.exe';marker='PASS native startup lifetimes:'
     observer_argument=f' "{win/observer.relative_to(ROOT)}"' if observer else ''
     run=out/'run.cmd';run.write_text('@echo off\nsetlocal\n'+f'pushd "{win/"Renderer/native"}"\n'
         +f'call BUILD.bat {mode} >"{winout/"build.log"}" 2>&1\nif errorlevel 1 goto failed\n'
@@ -65,6 +72,7 @@ def main():
              'executable_sha256':digest(exe) if passed else None,
              'scope':('GPU packed image executor against actual JGL; no game integration claim' if args.gpu else 'actual injected hooks against isolated JGL; native final wrapper uses an ordered stub; no game/UI coverage claim')}
     if args.adapter:receipt['scope']='actual injected hooks substitute GPU copy/fill; isolated native images and CPU fallback; no live map or final-transfer replacement'
+    if args.lifetimes:receipt['scope']='actual startup bootstrap and JGL hooks with candidate lifetime service; read-only ownership evidence, no map/GPU admission or game launch'
     (out/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
     for name in ('build.log','test.log'):
         if (out/name).exists():print((out/name).read_text(errors='replace')[-7000:])

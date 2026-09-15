@@ -1,5 +1,6 @@
 #define C3X_NATIVE_WORKER_TEST
 #include "test_native_image_adapter.cpp"
+#include "test_gpu_unit_composition.h"
 #include "test_native_screen.h"
 
 bool native_worker_contract(char const* path,c3x_renderer_gpu_images_fn images,c3x_renderer_gpu_frame_v1& view,c3x_renderer_gpu_render_fn render,c3x_renderer_gpu_present_fn present,c3x_renderer_camera_request_v1 const& request,
@@ -47,6 +48,7 @@ bool native_worker_contract(char const* path,c3x_renderer_gpu_images_fn images,c
         unit.presentation_frequency=1000000;unit.presentation_time_ticks=1000000;
         verify(unit_draw(&unit,unit_dc,unit_dc)==C3X_RENDERER_RESULT_OK,"actual unit job between GPU native operations");
         verify(gpu.readback(canvas,observed.data(),observed.size())&&std::all_of(observed.begin(),observed.end(),[&](unsigned c){return c==fill.color;}),"native GPU pixels and session survive unit job");
+        gpu_unit_contract(gpu,module,view,unit);
         SelectObject(unit_dc,previous_unit);DeleteObject(unit_bitmap);DeleteDC(unit_dc);
         auto cpu_render=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
         c3x_renderer_output_v1 cpu_output={C3X_RENDERER_API_VERSION,sizeof(cpu_output)};

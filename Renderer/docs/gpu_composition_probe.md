@@ -311,7 +311,7 @@ requesting redraws. DXGI lifecycle/Present stay on that window's thread to avoid
 [DXGI/window-thread deadlock](https://learn.microsoft.com/en-us/windows/win32/direct3darticles/dxgi-best-practices).
 A retained display preserves partial updates; recreation requires a full transfer.
 The executor caps images/maps/scratch at 32 images / 64 MiB, caller packets at
-128 KiB and CPU comparisons at 64 MiB plus one temporary image. Native DIBs,
+176 KiB and CPU comparisons at 64 MiB plus one temporary image. Native DIBs,
 world targets and the separate presenter budget below are additional.
 
 Reproduce with `python3 -m Renderer.native.record_gpu_frame --scene <scene.csv>`.
@@ -427,3 +427,31 @@ observed kind 0, rejecting the sprite copy format. Explicitly initializing a
 single command before copying the pair passes; the compiler cause is unproven.
 `7941ccb0301c4a0bb2d176588084edb4` exposed disabled unit assets in the GPU fixture;
 it now enables the production unit definitions before testing real interleaving.
+
+## Unit composition connection
+
+`c3x_renderer_gpu_unit` shares `RendererWorker::draw_unit` playback and pose
+selection. Prepared body/shadow pixels feed a bounded reusable GPU source; paired
+native-word/full-color outputs blend against resident destination and underlay
+images. Only the selected body rectangle is copied on the GPU. Native key tests,
+clipping, aliased underlays, erase bounds and actual unit display pass against the
+existing CPU blitter at 1440×900 (`3754bdcdcce948d0b1c5d6846d175b58`). The same 640×480
+chain passes (`884eb54116a94c3a85a90c72978c6cac`). These checks
+cover all 256 alpha values and both native formats, with zero background reads.
+The native unit hook now offers this operation before obtaining either DC.
+
+The compositor's 64 MiB cap includes the source and two destination snapshots;
+source comparison and the worker pose copy add at most 8 MiB of CPU storage beyond
+the existing pose publication/cache. Optional command packets now include paired
+image handles and verify the command struct size. Configuration/reset own cleanup.
+Cold pose rendering still finishes through the CPU cache. Live surface admission,
+GDI access and device-loss restoration remain required; this is not an all-GPU
+game build or whole-request speedup claim. The staged DLL is unchanged.
+
+Preserve `b99b94f78ba14e6ab137400704e8c1df`: the initial unit shader produced an
+incorrect RGB565 green channel. Explicit bit extraction, matching the validated
+native expansion pass, fixes the oracle mismatch; the compiler cause is unproven.
+The next GDI boundary is concrete: audited JGL text slot 46 (`0x1de0`) calls
+`TextOutA` (IAT `0x6802c`), then releases its DC; slot 42 (`0x1d10`) selects the
+font through `SelectObject` (IAT `0x68054`). These are verified native operations,
+not newly enabled hooks or permission to infer arbitrary DC lease lifetimes.

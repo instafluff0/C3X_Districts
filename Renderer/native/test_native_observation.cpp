@@ -13,6 +13,7 @@ static_assert(offsetof(JGL_Image,BitCount)==0x24 && offsetof(JGL_Image,Image_Rec
 struct JGLSprite {void** vtable;int a,b,c,d;void* bits;int f18,f1c,bit_count,f24,f28,stride,width,height;CRITICAL_SECTION lock;};
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
 struct State {
+    char const* mod_rel_dir=".";
     struct {bool enable_custom_rendering=true;} current_config;
     HMODULE kernel32=GetModuleHandleA("kernel32.dll");
 #include "build/native_probe_state.h"

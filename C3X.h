@@ -2675,6 +2675,8 @@ struct district_button_image_set {
 	LARGE_INTEGER custom_renderer_native_timer_due;
 	c3x_renderer_blit_fn custom_renderer_blit;
 	c3x_renderer_native_observe_fn custom_renderer_native_observe;
+	c3x_renderer_native_lifetime_fn custom_renderer_native_lifetime;
+	HMODULE custom_renderer_native_module;
 	c3x_renderer_native_image_fn custom_renderer_native_image;
 	void * custom_renderer_jgl_original[60], * custom_renderer_jgl_sprite_original, * custom_renderer_jgl_present_original;
 	void ** custom_renderer_jgl_table, ** custom_renderer_jgl_sprite_table, ** custom_renderer_jgl_graph_table;

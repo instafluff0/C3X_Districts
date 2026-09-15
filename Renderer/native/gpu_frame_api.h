@@ -18,10 +18,11 @@ struct c3x_renderer_gpu_frame_v1 {
 enum c3x_renderer_gpu_action {C3X_GPU_CREATE=1,C3X_GPU_UPLOAD,C3X_GPU_SUBMIT,C3X_GPU_DESTROY,C3X_GPU_READBACK};
 enum c3x_renderer_gpu_format {C3X_GPU_BGRA32=0,C3X_GPU_RGB555=1,C3X_GPU_RGB565=2};
 struct c3x_renderer_gpu_command_v1 {
-    int kind; /* 0 copy, 1 fill, 2 color key, 3 invert, 4 ordered map quantization, 5 native UI expansion, 6 decoded native sprite */
+    int kind; /* 0 copy, 1 fill, 2 color key, 3 invert, 4 ordered map quantization, 5 native UI expansion, 6 decoded native sprite, 7 premultiplied unit over native background */
     c3x_renderer_i64 destination,source;
     int area[4],clip[4],source_x,source_y;
     unsigned color; /* quantize: phase_x&7 | (phase_y&7)<<3; expand: native key, or 65536 for opaque; sprite: 0 native words, 1/2 expand 555/565 */
+    c3x_renderer_i64 background,detail,background_detail; /* unit_over only */
 };
 struct c3x_renderer_gpu_images_v1 {
     unsigned struct_size;
@@ -32,7 +33,7 @@ struct c3x_renderer_gpu_images_v1 {
     unsigned const* pixels;
     unsigned pixel_count;
     struct c3x_renderer_gpu_command_v1 const* commands;
-    unsigned command_count;
+    unsigned command_count,command_struct_size;
 };
 struct c3x_renderer_gpu_result_v1 {
     unsigned struct_size;
@@ -47,6 +48,12 @@ struct c3x_renderer_gpu_present_v1 {
     void* window; /* HWND identity only; must belong to the calling thread */
     int width,height,area[4];
 };
+struct c3x_renderer_gpu_unit_v1 {
+    unsigned struct_size;
+    c3x_renderer_i64 ticket,destination,background,detail,background_detail;
+    int clip[4];
+    unsigned playback_flags;
+};
 #pragma pack(pop)
 typedef int (*c3x_renderer_gpu_render_fn)(struct c3x_renderer_camera_request_v1 const*,struct c3x_renderer_gpu_frame_v1*,struct c3x_renderer_output_v1*);
 /* READBACK alone writes caller storage, after worker completion. Other calls
@@ -55,3 +62,7 @@ typedef int (*c3x_renderer_gpu_render_fn)(struct c3x_renderer_camera_request_v1 
 typedef int (*c3x_renderer_gpu_images_fn)(struct c3x_renderer_gpu_images_v1 const*,struct c3x_renderer_gpu_result_v1*,unsigned* readback,unsigned capacity);
 
 typedef int (*c3x_renderer_gpu_present_fn)(struct c3x_renderer_gpu_present_v1 const*);
+
+/* Reuses native playback/pose preparation; composes into GPU images without a
+   destination HDC or map/background readback. Bounds return the actual pose area. */
+typedef int (*c3x_renderer_gpu_unit_fn)(struct c3x_renderer_unit_v1 const*,struct c3x_renderer_gpu_unit_v1 const*,int* bounds);

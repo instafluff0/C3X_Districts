@@ -70,6 +70,15 @@ native tests; unsupported scaling/key modes restore native ownership. No new
 table entry or address is needed. Live exclusive admission remains pending;
 `required_user_action: []`.
 
+`forward_custom_unit_body` now offers the captured unit and native destination /
+underlay identities through `C3X_NATIVE_UNIT_DRAW` before acquiring either DC.
+The existing normal/reduced unit-body hooks and signatures are unchanged; GPU
+success returns the same expanded erase bounds. The optional
+`c3x_renderer_gpu_unit` DLL export reuses playback/pose ownership and composes on
+the existing GPU worker. The live compatibility callback still declines this
+operation until exclusive surface admission is connected. No CSV change is
+needed; `required_user_action: []`. Injected compilation passes.
+
 The accepted retained world/view/submission implementation was renderer-only. Persistent
 appearance, local dependency proofs and selected passes use the existing
 `Map_Renderer_m71_Draw_Tiles` / `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`

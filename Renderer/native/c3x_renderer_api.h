@@ -412,7 +412,10 @@ typedef int (*c3x_renderer_native_observe_fn)(struct c3x_renderer_native_observa
    consumes the native transfer, 0 requires releasing GPU window ownership before
    original JGL/DC fallback. Other operations return 0. DRAIN precedes detachment.
    A backend must drain before removal; it cannot fail open with stale CPU pixels. */
-enum { C3X_NATIVE_IMAGE_DRAIN = 100, C3X_NATIVE_IMAGE_REINIT = 101, C3X_NATIVE_IMAGE_CLIP = 102, C3X_NATIVE_IMAGE_PRESENT = 103, C3X_NATIVE_IMAGE_PALETTE = 104 };
+enum { C3X_NATIVE_IMAGE_DRAIN = 100, C3X_NATIVE_IMAGE_REINIT = 101, C3X_NATIVE_IMAGE_CLIP = 102, C3X_NATIVE_IMAGE_PRESENT = 103, C3X_NATIVE_IMAGE_PALETTE = 104, C3X_NATIVE_UNIT_DRAW = 105, C3X_NATIVE_IMAGE_TEXT_STATE = 106, C3X_NATIVE_TEXT = 107 };
+/* Process-lifetime, read-only tracking. No scene/device/configuration required.
+   VERIFY with null image establishes the owner; MAP queries eligibility. */
+typedef int (*c3x_renderer_native_lifetime_fn)(int operation, void * image, int context);
 typedef int (*c3x_renderer_native_image_fn)(int operation, void * image, void * source,
     void const * source_rect, void const * destination_rect, unsigned color);
 

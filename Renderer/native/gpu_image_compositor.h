@@ -22,9 +22,9 @@ class Compositor {
         ComPtr<ID3D11Texture2D> texture;ComPtr<ID3D11ShaderResourceView> read;ComPtr<ID3D11UnorderedAccessView> write;};
     struct Constants {int area[4],offset[2];unsigned mode,color;};
     ID3D11Device* device;ID3D11DeviceContext* context;
-    std::array<Image,32> images={};Image scratch;Id serial=0;
+    std::array<Image,32> images={};Image scratch,detail_scratch;Id serial=0;
     ImageDisplay display_program;
-    ComPtr<ID3D11ComputeShader> shader,import_shader;ComPtr<ID3D11Buffer> constants;
+    ComPtr<ID3D11ComputeShader> shader,import_shader,unit_shader;ComPtr<ID3D11Buffer> constants;
     Counts counters;std::uint64_t budget;
     Image* find(Id id){if(!id)return nullptr;for(auto& image:images)if(image.id==id)return &image;return nullptr;}
     static std::uint64_t bytes(Image const& image){return std::uint64_t(image.width)*image.height*4;}
@@ -35,8 +35,8 @@ class Compositor {
         checked(device->CreateShaderResourceView(image.texture.Get(),nullptr,&image.read));
         checked(device->CreateUnorderedAccessView(image.texture.Get(),nullptr,&image.write));image.width=width;image.height=height;
     }
-    void unbind(){ID3D11ShaderResourceView* r=nullptr;ID3D11UnorderedAccessView* w=nullptr;
-        context->CSSetShaderResources(0,1,&r);context->CSSetUnorderedAccessViews(0,1,&w,nullptr);}
+    void unbind(){ID3D11ShaderResourceView* r[5]={};ID3D11UnorderedAccessView* w[2]={};
+        context->CSSetShaderResources(0,5,r);context->CSSetUnorderedAccessViews(0,2,w,nullptr);}
     static Rect selected(Command const& command,Image const& image){return {
         std::max({0,command.area.left,command.clip.left}),std::max({0,command.area.top,command.clip.top}),
         std::min({int(image.width),command.area.right,command.clip.right}),std::min({int(image.height),command.area.bottom,command.clip.bottom})};}
@@ -44,10 +44,17 @@ class Compositor {
         auto d=find(command.destination);if(!d)return false;
         if(command.area.left>command.area.right || command.area.top>command.area.bottom ||
            command.clip.left>command.clip.right || command.clip.top>command.clip.bottom)return false;
-        if(command.kind!=Kind::copy&&command.kind!=Kind::fill&&command.kind!=Kind::color_key&&command.kind!=Kind::invert&&command.kind!=Kind::quantize&&command.kind!=Kind::expand&&command.kind!=Kind::native_sprite)return false;
+        if(command.kind!=Kind::copy&&command.kind!=Kind::fill&&command.kind!=Kind::color_key&&command.kind!=Kind::invert&&command.kind!=Kind::quantize&&command.kind!=Kind::expand&&command.kind!=Kind::native_sprite&&command.kind!=Kind::unit_over)return false;
+        if(command.kind!=Kind::unit_over&&(command.background||command.detail||command.background_detail))return false;
         if(command.kind==Kind::fill||command.kind==Kind::invert)return d->format==Format::bgra32||command.color<=65535;
         auto s=find(command.source);if(!s)return false;
-        if(command.kind==Kind::quantize){
+        if(command.kind==Kind::unit_over){
+            auto b=find(command.background),detail=find(command.detail),bd=find(command.background_detail);
+            if(s->format!=Format::bgra32||d->format==Format::bgra32||!b||b->format!=d->format||command.color)return false;
+            if(command.detail&&(!detail||detail->format!=Format::bgra32||detail->width!=d->width||detail->height!=d->height||detail==s))return false;
+            if(command.background_detail&&(!detail||!bd||bd->format!=Format::bgra32||bd->width!=b->width||bd->height!=b->height))return false;
+            if(bd==detail&&b!=d)return false;
+        }else if(command.kind==Kind::quantize){
             if(s->format!=Format::bgra32||d->format==Format::bgra32||command.color>63)return false;
         }else if(command.kind==Kind::expand){
             if(s->format==Format::bgra32||d->format!=Format::bgra32||command.color>65536)return false;
@@ -61,6 +68,56 @@ class Compositor {
         auto x=std::int64_t(command.source_x)+r.left-command.area.left;
         auto y=std::int64_t(command.source_y)+r.top-command.area.top;
         return x>=0&&y>=0&&x+(r.right-r.left)<=s->width&&y+(r.bottom-r.top)<=s->height;
+    }
+    void unit_over(Command const& op,Rect r){
+        if(!unit_shader){
+            char const* source=R"(
+cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint color;};
+Texture2D<uint> body:register(t0);Texture2D<uint> native_below:register(t1);Texture2D<uint> native_ground:register(t2);
+Texture2D<uint> detail_below:register(t3);Texture2D<uint> detail_ground:register(t4);
+RWTexture2D<uint> native_result:register(u0);RWTexture2D<uint> detail_result:register(u1);
+uint expanded(uint c){uint b=((c&31)<<3)|((c&31)>>2),r,g;
+ if(mode==1){g=((c>>3)&252)|((c>>9)&3);r=((c>>8)&248)|((c>>13)&7);}
+ else {g=((c>>2)&248)|((c>>7)&7);r=((c>>7)&248)|((c>>12)&7);}
+ return b|(g<<8)|(r<<16);}
+bool keyed(uint c){return (c&0xf800f8)==0xf800f8&&(c&0xf800)==0;}
+uint blend(uint source,uint below,uint alpha){
+ uint3 s=uint3(source&255,(source>>8)&255,(source>>16)&255),b=uint3(below&255,(below>>8)&255,(below>>16)&255);
+ uint3 c=min(s+(b*(255-alpha)+127)/255,255);uint result=c.x|(c.y<<8)|(c.z<<16);
+ if(keyed(result))result^=0x800;return result;
+}
+[numthreads(8,8,1)] void main(uint3 thread:SV_DispatchThreadID){
+ int2 at=area.xy+int2(thread.xy);if(any(at>=area.zw))return;
+ uint source=body.Load(int3(at+offset,0)),alpha=source>>24;if(!alpha)return;
+ uint below=expanded(native_below.Load(int3(at,0)));bool ground=false;
+ if(alpha<255&&keyed(below)){
+   uint w,h;native_ground.GetDimensions(w,h);if(any(at>=int2(w,h)))return;
+   below=expanded(native_ground.Load(int3(at,0)));if(keyed(below))return;ground=true;
+ }
+ uint c=blend(source,below,alpha);
+ if(mode==1)native_result[at]=(c>>3&31)|((c>>10&63)<<5)|((c>>19&31)<<11);
+ else native_result[at]=(c>>3&31)|((c>>11&31)<<5)|((c>>19&31)<<10);
+ if(color&1){
+   uint full=ground?((color&2)?detail_ground.Load(int3(at,0)):below):detail_below.Load(int3(at,0));
+   detail_result[at]=blend(source,full,alpha)|0xff000000;
+ }
+})";
+            ComPtr<ID3DBlob> code,error;checked(D3DCompile(source,std::strlen(source),"native unit composition",nullptr,nullptr,"main","cs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,&code,&error));
+            checked(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&unit_shader));
+        }
+        auto d=find(op.destination),b=find(op.background),detail=find(op.detail),bd=find(op.background_detail);
+        unbind();D3D11_BOX box={unsigned(r.left),unsigned(r.top),0,unsigned(r.right),unsigned(r.bottom),1};
+        // Only pixels in the selected body/shadow rectangle are read or copied.
+        context->CopySubresourceRegion(scratch.texture.Get(),0,r.left,r.top,0,d->texture.Get(),0,&box);++counters.snapshots;
+        if(detail){context->CopySubresourceRegion(detail_scratch.texture.Get(),0,r.left,r.top,0,detail->texture.Get(),0,&box);++counters.snapshots;}
+        auto ground=b==d?&scratch:b;auto full_ground=bd==detail?&detail_scratch:bd;
+        ID3D11ShaderResourceView* reads[5]={find(op.source)->read.Get(),scratch.read.Get(),ground->read.Get(),detail?detail_scratch.read.Get():nullptr,bd?full_ground->read.Get():nullptr};
+        ID3D11UnorderedAccessView* writes[2]={d->write.Get(),detail?detail->write.Get():nullptr};
+        Constants p={{r.left,r.top,r.right,r.bottom},{int(std::int64_t(op.source_x)-op.area.left),int(std::int64_t(op.source_y)-op.area.top)},d->format==Format::rgb565?1u:0u,(detail?1u:0u)|(bd?2u:0u)};
+        context->UpdateSubresource(constants.Get(),0,nullptr,&p,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
+        context->CSSetShaderResources(0,5,reads);context->CSSetUnorderedAccessViews(0,2,writes,nullptr);context->CSSetShader(unit_shader.Get(),nullptr,0);
+        context->Dispatch(unsigned(r.right-r.left+7)/8,unsigned(r.bottom-r.top+7)/8,1);unbind();
+        d->cpu_current=false;if(detail)detail->cpu_current=false;++counters.commands;
     }
 public:
     // R32_UINT stores native 16-bit words exactly too. Its explicit 4-byte budget
@@ -126,19 +183,23 @@ Texture2D<uint> input_image:register(t0);RWTexture2D<uint> output_image:register
     // the caller's unpublished transaction, never publish a partially drawn image.
     bool submit(Command const* commands,std::size_t count){
         if(!commands||!count||count>2048)return false;
-        unsigned width=0,height=0;
+        unsigned width=0,height=0,detail_width=0,detail_height=0;
         for(std::size_t n=0;n<count;++n){auto const& op=commands[n];if(!valid(op))return false;
-            if(op.kind==Kind::invert || (op.kind!=Kind::fill&&op.source==op.destination)){
+            if(op.kind==Kind::unit_over&&op.detail){auto image=find(op.detail);detail_width=std::max(detail_width,image->width);detail_height=std::max(detail_height,image->height);}
+            if(op.kind==Kind::unit_over || op.kind==Kind::invert || (op.kind!=Kind::fill&&op.source==op.destination)){
                 auto image=find(op.destination);width=std::max(width,image->width);height=std::max(height,image->height);}}
-        if(width && (scratch.width<width||scratch.height<height)){
-            auto requested=std::uint64_t(width)*height*4;
-            if(requested>budget-counters.resident_bytes+bytes(scratch))return false;
-            // Replacement temporarily retains both allocations; account for that peak too.
-            if(requested>budget-counters.resident_bytes)return false;
-            Image next;make(next,width,height);counters.resident_bytes+=requested-bytes(scratch);scratch=std::move(next);
-        }
+        // Reserve both destination snapshots before any operation can mutate a
+        // native/full-color pair. Old allocations count until replacement ends.
+        bool grow=width&&(scratch.width<width||scratch.height<height);
+        bool grow_detail=detail_width&&(detail_scratch.width<detail_width||detail_scratch.height<detail_height);
+        auto needed=(grow?std::uint64_t(width)*height*4:0)+(grow_detail?std::uint64_t(detail_width)*detail_height*4:0);
+        if(needed>budget-counters.resident_bytes)return false;
+        Image next,next_detail;if(grow)make(next,width,height);if(grow_detail)make(next_detail,detail_width,detail_height);
+        if(grow){counters.resident_bytes+=bytes(next)-bytes(scratch);scratch=std::move(next);}
+        if(grow_detail){counters.resident_bytes+=bytes(next_detail)-bytes(detail_scratch);detail_scratch=std::move(next_detail);}
         for(std::size_t n=0;n<count;++n){auto const& op=commands[n];auto d=find(op.destination);auto r=selected(op,*d);
             if(r.left>=r.right||r.top>=r.bottom)continue;
+            if(op.kind==Kind::unit_over){unit_over(op,r);continue;}
             auto s=op.kind==Kind::invert?d:find(op.source);unbind();
             if(s==d){D3D11_BOX box={0,0,0,d->width,d->height,1};context->CopySubresourceRegion(scratch.texture.Get(),0,0,0,0,d->texture.Get(),0,&box);s=&scratch;++counters.snapshots;}
             if(op.kind==Kind::copy){

@@ -73,6 +73,21 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     RECT popup={43,47,121,113};copy(screen_surface,save,popup);
     verify(reinterpret_cast<Fill>(screen_surface->vtable[17])(screen_surface,&popup,int(0x80007fffu))==0,"native popup draw");copy(save,screen_surface,popup);
     std::vector<unsigned> expected(map,map+std::size_t(w)*h),observed(expected.size());
+    // The native unit adapter consumes these actual JGL image identities; it
+    // must not acquire either CPU DC before composing and presenting the unit.
+    HMODULE renderer_module=nullptr;verify(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(live),&renderer_module)!=FALSE,"native unit renderer module");
+    auto unit_gpu=reinterpret_cast<c3x_renderer_gpu_unit_fn>(GetProcAddress(renderer_module,"c3x_renderer_gpu_unit"));
+    auto unit_cpu=reinterpret_cast<c3x_renderer_unit_draw_expanded_fn>(GetProcAddress(renderer_module,"c3x_renderer_unit_draw_expanded"));
+    c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Warrior");unit.unit_id=732;
+    unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=7;unit.sprite_width=unit.sprite_height=191;
+    unit.body_x=120;unit.body_y=160;unit.hour=12;unit.display_color_rgb=0x205bdd;unit.presentation_frequency=1000000;unit.presentation_time_ticks=1000000;
+    {
+        UnitOracleDib oracle(w,h,0);std::copy(expected.begin(),expected.end(),static_cast<unsigned*>(oracle.pixels));int expected_bounds[4]={},bounds[4]={};
+        verify(unit_cpu&&unit_cpu(&unit,oracle.dc,oracle.dc,expected_bounds)==C3X_RENDERER_RESULT_OK,"native unit display oracle");GdiFlush();
+        verify(owner.draw_unit(unit_gpu,frame.ticket,unit,screen_surface,screen_surface,bounds,0),"native unit image adapter to GPU composition");
+        verify(std::equal(bounds,bounds+4,expected_bounds)&&owner.owns(screen_surface)&&owner.stats().readbacks==0,"native unit preserves GPU ownership and erase bounds");
+        for(unsigned i=0;i<expected.size();++i)expected[i]=static_cast<unsigned*>(oracle.pixels)[i]|0xff000000u;
+    }
     // Source-index transparency must preserve full-color map pixels. Matching
     // RGB at ordinary indices remains opaque, regardless of magenta/green keys.
     JGLSprite overlay={};auto base=reinterpret_cast<char*>(jgl);

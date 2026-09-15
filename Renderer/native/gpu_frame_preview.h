@@ -1,5 +1,5 @@
-static_assert(sizeof(c3x_renderer_gpu_frame_v1)==52 && sizeof(c3x_renderer_gpu_command_v1)==64 &&
-              sizeof(c3x_renderer_gpu_images_v1)==60 && sizeof(c3x_renderer_gpu_result_v1)==48,"native C/C++ GPU API layout");
+static_assert(sizeof(c3x_renderer_gpu_frame_v1)==52 && sizeof(c3x_renderer_gpu_command_v1)==88 &&
+              sizeof(c3x_renderer_gpu_images_v1)==64 && sizeof(c3x_renderer_gpu_result_v1)==48,"native C/C++ GPU API layout");
 // Included in the production capture harness after its ordinary CPU control.
 char gpu_frame_test[8]={};GetEnvironmentVariableA("C3X_RENDERER_GPU_FRAME_TEST",gpu_frame_test,sizeof(gpu_frame_test));
 if(ok && !std::strcmp(gpu_frame_test,"1")) {
@@ -47,7 +47,7 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
         if(!verify_gpu(execute(create)==C3X_RENDERER_RESULT_OK&&status.readbacks==0&&status.uploads==0,"resident map has no CPU upload/readback"))break;
         auto canvas=status.image;
         c3x_renderer_gpu_command_v1 draw={0,canvas,view.map_image,{0,0,view.width,view.height},{0,0,view.width,view.height},0,0,0};
-        auto submit=image_request(C3X_GPU_SUBMIT);submit.commands=&draw;submit.command_count=1;
+        auto submit=image_request(C3X_GPU_SUBMIT);submit.commands=&draw;submit.command_count=1;submit.command_struct_size=sizeof(draw);
         if(!verify_gpu(execute(submit)==C3X_RENDERER_RESULT_OK&&status.readbacks==0,"GPU map-to-composition copy"))break;
         if(!verify_gpu(read(canvas)==C3X_RENDERER_RESULT_OK&&actual==expected,"exact resident-map pixels"))break;
         auto ui_create=image_request(C3X_GPU_CREATE);ui_create.width=ui_create.height=2;

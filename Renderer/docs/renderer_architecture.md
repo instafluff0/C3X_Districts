@@ -44,6 +44,10 @@ the live map still uses its existing asynchronous bitmap/readback path. Admissio
 of existing map/screen lifetimes and remaining map-dependent sprite/unit/access
 operations are the next work needed to remove that boundary. No live speedup is
 claimed; the current transfer comparison and evaluation status are in the probe.
+The unit adapter now bypasses destination/underlay CPU copies for admitted images.
+It reuses existing native playback and prepared poses, blending paired native-word
+and full-color results in one GPU operation. Cold pose output remains CPU-owned;
+the shipping compatibility callback has not enabled exclusive surface admission.
 
 ## Authority and migration
 

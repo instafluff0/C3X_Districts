@@ -7,6 +7,7 @@ namespace c3x_gpu_images {
 class Session {
     ID3D11Device* device;ID3D11DeviceContext* context;
     Compositor gpu;Id map=0;std::int64_t ticket=0,identity=0;std::uint64_t readbacks=0;
+    Id unit_image=0;unsigned unit_width=0,unit_height=0;std::uint64_t unit_revision=0;std::vector<unsigned> unit_pixels;
 public:
     Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c){}
     bool publish(ID3D11Texture2D* texture,std::int64_t serial){
@@ -27,6 +28,20 @@ public:
         if(requested!=ticket||!gpu.display(image,target,w,h,area))return false;
         context->CopyResource(buffer,retained);context->Flush();return true;
     }
+    int compose_unit(c3x_renderer_gpu_unit_v1 const& request,std::vector<unsigned> const& pixels,unsigned width,unsigned height,int x,int y){
+        if(request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
+        if(request.destination==std::int64_t(map)||request.detail==std::int64_t(map))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(!width||!height||width>1024||height>1024||pixels.size()!=std::size_t(width)*height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(!unit_image||width!=unit_width||height!=unit_height){
+            if(unit_image)gpu.destroy(unit_image);unit_image=0;unit_pixels.clear();unit_revision=0;
+            unit_image=gpu.create(width,height,Format::bgra32);if(!unit_image)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            unit_width=width;unit_height=height;
+        }
+        if(unit_pixels!=pixels){if(!gpu.upload(unit_image,++unit_revision,pixels.data(),pixels.size()))return C3X_RENDERER_RESULT_ERROR;unit_pixels=pixels;}
+        Command draw={Kind::unit_over,Id(request.destination),unit_image,{x,y,x+int(width),y+int(height)},
+            {request.clip[0],request.clip[1],request.clip[2],request.clip[3]},0,0,0,Id(request.background),Id(request.detail),Id(request.background_detail)};
+        return gpu.submit(&draw,1)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    }
     int execute(c3x_renderer_gpu_images_v1 const& request,std::vector<Command> const& commands,
                 std::vector<unsigned> const& pixels,c3x_renderer_gpu_result_v1& result,std::vector<unsigned>& output){
         output.clear();result={sizeof(result)};
@@ -36,7 +51,7 @@ public:
         else if(request.action==C3X_GPU_UPLOAD){ok=image!=map&&request.revision>0&&gpu.upload(image,request.revision,pixels.data(),pixels.size());}
         else if(request.action==C3X_GPU_DESTROY){ok=image!=map&&gpu.destroy(image);}
         else if(request.action==C3X_GPU_SUBMIT){
-            for(auto const& c:commands)if(c.destination==map)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+            for(auto const& c:commands)if(c.destination==map||c.detail==map)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
             ok=gpu.submit(commands.data(),commands.size());
         }else if(request.action==C3X_GPU_READBACK){
             auto texture=gpu.texture(image);if(!texture)return C3X_RENDERER_RESULT_BAD_ARGUMENT;

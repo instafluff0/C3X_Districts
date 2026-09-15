@@ -70,6 +70,14 @@ full-color resident producer without those compatibility copies. This final-tran
 integration is not completion of the readback-free architecture. Native UI/scrolling
 validation and whole-request game comparison remain pending.
 
+Custom-unit composition now uses the same GPU image owner: native-word and
+full-color destinations blend prepared bodies/shadows against resident underlays,
+with exact native key/clip/erase behavior and no background readback. The native
+unit hook offers this route before any DC lease. Live surface admission remains
+unconnected; cold unit pose finishing still uses the existing CPU publication.
+The remaining connection covers early surface lifetimes, native GDI/unsupported
+sprite operations and recovery, followed by whole-request game validation.
+
 ## Actual code responsibilities
 
 Completion means ownership and behavior for admitted categories, not permanent
