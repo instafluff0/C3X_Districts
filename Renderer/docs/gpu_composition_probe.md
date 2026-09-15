@@ -294,53 +294,136 @@ and `f684b988aa0344cda21ee179a6ec9fbd` (staged observer compatibility).
 The normal renderer candidate and required
 injected compilation pass; 45 existing UI/cadence/GDI/bridge/view tests pass.
 
-## Resident map → existing worker → composition
+## Resident map → native operations → native display
 
-The normal renderer DLL now exposes `c3x_renderer_gpu_render` and
-`c3x_renderer_gpu_images` using `native/gpu_frame_api.h`. The first copies the
-captured request, renders full detail through the existing world/view/pass owners,
-unwraps the circular finished surface into a sampleable GPU texture and imports
-it directly into the packed-image compositor. It returns an opaque map ticket and
-native replacement metadata, with no CPU pixel pointer. Producer readbacks are
-counted and must be zero for success. CPU bitmap validity is explicitly separate;
-returning to CPU rendering rebuilds current pixels, including after GPU failure.
+Optional `c3x_renderer_gpu_render`, `c3x_renderer_gpu_images` and
+`c3x_renderer_gpu_present` connect the existing world/view/pass owners to an
+immutable BGRA map, native operation packets and actual JGL final transfer.
+`native_image_adapter.h` keeps native-word/full-color pairs for admitted fresh
+map/screen/save lifetimes. Copies propagate both; fills and ordinary keyed UI
+expand native colors over unchanged map pixels. Unsupported sprite modes/GDI/raw access
+restores native words and relinquishes ownership. Native pointers stay on the
+caller; up to 2048 commands coalesce on the existing GPU worker.
 
-Composition packets create/destroy images, upload revised CPU sources, and submit
-ordered copy/fill/key/invert commands on that same `RendererWorker` and immediate
-context. Caller arrays are copied before queueing; native pointers, HDCs and COM
-objects never cross threads. Maps are immutable. A new GPU frame retires the old
-map/ticket while retaining UI images; CPU demand/configuration/reset retires the
-session. Image and whole-command validation precede mutation. Readback requires an
-explicit request and is reserved here for the oracle or a future native CPU barrier.
-Success establishes GPU command order, not physical completion or scanout.
+`patch_JGL_Graphsy_present` runs after native tooltip/cursor drawing and preserves
+palette binding. It uses the supplied native HWND without creating a window or
+requesting redraws. DXGI lifecycle/Present stay on that window's thread to avoid
+[DXGI/window-thread deadlock](https://learn.microsoft.com/en-us/windows/win32/direct3darticles/dxgi-best-practices).
+A retained display preserves partial updates; recreation requires a full transfer.
+The executor caps images/maps/scratch at 32 images / 64 MiB, caller packets at
+128 KiB and CPU comparisons at 64 MiB plus one temporary image. Native DIBs,
+world targets and the separate presenter budget below are additional.
 
-This path admits the existing bounded city profile without waves/reflections.
-Other profiles retain the current native CPU path. The compositor cap is 64 MiB
-including map/UI images and overlap scratch, plus one BGRA view (at most 10.2 MiB).
-Copied upload/readback buffers each cap at one 2240×1192 image; metadata and command
-queues are bounded. Existing renderer/native/driver allocations are additional.
-No second GPU device, worker pool or presenter is created.
+Reproduce with `python3 -m Renderer.native.record_gpu_frame --scene <scene.csv>`.
+Preserved receipts under `native/build/gpu-composition/`: `608e7d25ec424d7ba276d36fbcfd5a8c`
+(1440×900, 528 visible/784 captured), `0ede3a048c024fb9afcc026d4fe499d7`
+(640×480), `898b44c431e44ddaa57e05ea2b27819c` (observer compatibility).
+Stationary/animation/scroll/edit, native pixels, full-color display, palette,
+popup restore, partial transfer, recreation and config-off pass. The admitted
+chain performs zero execution reads; explicit config-off restores three images.
+The separate adapter stress fixture translates 47 operations with ten intentional
+fallback reads / 122,880 bytes. Oracle reads are additional. The map producer
+eliminates 5.18 MB/readback at 1440×900 in this fixture, not in the live bridge.
 
-`record_gpu_frame --scene <existing scene.csv>` runs the existing capture/production
-harness against a candidate DLL. Stationary, animation, scrolling and local-change
-cases compare exact pixels and replacement flags, then check GPU UI composition,
-upload reuse, immutable-map rejection, ticket/image lifetimes and exact CPU fallback.
-The test's explicit readback occurs after GPU composition and is counted separately.
-Normal build, matching TCC C/MSVC C++ packet layouts, the existing native JGL
-adapter and 45 UI/cadence/GDI/bridge contracts pass. The 1440×900 checkpoint
-`36e73263463d455080a0490d61fd4a7a` matches all pixels and ownership in four cases;
-528 tiles are visible, 784 captured. The matching 640×480 checkpoint is
-`80da53f379664d76bf34488e4f185751` (263 visible / 592 captured). At 1440×900,
-this avoids 5.18 MB of map readback per refreshed
-frame in this route, while adding bounded GPU unwrap/import work. The isolated
-32-bit process retains a largest free address region of about 2.0 GiB; this is not
-an in-game memory measurement. This validates a real
-renderer-to-compositor path, replacing the earlier CPU-uploaded map seed for this
-fixture; it does not yet measure a native final-presentation speedup.
+Preserve expensive diagnostics: `07b5131e653d4889be201dcad2211a65` found incorrect
+RGB565 shader expansion, fixed with explicit bit extraction; its compiler cause
+is unproven. `40aca9375e854f4c84459402247cf5ed` records a failed Parallels dispatch.
+`c61ff1963f5c4f4d912a37a47a217bfc` / `b247c0ae7dba4dc4adff705eb999384c`
+established that JGL's final transfer needs a palette-owner interface, not a bare
+palette. The fixture now initializes actual native palettes and owner wrappers.
+`6c7ba2a4b68347db8d76587076ab6828` attributes the large display mismatch to a desktop
+narrower than the test window; moving that same window verifies every pixel without
+changing desktop settings. Earlier controls and unreliable GPU timestamps remain
+preserved. None of these capture diagnostics is a presentation-latency benchmark.
 
-The staged observation DLL remains intact. The native JGL adapter still needs its
-packet transport connected to these worker exports, complete sprite/palette/text
-and CPU-access coverage, device-loss recovery, and one native-driven GPU final
-transfer. The current GDI final transfer requires CPU pixels and is unchanged.
-Live native capture remains pending. Static UI can remain CPU-rasterized and
-uploaded on change throughout this architecture.
+## Live final-transfer compatibility integration
+
+The loader now resolves `c3x_renderer_native_image` behind the audited GOG/JGL
+hooks. This callback consumes only final transfer/drain; **existing map and UI
+images remain CPU-owned**. `native_screen_bridge.h` borrows current JGL bits and
+stride, copies the requested native words, and returns the lease before worker
+submission. Retained-pointer changes are observed on each request. No pixel
+comparison, screen-type guess or timing-based UI completion rule is used.
+
+`NativePresenter` uploads packed R16 words and uses the shared `ImageDisplay` pass
+to expand 555/565 UI colors. Full-color map display still uses unchanged BGRA.
+Partial updates retain untouched display pixels. The compatibility route keeps a
+packed CPU copy of the displayed image so returning to GDI can restore exactly
+that image before the original partial transfer; uploading the entire current
+native screen instead could reveal unfinished UI outside that rectangle.
+Shaders survive window handoffs and invalidate on device replacement. Presentation
+stays on the native window thread; a queue barrier protects device access without
+retiring map publications, preparation or unit poses. Active prospective work
+causes immediate native fallback rather than cancellation or an added frame wait.
+Unsupported windows/formats, partial first frames and GPU failures also fall back.
+Config-off/reset release window ownership while native CPU pixels remain current.
+
+At 1440×900, the first correct BGRA compatibility path cost about 7.2 ms/callback;
+a bounded snapshot diagnostic attributed 3.68 ms to native capture/CPU expansion.
+Uploading native words instead reduced the callback to a 2.42–3.49 ms block mean across repeated runs,
+versus native GDI 1.92–2.72 ms in the same alternating blocks (about 0.5–0.8 ms
+additional callback cost).
+Both arms including the common desktop completion barrier were about 16.7 ms.
+This is a **final-transfer fixture**, not whole-request/game speedup evidence.
+Uploads halve to 2.59 MB for a full 1440×900 transfer; partial transfers upload
+only their rectangle. Existing map readback remains in the live path.
+The compatibility presenter adds ten GPU bytes/pixel (native source, retained
+BGRA display, swap buffer; at most 25.5 MiB), plus bounded packed CPU snapshot,
+worker packet and displayed shadow (at most 15.3 MiB combined). Existing native
+DIBs, world targets and driver allocations are additional.
+
+Current-code fixtures check the actual live export with preexisting CPU surfaces,
+retained-pointer edits, both native color formats, full/partial display, interleaved
+map publication, reset/recreation, observation expiry and partial config-off/GDI
+fallback. RGB565 GDI fallback is checked with the test window fully onscreen;
+large-window GPU checks expose every pixel by moving only that test window.
+Receipts and candidate/control hashes are indexed in
+`native/build/gpu-composition/live-screen-checkpoint.json`.
+
+Preserve `f15f19de14934e37bd9ea1a2956e6ae9` / `1f01f884cc7c45ac8044df8872912b74`:
+GetObject height did not preserve JGL's logical row order; its native lease/stride
+fixed the inversion. `3c320c66097f4fb090116c249ee1d003` found the off-desktop GDI
+clipping limit in the capture fixture; the tested dirty rectangle is now exposed
+before native transfer. `add975dd282446a6b3a36c3b4a34a218` preserves the slower
+CPU-expansion path and its attribution diagnostic. These findings do not justify
+repeating closed timing experiments or treating Parallels GPU timestamps as valid.
+
+The prior observer `038faec0…0be2e2` remains the rollback control. The current build
+is an evaluation of GPU presentation through normal INSTALL.bat; no game launch
+or installation is performed by the tooling. The pending strategic game checkpoint
+covers scrolling/zoom, Advisors/popups/buttons, overlays/picking/unit actions and
+window restore together, with `stage=native-screen` route/callback counters.
+The remaining architectural connection is exclusive map-to-screen ownership and
+map-dependent sprite/unit/access coverage, so the resident full-color map can
+replace the live CPU bitmap path. This compatibility integration does not remove
+map readback or prove that ownership. No new CSV entries are needed.
+
+## Sprite and session ownership checkpoint
+
+Existing sprite slot 17 now translates ordinary 8/16-bit and row-trimmed 8-bit
+sources. Coverage is explicit: indices 254/255 skip; opaque entries with the same
+RGB still draw. Palette/source/row-header edits are checked on use. One bounded
+decoded source reuses uploads; native scaling and unsupported key modes retain
+synchronized fallback. Paired native words/BGRA keep the map's full color.
+CPU map/unit jobs no longer retire the GPU session, and image/present packets
+preserve prepared views and unit playback. Map admission publishes transactionally:
+image-budget rejection preserves the prior map, ticket and native images.
+
+Current receipts `34673598b4cf460ea73472fd87a657f2` (1440×900) and
+`2671be8b0b084bcfad84504c72e42afe` (640×480) pass actual hooks, every native color
+expansion threshold, clipped/trimmed sprites, palette edits, actual custom-unit
+and CPU-map interleaving, saturated image admission and full/partial display.
+The sprite fixture translates 57 operations, with ten intentional fallback reads
+(122,880 bytes); the admitted map/display chain has zero execution reads before
+explicit fallback. Map oracle reads remain separately counted. These are
+correctness/work-elimination checks, not a live latency improvement. The staged
+compatibility DLL remains `a79fb579…dec552`; this checkpoint is not an all-GPU
+game build. Live admission, map-dependent unit/GDI access and recovery of dirty
+GPU-only native images after device loss remain unfinished.
+
+Preserve `087a5838f6504b009355309adce95cb4` and
+`c0680459a50144ff87a5cb08531e02ef`: nested command initialization produced an
+observed kind 0, rejecting the sprite copy format. Explicitly initializing a
+single command before copying the pair passes; the compiler cause is unproven.
+`7941ccb0301c4a0bb2d176588084edb4` exposed disabled unit assets in the GPU fixture;
+it now enables the production unit definitions before testing real interleaving.

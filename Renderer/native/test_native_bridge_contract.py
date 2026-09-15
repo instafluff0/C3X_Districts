@@ -829,7 +829,11 @@ int main() {
         self.assertIn("d3d11_usage_staging", native)
         self.assertIn("copysubresourceregion", native)
         self.assertIn("runtime_width > 2048", native)
-        for forbidden in ("createswapchain", "present(", "civ6", ".blp", ".fgx", "steamapps"):
+        # Native final presentation is now explicitly authorized. World rendering
+        # still cannot present; the connected native-window fixture tests the
+        # sole caller-driven transfer and its original-GDI fallback.
+        self.assertNotIn("present(", native.split("class rendererworker", 1)[0])
+        for forbidden in ("createswapchain", "civ6", ".blp", ".fgx", "steamapps"):
             self.assertNotIn(forbidden, native + api)
 
     def test_native_renderer_loads_definition_driven_normalized_terrain(self) -> None:

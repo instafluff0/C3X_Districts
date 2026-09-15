@@ -14,6 +14,9 @@
 
 #include "c3x_renderer_api.h"
 #include "gpu_frame_api.h"
+#ifdef C3X_GPU_NATIVE_CONTRACT
+bool native_worker_contract(char const*,c3x_renderer_gpu_images_fn,c3x_renderer_gpu_frame_v1&,c3x_renderer_gpu_render_fn,c3x_renderer_gpu_present_fn,c3x_renderer_camera_request_v1 const&,unsigned const*,int,int);
+#endif
 #include "benchmark_oracle.h"
 #include "busy_session_plan.h"
 
@@ -284,7 +287,11 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
 #ifdef C3X_LAB_PREVIEW
     enable_unit_preview=enable_unit_preview || GetEnvironmentVariableA("C3X_LAB_UNIT_STUDY",unit_preview,sizeof(unit_preview))!=0;
 #endif
-    if((enable_unit_preview || idle_unit_count) &&
+    bool gpu_contract_units=false;
+#ifdef C3X_GPU_NATIVE_CONTRACT
+    char gpu_units[8]={};gpu_contract_units=GetEnvironmentVariableA("C3X_RENDERER_GPU_FRAME_TEST",gpu_units,sizeof(gpu_units)) && !std::strcmp(gpu_units,"1");
+#endif
+    if((enable_unit_preview || idle_unit_count || gpu_contract_units) &&
        (!set_units || set_units(1)!=C3X_RENDERER_RESULT_OK))return 1;
     if (set_definitions == nullptr || render == nullptr || reset == nullptr ||
         (configure && set_definitions(argv[2], argv[3], nullptr, custom_path) != C3X_RENDERER_RESULT_OK))

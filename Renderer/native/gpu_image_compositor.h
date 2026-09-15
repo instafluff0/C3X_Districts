@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <algorithm>
 
+#include "gpu_image_display.h"
 namespace c3x_gpu_images {
 using Microsoft::WRL::ComPtr;
 struct Counts {std::uint64_t uploads=0,upload_bytes=0,commands=0,snapshots=0,resident_bytes=0;};
@@ -22,6 +23,7 @@ class Compositor {
     struct Constants {int area[4],offset[2];unsigned mode,color;};
     ID3D11Device* device;ID3D11DeviceContext* context;
     std::array<Image,32> images={};Image scratch;Id serial=0;
+    ImageDisplay display_program;
     ComPtr<ID3D11ComputeShader> shader,import_shader;ComPtr<ID3D11Buffer> constants;
     Counts counters;std::uint64_t budget;
     Image* find(Id id){if(!id)return nullptr;for(auto& image:images)if(image.id==id)return &image;return nullptr;}
@@ -42,11 +44,18 @@ class Compositor {
         auto d=find(command.destination);if(!d)return false;
         if(command.area.left>command.area.right || command.area.top>command.area.bottom ||
            command.clip.left>command.clip.right || command.clip.top>command.clip.bottom)return false;
-        if(command.kind!=Kind::copy&&command.kind!=Kind::fill&&command.kind!=Kind::color_key&&command.kind!=Kind::invert&&command.kind!=Kind::quantize)return false;
+        if(command.kind!=Kind::copy&&command.kind!=Kind::fill&&command.kind!=Kind::color_key&&command.kind!=Kind::invert&&command.kind!=Kind::quantize&&command.kind!=Kind::expand&&command.kind!=Kind::native_sprite)return false;
         if(command.kind==Kind::fill||command.kind==Kind::invert)return d->format==Format::bgra32||command.color<=65535;
         auto s=find(command.source);if(!s)return false;
         if(command.kind==Kind::quantize){
             if(s->format!=Format::bgra32||d->format==Format::bgra32||command.color>63)return false;
+        }else if(command.kind==Kind::expand){
+            if(s->format==Format::bgra32||d->format!=Format::bgra32||command.color>65536)return false;
+        }else if(command.kind==Kind::native_sprite){
+            // Decoded native source: low 16 bits are a native color, bit 16 is
+            // coverage. This is independent of the destination's pixel values.
+            if(s->format!=Format::bgra32||command.color>2||
+               (d->format==Format::bgra32?command.color==0:command.color!=0))return false;
         }else if(s->format!=d->format)return false;
         auto r=selected(command,*d);if(r.left>=r.right||r.top>=r.bottom)return true;
         auto x=std::int64_t(command.source_x)+r.left-command.area.left;
@@ -74,6 +83,19 @@ Texture2D<uint> input_image:register(t0);RWTexture2D<uint> output_image:register
    uint3 scaled=uint3(value&255,(value>>8)&255,(value>>16)&255)*levels;
    uint3 q=scaled/255+uint3((scaled%255)*128>(threshold*2+1)*255);
    value=q.x|(q.y<<5)|(q.z<<(mode==6?11:10));
+ }
+ if(mode>=9){
+   if(!(value&65536))return;
+   value&=65535;
+   if(mode==9){output_image[at]=value;return;}
+ }
+ if(mode==7||mode==8||mode==10||mode==11){
+   if(mode<9&&value==color)return;
+   uint b=((value&31)<<3)|((value&31)>>2);
+   uint r,g;
+   if(mode==8||mode==11){g=((value>>3)&252)|((value>>9)&3);r=((value>>8)&248)|((value>>13)&7);}
+   else {g=((value>>2)&248)|((value>>7)&7);r=((value>>7)&248)|((value>>12)&7);}
+   value=b|(g<<8)|(r<<16)|0xff000000;
  }
  output_image[at]=value;
 })";
@@ -129,7 +151,7 @@ Texture2D<uint> input_image:register(t0);RWTexture2D<uint> output_image:register
                 unsigned value[4]={op.color,op.color,op.color,op.color};context->ClearUnorderedAccessViewUint(d->write.Get(),value);
                 d->cpu_current=false;++counters.commands;continue;
             }
-            Constants p={{r.left,r.top,r.right,r.bottom},{0,0},op.kind==Kind::fill?1u:op.kind==Kind::color_key?(d->format==Format::bgra32?4u:2u):op.kind==Kind::invert?3u:op.kind==Kind::quantize?(d->format==Format::rgb565?6u:5u):0u,op.color};
+            Constants p={{r.left,r.top,r.right,r.bottom},{0,0},op.kind==Kind::fill?1u:op.kind==Kind::color_key?(d->format==Format::bgra32?4u:2u):op.kind==Kind::invert?3u:op.kind==Kind::quantize?(d->format==Format::rgb565?6u:5u):op.kind==Kind::expand?(s->format==Format::rgb565?8u:7u):op.kind==Kind::native_sprite?9u+op.color:0u,op.color};
             if(op.kind!=Kind::fill&&op.kind!=Kind::invert){p.offset[0]=int(std::int64_t(op.source_x)-op.area.left);p.offset[1]=int(std::int64_t(op.source_y)-op.area.top);}
             context->UpdateSubresource(constants.Get(),0,nullptr,&p,0,0);auto cb=constants.Get();context->CSSetConstantBuffers(0,1,&cb);
             auto read=s?s->read.Get():nullptr;auto write=d->write.Get();context->CSSetShaderResources(0,1,&read);context->CSSetUnorderedAccessViews(0,1,&write,nullptr);
@@ -162,6 +184,12 @@ Texture2D<float4> input_image:register(t0);RWTexture2D<uint> output_image:regist
         context->CSSetShader(import_shader.Get(),nullptr,0);context->Dispatch((desc.Width+7)/8,(desc.Height+7)/8,1);unbind();
         destination->cpu_current=false;return true;
     }
+    bool display(Id id,ID3D11RenderTargetView* target,unsigned width,unsigned height,Rect area){
+        auto image=find(id);if(!image||image->format!=Format::bgra32||image->width!=width||image->height!=height||!target)return false;
+        RECT clip={std::max(0,area.left),std::max(0,area.top),std::min(int(width),area.right),std::min(int(height),area.bottom)};
+        return display_program.draw(device,context,image->read.Get(),target,width,height,clip);
+    }
+
     ID3D11Texture2D* texture(Id id){auto image=find(id);return image?image->texture.Get():nullptr;}
     ID3D11ShaderResourceView* view(Id id){auto image=find(id);return image?image->read.Get():nullptr;}
     Counts stats()const{return counters;}

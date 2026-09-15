@@ -11,7 +11,12 @@ using Backend=c3x_gpu_images::LocalBackend;
 #endif
 using namespace c3x_gpu_images;
 c3x_native_images::Adapter<Backend>* adapter=nullptr;
-int translate(int op,void* object,void* source,void const* from,void const* to,unsigned color){return adapter->operation(op,object,source,from,to,color);}
+int (*native_present_image)(void*,void*,void const*)=nullptr;
+int translate(int op,void* object,void* source,void const* from,void const* to,unsigned color){
+    if(op==C3X_NATIVE_IMAGE_PRESENT&&native_present_image)return native_present_image(object,source,from);
+    if(op==C3X_NATIVE_IMAGE_DRAIN&&native_present_image)native_present_image(nullptr,nullptr,nullptr);
+    return adapter->operation(op,object,source,from,to,color);
+}
 int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned const* map_pixels=nullptr,int map_width=0,int phase_x=0,int phase_y=0){
     try{
         HMODULE jgl=LoadLibraryA(path);verify(c3x_native_observation::verified_module(jgl),"audited JGL");
@@ -71,13 +76,30 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         // Actual image slot 33 now also skips JGL rasterization for the audited
         // transparent mode; native palette/shadow variants still fall back.
         verify(fill(ui,&full,int(0x80007c1fu))==0,"native key background");
-        RECT foreground={5,6,28,29};verify(fill(ui,&foreground,int(0x800003e0u))==0,"native key foreground");
+        RECT foreground={5,6,28,29};verify(fill(ui,&foreground,int(0x80002345u))==0,"native key foreground");
         using Draw=int(__thiscall*)(JGL_Image*,JGL_Image*,int,int);
         for(int phase=0;phase<3;++phase){
             verify(reinterpret_cast<Draw>(original[33])(ui,control[0],-3,2)==0,"oracle image draw");
             verify(reinterpret_cast<Draw>(ui->vtable[33])(ui,target[0],-3,2)==0,"hooked GPU image draw");compare(0);
         }
         verify(backend.stats().readbacks==0&&gpu.stats().uploads==upload_before+3,"keyed image chain reuses CPU upload without readback");
+#ifdef C3X_NATIVE_WORKER_TEST
+        // Full-color destination: only native UI is expanded. The map beneath
+        // transparent pixels retains every BGRA bit from the production renderer.
+        auto full_color=gpu.create(w,h,Format::bgra32);
+        Command base={Kind::copy,full_color,map,{0,0,w,h},{0,0,w,h}};gpu.submit(&base,1);
+        Command overlay={Kind::expand,full_color,backend.image(ui),{0,0,w,h},{0,0,w,h},0,0,0x7c1f};gpu.submit(&overlay,1);
+        BITMAPINFO info={};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=w;info.bmiHeader.biHeight=-h;
+        info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;void* rgb=nullptr;
+        auto dc=CreateCompatibleDC(nullptr);auto bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&rgb,nullptr,0);verify(dc&&bitmap&&rgb,"native full-color UI oracle");
+        auto previous=SelectObject(dc,bitmap);using UiDc=HDC(__thiscall*)(JGL_Image*);
+        auto source_dc=reinterpret_cast<UiDc>(original[10])(ui);verify(BitBlt(dc,0,0,w,h,source_dc,0,0,SRCCOPY)!=FALSE,"GDI native UI color expansion");GdiFlush();
+        reinterpret_cast<Release>(original[11])(ui,1);
+        std::vector<unsigned> composed(w*h);gpu.readback(full_color,composed.data(),composed.size());
+        for(int y=0;y<h;++y)for(int x=0;x<w;++x){auto expected=x>=foreground.left&&x<foreground.right&&y>=foreground.top&&y<foreground.bottom?
+            (static_cast<unsigned*>(rgb)[y*w+x]|0xff000000u):map_pixels[y*map_width+x];verify(composed[y*w+x]==expected,"full-color map plus native UI exact");}
+        SelectObject(dc,previous);DeleteObject(bitmap);DeleteDC(dc);gpu.destroy(full_color);
+#endif
         // Unsupported stretch restores both GPU images before native StretchBlt.
         RECT reduced={0,0,32,24};both_copy(0,1,full,reduced);verify(!backend.owns(target[0])&&!backend.owns(target[1]),"stretch returns involved images to CPU ownership");compare(0,true);compare(1,true);
         verify(backend.stats().readbacks==2,"one readback for each dirty native fallback image");
@@ -97,6 +119,66 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         reinterpret_cast<Release>(control[2]->vtable[11])(control[2],1);reinterpret_cast<Release>(target[2]->vtable[11])(target[2],1);
         compare(2,true);verify(!backend.owns(target[2]),"public HDC receives current GPU pixels before native invert");
         verify(reinterpret_cast<Init>(target[2]->vtable[1])(target[2],w,h,16,1)==0,"new lifetime before config off");both_fill(2,full,0x80000567);
+        // Native sprite operations consume CPU source data, never destination bits.
+        JGLSprite sprite={};auto base_address=reinterpret_cast<char*>(jgl);
+        reinterpret_cast<JGLSprite*(__thiscall*)(JGLSprite*,void*)>(base_address+0x7e80)(&sprite,nullptr);
+        sprite.d=*reinterpret_cast<int*>(reinterpret_cast<char*>(ui)+0x7c);sprite.f28=*reinterpret_cast<int*>(reinterpret_cast<char*>(ui)+0x4d0);
+        sprite.bits=get(ui,0,0);sprite.bit_count=16;sprite.stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(ui)+0x40);sprite.width=w;sprite.height=h;
+        auto palette=reinterpret_cast<void*(__thiscall*)(JGL_Image*)>(original[58])(ui);
+        using SpriteDraw=int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,void*);
+        auto original_sprite=reinterpret_cast<SpriteDraw>(state.custom_renderer_jgl_sprite_original);
+        auto sprite_readbacks=backend.stats().readbacks;
+        auto draw_sprite=[&](int x,int y,void* selected_palette){
+            auto result=original_sprite(&sprite,control[2],x,y,selected_palette);
+            verify(reinterpret_cast<SpriteDraw>(sprite.vtable[17])(&sprite,target[2],x,y,selected_palette)==result,"native sprite return");
+            compare(2);verify(backend.owns(target[2])&&backend.stats().readbacks==sprite_readbacks,"native sprite has no destination readback");
+        };
+        auto sprite_uploads=gpu.stats().uploads;
+        draw_sprite(3,4,palette);draw_sprite(-9,7,palette);draw_sprite(300,400,palette);
+        verify(gpu.stats().uploads==sprite_uploads+1,"native sprite reuses unchanged source at new anchors");
+        reinterpret_cast<unsigned short*>(sprite.bits)[9]=0x4567;draw_sprite(3,4,palette);
+        verify(gpu.stats().uploads==sprite_uploads+2,"native sprite retained-pointer mutation updates source");
+        auto source_bits=sprite.bits;
+        auto sprite_palette=reinterpret_cast<void*(__thiscall*)(void*,void*)>(gt[30])(graph,nullptr);
+        verify(sprite_palette!=nullptr,"indexed sprite palette");
+        auto palette_table=*static_cast<void***>(sprite_palette);
+        auto colors=reinterpret_cast<unsigned short*(__thiscall*)(void*)>(palette_table[6])(sprite_palette);
+        verify(colors!=nullptr,"555 palette words");
+        for(unsigned n=0;n<256;++n)colors[n]=static_cast<unsigned short>(n*127);colors[0]=0x7c1f;
+        std::vector<unsigned char> indexed(w*h);for(unsigned n=0;n<indexed.size();++n)indexed[n]=n%256;
+        sprite.bit_count=8;sprite.bits=indexed.data();sprite.stride=w;
+        draw_sprite(-3,2,sprite_palette);draw_sprite(5,-4,sprite_palette);
+        colors[17]^=0x7fff;draw_sprite(0,0,sprite_palette);
+        indexed[12]=42;draw_sprite(0,0,sprite_palette);
+        verify(backend.stats().readbacks==sprite_readbacks,"all palette indices including opaque magenta and transparent 254/255 avoid readback");
+        // Actual native row-trimmed layout: left/count bytes and a 16-bit
+        // offset into the source stream. Descriptor edits are content changes.
+        std::vector<unsigned char> row_data,row_headers(h*4);
+        for(int y=0;y<h;++y){unsigned left=3+y%4,count=w-left-5,offset=unsigned(row_data.size());
+            row_headers[y*4]=static_cast<unsigned char>(left);row_headers[y*4+1]=static_cast<unsigned char>(count);row_headers[y*4+2]=static_cast<unsigned char>(offset&255);row_headers[y*4+3]=static_cast<unsigned char>(offset>>8);
+            row_data.insert(row_data.end(),indexed.begin()+y*w+left,indexed.begin()+y*w+left+count);
+        }
+        sprite.f18=1;sprite.f1c=reinterpret_cast<int>(row_headers.data());sprite.bits=row_data.data();
+        draw_sprite(0,0,sprite_palette);draw_sprite(-7,9,sprite_palette);
+        row_headers[1]-=3;draw_sprite(4,3,sprite_palette);
+        sprite.f18=0;sprite.f1c=0;
+        // Unsupported 16-bit scaled program retains the native no-draw behavior
+        // and synchronizes before it can acquire destination bytes.
+        sprite.f28=0x80007c1f;sprite.bit_count=16;sprite.bits=source_bits;sprite.stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(ui)+0x40);
+        auto scale=reinterpret_cast<int*>(base_address+0x6c0fc);int saved_scale=*scale;*scale=saved_scale*2;
+        auto result=original_sprite(&sprite,control[2],3,4,palette);
+        verify(reinterpret_cast<SpriteDraw>(sprite.vtable[17])(&sprite,target[2],3,4,palette)==result,"unsupported native sprite return");
+        *scale=saved_scale;compare(2,true);verify(!backend.owns(target[2]),"unsupported sprite restores complete destination");
+        reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(base_address+0x3cf10)(sprite_palette,1);
+        sprite.bits=nullptr;reinterpret_cast<void(__thiscall*)(JGLSprite*)>(base_address+0x7ed0)(&sprite);release(ui,1);
+        verify(reinterpret_cast<Init>(target[2]->vtable[1])(target[2],w,h,16,1)==0,"fresh palette destination");both_fill(2,full,0x80000567);
+        both_fill(2,{3,4,17,19},2);compare(2,true);verify(!backend.owns(target[2]),"palette-index fill retains native semantics after CPU barrier");
+        verify(reinterpret_cast<Init>(target[2]->vtable[1])(target[2],w,h,16,1)==0,"fresh config-off destination");both_fill(2,full,0x80000567);
+        RECT outside_source={-2,0,62,48};
+        verify(copy(ui,control[2],&outside_source,&full)==0,"native clipped-source control");
+        verify(reinterpret_cast<Copy>(ui->vtable[16])(ui,target[2],&outside_source,&full)==0,"queued adapter rejects unsupported source before skipping native draw");
+        compare(2,true);verify(!backend.owns(target[2]),"unsupported source bounds restore CPU before native copy");
+        verify(reinterpret_cast<Init>(target[2]->vtable[1])(target[2],w,h,16,1)==0,"fresh config-off destination after source fallback");both_fill(2,full,0x80000567);
         // Config-off restores all remaining dirty images before returning to JGL.
         state.current_config.enable_custom_rendering=false;both_fill(2,{0,0,2,2},0x80000111);compare(2,true);
         verify(state.custom_renderer_native_image==nullptr,"config-off drains and unbinds backend");state.current_config.enable_custom_rendering=true;
@@ -120,7 +202,9 @@ int native_adapter_contract(char const* path,Backend& gpu,Id map=0,unsigned cons
         for(auto image:target)reinterpret_cast<Destroy>(image->vtable[0])(image,1);
         for(auto image:control)reinterpret_cast<Destroy>(image->vtable[0])(image,1);
         reinterpret_cast<Destroy>(ui->vtable[0])(ui,1);reinterpret_cast<Destroy>(root->vtable[0])(root,1);
-        verify(gpu.stats().resident_bytes>0,"drain releases all images, only shared overlap scratch remains");
+        #ifndef C3X_NATIVE_WORKER_TEST
+        verify(gpu.stats().resident_bytes==w*h*4,"drain releases all images, only shared overlap scratch remains");
+#endif
         auto stats=backend.stats();std::printf("PASS hooked native GPU adapter: 6 phases exact native pixels; translated=%llu source_checks=%llu uploads=%llu fallback_readbacks=%llu bytes=%llu; zero readbacks in admitted GPU chain; retained-pointer edits, stretch, CPU access, reinit, config-off and detach pass\n",stats.translated,stats.source_checks,std::uint64_t(gpu.stats().uploads),stats.readbacks,stats.readback_bytes);
         reinterpret_cast<void(__thiscall*)(void*,unsigned)>(gt[0])(graph,1);FreeLibrary(jgl);return 0;
     }catch(std::exception const& e){std::fprintf(stderr,"FAIL %s\n",e.what());return 1;}

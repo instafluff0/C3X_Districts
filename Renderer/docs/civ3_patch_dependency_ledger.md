@@ -26,19 +26,49 @@ slots are checked before patching and restored on unload/capture completion;
 these DLL RVAs are not CSV addresses. No renderer callback requests a redraw.
 Missing exports, unsupported executable capabilities or a mismatched DLL leave
 the current CPU composition path. GPU destination substitution is not enabled. The user subsequently authorized
-staging observation DLL `038faec0…0be2e2`; it is staged, without install/game launch.
+staging observation DLL `038faec0…0be2e2`; the subsequent compatibility evaluation
+`a79fb579…dec552` is staged, without install/game launch.
 The independent packed GPU executor uses no additional hooks or CSV entries:
 `required_user_action: []`. Real destination admission remains pending live coverage.
 The adapter adds `patch_JGL_Image_clip`: concrete JGL slot 13, DLL RVA `0x1a40`,
 `int (__fastcall *)(JGL_Image *, int edx, RECT *)`. Its audited private HDC lease
 updates clip metadata only; the native body/return value remain authoritative.
-This runtime slot is verified/restored with the others, not a CSV entry. The new
-caller-thread backend seam is deliberately not resolved by the shipping loader;
-only the isolated test binds it. No additional executable address is required.
+This runtime slot is verified/restored with the others, not a CSV entry. The caller-thread seam also supports the live completed-screen compatibility
+callback described below. Exclusive GPU destination admission remains isolated.
+No additional executable address is required.
 Resident-map publication and composition add optional `c3x_renderer_gpu_render`
 and `c3x_renderer_gpu_images` DLL exports, driven by existing `RendererWorker`.
-This step changes no injected sources or executable hooks. The native image adapter
-remains unbound; `required_user_action: []`. Staged observation DLL is preserved.
+Resident-map publication required no new executable hooks. The native image
+adapter sends its tested native operations through those worker exports. Optional
+image packets specify BGRA/555/565 storage and bounded ordered commands; no native
+pointers leave the caller. Existing image/sprite hooks are reused unchanged.
+`patch_JGL_Graphsy_present` now wraps concrete Graphsy slot 41 at DLL RVA
+`0x3baa0`, verified against table RVA `0x685f8`. Original signature is
+`int (__thiscall *)(void *graph, RECT *rect)`; injected wrapper is
+`int (__fastcall *)(void *graph, int edx, RECT *rect)`. The body returns zero
+and transfers screen PCX member `+0x148` through window DC `+0x138`. It runs after
+the existing GOG `JGL_present_screen` wrapper finishes tooltip/cursor drawing.
+The optional callback consumes the complete transfer or leaves original JGL/DC
+fallback; table protection and restoration include this slot. No CSV address is
+added: it is a hash-pinned runtime DLL slot, admitted through existing GOG-only
+capabilities. `required_user_action: []`. The loader now resolves
+`c3x_renderer_native_image`, whose live implementation consumes only the completed
+screen transfer and drain operations. It never skips native pixel drawing.
+Observation expiry does not detach the live transfer owner; config-off/unload
+releases presentation before original GDI resumes. The older staged observer is
+preserved as the rollback control. The wrapper preserves original palette
+binding through verified image slot 59 (`0x1ca0`) and palette-owner global RVA
+`0x70f48` (native palette member `+4`). Its scoped 16-bit metadata operation may
+use the native private DC without treating palette binding as a pixel escape;
+other DC access still restores CPU ownership. Injected compilation passes.
+
+The existing `patch_JGL_Sprite_draw` now forwards typed sprite/palette/anchor
+arguments to the image adapter before native fallback. JGL sprite slot 17 remains
+RVA `0x8180`, signature `int (__thiscall *)(JGLSprite *, JGL_Image *, int x,
+int y, void *palette)`. Ordinary 8/16-bit and row-trimmed 8-bit sources pass exact
+native tests; unsupported scaling/key modes restore native ownership. No new
+table entry or address is needed. Live exclusive admission remains pending;
+`required_user_action: []`.
 
 The accepted retained world/view/submission implementation was renderer-only. Persistent
 appearance, local dependency proofs and selected passes use the existing

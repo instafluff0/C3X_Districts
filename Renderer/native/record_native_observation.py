@@ -37,7 +37,7 @@ def main():
     (build/'native_probe_state.h').write_text(text[start:text.index('\tc3x_renderer_unit_draw_background_fn',start)])
     invocation=uuid.uuid4().hex;out=build/'gpu-composition'/invocation;out.mkdir()
     inputs=[ROOT/'injected_code.c',ROOT/'C3X.h',ROOT/'civ_prog_objects.csv',jgl,*[native/n for n in
-        ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','test_gpu_image_compositor.cpp','native_image_adapter.h','test_native_image_adapter.cpp')]]
+        ('c3x_renderer_api.h','native_observation.h','test_native_observation.cpp','record_native_observation.py','BUILD.bat','gpu_image_compositor.h','gpu_image_commands.h','test_local_image_backend.h','test_gpu_image_compositor.cpp','native_image_adapter.h','test_native_image_adapter.cpp')]]
     if observer:inputs.append(observer)
     before={p.relative_to(ROOT).as_posix():digest(p) for p in inputs}
     win=windows_root();winout=win/out.relative_to(ROOT)
@@ -60,14 +60,15 @@ def main():
     passed=completion==[invocation,'0'] and unchanged and (out/'test.log').is_file() and marker in (out/'test.log').read_text(errors='replace')
     exe=build/'gpu-composition'/executable
     if passed:shutil.copy2(exe,out/exe.name)
-    receipt={'status':'pass' if passed else 'fail','inputs':before,'inputs_unchanged':unchanged,
+    receipt={'status':'pass' if passed else 'fail' if completion else 'unconfirmed','inputs':before,'inputs_unchanged':unchanged,
              'transport_returncode':result.returncode,'transport_output':result.stdout+result.stderr,
-             'executable_sha256':digest(exe) if exe.exists() else None,
+             'executable_sha256':digest(exe) if passed else None,
              'scope':('GPU packed image executor against actual JGL; no game integration claim' if args.gpu else 'actual injected hooks against isolated JGL; native final wrapper uses an ordered stub; no game/UI coverage claim')}
     if args.adapter:receipt['scope']='actual injected hooks substitute GPU copy/fill; isolated native images and CPU fallback; no live map or final-transfer replacement'
     (out/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n')
     for name in ('build.log','test.log'):
         if (out/name).exists():print((out/name).read_text(errors='replace')[-7000:])
+    if not completion:print('No native completion receipt; inspect VM before retry. '+result.stdout+result.stderr)
     print(out.relative_to(ROOT),receipt['status']);return 0 if passed else 1
 
 

@@ -404,12 +404,15 @@ struct c3x_renderer_native_observation {
     int left, top, right, bottom;
 };
 typedef int (*c3x_renderer_native_observe_fn)(struct c3x_renderer_native_observation const *);
-/* Isolated native-backend admission seam; not resolved by the shipping loader.
+/* Caller-thread native backend seam. The live loader binds final-transfer
+   compatibility only; exclusive image ownership remains separately admitted.
    Caller-thread-only, synchronous borrowed pointers. COPY/FILL/IMAGE_DRAW returning 1 means
    completed submission with native success (0); 0 requires current CPU storage.
-   Other operations maintain ownership and return 0. DRAIN precedes detachment.
+   PRESENT passes Graphsy as source and its final rectangle as source_rect; 1
+   consumes the native transfer, 0 requires releasing GPU window ownership before
+   original JGL/DC fallback. Other operations return 0. DRAIN precedes detachment.
    A backend must drain before removal; it cannot fail open with stale CPU pixels. */
-enum { C3X_NATIVE_IMAGE_DRAIN = 100, C3X_NATIVE_IMAGE_REINIT = 101, C3X_NATIVE_IMAGE_CLIP = 102 };
+enum { C3X_NATIVE_IMAGE_DRAIN = 100, C3X_NATIVE_IMAGE_REINIT = 101, C3X_NATIVE_IMAGE_CLIP = 102, C3X_NATIVE_IMAGE_PRESENT = 103, C3X_NATIVE_IMAGE_PALETTE = 104 };
 typedef int (*c3x_renderer_native_image_fn)(int operation, void * image, void * source,
     void const * source_rect, void const * destination_rect, unsigned color);
 

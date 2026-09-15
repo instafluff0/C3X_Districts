@@ -133,7 +133,7 @@ struct Capture {
             if (depth && !--depth) {LARGE_INTEGER end;QueryPerformanceCounter(&end);transfer_ms+=1000.*double(end.QuadPart-begin.QuadPart)/double(frequency.QuadPart);}
             // Flush only after the outer native transfer has returned, never during its drawing.
             if (!depth && (presents==1 || window_presents>=120 || presents>=8192)) flush();
-            if (!depth && presents>=8192) {ended=true;write("[C3X native] probe=complete hooks=detach\n");return 0;}
+            if (!depth && presents>=8192) {ended=true;write("[C3X native] probe=complete observation=stopped\n");return 0;}
         }
         return 1;
     }

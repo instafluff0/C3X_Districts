@@ -6,18 +6,27 @@ namespace c3x_gpu_images {
 // A map is immutable; native composition writes separately owned images.
 class Session {
     ID3D11Device* device;ID3D11DeviceContext* context;
-    Compositor gpu;Id map=0;std::int64_t ticket=0;std::uint64_t readbacks=0;
+    Compositor gpu;Id map=0;std::int64_t ticket=0,identity=0;std::uint64_t readbacks=0;
 public:
     Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c){}
     bool publish(ID3D11Texture2D* texture,std::int64_t serial){
-        ticket=0;if(map)gpu.destroy(map);map=0;
+        if(!texture||serial<=ticket)return false;
         D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
-        map=gpu.create(d.Width,d.Height,Format::bgra32);
-        if(!map||!gpu.import_bgra(map,texture))return false;
-        ticket=serial;return true;
+        auto next=gpu.create(d.Width,d.Height,Format::bgra32);
+        if(!next)return false;
+        if(!gpu.import_bgra(next,texture)){gpu.destroy(next);return false;}
+        // Admission failure leaves the previous immutable map and UI handles
+        // usable. Publish the new identity only after its import succeeds.
+        if(map)gpu.destroy(map);map=next;
+        ticket=serial;if(!identity)identity=serial;return true;
     }
+    std::int64_t session_identity()const{return identity;}
     Id map_image()const{return map;}
     std::int64_t current_ticket()const{return ticket;}
+    bool display_to(std::int64_t requested,Id image,ID3D11RenderTargetView* target,ID3D11Texture2D* retained,ID3D11Texture2D* buffer,unsigned w,unsigned h,Rect area){
+        if(requested!=ticket||!gpu.display(image,target,w,h,area))return false;
+        context->CopyResource(buffer,retained);context->Flush();return true;
+    }
     int execute(c3x_renderer_gpu_images_v1 const& request,std::vector<Command> const& commands,
                 std::vector<unsigned> const& pixels,c3x_renderer_gpu_result_v1& result,std::vector<unsigned>& output){
         output.clear();result={sizeof(result)};

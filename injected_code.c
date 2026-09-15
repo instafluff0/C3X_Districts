@@ -26859,10 +26859,10 @@ custom_renderer_native_probe_on ()
 }
 
 int
-translate_custom_renderer_native (int operation, JGL_Image * image, JGL_Image * source, RECT * source_rect, RECT * destination_rect, unsigned color)
+translate_custom_renderer_native (int operation, JGL_Image * image, void * source, RECT * source_rect, RECT * destination_rect, unsigned color)
 {
-	// The loader deliberately leaves this isolated-backend seam unbound. Native
-	// ownership and final-transfer integration must pass before live admission.
+	// The live callback consumes only final screen transfer. Native pixel
+	// drawing remains authoritative; exclusive GPU images use separate admission.
 	if (is->custom_renderer_native_image == NULL) return 0;
 	if (! custom_renderer_native_probe_on ()) {
 		is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0);
@@ -26870,7 +26870,8 @@ translate_custom_renderer_native (int operation, JGL_Image * image, JGL_Image * 
 		return 0;
 	}
 	// Audited clip metadata only: its private HDC never exposes image pixels.
-	if (operation == C3X_NATIVE_DC && is->custom_renderer_native_operation == C3X_NATIVE_IMAGE_CLIP) return 0;
+	if (operation == C3X_NATIVE_DC && (is->custom_renderer_native_operation == C3X_NATIVE_IMAGE_CLIP ||
+	    (is->custom_renderer_native_operation == C3X_NATIVE_IMAGE_PALETTE && image != NULL && image->BitCount == 16))) return 0;
 	return is->custom_renderer_native_image (operation, image, source, source_rect, destination_rect, color);
 }
 
@@ -26997,10 +26998,37 @@ patch_JGL_Sprite_draw (JGLSprite * sprite, int edx, JGL_Image * destination, int
 	bool observing = custom_renderer_native_probe_on ();
 	int previous = is->custom_renderer_native_operation;
 	observe_custom_renderer_native (C3X_NATIVE_SPRITE, destination, sprite, NULL);
+	RECT anchor = {x, y, x, y};
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE, destination, sprite, (RECT *)palette, &anchor, 0)) return 0;
 	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
 	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, int, int, void *))is->custom_renderer_jgl_sprite_original) (sprite, __, destination, x, y, palette);
 	if (observing) is->custom_renderer_native_operation = previous;
 	return result;
+}
+
+int __fastcall
+patch_JGL_Graphsy_present (void * graph, int edx, RECT * rect)
+{
+	// Audited final transfer: the EXE wrapper has already drawn tooltip/cursor.
+	// The optional backend consumes the complete screen or releases GPU window
+	// ownership before JGL's original DC access restores/copies native pixels.
+	void * native_screen = *(void **)((char *)graph + 0x148);
+	JGL_Image * image = native_screen != NULL ? *(JGL_Image **)((char *)native_screen + 4) : NULL;
+	if (is->custom_renderer_native_image != NULL && custom_renderer_native_probe_on () && image != NULL && image->BitCount == 16) {
+		// Preserve Graphsy's palette binding before replacing its pixel transfer.
+		// SetDIBColorTable cannot change packed 16-bit pixels; its private DC is
+		// metadata-only here. Indexed destinations retain the original body.
+		char * module = (char *)(*p_GetModuleHandleA) ("jgl.dll");
+		void * palette_owner = *(void **)(module + 0x70f48);
+		if (palette_owner != NULL) {
+			int previous = is->custom_renderer_native_operation;
+			is->custom_renderer_native_operation = C3X_NATIVE_IMAGE_PALETTE;
+			((void (__fastcall *) (JGL_Image *, int, void *))is->custom_renderer_jgl_original[59]) (image, __, *(void **)((char *)palette_owner + 4));
+			is->custom_renderer_native_operation = previous;
+		}
+	}
+	if (translate_custom_renderer_native (C3X_NATIVE_IMAGE_PRESENT, image, graph, rect, NULL, 0)) return 0;
+	return ((int (__fastcall *) (void *, int, RECT *))is->custom_renderer_jgl_present_original) (graph, __, rect);
 }
 
 void
@@ -27029,18 +27057,29 @@ set_custom_renderer_native_probe (JGL_Image * root)
 		if (! is->custom_renderer_native_observe (&check)) { is->custom_renderer_native_probe_rejected = true; return; }
 		void ** table = (void **)(module + 0x68238), ** sprite_table = (void **)(module + 0x68440);
 		for (int n = 0; n < 9; n++) if (table[slots[n]] != module + rvas[n]) { is->custom_renderer_native_probe_rejected = true; return; }
+		void * (__cdecl * get_graph) () = (void * (__cdecl *) ())( *p_GetProcAddress) ((HMODULE)module, "get_graphsy_object_ptr");
+		void * graph = get_graph != NULL ? get_graph () : NULL;
+		void ** graph_table = graph != NULL ? *(void ***)graph : NULL;
+		if (graph_table != (void **)(module + 0x685f8) || graph_table[41] != module + 0x3baa0) { is->custom_renderer_native_probe_rejected = true; return; }
+		if (table[59] != module + 0x1ca0) { is->custom_renderer_native_probe_rejected = true; return; }
 		if (sprite_table[17] != module + 0x8180) { is->custom_renderer_native_probe_rejected = true; return; }
 		is->custom_renderer_probe_thread_id = (DWORD (WINAPI *) ())(*p_GetProcAddress) (is->kernel32, "GetCurrentThreadId");
 		if (is->custom_renderer_probe_thread_id == NULL) return;
 		is->custom_renderer_probe_owner = is->custom_renderer_probe_thread_id ();
 		DWORD protect, unused;
 		if (! VirtualProtect (table, 0x250, PAGE_READWRITE, &protect)) return;
+		DWORD graph_protect;
+		if (! VirtualProtect (&graph_table[41], sizeof (void *), PAGE_READWRITE, &graph_protect)) { VirtualProtect (table, 0x250, protect, &unused); return; }
+		is->custom_renderer_jgl_graph_table = graph_table;
+		is->custom_renderer_jgl_present_original = graph_table[41];
 		memcpy (is->custom_renderer_jgl_original, table, sizeof is->custom_renderer_jgl_original);
 		is->custom_renderer_jgl_table = table;
 		is->custom_renderer_jgl_sprite_table = sprite_table;
 		is->custom_renderer_jgl_sprite_original = sprite_table[17];
 		for (int n = 0; n < 9; n++) table[slots[n]] = hooks[n];
 		sprite_table[17] = (void *)patch_JGL_Sprite_draw;
+		graph_table[41] = (void *)patch_JGL_Graphsy_present;
+		VirtualProtect (&graph_table[41], sizeof (void *), graph_protect, &unused);
 		VirtualProtect (table, 0x250, protect, &unused);
 		is->custom_renderer_native_probe_active = true;
 	}
@@ -27062,6 +27101,11 @@ set_custom_renderer_native_probe (JGL_Image * root)
 			is->custom_renderer_jgl_sprite_table[17] = is->custom_renderer_jgl_sprite_original;
 		VirtualProtect (table, 0x250, protect, &unused);
 	}
+	void ** graph_table = is->custom_renderer_jgl_graph_table;
+	if (graph_table != NULL && VirtualProtect (&graph_table[41], sizeof (void *), PAGE_READWRITE, &protect)) {
+		if (graph_table[41] == (void *)patch_JGL_Graphsy_present) graph_table[41] = is->custom_renderer_jgl_present_original;
+		VirtualProtect (&graph_table[41], sizeof (void *), protect, &unused);
+	}
 	// Wrappers live in permanent injected code and pass through when inactive,
 	// even if protection restoration failed. They never call an unloaded DLL.
 }
@@ -27072,7 +27116,7 @@ patch_JGL_present_screen (RECT * rect)
 {
 	observe_custom_renderer_native (C3X_NATIVE_SCREEN, p_jgl_screen_canvas->JGL.Image, NULL, rect);
 	JGL_present_screen (rect);
-	if (! observe_custom_renderer_native (C3X_NATIVE_PRESENT, p_jgl_screen_canvas->JGL.Image, NULL, rect))
+	if (! observe_custom_renderer_native (C3X_NATIVE_PRESENT, p_jgl_screen_canvas->JGL.Image, NULL, rect) && is->custom_renderer_native_image == NULL)
 		set_custom_renderer_native_probe (NULL);
 }
 #endif
@@ -27418,6 +27462,7 @@ ensure_custom_renderer_loaded ()
 #endif
 		is->custom_renderer_blit = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_blit");
 		is->custom_renderer_native_observe = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_observe");
+		is->custom_renderer_native_image = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_image");
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
 		is->custom_renderer_unit_draw_playback = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_playback");

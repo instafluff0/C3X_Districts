@@ -29,26 +29,46 @@ and UI timing ownership; it does not yet remove readback or establish live cover
 The intended next boundary is hybrid composition: retain CPU-generated static UI
 textures and translate the operations that depend on the animated map, preserving
 native demand and complete UI transactions. This is not a wholesale UI rewrite.
-Observation candidate `038faec0…0be2e2` passes native-hook execution and exact
-production-scene parity and is staged with explicit user permission. Installation
-and live capture wait for the user's return. Meanwhile the reusable packed GPU
+Observation control `038faec0…0be2e2` passed native-hook execution and exact
+production-scene parity; the later compatibility evaluation `a79fb579…dec552`
+is staged with user permission. Meanwhile the reusable packed GPU
 executor replaces the isolated prototype's earlier GPU arm: bounded resident
 images, source revisions and exact copy/fill/key/invert/save/restore transactions.
 Native 16-bit and full-frame RGB oracle checks validate admitted operations.
-The actual injected hooks now execute admitted copies, fills and ordinary keyed
-image draws through `native_image_adapter.h` in the isolated JGL harness. Fresh
+The actual injected hooks now execute admitted copies, fills, ordinary keyed
+images and ordinary 8/16-bit or row-trimmed 8-bit sprites through
+`native_image_adapter.h` in the isolated JGL harness. Indexed sprites skip indices
+254/255, independently of palette RGB. Fresh
 lifetimes own GPU destinations; escaped CPU pixels/HDCs force a synchronized,
 permanent return to CPU ownership. Complete word comparisons catch retained-pointer
 source edits and skip unchanged uploads. Clip metadata has its own direct hook.
 The existing GPU worker now accepts GPU-only map demand and copied composition
 packets. It unwraps the finished retained surface on the GPU, imports an immutable
 map into the shared packed-image executor and publishes a ticket plus native
-ownership metadata. UI images survive subsequent GPU frames; stale tickets and map
-writes reject. CPU fallback invalidates its stale bitmap before rendering again.
-The live loader remains unbound: connect native adapter packets, complete surface/
-palette/access coverage, device-loss recovery and the native final GPU transfer.
-Source comparison cost is still on the caller. This is demonstrated reuse and
-removed map readback in the integrated renderer fixture, not a game speedup.
+ownership metadata. UI images survive subsequent GPU frames and intervening CPU
+map/unit requests; image packets preserve unit playback and prepared views. Failed
+map admission preserves the previous map/ticket. Stale tickets and map writes
+reject. CPU fallback invalidates its stale bitmap before rendering again.
+Native adapter packets reach this same worker, with up to 2048 consecutive
+commands per packet and explicit CPU barriers. Paired native-word/full-color
+map/screen images propagate through native copies and popup save/restore; native
+UI expands over the original BGRA map. The actual Graphsy final-transfer hook now
+feeds optional GPU presentation after native final UI drawing. Window lifecycle
+and Present stay on the native caller thread; display preparation stays on the
+existing GPU worker. Full/partial displayed RGB, palette side effects, recreation
+and config-off restoration pass connected JGL tests at 1440×900 with no normal
+execution readbacks. This is not a measured game speedup.
+The live loader now binds the completed-screen compatibility endpoint. Native
+pixel drawing remains authoritative; packed 555/565 uploads and GPU expansion
+replace the final GDI transfer when admitted. Busy workers, unsupported windows
+and failures use immediate native fallback; partial handoffs preserve the last
+displayed image. Map publications, nearby preparation and unit queues survive UI
+transfers. Normal INSTALL.bat can use the staged evaluation build without settings.
+The live map producer still reads back. Next is actual map/screen lifetime admission
+and remaining map-dependent sprite/unit/access coverage, connecting the tested
+full-color resident producer without those compatibility copies. This final-transfer
+integration is not completion of the readback-free architecture. Native UI/scrolling
+validation and whole-request game comparison remain pending.
 
 ## Actual code responsibilities
 
