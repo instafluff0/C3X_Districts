@@ -543,7 +543,6 @@ struct c3x_config {
 	bool enable_custom_rendering_reflections;
 	bool enable_custom_rendering_waves;
 	bool enable_custom_rendering_cache;
-	bool enable_custom_rendered_units;
 	char * aircraft_victory_animation; // NULL if set to "none" in config
 
 	int day_night_cycle_mode;
@@ -2686,6 +2685,7 @@ struct district_button_image_set {
 	DWORD custom_renderer_probe_owner;
 	bool custom_renderer_native_probe_active, custom_renderer_native_probe_rejected;
 	int custom_renderer_native_operation;
+	c3x_renderer_unit_forget_fn custom_renderer_unit_forget;
 	c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw;
 	c3x_renderer_unit_draw_expanded_fn custom_renderer_unit_draw_expanded;
 	c3x_renderer_unit_draw_playback_fn custom_renderer_unit_draw_playback;

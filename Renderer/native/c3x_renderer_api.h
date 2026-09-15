@@ -446,6 +446,8 @@ typedef int (*c3x_renderer_unit_draw_expanded_fn)(struct c3x_renderer_unit_v1 co
 typedef int (*c3x_renderer_unit_draw_playback_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc, void * background_hdc, int * bounds_ltrb, c3x_renderer_u32 flags);
 // Optional unit configuration. Set before definition/asset loading; defaults off.
 typedef int (*c3x_renderer_set_unit_rendering_fn)(int enabled);
+/* Retire a despawned visual identity before Civ III can reuse its ID. No drawing. */
+typedef void (*c3x_renderer_unit_forget_fn)(int unit_id);
 typedef int (*c3x_renderer_export_scene_fn)(struct c3x_renderer_frame_v1 const *, struct c3x_renderer_scene_export_v1 const *);
 typedef int (*c3x_renderer_schedule_fn)(struct c3x_renderer_schedule_v1 const *, struct c3x_renderer_schedule_result_v1 *);
 typedef void (*c3x_renderer_reset_fn)(void);

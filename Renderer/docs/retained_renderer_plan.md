@@ -3,16 +3,43 @@
 ## Objective and boundaries
 
 Complete world → view → pass → publication with bounded ownership, full detail
-and source animation timing. Measure work eliminated, work prepared before demand
-and caller delivery separately. Civ III supplies demand; workers never advance
-gameplay, notify it or request redraws. This connected implementation objective
-supersedes the former single-experiment queue.
+and source animation timing. The September 15 user approval extends this objective
+to renderer-owned visual frames. Civ III retains gameplay, visibility, actions,
+authoritative anchors and completed UI updates; immutable captures feed rendering.
+The destination is one existing GPU presenter with an independent visual clock,
+not a second window or a faster gameplay animator.
+
+Implementation sequence: (1) make custom-on map units exclusively 3D and give
+unit identity/content/playback one retained owner with local validity and explicit
+retirement; (2) collect complete visible occurrences and preserve recomposable
+native overlays/UI at completed transaction boundaries; (3) replace visual-only
+native timer/erase cycles with renderer-owned frame scheduling. Keep existing
+native capture/delivery until replacement behavior is proven. A flattened GPU
+screen is not a reusable UI layer. Unknown unit mappings must be reported, never
+silently replaced by legacy map sprites. Renderer-off and UI portraits stay native.
 
 Preserve AGENTS.md, native overlays/visibility/picking, generic assets, accepted
 visual contracts and deferred wonders/Districts. Tested DLL staging is authorized;
 installation and launch remain the user's actions through ordinary `INSTALL.bat`,
 without environment settings. The authorized Advisor lifecycle hook reuses its
 existing patch-table addresses; see the patch ledger.
+
+## Retained-unit checkpoint
+
+The first frame-ownership step is implemented and staged as `1e9ac58a…81a0fd6`.
+Custom-on always enables 3D map units; the removed flag is also removed from the
+local configuration. Renderer-off and UI portraits keep native drawing. The
+132-test unit category has 131 passes/one existing skip (the sandbox-blocked GPU
+oracle passed when rerun with VM access). Injected compilation and connected GPU
+pixel/ownership checks pass. A retained-selection test samples 60 visual frames
+from one capture, preserving authored timing and directed-action anchors.
+
+Whole-request GPU means are 8.64 ms idle, 50.88 ms scrolling and 10.62 ms local
+change, versus the previous recorded 8.49/49.23/12.65 ms. No speedup is established;
+this step establishes instance ownership. Native capture/erase scheduling and
+flattened UI composition still run. Complete scene selection and recomposable UI
+must precede independent native presentation. Exact sources, tests and results:
+`native/build/gpu-composition/unit-instance-checkpoint/`; prior controls preserved.
 
 ## Current GPU integration
 
@@ -204,12 +231,20 @@ GPU residency or knowledge of uncaptured gameplay.
 
 | Responsibility | Implemented ownership | Remaining limits |
 | --- | --- | --- |
-| Persistent world/instances | `CapturedScene` retains canonical appearance/revisions and borrowed compiled handles. `ResidentContent` owns complete reusable ground, city, route, improvement and natural content independently of observations and camera departure. | Complete tile reuse covers the full-detail 2:1 city profile at native zooms (128/160/192; admitted class ≥96). Other bases retain existing paths. Captured surroundings only; units retain their separate playback/pose owner. |
+| Persistent world/instances | `CapturedScene` retains canonical appearance/revisions and borrowed compiled handles. `ResidentContent` owns complete reusable ground, city, route, improvement and natural content independently of observations and camera departure. | Complete tile reuse covers the full-detail 2:1 city profile at native zooms (128/160/192; admitted class ≥96). Other bases retain existing paths. Captured surroundings only. `UnitInstances` now owns copied unit content, catalog handles and playback; complete native unit occurrence collection remains pending. |
 | Local validity | Appearance, semantic neighbors, city exclusions, coast/world samples, river-cell proofs and exact scaled native-anchor dependencies guard complete compiled hits. Local changes retire known-invalid alternate views; fresh capture validates every publication. | Asset/device/world-basis changes remain global. Unobserved appearance cannot authorize output. |
-| World → view selection | Immutable content owns persistent bounded world-cell membership. Current authoritative occurrences supply eligibility; selected inputs feed existing ordered passes. Animated body/shadow/filter bounds are selected independently of surrounding static coverage. | Non-affine and unindexed inputs use the existing view index. Dynamic selection uses small scans. No complete native active-unit pass yet. |
+| World → view selection | Immutable content owns persistent bounded world-cell membership. Current authoritative occurrences supply eligibility; selected inputs feed existing ordered passes. Animated body/shadow/filter bounds are selected independently of surrounding static coverage. | Non-affine and unindexed inputs use the existing view index. Dynamic selection uses small scans. Explicit unit selections separate occurrence/projection from content; no complete native active-unit pass yet. |
 | Compatible submission | Shared meshes, tree instancing, ordered materials, common depth and bounded shadow-page batches serve foreground/background. Unit caster inputs now use one compatible GPU submission per pose. | Body materials still submit per part. Scene-wide unit collection and optional reflection profiles retain their existing execution. |
 | GPU/output reuse | Stable surrounding color/depth, selected animation and pending finish damage feed immutable GPU publication. Resident map/unit output, native UI composition and final transfer share the GPU path; CPU callers retain consolidated readback. Untouched donor margins keep their true old clock. | GPU allocation and full hardware MSAA resolve still cover the wide working surface. Physical targets are not narrowed. Tested retained profile has waves/reflections off. |
 | Preparation/native delivery | Bounded CPU helpers and one GPU owner prepare copied nearby/zoom views and unit poses. Fresh native requests pull compatible publications. Current refresh can interrupt unfinished prospective work at safe points. | Cold/outside-coverage views still use exact blocking fallback. Submitted GPU work is not preemptible; preparation can delay ambient freshness. Native delivery is implemented for prepared coverage, not general nonblocking scrolling. |
+
+`UnitInstances` holds at most 4,096 CPU identities; assets and completed pose
+textures retain their existing separate budgets. Local revisions reject stale
+selections after appearance/action changes; native despawn, eviction and catalog
+reset retire identity. Clock/camera changes reuse binding. The production body
+entry now captures and samples through this owner; sprite hooks still supply
+authoritative visibility/order. This is retained instance ownership, not complete
+scene collection or independent native presentation.
 
 Native selected idle/work loops preserve source frames/duration; inactive unselected
 units freeze. Directed actions keep native cursors/anchors. The authorized GOG

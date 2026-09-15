@@ -93,7 +93,7 @@ struct Timer {void* callback_fn_2=nullptr;unsigned* timer_id=reinterpret_cast<un
 Timer timer;auto timer_ptr=&timer;
 int inhibited=0,ending=0,players=1;auto inhibited_ptr=&inhibited;auto ending_ptr=&ending;auto p_player_bits=&players;
 struct State {
- struct {bool enable_custom_rendering=true,enable_custom_rendered_units=true,enable_custom_animations=false;} current_config;
+ struct {bool enable_custom_rendering=true,enable_custom_animations=false;} current_config;
  int custom_renderer_init_state=1,saved_tile_count=-1;bool custom_renderer_modal=false,paused_for_popup=false,custom_renderer_draw_in_progress=false;
  bool custom_renderer_fast_timer=false,custom_renderer_visual_only=false,custom_renderer_timer_running=false;
  bool custom_renderer_redraw_pending=false;unsigned custom_renderer_requested_frames=0,custom_renderer_presented_frames=0;

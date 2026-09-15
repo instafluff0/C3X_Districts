@@ -141,7 +141,8 @@ caller timestamps alone do not invalidate a pose or authorize another prediction
   values, never game pointers or native canvases. Fog, borders, labels, selection,
   unit HUD, UI and picking keep their native owners. There is no second presenter,
   camera or game loop. Config-off preserves native rendering; custom-on map-plane
-  failure must not replay native terrain. Preserve the separate unit fallback.
+  failure must not replay native terrain. Custom-on map units are exclusively 3D; preserve native UI portraits and
+    renderer-off behavior.
 - **Persistent scene identity.** A world record survives a change of view. Separate
   an asset (mesh/material/animation), a world instance (identity, placement and
   state), and a visible occurrence (instance plus wrapped offset and captured

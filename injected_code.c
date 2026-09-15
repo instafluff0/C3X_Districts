@@ -20652,7 +20652,6 @@ patch_init_floating_point ()
 		{"enable_custom_rendering_reflections", true, offsetof (struct c3x_config, enable_custom_rendering_reflections)},
 		{"enable_custom_rendering_waves", true, offsetof (struct c3x_config, enable_custom_rendering_waves)},
 		{"enable_custom_rendering_cache", false, offsetof (struct c3x_config, enable_custom_rendering_cache)},
-		{"enable_custom_rendered_units"                         , false, offsetof (struct c3x_config, enable_custom_rendered_units)},
 		{"enable_named_tiles"                                    , false, offsetof (struct c3x_config, enable_named_tiles)},
 		{"enable_distribution_hub_districts"                     , false, offsetof (struct c3x_config, enable_distribution_hub_districts)},
 		{"enable_aerodrome_districts"                            , false, offsetof (struct c3x_config, enable_aerodrome_districts)},
@@ -27567,6 +27566,7 @@ unload_custom_renderer ()
 	is->custom_renderer_async_presented = false;
 	is->custom_renderer_blit = NULL;
 	is->custom_renderer_native_observe = NULL;
+	is->custom_renderer_unit_forget = NULL;
 	is->custom_renderer_unit_draw = NULL;
 	is->custom_renderer_unit_draw_expanded = NULL;
 	is->custom_renderer_unit_draw_playback = NULL;
@@ -27757,7 +27757,7 @@ patch_Unit_tick_anim (Unit * this, int edx, PCX_Image * canvas, int offset_x, in
 		offset_y -= is->custom_renderer_zoom_unit_tick_delta_y;
 		is->custom_renderer_zoom_unit_tick_translated = true;
 	}
-	if (is->current_config.enable_custom_rendering && is->current_config.enable_custom_rendered_units &&
+	if (is->current_config.enable_custom_rendering &&
 	    is->custom_renderer_unit_draw != NULL && is->custom_renderer_init_state == IS_OK)
 		is->custom_renderer_unit_context = this;
 	Unit_tick_anim (this, __, canvas, offset_x, offset_y, status);
@@ -27774,8 +27774,8 @@ patch_Sprite_draw_unit_body_normal (Sprite * this, int edx, PCX_Image * backgrou
 {
 	if (forward_custom_unit_body (this, background, canvas, x, y, 0, palette)) return 0;
 	// These body hooks also draw UI portraits. Suppress native map bodies only
-	// inside tick_anim's canvas scope, even when custom unit rendering is off.
-	if (custom_renderer_zoom_enabled () && canvas != NULL && canvas == is->custom_renderer_unit_canvas) return 0;
+	// inside tick_anim's canvas scope. Custom-on map bodies are exclusively 3D.
+	if (is->current_config.enable_custom_rendering && canvas != NULL && canvas == is->custom_renderer_unit_canvas) return 0;
 	return Sprite_draw_unit_body_normal (this, __, background, canvas, x, y, palette_path, palette);
 }
 
@@ -27785,7 +27785,7 @@ patch_Sprite_draw_unit_body_reduced (Sprite * this, int edx, PCX_Image * backgro
 {
 	if (scale_x == 1 && scale_y == 1 && divisor == 2 &&
 	    forward_custom_unit_body (this, background, canvas, x, y, 1, palette)) return 0;
-	if (custom_renderer_zoom_enabled () && canvas != NULL && canvas == is->custom_renderer_unit_canvas) return 0;
+	if (is->current_config.enable_custom_rendering && canvas != NULL && canvas == is->custom_renderer_unit_canvas) return 0;
 	return Sprite_draw_unit_body_reduced (this, __, background, canvas, x, y, scale_x, scale_y, divisor, palette_path, palette);
 }
 
@@ -27875,6 +27875,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_native_observe = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_observe");
 		is->custom_renderer_native_image = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_image");
 		is->custom_renderer_native_map = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_map_view");
+		is->custom_renderer_unit_forget = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_forget");
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
 		is->custom_renderer_unit_draw_playback = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_playback");
@@ -27886,6 +27887,8 @@ ensure_custom_renderer_loaded ()
 		    (is->custom_renderer_set_definition_paths != NULL) &&
 		    (is->custom_renderer_render != NULL) &&
 		    (is->custom_renderer_blit != NULL) &&
+		    (is->custom_renderer_unit_draw_playback != NULL) &&
+		    (is->custom_renderer_unit_forget != NULL) &&
 		    (is->custom_renderer_export_scene != NULL) &&
 		    (is->custom_renderer_schedule != NULL) &&
 		    (is->custom_renderer_reset != NULL) &&
@@ -27903,7 +27906,7 @@ ensure_custom_renderer_loaded ()
 				custom_path[0] = '\0';
 			c3x_renderer_set_unit_rendering_fn set_units = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_unit_rendering");
 			if (set_units != NULL)
-				set_units (is->current_config.enable_custom_rendered_units ? 1 : 0);
+				set_units (1);
 			log_custom_renderer_event ("definition-start", C3X_RENDERER_RESULT_OK);
 			if (is->custom_renderer_set_definition_paths (is->mod_rel_dir, default_path, scenario_path, custom_path) != C3X_RENDERER_RESULT_OK) {
 				log_custom_renderer_event ("definition-load", C3X_RENDERER_RESULT_ERROR);
@@ -30307,6 +30310,9 @@ patch_Unit_despawn (Unit * this, int edx, int civ_id_responsible, byte param_2, 
 			is->always_despawn_passengers = true;
 	}
 
+	// Retire visual identity before native storage/IDs may be reused. No draw is requested.
+	if (is->current_config.enable_custom_rendering && is->custom_renderer_unit_forget != NULL)
+		is->custom_renderer_unit_forget (this->Body.ID);
 	Unit_despawn (this, __, civ_id_responsible, param_2, param_3, param_4, param_5, param_6, param_7);
 
 	is->always_despawn_passengers = prev_always_despawn_passengers;
@@ -46443,7 +46449,6 @@ custom_renderer_has_visual_work ()
 	    (p_main_screen_form->Mode_Action != 0 && p_main_screen_form->Mode_Action != 0x7f00) ||
 	    p_main_screen_form->animator.Units2_Count != 0 ||
 	    *(bool *)(p_main_screen_form->animator.field_18E4 + 0xb)) return false;
-	if (! is->current_config.enable_custom_rendered_units) return false;
 	Animator * animator = &p_main_screen_form->animator;
 	for (int n = 0; n < animator->Units_Count && n < 1024; n++) {
 		Unit * unit = animator->Units[n];

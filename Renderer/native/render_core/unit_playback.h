@@ -19,6 +19,7 @@ class UnitPlayback {
     std::deque<Instance> instances;
 public:
     void clear(){instances.clear();}
+    void forget(int id){instances.erase(std::remove_if(instances.begin(),instances.end(),[&](auto const& s){return s.id==id;}),instances.end());}
     template<class Clip>
     bool resolve(c3x_renderer_unit_v1& request,Clip const& clip,bool selected,unsigned& next_step) {
         next_step=1;
@@ -57,7 +58,7 @@ public:
         int next=int(std::fmod(state.seconds+interval,double(clip.duration))/clip.duration*state.frames+1e-7)%state.frames;
         next_step=unsigned((next-state.cursor+state.frames)%state.frames);
         if(!advancing)next_step=0;
-        if(instances.size()==128)instances.pop_front();
+        if(instances.size()==4096)instances.pop_front();
         instances.push_back(state);
         return advancing;
     }

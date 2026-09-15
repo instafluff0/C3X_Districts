@@ -568,6 +568,16 @@ wrapper and `Sprite_draw_on_map` inlead provide inverse input and native overlay
 placement. Native unit health/status alignment uses the existing `Unit_tick_anim`
 inlead. `audit_candidates: []`.
 
+The September 15 retained-unit step removes the separate custom-unit flag.
+Custom-on unit map bodies cannot replay native sprite bodies, at any zoom;
+renderer-off and UI portraits preserve their native routes. `Unit_despawn`
+(existing inlead, unchanged signature/addresses) now calls the renderer-only
+`c3x_renderer_unit_forget(int unit_id)` export before native destruction. This
+retires instance/playback identity and queued prediction; it does not draw or
+advance gameplay. Existing `Unit_tick_anim` and body hooks remain the authoritative
+capture/order adapter pending complete scene collection. No new Civ III symbol,
+CSV edit or native clock change: `required_user_action: []`.
+
 Native UI unit portraits remain outside zoom suppression. The existing
 `Sprite_draw_unit_body_normal` and `Sprite_draw_unit_body_reduced` wrappers
 suppress fallback only on the canvas scoped by `Unit_tick_anim`, independently

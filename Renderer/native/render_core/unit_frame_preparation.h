@@ -60,6 +60,10 @@ public:
     }
     bool empty() const {return pending.empty();}
     void clear(){pending.clear();seen.clear();}
+    void forget(int id){
+        pending.erase(std::remove_if(pending.begin(),pending.end(),[&](auto const& r){return r.unit_id==id;}),pending.end());
+        seen.erase(std::remove_if(seen.begin(),seen.end(),[&](auto const& r){return r.request.unit_id==id;}),seen.end());
+    }
 };
 }}
 #endif

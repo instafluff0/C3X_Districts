@@ -23,6 +23,7 @@ struct Animation_Info {int* Frame_Counts;};
 struct Summary {int current_anim_type=2,queued_anim_type=0,direction_2=3,pixel_loc_x=640,pixel_loc_y=480;};
 struct Animation {struct {void* Flic_Info;Sprite sprite;} Frame_1;Animation_Info* Animation_Info;Summary summary;int field_FC=7;};
 struct Rect {int left=20,top=30,right=45,bottom=55;};
+using RECT=Rect;
 struct Unit {struct {Rect Rect;int ID=42,UnitTypeID=0;int army_top_defender_id=-1;Animation Animation;} Body;bool army=false,visible=true;};
 struct UnitType {char Civilipedia_Entry[32]="PRTO_Archer";};
 struct Bic {int UnitTypeCount=1;UnitType* UnitTypes;bool is_zoomed_out=false;};
@@ -30,7 +31,7 @@ struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_rende
  c3x_renderer_unit_draw_background_fn custom_renderer_unit_draw=nullptr;
  c3x_renderer_unit_draw_playback_fn custom_renderer_unit_draw_playback=nullptr;
  c3x_renderer_unit_draw_expanded_fn custom_renderer_unit_draw_expanded=nullptr;int custom_renderer_init_state=1;
- struct {bool enable_custom_rendering=true,enable_custom_rendered_units=true,enable_custom_rendering_zoom=false;int day_night_cycle_mode=0,seasonal_cycle_mode=0;} current_config;
+ struct {bool enable_custom_rendering=true,enable_custom_rendering_zoom=false;int day_night_cycle_mode=0,seasonal_cycle_mode=0;} current_config;
  int custom_renderer_zoom_tile_width=128,custom_renderer_zoom_native_tile_width=128;
  long long custom_renderer_zoom_translate_x_fp=0,custom_renderer_zoom_translate_y_fp=0;
  int custom_renderer_zoom_unit_tick_delta_x=0,custom_renderer_zoom_unit_tick_delta_y=0;
@@ -46,7 +47,7 @@ int clamp(int a,int b,int v){return v<a?a:(v>b?b:v);}
 long long qpc=1000000;
 bool QueryPerformanceCounter(LARGE_INTEGER* value){value->QuadPart=qpc;qpc+=66000;return true;}
 bool Unit_has_ability(Unit* u,int,int){return u->army;}
-bool custom_renderer_zoom_enabled(){return state.current_config.enable_custom_rendering_zoom;}
+bool custom_renderer_zoom_enabled(){return state.current_config.enable_custom_rendering && state.current_config.enable_custom_rendering_zoom;}
 void sync_custom_renderer_zoom_to_native(){}
 bool custom_renderer_zoom_transform_active(){
  return custom_renderer_zoom_enabled() &&
@@ -81,6 +82,8 @@ int __fastcall original_reduced(Sprite*,int,PCX_Image*,PCX_Image*,int x,int y,in
 // Match the corrected nine-stack-argument native declaration.
 auto Sprite_draw_unit_body_reduced=original_reduced;
 void __fastcall Unit_tick_anim(Unit*,int,PCX_Image*,int,int,bool);
+
+int translate_custom_renderer_native(int,JGL_Image*,void*,RECT*,RECT*,unsigned){return 0;}
 
 #define this self
 #include "build/unit_bridge_capture.h"
@@ -123,16 +126,16 @@ int main(){
   assert(captured.projection_scale_milli==(zoom?500:1000));
   assert(captured.presentation_frequency==1000000 && captured.presentation_time_ticks>=0);
   assert(captured.display_color_rgb==0x0c2238 && !std::strcmp(captured.unit_key,"PRTO_Archer"));
-  success=false;invoke();assert(unit.Body.Rect.left==20 && unit.Body.Rect.right==45);assert((calls==std::vector<int>{10,20,30,40}));
-  denied_dc=&background_image;invoke();assert((calls==std::vector<int>{10,30,40}));denied_dc=nullptr;
-  state.current_config.enable_custom_rendered_units=false;invoke();assert((calls==std::vector<int>{10,30,40}));
-  state.current_config.enable_custom_rendered_units=true;unit.army=true;success=true;
+  success=false;invoke();assert(unit.Body.Rect.left==20 && unit.Body.Rect.right==45);assert((calls==std::vector<int>{10,20,40}));
+  denied_dc=&background_image;invoke();assert((calls==std::vector<int>{10,40}));denied_dc=nullptr;
+  state.current_config.enable_custom_rendering=false;invoke();assert((calls==std::vector<int>{10,30,40}));
+  state.current_config.enable_custom_rendering=true;unit.army=true;success=true;
   invoke();assert((calls==std::vector<int>{10,20,40}));
   Unit member=unit;member.army=false;member.Body.ID=84;member.Body.Animation.field_FC=4;
   member.Body.Rect={200,200,210,210};army_member=&member;unit.Body.army_top_defender_id=84;invoke();assert((calls==std::vector<int>{10,20,20,40}));
   assert(captured.unit_id==84 && captured.action_cursor==4);
   assert(member.Body.Rect.left==200 && member.Body.Rect.right==210); // Only parent's native dirty bounds own redraw.
-  unit.Body.army_top_defender_id=-1;invoke();assert((calls==std::vector<int>{10,20,30,40}));
+  unit.Body.army_top_defender_id=-1;invoke();assert((calls==std::vector<int>{10,20,40}));
   army_member=nullptr;unit.army=false;
   unit.visible=false;invoke();assert(calls.empty());unit.visible=true;
  }
@@ -153,7 +156,7 @@ int main(){
  state.current_config.enable_custom_rendering_zoom=true;
  for(int width:{64,96,128,160,192})for(bool custom_units:{false,true}){
   state.custom_renderer_zoom_tile_width=width;
-  state.current_config.enable_custom_rendered_units=custom_units;
+  state.current_config.enable_custom_rendering=custom_units;
   for(bool nested:{false,true}){
    state.custom_renderer_unit_context=nested?&unit:nullptr;
    state.custom_renderer_unit_canvas=nested?&canvas:nullptr;
@@ -165,7 +168,7 @@ int main(){
   }
  }
  state.custom_renderer_unit_context=nullptr;state.custom_renderer_unit_canvas=nullptr;
- state.current_config.enable_custom_rendered_units=true;
+ state.current_config.enable_custom_rendering=true;
  fixture_reduced=false;state.current_config.enable_custom_rendering_zoom=true;
  state.custom_renderer_zoom_tile_width=80;state.custom_renderer_zoom_native_tile_width=128;
  success=true;invoke();assert((calls==std::vector<int>{10,20,40}));
@@ -173,8 +176,8 @@ int main(){
  assert(unit.Body.Rect.left==7 && unit.Body.Rect.top==14);
  assert(unit.Body.Rect.right==7+191*625/1000 && unit.Body.Rect.bottom==14+191*625/1000);
  success=false;invoke();assert((calls==std::vector<int>{10,20,40}));
- state.current_config.enable_custom_rendered_units=false;invoke();assert((calls==std::vector<int>{10,40}));
- state.current_config.enable_custom_rendered_units=true;
+ state.current_config.enable_custom_rendering=false;invoke();assert((calls==std::vector<int>{10,30,40}));
+ state.current_config.enable_custom_rendering=true;
  for(int width:{64,96,128,160,192})for(bool reduced:{false,true}){
   fixture_reduced=reduced;
   state.custom_renderer_zoom_tile_width=width;success=true;invoke();
@@ -185,8 +188,8 @@ int main(){
   assert(unit.Body.Rect.right>=captured.body_x+191*scale/1000);
   assert(unit.Body.Rect.bottom>=captured.body_y+191*scale/1000);
   success=false;invoke();assert((calls==std::vector<int>{10,20,40}));
-  state.current_config.enable_custom_rendered_units=false;invoke();assert((calls==std::vector<int>{10,40}));
-  state.current_config.enable_custom_rendered_units=true;
+  state.current_config.enable_custom_rendering=false;invoke();assert((calls==std::vector<int>{10,30,40}));
+  state.current_config.enable_custom_rendering=true;
   state.custom_renderer_unit_draw=nullptr;invoke();assert((calls==std::vector<int>{10,40}));
   state.custom_renderer_unit_draw=capture;
   state.custom_renderer_init_state=0;invoke();assert((calls==std::vector<int>{10,40}));

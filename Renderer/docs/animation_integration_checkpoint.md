@@ -8,9 +8,9 @@ work does not authorize staging, running INSTALL.bat or launching Civ III.
 Use the normal C3X installation process and an actual game test at a strategic
 delivery checkpoint. Current-code Integration itself neither installs nor claims
 that game test.
-The configuration controls are `enable_custom_rendering` and
-`enable_custom_rendered_units`; the latter defaults off and avoids unit loading
-when disabled. No special launcher or runtime environment switch is required.
+`enable_custom_rendering` enables both the map and 3D map units. The separate
+unit flag is removed; renderer-off and UI portraits remain native. No special
+launcher or runtime environment switch is required.
 
 ## Authoritative animation boundaries
 

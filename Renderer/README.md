@@ -65,10 +65,13 @@ scope, precision constraints and remaining ownership work.
 
 Civ III/C3X owns game state, visibility, tile/object screen anchors, time and
 seasons. The renderer produces an off-screen map bitmap and inserts it at the
-existing map boundary. It does not own a second presenter, game loop or camera.
+existing map boundary. It does not own a second presenter, gameplay loop or camera. The approved next
+integration gives the existing presenter an independent visual frame clock after
+complete unit selection and recomposable native UI layers are established.
 Fog, borders, labels, selection, unit HUD and UI retain their native ownership.
 Config-off preserves the original path. Custom-on map-plane failure must not
-silently replay native terrain; preserve the existing separate unit fallback.
+silently replay native terrain; custom-on map units are exclusively 3D, with explicit CPU 3D delivery at native
+ownership barriers. UI portraits and renderer-off units remain native.
 
 Integration owns capture, bounded caches, invalidation, dirty redraw, scrolling,
 wrapping, zoom, compositing, device recovery and timing. Unit animation follows

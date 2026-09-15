@@ -7,6 +7,15 @@ use the pack's authored duration/frames on the caller's pause-filtered clock.
 Unselected idle/fidget bodies are frozen. The renderer supplies the existing
 source bodies and materials. Unit names and gameplay roles do not select shader behavior.
 
+`UnitInstances` now owns bounded copied unit content, catalog binding indices,
+local validity and authored playback. Per-view occurrences carry native anchors
+and projection separately. Stale selections fail after content changes, despawn,
+eviction or configuration reset; clock/view changes do not rebind assets.
+The game always enables 3D units with custom rendering. Missing bindings are
+reported as `unit-capture-failed`, without a legacy map-sprite substitute.
+Native body hooks still supply selection/order; complete visible-scene collection
+and independent visual-frame presentation remain the next integration step.
+
 ## Source and preparation
 
 `prepare_units.py` combines `UnitAnimationRuntime` with the fingerprinted authored
@@ -51,7 +60,7 @@ missing normal authority; that absence is a tracked build dependency.
   source kits use authored tangent frames and the first normal map. The second
   LEAN variance constants remain unresolved and are not guessed.
 - Preserve the 96 MiB payload budget, 8 MiB sprite cache, identity/dirty bounds,
-  action cursor reuse, clipping, config-off path, separate unit fallback and
+  action cursor reuse, clipping, config-off path, explicit CPU 3D delivery and
   retained terrain. Texture diagnostics use debugger output, not game-file logging.
 
 ## Verification and limits
@@ -90,7 +99,8 @@ The optional `c3x_renderer_unit_draw_expanded` API reports the complete rectangl
 on success. Pack-authored minimum canvases preserve the native center at odd,
 reduced and custom zoom sizes. The injected bridge unions the returned rectangle
 into the parent display unit's existing dirty region; failed draws leave the
-native fallback and rectangle intact. The renderer permits output up to 1024px
+rectangle intact and report renderer failure; custom-on never replays a native
+map body. UI portraits and renderer-off bodies retain native sprite drawing. The renderer permits output up to 1024px
 for the existing maximum 2x projection, with the existing 8 MiB sprite cache.
 No new patch-table entry is required. The updated bridge must be installed
 alongside the staged DLL; an old bridge cannot consume the expanded bounds.

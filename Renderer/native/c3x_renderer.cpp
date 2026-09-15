@@ -71,7 +71,7 @@
 #include "environment_refresh/reflection.h"
 #include "unit_body_renderer.h"
 #include "render_core/unit_frame_preparation.h"
-#include "render_core/unit_playback.h"
+#include "render_core/unit_instances.h"
 #include "city_fidelity/gpu.h"
 #include "city_fidelity/glow.h"
 #include "../lab/shared/natural/ground.h"
@@ -9953,7 +9953,7 @@ public:
         // Call serialization excludes foreground configure/render jobs. Idle
         // terrain preparation never reads this unit-only configuration value.
         renderer_state.unit_rendering_enabled=enabled!=0;
-        if(!enabled){unit_pixels_queue.clear();unit_playback.clear();renderer_state.unit_bodies.release_pose_leases();}
+        if(!enabled){unit_pixels_queue.clear();unit_instances.clear();renderer_state.unit_bodies.release_pose_leases();}
         renderer_state.trace.write("unit-config",enabled?"enabled; bind at definition load":"disabled; native units",true);
         return C3X_RENDERER_RESULT_OK;
     }
@@ -10615,37 +10615,37 @@ public:
         return result;
     }
 
+    void forget_unit(int id) {
+        std::lock_guard<std::mutex> call_guard(call_mutex);
+        std::lock_guard<std::mutex> lock(state_mutex);
+        unit_instances.forget(id);unit_pixels_queue.forget(id);
+        // In-flight poses are immutable shared content. They cannot publish
+        // themselves or restore the retired instance's selection.
+    }
+
     int draw_unit(c3x_renderer_unit_v1 const & request,HDC destination,HDC background=nullptr,int* bounds=nullptr,unsigned playback_flags=0,c3x_renderer_gpu_unit_v1 const* gpu_target=nullptr) {
         std::lock_guard<std::mutex> call_guard(call_mutex);
         std::unique_lock<std::mutex> lock(state_mutex);
         if(!renderer_state.unit_rendering_enabled)return C3X_RENDERER_RESULT_ERROR;
-        start_locked();job_unit=request;job_unit_predict=1;
-        bool selected=(playback_flags&C3X_RENDERER_UNIT_SELECTED)!=0;
-        if((playback_flags&C3X_RENDERER_UNIT_STATE_CAPTURED) && !selected && job_unit.action==8)
-            job_unit.action=1; // Unselected native fidgets use a stationary idle body.
-        auto const& playback_units=renderer_state.unit_bodies.units;
-        auto playback_unit=std::find_if(playback_units.begin(),playback_units.end(),[&](auto const& u){
-            return std::find(u.keys.begin(),u.keys.end(),job_unit.unit_key)!=u.keys.end();});
-        auto action_name=c3x_renderer::native_unit_action(job_unit.action);
-        if(playback_unit==playback_units.end() || !action_name)return C3X_RENDERER_RESULT_ERROR;
-        auto playback_clip=std::find_if(playback_unit->actions.begin(),playback_unit->actions.end(),
-            [&](auto const& a){return a.name==action_name;});
-        if(playback_clip==playback_unit->actions.end())return C3X_RENDERER_RESULT_ERROR;
-        if(playback_flags&C3X_RENDERER_UNIT_STATE_CAPTURED) {
-            bool advancing=unit_playback.resolve(job_unit,*playback_clip,selected,job_unit_predict);
-            if(!advancing)job_unit_predict=0;
-            if(!job_unit_predict && !playback_clip->ambient && job_unit.action==1) {
-                job_unit.action_cursor=0;job_unit.frame_count=1;
-            }
+        start_locked();
+        auto const& catalog=renderer_state.unit_bodies.units;
+        c3x_renderer::render_core::UnitInstances::Selection selection;
+        if(!unit_instances.capture(request,playback_flags,catalog,c3x_renderer::native_unit_action,selection)){
+            char detail[160];std::snprintf(detail,sizeof(detail),"id=%d key=%.63s action=%d reason=missing-or-invalid-3d-binding",
+                request.unit_id,request.unit_key,request.action);
+            renderer_state.trace.write("unit-capture-failed",detail,true);
+            return C3X_RENDERER_RESULT_ERROR;
         }
+        if(!unit_instances.sample(selection,request.presentation_time_ticks,request.presentation_frequency,
+            catalog,job_unit,job_unit_predict))return C3X_RENDERER_RESULT_SUPERSEDED;
+        auto definition=unit_instances.definition(selection,catalog);
+        auto action_name=c3x_renderer::native_unit_action(job_unit.action);
+        auto playback_clip=std::find_if(definition->actions.begin(),definition->actions.end(),
+            [&](auto const& action){return action.name==action_name;});
         if(bounds) {
-            auto const& units=renderer_state.unit_bodies.units;
-            auto found=std::find_if(units.begin(),units.end(),[&](auto const& unit){
-                return std::find(unit.keys.begin(),unit.keys.end(),request.unit_key)!=unit.keys.end();});
-            if(found==units.end())return C3X_RENDERER_RESULT_ERROR;
             int projection=request.projection_scale_milli>0?request.projection_scale_milli:(request.reduced?500:1000);
             if(!c3x_renderer::expand_unit_canvas(job_unit.body_x,job_unit.body_y,job_unit.sprite_width,job_unit.sprite_height,
-                                   projection,found->minimum_canvas))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+                                   projection,definition->minimum_canvas))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         }
         LARGE_INTEGER started={},finished={};QueryPerformanceCounter(&started);
         // Cached unit pixels are an independent CPU publication. Do not cancel
@@ -10750,6 +10750,10 @@ public:
         drain_camera_locked(lock);
         renderer_state.unit_bodies.release_pose_leases();
         if(renderer_state.trace.level) {
+            char instances[256];std::snprintf(instances,sizeof(instances),"retained=%zu captures=%llu reused=%llu bindings=%llu evictions=%llu",
+                unit_instances.size(),static_cast<unsigned long long>(unit_instances.captures),static_cast<unsigned long long>(unit_instances.reused),
+                static_cast<unsigned long long>(unit_instances.bindings),static_cast<unsigned long long>(unit_instances.evictions));
+            renderer_state.trace.write("unit-instances",instances,true);
             auto stats=renderer_state.unit_bodies.pose_preparation_statistics();char detail[384];
             std::snprintf(detail,sizeof(detail),"built=%llu consumed=%llu cancelled=%llu evicted=%llu rejected=%llu cpu_ms=%.3f join_ms=%.3f peak_ready_bytes=%zu retained_bytes=%zu active_peak=%u",
                 static_cast<unsigned long long>(stats.built),static_cast<unsigned long long>(stats.consumed),
@@ -10919,7 +10923,7 @@ private:
     int last_job_result = C3X_RENDERER_RESULT_ERROR;
     c3x_renderer_unit_v1 job_unit={};
     unsigned job_unit_predict=1;
-    c3x_renderer::render_core::UnitPlayback unit_playback;
+    c3x_renderer::render_core::UnitInstances unit_instances;
     c3x_renderer_output_v1 completed_output = {};
     std::uint64_t completed_scene_signature=0;
     unsigned fast_cache_hits=0;
@@ -11014,7 +11018,7 @@ private:
         if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){
             if(!gpu_presenter.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;gpu_presenter.release_native();native_screen_active=false;
         }
-        if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){unit_pixels_queue.clear();unit_playback.clear();unit_gpu_preparation=false;}
+        if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){unit_pixels_queue.clear();unit_instances.clear();unit_gpu_preparation=false;}
         // Fresh demand supersedes unstarted prospective snapshots. The caller
         // registers the updated family after composition; completed views retain
         // their independent content proofs and are not discarded here.
@@ -12102,6 +12106,10 @@ extern "C" __declspec(dllexport) int c3x_renderer_unit_draw_playback(
        !(flags&C3X_RENDERER_UNIT_STATE_CAPTURED) || (flags&~3u))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
     if(!renderer_worker)return C3X_RENDERER_RESULT_ERROR;
     return renderer_worker->draw_unit(*unit,static_cast<HDC>(destination_hdc),static_cast<HDC>(background_hdc),bounds,flags);
+}
+
+extern "C" __declspec(dllexport) void c3x_renderer_unit_forget(int unit_id) {
+    if(renderer_worker)renderer_worker->forget_unit(unit_id);
 }
 
 extern "C" __declspec(dllexport) int c3x_renderer_set_unit_rendering(int enabled) {
