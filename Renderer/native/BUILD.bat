@@ -26,6 +26,41 @@ if not exist "..\bin" mkdir "..\bin"
 if not exist "build" mkdir "build"
 if not exist "build\candidate" mkdir "build\candidate"
 
+if /i "%~1"=="native-image-adapter" (
+  if not exist "build\gpu-composition" mkdir "build\gpu-composition"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4100 /wd4191 test_native_image_adapter.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_native_image_adapter.exe /link d3d11.lib d3dcompiler.lib gdi32.lib user32.lib bcrypt.lib
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
+if /i "%~1"=="gpu-image-operations" (
+  if not exist "build\gpu-composition" mkdir "build\gpu-composition"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4191 test_gpu_image_compositor.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_gpu_image_compositor.exe /link d3d11.lib d3dcompiler.lib gdi32.lib user32.lib bcrypt.lib
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
+if /i "%~1"=="native-observation" (
+  if not exist "build\gpu-composition" mkdir "build\gpu-composition"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4100 /wd4191 test_native_observation.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_native_observation.exe /link gdi32.lib user32.lib bcrypt.lib
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
+if /i "%~1"=="jgl-image-operations" (
+  if not exist "build\gpu-composition" mkdir "build\gpu-composition"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_jgl_image_operations.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_jgl_image_operations.exe /link gdi32.lib user32.lib
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
+if /i "%~1"=="gpu-composition" (
+  if not exist "build\gpu-composition" mkdir "build\gpu-composition"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX benchmark_gpu_composition.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\benchmark_gpu_composition.exe /link /LARGEADDRESSAWARE d3d11.lib d3dcompiler.lib dxgi.lib gdi32.lib msimg32.lib user32.lib
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
 if /i "%~1"=="city-fidelity" (
   cl /nologo /std:c++17 /EHsc /O2 /W4 /WX city_fidelity\contract.cpp /Fo:build\city_contract.obj /Fe:build\city_contract.exe
   if errorlevel 1 exit /b 1

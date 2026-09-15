@@ -1,5 +1,41 @@
 # Civ III patch dependency ledger
 
+## Native composition observation — September 14, 2026
+
+The user authorized necessary verified CSV additions. Two GOG-only entries now
+identify the native screen-transfer boundary; Steam/PCGames remain `0x0`:
+
+| Symbol | Capability / signature | GOG |
+| --- | --- | --- |
+| `JGL_present_screen` | `inlead`; `void (__cdecl *)(RECT * rect)` | `0x606780` |
+| `p_jgl_screen_canvas` | `define`; `PCX_Image *` | `0xCAD030` |
+
+The first instruction is a complete five-byte absolute load. The original wrapper
+finishes tooltip/cursor drawing to this PCX image before calling Graphsy slot 41;
+`audit_native_composition.py` checks those bytes and the cdecl return against the
+preserved original GOG binary. Existing m71/m19 capture identifies the map canvas
+but cannot identify its later copies into the screen canvas. Both capabilities
+must exist before observation attaches. `required_user_action: []`.
+
+The permanent injected wrappers optionally observe hash-pinned JGL image slots
+0/1/3/4/10/13/16/17/33 and sprite slot 17. They preserve native return values, storage,
+leases and drawing. Pixel aliases 5/7 and bits alias 8 already call the observed
+core slots; do not hook them twice. The [probe audit](gpu_composition_probe.md)
+records DLL RVAs, signatures, binary hash and bounded capture. Runtime module
+slots are checked before patching and restored on unload/capture completion;
+these DLL RVAs are not CSV addresses. No renderer callback requests a redraw.
+Missing exports, unsupported executable capabilities or a mismatched DLL leave
+the current CPU composition path. GPU destination substitution is not enabled. The user subsequently authorized
+staging observation DLL `038faec0…0be2e2`; it is staged, without install/game launch.
+The independent packed GPU executor uses no additional hooks or CSV entries:
+`required_user_action: []`. Real destination admission remains pending live coverage.
+The adapter adds `patch_JGL_Image_clip`: concrete JGL slot 13, DLL RVA `0x1a40`,
+`int (__fastcall *)(JGL_Image *, int edx, RECT *)`. Its audited private HDC lease
+updates clip metadata only; the native body/return value remain authoritative.
+This runtime slot is verified/restored with the others, not a CSV entry. The new
+caller-thread backend seam is deliberately not resolved by the shipping loader;
+only the isolated test binds it. No additional executable address is required.
+
 The accepted retained world/view/submission implementation was renderer-only. Persistent
 appearance, local dependency proofs and selected passes use the existing
 `Map_Renderer_m71_Draw_Tiles` / `Map_Renderer_m19_Draw_Tile_by_XY_and_Flags`

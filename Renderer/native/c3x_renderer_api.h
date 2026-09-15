@@ -388,6 +388,32 @@ typedef int (*c3x_renderer_prepare_nearby_view_fn)(struct c3x_renderer_camera_re
 // PENDING requests a snapshot; OK means present/queued. Submission copies input.
 // Pixels still require camera_present_view with fresh authoritative capture.
 typedef int (*c3x_renderer_prepare_view_fn)(struct c3x_renderer_camera_request_v1 const *, int query_only);
+/* Optional, caller-thread-only native observation. No pixels or strings are captured. */
+enum c3x_renderer_native_operation {
+    C3X_NATIVE_VERIFY = 0, C3X_NATIVE_MAP, C3X_NATIVE_SCREEN, C3X_NATIVE_PRESENT,
+    C3X_NATIVE_INIT, C3X_NATIVE_DESTROY, C3X_NATIVE_PIXEL, C3X_NATIVE_BITS,
+    C3X_NATIVE_DC, C3X_NATIVE_COPY, C3X_NATIVE_FILL, C3X_NATIVE_IMAGE_DRAW,
+    C3X_NATIVE_SPRITE, C3X_NATIVE_OPERATION_COUNT
+};
+struct c3x_renderer_native_observation {
+    unsigned struct_size;
+    int operation, context;
+    void * object;
+    void * peer;
+    int width, height, bit_count;
+    int left, top, right, bottom;
+};
+typedef int (*c3x_renderer_native_observe_fn)(struct c3x_renderer_native_observation const *);
+/* Isolated native-backend admission seam; not resolved by the shipping loader.
+   Caller-thread-only, synchronous borrowed pointers. COPY/FILL/IMAGE_DRAW returning 1 means
+   completed submission with native success (0); 0 requires current CPU storage.
+   Other operations maintain ownership and return 0. DRAIN precedes detachment.
+   A backend must drain before removal; it cannot fail open with stale CPU pixels. */
+enum { C3X_NATIVE_IMAGE_DRAIN = 100, C3X_NATIVE_IMAGE_REINIT = 101, C3X_NATIVE_IMAGE_CLIP = 102 };
+typedef int (*c3x_renderer_native_image_fn)(int operation, void * image, void * source,
+    void const * source_rect, void const * destination_rect, unsigned color);
+
+
 typedef int (*c3x_renderer_blit_fn)(struct c3x_renderer_output_v1 const *, void * destination_hdc);
 typedef int (*c3x_renderer_unit_draw_fn)(struct c3x_renderer_unit_v1 const *, void * destination_hdc);
 /* Optional extension: native underlay resolves color-key canvas antialiasing. */

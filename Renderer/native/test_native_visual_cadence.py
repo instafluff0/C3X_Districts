@@ -58,6 +58,7 @@ extern void (WINAPI ** p_OutputDebugStringA) (char *);
 #define GetFocus is->GetFocus
 bool is_online_game ();
 void custom_renderer_scheduler_tick ();
+void set_custom_renderer_native_probe (JGL_Image *);
 void tile_animation_scheduler_tick ();
 void clear_active_custom_tile_animation_effects ();
 '''+body+'\nvoid unload_cadence () {\n'+unload+'\n}\n'
@@ -79,6 +80,7 @@ void clear_active_custom_tile_animation_effects ();
 #define Units_Image_Data_advance_animations advance
 #define p_native_timer_inhibited inhibited_ptr
 #define p_native_game_ending ending_ptr
+void set_custom_renderer_native_probe(void*){}
 struct Advisor_GUI {};enum AdvisorKind {AK_DOMESTIC,AK_TRADE};
 void Advisor_GUI_open(Advisor_GUI*,int,AdvisorKind);
 struct LARGE_INTEGER {long long QuadPart=0;};

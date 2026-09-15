@@ -13,6 +13,18 @@ selection, projection and composition; it should reuse unchanged scene content.
 This is design guidance, not a claim that these capabilities already exist or
 an instruction to rewrite the renderer.
 
+The authorized [GPU composition feasibility probe](gpu_composition_probe.md) explores
+a future hybrid output boundary: GPU-resident map and composition with retained
+CPU-generated UI textures. It does not yet replace the shipping bitmap bridge,
+prove complete JGL coverage, or transfer game/UI scheduling to the renderer.
+The native operation executor now owns bounded resident images and validated
+ordered packed-pixel operations. The isolated native adapter now translates actual
+hooked copy/fill/keyed-image calls, tracks native lifetimes and restores CPU pixels
+before fallback. Exposed pointers permanently relinquish GPU destination ownership;
+CPU sources are compared completely on use. The live loader leaves the adapter
+unbound until full access coverage, existing GPU-worker ownership, resident-map
+input, device-loss recovery and final native transfer are integrated.
+
 ## Authority and migration
 
 The current checkout is the implementation authority. This document defines the

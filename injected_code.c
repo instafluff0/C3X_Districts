@@ -26849,9 +26849,239 @@ log_custom_renderer_event (char const * stage, int result)
 	(*p_OutputDebugStringA) (message);
 }
 
+// JGL observation hooks: native pixels and return values always come from JGL.
+// This block is also executed by the isolated x86 JGL contract.
+bool
+custom_renderer_native_probe_on ()
+{
+	return is->custom_renderer_native_probe_active && is->current_config.enable_custom_rendering &&
+		is->custom_renderer_native_observe != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner;
+}
+
+int
+translate_custom_renderer_native (int operation, JGL_Image * image, JGL_Image * source, RECT * source_rect, RECT * destination_rect, unsigned color)
+{
+	// The loader deliberately leaves this isolated-backend seam unbound. Native
+	// ownership and final-transfer integration must pass before live admission.
+	if (is->custom_renderer_native_image == NULL) return 0;
+	if (! custom_renderer_native_probe_on ()) {
+		is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0);
+		is->custom_renderer_native_image = NULL;
+		return 0;
+	}
+	// Audited clip metadata only: its private HDC never exposes image pixels.
+	if (operation == C3X_NATIVE_DC && is->custom_renderer_native_operation == C3X_NATIVE_IMAGE_CLIP) return 0;
+	return is->custom_renderer_native_image (operation, image, source, source_rect, destination_rect, color);
+}
+
+int
+observe_custom_renderer_native (int operation, JGL_Image * image, void * peer, RECT * rect)
+{
+	if (! custom_renderer_native_probe_on ()) return 1;
+	struct c3x_renderer_native_observation event = {0};
+	event.struct_size = sizeof event;
+	event.operation = operation;
+	event.context = is->custom_renderer_native_operation;
+	event.object = image;
+	event.peer = peer;
+	if (image != NULL) {
+		event.width = image->Image_Rect.right - image->Image_Rect.left;
+		event.height = image->Image_Rect.bottom - image->Image_Rect.top;
+		event.bit_count = image->BitCount;
+	}
+	if (rect != NULL) {
+		event.left = rect->left; event.top = rect->top;
+		event.right = rect->right; event.bottom = rect->bottom;
+	}
+	return is->custom_renderer_native_observe (&event);
+}
+
+void * __fastcall
+patch_JGL_Image_destroy (JGL_Image * image, int edx, unsigned flags)
+{
+	translate_custom_renderer_native (C3X_NATIVE_DESTROY, image, NULL, NULL, NULL, 0);
+	observe_custom_renderer_native (C3X_NATIVE_DESTROY, image, NULL, NULL);
+	return ((void * (__fastcall *) (JGL_Image *, int, unsigned))is->custom_renderer_jgl_original[0]) (image, __, flags);
+}
+
+int __fastcall
+patch_JGL_Image_init (JGL_Image * image, int edx, int width, int height, int bits, int mode)
+{
+	translate_custom_renderer_native (C3X_NATIVE_IMAGE_REINIT, image, NULL, NULL, NULL, 0);
+	int result = ((int (__fastcall *) (JGL_Image *, int, int, int, int, int))is->custom_renderer_jgl_original[1]) (image, __, width, height, bits, mode);
+	if (result == 0) {
+		observe_custom_renderer_native (C3X_NATIVE_INIT, image, NULL, NULL);
+		translate_custom_renderer_native (C3X_NATIVE_INIT, image, NULL, NULL, NULL, 0);
+	}
+	return result;
+}
+
+void * __fastcall
+patch_JGL_Image_pixel_3 (JGL_Image * image, int edx, int x, int y)
+{
+	translate_custom_renderer_native (C3X_NATIVE_PIXEL, image, NULL, NULL, NULL, 0);
+	observe_custom_renderer_native (C3X_NATIVE_PIXEL, image, NULL, NULL);
+	return ((void * (__fastcall *) (JGL_Image *, int, int, int))is->custom_renderer_jgl_original[3]) (image, __, x, y);
+}
+
+void * __fastcall
+patch_JGL_Image_bits (JGL_Image * image)
+{
+	translate_custom_renderer_native (C3X_NATIVE_BITS, image, NULL, NULL, NULL, 0);
+	observe_custom_renderer_native (C3X_NATIVE_BITS, image, NULL, NULL);
+	return ((void * (__fastcall *) (JGL_Image *))is->custom_renderer_jgl_original[4]) (image);
+}
+
+HDC __fastcall
+patch_JGL_Image_acquire_dc (JGL_Image * image)
+{
+	translate_custom_renderer_native (C3X_NATIVE_DC, image, NULL, NULL, NULL, 0);
+	observe_custom_renderer_native (C3X_NATIVE_DC, image, NULL, NULL);
+	return ((HDC (__fastcall *) (JGL_Image *))is->custom_renderer_jgl_original[10]) (image);
+}
+
+int __fastcall
+patch_JGL_Image_clip (JGL_Image * image, int edx, RECT * rect)
+{
+	bool observing = custom_renderer_native_probe_on ();
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_IMAGE_CLIP;
+	int result = ((int (__fastcall *) (JGL_Image *, int, RECT *))is->custom_renderer_jgl_original[13]) (image, __, rect);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Image_copy (JGL_Image * image, int edx, JGL_Image * destination, RECT * source, RECT * target)
+{
+	bool observing = custom_renderer_native_probe_on ();
+	int previous = is->custom_renderer_native_operation;
+	observe_custom_renderer_native (C3X_NATIVE_COPY, destination, image, target);
+	if (translate_custom_renderer_native (C3X_NATIVE_COPY, destination, image, source, target, 0)) return 0;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_COPY;
+	int result = ((int (__fastcall *) (JGL_Image *, int, JGL_Image *, RECT *, RECT *))is->custom_renderer_jgl_original[16]) (image, __, destination, source, target);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Image_fill (JGL_Image * image, int edx, RECT * rect, int color)
+{
+	bool observing = custom_renderer_native_probe_on ();
+	int previous = is->custom_renderer_native_operation;
+	observe_custom_renderer_native (C3X_NATIVE_FILL, image, NULL, rect);
+	if (translate_custom_renderer_native (C3X_NATIVE_FILL, image, NULL, NULL, rect, color)) return 0;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_FILL;
+	int result = ((int (__fastcall *) (JGL_Image *, int, RECT *, int))is->custom_renderer_jgl_original[17]) (image, __, rect, color);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Image_draw_onto (JGL_Image * image, int edx, JGL_Image * destination, int x, int y)
+{
+	bool observing = custom_renderer_native_probe_on ();
+	int previous = is->custom_renderer_native_operation;
+	observe_custom_renderer_native (C3X_NATIVE_IMAGE_DRAW, destination, image, NULL);
+	RECT anchor = {x, y, x, y};
+	if (translate_custom_renderer_native (C3X_NATIVE_IMAGE_DRAW, destination, image, NULL, &anchor, 0)) return 0;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_IMAGE_DRAW;
+	int result = ((int (__fastcall *) (JGL_Image *, int, JGL_Image *, int, int))is->custom_renderer_jgl_original[33]) (image, __, destination, x, y);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Sprite_draw (JGLSprite * sprite, int edx, JGL_Image * destination, int x, int y, void * palette)
+{
+	bool observing = custom_renderer_native_probe_on ();
+	int previous = is->custom_renderer_native_operation;
+	observe_custom_renderer_native (C3X_NATIVE_SPRITE, destination, sprite, NULL);
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, int, int, void *))is->custom_renderer_jgl_sprite_original) (sprite, __, destination, x, y, palette);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+void
+set_custom_renderer_native_probe (JGL_Image * root)
+{
+	// Runtime DLL slots cannot be encoded as fixed Civ III executable addresses.
+	// Verify the exact DLL hash through the optional observer, then all slot RVAs.
+	int slots[9] = {0, 1, 3, 4, 10, 13, 16, 17, 33};
+	unsigned rvas[9] = {0x15d0, 0x1800, 0x1bc0, 0x1b70, 0x1b20, 0x1a40, 0x1ec0, 0x2270, 0x2410};
+	void * hooks[9] = {(void *)patch_JGL_Image_destroy, (void *)patch_JGL_Image_init, (void *)patch_JGL_Image_pixel_3, (void *)patch_JGL_Image_bits,
+		(void *)patch_JGL_Image_acquire_dc, (void *)patch_JGL_Image_clip,
+		(void *)patch_JGL_Image_copy, (void *)patch_JGL_Image_fill, (void *)patch_JGL_Image_draw_onto};
+	if (root != NULL) {
+#if defined(JGL_present_screen) && defined(p_jgl_screen_canvas)
+		if (JGL_present_screen == NULL || p_jgl_screen_canvas == NULL) return;
+#else
+		return;
+#endif
+	}
+	if (root != NULL && ! is->custom_renderer_native_probe_active) {
+		if (is->custom_renderer_native_observe == NULL || is->custom_renderer_native_probe_rejected) return;
+		char * module = (char *)(*p_GetModuleHandleA) ("jgl.dll");
+		if (module == NULL || (void *)root->vtable != module + 0x68238) return;
+		struct c3x_renderer_native_observation check = {0};
+		check.struct_size = sizeof check; check.operation = C3X_NATIVE_VERIFY; check.object = module;
+		if (! is->custom_renderer_native_observe (&check)) { is->custom_renderer_native_probe_rejected = true; return; }
+		void ** table = (void **)(module + 0x68238), ** sprite_table = (void **)(module + 0x68440);
+		for (int n = 0; n < 9; n++) if (table[slots[n]] != module + rvas[n]) { is->custom_renderer_native_probe_rejected = true; return; }
+		if (sprite_table[17] != module + 0x8180) { is->custom_renderer_native_probe_rejected = true; return; }
+		is->custom_renderer_probe_thread_id = (DWORD (WINAPI *) ())(*p_GetProcAddress) (is->kernel32, "GetCurrentThreadId");
+		if (is->custom_renderer_probe_thread_id == NULL) return;
+		is->custom_renderer_probe_owner = is->custom_renderer_probe_thread_id ();
+		DWORD protect, unused;
+		if (! VirtualProtect (table, 0x250, PAGE_READWRITE, &protect)) return;
+		memcpy (is->custom_renderer_jgl_original, table, sizeof is->custom_renderer_jgl_original);
+		is->custom_renderer_jgl_table = table;
+		is->custom_renderer_jgl_sprite_table = sprite_table;
+		is->custom_renderer_jgl_sprite_original = sprite_table[17];
+		for (int n = 0; n < 9; n++) table[slots[n]] = hooks[n];
+		sprite_table[17] = (void *)patch_JGL_Sprite_draw;
+		VirtualProtect (table, 0x250, protect, &unused);
+		is->custom_renderer_native_probe_active = true;
+	}
+	if (root != NULL) {
+		observe_custom_renderer_native (C3X_NATIVE_MAP, root, NULL, NULL);
+		return;
+	}
+	if (is->custom_renderer_native_image != NULL) {
+		is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0);
+		is->custom_renderer_native_image = NULL;
+	}
+	if (! is->custom_renderer_native_probe_active) return;
+	is->custom_renderer_native_probe_active = false;
+	DWORD protect, unused;
+	void ** table = is->custom_renderer_jgl_table;
+	if (VirtualProtect (table, 0x250, PAGE_READWRITE, &protect)) {
+		for (int n = 0; n < 9; n++) if (table[slots[n]] == hooks[n]) table[slots[n]] = is->custom_renderer_jgl_original[slots[n]];
+		if (is->custom_renderer_jgl_sprite_table[17] == (void *)patch_JGL_Sprite_draw)
+			is->custom_renderer_jgl_sprite_table[17] = is->custom_renderer_jgl_sprite_original;
+		VirtualProtect (table, 0x250, protect, &unused);
+	}
+	// Wrappers live in permanent injected code and pass through when inactive,
+	// even if protection restoration failed. They never call an unloaded DLL.
+}
+
+#ifdef JGL_present_screen
+void __cdecl
+patch_JGL_present_screen (RECT * rect)
+{
+	observe_custom_renderer_native (C3X_NATIVE_SCREEN, p_jgl_screen_canvas->JGL.Image, NULL, rect);
+	JGL_present_screen (rect);
+	if (! observe_custom_renderer_native (C3X_NATIVE_PRESENT, p_jgl_screen_canvas->JGL.Image, NULL, rect))
+		set_custom_renderer_native_probe (NULL);
+}
+#endif
+// End JGL observation hooks.
+
 void
 unload_custom_renderer ()
 {
+	set_custom_renderer_native_probe (NULL);
 #if defined(p_main_animation_timer) && defined(Timer_reset_and_activate) && defined(Units_Image_Data_advance_animations) && defined(p_native_timer_inhibited) && defined(p_native_game_ending)
 	if (is->custom_renderer_fast_timer && p_main_animation_timer != NULL && Timer_reset_and_activate != NULL &&
 	    p_main_animation_timer->timer_id != NULL && p_main_animation_timer->duration == 33)
@@ -26886,6 +27116,7 @@ unload_custom_renderer ()
 	is->custom_renderer_capture_only = false;
 	is->custom_renderer_async_presented = false;
 	is->custom_renderer_blit = NULL;
+	is->custom_renderer_native_observe = NULL;
 	is->custom_renderer_unit_draw = NULL;
 	is->custom_renderer_unit_draw_expanded = NULL;
 	is->custom_renderer_unit_draw_playback = NULL;
@@ -27186,6 +27417,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_async_enabled = false;
 #endif
 		is->custom_renderer_blit = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_blit");
+		is->custom_renderer_native_observe = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_observe");
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
 		is->custom_renderer_unit_draw_playback = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_playback");
@@ -27425,6 +27657,7 @@ capture_custom_renderer_tile (int visible_to_civ_id, int pixel_x, int pixel_y,
 
 	if (is->custom_renderer_tile_count == 1) {
 		is->custom_renderer_target = target;
+		if (target != NULL) set_custom_renderer_native_probe (((PCX_Image *)target)->JGL.Image);
 	}
 	return true;
 }

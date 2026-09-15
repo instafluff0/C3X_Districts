@@ -29,6 +29,7 @@
 #include "environment_runtime.h"
 #include "terrain_definition_runtime.h"
 #include "renderer_trace.h"
+#include "native_observation.h"
 #include "asset_content_hash.h"
 #include "scroll_damage.h"
 #include "river_node_locality.h"
@@ -11790,4 +11791,11 @@ extern "C" __declspec(dllexport) int c3x_renderer_schedule_idle(
     previous_busy=busy;
     previous_call_ticks=input->now_ticks;
     return result;
+}
+
+// Optional ABI extension: invoked synchronously by native pass-through hooks.
+extern "C" __declspec(dllexport) int c3x_renderer_native_observe(c3x_renderer_native_observation const* event) {
+    static c3x_native_observation::Capture capture;
+    try { return capture.observe(event); }
+    catch (...) { capture.ended=true; return 0; }
 }

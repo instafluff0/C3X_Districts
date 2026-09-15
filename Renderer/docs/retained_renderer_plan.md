@@ -14,6 +14,37 @@ installation and launch remain the user's actions through ordinary `INSTALL.bat`
 without environment settings. The authorized Advisor lifecycle hook reuses its
 existing patch-table addresses; see the patch ledger.
 
+## Current GPU composition investigation
+
+The user authorized the bounded [GPU composition probe](gpu_composition_probe.md)
+and necessary verified patch-table additions. The standalone path passes exact
+RGB composition and native JGL fill/copy checks. HDC-only replacement cannot cover
+native pixel-writing operations. GPU destination paths eliminate application map
+readback in the fixture, but variable completion stalls prevent a reliable speedup
+estimate. Typed pass-through JGL access/copy/fill/sprite
+hooks and a verified GOG final-transfer hook feed a bounded caller-thread capture that
+records map/screen identities, attempted copy dependencies and unattributed CPU
+access, flushing diagnostics after native transfer. It preserves existing pixels
+and UI timing ownership; it does not yet remove readback or establish live coverage.
+The intended next boundary is hybrid composition: retain CPU-generated static UI
+textures and translate the operations that depend on the animated map, preserving
+native demand and complete UI transactions. This is not a wholesale UI rewrite.
+Observation candidate `038faec0…0be2e2` passes native-hook execution and exact
+production-scene parity and is staged with explicit user permission. Installation
+and live capture wait for the user's return. Meanwhile the reusable packed GPU
+executor replaces the isolated prototype's earlier GPU arm: bounded resident
+images, source revisions and exact copy/fill/key/invert/save/restore transactions.
+Native 16-bit and full-frame RGB oracle checks validate admitted operations.
+The actual injected hooks now execute admitted copies, fills and ordinary keyed
+image draws through `native_image_adapter.h` in the isolated JGL harness. Fresh
+lifetimes own GPU destinations; escaped CPU pixels/HDCs force a synchronized,
+permanent return to CPU ownership. Complete word comparisons catch retained-pointer
+source edits and skip unchanged uploads. Clip metadata has its own direct hook.
+The live loader leaves this backend unbound: full surface/access coverage, existing
+GPU-worker integration, resident-map input, device-loss recovery and native final
+GPU transfer remain. Source comparison cost is still on the caller; this is a
+correctness checkpoint with demonstrated reuse, not a measured game speedup.
+
 ## Actual code responsibilities
 
 Completion means ownership and behavior for admitted categories, not permanent

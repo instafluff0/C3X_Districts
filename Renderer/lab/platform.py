@@ -47,7 +47,7 @@ def native_command_result(relative_cwd, command, *, timeout_seconds=None):
     else:
         vm = os.environ.get("C3X_RENDERER_VM", "Windows 11")
         directory = windows_root() / PureWindowsPath(relative_cwd)
-        args = ["prlctl", "exec", vm, "cmd", "/d", "/s", "/c",
+        args = ["prlctl", "exec", vm, "--current-user", "cmd", "/d", "/s", "/c",
                 f'pushd "{directory}" && {command}']
         cwd = ROOT
     try:

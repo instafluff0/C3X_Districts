@@ -1021,3 +1021,6 @@ define,    0x006205D0,	0x0,		0x0,		"Timer_reset_and_activate",	"void (__fastcall
 inlead,    0x00405FC0,	0x0,		0x0,		"Units_Image_Data_advance_animations",	"void (__fastcall *) (Units_Image_Data * this, int edx, float elapsed, Unit ** units, int count, void * effects)"
 define,    0x0072C2C4,	0x0,		0x0,		"p_native_timer_inhibited",	"int *"
 define,    0x00CC37BC,	0x0,		0x0,		"p_native_game_ending",	"int *"
+
+inlead, 0x606780, 0x0, 0x0, "JGL_present_screen", "void (__cdecl *) (RECT * rect)"
+define, 0xCAD030, 0x0, 0x0, "p_jgl_screen_canvas", "PCX_Image *"
