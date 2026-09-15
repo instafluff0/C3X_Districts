@@ -19941,6 +19941,53 @@ patch_JGL_Image_fill (JGL_Image * image, int edx, RECT * rect, int color)
 }
 
 int __fastcall
+patch_JGL_Image_tint (JGL_Image * image, int edx, RECT * area, int color, int percent)
+{
+	if (translate_custom_renderer_native (C3X_NATIVE_TINT, image, NULL, (RECT *)&percent, area, color)) return 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_FILL;
+	int result = ((int (__fastcall *) (JGL_Image *, int, RECT *, int, int))is->custom_renderer_jgl_original[18]) (image, __, area, color, percent);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Image_lookup (JGL_Image * image, int edx, RECT * area, JGL_Image * background, int percent, void * table)
+{
+	struct c3x_renderer_native_lookup inputs = {table, NULL, percent};
+	if (translate_custom_renderer_native (C3X_NATIVE_LOOKUP, image, background, (RECT *)&inputs, area, 0)) return 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_FILL;
+	// The native lookup helper borrows both images without releasing either.
+	int links = image->Bits_Data_Links, bits = image->Current_Bits_Data;
+	int bg_links = background->Bits_Data_Links, bg_bits = background->Current_Bits_Data;
+	int result = ((int (__fastcall *) (JGL_Image *, int, RECT *, JGL_Image *, int, void *))is->custom_renderer_jgl_original[21]) (image, __, area, background, percent, table);
+	image->Bits_Data_Links = links; image->Current_Bits_Data = bits;
+	background->Bits_Data_Links = bg_links; background->Current_Bits_Data = bg_bits;
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Image_line (JGL_Image * image, int edx, int x0, int y0, int x1, int y1, int color, int unused)
+{
+	RECT endpoints = {x0, y0, x1, y1};
+	if (translate_custom_renderer_native (C3X_NATIVE_LINE, image, NULL, &endpoints, NULL, color)) return 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_FILL;
+	// The diagonal helper borrows bits twice but some exits release only once.
+	// Its scalar-only draw must preserve the caller's entry lease state.
+	int links = image->Bits_Data_Links, bits = image->Current_Bits_Data;
+	int result = ((int (__fastcall *) (JGL_Image *, int, int, int, int, int, int, int))is->custom_renderer_jgl_original[25]) (image, __, x0, y0, x1, y1, color, unused);
+	image->Bits_Data_Links = links; image->Current_Bits_Data = bits;
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
 patch_JGL_Image_draw_onto (JGL_Image * image, int edx, JGL_Image * destination, int x, int y)
 {
 	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
@@ -19969,8 +20016,184 @@ patch_JGL_Sprite_draw (JGLSprite * sprite, int edx, JGL_Image * destination, int
 }
 
 int __fastcall
+patch_JGL_Sprite_keyed (JGLSprite * sprite, int edx, JGL_Image * destination, int x, int y, void * palette)
+{
+	struct c3x_renderer_native_sprite_style inputs = {palette, NULL, 0, 1};
+	RECT anchor = {x, y, x, y};
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE_STYLE, destination, sprite, (RECT *)&inputs, &anchor, 0)) return (*(int *)((char *)sprite + 0x18) & 1) ? y : 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, int, int, void *))is->custom_renderer_jgl_blend_original[6]) (sprite, __, destination, x, y, palette);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Sprite_mask (JGLSprite * sprite, int edx, JGL_Image * destination, int x, int y, int color, void * palette)
+{
+	struct c3x_renderer_native_sprite_style inputs = {palette, NULL, (unsigned)color, 2};
+	RECT anchor = {x, y, x, y};
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE_STYLE, destination, sprite, (RECT *)&inputs, &anchor, 0)) return 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, int, int, int, void *))is->custom_renderer_jgl_blend_original[7]) (sprite, __, destination, x, y, color, palette);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Sprite_shadow (JGLSprite * sprite, int edx, JGL_Image * destination, int x, int y, void * table, void * palette)
+{
+	struct c3x_renderer_native_sprite_style inputs = {palette, table, 0, 3};
+	RECT anchor = {x, y, x, y};
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE_STYLE, destination, sprite, (RECT *)&inputs, &anchor, 0)) return 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, int, int, void *, void *))is->custom_renderer_jgl_blend_original[8]) (sprite, __, destination, x, y, table, palette);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Sprite_opacity (JGLSprite * sprite, int edx, JGL_Image * destination, int x, int y, float opacity, void * palette, int flags)
+{
+	struct c3x_renderer_native_sprite_style inputs = {palette, NULL, (unsigned)flags, 4, opacity};
+	RECT anchor = {x, y, x, y};
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE_STYLE, destination, sprite, (RECT *)&inputs, &anchor, 0)) return 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, int, int, float, void *, int))is->custom_renderer_jgl_blend_original[9]) (sprite, __, destination, x, y, opacity, palette, flags);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Sprite_lookup (JGLSprite * sprite, int edx, JGL_Image * destination, int x, int y, void * table, void * palette)
+{
+	struct c3x_renderer_native_lookup inputs = {table, palette, 0};
+	RECT anchor = {x, y, x, y};
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE_LOOKUP, destination, sprite, (RECT *)&inputs, &anchor, 0)) return 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, int, int, void *, void *))is->custom_renderer_jgl_blend_original[3]) (sprite, __, destination, x, y, table, palette);
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Sprite_lookup_over (JGLSprite * sprite, int edx, JGL_Image * background, JGL_Image * destination, int x, int y, void * table, void * palette)
+{
+	struct c3x_renderer_native_lookup inputs = {table, palette, 0, background};
+	RECT anchor = {x, y, x, y};
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE_LOOKUP_OVER, destination, sprite, (RECT *)&inputs, &anchor, 0)) return 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	int links = destination->Bits_Data_Links, bits = destination->Current_Bits_Data;
+	int bg_links = background->Bits_Data_Links, bg_bits = background->Current_Bits_Data;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, JGL_Image *, int, int, void *, void *))is->custom_renderer_jgl_blend_original[4]) (sprite, __, background, destination, x, y, table, palette);
+	destination->Bits_Data_Links = links; destination->Current_Bits_Data = bits;
+	background->Bits_Data_Links = bg_links; background->Current_Bits_Data = bg_bits;
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Sprite_lookup_scaled (JGLSprite * sprite, int edx, JGL_Image * background, JGL_Image * destination, int x, int y, int scale_x, int scale_y, int denominator, void * table, void * palette)
+{
+	// The native scaled entry rejects unequal axes before borrowing any images.
+	if (scale_x != scale_y) return 1;
+	struct c3x_renderer_native_lookup inputs = {table, palette, 0, background, {scale_x, scale_y, denominator}};
+	RECT anchor = {x, y, x, y};
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE_LOOKUP_SCALED, destination, sprite, (RECT *)&inputs, &anchor, 0)) return 0;
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	int links = destination->Bits_Data_Links, bits = destination->Current_Bits_Data;
+	int bg_links = background->Bits_Data_Links, bg_bits = background->Current_Bits_Data;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, JGL_Image *, int, int, int, int, int, void *, void *))is->custom_renderer_jgl_blend_original[5]) (sprite, __, background, destination, x, y, scale_x, scale_y, denominator, table, palette);
+	destination->Bits_Data_Links = links; destination->Current_Bits_Data = bits;
+	background->Bits_Data_Links = bg_links; background->Current_Bits_Data = bg_bits;
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Sprite_blend (JGLSprite * sprite, int edx, JGLSprite * alpha, JGL_Image * background, JGL_Image * destination, int x, int y, void * palette)
+{
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	struct c3x_renderer_native_sprite_blend inputs = {alpha, background, palette};
+	RECT anchor = {x, y, x, y};
+	observe_custom_renderer_native (C3X_NATIVE_SPRITE, destination, sprite, NULL);
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE_BLEND, destination, sprite, (RECT *)&inputs, &anchor, 0)) return 0;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	// JGL 0x10ab0 borrows both images, then releases two links on the
+	// background only. Its scalar return exposes neither pointer. Restore the
+	// entry lease state so separate destinations do not accumulate false borrows
+	// and a caller's existing background lease is not consumed.
+	int background_links = background->Bits_Data_Links, destination_links = destination->Bits_Data_Links;
+	int background_bits = background->Current_Bits_Data, destination_bits = destination->Current_Bits_Data;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGLSprite *, JGL_Image *, JGL_Image *, int, int, void *))is->custom_renderer_jgl_blend_original[0]) (sprite, __, alpha, background, destination, x, y, palette);
+	background->Bits_Data_Links = background_links; background->Current_Bits_Data = background_bits;
+	destination->Bits_Data_Links = destination_links; destination->Current_Bits_Data = destination_bits;
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Sprite_blend_onto (JGLSprite * sprite, int edx, JGLSprite * alpha, JGL_Image * destination, int x, int y, void * palette)
+{
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	struct c3x_renderer_native_sprite_blend inputs = {alpha, destination, palette};
+	RECT anchor = {x, y, x, y};
+	observe_custom_renderer_native (C3X_NATIVE_SPRITE, destination, sprite, NULL);
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE_BLEND, destination, sprite, (RECT *)&inputs, &anchor, 0)) return 0;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	// JGL 0x10d90 releases two destination links after borrowing one. Preserve the caller's entry lease.
+	int destination_links = destination->Bits_Data_Links, destination_bits = destination->Current_Bits_Data;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGLSprite *, JGL_Image *, int, int, void *))is->custom_renderer_jgl_blend_original[1]) (sprite, __, alpha, destination, x, y, palette);
+	destination->Bits_Data_Links = destination_links; destination->Current_Bits_Data = destination_bits;
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
+patch_JGL_Sprite_alpha_onto (JGLSprite * sprite, int edx, JGLSprite * alpha, JGL_Image * destination, int x, int y, void * palette)
+{
+	bool observing = custom_renderer_native_probe_on () || (is->custom_renderer_native_lifetime != NULL && is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner);
+	int previous = is->custom_renderer_native_operation;
+	struct c3x_renderer_native_sprite_blend inputs = {alpha, destination, palette};
+	RECT anchor = {x, y, x, y};
+	observe_custom_renderer_native (C3X_NATIVE_SPRITE, destination, sprite, NULL);
+	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE_BLEND, destination, sprite, (RECT *)&inputs, &anchor, 1)) return 0;
+	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
+	// JGL 0x9b20 returns without releasing its destination pixel link. Preserve the caller's entry lease.
+	int destination_links = destination->Bits_Data_Links, destination_bits = destination->Current_Bits_Data;
+	int result = ((int (__fastcall *) (JGLSprite *, int, JGLSprite *, JGL_Image *, int, int, void *))is->custom_renderer_jgl_blend_original[2]) (sprite, __, alpha, destination, x, y, palette);
+	destination->Bits_Data_Links = destination_links; destination->Current_Bits_Data = destination_bits;
+	if (observing) is->custom_renderer_native_operation = previous;
+	return result;
+}
+
+int __fastcall
 patch_JGL_Graphsy_present (void * graph, int edx, RECT * rect)
 {
+	// The process-owned module also presents configured UI before the first map
+	// and after a scene unload. Bind here, at native demand, without loading
+	// map assets or extending configuration ownership into the startup menus.
+	if (is->custom_renderer_native_image == NULL && is->custom_renderer_native_module != NULL &&
+	    is->current_config.enable_custom_rendering && is->custom_renderer_native_probe_active &&
+	    is->custom_renderer_probe_thread_id () == is->custom_renderer_probe_owner) {
+		is->custom_renderer_native_observe = (c3x_renderer_native_observe_fn)(*p_GetProcAddress) (is->custom_renderer_native_module, "c3x_renderer_native_observe");
+		is->custom_renderer_native_image = (c3x_renderer_native_image_fn)(*p_GetProcAddress) (is->custom_renderer_native_module, "c3x_renderer_native_image");
+	}
 	// Audited final transfer: the EXE wrapper has already drawn tooltip/cursor.
 	// The optional backend consumes the complete screen or releases GPU window
 	// ownership before JGL's original DC access restores/copies native pixels.
@@ -20055,11 +20278,11 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 {
 	// Runtime DLL slots cannot be encoded as fixed Civ III executable addresses.
 	// Verify the exact DLL hash through the optional observer, then all slot RVAs.
-	int slots[14] = {0, 1, 3, 4, 10, 13, 16, 17, 33, 42, 43, 44, 45, 46};
-	unsigned rvas[14] = {0x15d0, 0x1800, 0x1bc0, 0x1b70, 0x1b20, 0x1a40, 0x1ec0, 0x2270, 0x2410, 0x1d10, 0x1d40, 0x1db0, 0x1d70, 0x1de0};
-	void * hooks[14] = {(void *)patch_JGL_Image_destroy, (void *)patch_JGL_Image_init, (void *)patch_JGL_Image_pixel_3, (void *)patch_JGL_Image_bits,
+	int slots[17] = {0, 1, 3, 4, 10, 13, 16, 17, 18, 21, 25, 33, 42, 43, 44, 45, 46};
+	unsigned rvas[17] = {0x15d0, 0x1800, 0x1bc0, 0x1b70, 0x1b20, 0x1a40, 0x1ec0, 0x2270, 0x2320, 0x22c0, 0x2160, 0x2410, 0x1d10, 0x1d40, 0x1db0, 0x1d70, 0x1de0};
+	void * hooks[17] = {(void *)patch_JGL_Image_destroy, (void *)patch_JGL_Image_init, (void *)patch_JGL_Image_pixel_3, (void *)patch_JGL_Image_bits,
 		(void *)patch_JGL_Image_acquire_dc, (void *)patch_JGL_Image_clip,
-		(void *)patch_JGL_Image_copy, (void *)patch_JGL_Image_fill, (void *)patch_JGL_Image_draw_onto,
+		(void *)patch_JGL_Image_copy, (void *)patch_JGL_Image_fill, (void *)patch_JGL_Image_tint, (void *)patch_JGL_Image_lookup, (void *)patch_JGL_Image_line, (void *)patch_JGL_Image_draw_onto,
 		(void *)patch_JGL_Image_font, (void *)patch_JGL_Image_default_font, (void *)patch_JGL_Image_text_index, (void *)patch_JGL_Image_text_rgb, (void *)patch_JGL_Image_text};
 	if (enabled) {
 #if defined(JGL_present_screen) && defined(p_jgl_screen_canvas)
@@ -20076,31 +20299,49 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 		check.struct_size = sizeof check; check.operation = C3X_NATIVE_VERIFY; check.object = module;
 		if (! is->custom_renderer_native_observe (&check)) { is->custom_renderer_native_probe_rejected = true; return; }
 		void ** table = (void **)(module + 0x68238), ** sprite_table = (void **)(module + 0x68440);
-		for (int n = 0; n < 14; n++) if (table[slots[n]] != module + rvas[n]) { is->custom_renderer_native_probe_rejected = true; return; }
+		for (int n = 0; n < 17; n++) if (table[slots[n]] != module + rvas[n]) { is->custom_renderer_native_probe_rejected = true; return; }
 		void * (__cdecl * get_graph) () = (void * (__cdecl *) ())( *p_GetProcAddress) ((HMODULE)module, "get_graphsy_object_ptr");
 		void * graph = get_graph != NULL ? get_graph () : NULL;
 		void ** graph_table = graph != NULL ? *(void ***)graph : NULL;
 		if (graph_table != (void **)(module + 0x685f8) || graph_table[41] != module + 0x3baa0) { is->custom_renderer_native_probe_rejected = true; return; }
 		if (table[59] != module + 0x1ca0) { is->custom_renderer_native_probe_rejected = true; return; }
-		if (sprite_table[17] != module + 0x8180) { is->custom_renderer_native_probe_rejected = true; return; }
+		if (sprite_table[17] != module + 0x8180 || sprite_table[20] != module + 0x9aa0 || sprite_table[21] != module + 0x9a30 || sprite_table[22] != module + 0x9b20 || sprite_table[33] != module + 0x8fc0 || sprite_table[35] != module + 0x90a0 || sprite_table[34] != module + 0x90e0 || sprite_table[23] != module + 0x8050 || sprite_table[29] != module + 0x8600 || sprite_table[31] != module + 0x8ee0 || sprite_table[37] != module + 0x9220) { is->custom_renderer_native_probe_rejected = true; return; }
 		is->custom_renderer_probe_thread_id = (DWORD (WINAPI *) ())(*p_GetProcAddress) (is->kernel32, "GetCurrentThreadId");
 		if (is->custom_renderer_probe_thread_id == NULL) return;
 		is->custom_renderer_probe_owner = is->custom_renderer_probe_thread_id ();
 		DWORD protect, unused;
-		if (! VirtualProtect (table, 0x250, PAGE_READWRITE, &protect)) return;
+		if (! VirtualProtect (table, 0x300, PAGE_READWRITE, &protect)) return;
 		DWORD graph_protect;
-		if (! VirtualProtect (&graph_table[41], sizeof (void *), PAGE_READWRITE, &graph_protect)) { VirtualProtect (table, 0x250, protect, &unused); return; }
+		if (! VirtualProtect (&graph_table[41], sizeof (void *), PAGE_READWRITE, &graph_protect)) { VirtualProtect (table, 0x300, protect, &unused); return; }
 		is->custom_renderer_jgl_graph_table = graph_table;
 		is->custom_renderer_jgl_present_original = graph_table[41];
 		memcpy (is->custom_renderer_jgl_original, table, sizeof is->custom_renderer_jgl_original);
 		is->custom_renderer_jgl_table = table;
 		is->custom_renderer_jgl_sprite_table = sprite_table;
 		is->custom_renderer_jgl_sprite_original = sprite_table[17];
-		for (int n = 0; n < 14; n++) table[slots[n]] = hooks[n];
+		is->custom_renderer_jgl_blend_original[3] = sprite_table[33];
+		is->custom_renderer_jgl_blend_original[4] = sprite_table[35];
+		is->custom_renderer_jgl_blend_original[5] = sprite_table[34];
+		is->custom_renderer_jgl_blend_original[6] = sprite_table[23];
+		is->custom_renderer_jgl_blend_original[7] = sprite_table[29];
+		is->custom_renderer_jgl_blend_original[8] = sprite_table[31];
+		is->custom_renderer_jgl_blend_original[9] = sprite_table[37];
+		for (int n = 0; n < 3; n++) is->custom_renderer_jgl_blend_original[n] = sprite_table[20+n];
+		for (int n = 0; n < 17; n++) table[slots[n]] = hooks[n];
 		sprite_table[17] = (void *)patch_JGL_Sprite_draw;
+		sprite_table[33] = (void *)patch_JGL_Sprite_lookup;
+		sprite_table[35] = (void *)patch_JGL_Sprite_lookup_over;
+		sprite_table[34] = (void *)patch_JGL_Sprite_lookup_scaled;
+		sprite_table[23] = (void *)patch_JGL_Sprite_keyed;
+		sprite_table[29] = (void *)patch_JGL_Sprite_mask;
+		sprite_table[31] = (void *)patch_JGL_Sprite_shadow;
+		sprite_table[37] = (void *)patch_JGL_Sprite_opacity;
+		sprite_table[20] = (void *)patch_JGL_Sprite_blend;
+		sprite_table[21] = (void *)patch_JGL_Sprite_blend_onto;
+		sprite_table[22] = (void *)patch_JGL_Sprite_alpha_onto;
 		graph_table[41] = (void *)patch_JGL_Graphsy_present;
 		VirtualProtect (&graph_table[41], sizeof (void *), graph_protect, &unused);
-		VirtualProtect (table, 0x250, protect, &unused);
+		VirtualProtect (table, 0x300, protect, &unused);
 		is->custom_renderer_native_probe_active = true;
 	}
 	if (enabled) {
@@ -20118,11 +20359,28 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 	is->custom_renderer_native_probe_active = false;
 	DWORD protect, unused;
 	void ** table = is->custom_renderer_jgl_table;
-	if (VirtualProtect (table, 0x250, PAGE_READWRITE, &protect)) {
-		for (int n = 0; n < 14; n++) if (table[slots[n]] == hooks[n]) table[slots[n]] = is->custom_renderer_jgl_original[slots[n]];
+	if (VirtualProtect (table, 0x300, PAGE_READWRITE, &protect)) {
+		for (int n = 0; n < 17; n++) if (table[slots[n]] == hooks[n]) table[slots[n]] = is->custom_renderer_jgl_original[slots[n]];
 		if (is->custom_renderer_jgl_sprite_table[17] == (void *)patch_JGL_Sprite_draw)
 			is->custom_renderer_jgl_sprite_table[17] = is->custom_renderer_jgl_sprite_original;
-		VirtualProtect (table, 0x250, protect, &unused);
+		if (is->custom_renderer_jgl_sprite_table[33] == (void *)patch_JGL_Sprite_lookup)
+			is->custom_renderer_jgl_sprite_table[33] = is->custom_renderer_jgl_blend_original[3];
+		if (is->custom_renderer_jgl_sprite_table[35] == (void *)patch_JGL_Sprite_lookup_over)
+			is->custom_renderer_jgl_sprite_table[35] = is->custom_renderer_jgl_blend_original[4];
+		if (is->custom_renderer_jgl_sprite_table[34] == (void *)patch_JGL_Sprite_lookup_scaled)
+			is->custom_renderer_jgl_sprite_table[34] = is->custom_renderer_jgl_blend_original[5];
+		if (is->custom_renderer_jgl_sprite_table[23] == (void *)patch_JGL_Sprite_keyed)
+			is->custom_renderer_jgl_sprite_table[23] = is->custom_renderer_jgl_blend_original[6];
+		if (is->custom_renderer_jgl_sprite_table[29] == (void *)patch_JGL_Sprite_mask)
+			is->custom_renderer_jgl_sprite_table[29] = is->custom_renderer_jgl_blend_original[7];
+		if (is->custom_renderer_jgl_sprite_table[31] == (void *)patch_JGL_Sprite_shadow)
+			is->custom_renderer_jgl_sprite_table[31] = is->custom_renderer_jgl_blend_original[8];
+		if (is->custom_renderer_jgl_sprite_table[37] == (void *)patch_JGL_Sprite_opacity)
+			is->custom_renderer_jgl_sprite_table[37] = is->custom_renderer_jgl_blend_original[9];
+		void * blend_hooks[3] = {(void *)patch_JGL_Sprite_blend, (void *)patch_JGL_Sprite_blend_onto, (void *)patch_JGL_Sprite_alpha_onto};
+		for (int n = 0; n < 3; n++) if (is->custom_renderer_jgl_sprite_table[20+n] == blend_hooks[n])
+			is->custom_renderer_jgl_sprite_table[20+n] = is->custom_renderer_jgl_blend_original[n];
+		VirtualProtect (table, 0x300, protect, &unused);
 	}
 	void ** graph_table = is->custom_renderer_jgl_graph_table;
 	if (graph_table != NULL && VirtualProtect (&graph_table[41], sizeof (void *), PAGE_READWRITE, &protect)) {
@@ -27569,7 +27827,7 @@ ensure_custom_renderer_loaded ()
 		is->custom_renderer_blit = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_blit");
 		is->custom_renderer_native_observe = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_observe");
 		is->custom_renderer_native_image = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_image");
-		is->custom_renderer_native_map = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_map");
+		is->custom_renderer_native_map = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_native_map_view");
 		is->custom_renderer_unit_draw = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_background");
 		is->custom_renderer_unit_draw_expanded = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_expanded");
 		is->custom_renderer_unit_draw_playback = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_unit_draw_playback");
@@ -28245,11 +28503,12 @@ composite_custom_renderer_frame ()
 	displayed.struct_size = sizeof displayed;
 	int resident_result = C3X_RENDERER_RESULT_BAD_ARGUMENT;
 	if (is->custom_renderer_native_map != NULL && is->custom_renderer_native_lifetime != NULL && custom_renderer_native_probe_on ())
-		resident_result = is->custom_renderer_native_map (C3X_NATIVE_MAP_PREPARE, image, &request, &output);
+		resident_result = is->custom_renderer_native_map (C3X_NATIVE_MAP_PREPARE, image, &request, &displayed);
 	bool gpu_map = resident_result == C3X_RENDERER_RESULT_OK;
 	if (gpu_map) {
 		render_result = resident_result;
-		is->custom_renderer_display_clock = frame.presentation_time_ticks;
+		output = displayed.output;
+		is->custom_renderer_display_clock = displayed.frame.presentation_time_ticks;
 	} else if (resident_result != C3X_RENDERER_RESULT_BAD_ARGUMENT) render_result = resident_result;
 	else {
 		if (is->custom_renderer_async_drawing)

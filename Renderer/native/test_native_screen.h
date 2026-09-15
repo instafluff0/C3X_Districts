@@ -34,8 +34,9 @@ struct PreparedScreenPalette {void** vtable;void* native;};
 int __fastcall prepared_screen_palette(PreparedScreenPalette*,int){return 0;}
 unsigned short* __fastcall snapshot_test_bits(void* image,int){return *reinterpret_cast<unsigned short**>(static_cast<char*>(image)+0x4c0);}
 void __fastcall snapshot_test_release(void*,int,int){}
+int __fastcall unexpected_startup_native_transfer(void*,int,RECT*){return 917;}
 bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_frame_v1 const& frame,
-                            c3x_renderer_gpu_present_fn present,unsigned const* map,int phase_x,int phase_y,c3x_renderer_native_image_fn live,c3x_renderer_render_view_fn render_view,c3x_renderer_camera_request_v1 const& demand,void (*reset)()){
+                            c3x_renderer_gpu_present_fn present,unsigned const* map,int phase_x,int phase_y,c3x_renderer_native_image_fn live,c3x_renderer_render_view_fn render_view,c3x_renderer_camera_request_v1 const& demand,void (*reset)(),std::vector<NativeFrameSample> const& performance_frames){
     state={};capture={};events.clear();lines.clear();
     SetProcessDPIAware();WNDCLASSA wc={};wc.lpfnWndProc=screen_window_proc;wc.hInstance=GetModuleHandleA(nullptr);wc.lpszClassName="C3XNativeTransferContract";
     verify(RegisterClassA(&wc)!=0,"register native test window");
@@ -109,6 +110,12 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     verify(colors!=nullptr,"native overlay palette");colors[0]=0x7c1f;colors[1]=0x3e0;
     verify(reinterpret_cast<int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,void*)>(overlay.vtable[17])(&overlay,screen_surface,33,29,palettes[0])==0,"indexed native overlay on full-color map");
     for(int y=0;y<2;++y)for(int x=0;x<4;++x)if(indices[y*4+x]<254)expected[(y+29)*w+x+33]=indices[y*4+x]?0xff00ff00u:0xffff00ffu;
+    auto scales=reinterpret_cast<int*>(base+0x6c0fc);int saved_scales[3]={scales[0],scales[1],scales[2]};
+    scales[0]=2;scales[1]=1;scales[2]=1;
+    verify(reinterpret_cast<int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,void*)>(overlay.vtable[17])(&overlay,screen_surface,41,31,palettes[0])==0,"scaled indexed overlay on resident map");
+    for(int y=0;y<2;++y)for(int x=0;x<8;++x){auto index=indices[y*4+x/2];
+        if(index<254)expected[(y+32)*w+x+43]=index?0xff00ff00u:0xffff00ffu;}
+    for(unsigned i=0;i<3;++i)scales[i]=saved_scales[i];
     overlay.bits=nullptr;reinterpret_cast<void(__thiscall*)(JGLSprite*)>(base+0x7ed0)(&overlay);
     for(int y=9;y<27;++y)for(int x=7;x<31;++x)expected[y*w+x]=0xff00ff00u;
     final_ui_drawn=false;patch_JGL_present_screen(&full);
@@ -215,10 +222,34 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     for(int y=partial.top;y<partial.bottom;++y)for(int x=partial.left;x<partial.right;++x)expected[y*w+x]=0xff0000ffu;
     capture_display(expected);
     verify(std::equal(publication_pixels.begin(),publication_pixels.end(),published),"UI transfer preserves current map publication storage");
-    // Explicit device/session reset preserves a complete native fallback and
-    // permits recreation on the next map demand, with no stale native surfaces.
-    reset();live_active=false;last_transfer=full;patch_JGL_present_screen(&full);
-    expected=native_expected();capture_display(expected);
+    // A CPU UI screen can start GPU presentation before any map demand or
+    // material initialization, including after an explicit renderer reset.
+    reset();last_transfer=full;
+    // Enter through the production Graphsy hook with only the process-owned
+    // module, as after configuration load / scene unload before any map call.
+    // A distinct native sentinel proves substitution rather than a successful
+    // native BitBlt hiding an unconnected GPU backend.
+    auto saved_observer=state.custom_renderer_native_observe;
+    auto saved_native_transfer=state.custom_renderer_jgl_present_original;
+    state.custom_renderer_native_module=renderer_module;
+    state.custom_renderer_native_image=nullptr;state.custom_renderer_native_observe=nullptr;
+    state.custom_renderer_jgl_present_original=reinterpret_cast<void*>(unexpected_startup_native_transfer);
+    state.current_config.enable_custom_rendering=false;
+    verify(patch_JGL_Graphsy_present(graph,0,&full)==917&&!state.custom_renderer_native_image&&!state.custom_renderer_native_observe,"config-off UI does not bind GPU presentation");
+    state.current_config.enable_custom_rendering=true;
+    for(int phase=0;phase<3;++phase){
+        verify(patch_JGL_Graphsy_present(graph,0,&full)==0&&state.custom_renderer_native_image==live&&state.custom_renderer_native_map==nullptr&&
+            state.custom_renderer_native_observe==reinterpret_cast<c3x_renderer_native_observe_fn>(GetProcAddress(renderer_module,"c3x_renderer_native_observe")),"actual native UI entry binds the process-owned presenter without map initialization");
+        live_active=true;expected=native_expected();capture_display(expected);
+        if(phase==0){set_custom_renderer_native_probe(nullptr);state.custom_renderer_native_observe=nullptr;
+            verify(!state.custom_renderer_native_image&&state.custom_renderer_native_probe_active,"scene unload keeps process hooks but releases presentation");}
+        if(phase==1){state.current_config.enable_custom_rendering=false;
+            verify(patch_JGL_Graphsy_present(graph,0,&full)==917&&!state.custom_renderer_native_image,"config-off drains GPU presentation before native UI transfer");
+            state.current_config.enable_custom_rendering=true;}
+    }
+    state.custom_renderer_native_module=nullptr;state.custom_renderer_native_observe=saved_observer;
+    state.custom_renderer_jgl_present_original=saved_native_transfer;
+    std::puts("PASS caller-owned UI presentation: configured pre-map entry, scene unload/rebind, config-off drain/native transfer and reenable; exact displayed RGB");
     verify(render_view(&demand,&publication)==C3X_RENDERER_RESULT_OK,"recreate renderer after reset");
     patch_JGL_present_screen(&full);live_active=true;capture_display(expected);
     // Independent RGB565 DIB input exercises the packed GPU expansion shader.
@@ -280,8 +311,14 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     // callback. Native surfaces precede map demand; prepare/cancel leaves their
     // CPU pixels unchanged and commit shares ownership with actual JGL copies.
     {
-        auto native_map=reinterpret_cast<c3x_renderer_native_map_fn>(GetProcAddress(renderer_module,"c3x_renderer_native_map"));
-        verify(native_map!=nullptr,"production resident native map export");
+        auto native_map_view=reinterpret_cast<c3x_renderer_native_map_view_fn>(GetProcAddress(renderer_module,"c3x_renderer_native_map_view"));
+        auto native_map=[&](int action,void* image,c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output){
+            c3x_renderer_camera_view_v1 sample={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(sample)};
+            int code=native_map_view(action,image,request,output?&sample:nullptr);
+            if(code==C3X_RENDERER_RESULT_OK && output){*output=sample.output;verify(sample.frame.presentation_time_ticks<=request->frame->presentation_time_ticks,"native map returns actual sample clock");}
+            return code;
+        };
+        verify(native_map_view!=nullptr,"production resident native map export");
         state.current_config.enable_custom_rendering=true;state.custom_renderer_native_image=live;
         JGL_Image* live_images[2];
         for(auto& image:live_images){image=create(graph,nullptr,1);verify(reinterpret_cast<Init>(image->vtable[1])(image,w,h,16,1)==0,"production native image init");
@@ -304,6 +341,12 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         screen_surface=live_images[1];screen_image=screen_surface;screen.JGL.Image=screen_surface;pcx.image=screen_surface;
         auto live_frame=*demand.frame;auto live_request=demand;live_request.frame=&live_frame;
         std::vector<c3x_renderer_tile_v1> live_tiles(live_frame.tiles,live_frame.tiles+live_frame.tile_count);live_frame.tiles=live_tiles.data();
+        LOGFONTA text_font={};text_font.lfHeight=-17;text_font.lfWeight=700;text_font.lfOutPrecision=7;strcpy_s(text_font.lfFaceName,"Arial");
+        auto label_font=CreateFontIndirectA(&text_font);verify(label_font!=nullptr,"native label font");
+        auto label_dc=*reinterpret_cast<HDC*>(reinterpret_cast<char*>(screen_surface)+0x4bc);auto previous_font=SelectObject(label_dc,label_font);
+        SetTextColor(label_dc,RGB(237,171,55));SetBkMode(label_dc,TRANSPARENT);SetTextAlign(label_dc,TA_LEFT|TA_TOP);
+        c3x_native_text::State label_state; c3x_native_text::Raster label;
+        verify(c3x_native_text::capture(label_dc,label_state)&&c3x_native_text::compile(label_dc,label_state,"Berlin: 6",9,label),"independent compiled label fixture");
         for(int step=0;step<2;++step){
             if(step)for(auto& tile:live_tiles){tile.anchor_x-=13;tile.anchor_y+=7;}
             c3x_renderer_output_v1 control={C3X_RENDERER_API_VERSION,sizeof(control)};
@@ -320,15 +363,40 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             verify(unit_cpu(&unit,unit_oracle.dc,unit_oracle.dc,expected_bounds)==C3X_RENDERER_RESULT_OK,"production owned unit CPU oracle");GdiFlush();
             verify(live(C3X_NATIVE_UNIT_DRAW,screen_surface,screen_surface,&unit,bounds,0)==1&&std::equal(bounds,bounds+4,expected_bounds),"production unit callback uses same map owner");
             for(unsigned n=0;n<expected.size();++n)expected[n]=static_cast<unsigned*>(unit_oracle.pixels)[n]|0xff000000u;
+            int label_x=63+step*17,label_y=39;
+            verify(reinterpret_cast<int(__thiscall*)(JGL_Image*,int,int,char const*,int)>(screen_surface->vtable[46])(screen_surface,label_x,label_y,"Berlin: 6",9)==0,"actual native text hook");
+            for(unsigned y=0;y<label.height;++y)for(unsigned x=0;x<label.width;++x){int dx=label_x+label.left+int(x),dy=label_y+label.top+int(y);
+                if(dx>=0&&dy>=0&&dx<w&&dy<h)expected[dy*w+dx]=c3x_native_text::apply(label,y*label.width+x,expected[dy*w+dx],false,true);}
+            auto cpu_screen=reinterpret_cast<unsigned short*(__thiscall*)(void*)>(original_bits)(screen_surface);
+            int cpu_stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(screen_surface)+0x40);bool untouched=true;
+            for(int y=0;y<h;++y)for(int x=0;x<w;++x)untouched=untouched&&cpu_screen[y*cpu_stride+x]==0x1234;
+            reinterpret_cast<Release>(original_release)(screen_surface,1);verify(untouched,"native map/copy/unit/text leaves CPU screen untouched");
             for(int y=9;y<27;++y)for(int x=7;x<31;++x)expected[y*w+x]=0xff00ff00u;
             last_transfer=full;final_ui_drawn=false;patch_JGL_present_screen(&full);live_active=true;capture_display(expected);
         }
+        // An unrelated CPU-owned UI source uses the existing GPU presenter,
+        // retaining full-color displayed pixels outside a partial transfer. The
+        // map/screen GPU family stays resident throughout this ownership mix.
+        auto resident_screen=screen_surface;auto resident_expected=expected;
+        screen_surface=canvases[1];last_transfer=partial;
+        verify(reinterpret_cast<Fill>(screen_surface->vtable[17])(screen_surface,&full,int(0x8000001fu))==0,"CPU-owned UI while map owner active");
+        verify(live(C3X_NATIVE_IMAGE_PRESENT,screen_surface,graph,&partial,nullptr,0)==1,"CPU UI shares resident final presenter");
+        for(int y=partial.top;y<partial.bottom;++y)for(int x=partial.left;x<partial.right;++x)expected[y*w+x]=0xff0000ffu;
+        capture_display(expected);verify(raw_unchanged(),"CPU UI transfer does not restore GPU map storage");
+        auto resident_bits=reinterpret_cast<unsigned short*(__thiscall*)(void*)>(original_bits)(resident_screen);
+        int resident_stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(resident_screen)+0x40);
+        bool screen_untouched=true;for(int y=0;y<h;++y)for(int x=0;x<w;++x)screen_untouched=screen_untouched&&resident_bits[y*resident_stride+x]==0x1234;
+        reinterpret_cast<Release>(original_release)(resident_screen,1);verify(screen_untouched,"CPU UI transfer leaves resident screen CPU bytes untouched");
+        screen_surface=resident_screen;last_transfer=full;expected=resident_expected;
+        verify(live(C3X_NATIVE_IMAGE_PRESENT,screen_surface,graph,&full,nullptr,0)==1,"return to resident screen without rebuilding map");capture_display(expected);
         // Reset must drain before the renderer retires its image session, while
         // the native surfaces and final window still exist.
         reset();live_active=false;preserve_gdi_display=true;capture_display(expected);preserve_gdi_display=false;
+        #include "native_frame_benchmark.h"
+        SelectObject(label_dc,previous_font);DeleteObject(label_font);
         for(auto image:live_images)reinterpret_cast<Destroy>(image->vtable[0])(image,1);
         screen_surface=canvases[1];screen_image=screen_surface;screen.JGL.Image=screen_surface;pcx.image=screen_surface;
-        std::puts("PASS production native map owner: prepare/validate/commit, cancelled ownership, unchanged CPU map, native copies, units, exact final display, next-view session and reset handoff");
+        std::puts("PASS production native map owner: prepare/validate/commit, cancelled ownership, unchanged CPU map, native copies, units, cached text, exact compiled final display, next-view session and reset handoff");
     }
     set_custom_renderer_native_probe(nullptr);native_present_image=nullptr;present_fn=native_present;screen.JGL.Image=nullptr;
     *reinterpret_cast<void**>(static_cast<char*>(graph)+0x148)=old_screen;*reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138)=old_dc;

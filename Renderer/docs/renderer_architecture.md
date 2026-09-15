@@ -17,7 +17,8 @@ The authorized [GPU composition implementation](gpu_composition_probe.md) now
 connects the production native map owner to the retained renderer. The injected
 map boundary prepares resident output, checks native replacement ownership, then
 commits pixels into its admitted map canvas. One caller-owned adapter routes
-native image copies, sprites, prepared units and final transfer through the
+native image copies, sprites, opacity transitions, lookup/FLC effects, cached text,
+prepared units and final transfer through the
 existing GPU worker. Native pointers/HDCs stay on the caller; only owned commands
 and source pixels cross that boundary.
 
@@ -25,7 +26,18 @@ Startup observation certifies complete native lifetimes. GPU admission follows
 map demand and copy/save dependencies; unrelated static UI can stay CPU-generated.
 Escaped public pointers/DCs revoke eligibility until reinit. Paired native-word
 and full-color images preserve native key/clip/fallback behavior while retaining
-BGRA map color. Indexed sprites use index-based coverage (254/255 transparent).
+BGRA map color. Separate HUD alpha-sprite programs consume resident backgrounds
+and write paired results through the same compositor; bounded CPU source decoding
+preserves native palette/alpha validity. Positive, in-bounds native stretches preserve GDI's sampling and
+bit-combination rules; keyed copies test native words while copying full-color
+pixels. Palette/whole-image fills reuse the current native palette. Transparent
+self-draw retains its native traversal through an explicit CPU barrier.
+Indexed sprites use index-based coverage (254/255 transparent); positive source
+scaling and palette-key resolution preserve audited JGL behavior. Bounded source
+decoding/resampling stays on the CPU; destination composition stays on the GPU.
+Native fonts render once into bounded, background-dependent glyph data; subsequent
+labels blend on the GPU, preserving full map color beneath smoothed edges. Small
+text-edge color differences are user-authorized; native layout remains authoritative.
 CPU map/unit requests preserve the GPU image session; configuration/reset drain
 native images before retiring it.
 
@@ -33,16 +45,28 @@ The audited Graphsy transfer follows native tooltip/cursor drawing and presents
 through the existing window on its caller thread. GPU partial transfers retain
 untouched displayed pixels. Explicit GDI handoff snapshots the last displayed
 image before release, independently of newer working-canvas pixels; normal GPU
-presentation has no CPU shadow. Before resident admission, the optional callback
-retains completed-CPU-screen compatibility presentation.
+presentation has no CPU shadow. CPU-generated UI sources share this presenter,
+including partial transfers over a full-color map. The existing final native hook
+binds this presenter on configured UI demand before any map call and after scene
+unload; configuration-off remains native. UI-only demand initializes the device
+without map shaders. Final transfer pauses interruptible preparation while
+preserving its camera ticket/input; queue activity never chooses a GDI fallback.
 
 The production owner passes connected JGL tests, including cancelled publication,
 unchanged CPU map storage, a second view and reset handoff. This is not completion
-of all-GPU gameplay: native text/GDI and unsupported sprites still force CPU
-barriers, cold unit finishing still reads back, and device-loss reconstruction is
-unfinished. Current resident demand blocks for exact GPU publication; asynchronous
-GPU publication and whole-request performance remain to validate. The staged DLL
-still uses CPU map publication. See the retained plan for current scope.
+of all-GPU gameplay: unsupported text states/GDI and sprites still force CPU
+barriers. Device-loss reconstruction is user-deferred; existing failure guards remain. Prepared areas now retain CPU or immutable GPU storage under the same spatial
+and content-validity owner. Cold GPU demand establishes surrounding coverage;
+subsequent demand selects its viewport and can adopt a background refresh. Native
+adoption retains the true ambient sample clock. Speculative unit GPU jobs consume
+ready CPU content only; finite unfinished predictions wait for internal completion
+notification. This keeps CPU compilation off speculative GPU ownership without a
+polling timer or Civ III callback. Complete 1440×900 scrolling requests average
+163.07 ms via CPU versus 65.11 ms via GPU; idle averages improve modestly but cold
+pose compilation still produces spikes. The measured resident candidate is staged
+for evaluation. Opacity-driven UI transitions now share GPU blend submission;
+actual game-screen coverage remains the outstanding integration checkpoint;
+see the retained plan for scope and reproducible controls.
 
 ## Authority and migration
 
@@ -86,13 +110,14 @@ compiled world content; stable demand can offer it again. They do not
 predict game state or add redraw callbacks. See the retained plan for controls and measured
 scope; helper count alone is not a speedup claim.
 
-Completed unit pixels now have independent caller-owned composition while the
-single GPU worker prepares a bounded future-pose queue. The nearest map bucket
-has priority; up to two compatible unit outputs share one staging readback.
-This completes preparation through pixels for the representative unit path,
-without moving D3D or native GDI ownership. Short-window pose stalls improve, but
-warm idle requests already take roughly 4 ms and native idle cadence remains
-about 15 Hz in the previous game observations. A user-authorized GOG timer/animator
+Unit pose content includes exact ground-shadow coverage, prepared by the existing
+CPU helpers. The GPU owner renders, finishes and caches immutable body textures;
+native composition borrows them without a body readback or CPU upload. The existing
+bounded future-pose queue publishes into that same 64 MiB cache for GPU callers.
+CPU fallback retains its bitmap publication and batched staging path. The nearest
+map bucket still has preparation priority. This removes the unit round trip;
+whole-request performance remains to measure. Previous warm idle requests were
+roughly 4 ms and observed native idle cadence about 15 Hz. A user-authorized GOG timer/animator
 adapter now enables 33 ms selected/working-unit visual opportunities while native
 advancement stays at 66 ms and map cadence remains unchanged. Enabled injection
 checks pass; actual delivery cadence and coverage beyond prepared views still

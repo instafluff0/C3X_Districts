@@ -53,6 +53,25 @@ int main(int argc,char** argv){
         for(int y=0;y<48;++y)for(int x=0;x<64;++x){auto p=get_b(b.image,x,y);verify(p!=nullptr,"copied pixel lease");unsigned value=*p;release_b(b.image,1);
             verify(value==unsigned(x>=7&&x<40&&y>=5&&y<33?0x03e0:0),"copy pixels");}
         std::printf("PASS actual JGL 16-bit clipped fill: dc_calls=%u pixel_calls=%u; copy: source_dc=%u destination_dc=%u; exact 3072 pixels\n",fill_dc,fill_pixels,a.dc_calls,b.dc_calls);
+        auto source_words=get(a.image,0,0);auto source_stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(a.image)+0x40);
+        for(int y=0;y<48;++y)for(int x=0;x<64;++x)source_words[y*source_stride+x]=std::uint16_t((y*64+x)*193u+79u)&0x7fff;
+        release(a.image,1);
+        auto source_dc=reinterpret_cast<HDC(__thiscall*)(Image*)>(a.original[10])(a.image);
+        int stretch_mode=GetStretchBltMode(source_dc);reinterpret_cast<Release>(a.original[11])(a.image,1);
+        for(auto extent:std::array<std::array<int,2>,8>{{{{32,24}},{{43,31}},{{61,43}},{{91,73}},{{7,5}},{{13,17}},{{97,19}},{{23,79}}}}){
+            RECT scaled={-3,-2,extent[0]-3,extent[1]-2};
+            verify(reinterpret_cast<Copy>(a.original[16])(a.image,b.image,&full,&scaled)==0,"native scaled image");GdiFlush();
+            auto words=get_b(b.image,0,0);auto stride=*reinterpret_cast<int*>(reinterpret_cast<char*>(b.image)+0x40);unsigned mismatches=0;
+            auto interval=[](int at,int src,int dst){int end=((2*at+1)*src)/(2*dst)+1;
+                return std::array<int,2>{{src<=dst?end-1:at==0?0:((2*at-1)*src)/(2*dst)+1,end}};};
+            for(int y=0;y<48&&y<scaled.bottom;++y)for(int x=0;x<64&&x<scaled.right;++x){
+                auto xr=interval(x+3,64,extent[0]),yr=interval(y+2,48,extent[1]);unsigned expected=0x7fff;
+                for(int yy=yr[0];yy<yr[1];++yy)for(int xx=xr[0];xx<xr[1];++xx)expected&=((yy*64+xx)*193u+79u)&0x7fff;
+                mismatches+=words[y*stride+x]!=expected;
+            }
+            release_b(b.image,1);verify(stretch_mode==BLACKONWHITE&&mismatches==0,"actual native center-end shrink mapping");
+            std::printf("PASS JGL stretch width=%d height=%d exact clipped native pixels\n",extent[0],extent[1]);
+        }
         for(auto& o:observations){o.image->table=o.original;reinterpret_cast<void(__thiscall*)(Image*,unsigned)>(o.original[0])(o.image,1);o.image=nullptr;}
         reinterpret_cast<void(__thiscall*)(void*,unsigned)>(gt[0])(graph,1);graph=nullptr;FreeLibrary(module);module=nullptr;return 0;
     }catch(std::exception const& e){std::fprintf(stderr,"FAIL %s\n",e.what());return 1;}

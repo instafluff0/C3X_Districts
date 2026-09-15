@@ -29,5 +29,14 @@ int main() {
  queue.observe(r,true,false);assert(queue.empty()); // Deselection retracts even a queued prediction.
  queue.observe(r,true,true,2);assert(queue.take(out,2)==1 && out[0].action_cursor==1);
  queue.clear();assert(queue.empty());
+ // A blocked first pose stays queued while later ready poses can be adopted.
+ r.action_cursor=0;
+ for(int id=1;id<=3;++id){r.unit_id=id;queue.observe(r,true);}
+ assert(queue.take_ready(out,2,[](auto const& x){return x.unit_id!=1;})==2);
+ assert(out[0].unit_id==2 && out[1].unit_id==3 && !queue.empty());
+ assert(queue.take_ready(out,2,[](auto const&){return false;})==0 && !queue.empty());
+ r.unit_id=1;r.action_cursor=4;queue.observe(r,true);
+ assert(queue.take_ready(out,2,[](auto const&){return true;})==1 && out[0].action_cursor==5);
+ assert(queue.empty());
 }
 ''')

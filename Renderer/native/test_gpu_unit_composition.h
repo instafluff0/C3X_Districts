@@ -28,7 +28,7 @@ void gpu_unit_contract(WorkerClient& gpu,HMODULE module,c3x_renderer_gpu_frame_v
             unsigned a=i%256;body[i]=(a<<24)|((i%251*a/255)<<16)|((i%137*a/255)<<8)|(i%73*a/255);}
         auto d=gpu.create(w,h,f),b=gpu.create(w,h,f),detail=gpu.create(w,h,Format::bgra32),bd=gpu.create(w,h,Format::bgra32),source=gpu.create(w,h,Format::bgra32);
         verify(d&&b&&detail&&bd&&source,"GPU unit pair admission");gpu.upload(source,1,body.data(),body.size());
-        for(unsigned phase=0;phase<3;++phase){
+        for(unsigned phase=0;phase<8;++phase){
             // Fresh native words and fuller-color map inputs, independent or
             // aliased underlay. The first two cases cover every alpha value.
             gpu.upload(d,phase+1,words.data(),n);gpu.upload(b,phase+1,ground.data(),n);
@@ -44,11 +44,16 @@ void gpu_unit_contract(WorkerClient& gpu,HMODULE module,c3x_renderer_gpu_frame_v
                 Command over={Kind::unit_over,d,source,{x,y,x+int(w),y+int(h)},{clip.left,clip.top,clip.right,clip.bottom},0,0,0,phase?d:b,detail,phase?detail:bd};
                 verify(gpu.submit(&over,1),"GPU alpha/key composition");gpu.flush();
             }else{
+                auto pose=unit;pose.frame_count=4;pose.action_cursor=phase>=5?1:0;
+                if(phase==3||phase==7){pose.body_x-=7;pose.body_y+=11;} // same content at another native anchor
+                if(phase>=4)pose.direction=2;
+                if(phase>=5){pose.hour=0;pose.season=1;}
+                if(phase>=6)pose.projection_scale_milli=1250;
                 int expected[4]={},bounds[4]={};
-                verify(native(&unit,packed.dc,under.dc,expected)==C3X_RENDERER_RESULT_OK,"actual native unit word oracle");
-                verify(native(&unit,full.dc,full_under.dc,expected)==C3X_RENDERER_RESULT_OK,"actual full-color unit oracle");
+                verify(native(&pose,packed.dc,under.dc,expected)==C3X_RENDERER_RESULT_OK,"actual native unit word oracle");
+                verify(native(&pose,full.dc,full_under.dc,expected)==C3X_RENDERER_RESULT_OK,"actual full-color unit oracle");
                 c3x_renderer_gpu_unit_v1 target={sizeof(target),view.ticket,std::int64_t(d),std::int64_t(b),std::int64_t(detail),std::int64_t(bd),{clip.left,clip.top,clip.right,clip.bottom},0};
-                verify(draw(&unit,&target,bounds)==C3X_RENDERER_RESULT_OK,"production prepared unit to GPU backgrounds");
+                verify(draw(&pose,&target,bounds)==C3X_RENDERER_RESULT_OK,"production resident unit to GPU backgrounds");
                 verify(std::equal(bounds,bounds+4,expected),"GPU unit native erase bounds");
                 // Refresh packet counters without performing a readback.
                 auto sentinel=gpu.create(1,1,Format::bgra32);verify(sentinel!=0,"unit counter query");gpu.destroy(sentinel);
@@ -61,5 +66,5 @@ void gpu_unit_contract(WorkerClient& gpu,HMODULE module,c3x_renderer_gpu_frame_v
         }
         for(auto id:{d,b,detail,bd,source})gpu.destroy(id);
     }
-    std::puts("PASS GPU unit composition: native 555/565, full-color map, all alpha values, keyed/aliased underlays, clipping and actual prepared unit; zero background readback");
+    std::puts("PASS GPU unit composition: native 555/565, full-color map, all alpha values, keyed/aliased underlays, clipping, cold/warm resident units across anchors/direction/time/zoom; zero background readback");
 }

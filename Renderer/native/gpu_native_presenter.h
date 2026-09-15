@@ -88,14 +88,21 @@ public:
     bool upload_screen(ID3D11DeviceContext* context,unsigned short const* pixels,unsigned w,unsigned h,RECT area,unsigned format){
         if(!pixels||!display||!back||w!=width||h!=height||format<1||format>2)return false;
         bool full=area.left==0&&area.top==0&&area.right==int(w)&&area.bottom==int(h);
-        if(!full && (native_pixels.empty() || native_format!=format))return false;
+        if(!full && !initialized)return false;
+        // A partial CPU source may overlay a full-color GPU display. Its CPU
+        // bytes are a complete fallback only after a full transfer (or another
+        // same-format CPU transfer); never fill the untouched region with zeros.
+        bool complete_cpu=full||(!native_pixels.empty()&&native_format==format);
         ComPtr<ID3D11Device> device;display->GetDevice(&device);
         if(!native_upload){D3D11_TEXTURE2D_DESC d={};d.Width=w;d.Height=h;d.MipLevels=d.ArraySize=d.SampleDesc.Count=1;
             d.Format=DXGI_FORMAT_R16_UINT;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
             checked(device->CreateTexture2D(&d,nullptr,&native_upload));checked(device->CreateShaderResourceView(native_upload.Get(),nullptr,&native_view));}
-        unsigned pitch=(w+1)&~1u;native_pixels.resize(std::size_t(pitch)*h);native_format=format;
-        for(int y=area.top;y<area.bottom;++y)std::copy(pixels+std::size_t(y)*pitch+area.left,pixels+std::size_t(y)*pitch+area.right,
-            native_pixels.data()+std::size_t(y)*pitch+area.left);
+        unsigned pitch=(w+1)&~1u;fallback_pixels.clear();
+        if(complete_cpu){
+            native_pixels.resize(std::size_t(pitch)*h);native_format=format;
+            for(int y=area.top;y<area.bottom;++y)std::copy(pixels+std::size_t(y)*pitch+area.left,pixels+std::size_t(y)*pitch+area.right,
+                native_pixels.data()+std::size_t(y)*pitch+area.left);
+        }else native_pixels.clear();
         D3D11_BOX box={unsigned(area.left),unsigned(area.top),0,unsigned(area.right),unsigned(area.bottom),1};
         context->UpdateSubresource(native_upload.Get(),0,&box,pixels+std::size_t(area.top)*pitch+area.left,pitch*2,0);
         if(!native_program.draw(device.Get(),context,native_view.Get(),target.Get(),w,h,area,format))return false;

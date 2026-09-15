@@ -17,14 +17,15 @@ struct UnitPoseInput {
     UnitPoseSource source;
     double phase=0;
     int direction=1,width=1,height=1,anchor_x=0,anchor_y=0;
-    float zoom=1,light_x=0,light_y=0;
+    float zoom=1,light_x=0,light_y=0,shadow_strength=1;
 };
 struct UnitPoseContent {
     UnitShadow shadow;
+    std::vector<unsigned char> ground_shadow;
     std::vector<std::vector<std::array<float,17>>> uploads;
     explicit UnitPoseContent(int extent):shadow(extent){}
     std::size_t bytes() const {
-        std::size_t size=sizeof(*this)+shadow.heights.capacity()*sizeof(float)+uploads.capacity()*sizeof(uploads[0]);
+        std::size_t size=sizeof(*this)+ground_shadow.capacity()+shadow.heights.capacity()*sizeof(float)+uploads.capacity()*sizeof(uploads[0]);
         for(auto const& part:uploads)size+=part.capacity()*sizeof(part[0]);
         return size;
     }
@@ -82,6 +83,20 @@ struct UnitPoseCompiler {
             for(std::size_t i=0;i<mesh.indices.size();i+=3) {
                 if((i%192)==0 && cancelled.load(std::memory_order_relaxed))return {};
                 shadow.triangle(points[mesh.indices[i]],points[mesh.indices[i+1]],points[mesh.indices[i+2]]);
+            }
+        }
+        // Translation-free finishing input, prepared by the same CPU pose owner.
+        // Keep the native shadow arithmetic exact; the GPU combines this coverage
+        // with the rendered body's alpha without reading the body back.
+        if(w<1||h<1||w>1024||h>1024)return {};
+        result->ground_shadow.resize(std::size_t(w)*h);
+        for(int y=0;y<h;++y){
+            if(cancelled.load(std::memory_order_relaxed))return {};
+            for(int x=0;x<w;++x){
+                float sx=(float(x)+.5f-float(input.anchor_x))/(64*zoom);
+                float sy=(float(y)+.5f-float(input.anchor_y))/(32*zoom);
+                float fade=std::clamp(float(std::min({x,y,w-1-x,h-1-y}))/3,0.f,1.f);
+                result->ground_shadow[std::size_t(y)*w+x]=static_cast<unsigned char>(255*lighting::c3x_dynamic_shadow_opacity*input.shadow_strength*fade*shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
             }
         }
         result->uploads.resize(source.meshes.size());

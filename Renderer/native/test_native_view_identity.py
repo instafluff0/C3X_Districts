@@ -78,7 +78,8 @@ Tile* tile_at(int x,int y){int at=(y*bic.Map.Width+x)/2;return at==absent?p_null
 unsigned modern_calls=0,legacy_calls=0,resident_calls=0;c3x_renderer_camera_identity_v1 received{};
 int resident_result=C3X_RENDERER_RESULT_OK;bool probe=true;
 bool custom_renderer_native_probe_on(){return probe;}
-int resident(int action,void* image,c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
+int resident(int action,void* image,c3x_renderer_camera_request_v1 const* r,c3x_renderer_camera_view_v1* v){
+ v->frame.presentation_time_ticks=55;
  assert(action==C3X_NATIVE_MAP_PREPARE&&image&&r);++resident_calls;received=r->identity;return resident_result;
 }
 int modern(c3x_renderer_camera_request_v1 const* r,c3x_renderer_output_v1*){
@@ -91,7 +92,7 @@ struct State {
  long long custom_renderer_display_clock=0,custom_renderer_camera_ticket=0;
  c3x_renderer_render_view_fn custom_renderer_render_view=modern;
  c3x_renderer_render_fn custom_renderer_render=legacy;
- c3x_renderer_native_map_fn custom_renderer_native_map=nullptr;
+ c3x_renderer_native_map_view_fn custom_renderer_native_map=nullptr;
  c3x_renderer_native_lifetime_fn custom_renderer_native_lifetime=nullptr;
  unsigned* custom_renderer_world_topology=nullptr;
  unsigned long long* custom_renderer_world_visibility=nullptr;
@@ -156,7 +157,7 @@ int main(){
  state.custom_renderer_render_view=modern;state.custom_renderer_native_map=resident;
  state.custom_renderer_native_lifetime=[](int,void*,int){return 1;};
  assert(demand()==C3X_RENDERER_RESULT_OK&&resident_calls==1&&modern_calls==1&&legacy_calls==1);
- assert(state.custom_renderer_display_clock==77&&received.map_epoch==state.custom_renderer_map_epoch);
+ assert(state.custom_renderer_display_clock==55&&received.map_epoch==state.custom_renderer_map_epoch);
  resident_result=C3X_RENDERER_RESULT_DEVICE_ERROR;
  assert(demand()==C3X_RENDERER_RESULT_DEVICE_ERROR&&modern_calls==1&&legacy_calls==1);
  resident_result=C3X_RENDERER_RESULT_BAD_ARGUMENT;

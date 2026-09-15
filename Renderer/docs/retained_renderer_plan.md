@@ -26,37 +26,121 @@ a GPU failure does not authorize stale native pixels.
 Startup lifetime evidence admits the map and its copy/save family on demand.
 Unused canvases allocate no GPU images; unrelated UI fills remain CPU-generated
 sources. External pointer/DC access revokes eligibility until reinit. One caller
-owner routes native copies, sprites, prepared units and final Graphsy transfer to
-the existing GPU worker, with paired native-word/full-color images. Indexed sprite
-indices 254/255 are transparent independently of palette RGB. Map colors retain
-the original BGRA precision. No renderer callback notifies Civ III or requests a
-draw; the native transfer follows final tooltip/cursor drawing.
+owner routes native copies, sprites, cached text, prepared units and final Graphsy transfer to
+the existing GPU worker, with paired native-word/full-color images. Ordinary indexed sprite
+indices 254/255 are transparent independently of palette RGB. Native stretching,
+full-color keyed copies and palette/whole-image fills use this same submission
+owner. Transparent self-draw keeps native traversal through an explicit barrier.
+Map colors retain
+the original BGRA precision. Positive indexed scaling follows JGL's source programs;
+mirrored sources and unsafe trimmed edges retain explicit fallback. The separate
+HUD alpha programs now blend resident underlays/destinations on the GPU, preserving
+native arithmetic and full-color map contribution. The staged candidate also
+routes translucent map-label panels and border/indicator lines through this owner;
+axis-aligned lines reuse fills and diagonal coverage reuses the sprite source.
+The staged candidate also handles destination-dependent lookup panels, indexed
+effects and ordinary/scaled native FLC palette/shadow drawing through one table
+program, retaining exact native words and full-color map contributions. Connected production checks
+verify these forms without execution readbacks. Single-key UI artwork, solid
+sprite masks and native map shadows now use this owner too. CPU-owned picking
+masks remain native; full FLC and small shadow lookup assets coexist.
+No renderer callback requests a draw; transfer follows final tooltip/cursor drawing. CPU UI
+sources share the GPU presenter, including partial updates over resident maps.
+The final-presentation hook binds the process-owned GPU presenter on configured
+UI demand, including before the first map and after scene unload. It needs no
+map shaders; config-off menus remain native. Foreground transfer preserves
+interrupted camera requests instead of selecting GDI because preparation is busy.
 
 Reset, configuration and detach drain this owner before retiring its GPU session.
 Partial GPU-to-GDI handoff preserves the last displayed image outside the native
 update; only that explicit fallback snapshots the display. Failed barriers deny
 native leases and defer reinitialization/destruction; device-loss reconstruction
-is still incomplete. The existing 64 MiB composition budget and bounded startup
+is deferred by the user; existing failure guards remain. The existing 64 MiB composition budget and bounded startup
 registry remain in force.
 
 The production exports pass connected JGL tests at 640×480 and 1440×900: cancelled
 publication, exact metadata, unchanged CPU map storage, native copies/units,
-second-view reuse, displayed pixels and reset handoff. Native dispatch tests check
+second-view reuse, cached native labels, displayed pixels and reset handoff. Native dispatch tests check
 the actual injected branch and its epoch/clock/fallback behavior. This demonstrates
-normal-path work removal in the harness, not a measured game speedup.
+normal-path work removal in the harness; the paired comparison below measures the
+complete rendering request, not live-game speed.
 
-**Remaining:** native text/GDI and unsupported sprite execution still demote
-surfaces to CPU ownership; cold unit pose finishing still reads back. Resident
-map demand currently blocks for exact GPU publication rather than adopting the
-existing asynchronous CPU camera result. Complete these responsibilities and
-recovery, then measure whole requests and validate native interactions. The full
-legacy terrain suite still has a boundary mismatch also present in the control;
-its threshold and evidence are preserved in the probe.
+Native labels retain Windows font/layout/smoothing and use resident response data
+for background-dependent blending. The cache holds at most 32 runs / 8 MiB within
+the existing GPU budget; a miss uses under 2 MiB CPU scratch. Native/map pixels are
+never read for glyph preparation. The user accepts slight text-edge color changes.
+Rotated/transformed text, complex clips, current-position/RTL drawing and oversized
+runs retain explicit native fallback; ordinary static UI can still be CPU-generated.
 
-The staged evaluation remains `a79fb579…dec552`, the completed-CPU-screen GPU
-transfer path. The connected resident owner is candidate source, not an all-GPU
-build ready for gameplay. Original observer `038faec0…0be2e2`, performance controls,
-rejected approaches and unreliable Parallels timestamp findings remain preserved.
+Unit bodies now finish and remain on the GPU, including cold poses and queued
+future poses. Existing CPU helpers compile exact shadow coverage alongside mesh
+content; GPU finishing combines it with body alpha. The pose owner retains at most
+64 MiB / 512 completed textures, and composition borrows an immutable source without
+copying/uploading it. CPU fallback consumes the same prepared shadow plane. Separate
+CPU/GPU cache counters preserve concurrent ownership; native timing/anchors are unchanged.
+
+Prepared-area publication now shares one content/spatial validity owner for CPU
+and immutable GPU storage. GPU selection retains a bounded texture view; the worker
+imports only its selected rectangle into the native composition session. Caller UI
+submissions preserve queued preparation, while incompatible map demand cancels it.
+Cold demand and preparation use the same working extent; first demand establishes
+reusable coverage. A clock-aware native export returns the actual adopted ambient
+sample. Connected 640×480 and 1440×900 tests verify asynchronous refresh adoption,
+exact native CPU-reference pixels and fallback; the injected smoke also passes.
+The previous unit/text checkpoint remains the reproducible control.
+
+The paired comparison covers map delivery, eight animated units, actual HUD alpha
+slots 20/21/22, eight translucent label panels/borders, lookup panel/indexed/FLC effects, a scaled FLC cursor, single-key artwork, solid masks, native map shadows, opacity transitions and final
+transfer in CPU/GPU/GPU/CPU order (64 measured requests per arm/case).
+At 1440×900, mean CPU → GPU request times are 163.07 → 65.11 ms scrolling,
+41.60 → 38.13 ms stationary animation, and 47.79 → 38.82 ms for the local-change
+sequence. Including desktop completion they are 173.13 → 75.44, 48.11 → 47.06,
+and 54.38 → 47.10 ms. Capture is outside timing, cold pose transitions remain
+included, and both arms use the same DLL. This measures the integration harness,
+not gameplay FPS or physical scanout. Idle p95 is 131.23 ms on GPU versus 109.23 ms on CPU.
+
+Speculative unit GPU submission now consumes only ready CPU content. Unready
+predictions stay in the finite queue; helper completion wakes the internal GPU
+worker under its queue lock. No timer or native callback is added. CPU input
+leases end before completion is observable; callback removal joins notification.
+GPU preparation's median falls from 41.586 to 1.132 ms at 640×480, with 139
+prepared pose adoptions. Complete GPU scrolling requests fall from the preserved
+candidate's 61.93 to 45.29 ms (640×480), and 76.69 to 51.51 ms (1440×900).
+Cold CPU pose compilation still dominates idle spikes; no uniformly smooth idle
+claim is made. The original worker/camera tests now compile and pass against the
+current interfaces. The unrelated terrain-boundary mismatch remains recorded.
+
+Opacity-driven command-panel/UI transitions (`FUN_005f8a70`, JGL sprite slot 37)
+now feed the existing source owner and GPU blend submission. Native sixteenth-step
+weights, endpoint quirks, flags, indexed transparency, clipping and positive scaling
+match the pinned JGL oracle. Full-color map contributions remain resident.
+
+**Remaining integration:** validate the complete path during ordinary game UI,
+scrolling and picking. The native/connected fixtures establish exact tested behavior,
+not coverage of every game screen. Unsupported text/sprite states and explicit
+public pixel/DC escapes retain CPU barriers; static CPU source preparation is
+intentional. Do not turn native source-only preparation or unsupported JGL stubs
+into another primitive-porting queue.
+Device-loss reconstruction is user-deferred. The measured remaining performance
+responsibility is cold unit pose/shadow construction; faster output helpers will
+not remove it. Controls and exact sources are in `native/build/gpu-composition/whole-frame-control/`
+and the completed correction in `native/build/gpu-composition/ready-content-checkpoint/`.
+
+The completed opacity candidate `deb24c11…514cec` is staged for ordinary
+`INSTALL.bat`. Connected 640×480 and 1440×900 checks, the expanded paired benchmark,
+23 portable contracts, startup/config-off lease tests and injected compilation
+pass. Native lookup/FLC fallback preserves caller-held leases. The admitted chain
+has zero execution readbacks; intentional CPU escape tests remain separate.
+These measurements compare complete delivery routes, not an isolated gain over the
+previous candidate or universal gameplay coverage. Previous `4faadc15…f3aa25`
+remains in `native-sprite-family-checkpoint/`; current exact sources, DLL and
+receipts are in `native-opacity-completion-checkpoint/`. The subsequent native UI
+lifecycle connection uses that same DLL; its current injected sources and checks
+are preserved in `native-ui-lifecycle-checkpoint/`. The paired performance numbers
+above belong to the opacity checkpoint, not a new lifecycle speedup measurement.
+No install or game launch.
+Original observer, performance controls, rejected approaches and unreliable
+Parallels timestamp findings survive.
 
 ## Actual code responsibilities
 
@@ -69,7 +153,7 @@ GPU residency or knowledge of uncaptured gameplay.
 | Local validity | Appearance, semantic neighbors, city exclusions, coast/world samples, river-cell proofs and exact scaled native-anchor dependencies guard complete compiled hits. Local changes retire known-invalid alternate views; fresh capture validates every publication. | Asset/device/world-basis changes remain global. Unobserved appearance cannot authorize output. |
 | World → view selection | Immutable content owns persistent bounded world-cell membership. Current authoritative occurrences supply eligibility; selected inputs feed existing ordered passes. Animated body/shadow/filter bounds are selected independently of surrounding static coverage. | Non-affine and unindexed inputs use the existing view index. Dynamic selection uses small scans. No complete native active-unit pass yet. |
 | Compatible submission | Shared meshes, tree instancing, ordered materials, common depth and bounded shadow-page batches serve foreground and background through the same path. | Individual demanded unit misses and optional reflection profiles retain their existing execution. |
-| GPU/output reuse | Stable surrounding static color/depth, selected animation, sparse restore, pending finish damage and consolidated readback. Selected updates publish only their fresh viewport; untouched donor margins keep their true old clock. | GPU allocation and full hardware MSAA resolve still cover the wide working surface. Physical targets are not narrowed. Tested retained profile has waves/reflections off. |
+| GPU/output reuse | Stable surrounding color/depth, selected animation and pending finish damage feed immutable GPU publication. Resident map/unit output, native UI composition and final transfer share the GPU path; CPU callers retain consolidated readback. Untouched donor margins keep their true old clock. | GPU allocation and full hardware MSAA resolve still cover the wide working surface. Physical targets are not narrowed. Tested retained profile has waves/reflections off. |
 | Preparation/native delivery | Bounded CPU helpers and one GPU owner prepare copied nearby/zoom views and unit poses. Fresh native requests pull compatible publications. Current refresh can interrupt unfinished prospective work at safe points. | Cold/outside-coverage views still use exact blocking fallback. Submitted GPU work is not preemptible; preparation can delay ambient freshness. Native delivery is implemented for prepared coverage, not general nonblocking scrolling. |
 
 Native selected idle/work loops preserve source frames/duration; inactive unselected

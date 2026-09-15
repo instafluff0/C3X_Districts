@@ -12,6 +12,7 @@ class UnitInputGuardTests(unittest.TestCase):
         root=Path(__file__).parent
         source=(root/'c3x_renderer.cpp').read_text()
         source=source[source.index('extern "C" __declspec(dllexport) int c3x_renderer_schedule_idle('):]
+        source=source[:source.index("\n}\n")+3] # Test this export, not unrelated exports appended below it.
         self.assertNotIn('GetQueueStatus',source)
         self.assertNotIn('GetAsyncKeyState',source)
         self.assertNotIn('PeekMessage',source)

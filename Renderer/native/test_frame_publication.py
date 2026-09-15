@@ -17,6 +17,7 @@ class PublicationTests(unittest.TestCase):
 #include <cstddef>
 #include <cstring>
 #include <vector>
+#include <memory>
 #include "Renderer/native/navigation_options.h"
 constexpr std::size_t mib=1024*1024;
 constexpr std::size_t default_viewport_cache_budget=32*mib,default_resource_backdrop_cache_budget=128*mib;
@@ -57,6 +58,7 @@ int main(){
 #include <cstdint>
 #include <cstring>
 #include <vector>
+#include <memory>
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/environment_runtime.h"
 #include "Renderer/native/unit_animation_runtime.h"
@@ -146,6 +148,7 @@ int main(){
 #include <string>
 #include <thread>
 #include <vector>
+#include <memory>
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/environment_runtime.h"
 #include "Renderer/native/unit_animation_runtime.h"
@@ -153,7 +156,43 @@ int main(){
 #include "Renderer/native/render_core/unit_playback.h"
 #include "Renderer/native/render_core/cliff_placement.h"
 #include "Renderer/native/prepared_view_area.h"
-using HDC=void*;
+#include "Renderer/native/gpu_frame_api.h"
+#include "Renderer/native/gpu_image_commands.h"
+#include "Renderer/native/render_core/scene_surface.h"
+#include <functional>
+using HDC=void*;using HWND=void*;
+struct RECT {int left,top,right,bottom;};
+// This fixture exercises the actual CPU/camera scheduler, not graphics. Native
+// GPU transport has separate Windows pixel tests. Fail if it enters these seams.
+int unexpected_gpu(){assert(false && "GPU operation in CPU scheduler fixture");return 0;}
+struct D3D11_TEXTURE2D_DESC {unsigned Width=0,Height=0;};
+struct ID3D11Texture2D {void GetDesc(D3D11_TEXTURE2D_DESC*){unexpected_gpu();}void Release(){unexpected_gpu();}};
+struct Device {int CreateTexture2D(D3D11_TEXTURE2D_DESC*,void*,ID3D11Texture2D**){return unexpected_gpu();}};
+struct Context {void CopyResource(ID3D11Texture2D*,ID3D11Texture2D*){unexpected_gpu();}};
+bool FAILED(int value){return value<0;}
+namespace c3x_native_images {
+struct ScreenSnapshot {RECT area{};int width=0,height=0;HWND window=nullptr;unsigned native_format=0;std::vector<unsigned short> pixels;};
+}
+bool native_transfer_test=false;unsigned native_transfers=0;
+namespace c3x_gpu_images {
+struct NativePresenter {
+ bool caller_thread(){return true;}void release_native(){}void reset(){}
+ template<class... T> bool prepare(T...){assert(native_transfer_test);return true;}
+ template<class... T> bool upload_screen(T...){assert(native_transfer_test);return true;}
+ template<class... T> bool preserve_display(T...){return unexpected_gpu();}
+ int view(){return unexpected_gpu();}int retained(){return unexpected_gpu();}int buffer(){return unexpected_gpu();}
+ int present(){assert(native_transfer_test);++native_transfers;return C3X_RENDERER_RESULT_OK;}void gpu_written(){unexpected_gpu();}
+};
+struct Session {
+ Session(Device*,Context*){unexpected_gpu();}
+ c3x_renderer_i64 current_ticket(){return unexpected_gpu();}std::uint64_t upload_count(){return unexpected_gpu();}
+ int map_image(){return unexpected_gpu();}int session_identity(){return unexpected_gpu();}
+ template<class... T> bool publish(T...){return unexpected_gpu();}
+ template<class... T> int execute(T&&...){return unexpected_gpu();}
+ template<class... T> int compose_resident_unit(T...){return unexpected_gpu();}
+ bool display_to(long long,std::uint64_t,int,int,int,int,int,Rect){return unexpected_gpu();}
+};
+}
 struct LARGE_INTEGER {long long QuadPart=0;};
 void QueryPerformanceCounter(LARGE_INTEGER* out){out->QuadPart=std::chrono::steady_clock::now().time_since_epoch().count();}
 bool ambient_mode=false,ahead_mode=false;
@@ -189,6 +228,11 @@ struct Bodies {
     Stats pose_preparation_statistics(){return {};}
     std::size_t pose_retained_bytes()const{return 0;}
     void release_pose_leases(){}
+    void set_pose_ready_notification(std::function<void()>){ }
+    bool resident_preparation_ready(c3x_renderer_unit_v1 const&){return unexpected_gpu();}
+    template<class... T> unsigned prepare_resident(T&&...){return unexpected_gpu();}
+    struct ResidentPose {struct Texture {ID3D11Texture2D* Get()const{unexpected_gpu();return nullptr;}} texture;int width=0,height=0;bool prepared=false;} resident_pose;
+    std::uint64_t output_readbacks=0,resident_pose_builds=0,resident_pose_hits=0;std::size_t resident_pose_bytes=0;
 
     struct Action {std::string name;bool loop=true,ambient=false;float duration=1;unsigned frames=31;};
     struct Unit {std::vector<std::string> keys;int minimum_canvas=0;std::vector<Action> actions;};
@@ -196,7 +240,7 @@ struct Bodies {
     bool copy_cached(c3x_renderer_unit_v1 const&,PublishedPose&){return cached;}
     bool blit(PublishedPose const&,HDC,int,int,HDC,unsigned&){return true;}
     std::size_t cached_pose_bytes()const{return cache_bytes;}
-    template<class F> unsigned prepare_pixels(int,int,c3x_renderer_unit_v1 const* requests,unsigned count,F,std::atomic<bool> const& demanded){
+    template<class F> unsigned prepare_pixels(Device*,Context*,c3x_renderer_unit_v1 const* requests,unsigned count,F,std::atomic<bool> const& demanded){
         if(check_demand_priority && priority_preparations.fetch_add(1)>0)assert(demand_executed);
         assert(count<=2 && requests[0].action_cursor==1);unit_pixels_entered=true;
         while(hold_unit_pixels.load() && !demanded.load())std::this_thread::yield();return count;
@@ -205,7 +249,7 @@ struct Bodies {
     char const* failure_reason="";bool cache_hit=false,cached=false;std::size_t cache_bytes=0;unsigned keyed_pixels=0,cast_pixels=0;
     bool restore_cached(c3x_renderer_unit_v1 const&){cache_hit=cached;return cached;}
     std::size_t cached_pose_entries()const{return cached?1u:0u;}
-    template<class F> bool render(int,int,c3x_renderer_unit_v1 const&,F,void* =nullptr,unsigned=1){demand_executed=true;return true;}
+    template<class F> bool render(Device*,Context*,c3x_renderer_unit_v1 const&,F,void* =nullptr,unsigned=1,bool=false){demand_executed=true;return true;}
     bool blit(HDC,int,int,HDC){return true;}void reset_gpu(){}
 };
 struct D3D11_RECT {int left,top,right,bottom;};
@@ -213,7 +257,11 @@ struct RendererState {
     struct Terrain {bool configured=false;std::vector<std::uint8_t> dds;};
     std::array<Terrain,14> terrain_textures;
     Trace trace;Bodies unit_bodies;bool unit_rendering_enabled=true,pickup_profile=false,cache_valid=false,profiling=false;
-    int device=0,context=0;
+    bool initialize_device(){assert(native_transfer_test);return true;}
+    Device owned_device;Context owned_context;Device* device=&owned_device;Context* context=&owned_context;
+    bool gpu_output_mode=false,gpu_map_valid=false,cpu_output_stale=false,scene_surface_requested=false,city_profile=false;
+    ID3D11Texture2D* gpu_map_texture=nullptr;unsigned frame_output_readbacks=0;std::uint64_t gpu_serial=0;
+    struct {bool enabled=false;} reflection;std::unique_ptr<c3x_gpu_images::Session> gpu_composition;
     unsigned cache_hits=0,device_recoveries=0,frame_tiles_built=0,prepared_blocks=0,visible_resource_animations=0;
     unsigned ambient_count() const {return visible_resource_animations;}
     bool can_prepare_ambient() const {return animate_pixels && visible_resource_animations;}
@@ -440,6 +488,31 @@ int main(){
     until([&]{return state.entered.load()>entered;});
     worker.reset_and_stop();assert(state.resets==1);
     assert(worker.camera_poll(last,out)==C3X_RENDERER_RESULT_SUPERSEDED);
+    // A completed CPU UI transfer preempts active camera work without losing
+    // its ticket or immutable input. No map publication is needed for UI output.
+    {
+        RendererState ui_state;RendererWorker ui_worker(ui_state);
+        native_transfer_test=true;native_transfers=0;
+        c3x_native_images::ScreenSnapshot screen;screen.width=screen.height=4;
+        screen.area={0,0,4,4};screen.pixels.resize(16);
+        assert(ui_worker.native_screen(&screen)==C3X_RENDERER_RESULT_OK);
+        assert(native_transfers==1 && ui_state.entered==0);
+        ui_state.hold=true;tile.anchor_x=17;
+        auto ui_frame=f;ui_frame.tiles=&tile;ui_frame.tile_count=1;ui_frame.presentation_time_ticks=81;
+        c3x_renderer_i64 ticket=0;assert(ui_worker.camera_begin(ui_frame,ticket)==C3X_RENDERER_RESULT_PENDING);
+        until([&]{return ui_state.entered.load()>0;});
+        screen.pixels.resize(16);
+        assert(ui_worker.native_screen(&screen)==C3X_RENDERER_RESULT_OK);
+        assert(native_transfers==2 && ui_state.cancelled>0);
+        tile.anchor_x=987; // Caller memory may change while the saved job resumes.
+        ui_state.hold=false;
+        until([&]{return ui_worker.camera_poll(ticket,out)==C3X_RENDERER_RESULT_OK;});
+        assert(static_cast<unsigned const*>(out.bgra_pixels)[0]==(17u^topology));
+        auto pixels=out.bgra_pixels;auto value=static_cast<unsigned const*>(pixels)[0];
+        screen.pixels.resize(16);assert(ui_worker.native_screen(&screen)==C3X_RENDERER_RESULT_OK);
+        assert(out.bgra_pixels==pixels && static_cast<unsigned const*>(pixels)[0]==value);
+        native_transfer_test=false;
+    }
     // Legacy render and the explicit camera interface share one publication.
     // A matching active camera request cannot certify an older front's view.
     ambient_mode=true;
@@ -911,6 +984,7 @@ int main(){
 #include <cstring>
 #include <thread>
 #include <vector>
+#include <memory>
 #include "Renderer/native/c3x_renderer_api.h"
 #include "Renderer/native/color_quantization.h"
 using HGDIOBJ=void*;
@@ -998,6 +1072,7 @@ int main(){
 #include <cstring>
 #include <new>
 #include <vector>
+#include <memory>
 #include "Renderer/native/c3x_renderer_api.h"
 int allocations_before_failure=-1;
 void* operator new(std::size_t size) {

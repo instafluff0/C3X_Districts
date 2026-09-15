@@ -4,10 +4,11 @@
 #include <cstring>
 #include <unordered_map>
 #include <vector>
+#include <memory>
 
 namespace c3x_renderer {
-// One finished area and its complete captured-content proof. GPU ownership stays
-// with the existing renderer; this owner only publishes immutable CPU results.
+// One finished area and its complete captured-content proof. Publication owns
+// immutable CPU or GPU storage; selection and validity are identical for both.
 template<class Publication> struct PreparedViewArea {
     Publication map,center;
     c3x_renderer_frame_v1 input={};
@@ -63,8 +64,10 @@ template<class Publication> struct PreparedViewArea {
         input.tiles=tiles.data();input.world_topology=topology.data();
         return std::uint64_t(input.target_width)*input.target_height*4+bytes()<budget;
     }
-    bool finish(c3x_renderer_output_v1 const& output,std::vector<std::uint64_t> proof) {
-        if(output.fallback_tile_count || !map.capture(output,0,0,&input,identity))return false;
+    bool finish(c3x_renderer_output_v1 const& output,std::vector<std::uint64_t> proof,Publication* resident=nullptr) {
+        if(output.fallback_tile_count)return false;
+        if(resident)map.swap(*resident);
+        else if(!map.capture(output,0,0,&input,identity))return false;
         dependencies=std::move(proof);
         for(auto const& tile:tiles)if(tile.tile_flags&C3X_RENDERER_TILE_RENDER)dependencies.push_back(key(tile));
         std::sort(dependencies.begin(),dependencies.end());dependencies.erase(std::unique(dependencies.begin(),dependencies.end()),dependencies.end());
@@ -80,8 +83,8 @@ template<class Publication> struct PreparedViewArea {
     // A delayed ambient refresh may hold its actual old sample; it must not
     // force the native camera to wait for a still-valid world image.
     bool project(c3x_renderer_frame_v1 const& current,c3x_renderer_camera_identity_v1 epochs,Publication& result,
-                 c3x_renderer_output_v1 const* sample=nullptr,c3x_renderer_i64 sample_ticks=0) const {
-        if(!map.output.bgra_pixels || std::memcmp(&identity,&epochs,sizeof(epochs)) ||
+                 c3x_renderer_output_v1 const* sample=nullptr,c3x_renderer_i64 sample_ticks=0,Publication const* resident_sample=nullptr) const {
+        if(!map.has_image() || std::memcmp(&identity,&epochs,sizeof(epochs)) ||
            current.target_width!=viewport_width || current.target_height!=viewport_height ||
            current.tile_width!=input.tile_width || current.tile_height!=input.tile_height ||
            current.hour!=input.hour || current.season!=input.season || current.presentation_frequency!=input.presentation_frequency ||
@@ -126,10 +129,10 @@ template<class Publication> struct PreparedViewArea {
         auto const& sampled=sample?*sample:map.output;
         auto sampled_ticks=sample?sample_ticks:input.presentation_time_ticks;
         if(sampled.content_revision!=map.output.content_revision || sampled.device_generation!=map.output.device_generation ||
-           sampled.width!=input.target_width || sampled.height!=input.target_height || !sampled.bgra_pixels ||
+           sampled.width!=input.target_width || sampled.height!=input.target_height || (!sampled.bgra_pixels && !(resident_sample?resident_sample->has_image():map.has_image())) ||
            sampled_ticks>current.presentation_time_ticks)return false;
         auto normalized=current;normalized.dirty_flags=result.frame.dirty_flags;
-        if(result.output.bgra_pixels && result.frame.presentation_time_ticks==sampled_ticks &&
+        if(result.has_image() && result.frame.presentation_time_ticks==sampled_ticks &&
            result.output.content_revision==map.output.content_revision && result.output.device_generation==map.output.device_generation &&
            !std::memcmp(&result.identity,&epochs,sizeof(epochs)) && result.matches_static_view(normalized)) {
             result.output.visible_animation_count=current.visible_animation_count+
@@ -138,18 +141,17 @@ template<class Publication> struct PreparedViewArea {
             result.output.clip_right=current.clip_right;result.output.clip_bottom=current.clip_bottom;
             return true;
         }
-        std::vector<std::uint32_t> pixels(std::size_t(viewport_width)*viewport_height);
-        for(int row=0;row<viewport_height;++row)std::copy_n(reinterpret_cast<std::uint32_t const*>(static_cast<unsigned char const*>(sampled.bgra_pixels)+std::size_t(row+y)*sampled.stride_bytes)+x,
-            viewport_width,pixels.data()+std::size_t(row)*viewport_width);
         auto output=sampled;output.visible_animation_count=current.visible_animation_count+
             (map.output.visible_animation_count>input.visible_animation_count?map.output.visible_animation_count-input.visible_animation_count:0);
         output.width=viewport_width;output.height=viewport_height;output.stride_bytes=viewport_width*4;
         output.clip_left=current.clip_left;output.clip_top=current.clip_top;
         output.clip_right=current.clip_right;output.clip_bottom=current.clip_bottom;
-        output.bgra_pixels=pixels.data();output.replacement_tile_count=current.tile_count;output.replacement_tile_flags=replacements.data();
+        output.bgra_pixels=nullptr;output.replacement_tile_count=current.tile_count;output.replacement_tile_flags=replacements.data();
         auto frame=current;frame.presentation_time_ticks=sampled_ticks;
-        return result.capture(output,current.tile_count?current.tiles[0].anchor_x:0,
-            current.tile_count?current.tiles[0].anchor_y:0,&frame,epochs);
+        if(resident_sample)return result.capture_crop(*resident_sample,output,x,y,frame,epochs);
+        if(!sample)return result.capture_crop(map,output,x,y,frame,epochs);
+        Publication transient;transient.output=sampled; // borrowed CPU sample, never published
+        return result.capture_crop(transient,output,x,y,frame,epochs);
     }
     bool centered(c3x_renderer_frame_v1 const& current) const {
         for(unsigned i=0;i<current.tile_count;++i)if(current.tiles[i].tile_flags&C3X_RENDERER_TILE_RENDER){

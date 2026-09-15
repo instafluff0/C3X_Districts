@@ -80,6 +80,37 @@ int main(){
 }
 ''')
 
+    def test_ready_adoption_and_notification_lifetime(self):
+        run_cpp(r'''
+#include "Renderer/native/render_core/content_preparation.h"
+#include <cassert>
+using namespace c3x_renderer::render_core;
+struct Result {int value;std::size_t bytes()const{return 1;}};
+using Pool=ContentPreparation<int,std::shared_ptr<int>,Result>;
+int main(){
+ Pool pool;std::atomic<bool> entered{false},release{false},notifying{false};
+ std::atomic<unsigned> calls{0};std::mutex consumer;std::condition_variable wake;unsigned revision=0;
+ std::unique_lock<std::mutex> lock(consumer);
+ pool.set_ready_notification([&]{notifying=true;std::lock_guard<std::mutex> guard(consumer);++revision;wake.notify_one();});
+ auto input=std::make_shared<int>(1);std::weak_ptr<int> lease=input;
+ pool.configure({{1,input},{2,std::make_shared<int>(2)}},[&](auto const& input,auto const&,unsigned){
+  ++calls;entered=true;while(!release)std::this_thread::yield();
+  return std::make_unique<Result>(Result{*input});
+ });
+ input.reset();pool.resume();while(!entered)std::this_thread::yield();
+ assert(!pool.take_ready(1));assert(!pool.take_ready(2));
+ assert(pool.statistics().pending==1 && calls==1); // No wait, steal, or duplicate compiler.
+ release=true;while(!notifying)std::this_thread::yield();
+ // Notification is waiting for the consumer lock. Pause must still finish:
+ // publication ended the CPU input lease before notifying the GPU scheduler.
+ pool.pause();assert(lease.expired());assert(pool.take_ready(1)->value==1);assert(!pool.take_ready(1));
+ assert(wake.wait_for(lock,std::chrono::seconds(5),[&]{return revision==1;}));
+ lock.unlock();pool.set_ready_notification({}); // Joins callback before consumer destruction.
+ pool.resume();assert(pool.take(2)->value==2);pool.pause();assert(calls==2 && revision==1);
+ pool.clear();
+}
+''')
+
     def test_shared_terrain_compiler_parallel_parity(self):
         run_cpp(r'''
 #include "Renderer/native/source_fidelity/terrain_compiler.h"

@@ -8,8 +8,8 @@
 #include <stdexcept>
 #include "native_observation.h"
 #define __ 0
-struct JGL_Image {void** vtable;char pad[0x20];int BitCount;char dimensions[0x1c];RECT Clip_Rect,Image_Rect;};
-static_assert(offsetof(JGL_Image,BitCount)==0x24 && offsetof(JGL_Image,Image_Rect)==0x54);
+struct JGL_Image {void** vtable;char pad[0x20];int BitCount;char dimensions[0x1c];RECT Clip_Rect,Image_Rect;char rest[0x4c8-0x64];int Bits_Data_Links,Current_Bits_Data;};
+static_assert(offsetof(JGL_Image,BitCount)==0x24 && offsetof(JGL_Image,Image_Rect)==0x54 && offsetof(JGL_Image,Bits_Data_Links)==0x4c8);
 struct JGLSprite {void** vtable;int a,b,c,d;void* bits;int f18,f1c,bit_count,f24,f28,stride,width,height;CRITICAL_SECTION lock;};
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
 struct State {
@@ -68,6 +68,7 @@ int main(int argc,char** argv){
         auto create=reinterpret_cast<Create>(gt[31]);auto a=create(graph,nullptr,1),b=create(graph,nullptr,1);
         void* original[60];std::memcpy(original,a->vtable,sizeof original);
         auto sprite_table=reinterpret_cast<void**>(reinterpret_cast<char*>(module)+0x68440);void* original_sprite=sprite_table[17];
+        void* original_blends[3]={sprite_table[20],sprite_table[21],sprite_table[22]};
         verify(reinterpret_cast<Init>(a->vtable[1])(a,64,48,16,1)==0,"init A");
         verify(reinterpret_cast<Init>(b->vtable[1])(b,64,48,16,1)==0,"init B");
         // An unsupported root must never cause writes, even with an observer installed.
@@ -119,7 +120,7 @@ int main(int argc,char** argv){
         verify(capture.images.at(b).roles==2,"screen identity");
         reinterpret_cast<Destroy>(b->vtable[0])(b,1);verify(!capture.images.count(b),"destruction retires pointer");
         set_custom_renderer_native_probe(nullptr);
-        verify(!state.custom_renderer_native_probe_active&&!std::memcmp(a->vtable,original,sizeof original)&&sprite_table[17]==original_sprite,"restore all slots");
+        verify(!state.custom_renderer_native_probe_active&&!std::memcmp(a->vtable,original,sizeof original)&&sprite_table[17]==original_sprite&&std::equal(original_blends,original_blends+3,sprite_table+20),"restore all slots");
         set_custom_renderer_native_probe(a);verify(state.custom_renderer_native_probe_active,"reattach");
         screen.JGL.Image=a;capture.presents=8191;patch_JGL_present_screen(&full);
         verify(capture.ended&&!state.custom_renderer_native_probe_active&&!std::memcmp(a->vtable,original,sizeof original),"budget exhaustion detaches hooks");

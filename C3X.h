@@ -2678,8 +2678,9 @@ struct district_button_image_set {
 	c3x_renderer_native_lifetime_fn custom_renderer_native_lifetime;
 	HMODULE custom_renderer_native_module;
 	c3x_renderer_native_image_fn custom_renderer_native_image;
-	c3x_renderer_native_map_fn custom_renderer_native_map;
+	c3x_renderer_native_map_view_fn custom_renderer_native_map;
 	void * custom_renderer_jgl_original[60], * custom_renderer_jgl_sprite_original, * custom_renderer_jgl_present_original;
+	void * custom_renderer_jgl_blend_original[10];
 	void ** custom_renderer_jgl_table, ** custom_renderer_jgl_sprite_table, ** custom_renderer_jgl_graph_table;
 	DWORD (WINAPI * custom_renderer_probe_thread_id) ();
 	DWORD custom_renderer_probe_owner;

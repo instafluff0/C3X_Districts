@@ -49,6 +49,15 @@ public:
         while(count<limit && !pending.empty()){out[count++]=pending.front();pending.pop_front();}
         return count;
     }
+    // Keep unready predictions until content completion or a newer observation;
+    // one slow CPU pose must not prevent adoption of other ready unit poses.
+    template<class Ready> unsigned take_ready(c3x_renderer_unit_v1* out,unsigned limit,Ready ready) {
+        unsigned count=0;
+        for(auto it=pending.begin();it!=pending.end() && count<limit;){
+            if(ready(*it)){out[count++]=*it;it=pending.erase(it);}else ++it;
+        }
+        return count;
+    }
     bool empty() const {return pending.empty();}
     void clear(){pending.clear();seen.clear();}
 };

@@ -26,11 +26,20 @@ if not exist "..\bin" mkdir "..\bin"
 if not exist "build" mkdir "build"
 if not exist "build\candidate" mkdir "build\candidate"
 
+if /i "%~1"=="native-text" (
+  if not exist "build\gpu-composition" mkdir "build\gpu-composition"
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX test_native_text.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_native_text.exe /link d3d11.lib d3dcompiler.lib gdi32.lib user32.lib
+  if errorlevel 1 exit /b 1
+  build\gpu-composition\test_native_text.exe
+  if errorlevel 1 exit /b 1
+  exit /b 0
+)
+
 if /i "%~1"=="gpu-frame" (
   ..\..\tcc\tcc.exe -m32 -run test_gpu_frame_api.c
   if errorlevel 1 exit /b 1
   if not exist "build\gpu-composition" mkdir "build\gpu-composition"
-  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4100 /wd4191 /DC3X_GPU_NATIVE_CONTRACT biq_preview.cpp test_native_worker.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_gpu_frame.exe /link /LARGEADDRESSAWARE gdi32.lib msimg32.lib user32.lib bcrypt.lib
+  cl /nologo /std:c++17 /EHsc /O2 /W4 /WX /wd4100 /wd4191 /DC3X_GPU_NATIVE_CONTRACT biq_preview.cpp test_native_worker.cpp /Fo:build\gpu-composition\ /Fe:build\gpu-composition\test_gpu_frame.exe /link /MAP:build\gpu-composition\test_gpu_frame.map /LARGEADDRESSAWARE gdi32.lib msimg32.lib user32.lib bcrypt.lib
   if errorlevel 1 exit /b 1
   exit /b 0
 )

@@ -1,4 +1,4 @@
-static_assert(sizeof(c3x_renderer_gpu_frame_v1)==52 && sizeof(c3x_renderer_gpu_command_v1)==88 &&
+static_assert(sizeof(c3x_renderer_gpu_frame_v1)==64 && sizeof(c3x_renderer_gpu_command_v1)==104 &&
               sizeof(c3x_renderer_gpu_images_v1)==64 && sizeof(c3x_renderer_gpu_result_v1)==48,"native C/C++ GPU API layout");
 // Included in the production capture harness after its ordinary CPU control.
 char gpu_frame_test[8]={};GetEnvironmentVariableA("C3X_RENDERER_GPU_FRAME_TEST",gpu_frame_test,sizeof(gpu_frame_test));
@@ -16,6 +16,18 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
     auto image_request=[&](int action,c3x_renderer_i64 image=0){c3x_renderer_gpu_images_v1 r={};r.struct_size=sizeof(r);r.action=action;r.ticket=view.ticket;r.image=image;return r;};
     auto execute=[&](c3x_renderer_gpu_images_v1 const& r){return gpu_images(&r,&status,nullptr,0);};
     auto read=[&](c3x_renderer_i64 image){auto r=image_request(C3X_GPU_READBACK,image);r.pixel_count=unsigned(actual.size());return gpu_images(&r,&status,actual.data(),unsigned(actual.size()));};
+    auto capture_reference=[&](c3x_renderer_frame_v1 const& input,std::vector<unsigned>& image){
+        auto present_view=reinterpret_cast<c3x_renderer_camera_present_view_fn>(GetProcAddress(module,"c3x_renderer_camera_present_view"));
+        auto render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
+        if(!present_view || !render_view)return false;
+        c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&input,{11,12,13,14}};
+        c3x_renderer_camera_view_v1 lease={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(lease)};
+        present_view(&request,&lease); // enable the native CPU publication policy
+        c3x_renderer_output_v1 cpu={C3X_RENDERER_API_VERSION,sizeof(cpu)};
+        if(render_view(&request,&cpu)!=C3X_RENDERER_RESULT_OK || !cpu.bgra_pixels ||
+           cpu.width!=input.target_width || cpu.height!=input.target_height)return false;
+        auto pixels=static_cast<unsigned const*>(cpu.bgra_pixels);image.assign(pixels,pixels+std::size_t(cpu.width)*cpu.height);return true;
+    };
     c3x_renderer_i64 old_ticket=0;
     for(int phase=0;phase<4 && ok;++phase){
         if(phase==1)test_frame.presentation_time_ticks+=test_frame.presentation_frequency/4;
@@ -27,6 +39,7 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
         auto pixels=static_cast<unsigned const*>(control.bgra_pixels);expected.assign(pixels,pixels+actual.size());map_expected=expected;
         std::vector<unsigned> ownership;
         if(control.replacement_tile_count)ownership.assign(control.replacement_tile_flags,control.replacement_tile_flags+control.replacement_tile_count);
+        if(!verify_gpu(capture_reference(test_frame,expected),"CPU working-area reference"))break;map_expected=expected;
         c3x_renderer_camera_request_v1 request={C3X_RENDERER_CAMERA_VIEW_VERSION,sizeof(request),&test_frame,{1,2,3,phase+1}};
         c3x_renderer_output_v1 meta={C3X_RENDERER_API_VERSION,sizeof(meta)};
         if(!verify_gpu(gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"GPU render")||
@@ -34,13 +47,68 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
            !verify_gpu(meta.replacement_tile_count==ownership.size()&&std::equal(ownership.begin(),ownership.end(),meta.replacement_tile_flags),"native ownership parity"))break;
 #ifdef C3X_GPU_NATIVE_CONTRACT
         if(phase==0){char jgl_path[2048]={};GetEnvironmentVariableA("C3X_RENDERER_GPU_JGL_TEST",jgl_path,sizeof(jgl_path));
-            if(!verify_gpu(jgl_path[0]&&native_worker_contract(jgl_path,gpu_images,view,gpu_render,gpu_present,request,expected.data(),test_tiles[0].anchor_x,test_tiles[0].anchor_y),"actual native hooks on renderer worker"))break;
+            std::vector<NativeFrameSample> performance_frames;
+            char benchmark_option[8]={};GetEnvironmentVariableA("C3X_RENDERER_NATIVE_FRAME_BENCHMARK",benchmark_option,sizeof(benchmark_option));
+            if(!std::strcmp(benchmark_option,"1")){
+                int home_x=center_x,home_y=center_y;
+                for(int workload=0;workload<3;++workload)for(int step=0;step<40;++step){
+                    NativeFrameSample sample;sample.workload=workload;sample.step=step;sample.frame=test_frame;
+                    center_x=home_x+(workload==1&&step>=8?(step-8)*2:0);center_y=home_y;
+                    sample.tiles=capture_view();sample.frame.tile_count=unsigned(sample.tiles.size());
+                    sample.frame.presentation_frequency=60000;sample.frame.presentation_time_ticks=600000+step*1000;
+                    if(workload==2&&step>=16){auto changed=std::min_element(sample.tiles.begin(),sample.tiles.end(),[&](auto const& a,auto const& b){
+                        auto distance=[&](auto const& t){return (t.tile_flags&C3X_RENDERER_TILE_RENDER)?std::abs(t.anchor_x-frame.target_width/2)+std::abs(t.anchor_y-frame.target_height/2):INT_MAX;};
+                        return distance(a)<distance(b);});
+                        if(changed!=sample.tiles.end())changed->terrain_type=(changed->terrain_type+1)%3;
+                    }
+                    performance_frames.push_back(std::move(sample));
+                }
+                center_x=home_x;center_y=home_y;
+            }
+            if(!verify_gpu(jgl_path[0]&&native_worker_contract(jgl_path,gpu_images,view,gpu_render,gpu_present,request,expected.data(),test_tiles[0].anchor_x,test_tiles[0].anchor_y,performance_frames),"actual native hooks on renderer worker"))break;
             // The independent native oracle intentionally reads back. Start a
             // fresh session for the existing producer/readback counters below.
             gpu_reset();
-            if(!verify_gpu(render(&test_frame,&control)==C3X_RENDERER_RESULT_OK&&gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"fresh session after native oracle"))break;
+            if(!verify_gpu(render(&test_frame,&control)==C3X_RENDERER_RESULT_OK && capture_reference(test_frame,expected) &&
+                gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"fresh session after native oracle"))break;map_expected=expected;
         }
 #endif
+        if(phase==0 && ok){
+            auto prepare=reinterpret_cast<c3x_renderer_prepare_nearby_view_fn>(GetProcAddress(module,"c3x_renderer_prepare_nearby_view"));
+            auto refresh=test_frame;auto refresh_tiles=test_tiles;
+            for(auto& tile:refresh_tiles)tile.anchor_x-=80;
+            refresh.tiles=refresh_tiles.data();refresh.presentation_time_ticks+=refresh.presentation_frequency/15;
+            auto refresh_request=request;refresh_request.frame=&refresh;
+            verify_gpu(gpu_render(&refresh_request,&view,&meta)==C3X_RENDERER_RESULT_OK && view.prepared &&
+                view.presentation_time_ticks==test_frame.presentation_time_ticks,"scroll selects previous resident coverage immediately");
+            verify_gpu(prepare && prepare(&refresh_request)==C3X_RENDERER_RESULT_OK,"queue resident nearby area");
+            auto deadline=GetTickCount64()+15000;unsigned delay=20;
+            do {
+                Sleep(delay);delay=(std::min)(500u,delay*2);
+                verify_gpu(gpu_render(&refresh_request,&view,&meta)==C3X_RENDERER_RESULT_OK,"poll resident prepared selection");
+                if(!view.prepared || view.presentation_time_ticks!=refresh.presentation_time_ticks)verify_gpu(prepare(&refresh_request)==C3X_RENDERER_RESULT_OK,"resume superseded preparation");
+            }while(ok && (!view.prepared || view.presentation_time_ticks!=refresh.presentation_time_ticks) && GetTickCount64()<deadline);
+            verify_gpu(view.prepared && !view.map_readbacks && !meta.bgra_pixels,"prepared GPU map adopted without CPU pixels");
+            verify_gpu(view.presentation_time_ticks==refresh.presentation_time_ticks,"prepared adoption preserves sample clock");
+            if(ok){
+                // Preserve the true prepared crop as an explicit oracle. Later
+                // requests may move within this coverage without rendering.
+                verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK,"prepared map oracle");
+                expected=actual;map_expected=actual;
+                auto held=refresh;held.presentation_time_ticks+=test_frame.presentation_frequency/2;
+                auto held_request=request;held_request.frame=&held;
+                verify_gpu(gpu_render(&held_request,&view,&meta)==C3X_RENDERER_RESULT_OK && view.prepared &&
+                    view.presentation_time_ticks==refresh.presentation_time_ticks,"held GPU ambient sample keeps old clock");
+                verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK && actual==expected,"held prepared pixels unchanged");
+                std::vector<unsigned> oracle;
+                verify_gpu(capture_reference(refresh,oracle) && oracle==expected,"prepared GPU crop equals independently finished native CPU area");
+                std::printf("PASS prepared GPU map adoption: queued resident area, selected immutable view, honest clock, no CPU map readback\n");
+                // The ordinary phase counters below require a fresh session.
+                gpu_reset();verify_gpu(render(&test_frame,&control)==C3X_RENDERER_RESULT_OK,"restore CPU phase control");
+                auto control_pixels=static_cast<unsigned const*>(control.bgra_pixels);expected.assign(control_pixels,control_pixels+actual.size());verify_gpu(capture_reference(test_frame,expected),"restore CPU area reference");map_expected=expected;
+                verify_gpu(gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"restore exact GPU phase");
+            }
+        }
         if(old_ticket){auto stale=image_request(C3X_GPU_CREATE);stale.ticket=old_ticket;stale.width=stale.height=2;verify_gpu(execute(stale)==C3X_RENDERER_RESULT_SUPERSEDED,"old ticket rejected");}
         old_ticket=view.ticket;
         auto create=image_request(C3X_GPU_CREATE);create.width=view.width;create.height=view.height;

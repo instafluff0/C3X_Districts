@@ -39,6 +39,90 @@ int main(int argc,char** argv){
         verify(reinterpret_cast<int(__thiscall*)(JGL_Image*,int)>(images[0]->vtable[44])(images[0],7)==0,"native indexed text state");
         verify(query(images[0]),"font/color state does not expose pixels");
         verify(reinterpret_cast<int(__thiscall*)(JGL_Image*,int,int,char const*,int)>(images[0]->vtable[46])(images[0],1,1,"Hi",2)==0&&query(images[0]),"scoped native TextOut preserves lifetime evidence");
+        // HUD alpha calls before GPU admission are private native drawing too.
+        // Their internal leases must not permanently disqualify these surfaces.
+        JGLSprite hud_color={},hud_alpha={};auto jgl_base=reinterpret_cast<char*>(jgl);
+        unsigned char hud_indices[16]={},hud_weights[16]={};
+        for(auto sprite:{&hud_color,&hud_alpha}){reinterpret_cast<JGLSprite*(__thiscall*)(JGLSprite*,void*)>(jgl_base+0x7e80)(sprite,nullptr);
+            sprite->bit_count=8;sprite->width=sprite->stride=sprite->height=4;}
+        hud_color.bits=hud_indices;hud_alpha.bits=hud_weights;
+        auto hud_palette=reinterpret_cast<void*(__thiscall*)(void*,void*)>(table[30])(graph,nullptr);verify(hud_palette!=nullptr,"startup HUD palette");
+        verify(reinterpret_cast<int(__thiscall*)(JGLSprite*,JGLSprite*,JGL_Image*,JGL_Image*,int,int,void*)>(hud_color.vtable[20])(&hud_color,&hud_alpha,images[0],images[1],0,0,hud_palette)==0,"config-off HUD background blend");
+        verify(query(images[0])&&query(images[1])&&state.custom_renderer_native_operation==0&&images[0]->Bits_Data_Links==0&&images[1]->Bits_Data_Links==0,"HUD source and destination private leases preserve lifetime and scope");
+        for(int slot:{21,22}){
+            verify(reinterpret_cast<int(__thiscall*)(JGLSprite*,JGLSprite*,JGL_Image*,int,int,void*)>(hud_color.vtable[slot])(&hud_color,&hud_alpha,images[1],0,0,hud_palette)==0,"config-off HUD destination blend");
+            verify(query(images[1])&&state.custom_renderer_native_operation==0&&images[1]->Bits_Data_Links==0,"HUD private destination lease preserves lifetime and scope");
+            auto held=reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(original[4])(images[1]);
+            verify(reinterpret_cast<int(__thiscall*)(JGLSprite*,JGLSprite*,JGL_Image*,int,int,void*)>(hud_color.vtable[slot])(&hud_color,&hud_alpha,images[1],0,0,hud_palette)==0,"HUD destination blend with caller lease");
+            verify(images[1]->Bits_Data_Links==1&&images[1]->Current_Bits_Data==int(reinterpret_cast<std::uintptr_t>(held)),"HUD destination blend preserves existing caller lease");
+            reinterpret_cast<Release>(original[9])(images[1],1);
+        }
+        for(bool alias:{false,true})for(int x:{0,32}){
+            auto target=images[alias?0:1];
+            auto held_background=reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(original[4])(images[0]);
+            auto held_destination=reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(original[4])(target);
+            int before_background=images[0]->Bits_Data_Links,before_destination=target->Bits_Data_Links;
+            verify(reinterpret_cast<int(__thiscall*)(JGLSprite*,JGLSprite*,JGL_Image*,JGL_Image*,int,int,void*)>(hud_color.vtable[20])(&hud_color,&hud_alpha,images[0],target,x,0,hud_palette)==0,"HUD blend with caller-held leases");
+            verify(images[0]->Bits_Data_Links==before_background&&target->Bits_Data_Links==before_destination&&
+                images[0]->Current_Bits_Data==int(reinterpret_cast<std::uintptr_t>(held_background))&&target->Current_Bits_Data==int(reinterpret_cast<std::uintptr_t>(held_destination)),"HUD exact lease preservation for separate/aliased and clipped native calls");
+            reinterpret_cast<Release>(original[9])(images[0],1);reinterpret_cast<Release>(original[9])(target,1);
+        }
+        using Tint=int(__thiscall*)(JGL_Image*,RECT*,int,int);
+        using Lookup=int(__thiscall*)(JGL_Image*,RECT*,JGL_Image*,int,void*);
+        std::vector<unsigned short> lookup_table(524288);for(unsigned n=0;n<lookup_table.size();++n)lookup_table[n]=static_cast<unsigned short>(n&32767);
+        for(auto background:{images[0],images[1]}){
+            auto bits=reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(original[4])(images[0]);
+            auto links=images[0]->Bits_Data_Links;
+            verify(reinterpret_cast<Lookup>(images[0]->vtable[21])(images[0],&area,background,40,lookup_table.data())==0,"native lookup private borrows");
+            verify(query(images[0])&&query(background)&&images[0]->Bits_Data_Links==links&&images[0]->Current_Bits_Data==int(reinterpret_cast<std::uintptr_t>(bits)),"lookup preserves entry pointer lease");
+            reinterpret_cast<Release>(original[9])(images[0],1);
+        }
+        lookup_table.resize(31*32768);
+        for(auto background:{images[0],images[1]}){
+            auto held=reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(original[4])(images[1]);
+            auto links=images[1]->Bits_Data_Links;
+            auto flc_result=reinterpret_cast<int(__thiscall*)(JGLSprite*,JGL_Image*,JGL_Image*,int,int,void*,void*)>(hud_color.vtable[35])(&hud_color,background,images[1],0,0,lookup_table.data(),hud_palette);
+            if(flc_result)std::fprintf(stderr,"FLC_STARTUP result=%d format=%d bits=%d source_present=%d background_links=%d destination_links=%d\n",flc_result,*reinterpret_cast<int*>(reinterpret_cast<char*>(background)+0x28),background->BitCount,hud_color.bits!=nullptr,background->Bits_Data_Links,images[1]->Bits_Data_Links);
+            verify(flc_result==0,"native FLC lookup private borrows");
+            verify(query(images[1])&&query(background)&&images[1]->Bits_Data_Links==links&&images[1]->Current_Bits_Data==int(reinterpret_cast<std::uintptr_t>(held)),"FLC lookup preserves caller entry lease");
+            reinterpret_cast<Release>(original[9])(images[1],1);
+        }
+        auto native_scales=reinterpret_cast<int*>(jgl_base+0x6c0fc);int saved_lookup_scales[3]={native_scales[0],native_scales[1],native_scales[2]};
+        native_scales[0]=native_scales[1]=1;native_scales[2]=2;
+        for(auto background:{images[0],images[1]})for(int x:{-2,0,32}){
+            auto held=reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(original[4])(images[1]);
+            auto links=images[1]->Bits_Data_Links;
+            verify(reinterpret_cast<int(__thiscall*)(JGLSprite*,JGL_Image*,JGL_Image*,int,int,int,int,int,void*,void*)>(hud_color.vtable[34])(&hud_color,background,images[1],x,0,1,1,2,lookup_table.data(),hud_palette)==0,"native scaled FLC with caller lease");
+            verify(query(images[1])&&query(background)&&images[1]->Bits_Data_Links==links&&images[1]->Current_Bits_Data==int(reinterpret_cast<std::uintptr_t>(held)),"scaled FLC preserves caller entry lease");
+            reinterpret_cast<Release>(original[9])(images[1],1);
+        }
+        for(unsigned i=0;i<3;++i)native_scales[i]=saved_lookup_scales[i];
+        std::vector<unsigned short> map_shadow_table(4*32768);for(unsigned n=0;n<map_shadow_table.size();++n)map_shadow_table[n]=static_cast<unsigned short>(n&32767);
+        for(int slot:{23,29,31})for(int x:{-2,0,32}){
+            std::fill(std::begin(hud_indices),std::end(hud_indices),static_cast<unsigned char>(slot==31?248:17));
+            auto held=reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(original[4])(images[1]);auto links=images[1]->Bits_Data_Links;
+            int result=slot==23?reinterpret_cast<int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,void*)>(hud_color.vtable[23])(&hud_color,images[1],x,0,hud_palette):
+                slot==29?reinterpret_cast<int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,int,void*)>(hud_color.vtable[29])(&hud_color,images[1],x,0,17,hud_palette):
+                reinterpret_cast<int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,void*,void*)>(hud_color.vtable[31])(&hud_color,images[1],x,0,map_shadow_table.data(),hud_palette);
+            verify(result==0&&query(images[1])&&images[1]->Bits_Data_Links==links&&images[1]->Current_Bits_Data==int(reinterpret_cast<std::uintptr_t>(held)),"single-key/mask/shadow calls preserve native caller leases");
+            reinterpret_cast<Release>(original[9])(images[1],1);
+        }
+        for(float opacity:{0.f,0.03125f,0.5f,1.f})for(int x:{-2,0,32}){
+            auto held=reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(original[4])(images[1]);auto links=images[1]->Bits_Data_Links;
+            auto result=reinterpret_cast<int(__thiscall*)(JGLSprite*,JGL_Image*,int,int,float,void*,int)>(hud_color.vtable[37])(&hud_color,images[1],x,0,opacity,hud_palette,0);
+            verify(result==0&&query(images[1])&&images[1]->Bits_Data_Links==links&&images[1]->Current_Bits_Data==int(reinterpret_cast<std::uintptr_t>(held)),"opacity transitions preserve native caller leases");
+            reinterpret_cast<Release>(original[9])(images[1],1);
+        }
+        for(auto sprite:{&hud_color,&hud_alpha}){sprite->bits=nullptr;reinterpret_cast<void(__thiscall*)(JGLSprite*)>(jgl_base+0x7ed0)(sprite);}
+        reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(jgl_base+0x3cf10)(hud_palette,1);
+        using Line=int(__thiscall*)(JGL_Image*,int,int,int,int,int,int);
+        verify(reinterpret_cast<Tint>(images[0]->vtable[18])(images[0],&area,int(0x80000000u),50)==0&&query(images[0])&&images[0]->Bits_Data_Links==0,"native label panel preserves private lifetime and leases");
+        for(RECT segment:{RECT{1,2,12,9},RECT{12,9,1,2},RECT{-20,-20,-2,-1},RECT{2,2,2,2}}){
+            auto held=reinterpret_cast<unsigned short*(__thiscall*)(JGL_Image*)>(original[4])(images[0]);
+            verify(reinterpret_cast<Line>(images[0]->vtable[25])(images[0],segment.left,segment.top,segment.right,segment.bottom,int(0x80001234u),1)==0,"native private line");
+            verify(query(images[0])&&images[0]->Bits_Data_Links==1&&images[0]->Current_Bits_Data==int(reinterpret_cast<std::uintptr_t>(held)),"native line preserves caller entry lease");
+            reinterpret_cast<Release>(original[9])(images[0],1);
+        }
         auto dc=reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(images[0]->vtable[10])(images[0]);verify(dc!=nullptr,"public native DC");
         reinterpret_cast<Release>(images[0]->vtable[11])(images[0],1);verify(!query(images[0]),"DC release cannot undo a CPU escape");
         verify(reinterpret_cast<Init>(images[0]->vtable[1])(images[0],16,16,16,1)==0&&query(images[0]),"successful reinit starts a new lifetime");

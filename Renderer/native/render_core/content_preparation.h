@@ -42,6 +42,10 @@ private:
     std::array<Key,6> active_key{};
     std::array<bool,6> active_urgent{};
     Compile compile;
+    // Notification owns no content lease. Unregister joins any callback before
+    // its consumer can disappear; callbacks may acquire the consumer's mutex.
+    std::mutex notification_mutex;
+    std::function<void()> ready_notification;
     std::deque<Job> pending;
     std::deque<Ready> ready;
     Statistics stats;
@@ -50,6 +54,8 @@ private:
         for(;;){
             wake.wait(lock,[&]{return stopping || (!paused && worker<worker_limit && !pending.empty() && ((demanded && pending.front().key==demand_key) || pending.front().urgent || (stats.bytes<capacity_limit/2)));});
             if(stopping)return;
+            bool published=false;
+            {
             Job job=std::move(pending.front());pending.pop_front();
             active[worker]=true;active_key[worker]=job.key;active_urgent[worker]=job.urgent;
             stats.active_peak=std::max(stats.active_peak,unsigned(std::count(active.begin(),active.end(),true)));
@@ -74,15 +80,36 @@ private:
                     }
                     if(stats.bytes+bytes<=capacity_limit){
                         ready.push_back({job.key,std::move(value),active_urgent[worker]});
-                        stats.bytes+=bytes;stats.peak_bytes=std::max(stats.peak_bytes,stats.bytes);++stats.built;
+                        stats.bytes+=bytes;stats.peak_bytes=std::max(stats.peak_bytes,stats.bytes);++stats.built;published=true;
                     }else ++stats.rejected;
                 }else ++stats.rejected;
             }catch(...){++stats.rejected;}
+            } // Release job input leases before pause/clear can observe completion.
             active[worker]=false;completed.notify_all();
+            // Pause may return before notification: source inputs are no longer
+            // borrowed. Never call the consumer while holding the content mutex.
+            if(published){
+                lock.unlock();
+                {std::lock_guard<std::mutex> guard(notification_mutex);
+                if(ready_notification)ready_notification();}
+                lock.lock();
+            }
         }
     }
 public:
     ContentPreparation()=default;
+    void set_ready_notification(std::function<void()> next){
+        std::lock_guard<std::mutex> guard(notification_mutex);ready_notification=std::move(next);
+    }
+    // Speculative GPU adoption never joins a helper or steals a queued CPU job.
+    std::unique_ptr<Result> take_ready(Key const& key){
+        std::lock_guard<std::mutex> lock(mutex);
+        for(auto it=ready.begin();it!=ready.end();++it)if(it->key==key){
+            stats.bytes-=it->value->bytes();auto value=std::move(it->value);ready.erase(it);
+            ++stats.consumed;wake.notify_all();return value;
+        }
+        return {};
+    }
     ContentPreparation(ContentPreparation const&)=delete;
     ~ContentPreparation(){
         {std::lock_guard<std::mutex> lock(mutex);stopping=true;cancel=true;wake.notify_all();}

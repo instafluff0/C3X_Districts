@@ -14,15 +14,19 @@ struct c3x_renderer_gpu_frame_v1 {
     int width,height;
     unsigned device_generation,map_readbacks;
     c3x_renderer_i64 content_revision,session; /* stable across maps and CPU/unit requests; retired on configuration/reset */
+    unsigned prepared; /* complete fresh capture selected an immutable prepared surface */
+    c3x_renderer_i64 presentation_time_ticks; /* actual adopted sample, never the later demand clock */
 };
 enum c3x_renderer_gpu_action {C3X_GPU_CREATE=1,C3X_GPU_UPLOAD,C3X_GPU_SUBMIT,C3X_GPU_DESTROY,C3X_GPU_READBACK};
 enum c3x_renderer_gpu_format {C3X_GPU_BGRA32=0,C3X_GPU_RGB555=1,C3X_GPU_RGB565=2};
 struct c3x_renderer_gpu_command_v1 {
-    int kind; /* 0 copy, 1 fill, 2 color key, 3 invert, 4 ordered map quantization, 5 native UI expansion, 6 decoded native sprite, 7 premultiplied unit over native background */
+    int kind; /* 0 copy, 1 fill, 2 color key, 3 invert, 4 ordered map quantization, 5 native UI expansion, 6 decoded native sprite, 7 premultiplied unit over native background, 8 native GDI text response, 9 paired native image transfer, 10 native blend, 11 native lookup */
     c3x_renderer_i64 destination,source;
     int area[4],clip[4],source_x,source_y;
     unsigned color; /* quantize: phase_x&7 | (phase_y&7)<<3; expand: native key, or 65536 for opaque; sprite: 0 native words, 1/2 expand 555/565 */
-    c3x_renderer_i64 background,detail,background_detail; /* unit_over only */
+    c3x_renderer_i64 background,detail,background_detail; /* unit_over; native_text uses background for its channel-response table; native_image uses detail/source detail */
+    int source_width,source_height; /* native_image: positive source extent; target extent is area; color is native key or 65536 for opaque */
+    c3x_renderer_i64 program; /* native lookup: optional decoded sprite indices; zero selects an image rectangle */
 };
 struct c3x_renderer_gpu_images_v1 {
     unsigned struct_size;

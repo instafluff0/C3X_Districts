@@ -27,7 +27,7 @@ these DLL RVAs are not CSV addresses. No renderer callback requests a redraw.
 Missing exports, unsupported executable capabilities or a mismatched DLL leave
 the current CPU composition path. GPU destination substitution is enabled only after resident-map admission in the candidate source. The user subsequently authorized
 staging observation DLL `038faec0…0be2e2`; the subsequent compatibility evaluation
-`a79fb579…dec552` is staged, without install/game launch.
+`a79fb579…dec552` remains a preserved control; the retained plan identifies the current staged evaluation.
 The independent packed GPU executor uses no additional hooks or CSV entries:
 `required_user_action: []`. The production owner now consumes observed lifetime evidence; actual game coverage remains pending.
 The adapter adds `patch_JGL_Image_clip`: concrete JGL slot 13, DLL RVA `0x1a40`,
@@ -42,6 +42,10 @@ Resident-map publication required no new executable hooks. The native image
 adapter sends its tested native operations through those worker exports. Optional
 image packets specify BGRA/555/565 storage and bounded ordered commands; no native
 pointers leave the caller. Existing image/sprite hooks are reused unchanged.
+Image slots 16/17/33 now also carry positive in-bounds stretching, palette/null
+fills and keyed full-color transfers. The internal image-command packet is 96
+bytes with explicit source extent; exact-size validation rejects older packets.
+No native signature/address or injected hook changes; `required_user_action: []`.
 `patch_JGL_Graphsy_present` now wraps concrete Graphsy slot 41 at DLL RVA
 `0x3baa0`, verified against table RVA `0x685f8`. Original signature is
 `int (__thiscall *)(void *graph, RECT *rect)`; injected wrapper is
@@ -49,11 +53,15 @@ pointers leave the caller. Existing image/sprite hooks are reused unchanged.
 and transfers screen PCX member `+0x148` through window DC `+0x138`. It runs after
 the existing GOG `JGL_present_screen` wrapper finishes tooltip/cursor drawing.
 The optional callback consumes the complete transfer or leaves original JGL/DC
-fallback; table protection and restoration include this slot. No CSV address is
+fallback; table protection and restoration include this slot. The same hook lazily resolves the existing observation/presentation exports from
+the process-owned module when configured UI demands a frame before map loading or
+after scene unload. It preserves native config-off and caller-thread ownership;
+no map assets, new timer or new hook are required. No CSV address is
 added: it is a hash-pinned runtime DLL slot, admitted through existing GOG-only
 capabilities. `required_user_action: []`. The loader now resolves
-`c3x_renderer_native_image`, which uses completed-screen compatibility before
-resident map admission and routes native operations through its GPU owner afterward.
+`c3x_renderer_native_image`, which routes resident images and completed CPU UI
+sources through one presenter, before or after map admission. Foreground transfer
+preserves queued camera input and never selects GDI solely because preparation is busy.
 Observation expiry does not detach the live transfer owner; config-off/unload
 releases presentation before original GDI resumes. The older staged observer is
 preserved as the rollback control. The wrapper preserves original palette
@@ -66,9 +74,126 @@ The existing `patch_JGL_Sprite_draw` now forwards typed sprite/palette/anchor
 arguments to the image adapter before native fallback. JGL sprite slot 17 remains
 RVA `0x8180`, signature `int (__thiscall *)(JGLSprite *, JGL_Image *, int x,
 int y, void *palette)`. Ordinary 8/16-bit and row-trimmed 8-bit sources pass exact
-native tests; unsupported scaling/key modes restore native ownership. No new
-table entry or address is needed. The production owner routes these operations;
+native tests, including positive indexed scaling and destination-palette keys.
+Mirrored sources and unsafe trimmed edges retain native ownership. No new table
+entry or address is needed. The production owner routes these operations;
 `required_user_action: []`.
+
+HUD alpha composition uses three additional hash-verified JGL sprite slots:
+
+| Injected wrapper | Slot / DLL RVA | Original `__thiscall` arguments after `JGLSprite *` |
+| --- | --- | --- |
+| `patch_JGL_Sprite_blend` | 20 / `0x9aa0` | `JGLSprite *alpha, JGL_Image *background, JGL_Image *destination, int x, int y, void *palette` |
+| `patch_JGL_Sprite_blend_onto` | 21 / `0x9a30` | `JGLSprite *alpha, JGL_Image *destination, int x, int y, void *palette` |
+| `patch_JGL_Sprite_alpha_onto` | 22 / `0x9b20` | same as slot 21 |
+
+All return `int`; injected wrappers add unused fastcall `edx`. Existing GOG
+`Sprite_draw_for_hud` (`0x5F83E0`) calls slot 20 for normal HUD chrome; native
+`FUN_005f8450` uses slot 22 for main-screen buttons. Slots 20/21 retain their
+premultiplied source/background rule; slot 22 retains straight alpha and its
+native rounding. Unsupported source layout/extent restores CPU ownership.
+Native fallback remains scoped private drawing. Slot 20's helper `0x10ab0`
+acquires background/destination separately (`0x10bce`, `0x10beb`) but releases
+both links against background (`0x10d70`–`0x10d77`). The wrapper restores the
+entry `Bits_Data_Links`/`Current_Bits_Data` of both images after that scalar-only
+call, preserving caller leases and avoiding false outstanding destination borrows.
+Slot 21's helper `0x10d90` borrows once (`0x10eae`) but releases two links
+(`0x1100c`); slot 22 borrows at `0x9bd9` and never releases. Their wrappers likewise
+preserve destination entry state. Actual startup tests cover separate/aliased
+images, clipped no-ops, zero outstanding borrows and pre-existing caller leases.
+The table span covers every hooked slot and detach restores all three. Existing
+GOG-only executable guards and pinned JGL hash apply; other builds are unverified.
+No executable symbol/signature/address or CSV changes; `required_user_action: []`.
+
+Map-label backgrounds and native borders use two additional image slots on the
+same verified JGL image table (RVA `0x68238`):
+
+| Injected wrapper | Slot / DLL RVA | Original `__thiscall` signature |
+| --- | --- | --- |
+| `patch_JGL_Image_tint` | 18 / `0x2320` | `int(JGL_Image *, RECT *, int color, int percent)` |
+| `patch_JGL_Image_line` | 25 / `0x2160` | `int(JGL_Image *, int x0, int y0, int x1, int y1, int color, int unused)` |
+
+The first reaches native helper `0x40c0`; native map-label code calls it at
+`PCX_Image` destinations with 25/50 percent background retention. The second
+reaches `0x2810` (16-bit), ignores its final argument, and underlies
+`PCX_Image::draw_horizontal_line`, `draw_vertical_line`, and `draw_rectangle`.
+The GPU owner preserves clipping and native palette/packed-word colors; tint
+retains the independent full-color map contribution. CPU fallback remains private
+native drawing. The diagonal line helper borrows twice (`0x28f3`, then e.g.
+`0x29c5`) but some exits release once; its scalar wrapper restores entry bits/lease
+state, as checked with caller-held pointers. Hook attachment verifies both RVAs,
+and detach restores both slots.
+These runtime DLL hooks do not require executable patch entries. Existing GOG-only
+capability and pinned-DLL checks apply; other builds remain unverified.
+`required_user_action: []`; `civ_prog_objects.csv` is unchanged.
+
+Lookup effects add `patch_JGL_Image_lookup`: image slot 21 / RVA `0x22c0`,
+`int __thiscall(JGL_Image *, RECT *, JGL_Image *background, int percent, void *table)`;
+and `patch_JGL_Sprite_lookup`: sprite slot 33 / RVA `0x8fc0`,
+`int __thiscall(JGLSprite *, JGL_Image *, int x, int y, void *table, void *palette)`.
+The former reaches `0x4ec0` from `FUN_00600090`, including unit-control canvas
+painting; it clips to image bounds (not the clip rectangle), substitutes background
+for word `0x7c1f`, and indexes the caller's table. Its scalar fallback preserves
+both entry leases because the native routine releases neither. Sprite helper
+`0x14db0` uses indices 1–15 as lookup blocks, 0 as black, and 16–255 as no-op;
+its 16-bit helper `0xaa40` and trimmed sources do not draw. Positive scaled sprites
+share the audited sampling program. Mirrored lookup sprites retain native fallback.
+The related native FLC form is `patch_JGL_Sprite_lookup_over`: sprite slot 35 /
+RVA `0x90a0`, `int __thiscall(JGLSprite *, JGL_Image *background,
+JGL_Image *destination, int x, int y, void *table, void *palette)`. Helper `0x159e0`
+is reached by `Sprite::FUN_005f88b0`, including FLC map/unit-control drawing. It
+uses palette indices 0–223, lookup blocks 15–30 for indices 224–239 and blocks
+0–14 for 240–254; only 255 skips. A magenta destination selects the background.
+It ignores mirror signs and does not draw unequal scales. Its private destination
+borrows are not released; the wrapper preserves both images' entry leases.
+Native 555/raw indexed input is admitted; unsupported layouts keep fallback.
+`FUN_0062c090` constructs up to 31 lookup blocks from the explosion palette;
+this is a generic table at runtime, not a Civ VI asset dependency.
+The scaled FLC form is `patch_JGL_Sprite_lookup_scaled`: sprite slot 34 /
+RVA `0x90e0`, `int __thiscall(JGLSprite *, JGL_Image *background,
+JGL_Image *destination, int x, int y, int scale_x, int scale_y, int denominator,
+void *table, void *palette)`. `Sprite::FUN_005f8940` reaches it for zoomed-out
+unit cursors and FLC map effects (`FUN_004e45e0` and native animator callers).
+Helper `0x15c90` clips first, restarts source traversal at byte zero, consumes
+every second byte and adjusts source rows using the explicit scale and clipped
+width. The default half-size form uses every second row. Its palette/shadow
+composition shares slot 35's GPU program. Unequal axes return 1; negative explicit
+scale is a native no-op. Source-bounded raw 8-bit/555 forms are admitted; unsafe
+source traversals retain fallback. Both entry image leases survive scalar fallback.
+All four RVAs are checked at attach and restored at detach; existing supported-build
+limits apply. No executable patch entry is needed; `required_user_action: []`.
+
+Single-key artwork, solid masks and native shadows use three verified JGL hooks:
+`patch_JGL_Sprite_keyed`, slot 23 / RVA `0x8050`,
+`int __thiscall(JGLSprite *, JGL_Image *, int x, int y, void *palette)`;
+`patch_JGL_Sprite_mask`, slot 29 / RVA `0x8600`, the same signature with
+`int color` before `palette`; and `patch_JGL_Sprite_shadow`, slot 31 / RVA
+`0x8ee0`, the same signature with `void *table` before `palette`.
+`FUN_005f8270` uses slot 23 for Advisor/UI artwork (only index 255 skips).
+`FUN_005f8570` and its scaled wrapper use slot 29 for solid selection/picking
+masks. Raw masks skip 254/255 and accept packed colors; trimmed masks skip only
+255 and always resolve a palette index. `Sprite::draw_shadow_on_map` and
+`FUN_005f86f0` reach slot 31 for map/resource/native-animation shadows. The native
+`FUN_00403d10` allocation is four lookup blocks; admitted source codes 248–251
+select these blocks and 254/255 skip. Out-of-allocation codes retain native
+fallback. Trimmed shadow sources do nothing; trimmed slot 23 does nothing and
+returns Y. CPU-owned picking masks stay native; admitted map composition uses
+the same GPU sprite/lookup programs. Both lookup assets coexist within the existing
+budget. All three slots are checked/restored at attach/detach; existing pinned-DLL
+and supported-build limits apply. `required_user_action: []`; no CSV changes.
+
+
+`patch_JGL_Sprite_opacity` wraps sprite slot 37 / pinned JGL RVA `0x9220`:
+`int __thiscall(JGLSprite *, JGL_Image *, int x, int y, float opacity,
+void *palette, int flags)`. The EXE wrapper `FUN_005f8a70` uses it for command-panel
+icons and UI fades. The existing sprite source owner and GPU blend submission
+preserve native sixteenth-step weights, low-byte flags, clipping and positive
+scaling. The pinned binary accepts [0,1] but compares its opaque endpoint against
+100 minus 1/32; opacity 1 therefore still selects 15/16. Only 255 skips normally;
+a nonzero flag low byte also skips 248–254. Trimmed sources are native no-ops.
+Existing CPU fallback remains for unsupported inputs. The runtime slot is
+verified/restored with the others; no CSV entry or executable address is added.
+`required_user_action: []`; existing GOG/pinned-DLL limits apply.
 
 `forward_custom_unit_body` now offers the captured unit and native destination /
 underlay identities through `C3X_NATIVE_UNIT_DRAW` before acquiring either DC.
@@ -87,7 +212,7 @@ INIT evidence; external bits/DC access or a foreign thread revokes it until rein
 Private native operations preserve it. Config-off draws still execute native code.
 The connected fixture admits pre-map canvases on demand, without startup GPU storage.
 
-These additional hash-verified image slots preserve original GDI text state/drawing:
+These hash-verified image slots preserve native font state and offer text to composition:
 
 | Injected wrapper | Slot / DLL RVA | Original `__thiscall` arguments after `JGL_Image *` |
 | --- | --- | --- |
@@ -99,17 +224,22 @@ These additional hash-verified image slots preserve original GDI text state/draw
 
 All return `int`; injected wrappers add the unused fastcall `edx` argument.
 Slot 46 offers typed text to composition before its original private DC lease;
-GPU text execution remains pending. These use the audited GOG JGL hash and existing
+ordinary bounded text runs now use resident native-font response data and GPU
+composition. Unsupported state/extent retains the explicit CPU barrier. Font,
+layout and clipping remain native; slight text-edge color differences are authorized.
+These use the audited GOG JGL hash and existing
 GOG executable guards. No CSV additions; `required_user_action: []`.
 
 `composite_custom_renderer_frame` now calls the optional DLL export
-`c3x_renderer_native_map(int action, void *image, camera_request const *, output *)`
-through a cdecl pointer. PREPARE returns resident metadata; existing ownership
+`c3x_renderer_native_map_view(int action, void *image, camera_request const *, camera_view *)`
+through a cdecl pointer. PREPARE returns resident metadata and its actual sample clock; existing ownership
 validation precedes COMMIT, and rejection CANCELs without inserting pixels.
 No new executable address is needed. Reset/configuration/detach drain the same
 native owner. Negative barrier results deny native bits/DC leases and defer native
-reinit/destruction rather than exposing stale storage; recovery is not yet complete.
-The injected smoke and connected production-owner harness pass. `required_user_action: []`.
+reinit/destruction rather than exposing stale storage; device-loss reconstruction is user-deferred.
+The clock-aware owner passes the injected smoke, native dispatch contracts and
+connected tests at both display sizes. Older DLLs lack the new export and retain
+the existing CPU fallback. `required_user_action: []`.
 
 The accepted retained world/view/submission implementation was renderer-only. Persistent
 appearance, local dependency proofs and selected passes use the existing

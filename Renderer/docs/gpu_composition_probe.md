@@ -1,4 +1,8 @@
-# GPU composition feasibility
+# GPU composition implementation and evidence
+
+The final section and [retained plan](retained_renderer_plan.md) describe current
+status. Earlier sections preserve checkpoint findings, including superseded next
+steps; device-loss reconstruction is now user-deferred.
 
 ## Decision and bounded implementation
 
@@ -403,8 +407,8 @@ map readback or prove that ownership. No new CSV entries are needed.
 Existing sprite slot 17 now translates ordinary 8/16-bit and row-trimmed 8-bit
 sources. Coverage is explicit: indices 254/255 skip; opaque entries with the same
 RGB still draw. Palette/source/row-header edits are checked on use. One bounded
-decoded source reuses uploads; native scaling and unsupported key modes retain
-synchronized fallback. Paired native words/BGRA keep the map's full color.
+decoded source reuses uploads; this historical checkpoint retained native scaling
+and unsupported key modes (coverage was subsequently extended below). Paired native words/BGRA keep the map's full color.
 CPU map/unit jobs no longer retire the GPU session, and image/present packets
 preserve prepared views and unit playback. Map admission publishes transactionally:
 image-budget rejection preserves the prior map, ticket and native images.
@@ -515,9 +519,27 @@ the prior ticket. They retain the existing
 producer's stationary/animation/scroll/local-edit checks. These are work-removal
 and correctness witnesses, not game cadence or whole-request performance evidence.
 
-Native text/GDI currently restores CPU ownership, so ordinary labels still bring
-readback back into the path. Cold unit finishing, asynchronous GPU publication and
-device-loss reconstruction remain incomplete. Failed native barriers return a
+Ordinary bounded native labels now use `native_text_raster.h` and the same adapter:
+Windows rasterizes the selected font on synthetic backgrounds once; cached response
+data blends over the resident map on the GPU. A 32-run / 8 MiB LRU shares the existing
+64 MiB image budget; preparation uses under 2 MiB scratch. GPU image handles expand
+from 32 to 128 to accommodate small glyph assets without changing the byte cap.
+No map pixels, HDCs or game pointers cross to the GPU worker. Native text-edge color
+differences are user-authorized; font choice, layout, clipping and smoothing remain
+native. Unsupported transforms/complex clips, current-position/RTL text and runs
+above 16K raster pixels retain the explicit CPU fallback.
+
+The bounded diagnostic rejects direct 16-bit/32-bit GDI parity: default smoothed
+text differs. Exact per-channel native/full-color response compilation took about
+34–37 ms for the sample. Following the user's tolerance clarification, 17 background
+samples reduce this to about 1 ms and match 32-bit Windows text within two channel
+levels in the tested cases. This is preparation timing, not whole-request latency.
+CPU UI source generation is allowed; repeating labels reuses resident GPU data.
+Explicit RGB565 packing is required by the shader oracle; a combined conditional
+shift/mask expression failed, as previously found for unit composition.
+
+Unit finishing now uses the resident path described below. Asynchronous GPU map
+publication and device-loss reconstruction remain incomplete. Failed native barriers return a
 negative result; hooks deny stale leases rather than allowing native drawing from
 old pixels. The older staged DLL is unchanged. No CSV addition or game launch.
 
@@ -528,3 +550,326 @@ fallback, hard-error propagation and unchanged identity epochs. Lifetime receipt
 pixel/bits/DC access and defer native reinit/destruction. These guards are not
 reconstruction after device loss. No broader terrain-suite reclassification or
 new visual acceptance is implied.
+
+Text-connected receipts `afcc6b9316e841208a1c749a752e2982` (640×480) and
+`1899844fc07042349bf5c442fcf0096c` (1440×900), candidate `16aae829…06f8cb`,
+verify actual slot-46 calls through final display with untouched CPU screen storage.
+The adapter proves one build/upload pair across three label anchors, two cache hits,
+and no background readbacks. `BUILD.bat native-text` independently compares actual
+D3D output with GDI over four backgrounds, both native formats and three font
+qualities, with transparent/opaque drawing. Comparison rows are native 555, GDI 32,
+and GPU in `native/build/gpu-composition/native-text-checkpoint/`. No injected source,
+CSV, staged DLL, installation or game launch changed in this checkpoint.
+
+## Resident unit finishing and publication
+
+`UnitPoseContent` now owns translation-free ground-shadow coverage, using the
+previous finishing formula. CPU helpers prepare it alongside posed geometry;
+CPU compatibility and GPU finishing consume the same bytes. `GpuUnitFinish` combines
+coverage with rendered alpha and premultiplies body color on the existing GPU worker.
+Its integer output matches the previous finishing/blending path in the tested cases.
+
+`UnitBodyRenderer` owns a 64 MiB / 512-entry resident pose cache with the existing
+appearance/pose key; native placement is excluded. The compositor's last borrowed
+source can retain one additional texture (up to 4 MiB) after cache eviction. Borrowing
+replaces the old CPU body upload cache. Shadow upload scratch is at most 1 MiB;
+a new cache allocation can transiently exceed the retained cap by 4 MiB before eviction. Unit target/material budgets are unchanged.
+CPU/GPU cache usage counters are separate because CPU bitmap hits can run concurrently
+with GPU preparation. Reset releases resident poses and finishing resources.
+
+The existing upcoming-pose queue selects GPU publication after GPU unit demand;
+normal authored timing, frozen-unit eligibility and caller-driven delivery are unchanged.
+Optional preparation retains the existing memory-pressure guard and never notifies Civ III.
+CPU fallback keeps its explicit bitmap path; ordinary GPU unit demand no longer enters it.
+Candidate builds and CPU pose/playback/cache tests pass. Connected tests exercise cold
+and cached poses, changed anchors/directions/hours/seasons/zoom, native 555/565 words,
+full-color backgrounds, clipping and final display. Detailed harness logging checks
+actual body-readback and composition-upload counters; normal trace filtering is not
+used as evidence of eliminated work. No whole-request speedup is claimed here.
+
+Final resident-unit receipts `4f4705429d244e6db155c7d099ad0d19` (640×480) and
+`21d630d9401340529f461a032647e770` (1440×900) each verify 15 real GPU unit
+requests, cold and cached, with zero body readbacks/composition uploads. Thirteen
+CPU pose/playback/preparation/cache tests also pass. Candidate `23063ef9…c986ed`
+and logs are preserved under `native/build/gpu-composition/resident-unit-checkpoint/`.
+No new unit visual difference, injected patch, staging, installation or game launch.
+
+
+## Resident map preparation and caller adoption
+
+`PreparedViewArea` now owns the same complete capture/dependency proof for CPU
+pixels or immutable GPU storage. GPU projection selects an offset view, without a
+CPU crop; the existing worker imports that rectangle into the native image session.
+Cold demand uses the same working extent as preparation and establishes coverage.
+The existing 32 MiB per-area / 64 MiB retained-view limits count texture bytes
+conservatively even when views share storage. The current publication remains
+bounded to 32 MiB; render scratch and composition budgets are unchanged.
+
+Native image/unit/presentation calls preserve queued area preparation. Incompatible
+map demand cancels it at existing safe points; no callback or redraw request is
+introduced. `c3x_renderer_native_map_view` returns the actual adopted ambient clock.
+The original metadata-only export remains available to explicit controls.
+
+Validation exposed and fixed two ownership problems: CPU fallback must publish a
+temporary area crop before returning it, and an unchanged GPU scene still requires
+one complete CPU transfer when its CPU mirror is stale. Demand/preparation now use
+the same working extent, preserving the existing native CPU output contract.
+The 32×32 fixture's duplicate wrapped occurrences intentionally reject area reuse;
+a 128×128 periodic extension of its unchanged tile attributes exercises admission.
+
+Receipts `d4adf124b06c45afa277bc13852a354b` (640×480) and
+`34b1a57664d943ad877a66b039ddafa5` (1440×900) pass connected native composition,
+background refresh adoption, actual sample clocks, exact CPU-reference pixels,
+local changes, explicit CPU fallback and reset. Both retain the 15-request resident
+unit proof. The injected smoke and native dispatch/publication contracts pass.
+Candidate `5ee204b4…12d9e0`, inputs and logs are in
+`native/build/gpu-composition/resident-map-checkpoint/`. Staging is unchanged.
+
+Nine prepared map-call samples per size had median CPU return times 0.810 / 2.316 ms;
+the larger-size maximum was 17.365 ms while preparation could delay demand. These
+are diagnostic call timings, not completed-display latency or an overall speedup.
+The final section records the complete request comparison and the ported
+full-worker test, preserving its camera obligations against current interfaces.
+
+
+## Native image-transfer completion
+
+The existing image owner now submits positive, in-bounds native stretching,
+keyed full-color copies and current-palette/null fills. One paired command tests
+transparency against native words and writes native/full-color results together;
+overlap snapshots count against the existing 64 MiB composition cap. Opaque
+same-size copies keep their direct GPU-copy path. No new hook or native address.
+
+Actual JGL uses `BLACKONWHITE`: enlargement selects the center sample; shrink
+ANDs the source interval ending at that sample, beginning after the preceding
+sample (the first interval starts at zero). Ordinary nearest sampling and simple
+floor/ceil interval boundaries were rejected by native pixel evidence. Eight
+clipped scale cases and independent RGB555/RGB565 GDI DIBs now pass exactly.
+Native transparent self-draw instead traverses in place; it retains an explicit
+CPU barrier, rather than incorrectly borrowing StretchBlt's overlap semantics.
+
+Positive indexed sprite scaling now follows JGL's separate ordinary/row-trimmed
+programs: truncated float extents and 16.16 source increments, with the ordinary
+origin offset. Disassembly/oracle evidence confirms trimmed scaling includes the
+byte after its count and stops advancing at an empty row. The adapter declines
+unproven terminal reads and mirrored sources. Destination palettes resolve positive
+16-bit keys; Sprite mutates its key, Image uses a temporary descriptor. Native
+scaled 16-bit drawing is a no-op. Bounded CPU decoding uses at most 2240×1192 words
+per scratch/cache vector; only source data uploads, never destination readback.
+
+Connected receipts `8ba6aa46112f4878a615e44b7f09b833` (640×480) and
+`420e34758a8d4d118d3e1ae0de6a3d2e` (1440×900) pass actual hooks, paired color
+precision, live palette edits, CPU barriers, bounded ownership, prepared maps,
+units and final display. Each retains 15 cold/warm resident-unit requests with
+zero body readbacks/composition uploads. The admitted native image chain performs
+zero execution readbacks; independent oracle reads are excluded from that claim.
+Candidate `27409085…7a2a7c`, exact inputs, rejected mapping diagnostics and logs
+are preserved in `native/build/gpu-composition/native-transfer-checkpoint/`.
+Staging remains unchanged; whole-request speedup is still open. The user has
+deferred device-loss reconstruction; retain the existing failure guards and focus
+on normal-path performance and drawing coverage.
+
+
+## Complete native rendering-request comparison
+
+`record_gpu_frame.py --benchmark` extends the existing native-screen fixture with
+fresh captures, eight animated units, JGL HUD/labels and final transfer. CPU/GPU/GPU/CPU
+blocks each have eight warmup and 32 measured demands. Both arms use the same DLL,
+local cache-enabled policy and full detail; input capture and pixel oracles are
+outside timing. Cold pose transitions remain included. A separate desktop boundary
+measures completion waiting, not physical scanout. Static map samples can retain an
+old clock legitimately; units receive the current clock.
+
+| Sequence | 640×480 CPU → GPU request mean | 1440×900 CPU → GPU request mean | 1440×900 with desktop boundary |
+| --- | --- | --- | --- |
+| Stationary animation | 35.70 → 33.64 ms | 43.28 → 35.11 ms | 49.42 → 46.28 ms |
+| Dense scrolling | 119.74 → 45.29 ms | 166.92 → 51.51 ms | 176.76 → 61.89 ms |
+| Local-change sequence | 41.59 → 32.78 ms | 48.68 → 35.64 ms | 54.91 → 46.83 ms |
+
+Readiness-checkpoint receipts `0262a84bb2e342638b954534fa809fe8` / `77edf290622c4a49a9a78459f31db07a`
+pass connected correctness and confirm untouched CPU map/screen storage throughout
+GPU blocks. Candidate `4ef83685…483a2`, full distributions, sources and staging/rollback
+receipts are in `native/build/gpu-composition/ready-content-checkpoint/`. The prior
+`62faa141…5a2be1` candidate and both resolution runs remain in `whole-frame-control/`.
+It established the complete benchmark and removed an unnecessary prior-CPU-call
+prerequisite from native GPU startup. No new native hook or CSV entry is required.
+
+The correction keeps unfinished unit predictions queued and adopts only ready CPU
+pose content for speculative GPU submission. Helper completion wakes the internal
+GPU owner; no polling or Civ III notification. GPU preparation median falls from
+41.586 to 1.132 ms at 640×480 (139 prepared adoptions), and full GPU scrolling from
+61.93 to 45.29 ms; at 1440×900, 76.69 to 51.51 ms. Idle still spends about 31 ms
+per request in the unit group on average; p95 remains 130.66 ms at 1440×900.
+Cold pose construction remains the dominant idle responsibility.
+
+The initial `3f4f589b…a9b254b` run omitted the game's worker/cache policy and remains
+nonrepresentative. `19e011f5…11d5d04` records the first readiness implementation;
+an ownership test caught input leases surviving into notification. The final code
+releases those leases before completion, and callback removal joins notification.
+The full-worker test now retains its camera/cancellation/priority assertions
+against the current interfaces. Pixel oracles remain unchanged; legacy terrain
+boundary evidence is not reclassified. Device recovery stays deferred.
+
+## Current native UI completion
+
+One final presenter now accepts both resident images and completed CPU UI sources.
+Partial CPU UI updates retain untouched full-color display pixels without restoring
+the map; CPU fallback storage is valid only when complete. The final native Graphsy
+hook binds this presenter from the process-owned module on configured UI demand,
+before the first map and after scene unload. Previously the export existed but
+its game binding depended on the first map load. The connected fixture now enters
+through this hook and uses a distinct native-return sentinel to prove GPU
+substitution, including config-off drain and reenable. UI-only demand creates the
+device without map materials; startup menus retain native behavior until configured.
+The actual-hook lifecycle checks pass at 640×480 (`5375f9cd23174597aa3119e8c8abc146`)
+and 1440×900 (`1a0f410d02304019bfa086977c5d1a39`), followed by injected compilation.
+`native-ui-lifecycle-checkpoint/` preserves current sources and these receipts with
+the unchanged `deb24c11…514cec` DLL. Its performance reference remains the opacity
+checkpoint; this connection is not claimed as an additional speedup. Foreground transfer preserves interrupted camera
+input/tickets; background activity no longer selects GDI. No timing rules.
+
+Normal HUD chrome/buttons also use JGL sprite slots 20/21/22, beyond ordinary
+sprite slot 17. The production owner now submits all three through the existing
+paired compositor. Slots 20/21 add premultiplied palette color to background ×
+alpha/256 with native 555 arithmetic; slot 22 applies its distinct (alpha+1)/256
+rule with separately truncated products. Actual JGL oracles cover all alpha values,
+background aliasing, clipping, and palette/alpha edits. These programs key index
+255 only; ordinary PCX sprite drawing still skips both 254/255. Full-color output
+preserves the independent map contribution while retaining native UI colors.
+Source decoding is bounded and reused; neither background nor destination is read
+back. Straight-alpha out-of-bounds traversal and unsupported layouts stay native.
+The same hooks preserve native private-lease scope before GPU admission. Slot 20's
+native helper releases both borrowed links against background even when destination
+is distinct; slot 21 over-releases and slot 22 omits its release. Each wrapper
+restores the affected entry lease state after the scalar call.
+This prevents false outstanding destination borrows without consuming caller-held
+pointers. Actual startup/config-off tests cover held leases, clipping and aliasing.
+The patch ledger records the verified runtime slots; no CSV entries were changed.
+
+Connected receipts `d301d0077d9c413a9294d56607b951c6` (640×480) and
+`5a0313cb04f44daa8c936ea0a9af55a7` (expanded 1440×900 benchmark)
+pass with actual HUD slots 20/21/22 inside every timed request. Startup receipt
+`6e70d5644c884e5e8635e5096ce65ad8` proves native lease preservation; injected
+compilation and 23 portable contracts pass. The paired benchmark measures CPU →
+GPU request means of 164.90 → 53.07 ms scrolling, 40.97 → 35.66 ms idle animation
+and 47.65 → 35.13 ms local change; desktop-boundary means are 174.15 → 61.13,
+47.87 → 47.07 and 54.41 → 46.79 ms. GPU idle p95 is 133.12 ms versus CPU 108.83 ms;
+cold unit poses remain dominant. This preserves the established gain and extends
+coverage; it does not establish another speedup over the readiness checkpoint.
+
+The incomplete runs `217058ed…`, `8576c37e…`, `3913f228…`, and `2f2f0180…`
+preserve the HUD lease diagnostics. The final run proves zero outstanding private
+borrows and unchanged CPU map/screen pixels for every GPU block. No reset bypass,
+benchmark-only lease release or timing workaround was used. The record tool now
+preserves failed receipts even when stderr interrupts a sample line.
+
+Prior staged `66351828…49fd30` and its exact sources remain in
+`native/build/gpu-composition/native-ui-completion-checkpoint/`. The previous HUD candidate
+`c0e9afbe…544193` was staged for ordinary `INSTALL.bat`; exact sources, receipts and
+rollback identity are in `native-hud-completion-checkpoint/`.
+No install or game launch occurred. Native UI/scroll/picking validation and
+unsupported drawing coverage remain open; CPU source preparation is intentional.
+
+## Native label panels and border lines
+
+Normal map-label call sites use image slot 18 for 25/50-percent translucent
+backgrounds. `PCX_Image` borders/indicators use image slot 25. Both are now routed
+through the same production owner; no native destination pixels are acquired.
+Tint extends the paired blend program with a constant native color and bounded
+percentage. Native 555 word output matches JGL, while the independent full-color
+map contribution follows the same background weight. Axis-aligned lines use fill
+commands; other lines compile bounded coverage into the existing reusable sprite
+source. JGL's X ordering, strict Bresenham tie rule, inclusive endpoints, clipping,
+degenerate no-op and ignored final argument are preserved.
+
+The ordinary native fallback remains available before GPU admission. Its diagonal
+helper leaves imbalanced temporary borrows on some exits; the wrapper restores
+entry lease state without consuming caller-held pointers. Startup tests exercise
+those leases. The pinned-DLL slot checks and detach cover both added hooks; no
+CSV entries changed. Device-loss reconstruction remains deferred.
+
+The isolated native oracle passes 270 clipped line cases, translucent panels across
+clamped percentages and colors, and full-color background contribution. The
+connected benchmark now includes eight translucent map labels and border outlines
+inside each timed frame. This is coverage completion, not a claim of a separate
+speedup. Connected receipts `83805961e37447e792e874078f897c54` (640×480),
+`062724e2db76480aa9ebf8d1b69ce369` (1440×900 paired benchmark), and
+`2725454c44654ee894423b3e46fdb76e` (current DLL startup lifetimes) pass.
+Injected compilation and 23 portable contracts pass. Live palette edits also match
+native output. Each GPU benchmark block preserves CPU map/screen storage.
+
+CPU → GPU whole-request means are 164.74 → 52.48 ms scrolling, 41.20 → 35.78 ms
+idle animation, and 47.92 → 36.78 ms local change. Desktop-completion means are
+174.16 → 61.91, 48.12 → 46.57, and 54.65 → 47.83 ms. Idle p95 regresses from
+105.64 to 131.50 ms; unit work averages 31.38 ms of GPU's 35.78 ms request.
+Cold pose/shadow work remains the performance priority. The same-DLL paired test
+includes capture-free measurement and cold transitions; it is not live gameplay.
+
+Candidate `70fa7eb6…995556` is staged for ordinary `INSTALL.bat`, with exact inputs,
+logs, executables and receipts in `native-label-completion-checkpoint/` and the
+previous DLL preserved in `native-hud-completion-checkpoint/`. No install/launch.
+The subsequent lookup integration below addresses image slot 21 and sprite slot
+33. CPU minimap/source-image preparation remains intentional and does not by itself
+require map readback. Device-loss reconstruction stays outside this work.
+
+## Lookup panels and indexed effects
+
+Image panels, lookup sprites and native FLC bodies/shadows now submit through one paired GPU lookup program.
+Image slot 21 occurs in native unit-control/panel painting; sprite slot 33 occurs
+in native UI effects. Slot 35 combines palette pixels and two lookup ranges in
+native FLC map/unit-control drawing. Slot 34 supplies the scaled FLC route used
+by zoomed-out unit cursors and animations. All depend on existing destination pixels. Native fallback
+would otherwise revoke resident ownership. CPU preparation copies caller-owned
+lookup/source data; no destination pixels are acquired for these effects.
+
+Two content-validated lookup assets coexist: the full FLC/UI table and native
+four-block shadow table. Together they retain under 2.25 MiB CPU data and 4.5 MiB
+GPU storage inside the existing composition budget; replacement needs under 6 MiB
+additional CPU scratch. Same-pointer edits invalidate content, while alternating
+shadow/FLC draws reuse both assets. Sprite coverage
+reuses the existing bounded source cache and positive scaling program. Image
+clipping, magenta background substitution, float-percent truncation, sprite index
+rules and native no-ops follow the pinned JGL binary. Native scalar fallback
+preserves image/FLC routines' unreleased entry leases. No CSV edits or timers.
+
+Native-word output is exact; independent full-color pixels interpolate the same
+lookup lattice. Identity and channel-remapping tables preserve full map precision.
+This extends color handling for these UI effects; actual effect appearance still
+belongs to the strategic game checkpoint. Mirrored plain lookup sprites and unsupported
+FLC source formats retain fallback; the tested native FLC form preserves its own
+mirror/scale no-op semantics. Scaled FLC preserves native clipping followed by
+source traversal from byte zero and every-second-byte selection. It feeds the same
+lookup submission; CPU preparation never reads either destination or underlay.
+Single-key Advisor/UI artwork, solid masks and native map shadows also feed the
+same sprite/lookup owner through slots 23/29/31. CPU-owned picking masks remain
+native. The final native oracle (`6618b7addf1d422daf7e1186b9a9f528`) passes raw
+and trimmed sources, scaling/clipping, native return/metadata behavior, full-color
+shadow/fade preservation and simultaneous lookup reuse without destination readbacks.
+Connected 640×480 (`383b5296928d48bf84937b74fcf9a984`), startup/config-off leases
+(`a4f2211559a648b6bdc94a5475fc8b5e`), injected compilation and 23 portable
+contracts pass. The 1440×900 benchmark (`268f78b251f94adc9c8a9124032c6a26`)
+includes these forms plus opacity transitions each request. CPU → GPU request
+means are 163.07 → 65.11 ms scrolling, 41.60 → 38.13 ms stationary animation and
+47.79 → 38.82 ms local change; desktop-boundary means are 173.13 → 75.44,
+48.11 → 47.06 and 54.38 → 47.10 ms. GPU idle p95 remains 131.23 ms
+(CPU 109.23), dominated by unit work. These compare complete delivery routes,
+not an isolated gain over the previous DLL. GPU UI/output costs 5.64–7.50 ms mean
+versus CPU 1.53–1.55 ms; all remain included. No execution readbacks occur in the
+admitted chain; contiguous free virtual space stays above 1.49 GB.
+Candidate `deb24c11…514cec` is staged for ordinary `INSTALL.bat`; exact source,
+DLL and receipts are in `native-opacity-completion-checkpoint/`. The prior sprite
+family checkpoint is preserved. No install or game launch was performed; actual
+gameplay coverage remains unverified.
+
+Sprite slot 37 (`FUN_005f8a70`, pinned JGL RVA `0x9220`) now supplies command-panel
+icons and UI fades through the existing sprite owner and blend shader. Its native
+sixteenth-step weights are exact, including threshold neighbors and the unusual
+15/16 result at opacity 1 (the unreachable opaque branch compares against 100).
+Low-byte flags select either index 255 alone or 248–255 as transparent. The native
+oracle verifies clipping, positive scaling, trimmed no-ops and full-color map
+contributions with zero destination readbacks. Native fallback preserves existing
+caller leases. No new renderer owner, timer or device-loss work is introduced.
+PCX wrappers for image slots 34/36–41 resolve to pinned JGL RVA `0x3be40`, a shared
+unsupported stub. Native minimap/source-image preparation remains intentional;
+neither is an additional map composition responsibility. Actual game-screen
+coverage is still pending and cannot be inferred from isolated/native replay tests.

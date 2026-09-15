@@ -7,15 +7,16 @@ namespace c3x_gpu_images {
 class Session {
     ID3D11Device* device;ID3D11DeviceContext* context;
     Compositor gpu;Id map=0;std::int64_t ticket=0,identity=0;std::uint64_t readbacks=0;
-    Id unit_image=0;unsigned unit_width=0,unit_height=0;std::uint64_t unit_revision=0;std::vector<unsigned> unit_pixels;
+    Id resident_unit=0;ID3D11Texture2D* resident_unit_texture=nullptr;
 public:
     Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c){}
-    bool publish(ID3D11Texture2D* texture,std::int64_t serial){
+    bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0){
         if(!texture||serial<=ticket)return false;
         D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
-        auto next=gpu.create(d.Width,d.Height,Format::bgra32);
+        if(!width)width=int(d.Width);if(!height)height=int(d.Height);
+        auto next=gpu.create(width,height,Format::bgra32);
         if(!next)return false;
-        if(!gpu.import_bgra(next,texture)){gpu.destroy(next);return false;}
+        if(!gpu.import_bgra(next,texture,x,y)){gpu.destroy(next);return false;}
         // Admission failure leaves the previous immutable map and UI handles
         // usable. Publish the new identity only after its import succeeds.
         if(map)gpu.destroy(map);map=next;
@@ -23,22 +24,21 @@ public:
     }
     std::int64_t session_identity()const{return identity;}
     Id map_image()const{return map;}
+    std::uint64_t upload_count()const{return gpu.stats().uploads;}
     std::int64_t current_ticket()const{return ticket;}
     bool display_to(std::int64_t requested,Id image,ID3D11RenderTargetView* target,ID3D11Texture2D* retained,ID3D11Texture2D* buffer,unsigned w,unsigned h,Rect area){
         if(requested!=ticket||!gpu.display(image,target,w,h,area))return false;
         context->CopyResource(buffer,retained);context->Flush();return true;
     }
-    int compose_unit(c3x_renderer_gpu_unit_v1 const& request,std::vector<unsigned> const& pixels,unsigned width,unsigned height,int x,int y){
+    int compose_resident_unit(c3x_renderer_gpu_unit_v1 const& request,ID3D11Texture2D* texture,unsigned width,unsigned height,int x,int y){
         if(request.ticket!=ticket)return C3X_RENDERER_RESULT_SUPERSEDED;
         if(request.destination==std::int64_t(map)||request.detail==std::int64_t(map))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        if(!width||!height||width>1024||height>1024||pixels.size()!=std::size_t(width)*height)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        if(!unit_image||width!=unit_width||height!=unit_height){
-            if(unit_image)gpu.destroy(unit_image);unit_image=0;unit_pixels.clear();unit_revision=0;
-            unit_image=gpu.create(width,height,Format::bgra32);if(!unit_image)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-            unit_width=width;unit_height=height;
+        if(!texture||!width||!height||width>1024||height>1024)return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+        if(texture!=resident_unit_texture){
+            if(resident_unit)gpu.destroy(resident_unit);resident_unit=0;resident_unit_texture=nullptr;
+            resident_unit=gpu.attach_source(texture);if(!resident_unit)return C3X_RENDERER_RESULT_BAD_ARGUMENT;resident_unit_texture=texture;
         }
-        if(unit_pixels!=pixels){if(!gpu.upload(unit_image,++unit_revision,pixels.data(),pixels.size()))return C3X_RENDERER_RESULT_ERROR;unit_pixels=pixels;}
-        Command draw={Kind::unit_over,Id(request.destination),unit_image,{x,y,x+int(width),y+int(height)},
+        Command draw={Kind::unit_over,Id(request.destination),resident_unit,{x,y,x+int(width),y+int(height)},
             {request.clip[0],request.clip[1],request.clip[2],request.clip[3]},0,0,0,Id(request.background),Id(request.detail),Id(request.background_detail)};
         return gpu.submit(&draw,1)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_BAD_ARGUMENT;
     }

@@ -25,6 +25,7 @@ public:
     CompositionOwner(c3x_renderer_gpu_render_fn r,c3x_renderer_gpu_images_fn i,c3x_renderer_gpu_present_fn p,
         c3x_renderer_gpu_unit_fn u,c3x_renderer_native_lifetime_fn l,void* b,void* end):render(r),images(i),present(p),unit(u),lifetime(l),bits(b),release(end){}
     bool active()const{return adapter!=nullptr;}
+    c3x_renderer_i64 sample_ticks()const{return frame.presentation_time_ticks;}
     // Native validation occurs between prepare and commit. Preparation never
     // inserts pixels or claims category replacement on the game's behalf.
     int map(int action,void* image,c3x_renderer_camera_request_v1 const* request,c3x_renderer_output_v1* output){
@@ -59,7 +60,7 @@ public:
         check_thread();if(!adapter)return 0;
         if(op==C3X_NATIVE_IMAGE_PRESENT){
             auto id=adapter->display_image(image);
-            if(!id){release_window();return 0;}
+            if(!id)return 0; // Caller uploads this CPU UI source into the same presenter.
             if(!source)throw std::runtime_error("native transfer has no Graphsy owner");
             auto dc=*reinterpret_cast<HDC*>(static_cast<char*>(source)+0x138);
             int width=field(image,0x38),height=field(image,0x3c);

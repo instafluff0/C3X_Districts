@@ -51,7 +51,7 @@ public:
         if(!commands||!count||count>2048)return false;
         if(count+pending.size()>2048)flush();
         for(std::size_t n=0;n<count;++n){auto const& c=commands[n];pending.push_back({int(c.kind),std::int64_t(c.destination),std::int64_t(c.source),
-            {c.area.left,c.area.top,c.area.right,c.area.bottom},{c.clip.left,c.clip.top,c.clip.right,c.clip.bottom},c.source_x,c.source_y,c.color,std::int64_t(c.background),std::int64_t(c.detail),std::int64_t(c.background_detail)});}
+            {c.area.left,c.area.top,c.area.right,c.area.bottom},{c.clip.left,c.clip.top,c.clip.right,c.clip.bottom},c.source_x,c.source_y,c.color,std::int64_t(c.background),std::int64_t(c.detail),std::int64_t(c.background_detail),c.source_width,c.source_height,std::int64_t(c.program)});}
         return true;
     }
     bool readback(Id id,std::uint32_t* pixels,std::size_t count){

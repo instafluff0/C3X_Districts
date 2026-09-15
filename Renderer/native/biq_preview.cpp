@@ -14,8 +14,9 @@
 
 #include "c3x_renderer_api.h"
 #include "gpu_frame_api.h"
+#include "native_frame_workload.h"
 #ifdef C3X_GPU_NATIVE_CONTRACT
-bool native_worker_contract(char const*,c3x_renderer_gpu_images_fn,c3x_renderer_gpu_frame_v1&,c3x_renderer_gpu_render_fn,c3x_renderer_gpu_present_fn,c3x_renderer_camera_request_v1 const&,unsigned const*,int,int);
+bool native_worker_contract(char const*,c3x_renderer_gpu_images_fn,c3x_renderer_gpu_frame_v1&,c3x_renderer_gpu_render_fn,c3x_renderer_gpu_present_fn,c3x_renderer_camera_request_v1 const&,unsigned const*,int,int,std::vector<NativeFrameSample> const&);
 #endif
 #include "benchmark_oracle.h"
 #include "busy_session_plan.h"
@@ -201,6 +202,14 @@ LONG WINAPI preview_unhandled_exception(EXCEPTION_POINTERS* fault) {
     preview_fault_address("fault",fault->ExceptionRecord->ExceptionAddress);
     for(DWORD i=0;i<fault->ExceptionRecord->NumberParameters;++i)
         std::fprintf(stderr,"exception-parameter[%lu]=0x%zx\n",i,std::size_t(fault->ExceptionRecord->ExceptionInformation[i]));
+    // The handler's own backtrace has already lost the faulting leaf. Preserve
+    // bounded image-backed candidates from its saved x86 stack for the map file.
+#ifdef _M_IX86
+    unsigned words[32]={};SIZE_T copied=0;
+    if(ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void*>(fault->ContextRecord->Esp),words,sizeof(words),&copied))
+        for(unsigned i=0;i<copied/sizeof(unsigned);++i){MEMORY_BASIC_INFORMATION memory={};auto address=reinterpret_cast<void*>(words[i]);
+            if(VirtualQuery(address,&memory,sizeof(memory)) && memory.Type==MEM_IMAGE)preview_fault_address("fault-stack",address);}
+#endif
     void* frames[32]={};USHORT count=CaptureStackBackTrace(0,32,frames,nullptr);
     for(USHORT i=0;i<count;++i)preview_fault_address("stack",frames[i]);
     std::fflush(stderr);

@@ -26,7 +26,14 @@ int main(){
  auto other=input;other.direction=7;assert(pool.offer({2,other},32));
  // Releasing the original owner leaves immutable job leases valid.
  mesh.reset();input.source.meshes.clear();other.source.meshes.clear();
- auto result=pool.take(1);assert(result && result->uploads==control->uploads && result->shadow.heights==control->shadow.heights);
+ auto result=pool.take(1);assert(result && result->uploads==control->uploads && result->shadow.heights==control->shadow.heights && result->ground_shadow==control->ground_shadow);
+ // Independent legacy finishing formula validates worker-prepared shadow bytes.
+ for(int y=0;y<input.height;++y)for(int x=0;x<input.width;++x){
+  float sx=(float(x)+.5f-float(input.anchor_x))/(64*input.zoom),sy=(float(y)+.5f-float(input.anchor_y))/(32*input.zoom);
+  float fade=std::clamp(float(std::min({x,y,input.width-1-x,input.height-1-y}))/3,0.f,1.f);
+  unsigned expected=unsigned(255*lighting::c3x_dynamic_shadow_opacity*input.shadow_strength*fade*control->shadow.coverage((sx+sy)*.5f,(sy-sx)*.5f));
+  assert(result->ground_shadow[std::size_t(y)*input.width+x]==expected);
+ }
  auto turned=pool.take(2);assert(turned && turned->uploads!=control->uploads);
  pool.pause();assert(pool.statistics().built==2 && pool.statistics().active_peak<=2);
  pool.clear();assert(pool.statistics().bytes==0 && pool.statistics().pending==0);
@@ -38,7 +45,7 @@ int main(){
 
     def test_cpu_validity_reuses_owner_color_but_rejects_pose_changes(self):
         source=(ROOT/"Renderer/native/unit_body_renderer.h").read_text()
-        key="struct Key {"+source.split("struct Key {",1)[1].split("    struct Cached",1)[0]
+        key="struct Key {"+source.split("struct Key {",1)[1].split("    struct PoseSelection",1)[0]
         function="PoseKey content_key("+source.split("PoseKey content_key(",1)[1].split("    unsigned preparation_workers",1)[0]
         run_cpp(r'''
 #include <array>

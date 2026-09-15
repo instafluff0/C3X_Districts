@@ -197,7 +197,7 @@ int main(){
         build.mkdir(exist_ok=True)
         # Windows scanners can briefly retain the just-exited executable. Its
         # disposable directory is not a test result and need not block cleanup.
-        with tempfile.TemporaryDirectory(dir=build, ignore_cleanup_errors=True) as directory:
+        with tempfile.TemporaryDirectory(dir=build, **({"ignore_cleanup_errors": True} if os.name == "nt" else {})) as directory:
             path = Path(directory)
             cpp = path / "query_test.cpp"
             cpp.write_text(program)

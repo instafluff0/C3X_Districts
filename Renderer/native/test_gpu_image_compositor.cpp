@@ -94,6 +94,36 @@ int main(int argc,char** argv){
         auto other_encoding=gpu.create(width,height,Format::rgb565);
         Command conversion={Kind::copy,images[0],other_encoding,area,area};require(!gpu.submit(&conversion,1),"different native pixel encodings cannot silently copy");
         require(gpu.destroy(other_encoding),"release encoding witness");
+        // Validate both native encodings against real GDI DIBs. The full-color
+        // output uses GDI's independent 16 -> 32 expansion as its oracle.
+        for(auto format:{Format::rgb555,Format::rgb565}){
+            struct BitmapInfo {BITMAPINFOHEADER header;DWORD masks[3];} info={};
+            info.header.biSize=sizeof(BITMAPINFOHEADER);info.header.biWidth=64;info.header.biHeight=-48;info.header.biPlanes=1;info.header.biBitCount=16;info.header.biCompression=BI_BITFIELDS;
+            info.masks[0]=format==Format::rgb565?0xf800:0x7c00;info.masks[1]=format==Format::rgb565?0x7e0:0x3e0;info.masks[2]=31;
+            HDC dib_dc[3]={CreateCompatibleDC(nullptr),CreateCompatibleDC(nullptr),CreateCompatibleDC(nullptr)};HBITMAP bitmap[3]={};HGDIOBJ previous[3]={};void* bits[3]={};
+            for(int n=0;n<3;++n){if(n==2){info.header.biBitCount=32;info.header.biCompression=BI_RGB;}
+                bitmap[n]=CreateDIBSection(dib_dc[n],reinterpret_cast<BITMAPINFO*>(&info),DIB_RGB_COLORS,&bits[n],nullptr,0);
+                require(dib_dc[n]&&bitmap[n]&&bits[n],"native encoding oracle DIB");previous[n]=SelectObject(dib_dc[n],bitmap[n]);}
+            auto input=gpu.create(64,48,format),output=gpu.create(64,48,format),detail=gpu.create(64,48,Format::bgra32);
+            std::vector<unsigned> words(64*48);for(unsigned n=0;n<words.size();++n)words[n]=(n*193+79)&(format==Format::rgb565?65535:32767);
+            require(gpu.upload(input,1,words.data(),words.size()),"native transfer format source");
+            for(unsigned n=0;n<words.size();++n)static_cast<unsigned short*>(bits[0])[n]=static_cast<unsigned short>(words[n]);
+            for(auto extent:std::array<std::array<int,2>,3>{{{{43,31}},{{91,73}},{{23,79}}}}){
+                require(StretchBlt(dib_dc[1],-3,-2,extent[0],extent[1],dib_dc[0],5,3,57,43,SRCCOPY)!=FALSE,"GDI packed transfer oracle");GdiFlush();
+                require(BitBlt(dib_dc[2],0,0,64,48,dib_dc[1],0,0,SRCCOPY)!=FALSE,"GDI independent native color expansion");GdiFlush();
+                Command transfer={Kind::native_image,output,input,{-3,-2,extent[0]-3,extent[1]-2},area,5,3,65536,0,detail,0,57,43};
+                require(gpu.submit(&transfer,1),"paired native transfer");
+                auto actual=read_gpu(device.Get(),context.Get(),gpu.texture(output)),rgb=read_gpu(device.Get(),context.Get(),gpu.texture(detail));
+                for(int y=0;y<48&&y<extent[1]-2;++y)for(int x=0;x<64&&x<extent[0]-3;++x){auto n=y*64+x;
+                    require(actual[n]==static_cast<unsigned short*>(bits[1])[n],"555/565 scaled native words exact GDI");
+                    require((rgb[n]&0xffffff)==(static_cast<unsigned*>(bits[2])[n]&0xffffff),"555/565 scaled expansion exact GDI");}
+                auto invalid=transfer;invalid.source_width=65;
+                Command transaction[2]={{Kind::fill,output,0,area,area,0,0,5},invalid};
+                require(!gpu.submit(transaction,2)&&actual==read_gpu(device.Get(),context.Get(),gpu.texture(output)),"invalid paired transfer rejects the entire transaction");
+            }
+            gpu.destroy(input);gpu.destroy(output);gpu.destroy(detail);
+            for(int n=0;n<3;++n){SelectObject(dib_dc[n],previous[n]);DeleteObject(bitmap[n]);DeleteDC(dib_dc[n]);}
+        }
         Compositor bounded(device.Get(),context.Get(),width*height*4);auto tight=bounded.create(width,height,Format::rgb555);require(tight!=0&&bounded.create(1,1,Format::rgb555)==0,"resident budget enforced");
         Command overlap={Kind::copy,tight,tight,area,area};require(!bounded.submit(&overlap,1)&&bounded.stats().commands==0,"scratch budget rejection precedes execution");
         for(auto image:native)reinterpret_cast<void(__thiscall*)(Native*,unsigned)>(image->table[0])(image,1);

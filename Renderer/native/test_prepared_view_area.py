@@ -11,6 +11,7 @@ class AreaTests(unittest.TestCase):
         run_cpp(r'''
 #include <cassert>
 #include <vector>
+#include <memory>
 #include <cstring>
 #include <algorithm>
 #include "Renderer/native/c3x_renderer_api.h"
@@ -45,6 +46,33 @@ int main(){
     output.visible_animation_count=1;
     auto dependency=area.key(tiles.front());auto absent=(std::uint64_t(99)<<32)|99;
     assert(area.finish(output,{dependency,absent}));
+    // The same validity owner selects immutable GPU storage without allocating
+    // a cropped CPU bitmap or extending the donor's ambient clock.
+    unsigned released=0;
+    {
+        c3x_renderer::PreparedViewArea<PublishedMapFrame> gpu_area;
+        assert(gpu_area.prepare(f,epochs));
+        PublishedMapFrame donor;
+        PublishedMapFrame::Resident storage={std::shared_ptr<void>(new int(7),[&](void* p){delete static_cast<int*>(p);++released;}),output.width,output.height};
+        auto metadata=output;metadata.bgra_pixels=nullptr;
+        assert(donor.capture(metadata,0,0,&gpu_area.input,epochs,&storage));
+        assert(gpu_area.finish(metadata,{dependency,absent},&donor));
+        PublishedMapFrame selected;
+        for(auto delta:std::vector<std::pair<int,int>>{{0,0},{32,0},{-32,0},{0,16},{0,-16}}){
+            auto fresh=tiles;for(auto& t:fresh){t.anchor_x-=delta.first;t.anchor_y-=delta.second;}
+            auto current=f;current.tiles=fresh.data();current.presentation_time_ticks=190;
+            assert(gpu_area.project(current,epochs,selected));
+            assert(!selected.output.bgra_pixels && selected.pixels.empty() && selected.resident.texture==storage.texture);
+            assert(selected.source_x==gpu_area.pad_x+delta.first && selected.source_y==gpu_area.pad_y+delta.second);
+            assert(selected.frame.presentation_time_ticks==100);
+        }
+        auto original=selected.resident.texture;auto original_x=selected.source_x;
+        tiles.front().city_id=4;assert(!gpu_area.project(f,epochs,selected));tiles.front().city_id=-1;
+        assert(selected.resident.texture==original && selected.source_x==original_x);
+        ++epochs.visibility_epoch;assert(!gpu_area.project(f,epochs,selected));--epochs.visibility_epoch;
+        gpu_area.clear();assert(selected.resident.texture && !released);
+    }
+    assert(released==1);
     PublishedMapFrame result;
     for(auto delta:std::vector<std::pair<int,int>>{{0,0},{32,0},{-32,0},{0,16},{0,-16},{64,32}}){
         auto fresh=tiles;std::reverse(fresh.begin(),fresh.end());

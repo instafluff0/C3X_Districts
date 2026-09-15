@@ -1,16 +1,17 @@
 #define C3X_NATIVE_WORKER_TEST
 #include "test_native_image_adapter.cpp"
 #include "test_gpu_unit_composition.h"
+#include "native_frame_workload.h"
 #include "test_native_screen.h"
 
 bool native_worker_contract(char const* path,c3x_renderer_gpu_images_fn images,c3x_renderer_gpu_frame_v1& view,c3x_renderer_gpu_render_fn render,c3x_renderer_gpu_present_fn present,c3x_renderer_camera_request_v1 const& request,
-                            unsigned const* pixels,int phase_x,int phase_y){
+                            unsigned const* pixels,int phase_x,int phase_y,std::vector<NativeFrameSample> const& performance_frames){
     try{
         state={};capture={};events.clear();lines.clear();
         HMODULE module=nullptr;verify(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(images),&module)!=FALSE,"worker module");
         WorkerClient gpu(images,view);
         if(native_adapter_contract(path,gpu,Id(view.map_image),pixels,view.width,phase_x,phase_y))return false;
-        verify(gpu.stats().resident_bytes==std::int64_t(view.width)*view.height*4+64*48*4,"native drain leaves only immutable map and overlap scratch");
+        verify(gpu.stats().resident_bytes==std::int64_t(view.width)*view.height*4+64*48*8,"native drain leaves only immutable map and paired overlap scratch");
         auto canvas=gpu.create(16,16,Format::bgra32);
         auto before=gpu.submitted_batches();auto calls=gpu.worker_calls();
         Command fill={Kind::fill,canvas,0,{0,0,16,16},{0,0,16,16},0,0,0};
@@ -21,8 +22,8 @@ bool native_worker_contract(char const* path,c3x_renderer_gpu_images_fn images,c
         verify(std::all_of(observed.begin(),observed.end(),[&](unsigned c){return c==fill.color;}),"ordered batch result");
         // Saturated ownership rejects the next map before retiring the old one.
         std::vector<Id> saturated;
-        for(unsigned n=0;n<32;++n){auto id=gpu.create(2,2,Format::bgra32);if(!id)break;saturated.push_back(id);}
-        verify(!saturated.empty()&&saturated.size()<32,"bounded GPU image admission");
+        for(unsigned n=0;n<128;++n){auto id=gpu.create(2,2,Format::bgra32);if(!id)break;saturated.push_back(id);}
+        verify(!saturated.empty()&&saturated.size()<128,"bounded GPU image admission");
         auto unavailable=view;c3x_renderer_output_v1 rejected_map={C3X_RENDERER_API_VERSION,sizeof(rejected_map)};
         verify(render(&request,&unavailable,&rejected_map)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"map image limit selects CPU fallback without retiring the old ticket");
         verify(gpu.readback(canvas,observed.data(),observed.size())&&std::all_of(observed.begin(),observed.end(),[&](unsigned c){return c==fill.color;}),"failed publication preserves preceding native pixels and ticket");
@@ -101,7 +102,7 @@ bool native_worker_contract(char const* path,c3x_renderer_gpu_images_fn images,c
 
         auto live=reinterpret_cast<c3x_renderer_native_image_fn>(GetProcAddress(module,"c3x_renderer_native_image"));
         auto render_view=reinterpret_cast<c3x_renderer_render_view_fn>(GetProcAddress(module,"c3x_renderer_render_view"));
-        verify(native_screen_contract(path,gpu,view,present,pixels,phase_x,phase_y,live,render_view,request,reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_reset"))),"native final screen contract");
+        verify(native_screen_contract(path,gpu,view,present,pixels,phase_x,phase_y,live,render_view,request,reinterpret_cast<void(*)()>(GetProcAddress(module,"c3x_renderer_reset")),performance_frames),"native final screen contract");
         std::printf("PASS native GPU worker transport: actual hooks, full-color map/native UI composition, exact 555/565 compatibility/expansion, CPU barriers, bounded packet reuse; batches=%llu worker_calls=%llu\n",gpu.submitted_batches(),gpu.worker_calls());
         return true;
     }catch(std::exception const& e){std::fprintf(stderr,"FAIL native GPU worker transport: %s\n",e.what());return false;}
