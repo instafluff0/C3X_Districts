@@ -37,6 +37,7 @@ struct State {Unit* custom_renderer_unit_context=nullptr;PCX_Image* custom_rende
  int custom_renderer_zoom_unit_tick_delta_x=0,custom_renderer_zoom_unit_tick_delta_y=0;
  bool custom_renderer_zoom_unit_tick_translated=false;
  bool day_night_cycle_unstarted=false,seasonal_cycle_unstarted=false;int current_day_night_cycle=12,current_seasonal_cycle=0;
+ c3x_renderer_visual_clock_fn custom_renderer_visual_clock=nullptr;
  LARGE_INTEGER custom_renderer_qpc_frequency={1000000},custom_renderer_animation_timestamp={},custom_renderer_animation_sample_at={};};
 constexpr int AT_DEFAULT=1,AT_PLANT=18,DNCM_OFF=0,SCM_OFF=0,CS_SUMMER=0,CS_SPRING=3,IS_OK=1,UTA_Army=1;
 struct Screen {Unit* Current_Unit=nullptr;} screen;Screen* p_main_screen_form=&screen;
@@ -202,4 +203,9 @@ int main(){
  // Scoped context restores an outer callback's exact previous values.
  success=true;patch_Unit_tick_anim(&unit,0,&other,101,202,true);
  assert(state.custom_renderer_unit_context==&unit && state.custom_renderer_unit_canvas==&canvas);
+ // A later native capture takes the same clock as independent GPU frames.
+ state.custom_renderer_visual_clock=+[]()->c3x_renderer_i64{return 9000000;};
+ state.custom_renderer_unit_context=nullptr;state.custom_renderer_unit_canvas=nullptr;
+ invoke();assert(captured.presentation_time_ticks==9000000);
+
 }

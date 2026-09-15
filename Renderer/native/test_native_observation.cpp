@@ -14,11 +14,14 @@ struct JGLSprite {void** vtable;int a,b,c,d;void* bits;int f18,f1c,bit_count,f24
 struct PCX_Image {struct {JGL_Image* Image;} JGL;};
 struct State {
     char const* mod_rel_dir=".";
+    bool custom_renderer_modal=false,paused_for_popup=false;int saved_tile_count=-1;
     struct {bool enable_custom_rendering=true;} current_config;
     HMODULE kernel32=GetModuleHandleA("kernel32.dll");
 #include "build/native_probe_state.h"
 };
 State state={};State* is=&state;
+struct {bool is_now_loading_game=false;} main_screen_fixture;auto p_main_screen_form=&main_screen_fixture;
+unsigned player_bits=1;unsigned* p_player_bits=&player_bits;
 auto p_GetModuleHandleA=&GetModuleHandleA;auto p_GetProcAddress=&GetProcAddress;
 PCX_Image screen;PCX_Image* screen_canvas=&screen;
 #define p_jgl_screen_canvas screen_canvas

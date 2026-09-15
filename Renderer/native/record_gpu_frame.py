@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--height',type=int,default=480)
     parser.add_argument('--jgl',type=Path,default=Path('Renderer/native/build/gpu-composition/audit/jgl.dll'))
     parser.add_argument('--benchmark',action='store_true',help='Compare complete native CPU/GPU frame requests and desktop completion')
+    parser.add_argument("--visual-only",action="store_true",help="Use production rendering settings and validate independent visual frames without the 384-request comparison")
     args=parser.parse_args()
     jgl=args.jgl.resolve()
     if digest(jgl)!='0b0cd514de0d95b93d20655f4b5194173fe257325af82e558a152305ff0dbdf2':parser.error('unrecognized JGL binary')
@@ -48,11 +49,11 @@ def main():
     win=windows_root();target=win/out.relative_to(ROOT)
     settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'1',
         'C3X_RENDERER_REFLECTION_CONTROL':'1','C3X_RENDERER_WAVES':'0','C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
-        'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
+        'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
         'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':r'..\..\Renderer\custom.custom_rendering.txt',
         'C3X_RENDERER_PREVIEW_OBJECTS':'1','C3X_RENDERER_PREVIEW_CITY':'0,3,1,1',
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
-    if args.benchmark:
+    if args.benchmark or args.visual_only:
         # Match configure_custom_renderer_effects with the shipped cache enabled.
         # These are harness settings, never a setup requirement for the player.
         settings.update({
@@ -106,6 +107,10 @@ def main():
         receipt['whole_frame_comparison']={'groups':groups,'samples':samples,'parse_errors':parse_errors,'control':'same candidate DLL using native CPU publication, blit, units, JGL UI and native GDI final transfer','capture_outside_timing':True,'desktop_completion_is_not_physical_scanout':True}
         passed=passed and not parse_errors and len(samples)==384 and 'PASS whole native frame comparison:' in log
         receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
+    if args.visual_only:
+        passed=passed and 'PASS independent resident frames:' in log and 'PASS visual timer transport:' in log
+        receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
+        receipt['visual_frames']=[line for line in log.splitlines() if line.startswith(('VISUAL_SAMPLE ','PASS independent resident frames:','PASS visual timer transport:'))]
     if passed:
         shutil.copy2(ROOT/'Renderer/native/build/gpu-composition/test_gpu_frame.exe',out/'test_gpu_frame.exe')
         shutil.copy2(dll,out/'C3XRenderer.dll')

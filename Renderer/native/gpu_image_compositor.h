@@ -388,16 +388,19 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
             unsigned zero[4]={};context->ClearUnorderedAccessViewUint(next.write.Get(),zero);
             counters.resident_bytes+=bytes(next);image=std::move(next);return image.id;}return 0;
     }
-    // Borrow an immutable finished unit from its pose owner. COM retains the
-    // texture through queued draws; this creates no texture copy or CPU upload.
-    Id attach_source(ID3D11Texture2D* texture){
-        if(!texture)return 0;D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
+    // Borrow an immutable map, pose or UI source from its owner. COM retains
+    // the texture through queued draws, without a texture copy or CPU upload.
+    Id attach_source(ID3D11Texture2D* texture,Format format=Format::bgra32){
+        if(!texture||(format!=Format::bgra32&&format!=Format::rgb555&&format!=Format::rgb565))return 0;D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
         ComPtr<ID3D11Device> owner;texture->GetDevice(&owner);
         if(owner.Get()!=device||d.Format!=DXGI_FORMAT_R32_UINT||d.SampleDesc.Count!=1||d.ArraySize!=1||d.MipLevels!=1||
-           !(d.BindFlags&D3D11_BIND_SHADER_RESOURCE)||!d.Width||!d.Height||d.Width>1024||d.Height>1024||std::uint64_t(d.Width)*d.Height*4>budget-counters.resident_bytes)return 0;
-        for(auto& image:images)if(!image.id){Image next;next.texture=texture;next.width=d.Width;next.height=d.Height;next.format=Format::bgra32;next.read_only=true;
+           !(d.BindFlags&D3D11_BIND_SHADER_RESOURCE)||!d.Width||!d.Height||d.Width>2240||d.Height>1192||std::uint64_t(d.Width)*d.Height*4>budget-counters.resident_bytes)return 0;
+        for(auto& image:images)if(!image.id){Image next;next.texture=texture;next.width=d.Width;next.height=d.Height;next.format=format;next.read_only=true;
             checked(device->CreateShaderResourceView(texture,nullptr,&next.read));next.id=++serial;counters.resident_bytes+=bytes(next);image=std::move(next);return image.id;
         }return 0;
+    }
+    template<class Visit> void visit_images(Visit visit)const{
+        for(auto const& image:images)if(image.id)visit(image.id,image.width,image.height,image.format,image.texture.Get());
     }
     bool destroy(Id id){auto image=find(id);if(!image)return false;unbind();counters.resident_bytes-=bytes(*image);*image={};return true;}
     bool upload(Id id,std::uint64_t revision,std::uint32_t const* pixels,std::size_t count){

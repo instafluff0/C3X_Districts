@@ -63,11 +63,12 @@ ordered passes. The existing regional renderer remains the control and supports
 waves/reflections and unsupported extents. See the retained plan for measured
 scope, precision constraints and remaining ownership work.
 
-Civ III/C3X owns game state, visibility, tile/object screen anchors, time and
-seasons. The renderer produces an off-screen map bitmap and inserts it at the
-existing map boundary. It does not own a second presenter, gameplay loop or camera. The approved next
-integration gives the existing presenter an independent visual frame clock after
-complete unit selection and recomposable native UI layers are established.
+Civ III/C3X owns game state, visibility, tile/object screen anchors, day/night and
+seasons. The renderer produces resident map/pose textures and retains the native
+composition operations over them. Its own visual clock schedules intervening
+frames through the existing worker and HWND presenter, without requesting native
+map redraws. Native captures share that clock; gameplay and directed-action
+progress remain native. See [visual frame ownership](docs/visual_frame_ownership.md).
 Fog, borders, labels, selection, unit HUD and UI retain their native ownership.
 Config-off preserves the original path. Custom-on map-plane failure must not
 silently replay native terrain; custom-on map units are exclusively 3D, with explicit CPU 3D delivery at native

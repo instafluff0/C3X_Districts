@@ -2655,6 +2655,7 @@ struct district_button_image_set {
 	// The injected bridge owns only capture/lifecycle state. Rendering lives in Renderer/native/C3XRenderer.dll.
 	HMODULE custom_renderer_module;
 	c3x_renderer_get_api_version_fn custom_renderer_get_api_version;
+	c3x_renderer_visual_clock_fn custom_renderer_visual_clock;
 	c3x_renderer_set_pack_path_fn custom_renderer_set_pack_path;
 	c3x_renderer_set_definition_paths_fn custom_renderer_set_definition_paths;
 	c3x_renderer_render_fn custom_renderer_render;
@@ -2670,8 +2671,7 @@ struct district_button_image_set {
 	long long custom_renderer_camera_ticket, custom_renderer_display_clock;
 	bool custom_renderer_async_enabled, custom_renderer_display_valid;
 	bool custom_renderer_async_drawing, custom_renderer_capture_only, custom_renderer_async_presented;
-	bool custom_renderer_fast_timer, custom_renderer_visual_only, custom_renderer_timer_running;
-	LARGE_INTEGER custom_renderer_native_timer_due;
+	bool custom_renderer_timer_running;
 	c3x_renderer_blit_fn custom_renderer_blit;
 	c3x_renderer_native_observe_fn custom_renderer_native_observe;
 	c3x_renderer_native_lifetime_fn custom_renderer_native_lifetime;

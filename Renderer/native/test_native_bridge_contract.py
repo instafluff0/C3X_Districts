@@ -1125,8 +1125,8 @@ int main() {
 
         self.assertLess(injected.index("custom_renderer_scheduler_tick ();"),
                         injected.index("on_timer_0x9F6500 ();", injected.index("patch_on_timer_0x9F6500")))
-        self.assertIn("stage=timer-return", injected)
-        self.assertIn("requested_delta=%u presented_delta=%u", injected)
+        self.assertIn("if (! resident) custom_renderer_scheduler_tick ();", injected)
+        self.assertIn("C3X_NATIVE_VISUAL_POLICY", injected)
         self.assertIn("custom_renderer_max_capture_ticks", injected)
         self.assertIn("custom_renderer_max_render_ticks", injected)
         self.assertIn("custom_renderer_max_blit_ticks", injected)

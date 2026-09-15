@@ -99,6 +99,14 @@ public:
         }
         return true;
     }
+    template<class Catalog> bool animated(Selection const& selected,Catalog const& catalog)const{
+        auto found=instances.find(selected.id);
+        if(found==instances.end()||found->second.revision!=selected.revision)return false;
+        auto const& instance=found->second;
+        if(!(instance.flags&C3X_RENDERER_UNIT_STATE_CAPTURED)||instance.unit>=catalog.size()||instance.action>=catalog[instance.unit].actions.size())return false;
+        auto const& clip=catalog[instance.unit].actions[instance.action];int action=instance.content.action;
+        return clip.ambient&&clip.loop&&((action==1&&(instance.flags&C3X_RENDERER_UNIT_SELECTED))||action==11||(action>=13&&action<=18));
+    }
     template<class Catalog>
     auto definition(Selection const& selected,Catalog const& catalog)const -> typename Catalog::value_type const* {
         auto found=instances.find(selected.id);

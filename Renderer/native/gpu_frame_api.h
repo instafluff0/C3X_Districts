@@ -58,6 +58,11 @@ struct c3x_renderer_gpu_unit_v1 {
     int clip[4];
     unsigned playback_flags;
 };
+/* Read-only scheduling diagnostics; no caller-owned scene pointers. */
+struct c3x_renderer_visual_status_v1 {
+    unsigned struct_size;
+    c3x_renderer_i64 frames,map_samples,unit_samples,pose_changes,retained_bytes,nodes,ticks,frequency;
+};
 #pragma pack(pop)
 typedef int (*c3x_renderer_gpu_render_fn)(struct c3x_renderer_camera_request_v1 const*,struct c3x_renderer_gpu_frame_v1*,struct c3x_renderer_output_v1*);
 /* READBACK alone writes caller storage, after worker completion. Other calls

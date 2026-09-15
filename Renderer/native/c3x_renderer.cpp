@@ -9920,6 +9920,8 @@ struct CameraTerrainPreview {
 // opt-in ambient compatibility mode may retain only an exactly matched static
 // camera/scene front while a newer clock tick is in flight; camera or captured
 // ownership changes still take over synchronously. No backlog is accumulated.
+void CALLBACK renderer_visual_timer(HWND,UINT,UINT_PTR,DWORD);
+
 class RendererWorker {
 public:
     explicit RendererWorker(RendererState & state) : renderer_state(state) {
@@ -9994,7 +9996,7 @@ public:
     int render_gpu(c3x_renderer_camera_request_v1 const& request,c3x_renderer_gpu_frame_v1& view,c3x_renderer_output_v1& metadata){
         LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
-        start_locked();drain_camera_locked(lock);foreground_pending.store(true);
+        start_locked();drain_camera_locked(lock);advance_visual_clock();foreground_pending.store(true);
         if(!gpu_presentation){nearby.clear();retained_views.clear();gpu_publication.clear();}
         gpu_presentation=true;native_presentation=true;isolated_publication=true;camera_preview_enabled=false;
         auto prior=*request.frame;prior.dirty_flags=gpu_publication.frame.dirty_flags;
@@ -10049,12 +10051,55 @@ public:
         return code;
     }
 
+    void stop_visual_timer(){if(visual_timer){KillTimer(nullptr,visual_timer);visual_timer=0;}}
+    void advance_visual_clock(){
+        LARGE_INTEGER now={},frequency={};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+        if(visual_last && visual_allowed && now.QuadPart>=visual_last)visual_ticks+=now.QuadPart-visual_last;
+        visual_last=now.QuadPart;visual_frequency=frequency.QuadPart;
+    }
+    long long visual_clock(){std::lock_guard<std::mutex> calls(call_mutex);advance_visual_clock();return visual_ticks;}
+    int visual_policy(unsigned policy){
+        std::lock_guard<std::mutex> calls(call_mutex);
+        if(policy<2){advance_visual_clock();visual_allowed=policy!=0;}
+        auto* session=renderer_state.gpu_composition.get();return session&&session->visual_ready()?1:0;
+    }
+    int visual_status(c3x_renderer_visual_status_v1& out){
+        std::lock_guard<std::mutex> calls(call_mutex);auto* session=renderer_state.gpu_composition.get();
+        out={sizeof(out),static_cast<long long>(visual_frames),static_cast<long long>(visual_map_samples),
+            static_cast<long long>(visual_unit_samples),static_cast<long long>(visual_pose_changes),
+            session?static_cast<long long>(session->visual_bytes()):0,session?static_cast<long long>(session->visual_nodes()):0,visual_ticks,visual_frequency};
+        return C3X_RENDERER_RESULT_OK;
+    }
+    int visual_frame(bool timer=false){
+        LARGE_INTEGER begin={},end={};QueryPerformanceCounter(&begin);
+        // A timer is only transport on the presenter's UI thread. Nested UI
+        // dispatch cannot reenter a native transaction or wait on its own gate.
+        std::unique_lock<std::mutex> calls(call_mutex,std::try_to_lock);
+        if(!calls.owns_lock()||!running||!gpu_presenter.caller_thread())return C3X_RENDERER_RESULT_PENDING;
+        if(!visual_allowed || (timer&&(!IsWindowVisible(gpu_present.window?static_cast<HWND>(gpu_present.window):nullptr)||
+            GetForegroundWindow()!=GetAncestor(static_cast<HWND>(gpu_present.window),GA_ROOT)))){
+            LARGE_INTEGER now={};QueryPerformanceCounter(&now);visual_last=now.QuadPart;return C3X_RENDERER_RESULT_PENDING;
+        }
+        std::unique_lock<std::mutex> lock(state_mutex);ForegroundCameraPause pause(*this,lock);
+        auto* session=renderer_state.gpu_composition.get();
+        if(!session||!session->visual_active()||!gpu_presenter.view())return C3X_RENDERER_RESULT_PENDING;
+        advance_visual_clock();
+        int result=submit_locked(lock,Command::visual_frame);
+        if(result==C3X_RENDERER_RESULT_OK){result=gpu_presenter.present();++visual_frames;}
+        QueryPerformanceCounter(&end);
+        char line[256];std::snprintf(line,sizeof(line),"result=%d frames=%llu request_ms=%.3f retained_bytes=%llu nodes=%zu native_map_calls=0 native_unit_calls=0",
+            result,static_cast<unsigned long long>(visual_frames),renderer_state.trace.milliseconds(end.QuadPart-begin.QuadPart),
+            static_cast<unsigned long long>(session->visual_bytes()),session->visual_nodes());
+        renderer_state.trace.write("visual-frame",line,result==C3X_RENDERER_RESULT_ERROR||visual_frames<=3||visual_frames%128==0);
+        return result;
+    }
     int present_gpu(c3x_renderer_gpu_present_v1 const& request){
         std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
         start_locked();drain_camera_locked(lock,gpu_presentation);
         if(!gpu_presenter.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
-        if(request.action==1){gpu_presenter.reset();return C3X_RENDERER_RESULT_OK;}
+        if(request.action==1){stop_visual_timer();if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();gpu_presenter.reset();return C3X_RENDERER_RESULT_OK;}
         if(request.action==2){
+            stop_visual_timer();if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();
             gpu_present=request;int result=submit_locked(lock,Command::gpu_present);
             if(result==C3X_RENDERER_RESULT_OK)gpu_presenter.release_native();
             return result;
@@ -10067,7 +10112,9 @@ public:
             gpu_present=request;
             int result=submit_locked(lock,Command::gpu_present);
             if(result==C3X_RENDERER_RESULT_OK)result=gpu_presenter.present();
-            if(result!=C3X_RENDERER_RESULT_OK)gpu_presenter.reset();
+            if(result!=C3X_RENDERER_RESULT_OK){stop_visual_timer();gpu_presenter.reset();}
+            else if(session->visual_ready()&&!visual_timer){advance_visual_clock();visual_timer=SetTimer(nullptr,0,33,renderer_visual_timer);
+                if(!visual_timer){session->stop_visuals();renderer_state.trace.write("visual-timer", "creation failed; native compatibility demand retained",true);}}
             return result;
         }catch(...){gpu_presenter.reset();return C3X_RENDERER_RESULT_ERROR;}
     }
@@ -10075,7 +10122,8 @@ public:
     // Native final transfer is independent of map publication. Existing CPU
     // surfaces stay authoritative until their entire access lifetime is covered.
     int native_screen(c3x_native_images::ScreenSnapshot* screen) {
-        std::lock_guard<std::mutex> calls(call_mutex);std::unique_lock<std::mutex> lock(state_mutex);
+        std::lock_guard<std::mutex> calls(call_mutex);stop_visual_timer();
+        if(renderer_state.gpu_composition)renderer_state.gpu_composition->stop_visuals();std::unique_lock<std::mutex> lock(state_mutex);
         if(!gpu_presenter.caller_thread())return C3X_RENDERER_RESULT_BAD_ARGUMENT;
         if(!screen){
             if(renderer_state.device){
@@ -10636,7 +10684,9 @@ public:
             renderer_state.trace.write("unit-capture-failed",detail,true);
             return C3X_RENDERER_RESULT_ERROR;
         }
-        if(!unit_instances.sample(selection,request.presentation_time_ticks,request.presentation_frequency,
+        job_unit_selection=selection;
+        if(gpu_target)advance_visual_clock();
+        if(!unit_instances.sample(selection,gpu_target?visual_ticks:request.presentation_time_ticks,gpu_target?visual_frequency:request.presentation_frequency,
             catalog,job_unit,job_unit_predict))return C3X_RENDERER_RESULT_SUPERSEDED;
         auto definition=unit_instances.definition(selection,catalog);
         auto action_name=c3x_renderer::native_unit_action(job_unit.action);
@@ -10743,7 +10793,7 @@ public:
 #endif
 
     void reset_and_stop() {
-        std::unique_lock<std::mutex> call_guard(call_mutex);
+        std::unique_lock<std::mutex> call_guard(call_mutex);stop_visual_timer();
         std::unique_lock<std::mutex> lock(state_mutex);
         if (!running)
             return;
@@ -10783,6 +10833,7 @@ private:
         gpu_images,
         gpu_unit,
         gpu_present,
+        visual_frame,
         native_screen,
         unit,
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
@@ -10806,6 +10857,10 @@ private:
     std::vector<unsigned short> screen_pixels;unsigned screen_format=1;
     int screen_width=0,screen_height=0;RECT screen_area={};
     c3x_renderer_gpu_present_v1 gpu_present={};
+    UINT_PTR visual_timer=0;bool visual_allowed=true;
+    long long visual_ticks=0,visual_last=0,visual_frequency=0;
+    std::uint64_t visual_frames=0,visual_map_epoch=0,visual_map_samples=0,visual_unit_samples=0,visual_pose_changes=0;
+    c3x_renderer::render_core::UnitInstances::Selection job_unit_selection;
     RendererState & renderer_state;
     LARGE_INTEGER job_timing_begin={},job_timing_rendered={},job_timing_published={};
     MapBlitter map_blitter;
@@ -10822,6 +10877,7 @@ private:
         c3x_renderer_frame_v1 frame={};c3x_renderer_camera_identity_v1 identity={};
         std::vector<c3x_renderer_tile_v1> tiles;std::vector<c3x_renderer_u32> topology;
     };
+    std::shared_ptr<ProspectiveView> visual_map_capture,visual_map_selection;
     std::deque<ProspectiveView> prospective_views;
     std::unique_ptr<ProspectiveView> pending_refresh;
     bool ahead_prospective=false,prospective_view_allowed=true,ahead_view_superseded=false;
@@ -11148,6 +11204,57 @@ private:
         }
         ~GpuOutputMode(){state.gpu_output_mode=previous;}
     };
+    c3x_gpu_images::RetainedComposition::Sample retain_visual_map(c3x_renderer_frame_v1 input){
+        using Texture=c3x_gpu_images::RetainedComposition::Texture;
+        auto epoch=++visual_map_epoch;visual_map_capture.reset();visual_map_selection.reset();
+        // Native unit demand does not make the terrain animate. Preserve the
+        // existing map sample rate; the visual presenter has its own cadence.
+        if(gpu_metadata.visible_animation_count<=job_frame.visible_animation_count)return {};
+        int x=gpu_publication.source_x,y=gpu_publication.source_y,w=gpu_metadata.width,h=gpu_metadata.height;
+        if(input.target_width!=gpu_publication.resident.width||input.target_height!=gpu_publication.resident.height){input=job_frame;x=y=0;}
+        auto capture=visual_map_capture=std::make_shared<ProspectiveView>();
+        auto selected=visual_map_selection=std::make_shared<ProspectiveView>();
+        capture->frame=input;capture->tiles.assign(input.tiles,input.tiles+input.tile_count);
+        if(input.world_topology_count)capture->topology.assign(input.world_topology,input.world_topology+input.world_topology_count);
+        selected->frame=job_frame;selected->tiles=job_tiles;selected->topology=job_world_topology;
+        auto* session=renderer_state.gpu_composition.get();
+        Texture initial=session->snapshot_bgra(static_cast<ID3D11Texture2D*>(gpu_publication.resident.texture.get()),
+            gpu_publication.source_x,gpu_publication.source_y,w,h);
+        auto origin=visual_ticks,clock=RendererState::resource_clock(gpu_publication.frame);
+        return [this,epoch,origin,clock,x,y,w,h,last=std::move(initial)](long long ticks,long long frequency)mutable -> Texture{
+            if(epoch!=visual_map_epoch)return last;
+            auto const& capture=visual_map_capture;auto const& selected=visual_map_selection;
+            auto frame=capture->frame,view=selected->frame;
+            frame.tiles=capture->tiles.data();frame.world_topology=capture->topology.data();view.tiles=selected->tiles.data();view.world_topology=selected->topology.data();
+            if(frequency>0)view.presentation_time_ticks+=static_cast<long long>(static_cast<long double>(std::max(0ll,ticks-origin))*view.presentation_frequency/frequency);
+            auto next=RendererState::resource_clock(view);if(next==clock)return last;
+            frame.presentation_time_ticks=view.presentation_time_ticks;frame.presentation_frequency=view.presentation_frequency;
+            c3x_renderer_output_v1 out={C3X_RENDERER_API_VERSION,sizeof(out)};GpuOutputMode mode(renderer_state,true);
+            if(!renderer_state.render(frame,out,-1,nullptr,0,nullptr,0,&view)||!renderer_state.gpu_map_valid||renderer_state.frame_output_readbacks)
+                throw std::runtime_error("retained map sample failed");
+            ++visual_map_samples;last=renderer_state.gpu_composition->snapshot_bgra(renderer_state.gpu_map_texture,x,y,w,h);clock=next;return last;
+        };
+    }
+    c3x_gpu_images::RetainedComposition::Sample retain_visual_unit(c3x_gpu_images::RetainedComposition::Texture initial){
+        auto selection=job_unit_selection;
+        if(!unit_instances.animated(selection,renderer_state.unit_bodies.units))return {};
+        return [this,selection,last=std::move(initial)](long long ticks,long long frequency)mutable{
+            auto const& catalog=renderer_state.unit_bodies.units;c3x_renderer_unit_v1 draw={};unsigned predict=0;
+            auto definition=unit_instances.definition(selection,catalog);
+            if(!definition||!unit_instances.sample(selection,ticks,frequency,catalog,draw,predict))return last;
+            int projection=draw.projection_scale_milli>0?draw.projection_scale_milli:(draw.reduced?500:1000);
+            if(!c3x_renderer::expand_unit_canvas(draw.body_x,draw.body_y,draw.sprite_width,draw.sprite_height,projection,definition->minimum_canvas))
+                throw std::runtime_error("retained unit bounds failed");
+            // Independent frames also refresh the bounded existing preparation
+            // queue; it must not run out of forecasts after native draws stop.
+            if(unit_pixels_enabled)unit_pixels_queue.observe(draw,true,predict!=0,predict);
+            auto& body=renderer_state.unit_bodies;
+            if(!body.render(renderer_state.device,renderer_state.context,draw,[&](auto const& action){return renderer_state.prepare_unit_action(action);},nullptr,predict,true))
+                throw std::runtime_error("retained unit sample failed");
+            ++visual_unit_samples;if(last.Get()!=body.resident_pose.texture.Get())++visual_pose_changes;last=body.resident_pose.texture;return last;
+        };
+    }
+
     bool capture_gpu(PublishedMapFrame& target,c3x_renderer_output_v1 const& output,
                      c3x_renderer_frame_v1 const& frame,c3x_renderer_camera_identity_v1 const& identity) {
         if(!renderer_state.gpu_map_valid || renderer_state.frame_output_readbacks)return false;
@@ -11602,7 +11709,7 @@ private:
             // Map and unit jobs borrow the device; only configuration/reset owns
             // native composition lifetimes. An ordinary CPU publication cannot
             // invalidate GPU UI/background handles held by the caller.
-            if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset)renderer_state.gpu_composition.reset();
+            if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){++visual_map_epoch;visual_map_capture.reset();visual_map_selection.reset();renderer_state.gpu_composition.reset();}
             if(command==Command::native_screen){
                 // Retain the transfer image with the presenter, not with a map
                 // ticket. Native UI-only transfers must not retire prepared maps.
@@ -11642,7 +11749,7 @@ private:
                         if(!renderer_state.gpu_composition)renderer_state.gpu_composition=std::make_unique<c3x_gpu_images::Session>(renderer_state.device,renderer_state.context);
                         auto& session=*renderer_state.gpu_composition;
                         if(session.publish(static_cast<ID3D11Texture2D*>(gpu_publication.resident.texture.get()),++renderer_state.gpu_serial,
-                            gpu_publication.source_x,gpu_publication.source_y,gpu_metadata.width,gpu_metadata.height)){
+                            gpu_publication.source_x,gpu_publication.source_y,gpu_metadata.width,gpu_metadata.height,retain_visual_map(rendered_area_ready?rendered_area.input:(gpu_reused&&nearby.map.has_image()?nearby.input:job_frame)))){
                             gpu_replacements=gpu_publication.replacements;gpu_fallbacks=gpu_publication.fallback;
                             gpu_metadata.replacement_tile_flags=gpu_replacements.empty()?nullptr:gpu_replacements.data();
                             gpu_metadata.fallback_tile_indices=gpu_fallbacks.empty()?nullptr:gpu_fallbacks.data();
@@ -11668,10 +11775,15 @@ private:
                 if(renderer_state.gpu_composition&&renderer_state.gpu_composition->current_ticket()==gpu_unit.ticket){
                     auto& body=renderer_state.unit_bodies;auto reads=body.output_readbacks,uploads=renderer_state.gpu_composition->upload_count();
                     if(body.render(renderer_state.device,renderer_state.context,job_unit,[&](auto const& action){return renderer_state.prepare_unit_action(action);},nullptr,job_unit_predict,true)){
-                        auto const& pose=body.resident_pose;result=renderer_state.gpu_composition->compose_resident_unit(gpu_unit,pose.texture.Get(),unsigned(pose.width),unsigned(pose.height),job_unit.body_x,job_unit.body_y);
+                        auto const& pose=body.resident_pose;result=renderer_state.gpu_composition->compose_resident_unit(gpu_unit,pose.texture.Get(),unsigned(pose.width),unsigned(pose.height),job_unit.body_x,job_unit.body_y,retain_visual_unit(pose.texture));
                     }else result=C3X_RENDERER_RESULT_ERROR;
                     gpu_unit_output_readbacks=body.output_readbacks-reads;gpu_unit_composition_uploads=renderer_state.gpu_composition->upload_count()-uploads;
                 }
+            }else if(command==Command::visual_frame){
+                int drawn=renderer_state.gpu_composition?renderer_state.gpu_composition->visual_frame(visual_ticks,visual_frequency,
+                    gpu_presenter.view(),gpu_presenter.retained(),gpu_presenter.buffer()):0;
+                result=drawn==1?C3X_RENDERER_RESULT_OK:drawn==2?C3X_RENDERER_RESULT_PENDING:C3X_RENDERER_RESULT_ERROR;
+                if(result==C3X_RENDERER_RESULT_OK)gpu_presenter.gpu_written();
             }else if(command==Command::gpu_present){
                 auto const& p=gpu_present;
                 if(p.action==2)result=gpu_presenter.preserve_display(renderer_state.context)?C3X_RENDERER_RESULT_OK:C3X_RENDERER_RESULT_ERROR;
@@ -11766,7 +11878,7 @@ private:
             }
             } catch (...) {
                 if(command==Command::unit)renderer_state.unit_bodies.reset_gpu();
-                else if(command!=Command::native_screen)renderer_state.reset();
+                else if(command!=Command::native_screen && command!=Command::visual_frame)renderer_state.reset();
                 renderer_state.trace.write("worker-error", "resource allocation or runtime exception", true);
                 output = {C3X_RENDERER_API_VERSION, sizeof(c3x_renderer_output_v1)};
                 result = C3X_RENDERER_RESULT_ERROR;
@@ -11789,12 +11901,12 @@ private:
                 output.prefetch_blocks_pending = renderer_state.pixel_work_pending();
                 output.prefetch_blocks_built = renderer_state.prepared_blocks;
                 output.pixel_block_cache_bytes = static_cast<unsigned>(renderer_state.pixel_blocks.bytes);
-            } else if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::gpu_present) {
+            } else if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::gpu_present && command!=Command::visual_frame) {
                 warm_order.clear(); warm_cursor = 0; warm_signature = 0;
                 warm_tiles.clear();
                 renderer_state.cancel_pixel_preparation();
             }
-            if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::gpu_present) {
+            if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::gpu_present && command!=Command::visual_frame) {
             if(command==Command::render && result==C3X_RENDERER_RESULT_OK){
                 if(rendered_area_ready){retain_view(rendered_area);nearby_presented=true;}
                 completed_phase_x=job_frame.tile_count?job_frame.tiles[0].anchor_x:0;
@@ -11830,7 +11942,7 @@ private:
                 char area_option[8]={};GetEnvironmentVariableA("C3X_RENDERER_PREPARED_VIEW",area_option,sizeof(area_option));
                 nearby_available=renderer_state.shared_scene_surface && std::strcmp(area_option,"0")!=0;
                 start_ahead();
-            }else if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::gpu_present){nearby.clear();retained_views.clear();prospective_views.clear();pending_refresh.reset();nearby_available=false;gpu_publication.clear();gpu_presentation=false;}
+            }else if(command!=Command::unit && command!=Command::native_screen && command!=Command::gpu_images && command!=Command::gpu_unit && command!=Command::gpu_present && command!=Command::visual_frame){nearby.clear();retained_views.clear();prospective_views.clear();pending_refresh.reset();nearby_available=false;gpu_publication.clear();gpu_presentation=false;}
             last_job_result=result;
             completed_job_sequence = sequence;
             job_command = Command::none;
@@ -11843,6 +11955,17 @@ private:
 };
 
 RendererWorker * renderer_worker = nullptr;
+void CALLBACK renderer_visual_timer(HWND,UINT,UINT_PTR,DWORD){
+    if(renderer_worker)try{renderer_worker->visual_frame(true);}catch(...){OutputDebugStringA("[C3X renderer] visual timer failed\n");}
+}
+extern "C" __declspec(dllexport) c3x_renderer_i64 c3x_renderer_visual_clock(){return renderer_worker?renderer_worker->visual_clock():0;}
+extern "C" __declspec(dllexport) int c3x_renderer_gpu_visual_status(c3x_renderer_visual_status_v1* out){
+    if(!out||out->struct_size!=sizeof(*out))return C3X_RENDERER_RESULT_BAD_ARGUMENT;
+    return renderer_worker?renderer_worker->visual_status(*out):C3X_RENDERER_RESULT_PENDING;
+}
+extern "C" __declspec(dllexport) int c3x_renderer_gpu_visual_frame(){
+    return renderer_worker?renderer_worker->visual_frame():C3X_RENDERER_RESULT_PENDING;
+}
 
 RendererWorker & get_renderer_worker() {
     if (renderer_worker == nullptr)
@@ -12224,6 +12347,7 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_present(c3x_renderer_gpu_p
 // exclusive owner; before that, completed CPU screens retain compatibility
 // presentation. A negative result denies CPU access after a failed barrier.
 extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
+    if(operation==C3X_NATIVE_VISUAL_POLICY)return renderer_worker?renderer_worker->visual_policy(color):0;
     if(operation==C3X_NATIVE_IMAGE_DRAIN){if(!drain_native_composition())return -1;}
     else if(native_composition&&native_composition->active()){
         try{

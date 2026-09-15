@@ -1,5 +1,26 @@
 # Civ III patch dependency ledger
 
+## Renderer-owned visual scheduling
+
+Existing `on_timer_0x9F6500` retains original gameplay advancement. The existing
+`Units_Image_Data_advance_animations` trampoline now always forwards; the former
+33/66 ms native timer split and visual-only `Animator_update` call are retired.
+No CSV signature or address changes are needed. Existing unit/map captures bind
+the optional DLL export `c3x_renderer_visual_clock` (`c3x_renderer_i64 (*)(void)`),
+sharing the renderer's QPC-frequency visual timeline. Older DLLs retain their
+existing capture clock.
+
+The existing popup, Advisor and command-button function scopes supply explicit
+entry/exit pause policy, including exits with no further screen transfer. The
+hash-verified Graphsy final-transfer hook supplies visibility policy and seals
+completed rectangles. The renderer uses
+Win32 `SetTimer`/`KillTimer` on the existing presenter thread; it never requests a
+Civ III redraw. Original native demand remains the compatibility path while no
+retained GPU front is ready. Existing `Unit_despawn`, capture, graphics-load/unload
+and CPU-access boundaries preserve retirement and config-off ownership.
+`required_user_action: []`; normal authorized DLL staging does not install or
+launch the game. See [visual frame ownership](visual_frame_ownership.md).
+
 ## Unit shadow pass
 
 The resident unit owner now submits immutable caster records through its existing

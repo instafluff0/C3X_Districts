@@ -168,12 +168,70 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         verify(!differences&&std::all_of(seen.begin(),seen.end(),[](unsigned char value){return value==1;}),"every native final displayed pixel exact");
     };
     capture_display(expected);
+    {
+        auto visual=reinterpret_cast<int(*)()>(GetProcAddress(renderer_module,"c3x_renderer_gpu_visual_frame"));
+        auto status=reinterpret_cast<int(*)(c3x_renderer_visual_status_v1*)>(GetProcAddress(renderer_module,"c3x_renderer_gpu_visual_status"));
+        if(visual&&status){
+        copy(screen_surface,save,full);copy(scene,screen_surface,full);
+        auto selected=unit;selected.unit_id=901;selected.action_cursor=0;int bounds[4]={};
+        verify(owner.draw_unit(unit_gpu,frame.ticket,selected,screen_surface,screen_surface,bounds,3),"publish selected unit once");
+        final_ui_drawn=false;patch_JGL_present_screen(&full);
+        verify(live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1)==1,"retained complete frame ready");
+        c3x_renderer_visual_status_v1 before={sizeof(before)},after={sizeof(after)};verify(status(&before)==1,"visual status before");
+        auto native_events=events.size();auto transfers=screen_transfers;
+        LARGE_INTEGER begin={},end={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&begin);
+        auto desktop_library=LoadLibraryA("dwmapi.dll");
+        auto visual_desktop=reinterpret_cast<HRESULT(WINAPI*)()>(GetProcAddress(desktop_library,"DwmFlush"));
+        verify(visual_desktop!=nullptr,"independent visual desktop boundary");
+        SetWindowPos(window,HWND_TOPMOST,20,20,w,h,SWP_NOACTIVATE|SWP_SHOWWINDOW);
+        auto desktop_dc=GetDC(nullptr);double visual_request_ms=0,visual_desktop_ms=0;
+        for(unsigned n=0;n<30;++n){Sleep(33);LARGE_INTEGER a={},b={};QueryPerformanceCounter(&a);
+            int result=visual();verify(result==1||result==C3X_RENDERER_RESULT_PENDING,"independent completed GPU visual frame");QueryPerformanceCounter(&b);
+            verify(SUCCEEDED(visual_desktop()),"independent visual desktop completion");LARGE_INTEGER visible={};QueryPerformanceCounter(&visible);
+            verify(GetPixel(desktop_dc,30,32)==RGB(0,255,0),"retained opaque UI unchanged over independent animation");
+            double request_ms=1000.*double(b.QuadPart-a.QuadPart)/frequency.QuadPart,desktop_ms=1000.*double(visible.QuadPart-a.QuadPart)/frequency.QuadPart;
+            visual_request_ms+=request_ms;visual_desktop_ms+=desktop_ms;
+            std::printf("VISUAL_SAMPLE result=%d request_ms=%.3f desktop_ms=%.3f\n",result,request_ms,desktop_ms);}
+        ReleaseDC(nullptr,desktop_dc);FreeLibrary(desktop_library);
+        QueryPerformanceCounter(&end);verify(status(&after)==1,"visual status after");
+        verify(after.frames-before.frames>=15&&after.frames-before.frames<=30&&after.map_samples>before.map_samples&&after.unit_samples>before.unit_samples&&after.pose_changes>before.pose_changes,
+            "authored unit poses advance with no new native selection");
+        verify(events.size()==native_events&&screen_transfers==transfers,"visual frames never call native drawing/transfer hooks");
+        verify(after.retained_bytes<=128ll*1024*1024,"retained visual memory bound");
+        auto prior_window=GetForegroundWindow();SetWindowPos(window,HWND_TOPMOST,20,20,w,h,SWP_SHOWWINDOW);
+        SetForegroundWindow(window);SetFocus(window);
+        c3x_renderer_visual_status_v1 transported=after;
+        LARGE_INTEGER deadline={};QueryPerformanceCounter(&deadline);deadline.QuadPart+=frequency.QuadPart*3;
+        do{
+            MSG message;while(PeekMessageA(&message,nullptr,WM_TIMER,WM_TIMER,PM_REMOVE))DispatchMessageA(&message);
+            verify(status(&transported)==1,"timer transport status");QueryPerformanceCounter(&end);
+            if(transported.frames>=after.frames+3)break;Sleep(1);
+        }while(end.QuadPart<deadline.QuadPart);
+        if(prior_window)SetForegroundWindow(prior_window);
+        verify(transported.frames>=after.frames+3&&events.size()==native_events&&screen_transfers==transfers,
+            "renderer timer transports frames without native draw demand");
+        std::printf("PASS visual timer transport: frames=%lld native_draw_calls=0\n",transported.frames-after.frames);
+        live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,0);
+        verify(visual()==C3X_RENDERER_RESULT_PENDING,"explicit modal policy pauses renderer clock");
+        auto clock=reinterpret_cast<c3x_renderer_visual_clock_fn>(GetProcAddress(renderer_module,"c3x_renderer_visual_clock"));
+        verify(clock!=nullptr,"native capture shares renderer visual clock");auto paused=clock();Sleep(20);
+        verify(clock()==paused,"modal pause excludes wall time from shared clock");
+        std::printf("PASS independent resident frames: frames=%lld map_samples=%lld unit_samples=%lld pose_changes=%lld bytes=%lld nodes=%lld average_request_ms=%.3f average_desktop_ms=%.3f native_draw_calls=0\n",
+            after.frames-before.frames,after.map_samples-before.map_samples,after.unit_samples-before.unit_samples,
+            after.pose_changes-before.pose_changes,after.retained_bytes,after.nodes,
+            visual_request_ms/30.,visual_desktop_ms/30.);
+        copy(save,screen_surface,full);final_ui_drawn=false;patch_JGL_present_screen(&full);
+        capture_display(expected);
+        live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
+        }
+    }
+    auto transfers_before_partial=screen_transfers;
     // Native partial transfer must retain the previous screen outside its rect,
     // even though its newly composed source has changed everywhere.
     verify(reinterpret_cast<Fill>(screen_surface->vtable[17])(screen_surface,&full,int(0x80007c00u))==0,"new screen contents");
     RECT partial={43,47,121,113};last_transfer=partial;final_ui_drawn=false;patch_JGL_present_screen(&partial);
     for(int y=partial.top;y<partial.bottom;++y)for(int x=partial.left;x<partial.right;++x)expected[y*w+x]=0xffff0000u;
-    capture_display(expected);verify(screen_transfers==2&&owner.stats().readbacks==0,"partial transfer uses retained GPU display");
+    capture_display(expected);verify(screen_transfers==transfers_before_partial+1&&owner.stats().readbacks==0,"partial transfer uses retained GPU display");
     // Partial native handoff must retain full-color displayed pixels, including
     // those outside the native update that differ from the current red canvas.
     c3x_renderer_gpu_present_v1 handoff={sizeof(handoff)};handoff.action=2;

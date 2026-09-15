@@ -302,6 +302,8 @@ pfp_init ()
 	tr.redundant = is->paused_for_popup;
 	if (! tr.redundant) {
 		is->paused_for_popup = true;
+		if (is->custom_renderer_native_image != NULL)
+			is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, 0);
 		QueryPerformanceCounter ((LARGE_INTEGER *)&tr.ts_before);
 	}
 	return tr;
@@ -315,6 +317,8 @@ pfp_finish (struct pause_for_popup * pfp)
 		QueryPerformanceCounter ((LARGE_INTEGER *)&ts_after);
 		is->time_spent_paused_during_popup += ts_after - pfp->ts_before;
 		is->paused_for_popup = false;
+		if (is->custom_renderer_native_image != NULL)
+			is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, is->current_config.enable_custom_rendering && ! is->custom_renderer_modal);
 	}
 	pfp->done = true;
 }
@@ -20226,6 +20230,11 @@ patch_JGL_Graphsy_present (void * graph, int edx, RECT * rect)
 			is->custom_renderer_native_operation = previous;
 		}
 	}
+	if (is->custom_renderer_native_image != NULL && custom_renderer_native_probe_on ()) {
+        bool animate = ! is->custom_renderer_modal && ! is->paused_for_popup &&
+            ! p_main_screen_form->is_now_loading_game && *p_player_bits != 0 && is->saved_tile_count < 0;
+        is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, animate ? 1 : 0);
+    }
 	if (translate_custom_renderer_native (C3X_NATIVE_IMAGE_PRESENT, image, graph, rect, NULL, 0)) return 0;
 	return ((int (__fastcall *) (void *, int, RECT *))is->custom_renderer_jgl_present_original) (graph, __, rect);
 }
@@ -22342,6 +22351,8 @@ patch_Main_GUI_set_up_unit_command_buttons (Main_GUI * this)
 	// Treat native command reconstruction as one UI operation for renderer scheduling.
 	bool previous_modal = is->custom_renderer_modal;
 	is->custom_renderer_modal = true;
+	if (is->custom_renderer_native_image != NULL)
+		is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, 0);
 	// Recompute resources now if needed because of a trade deal involving mill inputs. In rare cases the change in deals might affect a mill that
 	// produces a resource that's used for a worker job.
 	recompute_resources_if_necessary ();
@@ -22392,6 +22403,9 @@ patch_Main_GUI_set_up_unit_command_buttons (Main_GUI * this)
 		}
 	}
 	is->custom_renderer_modal = previous_modal;
+	if (is->custom_renderer_native_image != NULL)
+		is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL,
+			is->current_config.enable_custom_rendering && ! previous_modal && ! is->paused_for_popup);
 }
 
 void 
@@ -27531,14 +27545,6 @@ void
 unload_custom_renderer ()
 {
 	set_custom_renderer_native_probe (NULL);
-#if defined(p_main_animation_timer) && defined(Timer_reset_and_activate) && defined(Units_Image_Data_advance_animations) && defined(p_native_timer_inhibited) && defined(p_native_game_ending)
-	if (is->custom_renderer_fast_timer && p_main_animation_timer != NULL && Timer_reset_and_activate != NULL &&
-	    p_main_animation_timer->timer_id != NULL && p_main_animation_timer->duration == 33)
-		Timer_reset_and_activate (p_main_animation_timer, __, p_main_animation_timer->callback_fn,
-			p_main_animation_timer->callback_param, 66, 66);
-#endif
-	is->custom_renderer_fast_timer = false;
-	is->custom_renderer_native_timer_due.QuadPart = 0;
 	if ((is->custom_renderer_module != NULL) &&
 	    (is->custom_renderer_reset != NULL))
 		is->custom_renderer_reset ();
@@ -27546,6 +27552,7 @@ unload_custom_renderer ()
 		FreeLibrary (is->custom_renderer_module);
 	is->custom_renderer_module = NULL;
 	is->custom_renderer_get_api_version = NULL;
+	is->custom_renderer_visual_clock = NULL;
 	is->custom_renderer_set_pack_path = NULL;
 	is->custom_renderer_set_definition_paths = NULL;
 	is->custom_renderer_render = NULL;
@@ -27676,7 +27683,9 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	LARGE_INTEGER now;
 	if (! QueryPerformanceCounter (&now) || is->custom_renderer_qpc_frequency.QuadPart <= 0)
 		return false;
-	if (is->custom_renderer_animation_sample_at.QuadPart > 0) {
+	if (is->custom_renderer_visual_clock != NULL)
+		is->custom_renderer_animation_timestamp.QuadPart = is->custom_renderer_visual_clock ();
+	else if (is->custom_renderer_animation_sample_at.QuadPart > 0) {
 		long long elapsed = now.QuadPart - is->custom_renderer_animation_sample_at.QuadPart;
 		// The UI thread stops during Civ III's ordinary interturn pauses. Do not
 		// let that blocked wall time become a visible ambient-animation jump.
@@ -27849,6 +27858,7 @@ ensure_custom_renderer_loaded ()
 	is->custom_renderer_module = LoadLibraryA (path);
 	if (is->custom_renderer_module != NULL) {
 		is->custom_renderer_get_api_version = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_get_api_version");
+		is->custom_renderer_visual_clock = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_visual_clock");
 		is->custom_renderer_set_pack_path = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_pack_path");
 		is->custom_renderer_set_definition_paths = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_set_definition_paths");
 		is->custom_renderer_render = (void *)(*p_GetProcAddress) (is->custom_renderer_module, "c3x_renderer_render");
@@ -30459,7 +30469,9 @@ patch_Map_Renderer_m71_Draw_Tiles (Map_Renderer * this, int edx, int param_1, in
 		unload_custom_renderer ();
 		return;
 	}
-	if (is->custom_renderer_animation_sample_at.QuadPart > 0) {
+	if (is->custom_renderer_visual_clock != NULL)
+		is->custom_renderer_animation_timestamp.QuadPart = is->custom_renderer_visual_clock ();
+	else if (is->custom_renderer_animation_sample_at.QuadPart > 0) {
 		long long elapsed = is->custom_renderer_frame_timestamp.QuadPart -
 			is->custom_renderer_animation_sample_at.QuadPart;
 		if (elapsed >= 0 && elapsed <= is->custom_renderer_qpc_frequency.QuadPart / 4)
@@ -37132,8 +37144,13 @@ patch_Advisor_GUI_open (Advisor_GUI * this, int edx, AdvisorKind kind)
 {
 	bool previous_modal = is->custom_renderer_modal;
 	is->custom_renderer_modal = true;
+	if (is->custom_renderer_native_image != NULL)
+		is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, 0);
 	Advisor_GUI_open (this, edx, kind);
 	is->custom_renderer_modal = previous_modal;
+	if (is->custom_renderer_native_image != NULL)
+		is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL,
+			is->current_config.enable_custom_rendering && ! previous_modal && ! is->paused_for_popup);
 }
 
 void __fastcall
@@ -46426,128 +46443,34 @@ clear_active_custom_tile_animation_effects ()
 	}
 }
 
-// The intermediate native visual call must not advance FLC unit, cursor,
-// army-member or tile-effect state. Four stack arguments are verified in GOG.
+// Native gameplay/action timing is unchanged. The renderer owns visual-only
+// frames; this existing trampoline no longer suppresses native advancement.
 #ifdef Units_Image_Data_advance_animations
 void __fastcall
 patch_Units_Image_Data_advance_animations (Units_Image_Data * this, int edx, float elapsed,
-	Unit ** units, int count, void * effects)
+    Unit ** units, int count, void * effects)
 {
-	if (! is->custom_renderer_visual_only)
-		Units_Image_Data_advance_animations (this, __, elapsed, units, count, effects);
+    Units_Image_Data_advance_animations (this, __, elapsed, units, count, effects);
 }
 #endif
-
-bool
-custom_renderer_has_visual_work ()
-{
-	if (! is->current_config.enable_custom_rendering || is->custom_renderer_init_state != IS_OK ||
-	    is->custom_renderer_qpc_frequency.QuadPart <= 0 || is->custom_renderer_modal || is->paused_for_popup ||
-	    is->custom_renderer_draw_in_progress || p_main_screen_form->is_now_loading_game ||
-	    *p_player_bits == 0 || is->saved_tile_count >= 0 || is_online_game () ||
-	    GetFocus == NULL || GetFocus () == NULL ||
-	    (p_main_screen_form->Mode_Action != 0 && p_main_screen_form->Mode_Action != 0x7f00) ||
-	    p_main_screen_form->animator.Units2_Count != 0 ||
-	    *(bool *)(p_main_screen_form->animator.field_18E4 + 0xb)) return false;
-	Animator * animator = &p_main_screen_form->animator;
-	for (int n = 0; n < animator->Units_Count && n < 1024; n++) {
-		Unit * unit = animator->Units[n];
-		if (unit == NULL || unit->Body.ID < 0) continue;
-		int action = unit->Body.Animation.summary.current_anim_type;
-		if (unit == p_main_screen_form->Current_Unit || action == AT_FORTRESS ||
-		    (action >= AT_ROAD && action <= AT_PLANT)) return true;
-	}
-	return false;
-}
 
 void __stdcall
 patch_on_timer_0x9F6500 (void)
 {
-	// Native timer transport remains the sole source of demand. Nested UI
-	// dispatch cannot advance gameplay or take over an active visual refresh.
-	if (is->custom_renderer_timer_running) return;
-	bool visual_only = false;
-#if defined(p_main_animation_timer) && defined(Timer_reset_and_activate) && defined(Units_Image_Data_advance_animations) && defined(p_native_timer_inhibited) && defined(p_native_game_ending)
-	LARGE_INTEGER cadence_now = {0};
-	bool capable = p_main_animation_timer != NULL && Timer_reset_and_activate != NULL &&
-		Units_Image_Data_advance_animations != NULL;
-	bool visual_work = capable && p_main_animation_timer->callback_fn_2 == NULL &&
-		QueryPerformanceCounter (&cadence_now) && p_native_timer_inhibited != NULL && p_native_game_ending != NULL &&
-		! *p_native_timer_inhibited && ! *p_native_game_ending && custom_renderer_has_visual_work ();
-	if (capable && p_main_animation_timer->timer_id != NULL &&
-	    ((visual_work && p_main_animation_timer->duration == 66) ||
-	     (! visual_work && is->custom_renderer_fast_timer && p_main_animation_timer->duration == 33))) {
-		Timer_reset_and_activate (p_main_animation_timer, __, p_main_animation_timer->callback_fn,
-			p_main_animation_timer->callback_param, visual_work ? 33 : 66, visual_work ? 5 : 66);
-		if (p_main_animation_timer->timer_id == NULL && visual_work)
-			Timer_reset_and_activate (p_main_animation_timer, __, p_main_animation_timer->callback_fn,
-				p_main_animation_timer->callback_param, 66, 66);
-	}
-	is->custom_renderer_fast_timer = visual_work && p_main_animation_timer->timer_id != NULL &&
-		p_main_animation_timer->duration == 33;
-	if (is->custom_renderer_fast_timer) {
-		long long frequency = is->custom_renderer_qpc_frequency.QuadPart;
-		long long due = is->custom_renderer_native_timer_due.QuadPart;
-		visual_only = due > cadence_now.QuadPart + frequency / 500 && due <= cadence_now.QuadPart + frequency;
-		if (! visual_only) {
-			long long interval = frequency * 66 / 1000;
-			is->custom_renderer_native_timer_due.QuadPart =
-				(due > 0 && due <= cadence_now.QuadPart + frequency && due + interval > cadence_now.QuadPart) ?
-				due + interval : cadence_now.QuadPart + interval;
-		}
-	} else is->custom_renderer_native_timer_due.QuadPart = 0;
-#endif
-	is->custom_renderer_timer_running = true;
-	bool trace_custom_timer = is->current_config.enable_custom_rendering &&
-		(is->custom_renderer_init_state == IS_OK) &&
-		(is->custom_renderer_visible_animation_count > 0 || is->custom_renderer_fast_timer) &&
-		(is->custom_renderer_qpc_frequency.QuadPart > 0);
-	LARGE_INTEGER timer_started = {0}, scheduler_finished = {0}, timer_finished = {0};
-	unsigned int requested_before = is->custom_renderer_requested_frames;
-	unsigned int presented_before = is->custom_renderer_presented_frames;
-	bool pending_before = is->custom_renderer_redraw_pending;
-	if (trace_custom_timer)
-		QueryPerformanceCounter (&timer_started);
-	if (is->current_config.enable_custom_animations && ! is->current_config.enable_custom_rendering) {
-		if ((*p_debug_mode_bits & 0xC) != 0)
-			clear_active_custom_tile_animation_effects ();
-		else
-			tile_animation_scheduler_tick ();
-	}
-	custom_renderer_scheduler_tick ();
-	if (trace_custom_timer)
-		QueryPerformanceCounter (&scheduler_finished);
-	if (visual_only) {
-		Animator * animator = &p_main_screen_form->animator;
-		int previous_low = animator->field_1AE0, previous_high = animator->field_1AE4;
-		bool force_units = *(bool *)(animator->field_18E4 + 0xd);
-		// Enter unit erase/draw/composition without forcing a static map rebuild.
-		*(bool *)(animator->field_18E4 + 0xd) = true;
-		is->custom_renderer_visual_only = true;
-		Animator_update (animator);
-		is->custom_renderer_visual_only = false;
-		*(bool *)(animator->field_18E4 + 0xd) = force_units;
-		// The next native advancement still receives the whole native interval.
-		animator->field_1AE0 = previous_low; animator->field_1AE4 = previous_high;
-	} else on_timer_0x9F6500 ();
-	is->custom_renderer_timer_running = false;
-	if (trace_custom_timer && QueryPerformanceCounter (&timer_finished)) {
-		char message[512];
-		double ticks_to_ms = 1000.0 / is->custom_renderer_qpc_frequency.QuadPart;
-		snprintf (message, sizeof message,
-			"[C3X renderer] qpc=%lld stage=timer-return visual_only=%d interval_ms=%d total_ms=%.3f scheduler_ms=%.3f native_ms=%.3f requested_delta=%u presented_delta=%u pending_before=%d pending_after=%d drawing=%d visible=%u\n",
-			timer_finished.QuadPart, visual_only ? 1 : 0, is->custom_renderer_fast_timer ? 33 : 66,
-			(timer_finished.QuadPart - timer_started.QuadPart) * ticks_to_ms,
-			(scheduler_finished.QuadPart - timer_started.QuadPart) * ticks_to_ms,
-			(timer_finished.QuadPart - scheduler_finished.QuadPart) * ticks_to_ms,
-			is->custom_renderer_requested_frames - requested_before,
-			is->custom_renderer_presented_frames - presented_before,
-			pending_before ? 1 : 0, is->custom_renderer_redraw_pending ? 1 : 0,
-			is->custom_renderer_draw_in_progress ? 1 : 0,
-			is->custom_renderer_visible_animation_count);
-		message[(sizeof message) - 1] = '\0';
-		(*p_OutputDebugStringA) (message);
-	}
+    if (is->custom_renderer_timer_running) return;
+    is->custom_renderer_timer_running = true;
+    if (is->current_config.enable_custom_animations && ! is->current_config.enable_custom_rendering) {
+        if ((*p_debug_mode_bits & 0xC) != 0) clear_active_custom_tile_animation_effects ();
+        else tile_animation_scheduler_tick ();
+    }
+    // Compatibility demand exists only while no retained GPU front is ready.
+    // A completed resident front advances on the renderer's own UI-thread
+    // timer, without setting Animator dirty bits or calling Animator_update.
+    bool resident = is->current_config.enable_custom_rendering && is->custom_renderer_native_image != NULL &&
+        is->custom_renderer_native_image (C3X_NATIVE_VISUAL_POLICY, NULL, NULL, NULL, NULL, 2) > 0;
+    if (! resident) custom_renderer_scheduler_tick ();
+    on_timer_0x9F6500 ();
+    is->custom_renderer_timer_running = false;
 }
 
 void __fastcall
