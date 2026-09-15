@@ -71,6 +71,16 @@ Unique terrain/city/infrastructure meshes remain valid retained representations;
 forest instances additionally share source geometry. This does not require every
 object category to use the same mesh representation.
 
+CPU compilation ends at `PreparedMesh`: exact packed vertex/index bytes, bounds
+and shared-topology identity. Terrain preparation carries those records with its
+existing world/coast/river proofs; raw compiler vertices do not enter the ready
+queue. GPU adoption of prepared terrain validates dependencies and uploads
+immutable ranges without re-indexing or rediscovering bounds. Other object meshes
+use the same CPU packer, but their assembly/packing still runs on the render owner.
+Compilation may finish available content before joining active helpers; final
+occurrence/pass order remains native capture order. Workers acquire neither GPU
+nor native-game ownership.
+
 Explicit passes name inputs, outputs and dependencies for static/dynamic geometry,
 shadows, reflections, water, finishing and composition. This is not a replacement
 pass order. Static color/depth can be reused only with valid contributors, lighting,

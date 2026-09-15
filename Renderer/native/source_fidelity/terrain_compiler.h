@@ -5,6 +5,7 @@
 #include "../../lab/shared/natural/relief.h"
 #include "../../lab/shared/natural/ground.h"
 #include "../render_core/content_preparation.h"
+#include "../render_core/prepared_mesh.h"
 namespace c3x_renderer { namespace fidelity {
 struct TerrainCompileInput {
     using Key=std::array<std::uint64_t,12>;
@@ -15,15 +16,13 @@ struct TerrainCompileInput {
     bool river_ready=false,skip_flat_shore=true,separate_relief=true,indexed=true,retain_height=true;
 };
 struct TerrainSurfaces {
-    std::array<std::vector<MapVertex>,3> layers;
-    std::array<std::vector<unsigned>,2> indices;
+    std::array<render_core::PreparedMesh,3> meshes;
     std::unordered_map<std::size_t,std::uint32_t> world;
     std::unordered_map<std::uint64_t,std::uint64_t> coast;
     NaturalWorld::CellProof rivers;
     std::size_t proof_bytes=0;
     std::size_t buffer_bytes() const {
-        std::size_t bytes=0;for(auto const& layer:layers)bytes+=layer.capacity()*sizeof(MapVertex);
-        for(auto const& index:indices)bytes+=index.capacity()*sizeof(unsigned);return bytes;
+        std::size_t bytes=0;for(auto const& mesh:meshes)bytes+=mesh.bytes();return bytes;
     }
     std::size_t bytes() const {return sizeof(*this)+buffer_bytes()+proof_bytes+
         (world.size()+coast.size())*64+(world.bucket_count()+coast.bucket_count())*sizeof(void*);}
@@ -55,7 +54,14 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
         TerrainCompileScratch& scratch,Cancelled stop,TerrainSurfaces& destination,bool bounded) {
     using Vertex=MapVertex;
     auto result=&destination;
-    auto cancelled=[&]{return stop() || (bounded && result->buffer_bytes()>8u*1024u*1024u);};
+    std::array<std::vector<Vertex>,3> natural_vertices;
+    std::array<std::vector<unsigned>,2> natural_grid_indices;
+    auto cancelled=[&]{
+        std::size_t bytes=result->buffer_bytes();
+        for(auto const& layer:natural_vertices)bytes+=layer.capacity()*sizeof(Vertex);
+        for(auto const& index:natural_grid_indices)bytes+=index.capacity()*sizeof(unsigned);
+        return stop() || (bounded && bytes>8u*1024u*1024u);
+    };
     if(cancelled())return {};
     scratch.bind(natural,world_coast.world(),input.world_revision);
     NaturalWorld::CellInputs river_inputs;
@@ -97,10 +103,20 @@ bool emit_terrain_surfaces(NaturalData const& natural,Assets const& assets,
     auto triangle=[](std::vector<Vertex>& out,Vertex const& a,Vertex const& b,Vertex const& c){out.push_back(a);out.push_back(b);out.push_back(c);};
     auto const& tile=input;int ground=input.ground;auto owner=lookup_natural(nc,nr);
     auto patch_detail=input.detail;auto& patch_layouts=scratch.layouts;
-    auto& natural_vertices=result->layers;auto& natural_grid_indices=result->indices;
     bool index_natural_grids=input.indexed;
     auto record_natural_phase=[](unsigned){}; // Worker CPU time is recorded by its queue.
     #include "terrain_mesh_body.h"
+    if(cancelled())return false;
+    for(unsigned layer=0;layer<3;++layer){
+        auto topology=input.indexed && layer!=1?&natural_grid_indices[layer==0?0:1]:nullptr;
+        render_core::MeshFormat format;format.natural=true;
+        format.shared_grid=render_core::shared_mesh_grid(natural_vertices[layer].size(),topology,patch_layouts);
+        if(!render_core::prepare_mesh(natural_vertices[layer],topology,format,result->meshes[layer],stop))return false;
+        // Ready storage replaces raw compiler output before the next layer.
+        // A worker owns at most one layer's packing transient in addition to
+        // the existing bounded raw input; no raw arrays enter the ready queue.
+        std::vector<Vertex>().swap(natural_vertices[layer]);
+    }
     if(cancelled())return false;
     result->rivers.assign(river_inputs.begin(),river_inputs.end());
     result->proof_bytes=scratch.rivers.proof_bytes(result->rivers);

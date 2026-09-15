@@ -43,7 +43,7 @@ int main() {
             self.assertTrue(vertex.startswith(" = input.hydrology_data;"))
         cpp=(ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
         coverage=cpp.index("bool water_coverage=")
-        upload=cpp.index("if(!cache_geometry_layer(part.vertices",coverage)
+        upload=cpp.index("if(!cache_geometry_layer(mesh_upload,part.vertices",coverage)
         self.assertLess(coverage,upload)
         self.assertIn("if(!water_coverage)continue;",cpp[coverage:coverage+2600])
 

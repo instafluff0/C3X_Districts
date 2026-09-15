@@ -71,7 +71,9 @@ int main(){
   pool.configure({{1,1},{2,2}},[&](int const& input,auto const&,unsigned){
    ++calls;entered=true;while(!release)std::this_thread::yield();return std::make_unique<Result>(Result{input,1});
   });pool.resume();while(!entered)std::this_thread::yield();
+  assert(pool.compiling(1) && !pool.compiling(2));
   assert(!pool.take(2,true));release=true;assert(pool.take(1));pool.pause();assert(calls==1);
+  assert(!pool.compiling(1) && !pool.compiling(2));
  }
  // Destruction joins active compilers before borrowed owners may disappear.
  std::atomic<bool> entered{false},left{false};
@@ -164,7 +166,7 @@ int main(){
   input.tile_width=128;input.tile_height=64;input.target_height=480;input.world_revision=real;
   input.key[0]=real;
   auto expected=compile_terrain_surfaces(natural,assets,world,input,foreground,[]{return false;},false);
-  assert(expected && !expected->layers[real==6?2:0].empty());
+  assert(expected && !expected->meshes[real==6?2:0].empty());
   std::deque<TerrainPreparation::Job> jobs;
   for(int i=0;i<12;++i){auto job=input;job.key[1]=i;jobs.push_back({job.key,job});}
   pool.configure(jobs,[&](auto const& job,auto const& stop,unsigned worker){
@@ -172,9 +174,10 @@ int main(){
   },4);pool.resume();
   for(auto const& job:jobs){auto result=pool.take(job.key);assert(result);
    assert(result->world==expected->world && result->coast==expected->coast);
-   assert(result->indices==expected->indices);
-   for(unsigned layer=0;layer<3;++layer){auto const& a=result->layers[layer];auto const& b=expected->layers[layer];
-    assert(a.size()==b.size());if(!a.empty())assert(!std::memcmp(a.data(),b.data(),a.size()*sizeof(MapVertex)));}
+   for(unsigned layer=0;layer<3;++layer){auto const& a=result->meshes[layer];auto const& b=expected->meshes[layer];
+    assert(a.vertices==b.vertices && a.indices==b.indices && a.bounds==b.bounds);
+    assert(a.world_low==b.world_low && a.world_high==b.world_high && a.projected_bounds.extent==b.projected_bounds.extent);
+    assert(a.vertex_stride==b.vertex_stride && a.index_stride==b.index_stride && a.shared_grid==b.shared_grid);}
   }
   pool.clear();
  }

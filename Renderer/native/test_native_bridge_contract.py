@@ -491,7 +491,7 @@ int main() {
         self.assertIn('compile_terrain_shader("PSIntegrated"', renderer)
         self.assertIn('compile_terrain_shader("PSIntegratedFeature"', renderer)
         self.assertIn("D3DCompileFromFile", renderer)
-        self.assertIn("std::array<ID3D11ShaderResourceView *, 128> views", renderer)
+        self.assertIn("std::array<ID3D11ShaderResourceView*,128> material_views", renderer)
         self.assertIn("context->PSSetConstantBuffers(0, 1, &terrain_settings_buffer)", renderer)
         self.assertIn("#define C3X_GAME_RENDERER 1", adapter)
         self.assertIn("#define rivers_enabled 1.0", production_shader)

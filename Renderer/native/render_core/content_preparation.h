@@ -101,6 +101,14 @@ public:
     void set_ready_notification(std::function<void()> next){
         std::lock_guard<std::mutex> guard(notification_mutex);ready_notification=std::move(next);
     }
+    // Advisory only: compilation may finish immediately after this snapshot.
+    // The sole consumer may finish other independent content before joining;
+    // take() remains the authority for consuming/stealing exactly one result.
+    bool compiling(Key const& key){
+        std::lock_guard<std::mutex> lock(mutex);
+        for(unsigned i=0;i<active.size();++i)if(active[i] && active_key[i]==key)return true;
+        return false;
+    }
     // Speculative GPU adoption never joins a helper or steals a queued CPU job.
     std::unique_ptr<Result> take_ready(Key const& key){
         std::lock_guard<std::mutex> lock(mutex);

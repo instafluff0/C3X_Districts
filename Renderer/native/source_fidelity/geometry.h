@@ -22,19 +22,7 @@ if(fidelity_profile) {
     auto surface=[&](float u,float v){
         return ground_surface(project_natural,u,v,height_natural,shore_sample_at,material_weights_for);
     };
-    if(cpu_terrain_enabled) {
-        auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
-        auto prepared=terrain_preparation.take(input.key,true);
-        if(prepared && !terrain_result_valid(*prepared))prepared.reset();
-        if(!prepared)prepared=compile_terrain(input,foreground_terrain_scratch,cancelled,false);
-        if(!prepared)return false;
-        for(unsigned layer=0;layer<3;++layer)natural_vertices[layer]=std::move(prepared->layers[layer]);
-        natural_grid_indices=std::move(prepared->indices);
-        world_dependencies.insert(prepared->world.begin(),prepared->world.end());
-        coast_dependencies.insert(prepared->coast.begin(),prepared->coast.end());
-        river_dependencies.insert(prepared->rivers.begin(),prepared->rivers.end());
-        record_natural_phase(3);
-    }else {
+    if(!cpu_terrain_enabled) {
         #include "terrain_mesh_body.h"
     }
     #include "../city_fidelity/geometry.h"
@@ -92,4 +80,17 @@ if(fidelity_profile) {
         #include "../../lab/shared/natural/forest_mesh_body.h"
     }
     record_natural_phase(5);
+    if(cpu_terrain_enabled) {
+        // Join only after independent city/forest assembly has used this read lease.
+        auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
+        auto prepared=terrain_preparation.take(input.key,true);
+        if(prepared && !terrain_result_valid(*prepared))prepared.reset();
+        if(!prepared)prepared=compile_terrain(input,foreground_terrain_scratch,cancelled,false);
+        if(!prepared)return false;
+        world_dependencies.insert(prepared->world.begin(),prepared->world.end());
+        coast_dependencies.insert(prepared->coast.begin(),prepared->coast.end());
+        river_dependencies.insert(prepared->rivers.begin(),prepared->rivers.end());
+        prepared_terrain=std::move(prepared);
+        record_natural_phase(3);
+    }
 }

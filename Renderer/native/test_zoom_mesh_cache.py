@@ -1019,11 +1019,6 @@ int main(){
         compiler = shutil.which("clang++") or shutil.which("g++")
         if not compiler:
             self.skipTest("C++ compiler unavailable")
-        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
-        equality = source.split("struct VertexHash {", 1)[1].split("struct GroundPoint {", 1)[0]
-        indexing = "//" + source.split("        // Index into the packed array", 1)[1].split("        CachedVertexChunk chunk;", 1)[0]
-        indexing = indexing.rsplit("        }", 1)[0]
-        compact = source.split("        std::vector<std::uint16_t> narrow_indices;", 1)[1].split("        while (prefetch", 1)[0]
         program = r'''
 #include <array>
 #include <atomic>
@@ -1032,51 +1027,73 @@ int main(){
 #include <cstring>
 #include <unordered_map>
 #include "Renderer/lab/shared/natural/ground.h"
-using Vertex=c3x_renderer::fidelity::MapVertex;
+#include "Renderer/native/render_core/prepared_mesh.h"
+using namespace c3x_renderer::render_core;
 using UINT=unsigned;
-''' + "struct VertexHash {" + equality + r'''
+unsigned index_at(PreparedMesh const& mesh,unsigned i){
+ unsigned result=0;std::memcpy(&result,mesh.indices.data()+i*mesh.index_stride,mesh.index_stride);return result;
+}
 bool check(bool feature) {
-    bool pickup_profile=true,compact_feature=feature,prefetch=false;
-    std::atomic<bool> const* foreground_pending=nullptr;
-    std::size_t hash_stride=sizeof(Vertex);
     std::vector<Vertex> vertices;
     for(unsigned i=0;i<30000;i++) {
         Vertex v={};unsigned key=(i*73)%1789;
         v.x=float(key%41);v.y=float(key/41);v.z=float(key%13);
         v.u=key*.125f;v.normal_z=1;v.world_x=key*.25f;
-        // Compact features omit this channel. Signed zeros remain byte-distinct.
         v.material_grass=float(i%3);v.v=i%7==0?-0.f:0.f;
         vertices.push_back(v);
     }
-    std::vector<Vertex> expected;
-    std::vector<UINT> expected_indices;
-    std::unordered_map<Vertex,UINT,VertexHash,VertexEqual> old(0,VertexHash{hash_stride,feature},VertexEqual{hash_stride,feature});
+    std::vector<Vertex> expected;std::vector<UINT> expected_indices;
+    std::unordered_map<Vertex,UINT,VertexHash,VertexEqual> old(0,VertexHash{sizeof(Vertex),feature},VertexEqual{sizeof(Vertex),feature});
     for(auto const& v:vertices){auto at=old.emplace(v,UINT(expected.size()));
         if(at.second)expected.push_back(v);expected_indices.push_back(at.first->second);}
-    std::vector<Vertex> packed;
-    std::vector<UINT> indices;
-''' + indexing + r'''
-    assert(indices==expected_indices && packed.size()==expected.size());
-    assert(std::memcmp(packed.data(),expected.data(),packed.size()*sizeof(Vertex))==0);
+    for(unsigned projection:{0u,2u,3u}){
+        MeshFormat format;format.feature=feature;format.projection_kind=projection;
+        PreparedMesh mesh;assert(prepare_mesh(vertices,nullptr,format,mesh,[]{return false;}));
+        assert(mesh.index_count==expected_indices.size() && mesh.vertices.size()/mesh.vertex_stride==expected.size());
+        for(unsigned i=0;i<mesh.index_count;++i)assert(index_at(mesh,i)==expected_indices[i]);
+        for(unsigned i=0;i<expected.size();++i){auto v=expected[i];
+            if(projection){v.x/=128.f;v.y/=128.f;if(projection==3){v.z/=128.f;v.river_branch_count/=128.f;}}
+            float compact[]={v.x,v.y,v.z,v.u,v.v,v.normal_x,v.normal_y,v.normal_z,v.base_terrain,v.world_x,v.world_y,v.world_z};
+            assert(!std::memcmp(mesh.vertices.data()+i*mesh.vertex_stride,feature?static_cast<void*>(compact):&v,mesh.vertex_stride));
+        }
+        auto previous=mesh.vertices;
+        assert(!prepare_mesh(vertices,nullptr,format,mesh,[]{return true;}));assert(mesh.vertices==previous);
+        unsigned calls=0;assert(!prepare_mesh(vertices,nullptr,format,mesh,[&]{return ++calls==3;}));assert(mesh.vertices==previous);
+    }
     return true;
 }
 void check_index_width(std::size_t vertex_count) {
-    enum {DXGI_FORMAT_R16_UINT=16,DXGI_FORMAT_R32_UINT=32};
-    struct {int index_format=DXGI_FORMAT_R32_UINT;std::size_t byte_count=0;} chunk;
-    bool natural_vertex=false;std::vector<UINT> const*grid_indices=nullptr;
-    c3x_renderer::fidelity::PatchLayouts patch_layouts;
-    std::vector<Vertex> packed(vertex_count);
+    std::vector<Vertex> vertices(vertex_count);
     std::vector<UINT> indices={0,1,UINT(vertex_count-1),0,UINT(vertex_count-1),1};
-    std::size_t vertex_stride=76;
-    std::vector<std::uint16_t> narrow_indices;
-''' + compact + r'''
-    bool narrow=vertex_count<=65535;
-    assert(chunk.index_format==(narrow?DXGI_FORMAT_R16_UINT:DXGI_FORMAT_R32_UINT));
-    assert(chunk.byte_count==vertex_count*vertex_stride+indices.size()*(narrow?2:4));
-    if(narrow)for(std::size_t i=0;i<indices.size();++i)assert(narrow_indices[i]==indices[i]);
-    else assert(narrow_indices.empty());
+    PreparedMesh mesh;MeshFormat format;
+    assert(prepare_mesh(vertices,&indices,format,mesh,[]{return false;}));
+    assert(mesh.index_stride==(vertex_count<=65535?2:4));
+    assert(mesh.vertices.size()==vertex_count*sizeof(Vertex));
+    for(unsigned i=0;i<indices.size();++i)assert(index_at(mesh,i)==indices[i]);
+    indices.push_back(unsigned(vertex_count));assert(!prepare_mesh(vertices,&indices,format,mesh,[]{return false;}));
+}
+void check_formats(){
+    std::vector<Vertex> vertices(3);float values[42];
+    for(unsigned i=0;i<42;++i)values[i]=float(i)+.125f;
+    for(auto& v:vertices)std::memcpy(&v,values,sizeof(v));
+    vertices[1].x=-10.25f;vertices[1].world_z=25;vertices[2].y=100.25f;
+    std::vector<unsigned> indices={2,0,1};
+    for(bool natural:{false,true}){
+        MeshFormat format;format.natural=natural;format.pickup=natural;
+        PreparedMesh mesh;assert(prepare_mesh(vertices,&indices,format,mesh,[]{return false;}));
+        assert(mesh.bounds[0]==-13 && mesh.bounds[3]==103);
+        for(unsigned i=0;i<3;++i){auto const& v=vertices[i];
+            float data[]={v.x,v.y,v.z,v.world_x,v.world_y,v.world_z,v.world_valid,v.normal_x,v.normal_y,v.normal_z,v.u,v.v,
+                v.material_grass,v.material_plains,v.material_desert,v.material_marsh,v.authored_relief_height,v.authored_relief_blend,v.base_terrain,
+                v.relief_owner_u,v.relief_owner_v,v.relief_owner_coverage,v.relief_owner_state};
+            assert(mesh.vertex_stride==(natural?92:120));
+            assert(!std::memcmp(mesh.vertices.data()+i*mesh.vertex_stride,natural?static_cast<void*>(data):&v,mesh.vertex_stride));
+        }
+        if(natural)assert(mesh.projected_bounds.valid && mesh.world_high[2]==32.125f && mesh.world_low[2]==25);
+    }
 }
 int main(){
+    check_formats();
     for(auto count:{3u,65535u,65536u,70000u})check_index_width(count);
     assert(check(false) && check(true));
     // IEEE float grids share low mantissa bits. A power-of-two table must

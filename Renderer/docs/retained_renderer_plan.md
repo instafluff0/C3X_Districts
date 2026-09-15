@@ -9,7 +9,8 @@ without making every possible destination image a prerequisite for fast movement
 Full detail, authored animation and native ownership remain unchanged.
 
 **Active deliverable: milestone 1.** Its replacement static submission path is
-implemented and validated; its whole-request performance criterion remains open.
+implemented and validated, including packed terrain preparation; its whole-request
+performance criterion remains open.
 Continue the missing-content responsibility identified below without another
 planning/approval gate. Milestones are connected outcomes, not promised short
 passes. [Architecture](renderer_architecture.md) owns the design;
@@ -19,12 +20,12 @@ passes. [Architecture](renderer_architecture.md) owns the design;
 
 | Original responsibility | Implemented foundation | Remaining responsibility |
 | --- | --- | --- |
-| Persistent world/instances | Camera-independent content, shared assets/forest meshes, revisioned units, immutable mesh ranges and material bindings, bounded residency | Remove remaining foreground construction of missing content; broaden mesh sharing where useful |
+| Persistent world/instances | Camera-independent content, shared assets/forest meshes, revisioned units, packed terrain records, immutable mesh ranges/materials, bounded residency | Remove remaining foreground construction of missing content; broaden mesh sharing where useful |
 | Local validity | Captured appearance/dependency revisions, unit revision/despawn proofs | Preserve complete validity through migrated representations; refine authoritative change publication where useful |
 | Spatial selection | World pass index and native/wrapped occurrences feed replacement static submissions directly | Collected dynamic/unit pass inputs |
 | Compatible passes | Compatible static layers, shared material bindings, batched occurrence parameters/uploads, forest instancing, exact native composition | Collected dynamic/unit execution; additional sharing guided by cost |
 | GPU reuse/output | Resident admitted map/poses, static color/depth, incremental finishing and native composition | Direct dynamic scene execution; reduce per-pose and full-map work where measured |
-| Async integration | Bounded content/pose/view preparation, selected-work urgency and independent visual timer | Complete GPU-ready content preparation; coherent general nonblocking camera/content publication |
+| Async integration | Bounded content/pose/view preparation, selected-work urgency and independent visual timer | GPU-ready preparation for remaining objects; coherent general nonblocking camera/content publication |
 
 Independent frames use the existing HWND presenter without native redraw requests.
 Civ III's original gameplay timer is unchanged. Map animation still enters the
@@ -94,42 +95,43 @@ including navigation, animation and UI transitions. A 33 ms timer is not 30 FPS;
 
 ## Current evidence and implementation handoff
 
-**Completed:** selected static inputs now use compiled material bundles, bounded
-parameter streams and compatible layer submissions. Changed mesh ranges share
-immutable allocations within their existing residency owners. The old per-layer
-allocation and unconditional layer-flush paths are replaced. Current worker demand
-is explicitly prioritized. Full detail, dependency validity, native ownership and
-config-off behavior are preserved; no new hooks or visual concessions were added.
+**Completed:** terrain workers now return packed shader vertices, compact indices,
+bounds and existing world/coast/river proofs. The foreground raw-terrain handoff
+and duplicate packing are replaced. Shared-grid topology and immutable GPU ranges
+remain reusable; other object meshes use the same packer in the foreground.
+The render owner finishes independent content before joining active helpers, then
+assembles occurrences in native order. No new pool, timer, hooks or quality cuts.
 
-**Measured:** the full-detail 1120×1192 connected fixture includes map, eight units,
-native UI and final transfer (capture remains outside timing). Latest original DLL
-versus candidate GPU request means / p95, 64 samples per workload:
+**Measured:** the full-detail 1120×1192 fixture includes map, eight units, native UI
+and final transfer, with capture outside timing. Two final candidate runs and two
+preserved-control runs each contain 64 GPU samples per workload:
 
-| Workload | Original (ms) | Candidate (ms) |
+| Workload | Control means (ms) | Candidate means (ms) |
 | --- | --- | --- |
-| Stationary animation | 9.68 / 15.89 | 9.08 / 15.03 |
-| Dense scrolling | 56.06 / 99.90 | 55.88 / 104.41 |
-| Local change | 11.62 / 33.86 | 11.40 / 37.89 |
+| Stationary animation | 8.67, 9.23 | 9.39, 9.37 |
+| Dense scrolling | 41.58, 58.64 | 39.22, 42.36 |
+| Local change | 10.94, 11.31 | 10.27, 11.09 |
 
-Scrolling mean is effectively unchanged; its median improved but tails did not.
-This is **not a demonstrated whole-request speedup**. Submission/allocation work
-fell, while content preparation still averages 31.2 ms of the 55.9 ms request.
-Outer-halo CPU speculation regressed scrolling and was removed. Exact control
-pixels, native UI/ownership and independent-frame tests pass; sampled contiguous
-32-bit headroom is 1.47 GiB. These fixtures do not establish live-game acceptance.
+Scrolling preparation averages 19.88–21.53 ms versus 22.89–32.55 ms. A comparable
+55-content trace eliminates repeated packing for 108 terrain meshes; helper wait
+falls from the first packed candidate's 7.91 ms to 0.05 ms after correction.
+Those spans overlap other work. The control's second run slowed sharply mid-run;
+**a reliable overall speedup is not established**. Idle/local changes are broadly
+unchanged. All connected receipts retain exact control pixels and native ownership.
+Sampled contiguous headroom remains at least 1.26 GiB in the final runs.
 
-**Next unfinished responsibility:** complete preparation of missing world content
-into GPU-ready geometry, bounds, dependency proofs and upload ranges, leaving
-bounded adoption on the GPU owner. Existing terrain workers still return raw mesh
-vectors, and object assembly/packing still runs in the foreground. Extend the
-existing compilers and validity owners; do not add another speculative coverage
-queue or output-helper detour. Keep milestone 1 performance acceptance open until
-the complete workload improves. Direct dynamic/unit scene execution remains
-milestone 2; general coherent nonblocking native camera publication remains 3.
+**Next unfinished responsibility:** remove the remaining foreground ground/object
+assembly and adoption cost, using the completed packed-content boundary and actual
+cost attribution. Missing-content preparation still consumes about half a scrolling
+request; simply moving more work to helpers is insufficient. Preserve shared assets,
+local validity and native occurrence order, and keep milestone 1 acceptance open.
+Direct dynamic/unit scene execution remains milestone 2; general coherent
+nonblocking native camera publication remains 3. Do not start another output-helper
+or speculative-coverage detour.
 
-Candidate DLL `9b7a72e935d6b39100767f3f544287c7352e94431d63cc5fda641e25a7e8e722`
-is staged for ordinary `INSTALL.bat`; the user installs/launches. No installation
-or game launch was performed. Original rollback DLL and all intermediate results
-remain preserved. [Submission checkpoint](history/selected_submissions_20260915.md)
-records exact controls, receipts, tests and rejected mechanisms;
-[earlier evidence](history/retained_renderer_checkpoints_20260915.md) remains valid.
+Candidate DLL `a251c38008c6d090be78799419d40b8225a5ae4da2e5b8b5466fc4e2fc413fbd`
+is staged for ordinary `INSTALL.bat`; 289 tests passed, one platform check skipped.
+No game installation or launch was performed. Exact controls and verification are in
+[the packed-content checkpoint](history/gpu_ready_content_20260915.md).
+[Submission evidence](history/selected_submissions_20260915.md) and
+[earlier findings](history/retained_renderer_checkpoints_20260915.md) remain preserved.

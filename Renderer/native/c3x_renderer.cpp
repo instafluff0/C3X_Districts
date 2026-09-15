@@ -53,6 +53,7 @@
 #include "render_core/geometry_draws.h"
 #include "render_core/draw_parameter_stream.h"
 #include "render_core/immutable_mesh_upload.h"
+#include "render_core/prepared_mesh.h"
 #include "render_core/resource_instances.h"
 #include "render_core/scene_depth.h"
 #include "render_core/scene_surface.h"
@@ -367,41 +368,8 @@ struct NaturalTile {
 
 // Hash bytes, then compare all bytes: repeated triangle vertices share storage
 // without merging seams, normals, materials, or merely similar positions.
-struct VertexHash {
-    std::size_t stride = sizeof(Vertex);
-    bool feature = false;
-    std::size_t operator()(Vertex const & vertex) const {
-        auto bytes = reinterpret_cast<unsigned char const *>(&vertex);
-        float fields[12];
-        if(feature){float values[]={vertex.x,vertex.y,vertex.z,vertex.u,vertex.v,
-            vertex.normal_x,vertex.normal_y,vertex.normal_z,vertex.base_terrain,
-            vertex.world_x,vertex.world_y,vertex.world_z};
-            std::memcpy(fields,values,sizeof(fields));bytes=reinterpret_cast<unsigned char const*>(fields);}
-        std::uint64_t result = 1469598103934665603ull;
-        for (std::size_t i = 0; i < (feature?sizeof(fields):stride); i += sizeof(std::uint32_t)) {
-            std::uint32_t word;
-            std::memcpy(&word, bytes + i, sizeof(word));
-            result = (result ^ word) * 1099511628211ull;
-        }
-        // Float grids often have identical low mantissa bits. The flat table
-        // masks low hash bits, unlike the old prime-bucket unordered_map.
-        // Avalanche high coordinate bits before masking to avoid quadratic
-        // probing on otherwise ordinary flat terrain. Equality stays exact.
-        result ^= result >> 33; result *= 0xff51afd7ed558ccdull;
-        result ^= result >> 33; result *= 0xc4ceb9fe1a85ec53ull;
-        result ^= result >> 33;
-        return static_cast<std::size_t>(result);
-    }
-};
-struct VertexEqual {
-    std::size_t stride = sizeof(Vertex);
-    bool feature = false;
-    bool operator()(Vertex const & a, Vertex const & b) const {
-        if(feature)return std::memcmp(&a,&b,20)==0 && std::memcmp(&a.normal_x,&b.normal_x,12)==0 &&
-            std::memcmp(&a.base_terrain,&b.base_terrain,4)==0 && std::memcmp(&a.world_x,&b.world_x,12)==0;
-        return std::memcmp(&a, &b, stride) == 0;
-    }
-};
+using VertexHash=c3x_renderer::render_core::VertexHash;
+using VertexEqual=c3x_renderer::render_core::VertexEqual;
 
 struct GroundPoint {
     float u = 0.0f, v = 0.0f;
@@ -620,7 +588,8 @@ public:
     std::uint64_t frame_draw_calls=0,frame_parameter_updates=0,frame_bounds_tests=0;
     std::uint64_t frame_pass_setups=0,frame_active_layers=0;
     double frame_geometry_issue_ms=0,frame_scene_select_ms=0,frame_scene_execute_ms=0;
-    unsigned frame_content_uploads=0;
+    unsigned frame_content_uploads=0,frame_prepared_meshes=0,frame_foreground_meshes=0;
+    std::size_t frame_prepared_vertex_bytes=0;
     unsigned frame_caster_preparations=0;
     std::size_t frame_post_lanes=0;
     void memory_sample(char const* phase) {
@@ -4407,9 +4376,9 @@ public:
             trace.milliseconds(static_end.QuadPart-begin.QuadPart),trace.milliseconds(dynamic_end.QuadPart-static_end.QuadPart),
             trace.milliseconds(finish_end.QuadPart-dynamic_end.QuadPart),trace.milliseconds(ready.QuadPart-finish_end.QuadPart),trace.milliseconds(copied.QuadPart-ready.QuadPart));
         trace.write("shared-scene-surface",detail,true);memory_sample("shared-scene-complete");
-        sprintf_s(detail,"content_uploads=%u setups=%llu layers=%llu draws=%llu parameter_updates=%llu bounds_tests=%llu parameter_uploads=%u parameter_records=%u issue_ms=%.3f selection_ms=%.3f execute_ms=%.3f",
+        sprintf_s(detail,"content_uploads=%u setups=%llu layers=%llu draws=%llu parameter_updates=%llu bounds_tests=%llu parameter_uploads=%u parameter_records=%u issue_ms=%.3f selection_ms=%.3f execute_ms=%.3f prepared_meshes=%u foreground_meshes=%u prepared_vertex_bytes=%zu",
             frame_content_uploads,frame_pass_setups,frame_active_layers,frame_draw_calls,frame_parameter_updates,frame_bounds_tests,draw_parameters.uploads,draw_parameters.records,
-            frame_geometry_issue_ms,frame_scene_select_ms,frame_scene_execute_ms);
+            frame_geometry_issue_ms,frame_scene_select_ms,frame_scene_execute_ms,frame_prepared_meshes,frame_foreground_meshes,frame_prepared_vertex_bytes);
         trace.write("selected-pass-submission",detail,true);
         sprintf_s(detail,"incremental=%u resolve_pixels=%zu finish_rects=%zu readback_rects=%zu",
             unsigned(incremental_output),resolved_pixels,finish_damage.size(),copies.size());
@@ -4618,14 +4587,13 @@ public:
                               std::atomic<bool> const * foreground_pending = nullptr, bool compact_feature = false, bool natural_vertex = false,
                               NaturalMesh* record=nullptr,NaturalMesh const* cached=nullptr,
                               c3x_renderer::fidelity::GroundProjection const* projection=nullptr,
-                              std::vector<UINT> const* grid_indices=nullptr, unsigned projection_kind=0) {
-        if (vertices.empty() && (!cached || cached->vertices.empty())) return true;
-        std::size_t vertex_stride = pickup_profile ? (natural_vertex?92u:compact_feature?48u:sizeof(Vertex)) : 120u;
-        std::size_t hash_stride = pickup_profile ? sizeof(Vertex) : 120u;
-        std::vector<Vertex> packed;
-        std::vector<UINT> indices;
+                              std::vector<UINT> const* grid_indices=nullptr, unsigned projection_kind=0, c3x_renderer::render_core::PreparedMesh const* prepared=nullptr) {
+        if(vertices.empty() && (!cached || cached->vertices.empty()) && (!prepared || prepared->empty()))return true;
+        c3x_renderer::render_core::PreparedMesh local;
+        auto cancelled=[&]{return prefetch && foreground_pending->load(std::memory_order_relaxed);};
+        std::vector<Vertex> packed;std::vector<UINT> cached_indices;
         if(cached) {
-            indices=cached->indices;packed.resize(cached->vertices.size());
+            cached_indices=cached->indices;packed.resize(cached->vertices.size());
             for(std::size_t i=0;i<packed.size();++i){auto const& p=cached->vertices[i];auto& v=packed[i];
                 if(prefetch && (i&255u)==0 && foreground_pending->load(std::memory_order_relaxed))return false;
                 v.x=p[0];v.y=p[1];v.z=p[2];v.world_x=p[3];v.world_y=p[4];v.world_z=p[5];v.world_valid=p[6];
@@ -4636,64 +4604,31 @@ public:
                 if(projection){auto projected=(*projection)(v.world_x,v.world_y,v.world_z*112.f);
                     v.x=projected.x;v.y=projected.y;v.z=projected.z;}
             }
-        } else if(grid_indices) {
-            // The ground compiler already owns unique corners and exact
-            // triangle topology. Do not expand and hash them a second time.
-            packed.swap(vertices);indices=*grid_indices;
-        } else {
-        // Index into the packed array instead of allocating a hash node and
-        // copying a 168-byte key for every unique vertex. Equality and first
-        // occurrence order are identical to the old node-based table.
-        std::size_t capacity=1;
-        while(capacity<vertices.size()*2u)capacity*=2u;
-        std::vector<UINT> slots(capacity,UINT_MAX);
-        VertexHash vertex_hash{hash_stride,pickup_profile && compact_feature};
-        VertexEqual vertex_equal{hash_stride,pickup_profile && compact_feature};
-        packed.reserve(vertices.size()/3u);
-        indices.reserve(vertices.size());
-        for (Vertex const & vertex : vertices) {
-            if (prefetch && (indices.size() & 255u) == 0 && foreground_pending->load(std::memory_order_relaxed)) return false;
-            auto slot=vertex_hash(vertex)&(capacity-1);
-            while(slots[slot]!=UINT_MAX && !vertex_equal(packed[slots[slot]],vertex))slot=(slot+1)&(capacity-1);
-            if(slots[slot]==UINT_MAX){slots[slot]=static_cast<UINT>(packed.size());packed.push_back(vertex);}
-            indices.push_back(slots[slot]);
+
         }
-        }
+        if(!prepared){
+            c3x_renderer::render_core::MeshFormat format;
+            format.pickup=pickup_profile;format.feature=compact_feature;format.natural=natural_vertex;
+            format.projection_kind=projection_kind;
+            auto topology=cached?&cached_indices:grid_indices;
+            auto const& input=cached?packed:vertices;
+            if(natural_vertex && grid_indices)format.shared_grid=c3x_renderer::render_core::shared_mesh_grid(input.size(),topology,patch_layouts);
+            if(!c3x_renderer::render_core::prepare_mesh(input,topology,format,local,cancelled))return false;
+            prepared=&local;++frame_foreground_meshes;
+        }else{++frame_prepared_meshes;frame_prepared_vertex_bytes+=prepared->vertices.size();}
+        auto const& mesh=*prepared;
+        if(mesh.empty())return true;
         CachedVertexChunk chunk;
         chunk.projection_kind=projection_kind;chunk.source_tile_width=(projection_kind==2 || projection_kind==3)?128:shadow_tile_width;
-        chunk.bounds = {LONG_MAX, LONG_MAX, LONG_MIN, LONG_MIN};
-        chunk.version=tile_geometry_version; chunk.vertex_stride=static_cast<UINT>(vertex_stride);
-        for(unsigned i=0;i<3;++i){chunk.world_bounds.low[i]=1e9f;chunk.world_bounds.high[i]=-1e9f;}
-        for (Vertex const & vertex : packed) {
-            if(natural_vertex)chunk.projected_bounds.include(vertex.world_x,vertex.world_y,vertex.world_z);
-            float world_values[]={vertex.world_x,vertex.world_y,vertex.world_z};
-            if(pickup_profile)for(unsigned i=0;i<3;++i){float value=world_values[i];
-                chunk.world_bounds.low[i]=std::min(chunk.world_bounds.low[i],value);
-                chunk.world_bounds.high[i]=std::max(chunk.world_bounds.high[i],value);}
-            chunk.bounds.left = std::min(chunk.bounds.left, static_cast<LONG>(std::floor(vertex.x)) - 2);
-            chunk.bounds.top = std::min(chunk.bounds.top, static_cast<LONG>(std::floor(vertex.y)) - 2);
-            chunk.bounds.right = std::max(chunk.bounds.right, static_cast<LONG>(std::ceil(vertex.x)) + 2);
-            chunk.bounds.bottom = std::max(chunk.bounds.bottom, static_cast<LONG>(std::ceil(vertex.y)) + 2);
-        }
-        chunk.index_count = static_cast<UINT>(indices.size());
-        // Most per-tile chunks fit in 16-bit indices, including authored trees.
-        // Preserve the complete vertex/triangle order; only storage narrows.
-        std::vector<std::uint16_t> narrow_indices;
-        if (packed.size() <= 65535u) {
-            narrow_indices.reserve(indices.size());
-            for (UINT index : indices) narrow_indices.push_back(static_cast<std::uint16_t>(index));
-            chunk.index_format = DXGI_FORMAT_R16_UINT;
-        }
-        std::size_t index_bytes = indices.size() * (narrow_indices.empty() ? sizeof(UINT) : sizeof(std::uint16_t));
-        unsigned shared_grid=0;
-        if(natural_vertex && grid_indices && !narrow_indices.empty()){
-            unsigned side=unsigned(std::sqrt(double(packed.size())));
-            if(side>1 && side<=65 && side*side==packed.size()){
-                auto const&layout=patch_layouts.get(side-1);
-                if(layout.indices==indices)shared_grid=side-1;
-            }
-        }
-        chunk.byte_count = packed.size() * vertex_stride + (shared_grid?0:index_bytes);
+        chunk.version=tile_geometry_version;chunk.vertex_stride=mesh.vertex_stride;
+        chunk.bounds={mesh.bounds[0],mesh.bounds[1],mesh.bounds[2],mesh.bounds[3]};
+        std::copy(mesh.world_low.begin(),mesh.world_low.end(),chunk.world_bounds.low);
+        std::copy(mesh.world_high.begin(),mesh.world_high.end(),chunk.world_bounds.high);
+        chunk.projected_bounds=mesh.projected_bounds;
+        chunk.index_count=mesh.index_count;chunk.index_format=mesh.index_stride==2?DXGI_FORMAT_R16_UINT:DXGI_FORMAT_R32_UINT;
+        unsigned shared_grid=mesh.shared_grid;
+        std::size_t index_bytes=mesh.indices.size();
+        chunk.byte_count=mesh.vertices.size()+(shared_grid?0:index_bytes);
         while (prefetch && prefetched_geometry_bytes + pending_bytes + chunk.byte_count + 3u > 64u*1024u*1024u) {
             auto oldest = tile_geometry_cache.end();
             for (auto it = tile_geometry_cache.begin(); it != tile_geometry_cache.end(); ++it)
@@ -4711,77 +4646,38 @@ public:
         if (prefetch && foreground_pending->load(std::memory_order_relaxed)) return false;
         if(profiling && sampled_geometry_bucket!=tile_geometry_cache_bytes/(32u*1024u*1024u)){
             sampled_geometry_bucket=tile_geometry_cache_bytes/(32u*1024u*1024u);
-            char detail[192];sprintf_s(detail,"gpu_request=%zu packed_capacity=%zu index_capacity=%zu narrow_capacity=%zu",
-                chunk.byte_count,packed.capacity()*sizeof(packed[0]),indices.capacity()*sizeof(indices[0]),
-                narrow_indices.capacity()*sizeof(narrow_indices[0]));
+            char detail[192];sprintf_s(detail,"gpu_request=%zu packed_bytes=%zu index_bytes=%zu prepared=%u",
+                chunk.byte_count,mesh.vertices.size(),mesh.indices.size(),unsigned(prepared!=&local));
             trace.write("geometry-allocation",detail,true);
             memory_sample("before-geometry-allocation");
         }
         output.reserve(output.size()+1); // allocate before acquiring COM resources
-        D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = static_cast<UINT>(packed.size() * vertex_stride);
-        desc.Usage = D3D11_USAGE_IMMUTABLE;
-        desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-        D3D11_SUBRESOURCE_DATA initial = {};
-        std::vector<std::uint8_t> frozen_vertices;
-        initial.pSysMem = packed.data();
-        // Preserve source feature height in z; xy is a local, zoom-independent
-        // basis. World position, materials and source-shadow inputs are intact.
-        if(projection_kind==2 || projection_kind==3)for(auto& v:packed){
-            v.x/=float(chunk.source_tile_width);v.y/=float(chunk.source_tile_width);
-            if(projection_kind==3){v.z/=128.f;v.river_branch_count/=128.f;}
-        }
-        if(natural_vertex) {
-            frozen_vertices.resize(packed.size()*92);
-            for(std::size_t i=0;i<packed.size();++i){auto const&v=packed[i];
-                float data[]={v.x,v.y,v.z,v.world_x,v.world_y,v.world_z,v.world_valid,
-                    v.normal_x,v.normal_y,v.normal_z,v.u,v.v,
-                    v.material_grass,v.material_plains,v.material_desert,v.material_marsh,
-                    v.authored_relief_height,v.authored_relief_blend,v.base_terrain,
-                    v.relief_owner_u,v.relief_owner_v,v.relief_owner_coverage,v.relief_owner_state};
-                std::memcpy(frozen_vertices.data()+i*92,data,92);
+        if(record){
+            record->vertices.resize(mesh.vertices.size()/92u);
+            std::memcpy(record->vertices.data(),mesh.vertices.data(),mesh.vertices.size());
+            record->indices.resize(mesh.index_count);
+            for(unsigned i=0;i<mesh.index_count;++i){
+                if(mesh.index_stride==2){std::uint16_t value;std::memcpy(&value,mesh.indices.data()+i*2,2);record->indices[i]=value;}
+                else std::memcpy(&record->indices[i],mesh.indices.data()+i*4,4);
             }
-            initial.pSysMem=frozen_vertices.data();
-            if(record){record->vertices.resize(packed.size());record->indices=indices;
-                std::memcpy(record->vertices.data(),frozen_vertices.data(),frozen_vertices.size());}
-        } else if(pickup_profile && compact_feature) {
-            frozen_vertices.resize(packed.size()*48);
-            for(std::size_t i=0;i<packed.size();++i){auto const& v=packed[i];
-                float data[]={v.x,v.y,v.z,v.u,v.v,v.normal_x,v.normal_y,v.normal_z,v.base_terrain,
-                    v.world_x,v.world_y,v.world_z};
-                std::memcpy(frozen_vertices.data()+i*48,data,48);
-            }
-            initial.pSysMem=frozen_vertices.data();
-        } else if (!pickup_profile) {
-            frozen_vertices.resize(packed.size() * vertex_stride);
-            for (std::size_t i = 0; i < packed.size(); ++i)
-                std::memcpy(frozen_vertices.data() + i*vertex_stride, &packed[i], vertex_stride);
-            initial.pSysMem = frozen_vertices.data();
         }
         auto before=upload.size();
-        chunk.vertex_offset=upload.append(initial.pSysMem,desc.ByteWidth);
+        chunk.vertex_offset=upload.append(mesh.vertices.data(),mesh.vertices.size());
         auto shared=terrain_patch_indices.find(shared_grid);
         if(shared_grid && shared!=terrain_patch_indices.end()){
             chunk.indices=shared->second;chunk.indices->AddRef();++frame_patch_index_reuses;
         }else if(shared_grid){
             if(terrain_patch_index_bytes+index_bytes>4u*1024u*1024u || !make_tile_cache_room(chunk.byte_count+index_bytes))return false;
-            desc.ByteWidth=static_cast<UINT>(index_bytes);desc.BindFlags=D3D11_BIND_INDEX_BUFFER;
-            initial.pSysMem=narrow_indices.data();
+            D3D11_BUFFER_DESC desc={};desc.ByteWidth=static_cast<UINT>(index_bytes);
+            desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_INDEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA initial={};initial.pSysMem=mesh.indices.data();
             if(FAILED(device->CreateBuffer(&desc,&initial,&chunk.indices)))return false;
             try{terrain_patch_indices.emplace(shared_grid,chunk.indices);}catch(...){release(chunk.indices);throw;}
             chunk.indices->AddRef();terrain_patch_index_bytes+=index_bytes;frame_upload_bytes+=index_bytes;
-        }else{
-            chunk.index_offset=upload.append(narrow_indices.empty()?static_cast<void const*>(indices.data()):narrow_indices.data(),index_bytes);
-        }
-        // Charge alignment once with its content, including a preceding narrow
-        // index range. Shared flat-layer aliases carry zero additional bytes.
+        }else chunk.index_offset=upload.append(mesh.indices.data(),index_bytes);
         chunk.byte_count=upload.size()-before;
-        tile_geometry_cache_bytes += chunk.byte_count;
-        frame_upload_bytes += chunk.byte_count;
-        output.push_back(chunk);
-        if(grid_indices)vertices.swap(packed);
-        vertices.clear(); // bounded scratch reused for the next tile
-        return true;
+        tile_geometry_cache_bytes+=chunk.byte_count;frame_upload_bytes+=chunk.byte_count;
+        output.push_back(chunk);vertices.clear();return true;
     }
 
     GeometryDrawRecord project_natural_chunk(GeometryDrawRecord chunk, c3x_renderer_tile_v1 const& record) {
@@ -6313,7 +6209,7 @@ public:
         profiling=GetEnvironmentVariableA("C3X_RENDERER_PROFILE",profile_option,sizeof(profile_option)) &&
             std::strcmp(profile_option,"1")==0;
         frame_draw_calls=frame_parameter_updates=frame_bounds_tests=0;
-        draw_parameters.uploads=draw_parameters.records=0;frame_content_uploads=0;
+        draw_parameters.uploads=draw_parameters.records=0;frame_content_uploads=frame_prepared_meshes=frame_foreground_meshes=0;frame_prepared_vertex_bytes=0;
         frame_pass_setups=frame_active_layers=0;
         frame_geometry_issue_ms=frame_scene_select_ms=frame_scene_execute_ms=0;
         frame_caster_preparations=0;frame_post_lanes=0;
@@ -6982,8 +6878,14 @@ public:
             (std::strcmp(prefetch_foreground_control,"1")==0 ||
              std::strcmp(prefetch_foreground_control,"2")==0);
         int const prefetch_guard_tiles=std::strcmp(prefetch_foreground_control,"2")==0?2:0;
-        for (c3x_renderer_u32 preparation_slot = 0; preparation_slot < (batch_preparing?preparation_count:frame.tile_count); ++preparation_slot) {
-            c3x_renderer_u32 index=batch_preparing?preparation_indices[preparation_slot]:preparation_slot;
+        // World compilation order is independent of occurrence/pass order.
+        // Defer an active helper's tile once, doing other selected work first.
+        // The bounded second pass joins any remaining producers; no polling,
+        // duplicate builds, extra pool or partial frame publication.
+        std::vector<c3x_renderer_u32> compiling_tiles;
+        for (c3x_renderer_u32 preparation_slot = 0; preparation_slot < (batch_preparing?preparation_count:frame.tile_count+compiling_tiles.size()); ++preparation_slot) {
+            c3x_renderer_u32 index=batch_preparing?preparation_indices[preparation_slot]:
+                preparation_slot<frame.tile_count?preparation_slot:compiling_tiles[preparation_slot-frame.tile_count];
             if(index>=frame.tile_count)return false;
             c3x_renderer_tile_v1 const & tile = frame.tiles[index];
             bool const guarded_prefetch=prefetch_guard_tiles!=0 &&
@@ -7019,6 +6921,10 @@ public:
             bool draw_volcano = volcano_assets_ready && tile.real_terrain_type == 10;
             bool draw_dunes = dune_assets_ready &&
                 tile.real_terrain_type == 0 && tile.terrain_type == 0;
+            if(cpu_terrain_enabled && retained_world && !prewarming && preparation_slot<frame.tile_count){
+                auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
+                if(terrain_preparation.compiling(input.key)){compiling_tiles.push_back(index);continue;}
+            }
             ++textured_tile_count;
             build_replacement[index] = C3X_RENDERER_TILE_CUSTOM_TERRAIN_REPLACED;
             if (draw_feature || draw_marsh || draw_volcano)
@@ -9033,6 +8939,7 @@ public:
                 }
             }
             } // immutable routes and objects already resident on a world hit
+            std::unique_ptr<c3x_renderer::fidelity::TerrainSurfaces> prepared_terrain;
             std::array<std::vector<c3x_renderer::fidelity::MeshInstance>,22> forest_instances;
             std::array<c3x_renderer::render_core::SourceShadow::Bounds,22> forest_bounds;
             std::array<c3x_renderer::render_core::ProjectedMeshBounds,22> forest_projected;
@@ -9174,7 +9081,8 @@ public:
                         index_natural_grids && (layer==geometry_natural_terrain || layer==geometry_natural_terrain+2)
                             ?&natural_grid_indices[layer==geometry_natural_terrain?0:1]:nullptr,
                         world_ground && layer<geometry_route?3u:world_objects && layer>=geometry_route && layer<geometry_natural_terrain?
-                            (layer>=geometry_cliff0?4u:2u):(world_objects && natural_layer?1u:0u))) {
+                            (layer>=geometry_cliff0?4u:2u):(world_objects && natural_layer?1u:0u),
+                        prepared_terrain && layer>=geometry_natural_terrain && layer<=geometry_natural_mountain?&prepared_terrain->meshes[layer-geometry_natural_terrain]:nullptr)) {
                     char detail[256];sprintf_s(detail,"tile=%d,%d layer=%u vertices=%u bytes=%llu cap=%llu built=%u reused=%u prewarming=%u",
                         tile.tile_x,tile.tile_y,unsigned(layer),unsigned(tile_layers[layer]->size()),
                         static_cast<unsigned long long>(tile_geometry_cache_bytes),static_cast<unsigned long long>(tile_geometry_cache_budget),
