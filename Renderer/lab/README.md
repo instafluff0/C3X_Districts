@@ -4,13 +4,11 @@ Renderer Lab operates on the current C3X checkout. Category definitions live
 under `categories/`; `catalog.json` is their index. There are no Lab or
 Integration release numbers and no pending/integrated category ledger.
 
-For renderer performance engineering, follow the
-[benchmark workflow](../docs/benchmark_workflow.md). It extends the existing
-harness and preserves the category verification rules below. Read
-[the architecture](../docs/renderer_architecture.md) for the destination and
-[the retained plan](../docs/retained_renderer_plan.md) for the current connected implementation objective.
-Its September 13 execution reset replaces the old single-experiment queue;
-ordinary category art and visual-acceptance contracts still apply.
+For renderer development, read [the architecture](../docs/renderer_architecture.md)
+and [roadmap/current status](../docs/retained_renderer_plan.md). Use
+[validation](../docs/benchmark_workflow.md) for existing harnesses and measurement;
+it creates no separate tooling phase or task queue. Category art and visual
+approval remain governed by this workbench.
 
 Current commands from the repository root:
 

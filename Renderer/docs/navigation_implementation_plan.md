@@ -1,11 +1,9 @@
 ## Objective and scope
 
-The active execution order is maintained in
-[the benchmark workflow](benchmark_workflow.md), with current status in
-[the retained-renderer plan](retained_renderer_plan.md) and operating rules in
-[the autonomous execution contract](autonomous_renderer_execution.md). This
-document supplies architecture and acceptance criteria; its earlier staged
-experiment ordering is not a command to restart completed work.
+> Historical navigation design. The active [architecture](renderer_architecture.md)
+> and [roadmap](retained_renderer_plan.md) supersede its staged sequence and
+> presentation assumptions. Read below only for specific constraints/findings;
+> current frame ownership is documented [here](visual_frame_ownership.md).
 
 Make scrolling, zooming and arbitrary map jumps feel immediate while preserving
 current visual quality and Civ III's simulation, camera, visibility, interaction

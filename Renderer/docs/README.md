@@ -1,41 +1,46 @@
 # Renderer documentation
 
-## Start here
+## Active reading path
 
-- [Architectural destination](renderer_architecture.md): firm principles, preferred mechanisms and choices requiring evidence; not a task queue.
-- [Current capability status](retained_renderer_plan.md): achieved/unmet targets and the single next task.
-- [Execution contract](autonomous_renderer_execution.md): bounded implementation decisions, scope and stopping rules.
-- [Benchmark workflow](benchmark_workflow.md): measurement, bounded tooling deliverables and validation.
-- [Lab workbench](../lab/README.md): current category rendering and verification.
-- [Storage retention](storage_retention.md): preview-first maintenance and restoration.
+1. [Architecture](renderer_architecture.md): ownership, GPU-ready scene design and firm contracts.
+2. [Roadmap and current status](retained_renderer_plan.md): four agreed milestones, actual gaps and the next discussion.
+3. [Validation](benchmark_workflow.md): existing harnesses, measurement endpoints and meaningful checkpoints.
 
-## Durable contracts and findings
+[Execution rules](autonomous_renderer_execution.md) are a short operating reference.
+The [Lab workbench](../lab/README.md) owns category commands and visual approval.
+No historical document supplies an additional queue or mandatory baseline campaign.
 
-Read these when relevant to a change, not as competing task queues:
+## Read when relevant
 
-- [Workstream ownership](renderer_workstreams.md), [visible scene](visible_scene_contract.md),
-  [configuration](renderer_config_spec.md) and [patch dependency ledger](civ3_patch_dependency_ledger.md).
-- [Visual fidelity playbook](visual_fidelity_playbook.md), [source-art findings](source_art_findings.md)
-  and [cliff findings](coastal_cliff_findings.md), including their preserved local inputs.
-- [Shared environment](environment_lighting_and_ambient_effects.md) and
-  [Civ VI lighting evidence](civ6_lighting_findings.md).
-- [Native presentation constraints](native_async_presentation_audit.md) and
-  [navigation architecture](navigation_implementation_plan.md); implementation status
-  comes from current code and the capability scorecard.
-- [Natural wonders](natural_wonder_rendering.md) and
-  [wonders/Districts](wonder_and_district_rendering.md): preserved deferred contracts.
+| Area | References |
+| --- | --- |
+| Implemented visual frames | [Clock, retained composition and lifecycle](visual_frame_ownership.md) |
+| Native integration | [Workstreams](renderer_workstreams.md), [visible scene](visible_scene_contract.md), [configuration](renderer_config_spec.md), [patch ledger](civ3_patch_dependency_ledger.md) |
+| Visual/source contracts | [Fidelity playbook](visual_fidelity_playbook.md), [source findings](source_art_findings.md), [cliffs](coastal_cliff_findings.md) |
+| Lighting/effects | [Environment contract](environment_lighting_and_ambient_effects.md), [Civ VI evidence](civ6_lighting_findings.md) |
+| Deferred scope | [Natural wonders](natural_wonder_rendering.md), [wonders/Districts](wonder_and_district_rendering.md) |
+| Assets and generated evidence | [Storage retention](storage_retention.md) |
 
-The remaining category/import findings retain their existing filenames and links.
-They are references, not mandatory reading before every implementation step.
+Category/import notes retain their existing links. They preserve specific contracts
+and findings, not alternate architecture or implementation status.
 
-## Historical evidence
+## Historical evidence — consult selectively
 
-- [Retained renderer experiment archive](history/retained_experiments_20260910.md).
-- [Navigation continuation archive](history/navigation_continuation_20260910.md).
-- [Navigation activation and rollback handoff](navigation_handoff.md).
-- [Actual game findings](live_usage_findings_20260909.md) and
-  [busy workload](busy_navigation_session.md).
+- [September 15 checkpoint](history/retained_renderer_checkpoints_20260915.md): tested binary, comparisons, scope and preserved controls.
+- [Earlier retained checkpoints](history/retained_renderer_checkpoints_20260914.md), [completed output work](history/retained_output_completed_20260913.md), [experiment archive](history/retained_experiments_20260910.md).
+- [Native camera audit](native_async_presentation_audit.md): failed handoff mechanisms, ABI/ordering evidence and earlier corrections.
+- [Earlier navigation design](navigation_implementation_plan.md), [activation/rollback handoff](navigation_handoff.md), [continuation archive](history/navigation_continuation_20260910.md).
+- [Game findings](live_usage_findings_20260909.md), [busy workload](busy_navigation_session.md).
 
-These preserve successes, rejected hypotheses and measurement limits. Historical
-binary identities and instructions do not certify a current candidate or select
-the next task. Do not reproduce an old workload merely to begin a new task.
+Historical “current”, “next” and staging statements apply to their recorded versions,
+not today's checkout. The pre-synthesis active guides are recoverable from Git at
+`c1360ea9`. Preserve expensive findings and ignored inputs; documentation cleanup
+is not permission to delete assets or controls.
+
+## Keeping this usable
+
+Architecture owns principles; roadmap owns status and sequence; validation owns
+evidence rules. Update each in place rather than copying these responsibilities
+into handoffs. Put detailed timings in receipts and selected historical summaries.
+Remove obsolete instructions from active guides; retain only the evidence or
+contract that can still affect a decision. Do not append a new status diary.

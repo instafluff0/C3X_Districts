@@ -5,7 +5,7 @@
 > [the retained plan](retained_renderer_plan.md). Embedded "next" instructions
 > below are superseded; historical hashes and timings require matching receipts
 > before being used as current evidence. Do not rerun these workloads merely
-> to start the tooling transition.
+> to start new implementation.
 
 ## Current continuation
 

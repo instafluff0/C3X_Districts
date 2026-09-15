@@ -1,112 +1,122 @@
-# Retained renderer: implementation and next review
+# Renderer roadmap and current status
 
-## Objective and authority
+## Decision and objective
 
-Complete world → view → pass → publication with full detail, source animation
-speed and bounded ownership. Renderer-owned visual frames are authorized. Civ III
-retains gameplay, visibility, camera anchors, directed actions and UI decisions.
-The renderer never requests a Civ III redraw or creates another presenter/window.
+Agreed September 15, 2026: retain the original six architectural responsibilities
+and complete cheap GPU-ready scene rendering on top of independent visual frames.
+Scrolling should usually select/draw reusable content; nearby preparation helps
+without making every possible destination image a prerequisite for fast movement.
+Full detail, authored animation and native ownership remain unchanged.
 
-Preserve AGENTS.md, generic asset contracts, accepted visual differences and
-M9/M10/M11 wonders/Districts deferral. Tested DLL staging is authorized; the user
-installs and launches through ordinary `INSTALL.bat`, without environment setup.
+**Active next deliverable: milestone 1.** The user released the documentation
+pause. On implementation continuation, proceed through the production path below;
+choose routine implementation details without another planning/approval gate.
+The first attribution check belongs inside that work, not a new open-ended
+research/tooling phase. Milestones are connected outcomes, not four promised short
+passes. [Architecture](renderer_architecture.md) owns the design;
+[validation](benchmark_workflow.md) owns measurement and acceptance.
 
-## Current frame-ownership implementation
+## Current implementation and gaps
 
-[Visual frame ownership](visual_frame_ownership.md) describes the connected path:
-copied current map selection and retained unit instances feed dynamic GPU leaves;
-versioned native composition retains exact underlays, overlays and UI operations.
-Opaque coverage removes obsolete dependencies. Completed native transfers publish
-only their actual rectangles. Independent samples use selected scratch rectangles
-and shared immutable textures, leaving native working canvases untouched.
-
-An ordinary renderer-owned 33 ms timer uses the existing presenter thread and GPU
-worker. Native captures share its visual clock. Extra native `Animator_update`
-calls and renderer rearming of Civ III's timer are removed; original gameplay
-advancement remains. Authored idle/work sampling also feeds existing bounded
-preparation workers. Frozen units and unchanged samples skip visual submission.
-
-The tested DLL is staged for ordinary `INSTALL.bat`. Exact GPU replay, independent
-resource/unit frames, actual timer transport, UI pause, config-off and native
-compile checks pass. Live game coverage remains a separate checkpoint.
-
-## Six architectural responsibilities
-
-| Responsibility | Actual ownership and remaining work |
-| --- | --- |
-| Persistent world/instances | Retained camera-independent tile content, shared catalogs and revisioned unit instances exist. GPU residency is bounded. Current map selection owns one copied scene input; old composition versions retain GPU results. |
-| Local validity | Full captured tile content, dependency revisions, unit content revisions and explicit despawn invalidate retained use. Fresh native capture still supplies authoritative game changes; this is not yet a comprehensive game mutation event stream. |
-| Spatial selection | World pass membership and native affine anchors select terrain occurrences. Reachable native composition selects visible unit/overlay occurrences, including clipping and wrapping. No retained asset grants visibility. |
-| Compatible pass submission | Terrain/object groups, GPU unit shadows and exact native composition passes are implemented. Bodies still finish as separate pose textures; scene-wide compatible unit batching/instancing remains a major opportunity. |
-| GPU reuse/output | Admitted map, bodies, shadows and composition stay resident through the existing presenter, with fuller map color and native-word compatibility. CPU access barriers remain explicit. Per-pose surfaces and remaining full-map conversion work need assessment before further optimization. |
-| Asynchronous integration | Existing bounded preparation plus independent visual scheduling are integrated. Native capture/publication still owns camera/content changes. Cold or outside-coverage camera requests can block, and presentation still needs the UI message pump. |
-
-The next architecture review should use these owners and measured costs to choose
-a connected change, rather than another nearby output helper. Do not assume an
-extra worker or a higher timer frequency reduces total work. Directed movement/
-combat anchors and cursors remain authoritative native samples; intermediate
-visual interpolation is not implemented by this frame scheduler.
-
-## Validation and controls
-
-Checkpoint: `native/build/gpu-composition/visual-frame-checkpoint/`, staged DLL
-SHA256 `3a024a15dd79843a8da7cccc8657474674a31ac26a9fa403165e5c67ae88bf8a`.
-126 exact GPU replay comparisons and 120 independent samples pass; units suite
-passes 131 tests with one existing skip; 43 focused native/unit contracts and
-`TEST_INJECTED_CODE_COMPILE.bat` pass. The connected 1120×1192 fixture verifies
-30 independent resource/unit frames with zero native drawing calls, three actual
-timer frames, exact retained UI, modal pause, partial transfer and config-off.
-It retains 27 nodes / 27.0 MiB; the 32-bit process still has a largest free region
-of at least 1.37 GiB. No game was installed or launched.
-
-Same-harness GPU whole-request comparison (64 samples/workload, ms mean / p95):
-
-| Workload | Preserved `95dab634` control | Independent-frame implementation |
+| Original responsibility | Implemented foundation | Remaining responsibility |
 | --- | --- | --- |
-| Idle | 8.95 / 15.52 | 9.52 / 19.37 |
-| Dense scrolling | 47.58 / 59.62 | 51.19 / 84.35 |
-| Local change | 10.73 / 41.03 | 11.45 / 36.52 |
+| Persistent world/instances | Camera-independent tile content, shared assets, revisioned unit instances, bounded residency | Broader compact shared-mesh instances and reusable GPU submission descriptions |
+| Local validity | Captured appearance/dependency revisions, unit revision/despawn proofs | Preserve complete validity through migrated representations; refine authoritative change publication where useful |
+| Spatial selection | World pass membership, native occurrences/anchors, clipping/wrapping | Selected inputs that directly feed compatible submissions across migrated content |
+| Compatible passes | Terrain/object grouping, forest instancing, GPU unit shadows, exact native composition | Broader instancing/state grouping and collected dynamic/unit submission |
+| GPU reuse/output | Resident admitted map/poses, static color/depth, incremental finishing and native composition | Direct dynamic scene execution; reduce per-pose and full-map work where measured |
+| Async integration | Bounded content/pose/view preparation and independent visual timer | Coherent general nonblocking camera/content publication; UI-thread stalls remain |
 
-This is a scheduling capability gain, not a demonstrated foreground speedup.
-Native composition/presentation/preparation adds about 0.7–1.5 ms mean in this
-run; scrolling remains dominated by map work (44.1 of 51.2 ms). The focused
-architectural correction replaced full-canvas replay scratch with selected
-rectangles and immutable source binding; its intermediate control is preserved.
-A separate independent-frame run averages 17.60 ms whole request / 29.04 ms
-including desktop completion. Desktop completion is not physical scanout;
-neither this fixture nor a 33 ms target establishes sustained in-game FPS.
-Receipts `a898871e…`, `19bec32e…` and `bf75163b…` preserve control, final workloads
-and final connected visual/UI evidence. Live checkpoint: idle/work clips,
-scroll/zoom, movement/combat, popup/Advisor and command-button return, picking,
-focus changes and config-off. Passing automated fixtures does not establish
-coverage of every live screen.
+Independent frames use the existing HWND presenter without native redraw requests.
+Civ III's original gameplay timer is unchanged. Map animation still enters the
+existing render orchestration; units still produce separately finished poses.
+These are working mechanisms, not yet the cheap scene-frame endpoint.
 
-Preserved controls and expensive findings:
+## 1. Complete world → selected GPU submissions
 
-- `native/build/gpu-composition/unit-instance-checkpoint/`: source `95dab634`, DLL
-  `1e9ac58a…81a0fd6`; retained units/3D-only baseline. GPU whole-request means were
-  8.64 ms idle, 50.88 ms scrolling and 10.62 ms local change; no speedup claim.
-- `native/build/gpu-composition/visual-before-cropped-pass/`: exact intermediate
-  independent-frame sources/DLL. Full-size replay scratch was superseded by
-  selected destination/underlay scratch and direct immutable-source binding.
-- Accepted JGL owner repair is preserved in `ui-owner-fix-checkpoint/`; the
-  misnamed factory reset and 8-bit-default corruption must not be reintroduced.
-  Startup, resident-map, ready-content and unit-shadow checkpoints remain under
-  `native/build/gpu-composition/` with source, binary and test identities.
-- `native/build/world-content/`: canonical world content removed standard-zoom
-  recompilation (first closer zooms 1,282/1,697 → 193/294 ms), but dense scrolling
-  remained about 170 ms. An intermediate speculative zoom job caused two-second
-  freshness stalls; current demand now supersedes unstarted alternate-zoom work.
-  Existing small precision differences and their approval status remain recorded.
-- `native/build/world-view-zoom/`: prepared zooms reached 6–7 ms after a separate
-  five-second opportunity; cold construction and idle/scrolling did not improve.
-- [Historical checkpoints](history/retained_renderer_checkpoints_20260914.md) and
-  [completed output work](history/retained_output_completed_20260913.md) preserve
-  earlier controls and rejected approaches. Global 30 Hz map sampling regressed
-  warm requests 3.97 → 7.46 ms; this change preserves existing map sample buckets.
-  Parallels GPU timestamps remain unreliable. Whole-request wall time, actual
-  output age and work eliminated are the performance authority.
+Connect persistent content, shared mesh/material bindings, compact instances,
+spatially selected occurrences and explicit compatible pass inputs. Extend current
+owners and replace migrated submission paths together. Include worker ownership:
+prepare dependency-ready content and selected pass inputs concurrently, separate
+current-frame work from speculation, and replace redundant queues where needed.
+This is part of milestone 1, with animation scheduling extended in milestone 2;
+it is not another milestone. Do not deliver only a command/job abstraction or
+instancing that leaves submission costs unchanged.
 
-Detailed earlier status remains in Git at `95dab634` and in the existing
-checkpoint directories. Do not delete ignored findings, assets or controls
-without establishing that their necessary inputs can be recovered.
+Start with the active dense-scrolling map path, including terrain, vegetation and
+representative repeated city/infrastructure content. Choose actual conversions
+from code and bounded attribution; CPU-transformed vertices already cached on warm
+requests are not automatically the dominant cost. Preserve unique/deformed meshes
+and exact material/depth ordering where sharing or sorting is incompatible.
+
+**Done:** pans reuse unchanged content; local edits affect their real dependency
+neighborhood; selected inputs drive the replacement production submissions.
+Demonstrate whole-request effects, eliminated construction/binding work and bounded
+memory on stationary animation, dense scrolling and local changes.
+
+## 2. Make independent animation a direct scene operation
+
+Sample eligible animation state, collect required resource/unit poses, prepare
+missing content together and execute selected dynamic/shadow/finishing passes over
+valid static color/depth. Feed results into the existing native compositor. Keep
+native overlays, unit ordering and terrain occlusion exact; static UI stays reusable.
+
+Shared pose buffers, GPU deformation/skinning and grouped targets are candidates
+where they remove measured work. Do not force all units into one surface or alter
+source playback just to simplify batching.
+
+**Done:** idle animation does not rebuild world content or rediscover static
+submission state; animated-unit scaling avoids repeated independent setup/finish
+work where compatible. Verify frozen units, authored work loops and native actions.
+
+## 3. Complete state publication and nonblocking camera updates
+
+Keep durable world/lifecycle updates separate from replaceable camera requests.
+Publish copied authoritative changes and exact view eligibility; refine mutation
+hooks only where needed. Prioritize current missing content, then nearby reusable
+meshes/instances/pass inputs, then selected future views/animation pixels. Preserve
+useful preparation across supersession without evicting the current working set.
+
+**Done:** ordinary scrolling/zoom across useful coverage avoids synchronous
+construction barriers; cold, evicted and invalidated destinations have bounded,
+correct handling. Pixels, camera, visibility, overlays and picking advance
+coherently. Never hide a wait by presenting mismatched or stale view identity.
+
+## 4. Raise cadence against a measured frame budget
+
+Tune sustained presentation only after frame costs and publication are coherent.
+Measure input-to-display latency, frame tails, sample age, worker interference and
+combined memory. Consider parallel D3D recording or less UI-thread dependence only
+if the remaining cost warrants it. Stay on D3D11 unless evidence justifies a change.
+
+**Done:** demonstrate the selected cadence on representative live workloads,
+including navigation, animation and UI transitions. A 33 ms timer is not 30 FPS;
+60 FPS is a later 16.7 ms frame-budget objective, not a current promise.
+
+## Current evidence and implementation handoff
+
+Code checkpoint: `c1360ea9`. Tested DLL staged for ordinary `INSTALL.bat`:
+`3a024a15dd79843a8da7cccc8657474674a31ac26a9fa403165e5c67ae88bf8a`.
+The user installs/launches; no environment setup is required. Existing staging
+permission persists, but this documentation task does not stage or launch anything.
+
+Automated independent frames and native UI/ownership tests pass; live validation
+of decoupling remains pending. Latest whole-request GPU means: 9.52 ms idle,
+51.19 ms scrolling, 11.45 ms local change versus control 8.95 / 47.58 / 10.73 ms.
+Map work accounts for 44.1 of 51.2 ms scrolling, without resolving CPU versus GPU
+attribution. Independent frames average 17.60 ms request / 29.04 ms desktop
+completion. Decoupling is a capability gain, not a demonstrated foreground speedup.
+
+[Checkpoint evidence](history/retained_renderer_checkpoints_20260915.md) preserves
+sample counts, tails, tests, binary/receipt identities and expensive findings.
+First implementation deliverable: make selected static map pass inputs feed reusable
+GPU rendering descriptions and compatible submissions, extending existing world
+validity and worker ownership. Use one dense scrolling fixture to distinguish
+construction, selection, submission and downstream rendering cost, then choose
+the representative shared-instance conversion within that path. Compare the full
+replacement on idle animation, scrolling and a local edit against the preserved
+control. This defines the deliverable; exact batch boundaries, worker count and
+GPU recording strategy remain measured implementation choices. Complete this
+connected deliverable, adapt mechanisms when evidence warrants it, and update this
+handoff with capabilities, measured effects and the next unfinished responsibility.
+No additional milestone or output-helper detour is implied.

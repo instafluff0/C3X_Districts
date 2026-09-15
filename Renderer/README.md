@@ -4,19 +4,14 @@ The [documentation index](docs/README.md) separates active work from preserved
 contracts and history. Use [storage retention](docs/storage_retention.md) for
 generated-output maintenance; ignored assets are not automatically disposable.
 
-For renderer optimization, read [the architecture](docs/renderer_architecture.md)
-for the destination and firm principles, [the execution contract](docs/autonomous_renderer_execution.md)
-for bounded decisions, and [the benchmark workflow](docs/benchmark_workflow.md)
-for measurement, tooling deliverables and validation. [The retained plan](docs/retained_renderer_plan.md)
-records the current connected implementation objective and status. Its September 13
-execution reset supersedes the old single-experiment queue and tooling-first rules;
-validate the complete representative path at meaningful checkpoints.
-Do not restart baseline/oracle runs or old "next step" experiments from handoffs.
-
-The [navigation handoff](docs/navigation_handoff.md) preserves historical staged
-binary identities, rollback and measurements. It does not select new work or
-certify that the current checkout is the staged DLL. Preserve the staged result,
-source findings and existing renderer improvements throughout the tooling work.
+For renderer development, use [the architecture](docs/renderer_architecture.md),
+[the roadmap/current status](docs/retained_renderer_plan.md), and
+[validation](docs/benchmark_workflow.md). The active destination is cheap GPU-ready
+scene rendering: persistent world content → selected occurrences → compatible
+passes → resident native composition. Renderer-owned visual frames are implemented;
+cheap general camera changes and broader compatible submission remain unfinished.
+[Execution rules](docs/autonomous_renderer_execution.md) are a short reference.
+Historical handoffs preserve evidence, not extra queues or current build identity.
 
 The current C3X checkout is the implementation authority. Lab renders and tests
 that code by category; Integration runs the affected current-code checks. Fixed
@@ -56,12 +51,11 @@ and generated preview/verification archives have been removed.
 
 ## Architectural boundaries
 
-The destination is persistent scene identity, shared assets/world content, local
-invalidation and spatially selected passes. Eligible city-profile views now retain
-a circular GPU scene and finished output, updating exposed/changed content through
-ordered passes. The existing regional renderer remains the control and supports
-waves/reflections and unsupported extents. See the retained plan for measured
-scope, precision constraints and remaining ownership work.
+The [architecture](docs/renderer_architecture.md) defines world, asset, instance,
+view, pass and publication ownership. Raster caches accelerate that scene; they do
+not dictate its structure. Use the [roadmap](docs/retained_renderer_plan.md) for
+implemented capabilities, four agreed milestones, measured limits and checkpoint
+identity. Full detail remains the policy; there is no API migration prerequisite.
 
 Civ III/C3X owns game state, visibility, tile/object screen anchors, day/night and
 seasons. The renderer produces resident map/pose textures and retains the native
