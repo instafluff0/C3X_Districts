@@ -6,43 +6,33 @@ capture workflow and retain its exported text. Start capture before launching
 the game when possible so the session calibration and effective settings are
 included. There are no player names, save paths or credentials in the new records.
 
-The owner-preservation evaluation retains the temporary diagnostics below. The
-version-3 input had 83 post-draw samples / 128,505 checked pixels / zero mismatches;
-its 8-bit intermediates led to the reproduced graphics-owner replacement defect.
-Restart the game after installation so controls are recreated with native defaults.
+The accepted UI-corruption fix preserves the existing JGL graphics owner. Its
+temporary `ui-sprite-source`, `ui-sprite-palette`, `ui-native-draw`,
+`ui-sprite-oracle` and `ui-diagnostic-route` instrumentation is removed from game
+execution. Preserved diagnostic checkpoints retain the source/palette evidence.
 
-The Advisor-corruption evaluation emits `ui-diagnostic-route version=3` at the
-first final transfer through each composition state. `composition_active=0`
-means CPU snapshot presentation; this must not be called a retained GPU map.
-`ui-sprite-source route=cpu` now runs at the DLL dispatch even without a map owner.
-It samples up to 96 ordinary/other and 96 keyed indexed sources, with fingerprints
-for palette/content changes at reused addresses. `ui-sprite-palette` contains four
-64-word chunks of each selected RGB555 palette for offline asset comparison.
-Source hashes cover raw indexed rows; `raw_hash_valid=0` excludes compacted sources
-from byte-hash comparison. These records contain no screen text or image addresses.
+The startup integration uses compact route evidence:
 
-`ui-native-draw` samples up to 256 distinct ordinary raw indexed draw outcomes
-immediately after the original sprite method returns. At native 1:1 scale it
-compares nontransparent source indices against 8-bit destination indices or
-selected 555/565 palette words against 16-bit destination pixels. `checked=0`
-means no comparison was possible, not success. `mismatches` counts differing
-pixels; `first`, `expected` and `actual` identify the first difference. Indexed
-destinations also report `dib_colors` and `dib_palette_hash`. A later incorrect
-outcome is not hidden by an earlier correct draw of the same source. This check
-reads existing CPU storage and flushes pending GDI work; it does not draw or take
-a new destination lease. Correlate source hashes with the preceding palette records.
+- `native-tracking event=reset`: start/end of a native DLL tracking lifetime.
+- `native-lifetime`: sampled eligibility queries and cumulative accepted counts;
+  eligibility is ownership evidence, not a speed measurement.
+- `composite gpu_map=1`: this map was committed through the resident GPU seam.
+- `native-resident-present`: completed final transfer from a resident image,
+  without a CPU screen snapshot.
+- `native-screen`: CPU snapshot compatibility transfers, including static UI or
+  explicit fallback. Counters are cumulative; divide final time totals by calls,
+  not percentiles of cumulative totals.
 
-`ui-sprite-oracle` still compares up to 96 eligible ordinary/keyed GPU programs
-against actual JGL scratch drawing and full-color opaque output. It requires an
-active composition owner, RGB555 destination and source at most 768×256. Absence
-of oracle samples is **not** evidence of correct drawing. The September 15 game
-capture exposed this coverage gap in the first diagnostic build. No original game
-destination is drawn by the oracle. Temporary GPU samples add explicit readbacks;
-do not benchmark this build. CPU diagnostic collection adds no GPU readback.
+For unit-pass attribution, `unit-body` also reports cumulative `shadow_passes`
+and `shadow_input_bytes` for GPU caster submission, plus `cpu_shadow_upload_bytes`
+for the independent CPU route. Compare deltas within a route; mixed CPU/GPU tests
+naturally accumulate both. Resident pose hits submit neither pass nor input.
+
 Use ordinary `INSTALL.bat` and the existing debug stream; no environment settings.
-Remove diagnostics after the defect is resolved. `native-screen` counters are
-cumulative; divide final callback totals by final calls, never report a percentile
-of those totals as per-transfer latency.
+The strategic game check covers first map, idle/work animation, scrolling, zoom,
+selection/picking, Advisor/modal screens, save/load and config-off behavior. A GPU
+presenter alone does not prove resident composition; inspect map and final routes
+together. Keep whole-request measurements separate from counts of eliminated work.
 
 The DLL adds these events without changing the injected bridge or renderer ABI:
 

@@ -42,6 +42,8 @@ if(!performance_frames.empty()){
         verify(screen_surface->Bits_Data_Links==0,"whole-frame entry has no outstanding native bits");
         SelectObject(label_dc,previous_font);
         for(auto image:live_images){
+            // Each arm needs genuinely fresh storage after the CPU arm exposes it.
+            verify(reinterpret_cast<Init>(image->vtable[1])(image,w+1,h,16,1)==0,"replace preceding benchmark storage");
             verify(reinterpret_cast<Init>(image->vtable[1])(image,w,h,16,1)==0,"fresh whole-frame surface lifetime");
             verify(reinterpret_cast<Fill>(image->vtable[17])(image,&full,int(0x80000000u))==0,"whole-frame initial surface");
         }

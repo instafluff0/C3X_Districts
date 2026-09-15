@@ -12,7 +12,7 @@ namespace c3x_renderer {
 struct UnitShadow {
     int extent;
     std::vector<float> heights;
-    explicit UnitShadow(int size=128):extent(size),heights(std::size_t(size)*size){}
+    explicit UnitShadow(int size=128,bool raster=true):extent(size),heights(raster?std::size_t(size)*size:0){}
     float left=0,top=0,width=1,height=1,dx=0,dy=0;
     using Point=std::array<float,3>;
     Point project(Point p) const {return {p[0]-dx*p[2],p[1]-dy*p[2],p[2]};}

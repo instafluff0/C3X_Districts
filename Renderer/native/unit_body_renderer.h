@@ -6,6 +6,7 @@
 #include "unit_shadow.h"
 #include "unit_pose_content.h"
 #include "gpu_unit_finish.h"
+#include "gpu_unit_shadow.h"
 #include "environment_refresh/unit_shader.h"
 
 namespace c3x_renderer {
@@ -20,6 +21,7 @@ public:
     ResidentPose resident_pose;
     std::size_t resident_pose_bytes=0;
     std::uint64_t resident_pose_builds=0,resident_pose_hits=0,output_readbacks=0;
+    std::uint64_t gpu_shadow_passes=0,gpu_shadow_input_bytes=0,cpu_shadow_upload_bytes=0;
     struct Mesh { std::shared_ptr<AnimationMesh const> animation; ID3D11Buffer *indices=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Texture { std::vector<std::uint8_t> dds; ID3D11ShaderResourceView *view=nullptr; std::string path; std::size_t bytes=0; std::uint64_t used=0; bool failed=false; };
     struct Part { unsigned mesh=0,texture=0,address=0; unsigned material_textures[4]={UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX}; float material_model=0; float tint[3]={1,1,1}; float mask=0,strength=0,cutout=0; };
@@ -70,11 +72,11 @@ public:
     template<class T> void release(T*& p) { if(p) {p->Release();p=nullptr;} }
     void reset_gpu() {
         reset_pose_preparation();
-        resident_pose={};resident_cache.clear();resident_pose_bytes=0;gpu_finish.reset();
+        resident_pose={};resident_cache.clear();resident_pose_bytes=0;gpu_finish.reset();gpu_shadow.reset();
         for(auto & mesh:meshes) release(mesh.indices);
         for(auto & texture:textures) release(texture.view);
         release(vertex);release(pixel);release(layout);release(settings);release(beauty_frame);release(vertices);
-        release(shadow_view);release(shadow_texture);
+        release(shadow_target);release(shadow_view);release(shadow_texture);
         for(auto & sampler:samplers)release(sampler);
         release(raster);release(target);release(output);release(readback);
         linear.reset();transfer.reset(); capacity=0; image_width=image_height=0;target_width=target_height=0;
@@ -187,7 +189,7 @@ public:
             for(auto& saved:resident_cache)if(saved.key==key){
                 saved.used=++resident_serial;resident_pose=saved.pose;if(!deferred)saved.pose.prepared=false;
                 image_width=w;image_height=h;cache_hit=true;failure_reason="none";if(!deferred)++resident_pose_hits;
-                if(predict)schedule_pose_content(request,*found,*action,pose,key,predict);return true;
+                if(predict)schedule_pose_content(request,*found,*action,pose,key,predict,true);return true;
             }
         }
         unsigned pose_memory=NavigationOptions::unit_pose_mib(GetEnvironmentVariableA);
@@ -195,7 +197,7 @@ public:
         failure_reason="animation-payload-load";
         if(!prepare(*action))return false;
         payload_ms=elapsed();
-        auto prepared=prepare_pose_content(request,*found,*action,pose,key,predict,resident&&deferred);
+        auto prepared=prepare_pose_content(request,*found,*action,pose,key,predict,resident&&deferred,resident);
         if(!prepared){failure_reason="pose-content";return false;}
         pose_ms=elapsed();
         failure_reason="gpu-target-setup";
@@ -204,6 +206,13 @@ public:
         int samples=found->sample_scale;
         if((samples!=1 && samples!=2 && samples!=4) || !ensure(device,w,h,samples,found->minimum_canvas?1536:128))return false;
         auto environment=evaluate_environment(float(request.hour),request.season);
+        if(resident){
+            gpu_shadow.draw(device,context,shadow_target,unsigned(prepared->shadow.extent),prepared->shadow_triangles);
+            ++gpu_shadow_passes;gpu_shadow_input_bytes+=prepared->shadow_triangles.size()*sizeof(prepared->shadow_triangles[0]);
+        }else{
+            context->UpdateSubresource(shadow_texture,0,nullptr,prepared->shadow.heights.data(),prepared->shadow.extent*4,0);
+            cpu_shadow_upload_bytes+=prepared->shadow.heights.size()*sizeof(float);
+        }
         float clear_color[4]={};context->OMSetRenderTargets(1,&linear.target,linear.depth);
         context->ClearRenderTargetView(linear.target,clear_color);
         context->ClearDepthStencilView(linear.depth,D3D11_CLEAR_DEPTH,1,0);
@@ -232,7 +241,7 @@ public:
         context->UpdateSubresource(beauty_frame,0,nullptr,beauty,0,0);
         context->PSSetConstantBuffers(1,1,&beauty_frame);context->PSSetSamplers(1,1,&samplers[3]);
         pose_ms+=elapsed();
-        context->UpdateSubresource(shadow_texture,0,nullptr,shadow.heights.data(),shadow.extent*4,0);
+
         context->PSSetShaderResources(1,1,&shadow_view);
         for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
             auto const& part=action->parts[part_index];
@@ -288,7 +297,7 @@ public:
         pending.content=prepared;pending.shadow_strength=environment.shadow_strength;
         if(resident){
             failure_reason="gpu-body-finish";
-            resident_pose={gpu_finish.finish(device,context,output,unsigned(w),unsigned(h),prepared->ground_shadow),w,h,deferred!=nullptr};
+            resident_pose={gpu_finish.finish(device,context,output,unsigned(w),unsigned(h),shadow_view,prepared->ground_projection),w,h,deferred!=nullptr};
             constexpr std::size_t budget=64u*1024u*1024u;auto bytes=std::size_t(w)*h*4;
             while(!resident_cache.empty()&&(resident_pose_bytes>budget-bytes||resident_cache.size()>=512)){
                 auto old=std::min_element(resident_cache.begin(),resident_cache.end(),[](auto const& a,auto const& b){return a.used<b.used;});
@@ -351,7 +360,7 @@ public:
     bool resident_preparation_ready(c3x_renderer_unit_v1 const& request) {
         PoseSelection selection;
         if(!select_pose(request,selection))return true; // Retire invalid predictions.
-        auto const& key=selection.key;auto wanted=content_key(key);
+        auto const& key=selection.key;auto wanted=content_key(key,true);
         if(std::any_of(resident_cache.begin(),resident_cache.end(),[&](auto const& p){return p.key==key;}) ||
            std::any_of(retained_poses.begin(),retained_poses.end(),[&](auto const& p){return p.key==wanted;}))return true;
         return pose_preparation.contains(wanted,[](auto const&){return true;});
@@ -513,10 +522,11 @@ private:
     struct ResidentCached {Key key;std::uint64_t used;ResidentPose pose;};
     std::vector<ResidentCached> resident_cache;std::uint64_t resident_serial=0;
     GpuUnitFinish gpu_finish;
+    GpuUnitShadow gpu_shadow;
     ID3D11Texture2D* batch_readback=nullptr;
     mutable std::recursive_mutex cache_mutex;
     std::vector<Cached> cache;std::uint64_t serial=0;
-    using PoseKey=std::array<int,10>;
+    using PoseKey=std::array<int,11>;
     using PosePreparation=render_core::ContentPreparation<PoseKey,UnitPoseInput,UnitPoseContent>;
     PosePreparation pose_preparation;
     struct RetainedPose {PoseKey key;std::shared_ptr<UnitPoseContent const> value;};
@@ -525,8 +535,8 @@ private:
     std::deque<ObservedPose> observed_poses;
     std::size_t retained_pose_bytes=0;
     bool pose_preparation_configured=false;
-    PoseKey content_key(Key const& key) const {
-        return {int(key.unit),key.action,key.direction,key.cursor,key.frames,key.width,key.height,key.scale_milli,key.hour,key.season};
+    PoseKey content_key(Key const& key,bool resident=false) const {
+        return {int(key.unit),key.action,key.direction,key.cursor,key.frames,key.width,key.height,key.scale_milli,key.hour,key.season,int(resident)};
     }
     unsigned preparation_workers() const {
         char value[16]={};auto n=GetEnvironmentVariableA("C3X_RENDERER_UNIT_PREPARATION",value,sizeof(value));
@@ -556,21 +566,21 @@ private:
         return !input.source.meshes.empty() && bytes<=24u*1024u*1024u;
     }
     void schedule_pose_content(c3x_renderer_unit_v1 const& request,Unit const& unit,Action const& action,
-                               UnitAnimationPose const& pose,Key const& key,unsigned step) {
+                               UnitAnimationPose const& pose,Key const& key,unsigned step,bool resident=false) {
         auto workers=preparation_workers();if(!workers)return;
         try {
             MEMORYSTATUSEX memory={};memory.dwLength=sizeof(memory);
             if(!GlobalMemoryStatusEx(&memory) || memory.ullAvailVirtual<(512u+160u+24u*workers)*1024ull*1024ull) {
                 reset_pose_preparation();return;
             }
-            auto current=content_key(key);
+            auto current=content_key(key,resident);
             auto observed=std::find_if(observed_poses.begin(),observed_poses.end(),[&](auto const& item){return item.id==request.unit_id;});
             bool advancing=observed!=observed_poses.end();
             if(advancing && observed->key==current)return; // No autonomous cursor or repeated frozen predictions.
             if(advancing)observed_poses.erase(observed);
             if(observed_poses.size()>=128)observed_poses.pop_front();
             observed_poses.push_back({request.unit_id,current});
-            auto input=pose_input(request,unit,action,pose,key);
+            auto input=pose_input(request,unit,action,pose,key);input.gpu_shadow=resident;
             if(!preparation_fits(input))return;
             if(!pose_preparation_configured){
                 pose_preparation.configure({},UnitPoseCompiler{},workers,{},128u*1024u*1024u);
@@ -583,15 +593,15 @@ private:
             // two distant predictions per unit displaced work due this frame.
             {std::lock_guard<std::recursive_mutex> guard(cache_mutex);
             if(std::any_of(cache.begin(),cache.end(),[&](auto const& p){return p.key==next;}))return;}
-            auto prepared_key=content_key(next);
+            auto prepared_key=content_key(next,resident);
             if(std::any_of(retained_poses.begin(),retained_poses.end(),[&](auto const& p){return p.key==prepared_key;}))return;
             input.phase=action.loop?double(next.cursor)/key.frames:(key.frames==1?1.0:double(next.cursor)/(key.frames-1));
             pose_preparation.offer({prepared_key,input},32,advancing);
         }catch(...){} // Optional preparation cannot make a native draw fail.
     }
     std::shared_ptr<UnitPoseContent const> prepare_pose_content(c3x_renderer_unit_v1 const& request,Unit const& unit,
-                                Action const& action,UnitAnimationPose const& pose,Key const& key,unsigned predict,bool ready_only=false) {
-        auto wanted=content_key(key);pose_content_hit=false;
+                                Action const& action,UnitAnimationPose const& pose,Key const& key,unsigned predict,bool ready_only=false,bool resident=false) {
+        auto wanted=content_key(key,resident);pose_content_hit=false;
         std::shared_ptr<UnitPoseContent const> value;
         if(preparation_workers()) {
             auto found=std::find_if(retained_poses.begin(),retained_poses.end(),[&](auto const& p){return p.key==wanted;});
@@ -602,7 +612,7 @@ private:
         }
         if(!value && ready_only)return {};
         if(!value) {
-            std::atomic<bool> cancelled{false};auto input=pose_input(request,unit,action,pose,key);
+            std::atomic<bool> cancelled{false};auto input=pose_input(request,unit,action,pose,key);input.gpu_shadow=resident;
             if(input.source.meshes.empty())return {};
             value=UnitPoseCompiler{}(input,cancelled,0);
         }
@@ -616,7 +626,7 @@ private:
                 }
                 retained_poses.push_back({wanted,value});retained_pose_bytes+=value->bytes();
             }
-            if(predict)schedule_pose_content(request,unit,action,pose,key,predict);
+            if(predict)schedule_pose_content(request,unit,action,pose,key,predict,resident);
             }catch(...){} // Retention remains optional after exact compilation.
         }
         return value;
@@ -632,6 +642,7 @@ private:
     ID3D11VertexShader *vertex=nullptr;ID3D11PixelShader *pixel=nullptr;ID3D11InputLayout *layout=nullptr;
     ID3D11Buffer *settings=nullptr,*beauty_frame=nullptr,*vertices=nullptr;UINT capacity=0;
     ID3D11SamplerState *samplers[4]={};ID3D11RasterizerState *raster=nullptr;
+    ID3D11RenderTargetView* shadow_target=nullptr;
     int shadow_size=0;ID3D11Texture2D* shadow_texture=nullptr;ID3D11ShaderResourceView* shadow_view=nullptr;
     render_core::LinearTarget linear;render_core::LinearOutput transfer;
     ID3D11Texture2D *output=nullptr,*readback=nullptr;ID3D11RenderTargetView *target=nullptr;
@@ -682,11 +693,12 @@ private:
             if(FAILED(hr)){reset_gpu();return false;}
         }
         if(!shadow_texture || shadow_size!=shadow_extent) {
-            release(shadow_view);release(shadow_texture);shadow_size=shadow_extent;
+            release(shadow_target);release(shadow_view);release(shadow_texture);shadow_size=shadow_extent;
             D3D11_TEXTURE2D_DESC d={};d.Width=d.Height=shadow_extent;d.MipLevels=d.ArraySize=1;
-            d.Format=DXGI_FORMAT_R32_FLOAT;d.SampleDesc.Count=1;d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+            d.Format=DXGI_FORMAT_R32_FLOAT;d.SampleDesc.Count=1;d.Usage=D3D11_USAGE_DEFAULT;d.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;
             HRESULT hr=device->CreateTexture2D(&d,nullptr,&shadow_texture);
             if(SUCCEEDED(hr))hr=device->CreateShaderResourceView(shadow_texture,nullptr,&shadow_view);
+            if(SUCCEEDED(hr))hr=device->CreateRenderTargetView(shadow_texture,nullptr,&shadow_target);
             if(FAILED(hr)){reset_gpu();return false;}
         }
         if(!linear.ensure(device,UINT(w*samples),UINT(h*samples)) || !transfer.ensure(device))return false;

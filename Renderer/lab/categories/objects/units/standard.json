@@ -16,7 +16,11 @@
     "Renderer/lab/studies/units/studio_response.hlsl",
     "Renderer/lab/studies/units/sample_frame.h",
     "Renderer/lab/studies/units/material_study.py",
-    "Renderer/lab/studies/units/frame_probe.py"
+    "Renderer/lab/studies/units/frame_probe.py",
+    "Renderer/native/unit_pose_content.h",
+    "Renderer/native/unit_body_renderer.h",
+    "Renderer/native/gpu_unit_shadow.h",
+    "Renderer/native/gpu_unit_finish.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -48,7 +52,9 @@
     "Renderer.native.test_unit_playback",
     "Renderer.native.test_unit_frame_preparation",
     "Renderer.lab.studies.units.test_sizing",
-    "Renderer.tools.asset_compiler.test_unit_attachment_bindings"
+    "Renderer.tools.asset_compiler.test_unit_attachment_bindings",
+    "Renderer.native.test_unit_pose_content",
+    "Renderer.native.test_gpu_unit_shadow"
   ],
   "references": {
     "d3d11": [

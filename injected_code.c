@@ -19870,6 +19870,11 @@ patch_JGL_Image_destroy (JGL_Image * image, int edx, unsigned flags)
 int __fastcall
 patch_JGL_Image_init (JGL_Image * image, int edx, int width, int height, int bits, int mode)
 {
+	// JGL returns early for matching dimensions/depth; that does not retire a
+	// previously escaped pixel pointer or establish a new storage lifetime.
+	if (width == *(int *)((char *)image + 0x38) && height == *(int *)((char *)image + 0x3c) &&
+	    (bits == 0 || bits == image->BitCount))
+		return ((int (__fastcall *) (JGL_Image *, int, int, int, int, int))is->custom_renderer_jgl_original[1]) (image, __, width, height, bits, mode);
 	if (translate_custom_renderer_native (C3X_NATIVE_IMAGE_REINIT, image, NULL, NULL, NULL, 0) < 0) return -1;
 	int result = ((int (__fastcall *) (JGL_Image *, int, int, int, int, int))is->custom_renderer_jgl_original[1]) (image, __, width, height, bits, mode);
 	if (result == 0) {
@@ -19912,6 +19917,15 @@ patch_JGL_Image_clip (JGL_Image * image, int edx, RECT * rect)
 	int result = ((int (__fastcall *) (JGL_Image *, int, RECT *))is->custom_renderer_jgl_original[13]) (image, __, rect);
 	if (observing) is->custom_renderer_native_operation = previous;
 	return result;
+}
+
+void __fastcall
+patch_JGL_Image_palette (JGL_Image * image, int edx, void * palette)
+{
+	int previous = is->custom_renderer_native_operation;
+	is->custom_renderer_native_operation = C3X_NATIVE_IMAGE_PALETTE;
+	((void (__fastcall *) (JGL_Image *, int, void *))is->custom_renderer_jgl_original[59]) (image, __, palette);
+	is->custom_renderer_native_operation = previous;
 }
 
 int __fastcall
@@ -20011,8 +20025,6 @@ patch_JGL_Sprite_draw (JGLSprite * sprite, int edx, JGL_Image * destination, int
 	if (translate_custom_renderer_native (C3X_NATIVE_SPRITE, destination, sprite, (RECT *)palette, &anchor, 0)) return 0;
 	if (observing) is->custom_renderer_native_operation = C3X_NATIVE_SPRITE;
 	int result = ((int (__fastcall *) (JGLSprite *, int, JGL_Image *, int, int, void *))is->custom_renderer_jgl_sprite_original) (sprite, __, destination, x, y, palette);
-	// Diagnostic only: inspect the completed native draw before later copies.
-	translate_custom_renderer_native (C3X_NATIVE_SPRITE_COMPLETE, destination, sprite, (RECT *)palette, &anchor, result);
 	if (observing) is->custom_renderer_native_operation = previous;
 	return result;
 }
@@ -20280,12 +20292,12 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 {
 	// Runtime DLL slots cannot be encoded as fixed Civ III executable addresses.
 	// Verify the exact DLL hash through the optional observer, then all slot RVAs.
-	int slots[17] = {0, 1, 3, 4, 10, 13, 16, 17, 18, 21, 25, 33, 42, 43, 44, 45, 46};
-	unsigned rvas[17] = {0x15d0, 0x1800, 0x1bc0, 0x1b70, 0x1b20, 0x1a40, 0x1ec0, 0x2270, 0x2320, 0x22c0, 0x2160, 0x2410, 0x1d10, 0x1d40, 0x1db0, 0x1d70, 0x1de0};
-	void * hooks[17] = {(void *)patch_JGL_Image_destroy, (void *)patch_JGL_Image_init, (void *)patch_JGL_Image_pixel_3, (void *)patch_JGL_Image_bits,
+	int slots[18] = {0, 1, 3, 4, 10, 13, 16, 17, 18, 21, 25, 33, 42, 43, 44, 45, 46, 59};
+	unsigned rvas[18] = {0x15d0, 0x1800, 0x1bc0, 0x1b70, 0x1b20, 0x1a40, 0x1ec0, 0x2270, 0x2320, 0x22c0, 0x2160, 0x2410, 0x1d10, 0x1d40, 0x1db0, 0x1d70, 0x1de0, 0x1ca0};
+	void * hooks[18] = {(void *)patch_JGL_Image_destroy, (void *)patch_JGL_Image_init, (void *)patch_JGL_Image_pixel_3, (void *)patch_JGL_Image_bits,
 		(void *)patch_JGL_Image_acquire_dc, (void *)patch_JGL_Image_clip,
 		(void *)patch_JGL_Image_copy, (void *)patch_JGL_Image_fill, (void *)patch_JGL_Image_tint, (void *)patch_JGL_Image_lookup, (void *)patch_JGL_Image_line, (void *)patch_JGL_Image_draw_onto,
-		(void *)patch_JGL_Image_font, (void *)patch_JGL_Image_default_font, (void *)patch_JGL_Image_text_index, (void *)patch_JGL_Image_text_rgb, (void *)patch_JGL_Image_text};
+		(void *)patch_JGL_Image_font, (void *)patch_JGL_Image_default_font, (void *)patch_JGL_Image_text_index, (void *)patch_JGL_Image_text_rgb, (void *)patch_JGL_Image_text, (void *)patch_JGL_Image_palette};
 	if (enabled) {
 #if defined(JGL_present_screen) && defined(p_jgl_screen_canvas)
 		if (JGL_present_screen == NULL || p_jgl_screen_canvas == NULL) return;
@@ -20301,13 +20313,12 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 		check.struct_size = sizeof check; check.operation = C3X_NATIVE_VERIFY; check.object = module;
 		if (! is->custom_renderer_native_observe (&check)) { is->custom_renderer_native_probe_rejected = true; return; }
 		void ** table = (void **)(module + 0x68238), ** sprite_table = (void **)(module + 0x68440);
-		for (int n = 0; n < 17; n++) if (table[slots[n]] != module + rvas[n]) { is->custom_renderer_native_probe_rejected = true; return; }
+		for (int n = 0; n < 18; n++) if (table[slots[n]] != module + rvas[n]) { is->custom_renderer_native_probe_rejected = true; return; }
 		// The named export is a factory: calling it replaces JGL's active owner.
 		// Read the existing owner from the hash-verified DLL instead.
 		void * graph = *(void **)(module + 0x70d30);
 		void ** graph_table = graph != NULL ? *(void ***)graph : NULL;
 		if (graph_table != (void **)(module + 0x685f8) || graph_table[41] != module + 0x3baa0) { is->custom_renderer_native_probe_rejected = true; return; }
-		if (table[59] != module + 0x1ca0) { is->custom_renderer_native_probe_rejected = true; return; }
 		if (sprite_table[17] != module + 0x8180 || sprite_table[20] != module + 0x9aa0 || sprite_table[21] != module + 0x9a30 || sprite_table[22] != module + 0x9b20 || sprite_table[33] != module + 0x8fc0 || sprite_table[35] != module + 0x90a0 || sprite_table[34] != module + 0x90e0 || sprite_table[23] != module + 0x8050 || sprite_table[29] != module + 0x8600 || sprite_table[31] != module + 0x8ee0 || sprite_table[37] != module + 0x9220) { is->custom_renderer_native_probe_rejected = true; return; }
 		is->custom_renderer_probe_thread_id = (DWORD (WINAPI *) ())(*p_GetProcAddress) (is->kernel32, "GetCurrentThreadId");
 		if (is->custom_renderer_probe_thread_id == NULL) return;
@@ -20330,7 +20341,7 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 		is->custom_renderer_jgl_blend_original[8] = sprite_table[31];
 		is->custom_renderer_jgl_blend_original[9] = sprite_table[37];
 		for (int n = 0; n < 3; n++) is->custom_renderer_jgl_blend_original[n] = sprite_table[20+n];
-		for (int n = 0; n < 17; n++) table[slots[n]] = hooks[n];
+		for (int n = 0; n < 18; n++) table[slots[n]] = hooks[n];
 		sprite_table[17] = (void *)patch_JGL_Sprite_draw;
 		sprite_table[33] = (void *)patch_JGL_Sprite_lookup;
 		sprite_table[35] = (void *)patch_JGL_Sprite_lookup_over;
@@ -20363,7 +20374,7 @@ set_custom_renderer_native_hooks (bool enabled, JGL_Image * root)
 	DWORD protect, unused;
 	void ** table = is->custom_renderer_jgl_table;
 	if (VirtualProtect (table, 0x300, PAGE_READWRITE, &protect)) {
-		for (int n = 0; n < 17; n++) if (table[slots[n]] == hooks[n]) table[slots[n]] = is->custom_renderer_jgl_original[slots[n]];
+		for (int n = 0; n < 18; n++) if (table[slots[n]] == hooks[n]) table[slots[n]] = is->custom_renderer_jgl_original[slots[n]];
 		if (is->custom_renderer_jgl_sprite_table[17] == (void *)patch_JGL_Sprite_draw)
 			is->custom_renderer_jgl_sprite_table[17] = is->custom_renderer_jgl_sprite_original;
 		if (is->custom_renderer_jgl_sprite_table[33] == (void *)patch_JGL_Sprite_lookup)
@@ -20439,6 +20450,40 @@ start_custom_renderer_native_tracking ()
 	is->custom_renderer_native_lifetime = lifetime;
 #endif
 }
+
+#ifdef load_jgl_lib
+void * __cdecl
+patch_load_jgl_lib (char const * filename)
+{
+	void * graph = load_jgl_lib (filename);
+	// The native factory has finished; no window or canvas has been created yet.
+	if (graph != NULL) start_custom_renderer_native_tracking ();
+	return graph;
+}
+#endif
+
+#ifdef unload_jgl_lib
+void __cdecl
+patch_unload_jgl_lib ()
+{
+	// Drain while native images and vtables still exist. Never unload beneath a
+	// failed barrier or leave lifetime evidence across a DLL reload.
+	if (is->custom_renderer_native_image != NULL &&
+	    is->custom_renderer_native_image (C3X_NATIVE_IMAGE_DRAIN, NULL, NULL, NULL, NULL, 0) < 0) return;
+	unload_custom_renderer ();
+	HMODULE module = is->custom_renderer_native_module;
+	if (is->custom_renderer_native_lifetime != NULL)
+		is->custom_renderer_native_lifetime (C3X_NATIVE_VERIFY, NULL, 0);
+	is->custom_renderer_native_lifetime = NULL;
+	set_custom_renderer_native_hooks (false, NULL);
+	is->custom_renderer_native_module = NULL;
+	is->custom_renderer_native_observe = NULL;
+	is->custom_renderer_native_map = NULL;
+	is->custom_renderer_native_probe_rejected = false;
+	if (module != NULL) FreeLibrary (module);
+	unload_jgl_lib ();
+}
+#endif
 
 void
 patch_init_floating_point ()
@@ -21055,7 +21100,6 @@ patch_init_floating_point ()
 	is->loaded_config_names = NULL;
 	reset_to_base_config ();
 	apply_machine_code_edits (&is->current_config, true);
-	start_custom_renderer_native_tracking ();
 }
 
 void

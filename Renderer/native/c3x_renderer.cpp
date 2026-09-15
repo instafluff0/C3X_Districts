@@ -10662,9 +10662,9 @@ public:
             if(code==C3X_RENDERER_RESULT_OK&&bounds){bounds[0]=job_unit.body_x;bounds[1]=job_unit.body_y;bounds[2]=job_unit.body_x+pose.width;bounds[3]=job_unit.body_y+pose.height;}
             if(code==C3X_RENDERER_RESULT_OK&&pose.prepared)++unit_pixels_hits;
             QueryPerformanceCounter(&finished);auto const& body=renderer_state.unit_bodies;char detail[512];
-            std::snprintf(detail,sizeof(detail),"id=%d key=%.63s action=%d cursor=%d/%d result=%d gpu_composition=1 resident_pose=1 cache_hit=%u prepared=%u pose_builds=%llu pose_hits=%llu pose_bytes=%zu body_readbacks=%llu composition_uploads=%llu readback_ms=%.3f ms=%.3f",
+            std::snprintf(detail,sizeof(detail),"id=%d key=%.63s action=%d cursor=%d/%d result=%d gpu_composition=1 resident_pose=1 cache_hit=%u prepared=%u pose_builds=%llu pose_hits=%llu pose_bytes=%zu body_readbacks=%llu composition_uploads=%llu shadow_passes=%llu shadow_input_bytes=%llu cpu_shadow_upload_bytes=%llu readback_ms=%.3f ms=%.3f",
                 request.unit_id,request.unit_key,request.action,request.action_cursor,request.frame_count,code,unsigned(body.cache_hit),unsigned(pose.prepared),
-                static_cast<unsigned long long>(body.resident_pose_builds),static_cast<unsigned long long>(body.resident_pose_hits),body.resident_pose_bytes,static_cast<unsigned long long>(gpu_unit_output_readbacks),static_cast<unsigned long long>(gpu_unit_composition_uploads),body.readback_ms,renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart));
+                static_cast<unsigned long long>(body.resident_pose_builds),static_cast<unsigned long long>(body.resident_pose_hits),body.resident_pose_bytes,static_cast<unsigned long long>(gpu_unit_output_readbacks),static_cast<unsigned long long>(gpu_unit_composition_uploads),static_cast<unsigned long long>(body.gpu_shadow_passes),static_cast<unsigned long long>(body.gpu_shadow_input_bytes),static_cast<unsigned long long>(body.cpu_shadow_upload_bytes),body.readback_ms,renderer_state.trace.milliseconds(finished.QuadPart-started.QuadPart));
             renderer_state.trace.write("unit-body",detail,code!=C3X_RENDERER_RESULT_OK||!body.cache_hit);return code;
         }
         c3x_renderer::UnitBodyRenderer::PublishedPose cached;
@@ -12216,34 +12216,22 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_present(c3x_renderer_gpu_p
 // exclusive owner; before that, completed CPU screens retain compatibility
 // presentation. A negative result denies CPU access after a failed barrier.
 extern "C" __declspec(dllexport) int c3x_renderer_native_image(int operation,void* image,void* source,void const* from,void const* to,unsigned color){
-    if(operation==C3X_NATIVE_SPRITE_COMPLETE){
-        static c3x_native_images::SpriteDiagnostics native_draw_diagnostics;
-        native_draw_diagnostics.cpu_result(image,source,from,to,color);
-        return 0;
-    }
-    if(operation==C3X_NATIVE_IMAGE_PRESENT){
-        static unsigned reported=0;
-        unsigned route=native_composition&&native_composition->active()?2u:1u;
-        if(!(reported&route)){reported|=route;char line[192];std::snprintf(line,sizeof(line),
-            "[C3X renderer] stage=ui-diagnostic-route version=3 composition_active=%u cpu_source_sampling=1\n",route==2u);OutputDebugStringA(line);}
-    }
     if(operation==C3X_NATIVE_IMAGE_DRAIN){if(!drain_native_composition())return -1;}
     else if(native_composition&&native_composition->active()){
         try{
             int result=native_composition->operation(operation,image,source,from,to,color);
-            if(operation!=C3X_NATIVE_IMAGE_PRESENT || result!=0)return result;
+            if(operation!=C3X_NATIVE_IMAGE_PRESENT || result!=0){
+                if(operation==C3X_NATIVE_IMAGE_PRESENT&&result>0){static unsigned frames=0;++frames;
+                    if(frames<=3||(frames%128)==0){char line[128];std::snprintf(line,sizeof(line),
+                        "[C3X renderer] stage=native-resident-present frames=%u cpu_snapshot=0\n",frames);OutputDebugStringA(line);}}
+                return result;
+            }
             // An unowned CPU UI source uses the same final presenter. The
             // resident map family remains untouched, including full-color data.
         }
         catch(std::exception const& e){OutputDebugStringA(e.what());return -1;}
     }
-    if(operation!=C3X_NATIVE_IMAGE_PRESENT && operation!=C3X_NATIVE_IMAGE_DRAIN){
-        // Live compatibility sessions can never construct an Adapter. Keep
-        // source diagnostics at the dispatch boundary, before native fallback.
-        static c3x_native_images::SpriteDiagnostics compatibility_diagnostics;
-        compatibility_diagnostics.cpu_operation(operation,source,from);
-        return 0;
-    }
+    if(operation!=C3X_NATIVE_IMAGE_PRESENT && operation!=C3X_NATIVE_IMAGE_DRAIN)return 0;
     if(operation==C3X_NATIVE_IMAGE_DRAIN){if(renderer_worker)try{renderer_worker->native_screen(nullptr);}catch(...){}return 0;}
     LARGE_INTEGER began={},captured={},ended={},frequency={};QueryPerformanceCounter(&began);captured=began;
     bool presented=false;std::uint64_t uploaded=0;
@@ -12283,7 +12271,14 @@ extern "C" __declspec(dllexport) int c3x_renderer_gpu_unit(c3x_renderer_unit_v1 
 // cannot render, request work, or infer that an older image has no CPU aliases.
 extern "C" __declspec(dllexport) int c3x_renderer_native_lifetime(int operation,void* image,int context){
     static c3x_native_images::Lifetimes lifetimes;
-    return lifetimes.observe(operation,image,context,GetCurrentThreadId())?1:0;
+    bool eligible=lifetimes.observe(operation,image,context,GetCurrentThreadId());
+    if(operation==C3X_NATIVE_VERIFY&&!image)OutputDebugStringA("[C3X renderer] stage=native-tracking event=reset\n");
+    if(operation==C3X_NATIVE_MAP){
+        static unsigned requests=0,accepted=0;++requests;accepted+=eligible;
+        if(requests<=8||(requests%128)==0){char line[160];std::snprintf(line,sizeof(line),
+            "[C3X renderer] stage=native-lifetime requests=%u eligible=%u accepted=%u\n",requests,unsigned(eligible),accepted);OutputDebugStringA(line);}
+    }
+    return eligible?1:0;
 }
 
 // The live native map seam uses the same GPU producer and image adapter as the

@@ -1,20 +1,41 @@
 # Civ III patch dependency ledger
 
-The UI-corruption fix changes no native hook or CSV entry. Hook attachment and
-the temporary GPU oracle now read the existing Graphsy owner at JGL RVA `0x70d30`
-in the already hash-verified DLL (`0b0cd514…ff0dbdf2`) instead of calling
-`get_graphsy_object_ptr`. Export RVA `0x3b290` allocates a new object and writes
-both `0x70f30` and `0x70d30`; constructor `0x3b2e0` zeros default bit depth at
-`+0x134`. Image init `0x1800` resolves depth zero through that owner and falls back
-to 8-bit. This is confirmed binary evidence and a reproduced TCC regression.
-The existing `0x685f8` vtable/slot checks still guard attachment. No signature or
-ownership expansion. `required_user_action`: ordinary `INSTALL.bat`, then a fresh
-game process to check the four previously corrupted controls; no address action.
+## Unit shadow pass
 
-The existing sprite wrapper's diagnostic completion event reads completed pixels
-without claiming ownership. Startup lifetime tracking still precedes JGL loading;
-a clean post-load registration boundary remains necessary for live retained
-composition. Do not admit preexisting images without evidence.
+The resident unit owner now submits immutable caster records through its existing
+GPU worker. Existing native unit capture/draw and final composition hooks are
+unchanged; no executable/JGL signature or address is added. CPU destination
+fallback remains with its existing owner. `required_user_action: []`.
+
+## Native graphics lifetime boundary
+
+Under the user's existing permission for necessary hook entries, two direct
+GOG-only `inlead` hooks now bracket native graphics lifetime. Steam/PCGames remain
+`0x0`; unsupported builds keep the existing CPU composition fallback.
+
+| Symbol | Signature | GOG | Responsibility |
+| --- | --- | --- | --- |
+| `load_jgl_lib` | `void * (__cdecl *)(char const * filename)` | `0x6343D0` | Call original once, then attach tracking before window/canvas creation. |
+| `unload_jgl_lib` | `void (__cdecl *)(void)` | `0x634390` | Drain before native destruction, restore hooks, retire tracking, preserve original unload. |
+
+`audit_native_composition.py` verifies both complete six-byte prologues, the
+factory-result store/return, original unload and exact table entries against the
+preserved GOG executable. Failed loading attaches nothing; failed GPU drainage
+preserves the existing unload guard. A DLL reload starts with empty lifetime
+evidence. `required_user_action`: normal `INSTALL.bat` and fresh-process game check;
+no additional address action. There is no polling, timer or redraw notification.
+
+The existing hash-verified JGL image table additionally wraps slot 59, RVA `0x1ca0`,
+`void (__fastcall *)(JGL_Image *, int edx, void * palette)`. Its original palette
+binding remains authoritative; private DC access is attributed to metadata, while
+public DC/pixel escapes still revoke eligibility. Same-size native image init is
+a no-op and cannot establish a new storage lifetime after an escape.
+
+The accepted UI fix remains: borrow Graphsy at DLL RVA `0x70d30`; never call the
+misnamed `get_graphsy_object_ptr` factory during hook attachment. The confirmed
+factory/reset defect and exact source evidence are preserved in
+`native/build/gpu-composition/ui-owner-fix-checkpoint/`. Temporary sprite diagnostic
+callbacks/readbacks are removed from game execution.
 
 ## Native composition observation — September 14, 2026
 

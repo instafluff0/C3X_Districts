@@ -11,6 +11,7 @@ class Lifetimes {
 public:
     bool observe(int operation,void* object,int context,unsigned thread){
         std::lock_guard<std::mutex> lock(mutex);
+        if(operation==C3X_NATIVE_VERIFY&&!object){entries={};owner=thread;return true;}
         if(!owner)owner=thread;
         if(!object)return false;
         Entry* found=nullptr;for(auto& e:entries)if(e.object==object){found=&e;break;}

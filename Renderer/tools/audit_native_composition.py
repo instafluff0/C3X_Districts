@@ -20,14 +20,20 @@ def audit(path):
             rva=address-base
             if start<=rva and rva+size<=start+length:return data[raw+rva-start:raw+rva-start+size]
         raise ValueError('address outside file-backed image')
-    checks={0x606780:'a12cd3ca00', # complete first instruction; no relative relocation
+    checks={0x6343d0:'8b44240485c0', # complete six-byte loader prologue
+            0x634390:'8b0dccb2ca00', # complete six-byte unload prologue
+            0x634402:'56ffd08bf085f67505e880ffffff8935ccb2ca008bc65ec3', # factory result stored before cdecl return
+            0x63439f:'a1e0d5cc0085c0741150ff1560516600c705e0d5cc0000000000c705ccb2ca0000000000c3', # native DLL retirement
+            0x606780:'a12cd3ca00', # complete first instruction; no relative relocation
             0x6067a2:'b930d0ca00', # retained PCX screen canvas for final tooltip
             0x606997:'6830d0ca00e83f19ffff', # cursor Sprite_draw to same canvas
             0x6069a1:'8b0dccb2ca0085c974098b1156ff92a40000005ec3'} # final Graphsy slot41; cdecl return
     for address,expected in checks.items():
         if read(address,len(expected)//2).hex()!=expected:raise ValueError(f'byte mismatch: {address:#x}')
     root=Path(__file__).resolve().parents[2]
-    wanted={'JGL_present_screen':('inlead',0x606780,'void (__cdecl *) (RECT * rect)'),
+    wanted={'load_jgl_lib':('inlead',0x6343d0,'void * (__cdecl *) (char const * filename)'),
+            'unload_jgl_lib':('inlead',0x634390,'void (__cdecl *) (void)'),
+            'JGL_present_screen':('inlead',0x606780,'void (__cdecl *) (RECT * rect)'),
             'p_jgl_screen_canvas':('define',0xcad030,'PCX_Image *')}
     found={}
     for row in csv.reader((root/'civ_prog_objects.csv').read_text().splitlines(),skipinitialspace=True):

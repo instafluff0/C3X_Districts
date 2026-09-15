@@ -1,3 +1,4 @@
+#include "test_native_bootstrap.h"
 // Included only in the real-renderer/native-hook fixture.
 #include <thread>
 #include "native_screen_bridge.h"
@@ -42,8 +43,11 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     verify(RegisterClassA(&wc)!=0,"register native test window");
     HWND window=CreateWindowExA(WS_EX_TOPMOST|WS_EX_TOOLWINDOW,wc.lpszClassName,"Native transfer contract",WS_POPUP,20,20,frame.width,frame.height,nullptr,nullptr,wc.hInstance,nullptr);
     verify(window!=nullptr,"create native-owned test window");ShowWindow(window,SW_SHOWNOACTIVATE);UpdateWindow(window);
-    auto dc=GetDC(window);HMODULE jgl=LoadLibraryA(path);verify(jgl&&dc,"native screen fixture");
-    auto graph=reinterpret_cast<void*(__cdecl*)()>(GetProcAddress(jgl,"get_graphsy_object_ptr"))();auto gt=*reinterpret_cast<void***>(graph);
+    HMODULE renderer_module=nullptr;verify(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(live),&renderer_module)!=FALSE,"native renderer module");
+    char candidate_path[MAX_PATH];verify(GetModuleFileNameA(renderer_module,candidate_path,MAX_PATH)>0,"candidate module path");tracking_candidate=candidate_path;
+    auto dc=GetDC(window);auto graph=patch_load_jgl_lib(path);auto jgl=bootstrap_jgl;verify(graph&&dc,"native screen fixture post-load boundary");
+    auto gt=*static_cast<void***>(graph);
+    verify(state.custom_renderer_native_lifetime&&state.custom_renderer_native_probe_active,"production bootstrap before screen creation");
     // The isolated factory does not install the screen palettes. Use audited
     // native creation/activation, as the game does, before its original transfer.
     auto palette_create=reinterpret_cast<void*(__thiscall*)(void*,void*)>(gt[30]);
@@ -56,20 +60,20 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     auto create=reinterpret_cast<Create>(gt[31]);auto root=create(graph,nullptr,1);
     int w=frame.width,h=frame.height;RECT full={0,0,w,h};
     verify(reinterpret_cast<Init>(root->vtable[1])(root,w,h,16,1)==0,"screen root init");
-    void* original_bits=root->vtable[4];void* original_release=root->vtable[9];
-    HMODULE renderer_module=nullptr;verify(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(live),&renderer_module)!=FALSE,"native renderer module");
-    auto lifetime=reinterpret_cast<c3x_renderer_native_lifetime_fn>(GetProcAddress(renderer_module,"c3x_renderer_native_lifetime"));
-    verify(lifetime!=nullptr,"startup lifetime export");lifetime(C3X_NATIVE_VERIFY,nullptr,0);
-    capture.write=log_line;state.custom_renderer_native_observe=observe;set_custom_renderer_native_probe(root);
-    verify(state.custom_renderer_native_probe_active,"attach actual image and Graphsy final hooks");
-    state.custom_renderer_native_lifetime=lifetime;
-    // Real game images can precede the first map demand. Observe their native
-    // initialization and drawing before constructing any GPU adapter.
+    void* original_bits=state.custom_renderer_jgl_original[4];void* original_release=state.custom_renderer_jgl_original[9];
+    auto lifetime=state.custom_renderer_native_lifetime;
+    verify(lifetime(C3X_NATIVE_MAP,root,0)!=0,"screen root lifetime came from actual bootstrap/init hook");
+    c3x_renderer_native_observation observer_start={};observer_start.struct_size=sizeof(observer_start);
+    observer_start.operation=C3X_NATIVE_VERIFY;observer_start.object=jgl;
+    capture.write=log_line;verify(capture.observe(&observer_start)!=0,"initialize independent test observer");
+    state.custom_renderer_native_observe=observe;
     JGL_Image* canvases[3];
     for(auto& canvas:canvases){canvas=create(graph,nullptr,1);verify(reinterpret_cast<Init>(canvas->vtable[1])(canvas,w,h,16,1)==0,"fresh native surface");
         verify(reinterpret_cast<Fill>(canvas->vtable[17])(canvas,&full,int(0x80000000u))==0,"clear native surface");}
     c3x_native_images::Adapter<WorkerClient> owner(gpu,original_bits,original_release,lifetime);adapter=&owner;
-    verify(!owner.admit(root),"unobserved older surface rejected at GPU demand");
+    auto escaped_dc=reinterpret_cast<HDC(__thiscall*)(JGL_Image*)>(root->vtable[10])(root);
+    verify(escaped_dc!=nullptr,"public root DC escape");reinterpret_cast<Release>(root->vtable[11])(root,1);
+    verify(!owner.admit(root),"CPU-escaped surface rejected at GPU demand");
     for(auto canvas:canvases)verify(!owner.image(canvas),"observed unused surfaces have no GPU allocations");
     screen_adapter=&owner;screen_client=&gpu;screen_present=present;screen_frame=frame;screen_graph=graph;
     state.custom_renderer_native_image=translate;native_present_image=present_native_image;present_fn=complete_native_ui;
@@ -251,7 +255,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
             verify(patch_JGL_Graphsy_present(graph,0,&full)==917&&!state.custom_renderer_native_image,"config-off drains GPU presentation before native UI transfer");
             state.current_config.enable_custom_rendering=true;}
     }
-    state.custom_renderer_native_module=nullptr;state.custom_renderer_native_observe=saved_observer;
+    state.custom_renderer_native_module=renderer_module;state.custom_renderer_native_observe=saved_observer;
     state.custom_renderer_jgl_present_original=saved_native_transfer;
     std::puts("PASS caller-owned UI presentation: configured pre-map entry, scene unload/rebind, config-off drain/native transfer and reenable; exact displayed RGB");
     verify(render_view(&demand,&publication)==C3X_RENDERER_RESULT_OK,"recreate renderer after reset");
@@ -296,7 +300,10 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     std::printf("NATIVE_SNAPSHOT requests=24 capture_ms=%.3f\n",1000.*double(snapshot_end.QuadPart-snapshot_begin.QuadPart)/double(frequency.QuadPart)/24.);
     FreeLibrary(dwm);state.custom_renderer_native_image=live;patch_JGL_present_screen(&full);
     // Observation can stop without disabling the live transfer owner.
-    capture.presents=8191;capture.ended=false;last_transfer=full;patch_JGL_present_screen(&full);
+    state.custom_renderer_native_observe=observe; // Route this explicit observer-expiry fixture to its local counter.
+    // Earlier rebinding deliberately switches observers inside a present. Start
+    // this independent expiry case with a balanced local observation stack.
+    capture.depth=0;capture.presents=8191;capture.ended=false;last_transfer=full;patch_JGL_present_screen(&full);
     verify(capture.ended&&state.custom_renderer_native_probe_active&&state.custom_renderer_native_image==live,"bounded diagnostics do not detach live presentation");
     expected=native_expected();capture_display(expected);
     // Leave newer CPU pixels outside a partial transfer deliberately unshown.
@@ -337,7 +344,7 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         auto tiny_request=demand;tiny_request.frame=&tiny_frame;
         verify(native_map(C3X_NATIVE_MAP_PREPARE,tiny,&tiny_request,&meta)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"unsupported GPU surface returns admission rejection for CPU fallback");
         reinterpret_cast<Destroy>(tiny->vtable[0])(tiny,1);
-        verify(native_map(C3X_NATIVE_MAP_PREPARE,root,&demand,&meta)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"unobserved map target declines before preparation");
+        verify(native_map(C3X_NATIVE_MAP_PREPARE,root,&demand,&meta)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"CPU-escaped map target declines before preparation");
         verify(native_map(C3X_NATIVE_MAP_PREPARE,live_images[0],&demand,&meta)==C3X_RENDERER_RESULT_OK&&!meta.bgra_pixels&&raw_unchanged(),"resident prepare returns metadata without native pixel writes");
         verify(native_map(C3X_NATIVE_MAP_COMMIT,live_images[1],nullptr,nullptr)==C3X_RENDERER_RESULT_BAD_ARGUMENT,"wrong destination cannot commit prepared map");
         verify(native_map(C3X_NATIVE_MAP_CANCEL,live_images[0],nullptr,nullptr)==C3X_RENDERER_RESULT_OK&&raw_unchanged(),"rejected ownership can cancel without publishing");
@@ -405,9 +412,8 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     set_custom_renderer_native_probe(nullptr);native_present_image=nullptr;present_fn=native_present;screen.JGL.Image=nullptr;
     *reinterpret_cast<void**>(static_cast<char*>(graph)+0x148)=old_screen;*reinterpret_cast<HDC*>(static_cast<char*>(graph)+0x138)=old_dc;
     for(auto canvas:canvases)reinterpret_cast<Destroy>(canvas->vtable[0])(canvas,1);reinterpret_cast<Destroy>(root->vtable[0])(root,1);
-    state.custom_renderer_native_lifetime=nullptr;set_custom_renderer_native_probe(nullptr);
     reinterpret_cast<void(__thiscall*)(void*)>(gt[49])(graph);
     for(auto palette:palettes)reinterpret_cast<void*(__thiscall*)(void*,unsigned)>(reinterpret_cast<char*>(jgl)+0x3cf10)(palette,1);
-    reinterpret_cast<void(__thiscall*)(void*,unsigned)>(gt[0])(graph,1);FreeLibrary(jgl);ReleaseDC(window,dc);DestroyWindow(window);UnregisterClassA(wc.lpszClassName,wc.hInstance);
+    patch_unload_jgl_lib();ReleaseDC(window,dc);DestroyWindow(window);UnregisterClassA(wc.lpszClassName,wc.hInstance);
     std::puts("PASS native screen transfer: full-color map/copy/popup family, final UI ordering, exact displayed RGB, partial present, original GDI fallback; no execution readbacks before fallback");return true;
 }

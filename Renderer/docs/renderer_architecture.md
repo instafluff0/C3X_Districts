@@ -61,12 +61,10 @@ subsequent demand selects its viewport and can adopt a background refresh. Nativ
 adoption retains the true ambient sample clock. Speculative unit GPU jobs consume
 ready CPU content only; finite unfinished predictions wait for internal completion
 notification. This keeps CPU compilation off speculative GPU ownership without a
-polling timer or Civ III callback. Complete 1440×900 scrolling requests average
-163.07 ms via CPU versus 65.11 ms via GPU; idle averages improve modestly but cold
-pose compilation still produces spikes. The measured resident candidate is staged
-for evaluation. Opacity-driven UI transitions now share GPU blend submission;
-actual game-screen coverage remains the outstanding integration checkpoint;
-see the retained plan for scope and reproducible controls.
+polling timer or Civ III callback. The selected unit shadow pass now removes the dominant CPU pose-raster work;
+the retained plan records measured complete-request improvements and the remaining
+map cost. Actual game-screen coverage remains a native integration checkpoint;
+see that plan for scope and reproducible controls.
 
 ## Authority and migration
 
@@ -110,13 +108,16 @@ compiled world content; stable demand can offer it again. They do not
 predict game state or add redraw callbacks. See the retained plan for controls and measured
 scope; helper count alone is not a speedup claim.
 
-Unit pose content includes exact ground-shadow coverage, prepared by the existing
-CPU helpers. The GPU owner renders, finishes and caches immutable body textures;
-native composition borrows them without a body readback or CPU upload. The existing
-bounded future-pose queue publishes into that same 64 MiB cache for GPU callers.
-CPU fallback retains its bitmap publication and batched staging path. The nearest
+Unit pose helpers retain immutable mesh inputs and compile projected body vertices
+plus compact selected caster records. Resident draws submit one compatible GPU
+shadow pass, then material and finishing passes consume that height texture.
+No CPU height/coverage images are built or uploaded on this route. The native CPU
+route retains the independent rasterizer and finishing oracle. Same-size
+projection, direction, phase, lighting and CPU/GPU representation participate in
+content validity; owner color remains a GPU material input. Existing bounded pose
+publication and future preparation remain with the same unit owner. The nearest
 map bucket still has preparation priority. This removes the unit round trip;
-whole-request performance remains to measure. Previous warm idle requests were
+the selected shadow-pass comparison is recorded in the retained plan. Earlier warm idle requests were
 roughly 4 ms and observed native idle cadence about 15 Hz. A user-authorized GOG timer/animator
 adapter now enables 33 ms selected/working-unit visual opportunities while native
 advancement stays at 66 ms and map cadence remains unchanged. Enabled injection

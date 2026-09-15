@@ -16,43 +16,32 @@ existing patch-table addresses; see the patch ledger.
 
 ## Current GPU integration
 
-**Current correctness fix:** hook attachment incorrectly called JGL's
-`get_graphsy_object_ptr` export as a getter. It is a factory: it allocates a fresh
-graphics object and replaces both DLL owner globals. Its default bit depth is zero,
-so subsequent default-depth UI canvases become 8-bit. Existing 16-bit canvases
-survive, explaining the selective popup/close-button/checkbox/list corruption.
-The temporary GPU oracle repeated this mistake. Both now borrow the existing,
-hash-verified native owner; no per-control workaround or timing rule is added.
+**Accepted correctness checkpoint:** the user confirmed that preserving JGL's
+existing graphics owner fixed the selective UI corruption. The misnamed factory
+and 8-bit-default regression are preserved in `ui-owner-fix-checkpoint` with the
+before/after TCC test. Temporary sprite scans and GPU oracle readbacks have now
+been removed from game execution; standalone correctness oracles remain.
 
-The latest version-3 game log checks 128,505 pixels across 83 draw outcomes with
-zero mismatches; affected popup content reaches 8-bit intermediates with the same
-DIB palette. Earlier raw portrait/checkbox pixels and complete palettes match the
-installed artwork. An isolated TCC regression reproduces the actual bug: hook
-attachment changes the owner and default UI depth from 16 to 8 before the fix;
-afterward both remain unchanged. Prior source/draw-only tests missed this because
-they requested explicit 16-bit surfaces. The connected contract now asserts owner
-continuity and inherited UI depth, including diagnostic execution and detach.
+**Step 1 — live GPU lifetime integration:** direct native load/unload hooks now
+attach tracking after the original graphics factory returns and before native
+canvases are created. Palette metadata no longer falsely revokes eligibility;
+public CPU escapes still do. Same-size native init cannot erase an escape, and
+DLL reload clears prior lifetime evidence. No callback requests a Civ III draw.
+The connected fixture now enters through this production bootstrap rather than
+manually providing lifetime registration. Tests include original owner continuity,
+native config-off pixels, load failure/reload, actual storage replacement and
+zero-readback admitted composition. See the [patch ledger](civ3_patch_dependency_ledger.md).
 
-Evaluation DLL `ec963325d4bb…` is staged after connected 1120×1192 GPU/display
-validation and injected compile passed;
-the next game check must start a fresh process because old cached canvases cannot
-be repaired by replacing the DLL on disk. Evidence is preserved under
-`Renderer/native/build/gpu-composition/ui-owner-fix-checkpoint/`; the earlier
-`ui-native-draw-checkpoint` and normal `native-ui-lifecycle-checkpoint` remain controls.
-Temporary diagnostics remain for that check, so do not benchmark this build.
-See [usage logging](live_usage_logging.md).
+Actual gameplay confirmation remains pending: the last supplied pre-fix log used
+CPU composition and GPU snapshot presentation. New `composite gpu_map=1` and
+`native-resident-present` records distinguish the complete resident path from
+compatibility presentation. Do not equate passing connected tests with complete
+coverage of every native screen. The selected unit shadow pass below advances
+compatible submissions at full detail; map demand now dominates scrolling.
 
-The game log still reports `composition_active=0`. The separate startup lifetime
-tracker precedes dynamic JGL loading; later hook attachment lacks registration.
-Repair that clean initialization boundary after the corruption checkpoint; do not
-weaken lifetime admission or claim live retained GPU ownership from harness tests.
-
-The earlier version-1 capture's 59 map completions have a 16.78 ms median but a 668.87 ms p95,
-including the 6.15 s initial map. Logged unit cache misses reach 449.93 ms versus
-under 0.90 ms for logged hits. Screen-transfer counters total 5.15 s / 840 calls
-(6.13 ms mean; 297.05 ms maximum), not per-call cumulative-counter percentiles.
-Priorities remain correctness, actual live owner activation, then cold preparation
-and serialized waits. This debug run is not a controlled speed comparison.
+The earlier pre-residency debug capture and accepted UI repair are preserved
+in the startup and UI-owner checkpoints. They are not controlled comparisons of
+the current GPU path.
 
 The [GPU composition implementation](gpu_composition_probe.md) now has a production
 native owner. `composite_custom_renderer_frame` offers its authoritative capture
@@ -62,9 +51,9 @@ does not insert pixels. Unsupported admission retains the existing bitmap path;
 a GPU failure does not authorize stale native pixels.
 
 The implemented owner admits the map and its copy/save family on lifetime evidence;
-the live startup gap above currently prevents that evidence in the supplied capture.
+the supplied pre-fix capture lacked that evidence; corrected startup now records it.
 Unused canvases allocate no GPU images; unrelated UI fills remain CPU-generated
-sources. External pointer/DC access revokes eligibility until reinit. One caller
+sources. External pointer/DC access revokes eligibility until storage replacement. One caller
 owner routes native copies, sprites, cached text, prepared units and final Graphsy transfer to
 the existing GPU worker, with paired native-word/full-color images. Ordinary indexed sprite
 indices 254/255 are transparent independently of palette RGB. Native stretching,
@@ -111,12 +100,13 @@ never read for glyph preparation. The user accepts slight text-edge color change
 Rotated/transformed text, complex clips, current-position/RTL drawing and oversized
 runs retain explicit native fallback; ordinary static UI can still be CPU-generated.
 
-Unit bodies now finish and remain on the GPU, including cold poses and queued
-future poses. Existing CPU helpers compile exact shadow coverage alongside mesh
-content; GPU finishing combines it with body alpha. The pose owner retains at most
-64 MiB / 512 completed textures, and composition borrows an immutable source without
-copying/uploading it. CPU fallback consumes the same prepared shadow plane. Separate
-CPU/GPU cache counters preserve concurrent ownership; native timing/anchors are unchanged.
+Unit bodies and shadows finish and remain on the GPU. Existing CPU helpers
+compile compact selected caster records alongside body geometry. One instanced
+shadow pass preserves full resolution and the CPU barycentric coverage rule;
+material and finishing passes consume its resident height texture. CPU callers
+retain the original raster/finishing route. Pose content distinguishes CPU/GPU
+representation, while the bounded 64 MiB / 512 completed-texture owner and native
+source timing/anchors remain unchanged.
 
 Prepared-area publication now shares one content/spatial validity owner for CPU
 and immutable GPU storage. GPU selection retains a bounded texture view; the worker
@@ -128,26 +118,20 @@ sample. Connected 640×480 and 1440×900 tests verify asynchronous refresh adopt
 exact native CPU-reference pixels and fallback; the injected smoke also passes.
 The previous unit/text checkpoint remains the reproducible control.
 
-The paired comparison covers map delivery, eight animated units, actual HUD alpha
-slots 20/21/22, eight translucent label panels/borders, lookup panel/indexed/FLC effects, a scaled FLC cursor, single-key artwork, solid masks, native map shadows, opacity transitions and final
-transfer in CPU/GPU/GPU/CPU order (64 measured requests per arm/case).
-At 1440×900, mean CPU → GPU request times are 163.07 → 65.11 ms scrolling,
-41.60 → 38.13 ms stationary animation, and 47.79 → 38.82 ms for the local-change
-sequence. Including desktop completion they are 173.13 → 75.44, 48.11 → 47.06,
-and 54.38 → 47.10 ms. Capture is outside timing, cold pose transitions remain
-included, and both arms use the same DLL. This measures the integration harness,
-not gameplay FPS or physical scanout. Idle p95 is 131.23 ms on GPU versus 109.23 ms on CPU.
+The step-1 control `0bd678b8…841e4f`, exact sources, original paired benchmarks,
+and injected smoke remain in `native-startup-integration-checkpoint/`.
+Startup/config-off/reload, native GDI handoff and injected compilation passed;
+this step changes no injected source or patch-table entry. New `unit-body`
+counters identify GPU shadow passes, compact input bytes and separate CPU-route
+height uploads. Counters establish work placement, not elapsed speed.
 
 Speculative unit GPU submission now consumes only ready CPU content. Unready
 predictions stay in the finite queue; helper completion wakes the internal GPU
 worker under its queue lock. No timer or native callback is added. CPU input
 leases end before completion is observable; callback removal joins notification.
-GPU preparation's median falls from 41.586 to 1.132 ms at 640×480, with 139
-prepared pose adoptions. Complete GPU scrolling requests fall from the preserved
-candidate's 61.93 to 45.29 ms (640×480), and 76.69 to 51.51 ms (1440×900).
-Cold CPU pose compilation still dominates idle spikes; no uniformly smooth idle
-claim is made. The original worker/camera tests now compile and pass against the
-current interfaces. The unrelated terrain-boundary mismatch remains recorded.
+The ready-content correction and its measurements remain in
+`ready-content-checkpoint/`; the new shadow pass uses that same scheduling owner.
+The unrelated terrain-boundary mismatch remains recorded.
 
 Opacity-driven command-panel/UI transitions (`FUN_005f8a70`, JGL sprite slot 37)
 now feed the existing source owner and GPU blend submission. Native sixteenth-step
@@ -160,26 +144,58 @@ not coverage of every game screen. Unsupported text/sprite states and explicit
 public pixel/DC escapes retain CPU barriers; static CPU source preparation is
 intentional. Do not turn native source-only preparation or unsupported JGL stubs
 into another primitive-porting queue.
-Device-loss reconstruction is user-deferred. The measured remaining performance
-responsibility is cold unit pose/shadow construction; faster output helpers will
-not remove it. Controls and exact sources are in `native/build/gpu-composition/whole-frame-control/`
-and the completed correction in `native/build/gpu-composition/ready-content-checkpoint/`.
+Device-loss reconstruction is user-deferred. Map rendering now dominates the
+scrolling workload; general nonblocking native scrolling and scene-wide unit
+collection remain incomplete. Earlier controls stay in `whole-frame-control/`.
 
-The completed opacity candidate `deb24c11…514cec` is staged for ordinary
-`INSTALL.bat`. Connected 640×480 and 1440×900 checks, the expanded paired benchmark,
-23 portable contracts, startup/config-off lease tests and injected compilation
-pass. Native lookup/FLC fallback preserves caller-held leases. The admitted chain
-has zero execution readbacks; intentional CPU escape tests remain separate.
-These measurements compare complete delivery routes, not an isolated gain over the
-previous candidate or universal gameplay coverage. Previous `4faadc15…f3aa25`
-remains in `native-sprite-family-checkpoint/`; current exact sources, DLL and
-receipts are in `native-opacity-completion-checkpoint/`. The subsequent native UI
-lifecycle connection uses that same DLL; its current injected sources and checks
-are preserved in `native-ui-lifecycle-checkpoint/`. The paired performance numbers
-above belong to the opacity checkpoint, not a new lifecycle speedup measurement.
-No install or game launch.
-Original observer, performance controls, rejected approaches and unreliable
-Parallels timestamp findings survive.
+Earlier opacity and lifecycle controls remain in
+`native-opacity-completion-checkpoint/` and `native-ui-lifecycle-checkpoint/`;
+the accepted corruption fix remains in `ui-owner-fix-checkpoint/`. Original
+observer controls, rejected approaches and expensive source findings survive.
+
+## Step 2 — selected unit shadow pass
+
+The bounded Warrior CPU probe attributed 20.42 ms/pose to the 1536² shadow
+raster, versus 0.09 ms sampling and 0.03 ms vertex preparation on the Mac.
+The implemented correction moves raster ownership to an explicit GPU pass.
+Helpers retain compact immutable caster records; one instanced submission feeds
+the existing material and resident finishing passes. Full resolution, native
+anchors, source timing and CPU fallback remain. The Warrior idle input replaces
+a 9 MiB height upload with at most 98.25 KiB of caster records. Record preparation
+and GPU storage are each bounded to 16 MiB; the existing pose budgets remain.
+
+The focused oracle checks exact coverage and 221,488 finished pixels across
+128/1536 shadow resolution, direction and zoom. Maximum height rounding error is
+1.19e-7. A direct final-edge comparison preserves CPU coverage despite the VM
+reassociating `1-u-v`; no precision emulation, tolerance expansion or timing guard
+is needed. Category checks pass (130 tests, one existing skip); connected native
+pixel checks pass. Candidate `75ecd309…c66bed` is staged for ordinary `INSTALL.bat`.
+The exact sources, DLL, tests, control and measurements are preserved in
+`native/build/gpu-composition/unit-shadow-pass-checkpoint/`.
+
+The 1120×1192 harness compares full requests with eight animated units and native
+UI/final transfer; capture/source setup are outside timing. Each build runs
+CPU/GPU/GPU/CPU, with 64 measured requests per route/workload. Below compares the
+previous **GPU route** with the final GPU route, not CPU versus GPU:
+
+| Workload | Mean request old → new (ms) | Request p95 old → new (ms) | Mean desktop completion old → new (ms) |
+| --- | --- | --- | --- |
+| Stationary animation | 38.14 → 8.49 | 134.65 → 14.40 | 47.34 → 17.64 |
+| Dense scrolling | 61.98 → 49.23 | 94.92 → 65.08 | 73.08 → 59.11 |
+| Local-change sequence | 38.80 → 12.65 | 136.44 → 52.11 | 46.82 → 21.28 |
+
+A preceding candidate run measured means 8.59/50.19/11.25 ms; local-change tails
+vary with the actual edit. Final idle unit delivery averages 0.83 ms versus
+29.03 ms in the control; scrolling map delivery still averages 43.92 ms. Both
+routes retain matching ambient sample ages. The admitted path has zero execution
+readbacks and unchanged native CPU map/screen storage; sampled contiguous address
+space stays above 1.43 GiB. This is harness latency, not gameplay FPS or physical
+scanout; actual gameplay remains pending. Parallels GPU timestamps remain
+unreliable; these timings use whole-request QPC and desktop completion.
+
+This completes the unit shadow pass, not scene-wide unit collection or shared
+resident vertex submission. Those remain distinct architectural responsibilities;
+vertex caching alone would not have removed the measured dominant CPU cost.
 
 ## Actual code responsibilities
 
@@ -191,7 +207,7 @@ GPU residency or knowledge of uncaptured gameplay.
 | Persistent world/instances | `CapturedScene` retains canonical appearance/revisions and borrowed compiled handles. `ResidentContent` owns complete reusable ground, city, route, improvement and natural content independently of observations and camera departure. | Complete tile reuse covers the full-detail 2:1 city profile at native zooms (128/160/192; admitted class ≥96). Other bases retain existing paths. Captured surroundings only; units retain their separate playback/pose owner. |
 | Local validity | Appearance, semantic neighbors, city exclusions, coast/world samples, river-cell proofs and exact scaled native-anchor dependencies guard complete compiled hits. Local changes retire known-invalid alternate views; fresh capture validates every publication. | Asset/device/world-basis changes remain global. Unobserved appearance cannot authorize output. |
 | World → view selection | Immutable content owns persistent bounded world-cell membership. Current authoritative occurrences supply eligibility; selected inputs feed existing ordered passes. Animated body/shadow/filter bounds are selected independently of surrounding static coverage. | Non-affine and unindexed inputs use the existing view index. Dynamic selection uses small scans. No complete native active-unit pass yet. |
-| Compatible submission | Shared meshes, tree instancing, ordered materials, common depth and bounded shadow-page batches serve foreground and background through the same path. | Individual demanded unit misses and optional reflection profiles retain their existing execution. |
+| Compatible submission | Shared meshes, tree instancing, ordered materials, common depth and bounded shadow-page batches serve foreground/background. Unit caster inputs now use one compatible GPU submission per pose. | Body materials still submit per part. Scene-wide unit collection and optional reflection profiles retain their existing execution. |
 | GPU/output reuse | Stable surrounding color/depth, selected animation and pending finish damage feed immutable GPU publication. Resident map/unit output, native UI composition and final transfer share the GPU path; CPU callers retain consolidated readback. Untouched donor margins keep their true old clock. | GPU allocation and full hardware MSAA resolve still cover the wide working surface. Physical targets are not narrowed. Tested retained profile has waves/reflections off. |
 | Preparation/native delivery | Bounded CPU helpers and one GPU owner prepare copied nearby/zoom views and unit poses. Fresh native requests pull compatible publications. Current refresh can interrupt unfinished prospective work at safe points. | Cold/outside-coverage views still use exact blocking fallback. Submitted GPU work is not preemptible; preparation can delay ambient freshness. Native delivery is implemented for prepared coverage, not general nonblocking scrolling. |
 

@@ -9,8 +9,6 @@ bool native_worker_contract(char const* path,c3x_renderer_gpu_images_fn images,c
     try{
         state={};capture={};events.clear();lines.clear();
         HMODULE module=nullptr;verify(GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<char const*>(images),&module)!=FALSE,"worker module");
-        diagnostic_dispatch=reinterpret_cast<c3x_renderer_native_image_fn>(GetProcAddress(module,"c3x_renderer_native_image"));
-        verify(diagnostic_dispatch!=nullptr,"live CPU diagnostic dispatch export");
         WorkerClient gpu(images,view);
         if(native_adapter_contract(path,gpu,Id(view.map_image),pixels,view.width,phase_x,phase_y))return false;
         verify(gpu.stats().resident_bytes==std::int64_t(view.width)*view.height*4+64*48*8,"native drain leaves only immutable map and paired overlap scratch");

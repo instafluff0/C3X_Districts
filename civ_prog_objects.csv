@@ -1024,3 +1024,5 @@ define,    0x00CC37BC,	0x0,		0x0,		"p_native_game_ending",	"int *"
 
 inlead, 0x606780, 0x0, 0x0, "JGL_present_screen", "void (__cdecl *) (RECT * rect)"
 define, 0xCAD030, 0x0, 0x0, "p_jgl_screen_canvas", "PCX_Image *"
+inlead, 0x6343D0, 0x0, 0x0, "load_jgl_lib", "void * (__cdecl *) (char const * filename)"
+inlead, 0x634390, 0x0, 0x0, "unload_jgl_lib", "void (__cdecl *) (void)"

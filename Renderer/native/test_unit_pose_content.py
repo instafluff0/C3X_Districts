@@ -20,6 +20,18 @@ int main(){
  UnitPoseInput input;input.source.meshes={mesh};input.width=input.height=240;input.anchor_x=input.anchor_y=120;
  input.direction=3;input.phase=.5;input.light_x=1;
  std::atomic<bool> cancel{false};auto control=UnitPoseCompiler{}(input,cancel,0);assert(control);
+ auto selected_input=input;selected_input.gpu_shadow=true;
+ auto selected=UnitPoseCompiler{}(selected_input,cancel,0);assert(selected);
+ assert(selected->uploads==control->uploads && selected->shadow.heights.empty() && selected->ground_shadow.empty());
+ assert(selected->ground_projection[8]==control->shadow.extent && !selected->shadow_triangles.empty());
+ // Independent consumer of the selected pass input reproduces the CPU raster.
+ std::vector<float> heights(control->shadow.heights.size(),-1.f);int extent=control->shadow.extent;
+ for(auto const& t:selected->shadow_triangles)for(int y=0;y<extent;++y)for(int x=0;x<extent;++x){
+  float px=x+.5f,py=y+.5f,u=((t[4]-px)*(t[9]-py)-(t[5]-py)*(t[8]-px))/t[3];
+  float v=((t[8]-px)*(t[1]-py)-(t[9]-py)*(t[0]-px))/t[3],w=1-u-v,z=u*t[2]+v*t[6]+w*t[10];
+  if(u>=0&&v>=0&&w>=0&&z>=.002f)heights[y*extent+x]=std::max(heights[y*extent+x],z);
+ }
+ assert(heights==control->shadow.heights);
  using Pool=render_core::ContentPreparation<int,UnitPoseInput,UnitPoseContent>;
  Pool pool;pool.configure({},UnitPoseCompiler{},2);
  assert(pool.offer({1,input},32));assert(pool.offer({1,input},32));
@@ -37,6 +49,10 @@ int main(){
  auto turned=pool.take(2);assert(turned && turned->uploads!=control->uploads);
  pool.pause();assert(pool.statistics().built==2 && pool.statistics().active_peak<=2);
  pool.clear();assert(pool.statistics().bytes==0 && pool.statistics().pending==0);
+ // Reject oversized pass inputs before skinning or allocating the record list.
+ auto oversized=std::make_shared<AnimationMesh>();oversized->indices.resize((16u*1024u*1024u/48+1)*3);
+ UnitPoseInput excessive;excessive.gpu_shadow=true;excessive.source.meshes={oversized};
+ assert(!UnitPoseCompiler{}(excessive,cancel,0));
  // Cancellation cannot publish a partial pose.
  cancel=true;UnitPoseInput cancelled_input;cancelled_input.source.meshes={std::make_shared<AnimationMesh>()};
  assert(!UnitPoseCompiler{}(cancelled_input,cancel,0));
@@ -51,11 +67,11 @@ int main(){
 #include <array>
 #include <cassert>
 struct Owner {
-'''+key+"using PoseKey=std::array<int,10>;"+function+r'''
+'''+key+"using PoseKey=std::array<int,11>;"+function+r'''
 };
 int main(){
  Owner owner;Owner::Key key={1,2,3,4,16,240,240,1000,12,0,0x205bdd};
- auto original=owner.content_key(key);auto other=key;other.color=0xdd4422;
+ auto original=owner.content_key(key);assert(owner.content_key(key,true)!=original);auto other=key;other.color=0xdd4422;
  assert(!(other==key) && owner.content_key(other)==original); // Reuse CPU content, recolor on GPU.
  for(auto field:{&Owner::Key::action,&Owner::Key::direction,&Owner::Key::cursor,&Owner::Key::frames,
                  &Owner::Key::width,&Owner::Key::height,&Owner::Key::scale_milli,&Owner::Key::hour,&Owner::Key::season}) {
