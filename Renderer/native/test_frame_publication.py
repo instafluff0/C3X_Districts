@@ -310,6 +310,7 @@ struct RendererState {
     bool configure_definitions(char const*,char const*,char const*,char const*){reset();return true;}
     void reset(){demand_executed=true;++resets;pixels.clear();flags.clear();}
     void clear_geometry_vertex_buffers(){}
+    void discard_scene_view(){geometry_cache.clear();clear_geometry_vertex_buffers();}
     template<class T> bool prepare_unit_action(T const&){return true;}
     void begin_pixel_neighborhood(c3x_renderer_frame_v1 const&){}
     void start_pixel_preparation(){}void cancel_pixel_preparation(){}

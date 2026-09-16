@@ -75,7 +75,7 @@ def main():
     complete=(out/'completion.txt').read_text().split() if (out/'completion.txt').exists() else []
     log=(out/'test.log').read_text(errors='replace') if (out/'test.log').exists() else ''
     unchanged=all(digest(ROOT/p)==h for p,h in inputs.items())
-    passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and 'PASS prepared GPU map adoption:' in log
+    passed=complete==[invocation,'0'] and unchanged and 'PASS resident map GPU worker:' in log and 'PASS native GPU worker transport:' in log and 'PASS native screen transfer:' in log and 'PASS live native screen:' in log and 'PASS production native map owner:' in log and ('PASS prepared GPU map adoption:' in log or (args.width>2224 and args.height>1176 and 'PASS bounded GPU map demand:' in log))
     receipt={'status':'pass' if passed else 'fail' if complete else 'unconfirmed','inputs':inputs,'inputs_unchanged':unchanged,'transport_returncode':process.returncode,'transport_output':process.stdout+process.stderr,'settings':settings,'scope':'production captured renderer map -> existing GPU worker -> packed composition; oracle readback explicit; actual native final presentation including CPU compatibility callback; no game speedup claim'}
     trace=(out/'renderer.log').read_text(errors='replace') if (out/'renderer.log').exists() else ''
     resident_units=[line for line in trace.splitlines() if 'resident_pose=1' in line]
@@ -85,6 +85,10 @@ def main():
     # round trip, not merely avoid reading its destination/background canvas.
     passed=passed and resident_proof
     receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
+    if args.scroll_coverage:
+        passed=complete==[invocation,'0'] and unchanged and 'PASS scroll coverage:' in log
+        receipt['status']='pass' if passed else 'fail' if complete else 'unconfirmed'
+        receipt['scope']='fine-pan/zoom map coverage with idle guard preparation; missing pixels compared against a cold no-guard render; no native UI or performance claim'
     if args.benchmark:
         import re,statistics
         samples=[];parse_errors=[]

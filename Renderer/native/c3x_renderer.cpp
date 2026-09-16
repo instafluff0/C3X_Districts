@@ -4120,7 +4120,7 @@ public:
 
     bool scene_guard_pending() const {
         return world_preparation && shared_scene_surface && scene_guard_pad && !scene_guard_failed &&
-            scene_guard.pending && scene_scratch.color && cache_valid;
+            scene_guard.pending && scene_scratch.color && cache_valid && geometry_cache.valid;
     }
     bool prepare_scene_guard(std::atomic<bool> const& cancelled) {
         if(!scene_guard_pending() || cancelled.load(std::memory_order_relaxed))return true;
@@ -4517,6 +4517,16 @@ public:
         resource_anchors.clear();
         geometry_footprints.clear();
         for(auto& layer:geometry_vertex_buffers)std::vector<GeometryDrawRecord>().swap(layer);
+    }
+
+    // An abandoned view has no complete contributor set. Keep compiled world
+    // content, but never let idle preparation certify pixels from that view.
+    void discard_scene_view() {
+        cache_valid=false;resource_pixel_signature=0;
+        geometry_cache.clear();
+        clear_geometry_vertex_buffers();
+        scene_guard.invalidate_all();
+        scene_static_signature=0;
     }
 
     void release_resident_content(CachedTileGeometry& owner){
@@ -11293,7 +11303,7 @@ private:
                 }
             }catch(std::exception const& error){renderer_state.trace.write("prepared-area-error",error.what(),true);}
             catch(...){} // Cancellation or unavailable optional content keeps the native front.
-            if(!ok){renderer_state.geometry_cache.clear();renderer_state.clear_geometry_vertex_buffers();}
+            if(!ok){renderer_state.discard_scene_view();}
             QueryPerformanceCounter(&end);lock.lock();
             if(ok && !ahead_selected)retain_view(built);
             if(!ok && resident && !ahead_prospective && ahead_cancelled.load(std::memory_order_relaxed))area_pending=true;
@@ -11332,7 +11342,7 @@ private:
         }catch(...){ok=false;}
         // An interrupted assembly is not a device failure. Current CPU pixels
         // belong to publication; the ordinary miss will rebuild its draw view.
-        if(!ok){renderer_state.geometry_cache.clear();renderer_state.clear_geometry_vertex_buffers();}
+        if(!ok){renderer_state.discard_scene_view();}
         QueryPerformanceCounter(&end);
         lock.lock();
         bool cancelled=ahead_cancelled.load(std::memory_order_relaxed);
@@ -11512,8 +11522,7 @@ private:
                         // bitmap remain individually validated. Render marks
                         // the bitmap invalid before any partial pixel mutation.
                         // Only interrupted draw/animation assemblies are lost.
-                        renderer_state.geometry_cache.clear();
-                        renderer_state.clear_geometry_vertex_buffers();
+                        renderer_state.discard_scene_view();
                         result=C3X_RENDERER_RESULT_SUPERSEDED;
                     }else if(ok)result=C3X_RENDERER_RESULT_OK;
                     else {
@@ -11524,8 +11533,7 @@ private:
                     // Recursive placement unwinds on ordinary supersession.
                     // Keep resident assets and validated world content, exactly
                     // as for render's non-exception cancellation return above.
-                    renderer_state.geometry_cache.clear();
-                    renderer_state.clear_geometry_vertex_buffers();
+                    renderer_state.discard_scene_view();
                     renderer_state.trace.write("camera-cancelled","phase=cliff-placement",true);
                     result=C3X_RENDERER_RESULT_SUPERSEDED;
                 }catch(std::exception const& error) {

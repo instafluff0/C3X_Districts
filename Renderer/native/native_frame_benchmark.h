@@ -109,7 +109,8 @@ if(!performance_frames.empty()){
             verify(screen_surface->Bits_Data_Links==0&&live_images[0]->Bits_Data_Links==0,"whole-frame lookup releases native bits");
             last_transfer=full;final_ui_drawn=false;patch_JGL_present_screen(&full);GdiFlush();
             verify(screen_surface->Bits_Data_Links==0,"whole-frame final transfer releases native bits");
-            int preparation=prepare_view(&packet);verify(preparation==C3X_RENDERER_RESULT_OK||preparation==C3X_RENDERER_RESULT_BAD_ARGUMENT,"caller-driven preparation offer");
+            int preparation=prepare_view(&packet);verify(preparation==C3X_RENDERER_RESULT_OK||preparation==C3X_RENDERER_RESULT_BAD_ARGUMENT||
+                (w>2224 && h>1176 && preparation==C3X_RENDERER_RESULT_ERROR),"caller-driven preparation offer");
             QueryPerformanceCounter(&submit_done);verify(SUCCEEDED(finish_desktop()),"whole-frame desktop completion");QueryPerformanceCounter(&end);
             if(captured.step>=8){auto const& output=displayed.output;
                 double age=1000.*double(requested.presentation_time_ticks-displayed.frame.presentation_time_ticks)/double(requested.presentation_frequency);

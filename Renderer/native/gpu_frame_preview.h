@@ -39,20 +39,31 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
     if(!std::strcmp(coverage_test,"1")){
         auto longest_black=[](c3x_renderer_output_v1 const& image){int longest=0;
             for(int y=16;y<image.height-16;y+=8){auto row=reinterpret_cast<unsigned const*>(static_cast<unsigned char const*>(image.bgra_pixels)+std::size_t(y)*image.stride_bytes);int run=0;
-                for(int x=16;x<image.width-16;++x){run=(row[x]&0xffffff)?0:run+1;longest=std::max(longest,run);}}
+                for(int x=16;x<image.width-16;++x){run=(row[x]&0xffffff)?0:run+1;longest=(std::max)(longest,run);}}
             return longest;
         };
         for(int step=0;step<40;++step){
             tile_width=step<24?128:192;tile_height=tile_width/2;
-            int ox=-3616-(step<24?step:step-24)*84,oy=-940-(step>=12?(step%12)*64:0);
+            int position=step-step%2; // Repeat the committed camera/clock after cancellation too.
+            int ox=-3616-(position<24?position:position-24)*84,oy=-940-(position>=12?(position%12)*64:0);
             center_x=(target_width/2-tile_width/2-ox)/(tile_width/2);
             center_y=(target_height/2-tile_height/2-oy)/(tile_height/2);
             auto selected=capture_view();auto input=test_frame;input.tile_width=tile_width;input.tile_height=tile_height;
             int dx=ox-(selected[0].anchor_x-selected[0].tile_x*tile_width/2),dy=oy-(selected[0].anchor_y-selected[0].tile_y*tile_height/2);
             for(auto& tile:selected){tile.anchor_x+=dx;tile.anchor_y+=dy;}
             input.tiles=selected.data();input.tile_count=unsigned(selected.size());input.presentation_time_ticks=1000000;input.presentation_frequency=1000000;
+            if(step){
+                auto begin_camera=reinterpret_cast<c3x_renderer_camera_begin_fn>(GetProcAddress(module,"c3x_renderer_camera_begin"));
+                auto cancel_camera=reinterpret_cast<c3x_renderer_camera_cancel_fn>(GetProcAddress(module,"c3x_renderer_camera_cancel"));
+                auto future=input;auto future_tiles=selected;for(auto& tile:future_tiles)tile.anchor_y+=64;
+                future.tiles=future_tiles.data();future.presentation_time_ticks+=step*100000;
+                c3x_renderer_i64 ticket=0;if(!begin_camera||!cancel_camera||begin_camera(&future,&ticket)!=C3X_RENDERER_RESULT_PENDING)return 1;
+                Sleep(5+step%4*25);cancel_camera(ticket);Sleep(250);
+            }
+            input.presentation_time_ticks+=position*100000;
             c3x_renderer_output_v1 warm={C3X_RENDERER_API_VERSION,sizeof(warm)};
-            if(render(&input,&warm)!=C3X_RENDERER_RESULT_OK)return 1;
+            std::vector<unsigned> warm_pixels;if(!capture_reference(input,warm_pixels))return 1;
+            warm.width=input.target_width;warm.height=input.target_height;warm.stride_bytes=warm.width*4;warm.bgra_pixels=warm_pixels.data();
             int black=longest_black(warm);std::printf("SCROLL_COVERAGE step=%d origin=%d,%d tile_width=%d black_span=%d\n",step,ox,oy,tile_width,black);std::fflush(stdout);
             if(black>=32){
                 write_bmp((std::string(argv[5])+".scroll-warm.bmp").c_str(),warm);
@@ -111,7 +122,7 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
                 gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"fresh session after native oracle"))break;map_expected=expected;
         }
 #endif
-        if(phase==0 && ok){
+        if(phase==0 && ok && (test_frame.target_width<=2224 || test_frame.target_height<=1176)){
             auto prepare=reinterpret_cast<c3x_renderer_prepare_nearby_view_fn>(GetProcAddress(module,"c3x_renderer_prepare_nearby_view"));
             auto refresh=test_frame;auto refresh_tiles=test_tiles;
             for(auto& tile:refresh_tiles)tile.anchor_x-=80;
@@ -146,6 +157,23 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
                 auto control_pixels=static_cast<unsigned const*>(control.bgra_pixels);expected.assign(control_pixels,control_pixels+actual.size());verify_gpu(capture_reference(test_frame,expected),"restore CPU area reference");map_expected=expected;
                 verify_gpu(gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"restore exact GPU phase");
             }
+        }
+        if(phase==0 && ok && test_frame.target_width>2224 && test_frame.target_height>1176){
+            // At the maximum working extent there is no room for a wider donor.
+            // Demand must render the exact view, with an honest clock and no readback.
+            auto refresh=test_frame;auto refresh_tiles=test_tiles;
+            for(auto& tile:refresh_tiles)tile.anchor_x-=80;
+            refresh.tiles=refresh_tiles.data();refresh.presentation_time_ticks+=refresh.presentation_frequency/15;
+            auto refresh_request=request;refresh_request.frame=&refresh;
+            auto prepare=reinterpret_cast<c3x_renderer_prepare_nearby_view_fn>(GetProcAddress(module,"c3x_renderer_prepare_nearby_view"));
+            verify_gpu(capture_reference(refresh,expected) && gpu_render(&refresh_request,&view,&meta)==C3X_RENDERER_RESULT_OK &&
+                !view.prepared && !view.map_readbacks && !meta.bgra_pixels && view.presentation_time_ticks==refresh.presentation_time_ticks,
+                "maximum extent exact resident camera demand");
+            verify_gpu(prepare && prepare(&refresh_request)==C3X_RENDERER_RESULT_ERROR,"maximum extent declines wider preparation");
+            verify_gpu(read(view.map_image)==C3X_RENDERER_RESULT_OK && actual==expected,"maximum extent exact camera pixels");
+            if(ok)std::puts("PASS bounded GPU map demand: exact current camera and clock; wider preparation declined at maximum extent");
+            gpu_reset();verify_gpu(render(&test_frame,&control)==C3X_RENDERER_RESULT_OK && capture_reference(test_frame,expected) &&
+                gpu_render(&request,&view,&meta)==C3X_RENDERER_RESULT_OK,"restore maximum extent phase control");map_expected=expected;
         }
         if(old_ticket){auto stale=image_request(C3X_GPU_CREATE);stale.ticket=old_ticket;stale.width=stale.height=2;verify_gpu(execute(stale)==C3X_RENDERER_RESULT_SUPERSEDED,"old ticket rejected");}
         old_ticket=view.ticket;

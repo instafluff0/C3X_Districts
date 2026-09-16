@@ -137,78 +137,36 @@ No game installation or launch was performed. Exact controls and verification ar
 [Submission evidence](history/selected_submissions_20260915.md) and
 [earlier findings](history/retained_renderer_checkpoints_20260915.md) remain preserved.
 
-### Bug-repair checkpoint: input, zoom HUD and retained animation
+### Current bug-repair checkpoint
 
-Source fixes unify native mouse picking while keeping clip queries and city-work
-input native, and correct the city-HUD attachment point. The user approved the
-input and map-UI hooks; all are active. The city HUD now uses its specific
-coordinate call, and paired ordinary/army calls place status, selection cursors
-and civilization markers. The global city-anchor inlead and all four zoom
-bookkeeping fields are removed; `Unit_tick_anim` passes native offsets unchanged.
-The GOG injection compile and 65 focused checks pass, including byte/ABI evidence,
-actual table wiring and coordinate parity across supported zooms. See the patch
-ledger for exact symbols, addresses and signatures.
+Live feedback confirms unit selection and the previous HUD fixes. The new black
+rectangles were reproduced: canceled camera work discarded draw inputs, but idle
+static-cache preparation cleared regions and certified them with no contributors.
+Abandoned views now retire their draw/raster validity together; background work
+requires complete inputs. Compiled world assets and published fronts remain owned.
+The old build fails the scrolling reproducer at step 2; the fix passes 40 steps
+across cancellation, both scroll axes, zoom and idle preparation.
 
-Retained map samplers now own their copied inputs until composition releases them.
-The existing DLL fails the new unpublished-replacement test; candidate
-`03e148cf394e1a5b485f3d5609a97da30c97cba00dbc4a28346a94b1b86a0447` passes it,
-resource-only idle (Horses and Cattle), native UI/partial transfer/config-off oracles
-and 30 independent frames with zero native draw calls. This is a correctness fix,
-not a performance improvement claim. Cattle retained composition uses 32.1 MiB;
-the final independent request mean is 20.69 ms (desktop completion 29.63 ms).
-Local reproducer receipt: `native/build/gpu-composition/298f6135c9894b3da828ba2886d9314a`;
-Final connected Cattle result:
-`native/build/gpu-composition/42e7de0b371e4d89a755c9552d801d28`.
-Live feedback confirms animations and HUD positioning. The subsequent click log
-shows successful normal-scale picking, no completed-click dispatch, and a native
-hold latch surviving release. Compatibility redraws during the press rebuild
-command buttons, whose native show operation clears pressed-form ownership.
-The scheduler now suppresses optional redraws for the whole processed press,
-removing both the selected-unit exception and elapsed-time guards. Native actions
-and resident GPU frames retain their owners. The old scheduler fails the ownership
-regression; the fix passes 54 focused checks, GOG byte audit, DLL build and injection
-compile. Live click/double-click/held-path confirmation remains pending; temporary
-click traces remain for that checkpoint.
+The latest screen-upload log is 16-bit data and describes **2240×1192**, correcting
+the earlier 1120×1192 interpretation. Native map residency was lost after startup,
+explaining the lack of independent animation frames. At the actual extent,
+map/screen/popup pairs exceed the old 64 MiB live-composition budget; the Session
+now has a measured 96 MiB ceiling. Other resource budgets and full detail remain
+unchanged. The maximum extent has no wider prepared donor: camera demand remains
+exact and synchronous there. General nonblocking publication is still unfinished.
 
-The full startup log corrects the earlier admission diagnosis: its first map
-commits with `gpu_map=1`; the first Scout submission returns `BAD_ARGUMENT`,
-CPU unit delivery revokes map lifetime, and subsequent maps use `gpu_map=0`.
-Two unit rejection cases are reproduced and fixed: absent optional color layers
-were mistaken for aliased images, and a small unit reserved full-map scratch
-textures. Unit scratch now follows its selected rectangle, including keyed and
-aliased underlays; genuine CPU access still transfers ownership normally.
-No new hooks, native ownership exceptions, timers or memory-cap increases.
+[Repair evidence and controls](history/resident_scroll_repair_20260915.md) preserve
+the reproduction, earlier unit/sampler fixes, complete delivery-route measurements
+and test limitations. At 2240×1192, 384 complete same-DLL requests average
+GPU/CPU 19.96/74.47 ms idle, 64.65/193.20 ms scrolling and 21.11/79.83 ms local
+edit; significant tails remain. This compares delivery routes, not live-game FPS.
+The final candidate passes exact native UI/camera/config-off ownership and 30
+independent frames with no native redraws (21.05 ms request mean). Sampled
+contiguous headroom is 1.18 GiB; no player memory setting is required.
 
-**Validation:** the preserved `26b88ecc…` DLL rejects the packed-surface regression;
-the fix passes exact 555/565/full-color pixels and native erase bounds. Actual JGL
-scratch draws preserve map lifetime with zero delivery readbacks. A separate
-2240×1192 map/native-pair test previously exceeded 64 MiB; its 64×48 unit now needs
-24 KiB of scratch and stays within that same cap. Retained replay passes 126 pixel
-oracles and 120 clock frames. The connected 1120×1192 fixture also passes native
-UI, config-off, CPU escape, camera identity, and 30 independent visual frames.
-
-**Measured:** 384 complete map/eight-unit/UI/transfer requests, 64 per route and
-workload. Same-DLL GPU versus CPU delivery means are 8.94/59.43 ms stationary,
-39.06/149.80 ms scrolling and 12.51/64.70 ms local change. These compare delivery
-routes, not old/new implementation speed. Capture is outside timing; QPC desktop
-completion is not physical scanout. Independent frames average 21.49 ms per call,
-31.26 ms through desktop completion, with no native draw calls. Sampled largest
-free VA remains above 1.4 GiB. GPU timestamps remain unused on Parallels.
-Receipt: `native/build/gpu-composition/c423ae8e94c04d2f9ba3510eb5b38ed4`.
-
-**Remaining:** live confirmation of sustained residency, click/double-click and
-held-path behavior. The full 2240-pixel-wide UI stress fixture reaches 52.5 MiB
-before a popup requires another full-size native/color pair (~20.4 MiB), exceeding
-64 MiB and transferring to CPU ownership. This is distinct from the logged
-1120-pixel display and the passing map-sized unit test; do not claim universal
-resident UI coverage or silently raise the cap. Bounded diagnostic receipt:
-`native/build/gpu-composition/f720e68241a844d5ab332a2da2fa2d25`.
-General nonblocking camera publication and milestone 1's missing-content work
-remain architectural responsibilities, unchanged by this repair.
-
-Current staged DLL: `7d598ac58afb8f6186379df887a4f97baba109b3f6e3be674d3209c320487cec`.
-Ordinary `INSTALL.bat` uses it; the preceding `26b88ecc…` DLL remains in
-`native/build/rollback/<sha256>/`. Final connected verification receipt:
-`native/build/gpu-composition/34c3519f2d614c43932b65b044470b17`.
-The 48 focused input/bridge checks and GOG compile/injection smoke pass.
-No game was installed or launched; live confirmation remains pending.
+Current staged DLL:
+`61440a6b13fd8773cd02033868258aa809c38999fe7cd729006154e3f6eb587a`.
+Ordinary `INSTALL.bat` uses it; rollback `7d598ac5…` is preserved. Live confirmation
+of this repair remains pending. Missing-content work remains milestone 1's next
+architectural responsibility; general nonblocking camera publication stays open.
+No new hooks, gameplay cadence changes, installation or game launch.

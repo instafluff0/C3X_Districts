@@ -66,7 +66,8 @@ under their existing owners; only optional compatibility animation waits for rel
 
 Retained texture accounting is capped at 128 MiB, nodes at 32,768 and rectangular
 patches at 8,192 per image. Separate replay scratch is capped at 128 MiB; the
-existing live composition owner remains capped at 64 MiB. These are ceilings,
+live composition owner is capped at 96 MiB so 2240×1192 map/screen/popup color
+pairs fit together. Generic compositor tests retain their 64 MiB ceiling. These are ceilings,
 not permanent allocations. Source snapshots and CPU recipe metadata retire with
 their last owning version; shared map/pose textures use COM lifetime ownership.
 
