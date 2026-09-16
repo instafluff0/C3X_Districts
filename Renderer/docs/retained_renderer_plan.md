@@ -159,8 +159,56 @@ the final independent request mean is 20.69 ms (desktop completion 29.63 ms).
 Local reproducer receipt: `native/build/gpu-composition/298f6135c9894b3da828ba2886d9314a`;
 Final connected Cattle result:
 `native/build/gpu-composition/42e7de0b371e4d89a755c9552d801d28`.
-The exact tested candidate is staged for ordinary `INSTALL.bat`, with the prior
-DLL preserved under `native/build/rollback/<sha256>/`. No game was installed or
-launched. The pending live checkpoint covers short
-left/right click, held drag, repeated Z with city HUD, and idle Cattle without a
-working unit. The architectural next responsibility above is unchanged.
+Live feedback confirms animations and HUD positioning. The subsequent click log
+shows successful normal-scale picking, no completed-click dispatch, and a native
+hold latch surviving release. Compatibility redraws during the press rebuild
+command buttons, whose native show operation clears pressed-form ownership.
+The scheduler now suppresses optional redraws for the whole processed press,
+removing both the selected-unit exception and elapsed-time guards. Native actions
+and resident GPU frames retain their owners. The old scheduler fails the ownership
+regression; the fix passes 54 focused checks, GOG byte audit, DLL build and injection
+compile. Live click/double-click/held-path confirmation remains pending; temporary
+click traces remain for that checkpoint.
+
+The full startup log corrects the earlier admission diagnosis: its first map
+commits with `gpu_map=1`; the first Scout submission returns `BAD_ARGUMENT`,
+CPU unit delivery revokes map lifetime, and subsequent maps use `gpu_map=0`.
+Two unit rejection cases are reproduced and fixed: absent optional color layers
+were mistaken for aliased images, and a small unit reserved full-map scratch
+textures. Unit scratch now follows its selected rectangle, including keyed and
+aliased underlays; genuine CPU access still transfers ownership normally.
+No new hooks, native ownership exceptions, timers or memory-cap increases.
+
+**Validation:** the preserved `26b88ecc…` DLL rejects the packed-surface regression;
+the fix passes exact 555/565/full-color pixels and native erase bounds. Actual JGL
+scratch draws preserve map lifetime with zero delivery readbacks. A separate
+2240×1192 map/native-pair test previously exceeded 64 MiB; its 64×48 unit now needs
+24 KiB of scratch and stays within that same cap. Retained replay passes 126 pixel
+oracles and 120 clock frames. The connected 1120×1192 fixture also passes native
+UI, config-off, CPU escape, camera identity, and 30 independent visual frames.
+
+**Measured:** 384 complete map/eight-unit/UI/transfer requests, 64 per route and
+workload. Same-DLL GPU versus CPU delivery means are 8.94/59.43 ms stationary,
+39.06/149.80 ms scrolling and 12.51/64.70 ms local change. These compare delivery
+routes, not old/new implementation speed. Capture is outside timing; QPC desktop
+completion is not physical scanout. Independent frames average 21.49 ms per call,
+31.26 ms through desktop completion, with no native draw calls. Sampled largest
+free VA remains above 1.4 GiB. GPU timestamps remain unused on Parallels.
+Receipt: `native/build/gpu-composition/c423ae8e94c04d2f9ba3510eb5b38ed4`.
+
+**Remaining:** live confirmation of sustained residency, click/double-click and
+held-path behavior. The full 2240-pixel-wide UI stress fixture reaches 52.5 MiB
+before a popup requires another full-size native/color pair (~20.4 MiB), exceeding
+64 MiB and transferring to CPU ownership. This is distinct from the logged
+1120-pixel display and the passing map-sized unit test; do not claim universal
+resident UI coverage or silently raise the cap. Bounded diagnostic receipt:
+`native/build/gpu-composition/f720e68241a844d5ab332a2da2fa2d25`.
+General nonblocking camera publication and milestone 1's missing-content work
+remain architectural responsibilities, unchanged by this repair.
+
+Current staged DLL: `7d598ac58afb8f6186379df887a4f97baba109b3f6e3be674d3209c320487cec`.
+Ordinary `INSTALL.bat` uses it; the preceding `26b88ecc…` DLL remains in
+`native/build/rollback/<sha256>/`. Final connected verification receipt:
+`native/build/gpu-composition/34c3519f2d614c43932b65b044470b17`.
+The 48 focused input/bridge checks and GOG compile/injection smoke pass.
+No game was installed or launched; live confirmation remains pending.

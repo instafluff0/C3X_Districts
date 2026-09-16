@@ -2,6 +2,17 @@
 
 ## Zoom input and specific map-UI hooks
 
+Selected-unit click repair changes only optional compatibility scheduling: no
+ambient redraw during a processed mouse press. Full map redraw calls Main_GUI
+draw, which rebuilds command buttons; `Base_Form::impl_m01_Show_Enabled` clears
+native press owners at GOG `0x60504D` (byte-audited). The former selected-unit
+exception and time-based guards are removed. Existing click/hover/selection
+traces remain for live confirmation; `Main_Screen_Form_issue_command` is a
+define, not a native interception point. No patch-table changes are required
+(`required_user_action: []`). Resident-unit admission and scratch fixes use the
+same `Unit_tick_anim` / `Sprite_draw_unit_body_normal` / reduced-body hooks and
+JGL image bridge; they require no additional patches or native ownership.
+
 Explicit user authorization covers the rows below. GOG calls, entry bytes and
 stack cleanup are checked by `audit_native_visual_cadence.py`; CSV wiring and
 compiled coordinate/capture behavior are checked by `test_custom_zoom.py`.

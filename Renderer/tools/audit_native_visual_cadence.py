@@ -20,6 +20,11 @@ def audit(path):
             if start<=rva and rva+size<=start+length:return data[raw+rva-start:raw+rva-start+size]
         raise ValueError('address outside file-backed image')
     checks={
+        # Base_Form::impl_m01_Show_Enabled clears both pressed-form owners.
+        # Full map redraw -> Main_GUI::impl_m22_Draw -> command-button rebuild
+        # reaches this when a unit is selected. Never inject ambient redraws
+        # between native press and release.
+        0x605043:'a802',0x60504b:'750c',0x60504d:'33c0a3b0d3ca00a3b4d3ca00',
         # Shared zoom picking and native city anchor entry evidence.
         0x4e3b10:'83ec088b44240c',0x4e3c60:'83ec08a16c739c00',
         # Specific map UI routines: status (4 stack args), cursor (2), marker

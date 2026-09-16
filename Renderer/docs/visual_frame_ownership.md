@@ -52,6 +52,16 @@ completed display and withdraws the front; native compatibility demand remains
 available while no front is ready. History admission can restart at a fresh
 native map publication. Config-off retains the original native path.
 
+Packed native unit scratch surfaces are valid GPU destinations even without an
+optional full-color layer. Unit blending snapshots only its selected rectangle;
+it must not require full-map scratch allocations. Public CPU access retains the
+existing ownership barrier; a composition rejection is not permission to skip it.
+
+Compatibility ambient redraws never run during a processed mouse press: rebuilding
+native command buttons clears pressed-form ownership. No selected-unit exception
+or elapsed-time guard applies. Native actions and resident visual frames continue
+under their existing owners; only optional compatibility animation waits for release.
+
 ## Bounds and validation
 
 Retained texture accounting is capped at 128 MiB, nodes at 32,768 and rectangular

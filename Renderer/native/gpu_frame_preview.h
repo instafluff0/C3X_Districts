@@ -35,6 +35,38 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
         auto pixels=static_cast<unsigned const*>(cpu.bgra_pixels);image.assign(pixels,pixels+std::size_t(cpu.width)*cpu.height);return true;
     };
     c3x_renderer_i64 old_ticket=0;
+    char coverage_test[8]={};GetEnvironmentVariableA("C3X_RENDERER_SCROLL_COVERAGE_TEST",coverage_test,sizeof(coverage_test));
+    if(!std::strcmp(coverage_test,"1")){
+        auto longest_black=[](c3x_renderer_output_v1 const& image){int longest=0;
+            for(int y=16;y<image.height-16;y+=8){auto row=reinterpret_cast<unsigned const*>(static_cast<unsigned char const*>(image.bgra_pixels)+std::size_t(y)*image.stride_bytes);int run=0;
+                for(int x=16;x<image.width-16;++x){run=(row[x]&0xffffff)?0:run+1;longest=std::max(longest,run);}}
+            return longest;
+        };
+        for(int step=0;step<40;++step){
+            tile_width=step<24?128:192;tile_height=tile_width/2;
+            int ox=-3616-(step<24?step:step-24)*84,oy=-940-(step>=12?(step%12)*64:0);
+            center_x=(target_width/2-tile_width/2-ox)/(tile_width/2);
+            center_y=(target_height/2-tile_height/2-oy)/(tile_height/2);
+            auto selected=capture_view();auto input=test_frame;input.tile_width=tile_width;input.tile_height=tile_height;
+            int dx=ox-(selected[0].anchor_x-selected[0].tile_x*tile_width/2),dy=oy-(selected[0].anchor_y-selected[0].tile_y*tile_height/2);
+            for(auto& tile:selected){tile.anchor_x+=dx;tile.anchor_y+=dy;}
+            input.tiles=selected.data();input.tile_count=unsigned(selected.size());input.presentation_time_ticks=1000000;input.presentation_frequency=1000000;
+            c3x_renderer_output_v1 warm={C3X_RENDERER_API_VERSION,sizeof(warm)};
+            if(render(&input,&warm)!=C3X_RENDERER_RESULT_OK)return 1;
+            int black=longest_black(warm);std::printf("SCROLL_COVERAGE step=%d origin=%d,%d tile_width=%d black_span=%d\n",step,ox,oy,tile_width,black);std::fflush(stdout);
+            if(black>=32){
+                write_bmp((std::string(argv[5])+".scroll-warm.bmp").c_str(),warm);
+                gpu_reset();SetEnvironmentVariableA("C3X_RENDERER_WORLD_PREPARATION","0");
+                c3x_renderer_output_v1 cold={C3X_RENDERER_API_VERSION,sizeof(cold)};
+                if(render(&input,&cold)!=C3X_RENDERER_RESULT_OK)return 1;
+                write_bmp((std::string(argv[5])+".scroll-cold.bmp").c_str(),cold);
+                std::printf("SCROLL_COVERAGE cold_black_span=%d warm_black_span=%d\n",longest_black(cold),black);
+                return 1;
+            }
+            Sleep(100); // Exercise the existing idle guard producer between demands.
+        }
+        std::puts("PASS scroll coverage: fine pans, two axes, zoom and idle guard preparation; no missing map strips");return 0;
+    }
     for(int phase=0;phase<4 && ok;++phase){
         if(phase==1)test_frame.presentation_time_ticks+=test_frame.presentation_frequency/4;
         if(phase==2)for(auto& tile:test_tiles){tile.anchor_x-=23;tile.anchor_y+=11;}

@@ -12216,11 +12216,10 @@ extern "C" __declspec(dllexport) int c3x_renderer_set_unit_rendering(int enabled
     return get_renderer_worker().set_unit_rendering(enabled);
 }
 
-// Ambient redraws are optional. Civ III tells us when the left button belongs to
-// a selected-unit map/pathfinder interaction; allow that interaction immediately.
-// Keep a bounded guard for other clicks and the first release interval.
-// GetKeyState reads processed button state; avoid GetQueueStatus/GetAsyncKeyState,
-// whose change bits are consumable.
+// Optional compatibility redraws rebuild native command buttons, whose show
+// operation clears pressed-form ownership. Never request one during a mouse
+// press. Native actions and resident GPU visual frames have independent owners.
+// GetKeyState observes processed state without consuming input transitions.
 extern "C" int c3x_renderer_schedule(c3x_renderer_schedule_v1 const*,c3x_renderer_schedule_result_v1*);
 extern "C" __declspec(dllexport) int c3x_renderer_schedule_idle(
     c3x_renderer_schedule_v1 const* input,c3x_renderer_schedule_result_v1* output) {
@@ -12229,24 +12228,12 @@ extern "C" __declspec(dllexport) int c3x_renderer_schedule_idle(
     unsigned buttons=((GetKeyState(VK_LBUTTON)&0x8000)?1u:0u) |
         ((GetKeyState(VK_RBUTTON)&0x8000)?2u:0u) |
         ((GetKeyState(VK_MBUTTON)&0x8000)?4u:0u);
-    bool busy=buttons!=0;
-    static bool previous_busy=false;
-    static c3x_renderer_i64 busy_started_ticks=0;
-    static c3x_renderer_i64 previous_call_ticks=0;
-    bool just_pressed=busy && !previous_busy;
-    bool just_released=!busy && previous_busy;
-    if(just_pressed)busy_started_ticks=input->now_ticks;
-    c3x_renderer_i64 held_ticks=input->now_ticks-busy_started_ticks;
-    bool pathfinder_hold=(input->state_flags&C3X_RENDERER_SCHEDULER_PATHFINDER_HOLD)!=0;
-    bool deciding_click=busy && !pathfinder_hold &&
-        (held_ticks<0 || held_ticks<=input->frequency/4);
-    bool defer=deciding_click || just_released;
+    bool defer=buttons!=0;
     c3x_renderer_u32 base_request=output->request_redraw;
     c3x_renderer_u32 base_rebase=output->rebase_clock;
-    if(!busy)busy_started_ticks=0;
     if(defer){output->request_redraw=0;output->dirty_flags=0;output->skipped_frame_count=0;output->rebase_clock=1;}
     char const* reason="cadence-wait";
-    if(defer)reason=just_released?"release-guard":"click-decision-guard";
+    if(defer)reason="native-mouse-press";
     else if((input->state_flags&C3X_RENDERER_SCHEDULER_MAP_VISIBLE)==0)reason="map-hidden";
     else if((input->state_flags&C3X_RENDERER_SCHEDULER_FOCUSED)==0)reason="unfocused";
     else if((input->state_flags&C3X_RENDERER_SCHEDULER_MODAL)!=0)reason="modal";
@@ -12254,22 +12241,13 @@ extern "C" __declspec(dllexport) int c3x_renderer_schedule_idle(
     else if((input->state_flags&C3X_RENDERER_SCHEDULER_REDRAW_PENDING)!=0)reason="redraw-pending";
     else if(output->rebase_clock)reason="clock-rebase";
     else if(output->request_redraw)reason="redraw-request";
-    double ticks_to_ms=1000.0/double(input->frequency);
-    double callback_gap_ms=previous_call_ticks>0?
-        double(input->now_ticks-previous_call_ticks)*ticks_to_ms:-1.0;
-    double present_age_ms=input->last_presented_ticks>0?
-        double(input->now_ticks-input->last_presented_ticks)*ticks_to_ms:-1.0;
-    double held_ms=busy?double(held_ticks)*ticks_to_ms:0.0;
-    char detail[640];
+    char detail[384];
     std::snprintf(detail,sizeof(detail),
-        "[C3X renderer] qpc=%lld stage=scheduler-callback gap_ms=%.3f present_age_ms=%.3f buttons=%u held_ms=%.3f pathfinder=%u state=0x%08x visible=%u base_request=%u base_rebase=%u final_request=%u final_rebase=%u skipped=%u reason=%s\n",
-        static_cast<long long>(input->now_ticks),callback_gap_ms,present_age_ms,buttons,held_ms,pathfinder_hold?1u:0u,
-        input->state_flags,input->visible_animation_count,base_request,base_rebase,
-        output->request_redraw,output->rebase_clock,output->skipped_frame_count,reason);
+        "[C3X renderer] qpc=%lld stage=scheduler-callback buttons=%u state=0x%08x visible=%u base_request=%u base_rebase=%u final_request=%u final_rebase=%u skipped=%u reason=%s\n",
+        static_cast<long long>(input->now_ticks),buttons,input->state_flags,input->visible_animation_count,
+        base_request,base_rebase,output->request_redraw,output->rebase_clock,output->skipped_frame_count,reason);
     detail[sizeof(detail)-1]='\0';
     OutputDebugStringA(detail);
-    previous_busy=busy;
-    previous_call_ticks=input->now_ticks;
     return result;
 }
 

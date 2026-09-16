@@ -75,7 +75,7 @@ class CustomZoomTests(unittest.TestCase):
 
     def test_native_input_and_hud_share_the_projection(self):
         source = (ROOT / "injected_code.c").read_text()
-        functions = source[source.index("int\ncustom_renderer_zoom_transform_coordinate"):source.index("void __fastcall\npatch_Main_Screen_Form_handle_left_click_on_map_1")]
+        functions = source[source.index("int\ncustom_renderer_zoom_transform_coordinate"):source.index("// Temporary, event-bounded diagnosis")]
         functions = functions.replace("this", "screen")
         program = r'''
 #include <cassert>

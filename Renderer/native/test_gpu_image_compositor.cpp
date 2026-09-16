@@ -35,6 +35,28 @@ int main(int argc,char** argv){
         Native* native[3]={create(graph,nullptr,1),create(graph,nullptr,1),create(graph,nullptr,1)};
         ComPtr<ID3D11Device> device;ComPtr<ID3D11DeviceContext> context;
         checked(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,nullptr,&context));
+        {
+            // A retained map plus packed/full-color native destination and
+            // underlay fit the existing budget at the live map's dimensions.
+            // One small unit must not require two additional full-size images.
+            constexpr unsigned w=2240,h=1192;Rect full_area={0,0,w,h},body_area={1000,476,1064,524};
+            Compositor bounded(device.Get(),context.Get());
+            auto map=bounded.create(w,h,Format::bgra32),d=bounded.create(w,h,Format::rgb555),b=bounded.create(w,h,Format::rgb555);
+            auto detail=bounded.create(w,h,Format::bgra32),bd=bounded.create(w,h,Format::bgra32),body=bounded.create(64,48,Format::bgra32);
+            require(map&&d&&b&&detail&&bd&&body,"live-size map/native pair admission");
+            Command seed[]={{Kind::fill,d,0,full_area,full_area,0,0,0x3e0},{Kind::fill,b,0,full_area,full_area,0,0,0x3e0},
+                {Kind::fill,detail,0,full_area,full_area,0,0,0xff00ff00u},{Kind::fill,bd,0,full_area,full_area,0,0,0xff00ff00u},
+                {Kind::fill,body,0,{0,0,64,48},{0,0,64,48},0,0,0xffff0000u}};
+            require(bounded.submit(seed,5),"live-size composition seed");auto bytes=bounded.stats().resident_bytes;
+            Command unit={Kind::unit_over,d,body,body_area,full_area,0,0,0,b,detail,bd};
+            require(bounded.submit(&unit,1),"live-size unit uses selected scratch within unchanged budget");
+            require(bounded.stats().resident_bytes-bytes==2u*64u*48u*4u,"unit scratch tracks the selected rectangle");
+            auto words=read_gpu(device.Get(),context.Get(),bounded.texture(d));
+            auto colors=read_gpu(device.Get(),context.Get(),bounded.texture(detail));
+            for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){bool hit=x>=1000&&x<1064&&y>=476&&y<524;
+                require(words[y*w+x]==(hit?0x7c00u:0x3e0u)&&colors[y*w+x]==(hit?0xffff0000u:0xff00ff00u),"live-size unit exact selected pixels");}
+            std::puts("PASS live-size unit: 2240x1192 map and native color pairs; 24576 scratch bytes, unchanged 64 MiB budget, exact pixels");
+        }
         Compositor gpu(device.Get(),context.Get());Id images[3]={};constexpr unsigned width=64,height=48;
         RECT full={0,0,width,height};Rect area={0,0,width,height};
         for(unsigned n=0;n<3;++n){require(reinterpret_cast<Init>(native[n]->table[1])(native[n],width,height,16,1)==0,"native init");

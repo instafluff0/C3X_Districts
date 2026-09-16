@@ -225,7 +225,7 @@ int main() {
         off_branch = re.search(
             r"if \(! is->current_config\.enable_custom_rendering\).*?"
             r"Map_Renderer_m71_Draw_Tiles \(this, __, param_1, param_2, param_3\);\s*return;",
-            injected,
+            injected[injected.index("void __fastcall\npatch_Map_Renderer_m71_Draw_Tiles"):],
             re.DOTALL,
         )
         self.assertIsNotNone(off_branch)
@@ -1136,7 +1136,7 @@ int main() {
         self.assertIn("input.cadence_ms = 0x32", tick)
         self.assertIn("stage=scheduler-callback", wrapper)
         self.assertIn("base_request=%u base_rebase=%u", wrapper)
-        self.assertIn("pathfinder=%u", wrapper)
+        self.assertIn("native-mouse-press", wrapper)
         self.assertIn("requested=%u presented=%u pending=%d", injected)
         self.assertIn("presentation_time_ticks", api)
         self.assertIn("custom_renderer_animation_timestamp", injected)
@@ -1144,7 +1144,7 @@ int main() {
         self.assertIn("visible_animation_count", api)
         self.assertIn("C3X_RENDERER_SCHEDULER_REDRAW_PENDING", api)
         self.assertIn("C3X_RENDERER_SCHEDULER_PATHFINDER_HOLD", api)
-        self.assertIn("p_main_screen_form->field_4DC0 + 0x61", tick)
+        self.assertNotIn("p_main_screen_form->field_4DC0 + 0x61", tick)
         self.assertIn("input->visible_animation_count == 0", scheduler)
         self.assertIn("input.now_ticks - input.event_start_ticks", scheduler)
         self.assertIn("output->request_redraw = 1", scheduler)

@@ -23791,12 +23791,44 @@ patch_Main_Screen_Form_get_tile_coords_for_map_clip (Main_Screen_Form * this, in
 	return Main_Screen_Form_get_tile_coords_under_mouse (this, __, x, y, out_tile_x, out_tile_y);
 }
 
+// Temporary, event-bounded diagnosis of native map click dispatch. No input
+// polling, timer changes, forced selection or redraws belong in this trace.
+void
+trace_custom_renderer_map_click (Main_Screen_Form * screen, char const * phase, int x, int y)
+{
+	if (! is->current_config.enable_custom_rendering) return;
+	int tile_x = -1, tile_y = -1;
+	int pick = patch_Main_Screen_Form_get_tile_coords_under_mouse (screen, __, x, y, &tile_x, &tile_y);
+	City * city = pick == 0 ? city_at (tile_x, tile_y) : NULL;
+	LARGE_INTEGER now = {0};
+	QueryPerformanceCounter (&now);
+	char line[768];
+	snprintf (line, sizeof line,
+		"[C3X renderer] qpc=%lld stage=map-click phase=%s screen=%d,%d stored=%d,%d pick=%d tile=%d,%d city=%d selected_city=%d current_unit=%d mode=%d alternate=%d drag=%d,%d:%d,%d hold=%d click_timer=%d hold_timer=%d form_flags=%x,%x city_form=%d camera=%d,%d zoom=%d/%d translation=%lld,%lld\n",
+		now.QuadPart, phase, x, y, screen->mouse_x, screen->mouse_y, pick, tile_x, tile_y,
+		city != NULL ? city->Body.ID : -1,
+		screen->Selected_City != NULL ? screen->Selected_City->Body.ID : -1,
+		screen->Current_Unit != NULL ? screen->Current_Unit->Body.ID : -1,
+		screen->Mode_Action, screen->field_4ED0 & 255,
+		screen->field_4E80[1], screen->field_4E80[2], screen->field_4E80[3], screen->field_4E80[4],
+		((unsigned char *)screen->field_4DC0)[0x61],
+		screen->timer_1.timer_id != NULL, screen->timer_2.timer_id != NULL,
+		screen->Base_Data.Status1, screen->Base_Data.Status2, p_city_form->Base.Data.Status2 & 1,
+		screen->camera_x, screen->camera_y,
+		is->custom_renderer_zoom_tile_width, is->custom_renderer_zoom_native_tile_width,
+		is->custom_renderer_zoom_translate_x_fp, is->custom_renderer_zoom_translate_y_fp);
+	line[sizeof line - 1] = '\0';
+	(*p_OutputDebugStringA) (line);
+}
+
 void __fastcall
 patch_Main_Screen_Form_handle_left_click_on_map_1 (Main_Screen_Form * this, int edx, int param_1, int param_2)
 {
 	if (is->sb_activated_by_button == 1)
 		is->sb_activated_by_button = 2;
+	trace_custom_renderer_map_click (this, "click-enter", param_1, param_2);
 	Main_Screen_Form_handle_left_click_on_map_1 (this, __, param_1, param_2);
+	trace_custom_renderer_map_click (this, "click-exit", param_1, param_2);
 	is->sb_activated_by_button = 0;
 }
 
@@ -35766,7 +35798,10 @@ done:
 void __fastcall
 patch_Main_Screen_Form_process_mouse_hover (Main_Screen_Form * this, int edx, int local_x, int local_y)
 {
+	int previous_action = this->Mode_Action;
 	Main_Screen_Form_process_mouse_hover (this, __, local_x, local_y);
+	if (this->Mode_Action != previous_action)
+		trace_custom_renderer_map_click (this, "hover-action", local_x, local_y);
 	update_combat_odds_hud_for_hover (this, local_x, local_y);
 	combat_odds_hud_request_redraw_if_layout_stale (this);
 }
@@ -42708,6 +42743,12 @@ patch_Unit_select (Unit * this)
 		clear_highlighted_worker_tiles_and_redraw ();
 	}
 
+	if (is->current_config.enable_custom_rendering) {
+		char line[128];
+		snprintf (line, sizeof line, "[C3X renderer] stage=map-click phase=select-unit unit=%d tile=%d,%d\n",
+			this->Body.ID, this->Body.X, this->Body.Y);
+		(*p_OutputDebugStringA) (line);
+	}
 	Unit_select (this);
 }
 
@@ -46374,11 +46415,6 @@ custom_renderer_scheduler_tick ()
 		input.state_flags |= C3X_RENDERER_SCHEDULER_DRAWING;
 	if (is->custom_renderer_redraw_pending)
 		input.state_flags |= C3X_RENDERER_SCHEDULER_REDRAW_PENDING;
-	// Civ III sets this byte when a selected unit starts a left-button map hold
-	// and clears it on release. It is the authoritative pathfinder interaction
-	// state, unlike a process-wide mouse-button test that also includes UI clicks.
-	if (*((byte *)p_main_screen_form->field_4DC0 + 0x61) != 0)
-		input.state_flags |= C3X_RENDERER_SCHEDULER_PATHFINDER_HOLD;
 
 	struct c3x_renderer_schedule_result_v1 decision = {0};
 	decision.api_version = C3X_RENDERER_API_VERSION;

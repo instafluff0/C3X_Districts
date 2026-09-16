@@ -86,7 +86,11 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     auto copy=[&](JGL_Image* from,JGL_Image* to,RECT area){verify(reinterpret_cast<Copy>(from->vtable[16])(from,to,&area,&area)==0,"native family copy");};
     copy(scene,screen_surface,full);
     verify(owner.owns(scene)&&owner.owns(screen_surface)&&!owner.image(save),"startup evidence admits only demanded map and screen destinations");
+    auto popup_bytes=gpu.stats().resident_bytes;
     RECT popup={43,47,121,113};copy(screen_surface,save,popup);
+    if(owner.stats().readbacks)std::fprintf(stderr,"popup ownership loss: width=%d height=%d resident_before=%lld resident_after=%lld readbacks=%llu\n",
+        w,h,popup_bytes,gpu.stats().resident_bytes,static_cast<unsigned long long>(owner.stats().readbacks));
+    verify(owner.stats().readbacks==0,"native popup save preserves GPU ownership");
     verify(reinterpret_cast<Fill>(screen_surface->vtable[17])(screen_surface,&popup,int(0x80007fffu))==0,"native popup draw");copy(save,screen_surface,popup);
     std::vector<unsigned> expected(map,map+std::size_t(w)*h),observed(expected.size());
     // The native unit adapter consumes these actual JGL image identities; it
@@ -96,6 +100,27 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
     c3x_renderer_unit_v1 unit={};unit.struct_size=sizeof(unit);strcpy_s(unit.unit_key,"PRTO_Warrior");unit.unit_id=732;
     unit.action=1;unit.direction=3;unit.frame_count=16;unit.action_cursor=7;unit.sprite_width=unit.sprite_height=191;
     unit.body_x=120;unit.body_y=160;unit.hour=12;unit.display_color_rgb=0x205bdd;unit.presentation_frequency=1000000;unit.presentation_time_ticks=1000000;
+    {
+        // Native animation also draws into separate packed scratch surfaces,
+        // before either surface has acquired an optional full-color layer.
+        JGL_Image* scratch[2];constexpr unsigned extent=384;
+        RECT scratch_area={0,0,extent,extent};
+        for(auto& image:scratch){image=create(graph,nullptr,1);
+            verify(reinterpret_cast<Init>(image->vtable[1])(image,extent,extent,16,1)==0,"unit scratch init");
+            verify(reinterpret_cast<Fill>(image->vtable[17])(image,&scratch_area,int(0x800003e0u))==0,"unit scratch clear");}
+        UnitOracleDib oracle(extent,extent,1);auto words=static_cast<unsigned short*>(oracle.pixels);
+        std::fill(words,words+extent*extent,static_cast<unsigned short>(0x3e0));int expected_bounds[4]={},bounds[4]={};
+        verify(unit_cpu(&unit,oracle.dc,oracle.dc,expected_bounds)==C3X_RENDERER_RESULT_OK,"packed scratch unit oracle");GdiFlush();
+        auto reads=owner.stats().readbacks;
+        verify(owner.draw_unit(unit_gpu,frame.ticket,unit,scratch[0],scratch[1],bounds,0),"separate packed unit scratch composition");
+        verify(std::equal(bounds,bounds+4,expected_bounds)&&owner.owns(scratch[0])&&owner.owns(scene)&&
+            lifetime(C3X_NATIVE_MAP,scene,0)&&lifetime(C3X_NATIVE_MAP,scratch[0],0)&&owner.stats().readbacks==reads,
+            "unit scratch draw preserves native map lifetime without CPU escape");
+        std::vector<unsigned> pixels(extent*extent);verify(gpu.readback(owner.image(scratch[0]),pixels.data(),pixels.size()),"scratch oracle readback");
+        for(unsigned i=0;i<pixels.size();++i)verify(pixels[i]==words[i],"packed scratch exact native pixels");
+        for(auto image:scratch)reinterpret_cast<Destroy>(image->vtable[0])(image,1);
+        std::puts("PASS native unit scratch: separate packed surfaces, exact pixels/bounds, zero delivery readbacks, map residency preserved");
+    }
     {
         UnitOracleDib oracle(w,h,0);std::copy(expected.begin(),expected.end(),static_cast<unsigned*>(oracle.pixels));int expected_bounds[4]={},bounds[4]={};
         verify(unit_cpu&&unit_cpu(&unit,oracle.dc,oracle.dc,expected_bounds)==C3X_RENDERER_RESULT_OK,"native unit display oracle");GdiFlush();

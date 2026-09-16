@@ -10,7 +10,9 @@ class Session {
     Compositor gpu;RetainedComposition layers;Id map=0;std::int64_t ticket=0,identity=0;std::uint64_t readbacks=0;
     Id resident_unit=0;ID3D11Texture2D* resident_unit_texture=nullptr;
 public:
-    Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c),layers(d,c){}
+    Session(ID3D11Device* d,ID3D11DeviceContext* c):device(d),context(c),gpu(d,c,96u*1024u*1024u),layers(d,c){}
+    // At 2240x1192 the map, screen and popup color pairs exceed 64 MiB.
+    // Keep an explicit 96 MiB live-image ceiling; replay has its own budget.
     bool publish(ID3D11Texture2D* texture,std::int64_t serial,int x=0,int y=0,int width=0,int height=0,RetainedComposition::Sample sample={}){
         if(!texture||serial<=ticket)return false;
         D3D11_TEXTURE2D_DESC d={};texture->GetDesc(&d);
