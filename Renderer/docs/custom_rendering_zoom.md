@@ -14,17 +14,25 @@ farther-out level. Configuration-off retains the original native zoom path.
 
 Civ III remains the camera and interaction authority. The injected bridge
 applies one affine scale and translation to captured map anchors, then supplies
-the selected tile width to the off-screen renderer. Mouse coordinates are
-inverse-transformed before native tile picking. Native map sprites, C3X tile
+the selected tile width to the off-screen renderer. Native events and stored mouse coordinates remain in screen pixels. The shared
+`Main_Screen_Form_get_tile_coords_under_mouse` inlead applies the inverse at
+picking, so down/hover/release/right-click, held-click callbacks and C3X targeting
+agree. Four explicit call-site replacements preserve native map-traversal clip queries,
+including incremental draws outside m71. Visible city work-area input also bypasses
+the custom inverse. Per-caller inverse transforms are removed. Native map sprites, C3X tile
 highlights and map text receive the same forward transform; custom-rendered
 unit bodies receive an exact numeric projection scale rather than the old
 normal/reduced binary. While this zoom feature is enabled, native FLC unit bodies
 are never shown: if custom units are disabled or a custom body cannot render,
 that body is omitted. Native selection, health, status and unit-HUD overlays keep
-their existing ownership. The unit animation hook shifts its native screen
-offset so the body and status layers share the transformed unit center. The
-native city-HUD pass enables a narrow context in which the existing
-`Main_Screen_Form_tile_to_screen_coords` hook transforms city-label anchors.
+their existing ownership. Map-specific calls for city-HUD coordinates, unit
+health/status, selection cursors and civilization markers transform attachment
+points directly, preserving native UI size and offsets. Ordinary and army paths
+are covered. Shared drawing functions and city-screen callers remain unpatched.
+The general tile-to-screen function is a callable `define`; the city HUD uses a
+single internal call replacement. `Unit_tick_anim` only scopes capture/canvas
+ownership, with unchanged offsets and no translation/undo state. Executable tests
+check call-site wiring, coordinate parity and argument preservation.
 
 Zoom is deliberately main-map-only. It uses the existing patched
 `Main_Screen_Form_handle_key_down` boundary and consumes `Z` before Civ III's
@@ -85,9 +93,8 @@ A live checkpoint should exercise repeated `Z` steps, hover/left/right selection
 scrolling and wrapping, units and selection/status overlays, city-screen `Z`,
 the native zoom control reset, and configuration-off behavior.
 
-The three-level cycle and native-state clamping pass five focused checks,
-including actual compiled injected function bodies with MSVC and center-offset
-checks for loaded native reduced zoom. `TEST_INJECTED_CODE_COMPILE.bat` passes;
-this is not a live gameplay check. No candidate has been staged for this change.
-Standalone lower-zoom diagnostic inputs remain available to reproduce previous
-pressure findings; they are outside the current supported custom-zoom envelope.
+The regression checks include compiled injected function bodies across all three
+levels, both native bases and several camera offsets; consistent event picking;
+city-work-area/config-off bypass; unscaled HUD layout at a transformed attachment;
+and actual CSV activation. The approved GOG input, clip-query and map-UI hooks are active;
+see the patch ledger for addresses and other-build limitations.

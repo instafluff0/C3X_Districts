@@ -15,7 +15,7 @@ if(ok && !std::strcmp(gpu_frame_test,"1")) {
     auto animal=std::min_element(test_tiles.begin(),test_tiles.end(),[&](auto const& a,auto const& b){
         auto distance=[&](auto const& t){return (t.tile_flags&C3X_RENDERER_TILE_RENDER)&&t.real_terrain_type<=4?
             std::abs(t.anchor_x-frame.target_width/2)+std::abs(t.anchor_y-frame.target_height/2):INT_MAX;};return distance(a)<distance(b);});
-    if(animal!=test_tiles.end()){animal->resource_id=101;animal->resource_class=0;strcpy_s(animal->resource_name,"Horses");}
+    if(animal!=test_tiles.end()){animal->resource_id=101;animal->resource_class=0;strcpy_s(animal->resource_name,"Cattle");}
     c3x_renderer_gpu_frame_v1 view={sizeof(view)};
     c3x_renderer_gpu_result_v1 status={sizeof(status)};
     std::vector<unsigned> expected,map_expected,actual(std::size_t(frame.target_width)*frame.target_height);

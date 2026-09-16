@@ -23718,11 +23718,77 @@ custom_renderer_zoom_inverse_point (int * x, int * y)
 }
 
 void __fastcall
-patch_Main_Screen_Form_tile_to_screen_coords (Main_Screen_Form * this, int edx, int tile_x, int tile_y, int * out_x, int * out_y)
+patch_Main_Screen_Form_city_hud_coords (Main_Screen_Form * this, int edx, int tile_x, int tile_y, int * out_x, int * out_y)
 {
 	Main_Screen_Form_tile_to_screen_coords (this, __, tile_x, tile_y, out_x, out_y);
-	if (is->custom_renderer_zoom_native_hud_context)
+	if (custom_renderer_zoom_transform_active ()) {
+		// Native HUD layout adds half a tile in X and 7/8 of a tile in Y.
+		// Transform that attachment point, then let native layout add its
+		// unchanged pixel-sized text, icons and ten-pixel margin.
+		int width = is->custom_renderer_zoom_native_tile_width;
+		*out_x += width / 2;
+		*out_y += width * 7 / 16;
 		custom_renderer_zoom_transform_point (out_x, out_y);
+		*out_x -= width / 2;
+		*out_y -= width * 7 / 16;
+	}
+}
+
+// Only the audited map/army call sites use these wrappers. The shared native
+// routines remain unpatched for city-screen lists and other UI consumers.
+void __fastcall
+patch_Unit_draw_map_status (Unit * this, int edx, PCX_Image * canvas, int x, int y, bool stack_marks)
+{
+	if (custom_renderer_zoom_transform_active ()) {
+		// Native caller places status one quarter tile left/up of the center.
+		int offset = is->custom_renderer_zoom_native_tile_width / 4;
+		x += offset; y += offset;
+		custom_renderer_zoom_transform_point (&x, &y);
+		x -= offset; y -= offset;
+	}
+	Unit_draw_status (this, __, canvas, x, y, stack_marks);
+}
+
+void __fastcall
+patch_Animator_draw_map_unit_cursor (Animator * this, int edx, int x, int y)
+{
+	custom_renderer_zoom_transform_point (&x, &y);
+	Animator_draw_unit_cursor (this, __, x, y);
+}
+
+int __fastcall
+patch_Sprite_draw_map_unit_marker (Sprite * this, int edx, PCX_Image * canvas, int x, int y,
+	int color, int scale_x, int scale_y, int divisor, PCX_Color_Table * palette)
+{
+	if (custom_renderer_zoom_transform_active ()) {
+		// Keep native marker size; its top-left was derived from this center.
+		int native_divisor = p_bic_data->is_zoomed_out ? 4 : 2;
+		int half_width = this->Width / native_divisor, half_height = this->Height / native_divisor;
+		x += half_width; y += half_height;
+		custom_renderer_zoom_transform_point (&x, &y);
+		x -= half_width; y -= half_height;
+	}
+	return Sprite_draw_scaled_color (this, __, canvas, x, y, color, scale_x, scale_y, divisor, palette);
+}
+
+int __fastcall
+patch_Main_Screen_Form_get_tile_coords_under_mouse (Main_Screen_Form * this, int edx, int mouse_x, int mouse_y, int * out_tile_x, int * out_tile_y)
+{
+	// Keep event coordinates and stored mouse state in native screen pixels.
+	// Press, hover, release, the hold timer and commands all pick here. Native
+	// city work-area input belongs to its native camera. Map clip queries
+	// use the separate native-coordinate call-site wrapper below.
+	if (!(p_city_form->Base.Data.Status2 & 1))
+		custom_renderer_zoom_inverse_point (&mouse_x, &mouse_y);
+	return Main_Screen_Form_get_tile_coords_under_mouse (this, __, mouse_x, mouse_y, out_tile_x, out_tile_y);
+}
+
+int __fastcall
+patch_Main_Screen_Form_get_tile_coords_for_map_clip (Main_Screen_Form * this, int edx, int x, int y, int * out_tile_x, int * out_tile_y)
+{
+	// Four audited map-traversal call sites pass native canvas clip corners,
+	// including incremental traversal outside m71. Never inverse-project them.
+	return Main_Screen_Form_get_tile_coords_under_mouse (this, __, x, y, out_tile_x, out_tile_y);
 }
 
 void __fastcall
@@ -23730,7 +23796,6 @@ patch_Main_Screen_Form_handle_left_click_on_map_1 (Main_Screen_Form * this, int 
 {
 	if (is->sb_activated_by_button == 1)
 		is->sb_activated_by_button = 2;
-	custom_renderer_zoom_inverse_point (&param_1, &param_2);
 	Main_Screen_Form_handle_left_click_on_map_1 (this, __, param_1, param_2);
 	is->sb_activated_by_button = 0;
 }
@@ -27335,9 +27400,8 @@ void __fastcall
 patch_open_tile_info (void * this, int edx, int mouse_x, int mouse_y, int civ_id)
 {
 	int tx, ty;
-	custom_renderer_zoom_inverse_point (&mouse_x, &mouse_y);
 	if (is->current_config.show_detailed_tile_info &&
-	    (! Main_Screen_Form_get_tile_coords_under_mouse (p_main_screen_form, __, mouse_x, mouse_y, &tx, &ty))) {
+	    (! patch_Main_Screen_Form_get_tile_coords_under_mouse (p_main_screen_form, __, mouse_x, mouse_y, &tx, &ty))) {
 		is->viewing_tile_info_x = tx;
 		is->viewing_tile_info_y = ty;
 		is->tile_info_open = true;
@@ -27668,12 +27732,6 @@ forward_custom_unit_body (Sprite * sprite, PCX_Image * background, PCX_Image * c
 	if (custom_renderer_zoom_enabled ()) {
 		sync_custom_renderer_zoom_to_native ();
 		draw.projection_scale_milli = is->custom_renderer_zoom_tile_width * 1000 / 128;
-		// tick_anim first translates its native body and status layers together.
-		// Recover the original body anchor before applying the full affine zoom.
-		if (is->custom_renderer_zoom_unit_tick_translated) {
-			draw.body_x -= is->custom_renderer_zoom_unit_tick_delta_x;
-			draw.body_y -= is->custom_renderer_zoom_unit_tick_delta_y;
-		}
 		custom_renderer_zoom_transform_point (&draw.body_x, &draw.body_y);
 	}
 	draw.hour = (is->current_config.day_night_cycle_mode != DNCM_OFF && ! is->day_night_cycle_unstarted) ?
@@ -27746,35 +27804,14 @@ patch_Unit_tick_anim (Unit * this, int edx, PCX_Image * canvas, int offset_x, in
 {
 	Unit * previous_unit = is->custom_renderer_unit_context;
 	PCX_Image * previous_canvas = is->custom_renderer_unit_canvas;
-	int previous_delta_x = is->custom_renderer_zoom_unit_tick_delta_x;
-	int previous_delta_y = is->custom_renderer_zoom_unit_tick_delta_y;
-	bool previous_translated = is->custom_renderer_zoom_unit_tick_translated;
 	is->custom_renderer_unit_context = NULL;
 	is->custom_renderer_unit_canvas = canvas;
-	is->custom_renderer_zoom_unit_tick_delta_x = 0;
-	is->custom_renderer_zoom_unit_tick_delta_y = 0;
-	is->custom_renderer_zoom_unit_tick_translated = false;
-	if (custom_renderer_zoom_transform_active ()) {
-		int native_divisor = p_bic_data->is_zoomed_out ? 2 : 1;
-		int center_x = this->Body.Animation.summary.pixel_loc_x / native_divisor - offset_x;
-		int center_y = this->Body.Animation.summary.pixel_loc_y / native_divisor - offset_y;
-		int transformed_x = center_x, transformed_y = center_y;
-		custom_renderer_zoom_transform_point (&transformed_x, &transformed_y);
-		is->custom_renderer_zoom_unit_tick_delta_x = transformed_x - center_x;
-		is->custom_renderer_zoom_unit_tick_delta_y = transformed_y - center_y;
-		offset_x -= is->custom_renderer_zoom_unit_tick_delta_x;
-		offset_y -= is->custom_renderer_zoom_unit_tick_delta_y;
-		is->custom_renderer_zoom_unit_tick_translated = true;
-	}
 	if (is->current_config.enable_custom_rendering &&
 	    is->custom_renderer_unit_draw != NULL && is->custom_renderer_init_state == IS_OK)
 		is->custom_renderer_unit_context = this;
 	Unit_tick_anim (this, __, canvas, offset_x, offset_y, status);
 	is->custom_renderer_unit_context = previous_unit;
 	is->custom_renderer_unit_canvas = previous_canvas;
-	is->custom_renderer_zoom_unit_tick_delta_x = previous_delta_x;
-	is->custom_renderer_zoom_unit_tick_delta_y = previous_delta_y;
-	is->custom_renderer_zoom_unit_tick_translated = previous_translated;
 }
 
 int __fastcall
@@ -30650,11 +30687,6 @@ handle_named_tile_menu_selection (void)
 void __fastcall
 patch_Main_Screen_Form_handle_right_click_on_tile (Main_Screen_Form * this, int edx, int tile_x, int tile_y, int mouse_x, int mouse_y)
 {
-	if (custom_renderer_zoom_transform_active ()) {
-		int native_x = mouse_x, native_y = mouse_y;
-		custom_renderer_zoom_inverse_point (&native_x, &native_y);
-		Main_Screen_Form_get_tile_coords_under_mouse (this, __, native_x, native_y, &tile_x, &tile_y);
-	}
 	if (is->current_config.enable_named_tiles) {
 		Tile * tile = tile_at (tile_x, tile_y);
 		if (tile_can_be_named (tile, tile_x, tile_y) && ! Tile_has_city (tile)) {
@@ -30673,11 +30705,6 @@ patch_Main_Screen_Form_handle_right_click_on_tile (Main_Screen_Form * this, int 
 void __fastcall
 patch_Main_Screen_Form_open_right_click_menu (Main_Screen_Form * this, int edx, int tile_x, int tile_y, int mouse_x, int mouse_y)
 {
-	if (custom_renderer_zoom_transform_active ()) {
-		int native_x = mouse_x, native_y = mouse_y;
-		custom_renderer_zoom_inverse_point (&native_x, &native_y);
-		Main_Screen_Form_get_tile_coords_under_mouse (this, __, native_x, native_y, &tile_x, &tile_y);
-	}
 	bool set_active = false;
 	if (!is->named_tile_menu_active && is->current_config.enable_named_tiles) {
 		Tile * tile = tile_at (tile_x, tile_y);
@@ -31053,7 +31080,7 @@ combat_odds_hud_target_still_hovered (Main_Screen_Form * main_screen_form)
 		return false;
 
 	int tile_x = -1, tile_y = -1;
-	if (Main_Screen_Form_get_tile_coords_under_mouse (
+	if (patch_Main_Screen_Form_get_tile_coords_under_mouse (
 		    main_screen_form, __,
 		    main_screen_form->mouse_x, main_screen_form->mouse_y,
 		    &tile_x, &tile_y))
@@ -31155,10 +31182,7 @@ draw_combat_odds_hud (Main_Screen_Form * main_screen_form, PCX_Image * canvas)
 void __fastcall
 patch_Main_Screen_Form_draw_city_hud (Main_Screen_Form * this, int edx, PCX_Image * canvas)
 {
-	bool previous_hud_context = is->custom_renderer_zoom_native_hud_context;
-	is->custom_renderer_zoom_native_hud_context = custom_renderer_zoom_transform_active ();
 	Main_Screen_Form_draw_city_hud (this, __, canvas);
-	is->custom_renderer_zoom_native_hud_context = previous_hud_context;
 
 	bool draw_natural_wonders = is->current_config.enable_natural_wonders &&
 	                            is->current_config.show_natural_wonder_name_on_map;
@@ -34045,7 +34069,7 @@ patch_Main_Screen_Form_find_visible_unit (Main_Screen_Form * this, int edx, int 
 						this->Current_Unit->Body.Y,
 						tile_x, tile_y)) {
 				int mx = -1, my = -1;
-				if ((Main_Screen_Form_get_tile_coords_under_mouse (
+				if ((patch_Main_Screen_Form_get_tile_coords_under_mouse (
 					     this, __, this->mouse_x, this->mouse_y,
 					     &mx, &my) == 0) &&
 				    (mx == tile_x) && (my == tile_y)) {
@@ -35710,7 +35734,7 @@ update_combat_odds_hud_for_hover (Main_Screen_Form * main_screen_form,
 		goto done;
 
 	int tile_x = -1, tile_y = -1;
-	if (Main_Screen_Form_get_tile_coords_under_mouse (
+	if (patch_Main_Screen_Form_get_tile_coords_under_mouse (
 		    main_screen_form, __, local_x, local_y, &tile_x, &tile_y))
 		goto done;
 
@@ -35742,7 +35766,6 @@ done:
 void __fastcall
 patch_Main_Screen_Form_process_mouse_hover (Main_Screen_Form * this, int edx, int local_x, int local_y)
 {
-	custom_renderer_zoom_inverse_point (&local_x, &local_y);
 	Main_Screen_Form_process_mouse_hover (this, __, local_x, local_y);
 	update_combat_odds_hud_for_hover (this, local_x, local_y);
 	combat_odds_hud_request_redraw_if_layout_stale (this);

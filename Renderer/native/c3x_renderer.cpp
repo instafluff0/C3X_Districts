@@ -10853,7 +10853,6 @@ private:
         c3x_renderer_frame_v1 frame={};c3x_renderer_camera_identity_v1 identity={};
         std::vector<c3x_renderer_tile_v1> tiles;std::vector<c3x_renderer_u32> topology;
     };
-    std::shared_ptr<ProspectiveView> visual_map_capture,visual_map_selection;
     std::deque<ProspectiveView> prospective_views;
     std::unique_ptr<ProspectiveView> pending_refresh;
     bool ahead_prospective=false,prospective_view_allowed=true,ahead_view_superseded=false;
@@ -11182,14 +11181,17 @@ private:
     };
     c3x_gpu_images::RetainedComposition::Sample retain_visual_map(c3x_renderer_frame_v1 input){
         using Texture=c3x_gpu_images::RetainedComposition::Texture;
-        auto epoch=++visual_map_epoch;visual_map_capture.reset();visual_map_selection.reset();
+        // A native prepare is not a displayed-front replacement. Each retained
+        // source owns its immutable capture until the compositor releases it.
+        // Only renderer reset/configuration invalidates every source at once.
+        auto epoch=visual_map_epoch;
         // Native unit demand does not make the terrain animate. Preserve the
         // existing map sample rate; the visual presenter has its own cadence.
         if(gpu_metadata.visible_animation_count<=job_frame.visible_animation_count)return {};
         int x=gpu_publication.source_x,y=gpu_publication.source_y,w=gpu_metadata.width,h=gpu_metadata.height;
         if(input.target_width!=gpu_publication.resident.width||input.target_height!=gpu_publication.resident.height){input=job_frame;x=y=0;}
-        auto capture=visual_map_capture=std::make_shared<ProspectiveView>();
-        auto selected=visual_map_selection=std::make_shared<ProspectiveView>();
+        auto capture=std::make_shared<ProspectiveView>();
+        auto selected=std::make_shared<ProspectiveView>();
         capture->frame=input;capture->tiles.assign(input.tiles,input.tiles+input.tile_count);
         if(input.world_topology_count)capture->topology.assign(input.world_topology,input.world_topology+input.world_topology_count);
         selected->frame=job_frame;selected->tiles=job_tiles;selected->topology=job_world_topology;
@@ -11197,9 +11199,8 @@ private:
         Texture initial=session->snapshot_bgra(static_cast<ID3D11Texture2D*>(gpu_publication.resident.texture.get()),
             gpu_publication.source_x,gpu_publication.source_y,w,h);
         auto origin=visual_ticks,clock=RendererState::resource_clock(gpu_publication.frame);
-        return [this,epoch,origin,clock,x,y,w,h,last=std::move(initial)](long long ticks,long long frequency)mutable -> Texture{
+        return [this,epoch,capture,selected,origin,clock,x,y,w,h,last=std::move(initial)](long long ticks,long long frequency)mutable -> Texture{
             if(epoch!=visual_map_epoch)return last;
-            auto const& capture=visual_map_capture;auto const& selected=visual_map_selection;
             auto frame=capture->frame,view=selected->frame;
             frame.tiles=capture->tiles.data();frame.world_topology=capture->topology.data();view.tiles=selected->tiles.data();view.world_topology=selected->topology.data();
             if(frequency>0)view.presentation_time_ticks+=static_cast<long long>(static_cast<long double>(std::max(0ll,ticks-origin))*view.presentation_frequency/frequency);
@@ -11685,7 +11686,7 @@ private:
             // Map and unit jobs borrow the device; only configuration/reset owns
             // native composition lifetimes. An ordinary CPU publication cannot
             // invalidate GPU UI/background handles held by the caller.
-            if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){++visual_map_epoch;visual_map_capture.reset();visual_map_selection.reset();renderer_state.gpu_composition.reset();}
+            if(command==Command::configure_pack || command==Command::configure_definitions || command==Command::reset){++visual_map_epoch;renderer_state.gpu_composition.reset();}
             if(command==Command::native_screen){
                 // Retain the transfer image with the presenter, not with a map
                 // ticket. Native UI-only transfers must not retire prepared maps.

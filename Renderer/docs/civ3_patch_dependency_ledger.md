@@ -1,5 +1,52 @@
 # Civ III patch dependency ledger
 
+## Zoom input and specific map-UI hooks
+
+Explicit user authorization covers the rows below. GOG calls, entry bytes and
+stack cleanup are checked by `audit_native_visual_cadence.py`; CSV wiring and
+compiled coordinate/capture behavior are checked by `test_custom_zoom.py`.
+All newly added rows have Steam/PCGames.de `0x0`. Their equivalent call sites need
+separate evidence before this correction is claimed on those builds.
+
+Input uses the existing `Main_Screen_Form_get_tile_coords_under_mouse` inlead
+(GOG `0x4E3C60`, existing Steam `0x4EC4B0`, PCGames.de `0x4E3D20`), signature
+`int (__fastcall *)(Main_Screen_Form *, int, int, int, int *, int *)`.
+Events/stored mouse coordinates remain display pixels; only picking applies the
+inverse. City work-area input bypasses it. Four `repl call` rows named
+`Main_Screen_Form_get_tile_coords_for_map_clip` at `0x4C32A8`, `0x4C32C4`,
+`0x4C4F44`, `0x4C4F60` preserve native clip queries, including incremental draws
+outside m71. C3X direct input consumers call the wrapper explicitly.
+
+Map UI uses specific call replacements, leaving shared drawing routines callable:
+
+| Wrapper / purpose | Original GOG function | GOG `repl call` sites |
+| --- | --- | --- |
+| `Main_Screen_Form_city_hud_coords` / city-label attachment | `Main_Screen_Form_tile_to_screen_coords`, `0x4E3B10` | `0x4E571E` |
+| `Unit_draw_map_status` / health, status icons, stack marks | `Unit_draw_status` (`FUN_005ba750`), `0x5BA750` | `0x5CC41D`, `0x5CC9EB` |
+| `Animator_draw_map_unit_cursor` / selected-unit cursor | `Animator_draw_unit_cursor` (`FUN_004f03e0`), `0x4F03E0` | `0x5CC2B1`, `0x5CC7F8` |
+| `Sprite_draw_map_unit_marker` / civilization marker | `Sprite_draw_scaled_color` (`FUN_005f84b0`), `0x5F84B0` | `0x5CC29D`, `0x5CC7D8` |
+
+The paired unit sites cover ordinary and army drawing. Signatures (including
+fastcall's unused EDX slot) are:
+
+- City coordinates: `void (Main_Screen_Form *, int, int, int, int *, int *)`.
+- Status: `void (Unit *, int, PCX_Image *, int x, int y, bool stack_marks)`.
+- Cursor: `void (Animator *, int, int x, int y)`.
+- Marker: `int (Sprite *, int, PCX_Image *, int x, int y, int color, int scale_x, int scale_y, int divisor, PCX_Color_Table *)`.
+
+The marker has **eight stack arguments**, confirmed by argument loads and
+`RET 0x20`; its decompiler signature is incomplete. Status returns with
+`RET 0x10`, cursor with `RET 0x08`. Wrappers preserve all non-position arguments.
+Each attachment point is transformed once, preserving native pixel-sized UI
+offsets. City HUD's internal coordinate call replaces the former global
+`tile_to_screen_coords` inlead and context flag; that symbol is now `define`
+again, with its existing other-build addresses unchanged. `Unit_tick_anim`
+retains capture/canvas scope only. Its offset translation, undo path and three
+zoom fields are removed. City-screen status callers remain unpatched.
+
+`required_user_action: []`. Config-off forwards unchanged arguments. No new timer,
+redraw request, installer execution or gameplay launch is part of this change.
+
 ## Renderer-owned visual scheduling
 
 Existing `on_timer_0x9F6500` retains original gameplay advancement. The existing
@@ -540,7 +587,7 @@ Existing map and unit boundaries remain unchanged:
 The full-size world-mesh sharing, version-checked viewport draw restore and
 retained-image capacity changes are DLL-only. They use the existing map capture
 and composite boundaries below. `required_user_action: []` for these performance
-changes; the separate city-HUD request remains outstanding.
+changes; city-HUD hook activation is recorded at the top of this ledger.
 
 Direct natural-grid indexing and source-aware underlying relief queries are also
 DLL-only. They preserve those same capture/composite symbols and ownership;
@@ -579,14 +626,13 @@ No new Civ III symbol or address is needed: `required_user_action: []`.
   `Sprite_draw_unit_body_normal`, `Sprite_draw_unit_body_reduced`,
   `on_timer_0x9F6500`, `QueryPerformanceCounter`, `OutputDebugStringA`.
 - `audit_candidates: []` for the current renderer work.
-- `required_user_action: [Main_Screen_Form_tile_to_screen_coords: define -> inlead]`
-  for native city-HUD anchor alignment; details and fallback are below.
+- The approved zoom activation is listed in the shared-projection correction at
+  the top of this ledger.
 
 Stepped custom zoom uses the existing `Main_Screen_Form_handle_key_down` inlead
 and consumes `Z` before Civ III's native two-level toggle. Existing
-`Main_Screen_Form_get_tile_coords_under_mouse`, left/right-click wrappers, hover
-wrapper and `Sprite_draw_on_map` inlead provide inverse input and native overlay
-placement. Native unit health/status alignment uses the existing `Unit_tick_anim`
+projection hooks described above and `Sprite_draw_on_map` provide inverse input
+and native overlay placement. Native unit health/status alignment uses the existing `Unit_tick_anim`
 inlead. `audit_candidates: []`.
 
 The September 15 retained-unit step removes the separate custom-unit flag.
@@ -610,21 +656,7 @@ The centered five-level range (64, 96, 128, 160, 192 pixels, normal at 128)
 changes only the existing key handler's step array and native-sync bounds.
 Those existing symbols and capture/overlay hooks already carry numeric scales;
 this range change needs no new entry, signature or address.
-`required_user_action: []` for the range change itself. The separate city-HUD
-row capability request below remains outstanding.
-
-Native city names and state labels calculate their anchor through the already
-recorded `Main_Screen_Form_tile_to_screen_coords` symbol. Change that existing
-row from `define` to `inlead` so the implemented contextual patch can transform
-city-HUD anchors. Signature:
-`void (__fastcall *)(Main_Screen_Form *, int, int, int, int *, int *)`.
-Recorded addresses are GOG `0x4E3B10`, Steam `0x4EC360`, and PCGames.de
-`0x4E3BD0`; these are existing checkout data, not new address claims. Capability:
-native city-HUD anchor transformation during custom zoom. Reason: the native HUD
-calls this function before drawing city text and state icons. Fallback: leave the
-row as `define`; terrain, input and unit-status zoom continue to work, but native
-city HUD remains at its binary native-zoom anchors.
-`required_user_action: [Main_Screen_Form_tile_to_screen_coords: define -> inlead]`.
+`required_user_action: []` for the range change itself. Shared-projection activation is recorded above.
 
 The experimental `Main_Screen_Form_process_mouse_wheel` row is currently
 `ignore`, so it cannot install the abandoned wheel patch. It may remain ignored

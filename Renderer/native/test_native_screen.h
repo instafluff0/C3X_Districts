@@ -36,7 +36,7 @@ int __fastcall prepared_screen_palette(PreparedScreenPalette*,int){return 0;}
 unsigned short* __fastcall snapshot_test_bits(void* image,int){return *reinterpret_cast<unsigned short**>(static_cast<char*>(image)+0x4c0);}
 void __fastcall snapshot_test_release(void*,int,int){}
 int __fastcall unexpected_startup_native_transfer(void*,int,RECT*){return 917;}
-bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_frame_v1 const& frame,
+bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_frame_v1 frame,
                             c3x_renderer_gpu_present_fn present,unsigned const* map,int phase_x,int phase_y,c3x_renderer_native_image_fn live,c3x_renderer_render_view_fn render_view,c3x_renderer_camera_request_v1 const& demand,void (*reset)(),std::vector<NativeFrameSample> const& performance_frames){
     state={};capture={};events.clear();lines.clear();
     SetProcessDPIAware();WNDCLASSA wc={};wc.lpfnWndProc=screen_window_proc;wc.hInstance=GetModuleHandleA(nullptr);wc.lpszClassName="C3XNativeTransferContract";
@@ -173,6 +173,28 @@ bool native_screen_contract(char const* path,WorkerClient& gpu,c3x_renderer_gpu_
         auto status=reinterpret_cast<int(*)(c3x_renderer_visual_status_v1*)>(GetProcAddress(renderer_module,"c3x_renderer_gpu_visual_status"));
         if(visual&&status){
         copy(screen_surface,save,full);copy(scene,screen_surface,full);
+        // Resource-only idle must not depend on an animated/selected unit.
+        final_ui_drawn=false;patch_JGL_present_screen(&full);
+        live(C3X_NATIVE_VISUAL_POLICY,nullptr,nullptr,nullptr,nullptr,1);
+        c3x_renderer_visual_status_v1 ambient_before={sizeof(ambient_before)},ambient_after={sizeof(ambient_after)};
+        verify(status(&ambient_before)==1,"resource-only idle status before");
+        for(unsigned n=0;n<8;++n){Sleep(70);int result=visual();
+            verify(result==1||result==C3X_RENDERER_RESULT_PENDING,"resource-only idle visual frame");}
+        verify(status(&ambient_after)==1&&ambient_after.map_samples>ambient_before.map_samples&&
+            ambient_after.unit_samples==ambient_before.unit_samples,"resources animate without any animated unit");
+        std::printf("PASS resource-only idle: map_samples=%lld unit_samples=0\n",ambient_after.map_samples-ambient_before.map_samples);
+        // A new prepared map is not a native screen transfer. The committed
+        // front (and any untouched rectangles) still owns its animation input.
+        auto render_gpu=reinterpret_cast<c3x_renderer_gpu_render_fn>(GetProcAddress(renderer_module,"c3x_renderer_gpu_render"));
+        c3x_renderer_gpu_frame_v1 prepared={sizeof(prepared)};
+        c3x_renderer_output_v1 prepared_meta={C3X_RENDERER_API_VERSION,sizeof(prepared_meta)};
+        gpu.flush();verify(render_gpu&&render_gpu(&demand,&prepared,&prepared_meta)==1,"prepare replacement before screen transfer");
+        gpu.advance(prepared);frame=prepared;screen_frame=prepared;
+        auto retained_before=ambient_after;
+        for(unsigned n=0;n<4;++n){Sleep(70);visual();}
+        verify(status(&ambient_after)==1&&ambient_after.map_samples>retained_before.map_samples&&
+            ambient_after.unit_samples==retained_before.unit_samples,"unpublished replacement cannot freeze displayed resources");
+        std::printf("PASS unpublished map replacement: displayed_map_samples=%lld\n",ambient_after.map_samples-retained_before.map_samples);
         auto selected=unit;selected.unit_id=901;selected.action_cursor=0;int bounds[4]={};
         verify(owner.draw_unit(unit_gpu,frame.ticket,selected,screen_surface,screen_surface,bounds,3),"publish selected unit once");
         final_ui_drawn=false;patch_JGL_present_screen(&full);

@@ -20,6 +20,17 @@ def audit(path):
             if start<=rva and rva+size<=start+length:return data[raw+rva-start:raw+rva-start+size]
         raise ValueError('address outside file-backed image')
     checks={
+        # Shared zoom picking and native city anchor entry evidence.
+        0x4e3b10:'83ec088b44240c',0x4e3c60:'83ec08a16c739c00',
+        # Specific map UI routines: status (4 stack args), cursor (2), marker
+        # (8, despite the truncated decompiler signature). All callers preserve
+        # native dimensions/scale/palette and only transform attachment points.
+        0x5ba750:'83ec2853558be95657',0x5bab9f:'c21000',
+        0x4f04bc:'c20800',0x5f8561:'c22000',
+        0x5f84d6:'8b7c24388b542434',
+        0x5cc218:'6a016a016a01',0x5cc25c:'6a02',
+
+
         # Advisor entry/one stack argument, page construction, modal dialog and return.
         0x49d070:'568bf1e8b8e4fdff',0x49d095:'8b7c240c',
         0x49d1ae:'ff927c010000',0x49d205:'ff9010010000',0x49d239:'5ec20400',
@@ -41,7 +52,11 @@ def audit(path):
     }
     for address,value in checks.items():
         if read(address,len(value)//2).hex()!=value:raise ValueError(f'byte mismatch at {address:#x}')
-    calls={0x4de6d0:0x6205d0,0x6205e9:0x620560,0x6205f0:0x620660,0x4ef17a:0x405fc0}
+    calls={0x4e571e:0x4e3b10,
+           0x5cc41d:0x5ba750,0x5cc9eb:0x5ba750,
+           0x5cc2b1:0x4f03e0,0x5cc7f8:0x4f03e0,
+           0x5cc29d:0x5f84b0,0x5cc7d8:0x5f84b0,
+           0x4c32a8:0x4e3c60,0x4c32c4:0x4e3c60,0x4c4f44:0x4e3c60,0x4c4f60:0x4e3c60,0x4de6d0:0x6205d0,0x6205e9:0x620560,0x6205f0:0x620660,0x4ef17a:0x405fc0}
     for address,target in calls.items():
         code=read(address,5)
         if code[0]!=0xe8 or address+5+struct.unpack_from('<i',code,1)[0]!=target:

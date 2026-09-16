@@ -129,9 +129,38 @@ Direct dynamic/unit scene execution remains milestone 2; general coherent
 nonblocking native camera publication remains 3. Do not start another output-helper
 or speculative-coverage detour.
 
-Candidate DLL `a251c38008c6d090be78799419d40b8225a5ae4da2e5b8b5466fc4e2fc413fbd`
-is staged for ordinary `INSTALL.bat`; 289 tests passed, one platform check skipped.
+The preserved performance-control DLL is
+`a251c38008c6d090be78799419d40b8225a5ae4da2e5b8b5466fc4e2fc413fbd`; its checkpoint
+had 289 passing tests and one platform skip. Current staging is recorded below.
 No game installation or launch was performed. Exact controls and verification are in
 [the packed-content checkpoint](history/gpu_ready_content_20260915.md).
 [Submission evidence](history/selected_submissions_20260915.md) and
 [earlier findings](history/retained_renderer_checkpoints_20260915.md) remain preserved.
+
+### Bug-repair checkpoint: input, zoom HUD and retained animation
+
+Source fixes unify native mouse picking while keeping clip queries and city-work
+input native, and correct the city-HUD attachment point. The user approved the
+input and map-UI hooks; all are active. The city HUD now uses its specific
+coordinate call, and paired ordinary/army calls place status, selection cursors
+and civilization markers. The global city-anchor inlead and all four zoom
+bookkeeping fields are removed; `Unit_tick_anim` passes native offsets unchanged.
+The GOG injection compile and 65 focused checks pass, including byte/ABI evidence,
+actual table wiring and coordinate parity across supported zooms. See the patch
+ledger for exact symbols, addresses and signatures.
+
+Retained map samplers now own their copied inputs until composition releases them.
+The existing DLL fails the new unpublished-replacement test; candidate
+`03e148cf394e1a5b485f3d5609a97da30c97cba00dbc4a28346a94b1b86a0447` passes it,
+resource-only idle (Horses and Cattle), native UI/partial transfer/config-off oracles
+and 30 independent frames with zero native draw calls. This is a correctness fix,
+not a performance improvement claim. Cattle retained composition uses 32.1 MiB;
+the final independent request mean is 20.69 ms (desktop completion 29.63 ms).
+Local reproducer receipt: `native/build/gpu-composition/298f6135c9894b3da828ba2886d9314a`;
+Final connected Cattle result:
+`native/build/gpu-composition/42e7de0b371e4d89a755c9552d801d28`.
+The exact tested candidate is staged for ordinary `INSTALL.bat`, with the prior
+DLL preserved under `native/build/rollback/<sha256>/`. No game was installed or
+launched. The pending live checkpoint covers short
+left/right click, held drag, repeated Z with city HUD, and idle Cattle without a
+working unit. The architectural next responsibility above is unchanged.

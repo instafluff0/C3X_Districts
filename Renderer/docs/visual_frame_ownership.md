@@ -15,7 +15,9 @@ Civ III to redraw, and no second presenter or window is introduced.
 - Map samples own copied tiles, topology, projection and selected-view inputs.
   They reuse the established working extent and existing static/pass caches.
   The existing map sample buckets remain unchanged; presentation has a separate
-  cadence. A newer authoritative map capture freezes older map versions.
+  cadence. Each retained source owns its capture until native composition retires
+  it. Preparing another map cannot freeze the displayed version or untouched
+  rectangles of a partial transfer; reset/configuration retires the whole session.
 - `RetainedComposition` stores ordered rectangular writes over versioned images.
   Copies reference immutable source versions, including native save/restore.
   Dynamic leaves are resident map/pose textures. Opaque writes remove covered

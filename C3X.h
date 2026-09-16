@@ -2713,10 +2713,6 @@ struct district_button_image_set {
 	int custom_renderer_zoom_native_tile_width;
 	long long custom_renderer_zoom_translate_x_fp;
 	long long custom_renderer_zoom_translate_y_fp;
-	bool custom_renderer_zoom_native_hud_context;
-	int custom_renderer_zoom_unit_tick_delta_x;
-	int custom_renderer_zoom_unit_tick_delta_y;
-	bool custom_renderer_zoom_unit_tick_translated;
 	bool custom_renderer_frame_active;
 	bool custom_renderer_capture_failed;
 	bool custom_renderer_composited;
