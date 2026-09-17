@@ -208,3 +208,109 @@ confirm the byte-count win's effect on total request time; a lower-variance
 timing method (or more samples) would help before deciding whether to chase
 further buffer-creation offloads versus migrating ground-layer generation itself,
 which is still the bigger remaining foreground cost per the original diagnosis.
+
+### Deterministic phase-cost counter and revised diagnosis
+
+**Completed:** the existing per-frame phase timers (`ground_ms`, `features_ms`,
+`cliffs_ms`, `upload_ms`, already present and reported on the `mesh-phases` trace
+line, gated by `pickup_profile`) had a boundary bug: the natural-terrain
+worker-take/foreground-fallback step (`#include "source_fidelity/geometry.h"`,
+including this session's new `attach_terrain_vertex_buffer` call) sat inside the
+window measured as `cliffs_ms`, so cliff cost and natural-terrain-prep cost were
+silently summed together. A new counter, `terrain_prep_ms`, isolates natural-
+terrain worker-take/fallback from true cliff-placement cost by moving the
+`QueryPerformanceCounter` boundary to right after cliff generation ends instead
+of after natural-terrain prep ends. This is a two-line instrumentation change
+(`terrain_prep_ticks` accumulator + one relocated `QueryPerformanceCounter` call)
+with no behavioral effect on rendering; only the trace line gained a field.
+
+**Measured:** on the standard benchmark scene, aggregated over 151 full-build
+mesh-phases samples, the corrected per-phase share of total foreground tick
+budget is: **upload 49.4%, ground-layer generation 25.2%, natural-terrain-prep
+22.5%, features 2.9%, cliffs ~0%** (this scene has negligible cliff content, so
+the previously-observed "cliffs_ms regression" after the buffer-creation change
+was entirely counter contamination, not a real regression — confirmed cliff
+cost alone is 0.006 ms/frame, unaffected by that work).
+
+**Revised diagnosis:** GPU buffer creation (`upload_ms`) is the single largest
+remaining foreground-thread cost for ground/cliff/city content — bigger than
+their CPU vertex generation (`ground_ms` + `cliffs_ms` + `features_ms` ≈ 28%
+combined). This changes the shape of the next responsibility: migrating
+ground/cliff/city *generation* to a worker is the larger, riskier lift (that
+code is not behind a clean compiler boundary like natural terrain — it is
+tightly inlined with tile-flag/environment processing, city composition, forest
+instancing, and shared-layer/world-hit caching, all in one function), whereas
+extending the already-proven, already-thread-safe "create the `ID3D11Buffer` off
+the foreground thread" technique to these layers targets the *larger* cost with
+*less* architectural risk, since `ID3D11Device::CreateBuffer` is confirmed
+thread-safe and `cache_geometry_layer` already accepts a pre-created buffer
+handle. Because ground/cliff/city generation (unlike natural terrain) has no
+existing async prepare-ahead pipeline, this would take the form of a same-frame
+fork-join (parallelize this frame's buffer creations across worker threads,
+then join before drawing) rather than a speculative worker-queue like
+`terrain_preparation`/`ContentPreparation`.
+
+**Next unfinished responsibility:** implement the same-frame fork-join buffer
+creation for ground/cliff/city layers (the ~49%-share cost), re-measure with
+this same deterministic counter, and only then revisit whether migrating
+generation itself is still worthwhile. This is an evidence-driven change of
+plan from "migrate generation first" to "migrate buffer creation first" —
+authorization to proceed with the fork-join implementation was requested from
+the user before starting it, since it is new scope beyond what was already
+authorized this session.
+
+**Scoping finding (fork-join implementation):** a naive per-tile async dispatch
+of `mesh_uploads[owner].create(device,&allocation)` is unsafe as a quick patch.
+`compiled.buffers[layer]` (a `std::vector<CachedVertexChunk>` per layer) can
+receive multiple `push_back`s for the same tile — the city layer does this once
+per `city_chunks` part — so a raw pointer captured for deferred/async buffer
+assignment can dangle if the vector later reallocates for a subsequent part.
+Correctness requires index-based (not pointer-based) deferred writes, resolved
+only after a layer's vector is fully populated. Separately, `make_tile_cache_room`
+already protects any entry with `last_used == tile_geometry_epoch` (i.e. used
+this frame) from eviction, so same-frame deferral is not blocked by cache
+eviction races — that part is safe. A 1-tile-deep software-pipeline (kick off
+tile N's buffer creation asynchronously, overlap with tile N+1's CPU generation,
+join and insert tile N into the cache before returning) is the smallest change
+that captures the ~49%/~51% near-balance between upload and generation cost, but
+it still means restructuring the per-tile loop to hold one tile's finalized
+`compiled` entry back by one iteration — real surgery on a ~10,000-line hot path
+with no existing concurrency-specific test for this code (unlike
+`terrain_compiler.h`'s dedicated parity test). This was deliberately not
+implemented this session given that risk; it remains TBD, along with the
+ground/cliff/city generation-migration option this finding deprioritized (still
+worth revisiting later per the user's request — neither is abandoned, both are
+open follow-ups).
+
+### Within-tile concurrent buffer creation (shipped)
+
+**Completed:** for a tile whose geometry splits across both allocation owners
+(camera-specific layers plus shared/world content — the `mesh_uploads[0]`/
+`mesh_uploads[1]` split already in the per-tile buffer-creation step), the two
+independent `ImmutableMeshUpload::create` calls (each one `ID3D11Device::
+CreateBuffer`, confirmed thread-safe) now run concurrently on a `std::thread`
+instead of serially, then join before either buffer is used. This required no
+new headers (`<thread>` was already included), no change to per-tile cache
+insertion, cancellation, or error-contract ordering (a failure in either owner
+still fails the whole tile exactly as before, after both are guaranteed
+resolved), and no cross-iteration state — it is strictly a same-iteration,
+same-tile concurrency change, so it carries none of the cancellation/contract
+risk identified above for the cross-tile pipeline.
+
+**Measured:** on the standard benchmark scene (151 full-build mesh-phases
+samples), `upload_ms` mean dropped from 12.070 to 10.613 (~12%), and total
+foreground mesh-phase tick budget dropped from 3692.7 to 3521.2 (~4.6%). This
+scene has `natural_hits=0` (few/no dual-owner tiles), so the win here is
+modest and scene-dependent; scenes with more shared-natural tiles should see
+more. Full native benchmark passes every contract (exact pixels/ownership,
+immutable map, GPU/CPU fallback) both before and after — confirmed via
+`record_gpu_frame.py --benchmark` with byte-identical `control.bmp` semantics
+(`exact=1` on all four `GPU_FRAME` phases).
+
+**Next unfinished responsibility:** the cross-tile pipeline (buffer creation
+for tile N overlapped with CPU generation for tile N+1) remains the larger,
+not-yet-attempted opportunity — still TBD, still blocked on the
+cancellation/error-contract restructuring described above, not on tooling or
+authorization. The ground/cliff/city generation-to-worker migration (the
+original milestone-1 plan before this session's evidence reprioritized it) is
+also still TBD and not abandoned.

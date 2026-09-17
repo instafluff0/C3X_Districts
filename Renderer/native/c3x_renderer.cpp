@@ -6556,7 +6556,7 @@ public:
                 (content_source.tiles[i].tile_flags & C3X_RENDERER_TILE_RENDER) != 0) ++draw_record_count;
         int const base_ground_grid = frame.tile_width >= 96 ?
             (draw_record_count <= 768 ? 16 : 12) : 8;
-        c3x_renderer_i64 ground_ticks=0,feature_ticks=0,cliff_ticks=0,upload_ticks=0;
+        c3x_renderer_i64 ground_ticks=0,feature_ticks=0,cliff_ticks=0,upload_ticks=0,terrain_prep_ticks=0;
         std::array<c3x_renderer_i64,6> natural_phase_ticks{};
         LARGE_INTEGER natural_phase_mark={};
         auto begin_natural_phase=[&](){if(profiling)QueryPerformanceCounter(&natural_phase_mark);};
@@ -8980,6 +8980,7 @@ public:
                 }
             }
             } // immutable routes and objects already resident on a world hit
+            QueryPerformanceCounter(&phase_end);cliff_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
             std::unique_ptr<c3x_renderer::fidelity::TerrainSurfaces> prepared_terrain;
             std::array<std::vector<c3x_renderer::fidelity::MeshInstance>,22> forest_instances;
             std::array<c3x_renderer::render_core::SourceShadow::Bounds,22> forest_bounds;
@@ -9025,7 +9026,7 @@ public:
             }
             c3x_renderer::fidelity::GroundProjection natural_projection{(tile.tile_x+tile.tile_y)/2,
                 (tile.tile_x-tile.tile_y)/2,half_w,half_h,relief_projection_scale,float(content_view_height)};
-            QueryPerformanceCounter(&phase_end);cliff_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
+            QueryPerformanceCounter(&phase_end);terrain_prep_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
             if (cancelled()) return false;
             CachedTileGeometry compiled;
             compiled.resource_anchors = std::move(tile_resource_anchors);
@@ -9139,11 +9140,28 @@ public:
             }
             // Keep allocation boundaries equal to residency/eviction owners:
             // camera-specific layers and shared world content can retire alone.
+            // The two owners' CreateBuffer calls are independent (different
+            // ImmutableMeshUpload instances, same thread-safe device), so when
+            // both are populated for this tile run them concurrently instead
+            // of serially; this changes nothing about ordering, cancellation,
+            // or the success/failure contract below, only wall-clock cost.
+            ID3D11Buffer* allocations[2]={nullptr,nullptr};
+            bool create_ok[2]={true,true};
+            bool second_owner_needed=mesh_uploads[0].size()>0 && mesh_uploads[1].size()>0;
+            std::thread second_owner_thread;
+            if(second_owner_needed)second_owner_thread=std::thread([&]{
+                create_ok[1]=mesh_uploads[1].create(device,&allocations[1]);
+            });
+            if(mesh_uploads[0].size() && !mesh_uploads[0].create(device,&allocations[0]))create_ok[0]=false;
+            if(second_owner_needed)second_owner_thread.join();
+            else if(mesh_uploads[1].size() && !mesh_uploads[1].create(device,&allocations[1]))create_ok[1]=false;
+            if((mesh_uploads[0].size() && !create_ok[0]) || (mesh_uploads[1].size() && !create_ok[1])){
+                if(allocations[0])allocations[0]->Release();
+                if(allocations[1])allocations[1]->Release();
+                tile_geometry_cache_bytes-=compiled.byte_count;return false;
+            }
             for(unsigned owner=0;owner<2;++owner)if(mesh_uploads[owner].size()){
-                ID3D11Buffer* allocation=nullptr;
-                if(!mesh_uploads[owner].create(device,&allocation)){
-                    tile_geometry_cache_bytes-=compiled.byte_count;return false;
-                }
+                ID3D11Buffer* allocation=allocations[owner];
                 for(unsigned layer=0;layer<geometry_layer_count;++layer)if(unsigned(layer>=shared_start)==owner)
                     for(auto& chunk:compiled.buffers[layer]){
                     // Buffer and indices are independent: a natural layer may
@@ -9267,9 +9285,9 @@ public:
             QueryPerformanceCounter(&phase_end);upload_ticks+=phase_end.QuadPart-phase_time.QuadPart;
         }
         if(pickup_profile && !prewarming) {
-            char detail[384];sprintf_s(detail,"built=%u reused=%u ground_ms=%.3f features_ms=%.3f cliffs_ms=%.3f upload_ms=%.3f bytes=%llu natural_hits=%u natural_bytes=%zu ground_grid_hits=%u ground_grid_bytes=%zu",
+            char detail[384];sprintf_s(detail,"built=%u reused=%u ground_ms=%.3f features_ms=%.3f cliffs_ms=%.3f terrain_prep_ms=%.3f upload_ms=%.3f bytes=%llu natural_hits=%u natural_bytes=%zu ground_grid_hits=%u ground_grid_bytes=%zu",
                 frame_tiles_built,frame_tiles_reused,trace.milliseconds(ground_ticks),trace.milliseconds(feature_ticks),
-                trace.milliseconds(cliff_ticks),trace.milliseconds(upload_ticks),static_cast<unsigned long long>(tile_geometry_cache_bytes),frame_natural_hits,natural_mesh_cache_bytes,frame_ground_grid_hits,ground_grid_cache_bytes);
+                trace.milliseconds(cliff_ticks),trace.milliseconds(terrain_prep_ticks),trace.milliseconds(upload_ticks),static_cast<unsigned long long>(tile_geometry_cache_bytes),frame_natural_hits,natural_mesh_cache_bytes,frame_ground_grid_hits,ground_grid_cache_bytes);
             trace.write("mesh-phases",detail,true);
             sprintf_s(detail,"pixels=%u mountain_cells=%u rocky_cells=%u shared_layouts=%zu shared_index_bytes=%zu shared_index_reuses=%u",
                 patch_pixels,patch_detail.mountain,patch_detail.rocky_ground,terrain_patch_indices.size(),terrain_patch_index_bytes,frame_patch_index_reuses);
