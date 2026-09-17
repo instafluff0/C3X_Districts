@@ -93,6 +93,50 @@ if the remaining cost warrants it. Stay on D3D11 unless evidence justifies a cha
 including navigation, animation and UI transitions. A 33 ms timer is not 30 FPS;
 60 FPS is a later 16.7 ms frame-budget objective, not a current promise.
 
+## Water effects: roadmap placement
+
+Requested addition (2026-09-17): bring C3X water closer to the Civ VI target —
+ocean ripples/swell, directional river flow, shoreline wave/foam activity,
+reflections of nearby scene geometry, refraction, sun glint and moon/night
+response, coast/lake/ocean color-depth variation, ship-wake VFX, and general
+time-of-day response. Most of this is not new scope from zero; placement below
+reflects what is already built versus what is genuinely gated on milestones 1–2.
+
+**Already implemented, no milestone dependency:** sun/moon direction and color,
+water Fresnel/specular response, day-night glint transition, and coast/lake/
+ocean color-depth variation shipped in M6.4/I13A (`environment_lighting_and_
+ambient_effects.md`) and are already driving the production water shader.
+Refraction and further color/opacity tuning are the same kind of shader-only
+work and can be layered in opportunistically whenever the water shader is next
+touched, without waiting on any milestone below.
+
+**Gated on milestone 2 (animation as a direct scene operation):** open-water
+ripples/swell, directional river flow, and turning on shoreline wave/foam
+activity all require continuous per-frame motion that milestone 2 exists to
+provide safely. `ocean_wave_findings.md`'s own production recommendation says
+so explicitly: doing this today means invalidating/rebuilding all terrain
+every frame, which it calls unacceptable. Shoreline waves are further along
+than the others — a full candidate already passed 207 integration tests and
+is pixel-identical to the current baseline when off (`ocean_wave_findings.md`,
+"Quieter shoreline spacing") — so it is not new design work, only enablement.
+**Use it as milestone 2's first real validation workload** (selectively
+redraw only the animated water band over reusable static color/depth) instead
+of a synthetic one; extend the same "animate only what changed" mechanism to
+open-water ripples and river flow once it is proven on shoreline waves.
+
+**Gated on both milestone 1 and milestone 2:** reflections of nearby scene
+geometry (mountains, buildings) need the whole visible scene's resolved
+color+depth as an input (milestone 1's GPU-submitted output) and need
+selective redraw when the camera or reflected content changes, not full
+static reuse (milestone 2). Sequence this after both land, using the existing
+per-city `environment_refresh::Reflection` scratch-target plumbing as the
+starting point rather than a new reflection pipeline from scratch.
+
+**Independent of this roadmap's milestones:** ship wake/spray is unit-attached
+VFX, the same category as M7.5 attached effects (flames/smoke/steam), not
+core water-shader work. It can be scheduled whenever effects work is picked
+up, without waiting on milestones 1–4.
+
 ## Current evidence and implementation handoff
 
 **Completed:** terrain workers now return packed shader vertices, compact indices,
