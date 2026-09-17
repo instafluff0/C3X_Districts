@@ -85,7 +85,10 @@ if(fidelity_profile) {
         auto input=terrain_compile_input(tile,frame,ground,skip_flat_shore,separate_natural_relief,index_natural_grids,retain_height_samples,world_objects);
         auto prepared=terrain_preparation.take(input.key,true);
         if(prepared && !terrain_result_valid(*prepared))prepared.reset();
-        if(!prepared)prepared=compile_terrain(input,foreground_terrain_scratch,cancelled,false);
+        if(!prepared){
+            prepared=compile_terrain(input,foreground_terrain_scratch,cancelled,false);
+            if(prepared && !attach_terrain_vertex_buffer(*prepared))prepared.reset();
+        }
         if(!prepared)return false;
         world_dependencies.insert(prepared->world.begin(),prepared->world.end());
         coast_dependencies.insert(prepared->coast.begin(),prepared->coast.end());

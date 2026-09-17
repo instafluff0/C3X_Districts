@@ -17,6 +17,12 @@ struct TerrainCompileInput {
 };
 struct TerrainSurfaces {
     std::array<render_core::PreparedMesh,3> meshes;
+    // Populated only by the renderer, after compilation, once meshes are
+    // packed: a type-erased handle to a GPU buffer holding every non-empty
+    // layer's vertex bytes, and each layer's offset within it. Kept opaque so
+    // this CPU-only compiler never depends on a graphics device.
+    std::shared_ptr<void> vertex_buffer;
+    std::array<unsigned,3> vertex_offset{};
     std::unordered_map<std::size_t,std::uint32_t> world;
     std::unordered_map<std::uint64_t,std::uint64_t> coast;
     NaturalWorld::CellProof rivers;

@@ -170,3 +170,41 @@ Ordinary `INSTALL.bat` uses it; rollback `7d598ac5…` is preserved. Live confir
 of this repair remains pending. Missing-content work remains milestone 1's next
 architectural responsibility; general nonblocking camera publication stays open.
 No new hooks, gameplay cadence changes, installation or game launch.
+
+### Worker-side GPU buffer creation checkpoint
+
+**Completed:** the three worker-prepared natural-terrain layers (terrain, decal,
+mountain) now have their GPU vertex buffer created on the same worker thread that
+packs them, not on the foreground render thread. `TerrainSurfaces` gained an
+opaque `std::shared_ptr<void>` buffer handle plus per-layer offsets so the
+platform-agnostic compiler header (verified bit-exact against the foreground path
+by a standalone Mac test) still never names a D3D11 type; the concrete
+`ID3D11Buffer` and its `CreateBuffer`/`Release` calls live only in the renderer
+source, behind a small `attach_terrain_vertex_buffer` step run right after
+compilation, in both the worker job and the foreground fallback. The device is
+created without `D3D11_CREATE_DEVICE_SINGLETHREADED`, so cross-thread
+`CreateBuffer` is spec-safe. Index-buffer handling (shared-grid reuse and the
+per-tile combined buffer for edge tiles) is unchanged; only vertex bytes for
+these three layers move off the foreground path.
+
+**Measured:** wall-clock `geometry_ms`/`request_ms` in the whole-frame benchmark
+swung 15–20% between repeated runs of the *same* binary on the Parallels VM, so
+that comparison was inconclusive at 64 samples. The deterministic,
+run-to-run-identical signal is foreground GPU upload bytes: across 63 dense-
+scrolling steps, the control DLL appended 2,428,414 bytes to the foreground
+upload accumulator (GPU-resident route) versus 798,450 bytes for the candidate —
+a **67% reduction**, reproduced exactly across two independent candidate runs.
+The same 67% reduction appears on the CPU-comparison route (4,856,828 → 1,596,900
+bytes). `python3 Renderer/renderer.py build`'s embedded tests and
+`python3 -m unittest Renderer.native.test_content_preparation` (including the
+worker/foreground parity test) both pass; the full native benchmark still passes
+every contract (exact pixels/ownership, immutable map, GPU/CPU fallback).
+
+**Next unfinished responsibility:** foreground ground/cliff/city generation and
+adoption remain the larger, previously-identified piece of "missing-content"
+scrolling cost — this change only removed buffer-creation cost for content
+already migrated to the worker. Wall-clock evidence was too noisy on this VM to
+confirm the byte-count win's effect on total request time; a lower-variance
+timing method (or more samples) would help before deciding whether to chase
+further buffer-creation offloads versus migrating ground-layer generation itself,
+which is still the bigger remaining foreground cost per the original diagnosis.

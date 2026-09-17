@@ -4597,7 +4597,8 @@ public:
                               std::atomic<bool> const * foreground_pending = nullptr, bool compact_feature = false, bool natural_vertex = false,
                               NaturalMesh* record=nullptr,NaturalMesh const* cached=nullptr,
                               c3x_renderer::fidelity::GroundProjection const* projection=nullptr,
-                              std::vector<UINT> const* grid_indices=nullptr, unsigned projection_kind=0, c3x_renderer::render_core::PreparedMesh const* prepared=nullptr) {
+                              std::vector<UINT> const* grid_indices=nullptr, unsigned projection_kind=0, c3x_renderer::render_core::PreparedMesh const* prepared=nullptr,
+                              ID3D11Buffer* prepared_buffer=nullptr, unsigned prepared_vertex_offset=0) {
         if(vertices.empty() && (!cached || cached->vertices.empty()) && (!prepared || prepared->empty()))return true;
         c3x_renderer::render_core::PreparedMesh local;
         auto cancelled=[&]{return prefetch && foreground_pending->load(std::memory_order_relaxed);};
@@ -4672,7 +4673,13 @@ public:
             }
         }
         auto before=upload.size();
-        chunk.vertex_offset=upload.append(mesh.vertices.data(),mesh.vertices.size());
+        if(prepared_buffer){
+            // This layer's vertex bytes already live in a buffer created when
+            // the content was compiled (worker or foreground fallback); adopt
+            // it directly instead of re-copying into the per-tile upload.
+            chunk.buffer=prepared_buffer;prepared_buffer->AddRef();
+            chunk.vertex_offset=prepared_vertex_offset;
+        }else chunk.vertex_offset=upload.append(mesh.vertices.data(),mesh.vertices.size());
         auto shared=terrain_patch_indices.find(shared_grid);
         if(shared_grid && shared!=terrain_patch_indices.end()){
             chunk.indices=shared->second;chunk.indices->AddRef();++frame_patch_index_reuses;
@@ -4685,8 +4692,12 @@ public:
             try{terrain_patch_indices.emplace(shared_grid,chunk.indices);}catch(...){release(chunk.indices);throw;}
             chunk.indices->AddRef();terrain_patch_index_bytes+=index_bytes;frame_upload_bytes+=index_bytes;
         }else chunk.index_offset=upload.append(mesh.indices.data(),index_bytes);
-        chunk.byte_count=upload.size()-before;
-        tile_geometry_cache_bytes+=chunk.byte_count;frame_upload_bytes+=chunk.byte_count;
+        // byte_count tracks true resident bytes for cache/eviction accounting
+        // regardless of upload path; frame_upload_bytes tracks only bytes this
+        // call actually copied into the foreground per-tile upload buffer.
+        auto foreground_bytes=upload.size()-before;
+        chunk.byte_count=foreground_bytes+(prepared_buffer?mesh.vertices.size():0);
+        tile_geometry_cache_bytes+=chunk.byte_count;frame_upload_bytes+=foreground_bytes;
         output.push_back(chunk);vertices.clear();return true;
     }
 
@@ -4846,6 +4857,24 @@ public:
             c3x_renderer::fidelity::TerrainCompileInput const& input,
             c3x_renderer::fidelity::TerrainCompileScratch& scratch,std::function<bool()> cancelled,bool bounded=true) {
         return c3x_renderer::fidelity::compile_terrain_surfaces(natural,terrain_textures,world_coast,input,scratch,cancelled,bounded);
+    }
+    // Packs every non-empty natural layer's vertex bytes into one immutable
+    // buffer and attaches it to the compiled result, so GPU adoption becomes
+    // an AddRef instead of a copy+CreateBuffer. Safe to call from a worker
+    // thread: the device is created without D3D11_CREATE_DEVICE_SINGLETHREADED,
+    // so CreateBuffer is free-threaded. compile_terrain_surfaces stays CPU-only
+    // and device-free; this step runs after it, still off the render thread.
+    bool attach_terrain_vertex_buffer(c3x_renderer::fidelity::TerrainSurfaces& surfaces) {
+        c3x_renderer::render_core::ImmutableMeshUpload vertex_upload;
+        for(unsigned layer=0;layer<3;++layer){
+            auto const& mesh=surfaces.meshes[layer];
+            if(mesh.empty())continue;
+            surfaces.vertex_offset[layer]=vertex_upload.append(mesh.vertices.data(),mesh.vertices.size());
+        }
+        ID3D11Buffer* buffer=nullptr;
+        if(!vertex_upload.create(device,&buffer))return false;
+        if(buffer)surfaces.vertex_buffer=std::shared_ptr<void>(buffer,[](void* p){static_cast<ID3D11Buffer*>(p)->Release();});
+        return true;
     }
 
     std::vector<std::uint64_t> prepared_view_dependencies() const {
@@ -6788,7 +6817,9 @@ public:
                 terrain_preparation.configure(std::move(jobs),[this,foreground_pending](auto const& input,auto const& stop,unsigned worker){
                     auto cancelled=[&]{return stop.load(std::memory_order_relaxed) ||
                         (foreground_pending && foreground_pending->load(std::memory_order_relaxed));};
-                    return compile_terrain(input,terrain_scratch[worker],cancelled);
+                    auto result=compile_terrain(input,terrain_scratch[worker],cancelled);
+                    if(result && !attach_terrain_vertex_buffer(*result))result.reset();
+                    return result;
                 },cpu_terrain_workers,std::move(needed),cpu_preparation_budget);
                 terrain_preparation.resume();
             }catch(...){terrain_preparation.clear();}
@@ -9092,7 +9123,9 @@ public:
                             ?&natural_grid_indices[layer==geometry_natural_terrain?0:1]:nullptr,
                         world_ground && layer<geometry_route?3u:world_objects && layer>=geometry_route && layer<geometry_natural_terrain?
                             (layer>=geometry_cliff0?4u:2u):(world_objects && natural_layer?1u:0u),
-                        prepared_terrain && layer>=geometry_natural_terrain && layer<=geometry_natural_mountain?&prepared_terrain->meshes[layer-geometry_natural_terrain]:nullptr)) {
+                        prepared_terrain && layer>=geometry_natural_terrain && layer<=geometry_natural_mountain?&prepared_terrain->meshes[layer-geometry_natural_terrain]:nullptr,
+                        prepared_terrain && layer>=geometry_natural_terrain && layer<=geometry_natural_mountain?static_cast<ID3D11Buffer*>(prepared_terrain->vertex_buffer.get()):nullptr,
+                        prepared_terrain && layer>=geometry_natural_terrain && layer<=geometry_natural_mountain?prepared_terrain->vertex_offset[layer-geometry_natural_terrain]:0u)) {
                     char detail[256];sprintf_s(detail,"tile=%d,%d layer=%u vertices=%u bytes=%llu cap=%llu built=%u reused=%u prewarming=%u",
                         tile.tile_x,tile.tile_y,unsigned(layer),unsigned(tile_layers[layer]->size()),
                         static_cast<unsigned long long>(tile_geometry_cache_bytes),static_cast<unsigned long long>(tile_geometry_cache_budget),
@@ -9112,8 +9145,11 @@ public:
                     tile_geometry_cache_bytes-=compiled.byte_count;return false;
                 }
                 for(unsigned layer=0;layer<geometry_layer_count;++layer)if(unsigned(layer>=shared_start)==owner)
-                    for(auto& chunk:compiled.buffers[layer])if(!chunk.buffer){
-                    chunk.buffer=allocation;allocation->AddRef();
+                    for(auto& chunk:compiled.buffers[layer]){
+                    // Buffer and indices are independent: a natural layer may
+                    // already carry its own worker-created vertex buffer while
+                    // still needing this shared per-tile buffer for indices.
+                    if(!chunk.buffer){chunk.buffer=allocation;allocation->AddRef();}
                     if(!chunk.indices){chunk.indices=allocation;allocation->AddRef();}
                 }
                 allocation->Release();++frame_content_uploads;
