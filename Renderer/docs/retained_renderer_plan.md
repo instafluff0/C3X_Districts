@@ -314,3 +314,187 @@ cancellation/error-contract restructuring described above, not on tooling or
 authorization. The ground/cliff/city generation-to-worker migration (the
 original milestone-1 plan before this session's evidence reprioritized it) is
 also still TBD and not abandoned.
+
+### Ground/cliff generation: scoping and a first clean-boundary slice (cliffs)
+
+**Scoping finding (ground/land/bed/water is much larger than assumed):**
+before choosing a first "clean compiler boundary" extraction target, checked
+whether cliffs are structurally cleaner than ground, since cliffs' measured
+cost is scene-dependent (near-zero in the standard benchmark scene, which
+lacks meaningful coastline) while ground's 25%-of-budget cost is guaranteed
+and scene-independent. Found `append_ground_layer`/`make_ground_vertex`/
+`ground_point_at` pull in roughly 20 mutually-dependent closures (`ground_at_
+lattice`, `terrain_at_lattice`, `relief_at_lattice`, `center_material_weights`,
+`material_weights_for`, `water_family_depth`, `signed_shore_distance`,
+`periodic_surface_uv`, `river_edge_distance`, `river_distance`, `river_node_
+distance`, `relief_at_world`, `pickup_ground_at`/`pickup_height_at`, `cast_
+shadow_visibility`, plus the `ground_grid_cache`/`CachedGroundGrid` nested-LOD
+reuse system) — this is comparable in size to the *entire* natural-terrain
+migration, not a one-session slice. Attempting it now would trade a real risk
+of subtle correctness bugs for an unverifiable-in-one-pass change, which
+conflicts with "preserve contracts and controls." Deferred as its own
+properly-scoped future initiative (see below), not attempted this session.
+
+**Completed instead (bounded, verified):** cliff generation turned out to
+already be *mostly* clean — `render_core::cliff_placements()` (`render_core/
+cliff_placement.h`) was already a pure function taking every dependency
+(world lookup, height, shore distance, asset max-height, coast-cell observer,
+recipe selection, cancellation) as explicit parameters. The only actual gap
+was at the call site in `c3x_renderer.cpp`: it wrote cliff vertices directly
+into the frame-shared `cliff_vertices[asset]` arrays and cliff-specific coast
+reads directly into the frame-shared `coast_dependencies` map, via captured
+references — the same "mutate through a capture" pattern that made a hard
+cross-tile pipeline decision necessary elsewhere. Added `source_fidelity/
+cliff_compiler.h` (`CliffCompileInput`/`CliffSurfaces`/`compile_cliff_
+surfaces`), mirroring `terrain_compiler.h`'s shape: the same placement/
+transform logic now runs against an isolated per-tile `CliffSurfaces` result
+(vertices per asset bucket, plus the coast cells actually read), and the call
+site merges that result into the existing frame-shared structures afterward —
+same final data, same order, now via a value instead of a captured mutation.
+
+**Measured:** rebuilt (`python3 Renderer/renderer.py build`), reran the Mac
+parity suite (`test_content_preparation`, 4/4 pass, unaffected), and reran the
+full native benchmark (`record_gpu_frame.py --benchmark`) — all contracts
+PASS, `exact=1` on all four `GPU_FRAME` phases (byte-identical output
+preserved). `mesh-phases` aggregation (162 samples) shows `cliffs_ms` still
+~0.005ms mean and `ground_ms`/`terrain_prep_ms`/`upload_ms` within normal
+run-to-run noise of the prior measurement — expected, since this is a pure
+output-isolation refactor (same instructions, same thread, no concurrency
+added yet), not a performance change. The value here is risk reduction and a
+verified reusable template, not a measured speedup.
+
+**The generalized finding (applies to cliffs, ground, and city alike):**
+isolating a layer's *output* into a value type is necessary but not
+sufficient for worker/thread eligibility. `world_lookup`, `shore_sample_at`,
+and `natural_height_at` — shared by ground, cliff, and city generation within
+one tile iteration — all read through one per-tile `SurfaceQueries` instance
+and its backing `ExactPointCache`s (e.g. `shore_samples`), which are mutated
+on cache miss. Running any two of these layers concurrently today, even with
+isolated outputs, would race on that shared cache. `terrain_compiler.h`
+avoids this because it constructs its *own* `SurfaceQueries` against a
+private `TerrainCompileScratch` (independent `shores`/`pickup`/`heights`
+caches) for every compile call. Cliffs, ground, and city do not yet have that
+— they all still share the renderer's one per-tile instance. This is the
+single, reusable next-responsibility for all three: give each layer its own
+private scratch (mirroring `TerrainCompileScratch`), matching the two-step
+pattern natural terrain already proved (pure output first, then a private
+scratch that makes concurrent/worker execution actually safe).
+
+**Next unfinished responsibility (in priority order):**
+1. Give cliff generation its own private scratch (or confirm its per-call
+   query volume is low enough to bypass the shared cache entirely — cliffs
+   call `shore`/`height` only a handful of times per candidate, unlike
+   ground's per-vertex grid), then it becomes safe to run cliff generation on
+   a background thread concurrently with ground/city generation for the same
+   tile (same pattern as this session's within-tile buffer-creation win, but
+   for CPU generation instead of GPU upload). Needs a coastal-content
+   benchmark scene to measure, since the standard scene's `cliffs_ms≈0`.
+2. Ground/land/bed/water's own clean-boundary extraction remains a real,
+   large, separately-scoped future initiative — not started this session.
+   The ~20-closure dependency list above is the starting map for that work
+   whenever it is picked up; expect it to need its own multi-step plan (like
+   natural terrain's), not a single pass.
+3. City generation was not scoped this session; expect similar entanglement
+   to ground given it shares the same per-tile `queries`/dependency
+   accumulators — scope it before committing effort, using the same
+   "map the closures, measure before extracting" method used above.
+
+### Cliff private query scratch: built and verified; concurrency intentionally not added
+
+**Completed capability:** implemented item 1 above. Added `source_fidelity/
+surface_query_scratch.h` defining `SurfaceQueryScratch` — a private
+`ExactPointCache<ShoreSample>`, `ExactPointCache<GroundSample>`, `ExactPoint
+Cache<std::array<float,2>>`, and a `NaturalWorld` with `borrowed_data`
+pointing at the renderer's immutable natural payload (the exact isolation
+`TerrainCompileScratch` already proved: a second `NaturalWorld` instance
+shares the same underlying data but tracks its own `DependencyScope`
+consumer state, so two concurrent `DependencyScope`s never race on a shared
+`consumer` pointer — this was a real, confirmed race in the pre-existing
+shared path, not a hypothetical). Cliff generation's call site in
+`c3x_renderer.cpp` now builds its own `SurfaceQueries`/`ReliefSurface`/
+`river_distance`/`pickup_river`/`pickup_activity`/`natural_height_at`
+pipeline against this scratch — mirroring `emit_terrain_surfaces`'s own
+already-proven duplication of this exact shape, not a new abstraction —
+instead of reading through ground's shared `queries`/`pickup_surface`.
+Dependencies read through the private pipeline are recorded locally and
+merged into the frame-shared `world_dependencies`/`coast_dependencies` maps
+afterward, same pattern as the vertex output isolation from the prior slice.
+
+**Measured:** rebuilt, reran the Mac parity suite (4/4 pass), and reran the
+full native benchmark — all contracts PASS, `exact=1` on all four `GPU_FRAME`
+phases (byte-identical, confirming the private pipeline reproduces ground's
+shared-pipeline results exactly). `mesh-phases` aggregation (160 samples)
+shows `cliffs_ms` unchanged (~0.005ms mean, same as before this session's
+cliff work began) and other phases within normal noise — expected, since no
+concurrency was added yet.
+
+**Why the background-thread step was not taken:** `cliffs_ms` in the trace is
+already a per-frame aggregate (160 samples for ~759 tiles/frame, not one
+sample per tile), meaning ~0.005ms is the *entire frame's* cliff-generation
+cost, not a per-tile figure. Overlapping cliff generation with ground/feature
+generation on a background thread can save at most cliffs' own serial cost —
+it cannot exceed that regardless of how much of ground's ~6ms it overlaps
+with. That ceiling is structural: `cliff_placements()` only evaluates
+candidates at actual rocky-coastline cells, so its cost scales with
+coastline length, not grid resolution, unlike ground's per-vertex cost. Since
+the measured ceiling is ~0.005ms against a frame budget of tens of
+milliseconds, spending further effort on the thread-spawn/join and its
+correctness risk (join timing relative to cancellation, ensuring the private
+`SurfaceQueryScratch` object outlives the thread) is not justified by the
+achievable win. The private scratch itself remains valuable independent of
+this: it is now a proven, reusable isolation pattern for the next, actually
+consequential step below.
+
+**Next unfinished responsibility:** ground/land/bed/water's own clean-
+boundary extraction (priority 2 above) is the real remaining opportunity —
+guaranteed ~25%-of-budget cost, unlike cliffs' structurally-capped cost.
+`SurfaceQueryScratch` (this slice) and `emit_terrain_surfaces`'s already-
+proven duplication shape are now the concrete template for that work: ground
+would get its own instance of the same scratch (or a shared one, since
+ground and cliffs are not run concurrently with each other in the current
+per-tile structure) instead of building an isolation layer from scratch. City
+generation scoping (priority 3) remains untouched.
+
+### Ground scoping: a second, deeper blocker beyond the cliff/terrain pattern
+
+Before writing any ground extraction code, checked whether the cliff/terrain
+"give it a private scratch" pattern transfers directly. It does not, fully.
+Ground's neighborhood/material-weight closures (`neighborhood_at`, `ground_
+at_lattice`, `terrain_at_lattice`, `relief_at_lattice`) read `topology_cache`
+(`SceneTopology`, `render_core::CapturedScene`) — a per-frame-epoch cache
+that the *same* tile loop writes to (`topology_cache.update(tile,...)`) as it
+processes each tile serially, unlike terrain's neighbor lookup (`queries.
+natural_tile`), which reads immutable world data and is safe to read
+concurrently by construction.
+
+In steady state (unchanged topology across frames), every tile's neighbor
+observations are already marked "seen this epoch" during `CapturedScene::
+begin()`, before any tile's own generation runs this frame, so reads are
+order-independent. For newly-revealed tiles (first sight, e.g. scrolling into
+unexplored territory), no such retained observation exists yet, and the
+value returned depends on whether the tile whose data is being read has
+already had its own `update()` called earlier in *this frame's* processing
+order — a real, if bounded (falls back to a default ground/surface slot, not
+a crash), order dependency. Separately, and regardless of that logical
+question, `topology_cache` is a plain `std::unordered_map` mutated by
+`update()` on the main thread during the same loop a worker would need to
+read it from — a genuine data race if read concurrently, independent of
+whether the order-dependency above is judged acceptable.
+
+**Conclusion:** unlike cliffs, giving ground a private query scratch does not
+by itself make it worker-eligible; the topology_cache dependency is separate,
+additional scope (likely a pre-pass that fully populates per-tile topology
+before any tile's mesh generation begins, removing the interleaved
+accumulate-then-read pattern) that has not been designed. What remains
+low-risk and valuable regardless: isolating ground's *output* into a value
+type (mirroring cliffs' first slice — explicit dependency parameters, no
+captured-reference mutation, no execution-order change), without attempting
+concurrency, as a bounded first step whenever this is picked back up.
+
+**Next unfinished responsibility:** ground extraction was paused here, at the
+scoping stage, given the size of the newly-found topology_cache complication.
+Nothing was implemented for ground this session. When resumed, do the output-
+isolation-only slice first (bounded, verifiable byte-identical, no topology_
+cache redesign required), then treat the topology_cache ordering problem as
+its own explicitly-scoped design task before attempting worker eligibility.
+City generation scoping (priority 3) remains untouched and unstarted.

@@ -71,6 +71,8 @@
 #include "source_fidelity/runtime.h"
 #include "source_fidelity/light_frame.h"
 #include "source_fidelity/terrain_compiler.h"
+#include "source_fidelity/cliff_compiler.h"
+#include "source_fidelity/surface_query_scratch.h"
 #include "environment_refresh/reflection.h"
 #include "unit_body_renderer.h"
 #include "render_core/unit_frame_preparation.h"
@@ -558,6 +560,13 @@ public:
     c3x_renderer::fidelity::TerrainPreparation terrain_preparation;
     std::array<c3x_renderer::fidelity::TerrainCompileScratch,6> terrain_scratch;
     c3x_renderer::fidelity::TerrainCompileScratch foreground_terrain_scratch;
+    // Cliff generation's own private copy of the ground/terrain query
+    // machinery (SurfaceQueries/ReliefSurface/NaturalWorld caches), so it can
+    // eventually query height/shore/river data without sharing the per-tile
+    // `queries`/`pickup_surface` ground uses. A persistent member (not a
+    // per-frame local) to match foreground_terrain_scratch and avoid
+    // rebuilding its river-page cache every frame.
+    c3x_renderer::fidelity::SurfaceQueryScratch cliff_query_scratch;
     unsigned cpu_terrain_workers=0;
     bool world_preparation=false;
     std::size_t cpu_preparation_budget=16u*1024u*1024u;
@@ -6344,7 +6353,8 @@ public:
             auto updated = world_coast.update({frame.world_width_tiles, frame.world_height_tiles,
                 frame.world_wrap_x != 0, frame.world_wrap_y != 0}, frame.world_topology,
                 frame.world_topology_count, frame.world_topology_revision);
-            if(fidelity_profile)natural.update_rivers(world_coast.world(),frame.world_topology_revision);
+            if(fidelity_profile){natural.update_rivers(world_coast.world(),frame.world_topology_revision);
+                cliff_query_scratch.bind(natural,world_coast.world(),frame.world_topology_revision);}
             QueryPerformanceCounter(&end);
             if (updated.cells_built) {
                 char detail[256];
@@ -7113,14 +7123,14 @@ public:
                 (relief_neighborhood ? (frame.tile_width>=96?24:12) : (frame.tile_width>=96?12:8)) :
                 relief_neighborhood ? relief_grid : base_ground_grid;
             bool coast_detail=false;
+            c3x_renderer::render_core::ShoreSample tile_center_shore{};
             if(pickup_profile){
                 auto shore_started=std::chrono::steady_clock::now();
-                c3x_renderer::render_core::ShoreSample center;
                 if(retain_center_shore){
-                    try{center=center_shore_cache.get(world_coast,tile.tile_x,tile.tile_y,observe_world,observe_coast);queries.prime_center(center);}
-                    catch(...){center=shore_sample_at(queries.center_u,queries.center_v);}
-                }else center=shore_sample_at(queries.center_u,queries.center_v);
-                coast_detail=std::abs(center.distance)<1.5;
+                    try{tile_center_shore=center_shore_cache.get(world_coast,tile.tile_x,tile.tile_y,observe_world,observe_coast);queries.prime_center(tile_center_shore);}
+                    catch(...){tile_center_shore=shore_sample_at(queries.center_u,queries.center_v);}
+                }else tile_center_shore=shore_sample_at(queries.center_u,queries.center_v);
+                coast_detail=std::abs(tile_center_shore.distance)<1.5;
                 frame_center_shore_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-shore_started).count();
             }
             int const flat_grid=pickup_profile ? (coast_detail && frame.tile_width>=96?16:8) : tile_ground_grid;
@@ -8936,21 +8946,86 @@ public:
             }
             QueryPerformanceCounter(&phase_end);feature_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
             if (pickup_profile && cliff_assets_ready && coast_detail) {
-                float cu=float(tile.tile_x+tile.tile_y)*.5f;
-                float cr=float(tile.tile_x-tile.tile_y)*.5f;
-                // Imported cliff bodies use the same vertical projection as
-                // every other feature, then convert to the shared relief-world
-                // height used by placement, depth, shadows and water.
-                float cliff_vertical_basis=150.f/112.f*(world_objects?128.f/224.f:feature_projection_scale)/
+                c3x_renderer::fidelity::CliffCompileInput cliff_input;
+                cliff_input.tile_x=tile.tile_x;cliff_input.tile_y=tile.tile_y;
+                cliff_input.left=left;cliff_input.top=top;cliff_input.half_w=half_w;cliff_input.half_h=half_h;
+                cliff_input.relief_projection_scale=relief_projection_scale;
+                cliff_input.content_view_height=float(content_view_height);
+                cliff_input.vertical_basis=150.f/112.f*(world_objects?128.f/224.f:feature_projection_scale)/
                     (world_objects?128.f/224.f*.82f:relief_projection_scale);
-                auto placements=c3x_renderer::render_core::cliff_placements(
-                    world_coast.world().dimensions(),int(cu),int(cr),world_lookup,
+                // Compiled into an isolated per-tile result (vertices plus the
+                // coast cells actually read) instead of writing directly into
+                // the frame-shared cliff_vertices/coast_dependencies, so the
+                // compiler has no renderer-owned state to race on if it later
+                // moves off this thread. Merged below, in the same order as
+                // the previous inline version, so output stays byte-identical.
+                c3x_renderer::fidelity::CliffSurfaces cliff_result;
+                // Cliffs query height/shore/river data through their own
+                // private SurfaceQueries/ReliefSurface/NaturalWorld instead of
+                // the ones ground uses, so this whole block can eventually run
+                // concurrently with ground/city generation for this tile
+                // without racing their mutable caches. Dependencies read
+                // through these private objects are recorded locally and
+                // merged into the frame-shared maps below, same as ground's.
+                std::unordered_map<std::size_t,std::uint32_t> cliff_world_dependencies;
+                auto cliff_observe_world=[&](std::size_t i,std::uint32_t value){cliff_world_dependencies.emplace(i,value);};
+                auto cliff_observe_coast=[&](auto id,auto revision){cliff_result.coast.emplace(id,revision);};
+                cliff_query_scratch.reset_tile();
+                c3x_renderer::fidelity::SurfaceQueries cliff_queries(world_coast,cliff_query_scratch.shore_samples,
+                    tile.tile_x,tile.tile_y,cliff_observe_world,cliff_observe_coast,skip_flat_shore);
+                cliff_queries.prime_center(tile_center_shore);
+                auto cliff_world_lookup=[&](int c,int r){ return cliff_queries.tile(c,r); };
+                auto cliff_shore_sample_at=[&](float u,float v){ return cliff_queries.shore(u,v); };
+                auto cliff_river_distance=[&](c3x_renderer_tile_v1 const & river_tile,float u,float v){
+                    if(fidelity_profile){
+                        float x=float(river_tile.tile_x+river_tile.tile_y)*.5f+u,y=float(river_tile.tile_x-river_tile.tile_y)*.5f+1-v;
+                        return float(cliff_query_scratch.rivers.river_sample({x,y}).distance);
+                    }
+                    float distance=1000.0f;unsigned mask=river_tile.river_code & 170u;
+                    if((mask & 2u)!=0)distance=std::min(distance,river_edge_distance(river_tile,u,v,0.0f,0.0f,1.0f,0.0f,2u));
+                    if((mask & 8u)!=0)distance=std::min(distance,river_edge_distance(river_tile,u,v,1.0f,0.0f,1.0f,1.0f,8u));
+                    if((mask & 32u)!=0)distance=std::min(distance,river_edge_distance(river_tile,u,v,0.0f,1.0f,1.0f,1.0f,32u));
+                    if((mask & 128u)!=0)distance=std::min(distance,river_edge_distance(river_tile,u,v,0.0f,0.0f,0.0f,1.0f,128u));
+                    return distance;
+                };
+                auto cliff_pickup_river=[&](int c,int r,float u,float v){
+                    auto const & world=world_coast.world();
+                    auto i=world.index(c,r);auto value=world.at(i);
+                    if(i!=std::size_t(-1))cliff_observe_world(i,value);
+                    if(value==0xffffffffu || ((value>>16)&170u)==0 || !river_assets_ready)return 1000.0f;
+                    c3x_renderer_tile_v1 owner={};
+                    owner.tile_x=c+r;owner.tile_y=c-r;owner.river_code=(value>>16)&255u;
+                    return cliff_river_distance(owner,u,v);
+                };
+                auto cliff_pickup_activity=[&](int c,int r){
+                    auto const & world=world_coast.world();
+                    auto i=world.index(c,r);auto value=world.at(i);
+                    if(i!=std::size_t(-1))cliff_observe_world(i,value);
+                    return value!=0xffffffffu && (value>>24)!=0 ? 1.0f : 0.0f;
+                };
+                c3x_renderer::fidelity::ReliefSurface cliff_pickup_surface(world_coast.world().dimensions(),
+                    (tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,tile_center_shore.distance,
+                    cliff_world_lookup,pickup_source,cliff_shore_sample_at,cliff_pickup_river,pickup_dune,cliff_pickup_activity,
+                    cliff_query_scratch.pickup_ground_samples,cliff_query_scratch.pickup_height_queries,separate_natural_relief);
+                auto cliff_pickup_height_at=[&](float u,float v){ return cliff_pickup_surface.height(u,v); };
+                auto cliff_natural_height_at=[&](float u,float v,float* support=nullptr){
+                    auto compute=[&](){
+                        std::array<float,2> value{};
+                        value[0]=cliff_queries.height(cliff_query_scratch.rivers,cliff_pickup_height_at,u,v,&value[1]);
+                        return value;
+                    };
+                    auto value=retain_height_samples?cliff_query_scratch.height_samples.get(u,v,compute):compute();
+                    if(support)*support=value[1];
+                    return value[0];
+                };
+                c3x_renderer::fidelity::compile_cliff_surfaces(world_coast.world().dimensions(),cliff_bundle,cliff_input,
+                    cliff_world_lookup,
                     [&](int c,int r){ return world_coast.world().index(c,r); },
-                    [&](double u,double v){ return natural_height_at(float(u),float(v))-2.5f; },
-                    [&](double u,double v){ return shore_sample_at(float(u),float(v)).distance; },
+                    [&](double u,double v){ return cliff_natural_height_at(float(u),float(v))-2.5f; },
+                    [&](double u,double v){ return cliff_shore_sample_at(float(u),float(v)).distance; },
                     [&](unsigned i){ float h=0;for(auto const& v:cliff_bundle.assets[i].vertices)
-                        h=std::max(h,v.position[2]*cliff_vertical_basis);return h; },
-                    [&](int c,int r){return world_coast.cell(c,r,[&](auto id,auto revision){coast_dependencies.emplace(id,revision);});},
+                        h=std::max(h,v.position[2]*cliff_input.vertical_basis);return h; },
+                    [&](int c,int r){return world_coast.cell(c,r,cliff_observe_coast);},
                     [&](bool is_small,unsigned seed){
                         auto group=find_feature_group(cliff_bundle,is_small?"cliff_small":"cliff_large");
                         auto selected=c3x_renderer::select_feature_placement(*group,seed);
@@ -8958,26 +9033,11 @@ public:
                         return c3x_renderer::render_core::CliffRecipe{selected->asset_index,
                             selected->scale,selected->scale_variation};
                     },
-                    cancelled);
-                c3x_renderer::fidelity::GroundProjection cliff_projection{
-                    int(cu),int(cr),half_w,half_h,relief_projection_scale,float(content_view_height)};
-                for(auto const& instance:placements) {
-                    auto const& asset=cliff_bundle.assets[instance.asset];
-                    c3x_renderer::render_core::CliffTransform transform(instance,cliff_vertical_basis);
-                    std::vector<Vertex> transformed(asset.vertices.size());
-                    for(std::size_t i=0;i<asset.vertices.size();++i) {
-                        auto const& source=asset.vertices[i];auto& v=transformed[i];
-                        auto position=transform.position(source.position),normal=transform.normal(source.normal);
-                        float wx=position[0],wy=position[1],wz=position[2];
-                        auto projected=cliff_projection(wx,wy,wz*112);
-                        v.x=left+projected.x;v.y=top+projected.y;v.z=top+projected.z;
-                        v.u=source.uv[0];v.v=source.uv[1];v.panel=1;
-                        v.normal_x=normal[0];v.normal_y=normal[1];v.normal_z=normal[2];v.base_terrain=.48f;
-                        v.shadow_visibility=v.ambient_visibility=1;
-                        v.world_x=wx;v.world_y=wy;v.world_z=wz;v.world_valid=1;
-                    }
-                    for(auto i:asset.indices)cliff_vertices[instance.asset].push_back(transformed[i]);
-                }
+                    cancelled,cliff_result);
+                for(unsigned i=0;i<cliff_result.vertices.size();++i)if(!cliff_result.vertices[i].empty())
+                    cliff_vertices[i].insert(cliff_vertices[i].end(),cliff_result.vertices[i].begin(),cliff_result.vertices[i].end());
+                for(auto const& dependency:cliff_result.coast)coast_dependencies.emplace(dependency.first,dependency.second);
+                for(auto const& dependency:cliff_world_dependencies)world_dependencies.emplace(dependency.first,dependency.second);
             }
             } // immutable routes and objects already resident on a world hit
             QueryPerformanceCounter(&phase_end);cliff_ticks+=phase_end.QuadPart-phase_time.QuadPart;phase_time=phase_end;
