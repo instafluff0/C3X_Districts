@@ -11,10 +11,15 @@
 // vertex buffers/index arrays plus any cached grid samples worth retaining,
 // instead of writing into caller-owned vectors from an inline closure.
 //
-// This alone does not make ground generation worker-eligible: the callables
-// passed in still read a per-tile SurfaceQueries/NaturalWorld scratch shared
-// with feature/city/cliff generation, so running this concurrently with them
-// would race that shared state.
+// Milestone 1.2: the caller may now pass a private, per-generator
+// SurfaceQueries/NaturalWorld scratch (mirroring cliff_query_scratch) instead
+// of the shared per-tile queries/pickup_surface/natural also read by
+// feature/city/cliff generation, so this compiler's own callables and its
+// one direct dependency here (river_sample/river_affects, hence the widened
+// NaturalWorld& rather than the GPU-owning Natural&) no longer require that
+// shared state. The frozen/legacy (!pickup_profile) callables still delegate
+// to the shared, topology_cache-reading closures below, since that path is
+// foreground-only and never scheduled concurrently.
 #include "../../lab/shared/natural/vertex.h"
 #include "../render_core/terrain_query.h"
 #include "../c3x_renderer_api.h"
@@ -106,7 +111,7 @@ template<class RiverNodes,class ReliefAt,class PickupHeightAt,class PickupGround
     class RiverDistanceAt,class MaterialWeightsAt,class ShoreDistanceAt,class WaterDepthAt,
     class SurfaceUVAt,class ShoreSampleAt,class NdcX,class NdcY,class Cancelled>
 void compile_ground_surfaces(GroundCompileInput const & input, c3x_renderer_frame_v1 const & frame,
-        Natural & natural, RiverNodes const & local_river_nodes,
+        NaturalWorld & natural, RiverNodes const & local_river_nodes,
         std::vector<CachedGroundGrid> const * cached_grid_source, unsigned & ground_grid_hit_counter,
         ReliefAt relief_at_world, PickupHeightAt pickup_height_at, PickupGroundAt pickup_ground_at,
         RiverDistanceAt river_distance, MaterialWeightsAt material_weights_for,

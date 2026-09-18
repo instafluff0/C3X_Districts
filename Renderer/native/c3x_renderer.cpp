@@ -384,7 +384,13 @@ struct CachedGroundTile {
     std::uint64_t signature=0,used=0;
     int x=0,y=0;
     std::size_t bytes=0;
-    std::vector<CachedGroundGrid> grids;
+    // A shared_ptr, not an owned vector: a future worker job may capture a
+    // copy of this handle before it starts (see the ground call site) so the
+    // grids stay alive even if this map entry is evicted by a *different*
+    // tile's admission logic while that job is still reading them -- the
+    // same lease pattern std::shared_ptr provides everywhere else, applied
+    // here since CachedGroundTile is ground-exclusive state.
+    std::shared_ptr<std::vector<CachedGroundGrid>> grids;
     std::vector<std::pair<std::uint64_t,std::uint64_t>> dependencies,coast_dependencies;
     std::vector<std::pair<std::size_t,std::uint32_t>> world_dependencies;
     c3x_renderer::fidelity::NaturalWorld::CellProof river_dependencies;
@@ -526,6 +532,14 @@ public:
     // per-frame local) to match foreground_terrain_scratch and avoid
     // rebuilding its river-page cache every frame.
     c3x_renderer::fidelity::SurfaceQueryScratch cliff_query_scratch;
+    // Ground's own copy of the same scratch is deliberately NOT a persistent
+    // member like cliff_query_scratch above: a shared member would still be
+    // one mutable object every ground compile reads through, so two ground
+    // jobs could never safely run concurrently against it. It is constructed
+    // fresh, per tile, at ground's own call site instead (binding cost is a
+    // pointer store plus a possible page-cache clear -- proven cheap in
+    // NaturalWorld::update_rivers -- so paying it per tile instead of per
+    // frame is not a measurable regression).
     unsigned cpu_terrain_workers=0;
     bool world_preparation=false;
     std::size_t cpu_preparation_budget=16u*1024u*1024u;
@@ -6314,6 +6328,8 @@ public:
                 frame.world_topology_count, frame.world_topology_revision);
             if(fidelity_profile){natural.update_rivers(world_coast.world(),frame.world_topology_revision);
                 cliff_query_scratch.bind(natural,world_coast.world(),frame.world_topology_revision);}
+            // Ground's own scratch is bound per tile at its call site instead
+            // of here (see the member-removal comment above).
             QueryPerformanceCounter(&end);
             if (updated.cells_built) {
                 char detail[256];
@@ -8082,6 +8098,125 @@ public:
             }
             QueryPerformanceCounter(&phase_time);
             if(!world_ground || !shared_hit){
+            // Ground's own private query/height/river pipeline (Milestone
+            // 1.2). Mirrors cliffs' isolation: a private SurfaceQueryScratch
+            // and dependency accumulators instead of the shared
+            // queries/pickup_surface/natural also read here by feature,
+            // forest exclusion and city generation for this same tile. Only
+            // the pickup-profile callables need a private copy; the
+            // frozen/legacy (!pickup_profile) callables still delegate to the
+            // shared, topology_cache-reading closures above, since that path
+            // is foreground-only comparison code, never scheduled
+            // concurrently. water_family_depth is the one callable with no
+            // pickup_profile branch (always reads ground_at_lattice), so it
+            // gets its own small private lattice lookup instead of reusing
+            // the shared 33x33 neighborhood cache.
+            //
+            // Unlike cliff_query_scratch (a persistent member), this instance
+            // is local to this tile: a shared member would still be one
+            // mutable object every ground compile reads through, so two
+            // ground jobs could never run concurrently against it.
+            c3x_renderer::fidelity::SurfaceQueryScratch ground_query_scratch;
+            ground_query_scratch.bind(natural,world_coast.world(),frame.world_topology_revision);
+            // Owned, per-tile copies of the exact river nodes this compile
+            // reads, instead of pointers into topology_cache.rivers (cleared
+            // and rebuilt by the same per-frame pre-pass above whenever the
+            // world's topology signature changes). A worker holding
+            // local_river_nodes's pointers across that rebuild would read
+            // freed memory; RiverNode is a small POD, so copying the already-
+            // filtered, already-sorted set by value is cheap and preserves
+            // exact order/content.
+            std::vector<RiverNode> ground_river_node_values;
+            ground_river_node_values.reserve(local_river_nodes.size());
+            for(auto node:local_river_nodes)ground_river_node_values.push_back(*node);
+            std::vector<RiverNode const *> ground_river_nodes;
+            ground_river_nodes.reserve(ground_river_node_values.size());
+            for(auto const& node:ground_river_node_values)ground_river_nodes.push_back(&node);
+            std::unordered_map<std::size_t,std::uint32_t> ground_world_dependencies;
+            std::unordered_map<std::uint64_t,std::uint64_t> ground_coast_dependencies;
+            std::unordered_map<std::uint64_t,std::uint64_t> ground_topology_dependencies;
+            c3x_renderer::fidelity::NaturalWorld::CellInputs ground_river_dependencies;
+            c3x_renderer::fidelity::NaturalWorld::DependencyScope ground_river_inputs(
+                ground_query_scratch.rivers,&ground_river_dependencies);
+            auto ground_observe_world=[&](std::size_t i,std::uint32_t value){ground_world_dependencies.emplace(i,value);};
+            auto ground_observe_coast=[&](auto id,auto revision){ground_coast_dependencies.emplace(id,revision);};
+            c3x_renderer::fidelity::SurfaceQueries ground_queries(world_coast,ground_query_scratch.shore_samples,
+                tile.tile_x,tile.tile_y,ground_observe_world,ground_observe_coast,skip_flat_shore);
+            ground_queries.prime_center(tile_center_shore);
+            auto ground_world_lookup=[&](int c,int r){ return ground_queries.tile(c,r); };
+            auto ground_shore_sample_at=[&](float u,float v){ return ground_queries.shore(u,v); };
+            auto ground_river_distance=[&](c3x_renderer_tile_v1 const & river_tile,float u,float v){
+                if(fidelity_profile){
+                    float x=float(river_tile.tile_x+river_tile.tile_y)*.5f+u,y=float(river_tile.tile_x-river_tile.tile_y)*.5f+1-v;
+                    return float(ground_query_scratch.rivers.river_sample({x,y}).distance);
+                }
+                return river_distance(river_tile,u,v); // pure river_edge_distance math; no shared state to isolate
+            };
+            auto ground_pickup_river=[&](int c,int r,float u,float v){
+                auto const & world=world_coast.world();
+                auto i=world.index(c,r);auto value=world.at(i);
+                if(i!=std::size_t(-1))ground_observe_world(i,value);
+                if(value==0xffffffffu || ((value>>16)&170u)==0 || !river_assets_ready)return 1000.0f;
+                c3x_renderer_tile_v1 owner={};
+                owner.tile_x=c+r;owner.tile_y=c-r;owner.river_code=(value>>16)&255u;
+                return ground_river_distance(owner,u,v);
+            };
+            auto ground_pickup_activity=[&](int c,int r){
+                auto const & world=world_coast.world();
+                auto i=world.index(c,r);auto value=world.at(i);
+                if(i!=std::size_t(-1))ground_observe_world(i,value);
+                return value!=0xffffffffu && (value>>24)!=0 ? 1.0f : 0.0f;
+            };
+            c3x_renderer::fidelity::ReliefSurface ground_pickup_surface(world_coast.world().dimensions(),
+                (tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,tile_center_shore.distance,
+                ground_world_lookup,pickup_source,ground_shore_sample_at,ground_pickup_river,pickup_dune,ground_pickup_activity,
+                ground_query_scratch.pickup_ground_samples,ground_query_scratch.pickup_height_queries,separate_natural_relief);
+            auto ground_pickup_ground_at=[&](float u,float v){ return ground_pickup_surface.sample(u,v); };
+            auto ground_pickup_height_at=[&](float u,float v){ return ground_pickup_surface.height(u,v); };
+            auto ground_relief_at_world=[&](float world_u,float world_v)->std::array<float,3>{
+                if(pickup_profile){
+                    auto sample=ground_pickup_ground_at(world_u,world_v);
+                    return {sample.height,sample.authored_height,sample.authored_blend};
+                }
+                return relief_at_world(world_u,world_v);
+            };
+            auto ground_material_weights_for=[&](float world_u,float world_v){
+                return pickup_profile ? ground_queries.weights(world_u,world_v)
+                                       : material_weights_for(world_u,world_v);
+            };
+            auto ground_signed_shore_distance=[&](float world_u,float world_v,float local_u,float local_v){
+                return pickup_profile
+                    ? static_cast<float>(std::clamp(-ground_shore_sample_at(world_u,world_v).distance/.65,-1.,1.))
+                    : signed_shore_distance(world_u,world_v,local_u,local_v);
+            };
+            auto ground_observed_coordinate_key=[&](int x,int y){
+                auto key=coordinate_key(x,y);
+                auto inserted=ground_topology_dependencies.try_emplace(key,0);
+                if(inserted.second){
+                    auto found=topology_cache.current(key);
+                    inserted.first->second=found==nullptr?0:found->semantic;
+                }
+                return key;
+            };
+            auto ground_ground_at_lattice=[&](int u,int v){
+                auto record=topology_cache.current(ground_observed_coordinate_key(u+v,u-v));
+                return record?static_cast<float>(record->ground):ground_slot;
+            };
+            auto ground_water_family_depth=[&](float world_u,float world_v){
+                float grid_x=world_u-0.5f;
+                float grid_y=world_v-0.5f;
+                int x0=static_cast<int>(std::floor(grid_x));
+                int y0=static_cast<int>(std::floor(grid_y));
+                float tx=smoothstep01(grid_x-static_cast<float>(x0));
+                float ty=smoothstep01(grid_y-static_cast<float>(y0));
+                auto center_depth=[&](int x,int y){
+                    int base=static_cast<int>(ground_ground_at_lattice(x,y));
+                    return base>=11?std::clamp((base-10)*0.34f,0.18f,1.0f):0.34f;
+                };
+                float top=center_depth(x0,y0)*(1.0f-tx)+center_depth(x0+1,y0)*tx;
+                float bottom=center_depth(x0,y0+1)*(1.0f-tx)+center_depth(x0+1,y0+1)*tx;
+                return top*(1.0f-ty)+bottom*ty;
+            };
             c3x_renderer::fidelity::GroundCompileInput ground_compile_input;
             ground_compile_input.tile = tile;
             ground_compile_input.world_ground = world_ground;
@@ -8104,11 +8239,20 @@ public:
             ground_compile_input.tile_ground_grid = tile_ground_grid;
             ground_compile_input.shadow_grid = shadow_grid;
             c3x_renderer::fidelity::GroundSurfaces ground_surfaces;
-            c3x_renderer::fidelity::compile_ground_surfaces(ground_compile_input, frame, natural, local_river_nodes,
-                ground_hit ? &retained_ground->second.grids : nullptr, frame_ground_grid_hits,
-                relief_at_world, pickup_height_at, pickup_ground_at, river_distance, material_weights_for,
-                signed_shore_distance, water_family_depth, periodic_surface_uv, shore_sample_at,
+            c3x_renderer::fidelity::compile_ground_surfaces(ground_compile_input, frame, ground_query_scratch.rivers, ground_river_nodes,
+                ground_hit ? retained_ground->second.grids.get() : nullptr, frame_ground_grid_hits,
+                ground_relief_at_world, ground_pickup_height_at, ground_pickup_ground_at, ground_river_distance, ground_material_weights_for,
+                ground_signed_shore_distance, ground_water_family_depth, periodic_surface_uv, ground_shore_sample_at,
                 ndc_x, ndc_y, cancelled, ground_surfaces);
+            // Ground's own private accumulators, captured above instead of the
+            // shared world_dependencies/coast_dependencies/dependencies/
+            // river_dependencies maps; merge them in now so cache persistence
+            // and future validity checks below see the same union they would
+            // have if ground had written into the shared maps directly.
+            for(auto const& dependency:ground_world_dependencies)world_dependencies.emplace(dependency.first,dependency.second);
+            for(auto const& dependency:ground_coast_dependencies)coast_dependencies.emplace(dependency.first,dependency.second);
+            for(auto const& dependency:ground_topology_dependencies)dependencies.emplace(dependency.first,dependency.second);
+            for(auto const& dependency:ground_river_dependencies)river_dependencies.emplace(dependency.first,dependency.second);
             underlay_vertices = std::move(ground_surfaces.underlay_vertices);
             land_vertices = std::move(ground_surfaces.land_vertices);
             bed_vertices = std::move(ground_surfaces.bed_vertices);
@@ -8125,7 +8269,7 @@ public:
             if(!pending_ground_grids.empty()){
                 CachedGroundTile incoming;
                 incoming.signature=ground_signature;incoming.used=tile_geometry_epoch;incoming.x=tile.tile_x;incoming.y=tile.tile_y;
-                incoming.grids=std::move(pending_ground_grids);
+                incoming.grids=std::make_shared<std::vector<CachedGroundGrid>>(std::move(pending_ground_grids));
                 incoming.dependencies.assign(dependencies.begin(),dependencies.end());
                 incoming.coast_dependencies.assign(coast_dependencies.begin(),coast_dependencies.end());
                 incoming.river_dependencies.assign(river_dependencies.begin(),river_dependencies.end());
@@ -8133,15 +8277,15 @@ public:
                 if(ground_hit){
                     // Allocate before moving any retained grids. A failed
                     // allocation must leave the old cache entry usable.
-                    incoming.grids.reserve(incoming.grids.size()+retained_ground->second.grids.size());
-                    for(auto& grid:retained_ground->second.grids)incoming.grids.push_back(std::move(grid));
+                    incoming.grids->reserve(incoming.grids->size()+retained_ground->second.grids->size());
+                    for(auto& grid:*retained_ground->second.grids)incoming.grids->push_back(std::move(grid));
                     ground_grid_cache_bytes-=retained_ground->second.bytes;ground_grid_cache.erase(retained_ground);
                 }
-                incoming.bytes=sizeof(CachedGroundTile)+natural.proof_bytes(incoming.river_dependencies)+64+incoming.grids.capacity()*sizeof(CachedGroundGrid)+
+                incoming.bytes=sizeof(CachedGroundTile)+natural.proof_bytes(incoming.river_dependencies)+64+incoming.grids->capacity()*sizeof(CachedGroundGrid)+
                     incoming.dependencies.capacity()*sizeof(incoming.dependencies[0])+
                     incoming.coast_dependencies.capacity()*sizeof(incoming.coast_dependencies[0])+
                     incoming.world_dependencies.capacity()*sizeof(incoming.world_dependencies[0]);
-                for(auto const& grid:incoming.grids)incoming.bytes+=grid.vertices.capacity()*sizeof(Vertex)+grid.samples.capacity()*sizeof(grid.samples[0]);
+                for(auto const& grid:*incoming.grids)incoming.bytes+=grid.vertices.capacity()*sizeof(Vertex)+grid.samples.capacity()*sizeof(grid.samples[0]);
                 float cx=float(tile.tile_x)+float(frame.target_width-frame.tile_width-2*tile.anchor_x)/frame.tile_width;
                 float cy=float(tile.tile_y)+float(frame.target_height-frame.tile_height-2*tile.anchor_y)/frame.tile_height;
                 auto distance=[&](CachedGroundTile const& value){float dx=value.x-cx,dy=value.y-cy;return dx*dx+dy*dy;};

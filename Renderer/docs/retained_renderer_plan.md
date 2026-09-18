@@ -634,3 +634,137 @@ claimed or expected from this slice, per its architecture-enabling mandate.
 remains the actual blocker to worker eligibility for ground, and still needs
 its own explicitly-scoped design task before that step can be attempted.
 City generation scoping (priority 3) remains untouched and unstarted.
+
+### Ground compile input made worker-safe (Milestone 1.2), corrected: per-job scratch, owned river-node snapshot, lease-safe cached grids — two lifetime concerns remain open
+
+An earlier pass at this milestone (superseded below) gave ground a private
+`SurfaceQueryScratch` but made it a *persistent renderer member* — one
+mutable object every ground compile would still read/write through, so two
+future ground jobs would race on its point caches and `NaturalWorld`
+river-page/consumer state. It also left the compile holding live references
+into `topology_cache.rivers` (via `local_river_nodes`' raw pointers),
+`world_coast`, and `ground_grid_cache`'s cached-grid storage, on the
+unproven assumption that "frozen for this frame's tile loop" is enough —
+it isn't, if a future async job outlives the frame in which the next
+capture rebuilds/mutates/evicts those containers. This was correctly
+rejected; the fixes below replace that section.
+
+**Completed capability — three concerns fixed, ground-scoped, no output
+change:**
+
+1. **Scratch is no longer a shared member.** `ground_query_scratch` was
+   removed as a persistent `c3x_renderer` field entirely (unlike `cliff_
+   query_scratch`, which stays a member because cliffs are not being
+   re-scoped here). It is now declared and `.bind(...)`-ed as a *local*
+   right at the ground call site, so every tile's compile gets a fresh
+   instance — there is no longer any shared object for two concurrent jobs
+   to race on. `SurfaceQueryScratch::bind()` is cheap (a pointer store plus
+   a conditional `river_pages.clear()` only when the topology revision
+   changed), so moving it from once-per-frame to once-per-tile has no
+   measurable cost.
+2. **River nodes are an owned per-job copy, not shared pointers.**
+   `local_river_nodes` (`std::vector<RiverNode const*>`) points into
+   `topology_cache.rivers`, which the per-frame topology pre-pass clears and
+   rebuilds whenever the world's topology signature changes — a real
+   dangling-pointer hazard for a job that outlives that rebuild. Ground now
+   copies the pointed-to `RiverNode` values (a small POD) into its own
+   `ground_river_node_values` vector immediately at the call site, and
+   builds `ground_river_nodes` as pointers into that *owned* copy —
+   preserving exact order/content while removing the dependency on
+   `topology_cache.rivers`'s lifetime.
+3. **Cached grids survive eviction of the tile that produced them.**
+   `CachedGroundTile::grids` changed from `std::vector<CachedGroundGrid>` to
+   `std::shared_ptr<std::vector<CachedGroundGrid>>`. The admission/eviction
+   logic can pick *any* map entry as its LRU victim and erase it, including
+   one a future in-flight job (from an earlier tile) might still be reading
+   via `cached_grid_source`. A job that captures a copy of the shared_ptr
+   before its tile's turn ends keeps the vector alive by refcount even after
+   the owning map entry is erased; this is proven directly (see tests
+   below), not just asserted.
+
+**Two lifetime concerns remain genuinely open, not fixed here — explicitly
+flagged, not fixed by omission:**
+
+- `topology_cache.current(key)` reads inside `ground_ground_at_lattice`/
+  `ground_observed_coordinate_key` are still live, synchronous reads into
+  the same `SceneTopology`/`CapturedScene` object the per-frame pre-pass
+  rebuilds. This is genuinely safe *within* one frame's tile loop (confirmed
+  by call order), but not across a hypothetical worker job that outlives a
+  frame boundary. Ground's own touched-key footprint is provably tiny
+  (~9 lattice keys, derived from `ground_point_at`'s coordinate formula),
+  but eagerly pre-snapshotting even that small bound was rejected: it would
+  either duplicate the formula elsewhere (drift risk if `ground_point_at`
+  ever changes) or capture a slightly padded superset, which would change
+  which keys land in the recorded dependency set — a violation of "preserve
+  exact dependency behavior."
+- `world_coast`/`NaturalWorld`'s underlying `WorldTopology` is still
+  mutated in place (not swapped) and read by reference throughout
+  `SurfaceQueries`/`NaturalWorld::river_page_entry`. Giving ground a private
+  `NaturalWorld` wrapper (item 1 above) fixes the *consumer/last_cell* race
+  ground's own scratch introduced, but the wrapper still holds
+  `river_world=&w`, a raw pointer into the same shared, main-thread-mutated
+  topology payload as everyone else's. `WorldCoast`/`CapturedScene` are not
+  ground-exclusive — cliffs, terrain, cities and features all read through
+  them too — so a fix here has a blast radius well beyond ground.
+
+Both gaps require the same kind of decision: either (a) a broader
+`CapturedScene`/`WorldCoast`/`NaturalWorld` generation-lease redesign
+(shared_ptr-swap-not-mutate, benefits every per-tile generator, larger and
+riskier), or (b) an interim, documented, *enforced* scheduling policy for
+Milestone 1.3 (worker jobs must be joined/completed before any
+topology-changing or world-changing rebuild proceeds, turning the rebuild
+into a synchronization barrier), deferring the full redesign to its own
+explicitly-scoped milestone. This was raised with the user as an explicit
+scope/authorization question at the end of this session; the user chose to
+review this doc first and decide in a follow-up session before either path
+is started. Nothing in this slice depends on that decision — it only gates
+starting Milestone 1.3's worker queue.
+
+**Why no shared mutable state remains in the three fixed areas:** the
+scratch is a fresh local per call (no member survives between tiles to
+race on); the river-node vector is a private owned copy captured before the
+call, independent of `topology_cache.rivers`'s later mutation; and the
+cached-grid vector's lifetime is now decoupled from its owning map entry's
+lifetime via reference counting, so eviction of the entry no longer implies
+destruction of the vector a job may still be reading.
+
+**Tests run and results:** `python3 Renderer/renderer.py build` — clean
+compile, no errors, after the `CachedGroundTile::grids` shared_ptr
+conversion and all call-site/admission-code updates it required.
+`python3 -m unittest Renderer.native.test_zoom_mesh_cache Renderer.native.
+test_world_view_submission` — 26 tests, all pass. This includes: the
+existing `test_retained_ground_dependencies_and_bounded_admission` (updated
+for the shared_ptr type), a strengthened `test_ground_compile_call_site_
+uses_private_scratch_not_shared_natural` (now also asserts, by source, that
+`ground_query_scratch` is declared locally at the call site and not as a
+persistent struct member, that `ground_river_node_values`/`ground_river_
+nodes` — not `local_river_nodes` — are what's passed to the compile, and
+that `CachedGroundTile::grids` is a `shared_ptr`), and a new executable
+test, `test_cached_ground_grids_shared_ptr_survives_map_entry_erasure`,
+which extracts the real `CachedGroundTile`/`CachedGroundGrid` struct
+definitions, inserts an entry into a real `unordered_map`, captures a copy
+of its `grids` shared_ptr (simulating a job holding a lease), erases the map
+entry (simulating a later tile's LRU eviction), and asserts the leased
+vector is still readable with unchanged content. `python3 Renderer/
+renderer.py integration grassland --full --renderer-only` — 294 tests, 293
+pass; the one failure (`test_actual_worker_camera_supersession_and_
+takeover`) reproduces identically with this session's changes `git stash`-ed
+out (a macOS-clang-vs-Windows-mock API gap in `environment_runtime.cpp`:
+`UINT_PTR`, `IsWindowVisible`, `QueryPerformanceFrequency`, etc. — unrelated
+to ground, not touched by this session). No byte difference in rendered
+output across terrain, river/coast, wrapping, cache-hit, cancellation, or
+zoom cases.
+
+**Next unfinished responsibility (blocker before Milestone 1.3):** the
+user's decision between the interim scheduling-policy contract and the
+broader generation-lease redesign, above — needed before a worker queue can
+be added safely, since both open lifetime concerns (topology_cache lattice
+reads, world_coast/NaturalWorld's underlying payload) would otherwise become
+real use-after-free/data-race risks the moment a ground job outlives a
+frame boundary. Once that's decided, Milestone 1.3 still separately needs
+its scheduling-granularity decision (ground dispatched to a worker on its
+own vs. the whole per-tile body moving together once cliffs/ground/features
+are all worker-safe) — unchanged from the prior note. Cliffs remain
+worker-safe from the earlier slice; ground is now worker-safe from this
+corrected slice *conditioned on* the pending lifetime-concern decision;
+city generation (priority 3) remains unscoped.

@@ -99,6 +99,73 @@ int main(){
 }
 ''')
 
+    def test_ground_and_cliff_private_scratches_never_share_consumer_state(self):
+        """Milestone 1.2: ground and cliff generation each bind their own
+        source_fidelity/surface_query_scratch.h SurfaceQueryScratch (ground_
+        query_scratch/cliff_query_scratch in c3x_renderer.cpp) instead of the
+        shared per-tile queries/pickup_surface/natural. This proves the exact
+        mechanism that makes that safe: two independently-bound scratches'
+        NaturalWorld river state never share DependencyScope consumer even
+        when interleaved, a proof captured through one instance still
+        validates through a completely different NaturalWorld sharing the
+        same field/revision (what the ground call site's merge of private
+        river_dependencies into the shared, natural-validated map relies on),
+        and mutating one scratch's private ExactPointCaches never reaches
+        another scratch instance."""
+        run_cpp(r'''
+#include "Renderer/native/source_fidelity/surface_query_scratch.h"
+#include <cassert>
+using namespace c3x_renderer;
+int main(){
+ render_core::WorldTopology topology;
+ std::vector<std::uint32_t> bits(2048,2|(2<<8));
+ auto update=[&]{topology.update({64,64,true,true},bits.data(),bits.size());};update();
+ fidelity::NaturalWorld shared_data;
+ shared_data.fields.resize(1);shared_data.fields[0].width=shared_data.fields[0].height=2;
+ shared_data.fields[0].pixels={0,64,128,255};
+ shared_data.update_rivers(topology,1);
+ // Ground and cliffs each bind a private scratch to the same shared payload,
+ // exactly as c3x_renderer.cpp's ground_query_scratch/cliff_query_scratch do.
+ fidelity::SurfaceQueryScratch ground_scratch,cliff_scratch;
+ ground_scratch.bind(shared_data,topology,1);
+ cliff_scratch.bind(shared_data,topology,1);
+ fidelity::NaturalWorld::CellInputs ground_dependencies,cliff_dependencies;
+ {
+  // Interleave both instances' calls the way two tiles' ground/cliff
+  // compiles would if ever scheduled concurrently -- a real single-thread
+  // interleaving is enough to prove state does not leak between the two
+  // owning objects, since consumer/last_cell live on each NaturalWorld, not
+  // on any shared/global/thread-local storage.
+  fidelity::NaturalWorld::DependencyScope ground_scope(ground_scratch.rivers,&ground_dependencies);
+  fidelity::NaturalWorld::DependencyScope cliff_scope(cliff_scratch.rivers,&cliff_dependencies);
+  auto ground_sample=ground_scratch.rivers.river_sample({12.5,4.5});
+  auto cliff_sample=cliff_scratch.rivers.river_sample({20.5,4.5});
+  ground_scratch.rivers.river_sample({12.5,4.5}); // repeat; must not grow either proof again
+  cliff_scratch.rivers.river_sample({20.5,4.5});
+  assert(ground_dependencies.size()==1 && cliff_dependencies.size()==1);
+  assert(ground_dependencies.begin()->first!=cliff_dependencies.begin()->first);
+  assert(ground_sample.distance==1000 && cliff_sample.distance==1000);
+ }
+ assert(!ground_scratch.rivers.consumer && !cliff_scratch.rivers.consumer);
+ // A proof captured via one private scratch still validates through the
+ // shared natural object and through a completely different NaturalWorld
+ // sharing the same field/revision -- exactly what merging ground's private
+ // river_dependencies into the shared river_dependencies map at the ground
+ // call site in c3x_renderer.cpp relies on for correct cache invalidation.
+ fidelity::NaturalWorld::CellProof ground_proof(ground_dependencies.begin(),ground_dependencies.end());
+ assert(shared_data.valid(ground_proof));
+ fidelity::NaturalWorld independent_reader;
+ independent_reader.fields=shared_data.fields;independent_reader.update_rivers(topology,1);
+ assert(independent_reader.valid(ground_proof));
+ // Mutating one scratch's private ExactPointCaches/reset never reaches
+ // another scratch instance's cached content.
+ ground_scratch.pickup_ground_samples.get(0.f,0.f,[]{return render_core::GroundSample{};});
+ assert(ground_scratch.pickup_ground_samples.misses==1);
+ cliff_scratch.reset_tile();
+ assert(ground_scratch.pickup_ground_samples.misses==1);
+}
+''')
+
     def test_shared_patch_topology_and_explicit_detail_policy(self):
         run_cpp(r'''
 #include "Renderer/lab/shared/natural/ground.h"

@@ -440,10 +440,134 @@ int main(){
  State tiny;tiny.natural_mesh_cache_budget=1;tiny.run(0,true);assert(tiny.ground_grid_cache.empty());
  State extended;extended.run(0,true);auto before=extended.ground_grid_cache_bytes;
  assert(extended.run(0,true) && extended.ground_grid_cache_bytes>before);
- assert(extended.ground_grid_cache.begin()->second.grids.size()==2);
+ assert(extended.ground_grid_cache.begin()->second.grids->size()==2);
 }
 '''
         with tempfile.TemporaryDirectory(prefix="c3x-ground-cache-") as directory:
+            cpp = Path(directory) / "test.cpp"
+            cpp.write_text(program)
+            binary = Path(directory) / "test"
+            subprocess.run([compiler, "-std=c++17", "-O2", "-I", str(ROOT), str(cpp), "-o", str(binary)], check=True)
+            subprocess.run([str(binary)], check=True)
+
+    def test_ground_compile_call_site_uses_private_scratch_not_shared_natural(self):
+        # Milestone 1.2: ground's compile_ground_surfaces call must read
+        # through its own ground_query_scratch (source_fidelity/
+        # surface_query_scratch.h), not the frame-level natural/queries/
+        # pickup_surface that feature, forest exclusion and city generation
+        # also read for this same tile -- otherwise two tiles' ground
+        # compiles would race NaturalWorld's consumer/last_cell state exactly
+        # as test_world_view_submission.py's
+        # test_ground_and_cliff_private_scratches_never_share_consumer_state
+        # demonstrates. This guards the call site wiring by source, since the
+        # call site itself needs the real WorldCoast/ReliefSurface/D3D
+        # dependencies to execute directly.
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        ground_compiler = (ROOT / "Renderer/native/source_fidelity/ground_compiler.h").read_text()
+        # The compiler's own signature must accept the base NaturalWorld (its
+        # only two uses, river_sample/river_affects, are both declared there),
+        # not the GPU-owning Natural subclass -- otherwise a private
+        # NaturalWorld-only scratch could never be substituted for it.
+        signature = ground_compiler.split("void compile_ground_surfaces(", 1)[1].split(");", 1)[0]
+        self.assertIn("NaturalWorld & natural", signature)
+        self.assertNotIn("Natural & natural", signature)
+        call = "c3x_renderer::fidelity::compile_ground_surfaces(" + source.split(
+            "c3x_renderer::fidelity::compile_ground_surfaces(", 1)[1].split(");", 1)[0]
+        self.assertIn("ground_query_scratch.rivers", call)
+        self.assertIn("ground_relief_at_world", call)
+        self.assertIn("ground_river_distance", call)
+        self.assertIn("ground_water_family_depth", call)
+        self.assertNotIn(", natural,", call)
+        # Milestone 1.2 correction: ground_query_scratch must no longer be a
+        # persistent renderer member shared by every ground compile (that
+        # would let two future ground jobs race on its point caches and
+        # NaturalWorld river-page/consumer state). It must instead be
+        # declared fresh, right before this call, so each invocation gets
+        # its own instance -- the call site's whole private-pipeline block
+        # (anchored on its own explanatory comment, through to the call)
+        # must contain the local declaration, not just a bare use of the
+        # name, and that declaration must not also appear as a persistent
+        # struct member anywhere in the file.
+        pipeline_anchor = "Ground's own private query/height/river pipeline"
+        pipeline_block = source.split(pipeline_anchor, 1)[1].split(
+            "c3x_renderer::fidelity::compile_ground_surfaces(", 1)[0]
+        self.assertIn("SurfaceQueryScratch ground_query_scratch;", pipeline_block)
+        self.assertNotRegex(
+            source.split(pipeline_anchor, 1)[0],
+            r"SurfaceQueryScratch\s+ground_query_scratch\s*;")
+        # local_river_nodes holds pointers into topology_cache.rivers, which
+        # is cleared/rebuilt whenever the frame's topology pre-pass reruns.
+        # Ground must copy the pointed-to RiverNode values into its own
+        # owned vector before compiling, and pass pointers into that OWNED
+        # copy to compile_ground_surfaces, not the shared local_river_nodes
+        # pointers directly.
+        self.assertIn("ground_river_node_values", pipeline_block)
+        self.assertIn("ground_river_nodes", call)
+        self.assertNotIn("local_river_nodes", call)
+        # CachedGroundTile::grids must be a shared_ptr so an in-flight
+        # reader can keep the vector alive past this tile's map-entry being
+        # evicted by a later tile's LRU admission.
+        cached_ground_tile = source.split("struct CachedGroundTile {", 1)[1].split("};", 1)[0]
+        self.assertIn("std::shared_ptr<std::vector<CachedGroundGrid>> grids", cached_ground_tile)
+        # Every dependency accumulator ground's private pipeline records into
+        # must be merged into the shared maps the outer cache-persistence and
+        # future cache-hit validity checks (river_dependencies/dependencies/
+        # coast_dependencies/world_dependencies) actually read.
+        merge = source.split(call, 1)[1][:2000]
+        for private_map, shared_map in (
+            ("ground_world_dependencies", "world_dependencies"),
+            ("ground_coast_dependencies", "coast_dependencies"),
+            ("ground_topology_dependencies", "dependencies"),
+            ("ground_river_dependencies", "river_dependencies"),
+        ):
+            self.assertIn(f"for(auto const& dependency:{private_map}){shared_map}.emplace(", merge)
+
+    def test_cached_ground_grids_shared_ptr_survives_map_entry_erasure(self):
+        # Milestone 1.2 correction: CachedGroundTile::grids must be a
+        # shared_ptr, because the LRU admission logic above can erase ANY
+        # map entry -- including one belonging to an earlier tile a future
+        # worker job is still reading -- while picking a victim to make
+        # room for a new entry. This proves the actual production struct's
+        # grids field keeps the vector alive (readable, unchanged content)
+        # through exactly that erasure, as long as a caller (standing in for
+        # an in-flight job) still holds a copy of the shared_ptr.
+        compiler = shutil.which("clang++") or shutil.which("g++")
+        if not compiler:
+            self.skipTest("C++ compiler unavailable")
+        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
+        ground_compiler = (ROOT / "Renderer/native/source_fidelity/ground_compiler.h").read_text()
+        retained = "struct CachedGroundGrid {" + ground_compiler.split("struct CachedGroundGrid {", 1)[1].split("struct GroundCompileInput", 1)[0]
+        ground_tile = "struct CachedGroundTile {" + source.split("struct CachedGroundTile {", 1)[1].split("struct RiverNode", 1)[0]
+        self.assertIn("std::shared_ptr<std::vector<CachedGroundGrid>> grids", ground_tile)
+        program = r'''
+#include <array>
+#include <cassert>
+#include <cstdint>
+#include <memory>
+#include <unordered_map>
+#include <vector>
+#include "Renderer/lab/shared/natural/world.h"
+#include "Renderer/lab/shared/natural/vertex.h"
+using Vertex=c3x_renderer::fidelity::MapVertex;
+using MapVertex=c3x_renderer::fidelity::MapVertex;
+''' + retained + r'''
+''' + ground_tile + r'''
+int main(){
+ std::unordered_map<std::uint64_t,CachedGroundTile> cache;
+ auto& entry=cache[1];
+ std::vector<CachedGroundGrid> grids(2);
+ grids[0].divisions=3;grids[0].layer=.25f;
+ grids[1].divisions=5;grids[1].layer=.75f;
+ entry.grids=std::make_shared<std::vector<CachedGroundGrid>>(std::move(grids));
+ std::shared_ptr<std::vector<CachedGroundGrid>> lease=entry.grids; // simulates a job capturing the lease before its tile is evicted
+ assert(cache.erase(1)==1); // a later tile's admission evicting this entry as its LRU victim
+ assert(cache.empty());
+ assert(lease && lease->size()==2);
+ assert((*lease)[0].divisions==3 && (*lease)[0].layer==.25f);
+ assert((*lease)[1].divisions==5 && (*lease)[1].layer==.75f);
+}
+'''
+        with tempfile.TemporaryDirectory(prefix="c3x-ground-grid-lease-") as directory:
             cpp = Path(directory) / "test.cpp"
             cpp.write_text(program)
             binary = Path(directory) / "test"
