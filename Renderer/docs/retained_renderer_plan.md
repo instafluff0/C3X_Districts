@@ -6,7 +6,9 @@ Agreed September 15, 2026: retain the original six architectural responsibilitie
 and complete cheap GPU-ready scene rendering on top of independent visual frames.
 Scrolling should usually select/draw reusable content; nearby preparation helps
 without making every possible destination image a prerequisite for fast movement.
-Full detail, authored animation and native ownership remain unchanged.
+Full detail, authored animation and Civ III's gameplay/state authority remain
+unchanged. The zoom-owned map-overlay extension below is a planned rendering
+ownership change, not a second visibility, selection, or pathfinding system.
 
 **Active deliverable: milestone 1.** Its replacement static submission path is
 implemented and validated, including packed terrain preparation; its whole-request
@@ -58,8 +60,9 @@ memory on stationary animation, dense scrolling and local changes.
 
 Sample eligible animation state, collect required resource/unit poses, prepare
 missing content together and execute selected dynamic/shadow/finishing passes over
-valid static color/depth. Feed results into the existing native compositor. Keep
-native overlays, unit ordering and terrain occlusion exact; static UI stays reusable.
+valid static color/depth. Feed results into the existing native compositor. Until
+the explicit zoom-owned tactical-overlay cutover below, keep native overlays;
+preserve unit ordering and terrain occlusion exactly, and keep static UI reusable.
 
 Shared pose buffers, GPU deformation/skinning and grouped targets are candidates
 where they remove measured work. Do not force all units into one surface or alter
@@ -136,6 +139,52 @@ starting point rather than a new reflection pipeline from scratch.
 VFX, the same category as M7.5 attached effects (flames/smoke/steam), not
 core water-shader work. It can be scheduled whenever effects work is picked
 up, without waiting on milestones 1–4.
+
+## Zoom-owned map overlays: roadmap placement
+
+Requested addition (2026-09-17): because custom rendering owns the three-level
+map projection, the renderer must eventually draw the map-plane fog/unseen
+territory treatment, selected-unit highlight/cursor, and pathfinding/route
+visualization rather than scaling Civ III's versions on top. This is a visual
+ownership extension only. Civ III remains authoritative for tile visibility,
+viewer changes, selection, hover/targeting context, pathfinding, movement costs,
+route/turn semantics, picking, and gameplay; the renderer consumes copied
+visibility and tactical-overlay records and never reimplements those rules.
+
+**Milestone 1 — visibility data and static fog pass:** make captured per-tile
+visibility/fog/unseen state (already represented by the visible-scene
+`visibility_mask` and `fog_status`) an explicit dependency of the final map
+output. Add a renderer fog/unseen coverage pass after terrain/objects and before
+tactical overlays, with correct map clipping, wrapping, and all 128/160/192 tile
+widths. Its standalone/replay tests must cover revealed, fogged, unseen, and
+visibility-edge tiles. Do not suppress Civ III's fog yet: live replacement waits
+for the atomic publication and invalidation contract in milestone 3.
+
+**Milestone 2 — direct tactical-overlay pass:** add a cheap dynamic pass for
+the selected-unit highlight/cursor and the already-computed route visualization.
+Capture semantic primitives such as the selected/hovered anchor, route segments,
+turn breaks and reachable/blocked indicators from Civ III's authoritative
+interaction state or its established draw inputs; do not infer a route from map
+data. Keep these pass inputs separate from unit-body animation, preserve depth
+and terrain occlusion where the native presentation requires it, and prove that
+hover/selection/path changes do not rebuild static terrain or unit content.
+
+**Milestone 3 — coherent live cutover:** publish pixels, camera/zoom transform,
+visibility epoch, tactical-overlay revision and overlay inputs as one compatible
+view identity. At the map composition boundary, suppress only the corresponding
+native fog/unseen, selected-unit, and route draws once the matching renderer
+output is ready; never show a new camera with old fog, a stale route, or duplicate
+native/renderer marks. Visibility, selection, route cancellation, scroll/wrap,
+zoom, device recovery, config-off, and renderer-failure paths all retain their
+native fallback. Audit existing draw/capture seams before proposing any new patch
+symbol; this roadmap entry authorizes no speculative CSV change.
+
+**Still native unless separately extended:** unit health/activity/status and
+stack HUD, civilization markers, city labels, borders, general map text, broader
+selection UI, and all non-map screens. Their current transformed-native treatment
+remains in place. The overlay cutover needs focused all-zoom visual comparisons
+and executable ownership/invalidation tests before it is accepted; it does not
+move deferred wonders or Districts forward.
 
 ## Current evidence and implementation handoff
 
@@ -541,4 +590,47 @@ Nothing was implemented for ground this session. When resumed, do the output-
 isolation-only slice first (bounded, verifiable byte-identical, no topology_
 cache redesign required), then treat the topology_cache ordering problem as
 its own explicitly-scoped design task before attempting worker eligibility.
+City generation scoping (priority 3) remains untouched and unstarted.
+
+### Ground output isolation: value-boundary slice completed
+
+**Completed capability:** implemented the output-isolation-only slice
+described above. Added `source_fidelity/ground_compiler.h` defining
+`GroundPoint`, `CachedGroundGrid`, `GroundCompileInput`, `GroundSurfaces`, and
+`compile_ground_surfaces(...)` — mirroring `cliff_compiler.h`/`terrain_
+compiler.h`'s shape. The six ground-family mesh layers (underlay, land, bed,
+water, river, terrain-shadow) are now produced by this function into a
+`GroundSurfaces` value that the caller adopts via `std::move`, instead of
+being emitted by mutating renderer-owned output vectors through the large
+inline closure previously in `c3x_renderer.cpp`. Execution order, sampling
+math, dependency behavior, cache behavior (including the still-unmoved
+`topology_cache`/admission/eviction logic, deliberately left in place per
+this slice's bounded scope), mesh ordering, and rendered bytes are all
+preserved exactly — no topology_cache redesign and no background execution
+were introduced, per this slice's explicit boundary. Also removed a leftover
+duplicate `river_node_distance` closure in `c3x_renderer.cpp` that had zero
+remaining call sites after the extraction (the header defines its own
+internal copy).
+
+**Measured:** rebuilt (`renderer.py build`, exit 0, all native modules/tests
+compile and pass) and reran the full cross-category regression sweep
+(`renderer.py integration grassland --full --renderer-only`, 291 tests).
+Fixed 11 Python "contract" tests that broke on stale assumptions about which
+file now contains moved code/strings (not on any behavior or byte
+difference) — 8 in `test_native_bridge_contract.py` (simple literal-string
+relocations) and 3 in `test_zoom_mesh_cache.py` (golden tests that extract
+and compile real code; these needed their extraction markers and mock
+harnesses reworked to match the new `input.*`/`destination.*`/
+`cached_grid_source` parameter shape). One remaining failure
+(`test_actual_worker_camera_supersession_and_takeover`) was confirmed
+pre-existing and unrelated: it fails identically with this session's changes
+stashed out, due to a local-macOS-clang-only gap compiling Windows-specific
+mocks in `environment_runtime.cpp`, never touching ground code. No speedup is
+claimed or expected from this slice, per its architecture-enabling mandate.
+
+**Next unfinished responsibility:** the topology_cache ordering problem
+(ground's neighborhood closures reading a same-frame, main-thread-mutated
+`std::unordered_map` with a real order dependency on newly-revealed tiles)
+remains the actual blocker to worker eligibility for ground, and still needs
+its own explicitly-scoped design task before that step can be attempted.
 City generation scoping (priority 3) remains untouched and unstarted.

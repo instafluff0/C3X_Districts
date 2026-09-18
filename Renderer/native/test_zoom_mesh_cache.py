@@ -363,8 +363,12 @@ int main(){
         if not compiler:
             self.skipTest("C++ compiler unavailable")
         source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
-        retained = "struct CachedGroundGrid {" + source.split("struct CachedGroundGrid {", 1)[1].split("struct RiverNode", 1)[0]
-        lookup = "auto ground_key=" + source.split("auto ground_key=", 1)[1].split("            auto append_ground_layer", 1)[0]
+        # CachedGroundGrid now lives in source_fidelity/ground_compiler.h; the
+        # cache-key lookup/admission logic around it is unmoved caller code.
+        ground_compiler = (ROOT / "Renderer/native/source_fidelity/ground_compiler.h").read_text()
+        retained = "struct CachedGroundGrid {" + ground_compiler.split("struct CachedGroundGrid {", 1)[1].split("struct GroundCompileInput", 1)[0]
+        ground_tile = "struct CachedGroundTile {" + source.split("struct CachedGroundTile {", 1)[1].split("struct RiverNode", 1)[0]
+        lookup = "auto ground_key=" + source.split("auto ground_key=", 1)[1].split("            auto append_feature_instance", 1)[0]
         admission = "if(!pending_ground_grids.empty()){\n" + source.split("if(!pending_ground_grids.empty()){\n", 1)[1].split("            QueryPerformanceCounter(&phase_end);ground_ticks", 1)[0]
         program = r'''
 #include <array>
@@ -376,7 +380,9 @@ int main(){
 #include "Renderer/lab/shared/natural/world.h"
 #include "Renderer/lab/shared/natural/vertex.h"
 using Vertex=c3x_renderer::fidelity::MapVertex;
+using MapVertex=c3x_renderer::fidelity::MapVertex;
 ''' + retained + r'''
+''' + ground_tile + r'''
 struct State {
  struct Frame {int world_width_tiles=100,world_height_tiles=100,world_wrap_x=1,world_wrap_y=0;
   int world_topology_revision=1,tile_width=128,tile_height=64,target_width=128,target_height=64;} frame;
@@ -448,8 +454,9 @@ int main(){
         compiler = shutil.which("clang++") or shutil.which("g++")
         if not compiler:
             self.skipTest("C++ compiler unavailable")
-        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
-        retained = "struct CachedGroundGrid {" + source.split("struct CachedGroundGrid {", 1)[1].split("struct CachedGroundTile", 1)[0]
+        # CachedGroundGrid now lives in source_fidelity/ground_compiler.h.
+        source = (ROOT / "Renderer/native/source_fidelity/ground_compiler.h").read_text()
+        retained = "struct CachedGroundGrid {" + source.split("struct CachedGroundGrid {", 1)[1].split("struct GroundCompileInput", 1)[0]
         program = r'''
 #include <array>
 #include <cassert>
@@ -458,6 +465,7 @@ int main(){
 #include <vector>
 #include "Renderer/lab/shared/natural/vertex.h"
 using Vertex=c3x_renderer::fidelity::MapVertex;
+using MapVertex=c3x_renderer::fidelity::MapVertex;
 ''' + retained + r'''
 int main(){
  for(int divisions:{8,12,16,24,32})for(float layer:{.5f,1.f,9.f}){
@@ -843,9 +851,12 @@ int main(){
         compiler = shutil.which("clang++") or shutil.which("g++")
         if not compiler:
             self.skipTest("C++ compiler unavailable")
-        source = (ROOT / "Renderer/native/c3x_renderer.cpp").read_text()
-        grid = "auto append_ground_layer = " + source.split("auto append_ground_layer = ", 1)[1].split("            auto append_feature_instance", 1)[0]
-        retained = "struct CachedGroundGrid {" + source.split("struct CachedGroundGrid {", 1)[1].split("struct RiverNode", 1)[0]
+        # append_ground_layer and CachedGroundGrid now live in
+        # source_fidelity/ground_compiler.h, compiled from there directly.
+        source = (ROOT / "Renderer/native/source_fidelity/ground_compiler.h").read_text()
+        grid = "auto append_ground_layer = " + source.split("auto append_ground_layer = ", 1)[1].split(
+            "    append_ground_layer(destination.underlay_vertices", 1)[0]
+        retained = "struct CachedGroundGrid {" + source.split("struct CachedGroundGrid {", 1)[1].split("struct GroundCompileInput", 1)[0]
         program = r'''
 #include <array>
 #include <cmath>
@@ -857,15 +868,18 @@ int main(){
 #include "Renderer/lab/shared/natural/world.h"
 #include "Renderer/lab/shared/natural/vertex.h"
 using Vertex=c3x_renderer::fidelity::MapVertex;
+using MapVertex=c3x_renderer::fidelity::MapVertex;
 using UINT=unsigned;
 ''' + retained + r'''
 int main(){
- bool world_ground=false,ground_hit=false,retain_ground_grids=false,prewarming=false,reuse_nested_ground_grids=true;
- std::unordered_map<int,CachedGroundTile> retained_cache;
- auto retained_ground=retained_cache.end();
- std::vector<CachedGroundGrid> pending_ground_grids;
- unsigned frame_ground_grid_hits=0;
- struct {int tile_width=128,tile_height=64;} frame;
+ struct Input {
+  bool world_ground=false,retain_ground_grids=false,reuse_nested_ground_grids=true,prewarming=false;
+ } input;
+ struct Destination { std::vector<CachedGroundGrid> pending_grids; } destination;
+ struct Frame {int tile_width=128,tile_height=64;} frame;
+ std::vector<CachedGroundGrid> grids;
+ std::vector<CachedGroundGrid> const* cached_grid_source=&grids;
+ unsigned ground_grid_hit_counter=0;
  auto river_node_distance=[](float,float,unsigned){return 1000.f;};
  struct Point {float relief[3]={},normal_delta[2]={};} point;
  auto ground_point_at=[&](float,float)->Point&{return point;};
@@ -894,11 +908,10 @@ int main(){
  }
  // Execute the actual cached-grid selection/indexing against every supported
  // fine/coarse pair. Compare all channels, not only the projected position.
- ground_hit=true;retained_cache.emplace(0,CachedGroundTile{});retained_ground=retained_cache.find(0);
  for(int fine:{8,12,16,24,32})for(int coarse:{8,12,16,24,32})
  for(float layer:{.5f,1.f,9.f})for(int width:{64,96,128,160,192}){
   frame.tile_width=width;frame.tile_height=width/2;
-  auto& grids=retained_ground->second.grids;grids.clear();grids.emplace_back();
+  grids.clear();grids.emplace_back();
   auto& cached=grids.back();cached.divisions=fine;cached.layer=layer;
   for(int y=0;y<=fine;++y)for(int x=0;x<=fine;++x){
    cached.vertices.push_back(make_ground_vertex(float(x)/fine,float(y)/fine,layer));
@@ -922,9 +935,9 @@ int main(){
    if(layer==9.f)vertex.river_branch_count=1000.f;
    assert(!std::memcmp(&packed[i],&vertex,sizeof(Vertex)));
   }
-  reuse_nested_ground_grids=false;samples=0;append_ground_layer(packed,layer,coarse,&indices);
+  input.reuse_nested_ground_grids=false;samples=0;append_ground_layer(packed,layer,coarse,&indices);
   assert(samples==(fine==coarse?0u:unsigned((coarse+1)*(coarse+1))));
-  reuse_nested_ground_grids=true;
+  input.reuse_nested_ground_grids=true;
  }
  stop=true;samples=0;std::vector<Vertex> aborted;std::vector<UINT> empty;
  append_ground_layer(aborted,.5f,32,&empty);assert(!samples && empty.empty());

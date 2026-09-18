@@ -199,6 +199,11 @@ int main() {
     def test_native_topology_halo_is_checked_bounded_and_not_a_lod_input(self) -> None:
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
         native = (Path(__file__).parent / "c3x_renderer.cpp").read_text(encoding="utf-8")
+        # Shadow ray-marching (cast_shadow_visibility) is compiled from
+        # source_fidelity/ground_compiler.h alongside the rest of ground assembly.
+        ground_compiler = (Path(__file__).parent / "source_fidelity/ground_compiler.h").read_text(
+            encoding="utf-8"
+        )
         capture = injected.split("capture_custom_renderer_topology (", 1)[1].split(
             "validate_custom_renderer_replacement_ownership", 1)[0]
         self.assertIn("Main_Screen_Form_tile_to_screen_coords", capture)
@@ -208,8 +213,8 @@ int main() {
         self.assertIn("tile_topology_signature(tile)", native)
         self.assertIn("draw_record_count <= 512", native)
         self.assertIn("bitmap_footprint_signature.complete == cached_signature.complete", native)
-        self.assertIn("ray_height >= 128.0f", native)
-        self.assertIn("greatest_obstruction >= 10.0f", native)
+        self.assertIn("ray_height >= 128.0f", ground_compiler)
+        self.assertIn("greatest_obstruction >= 10.0f", ground_compiler)
 
     def test_river_locality_bound_matches_frozen_shader_effect_ranges(self) -> None:
         shader = (Path(__file__).parent / "terrain_rendering.hlsl").read_text(encoding="utf-8")
@@ -556,7 +561,12 @@ int main() {
         self.assertIn("canonical_river_x = canonical_component", renderer)
         self.assertIn("(distance - 4.0f) / 16.0f", renderer)
         self.assertIn("valley * 0.92f", renderer)
-        self.assertIn("append_ground_layer(river_vertices, 9.0f", renderer)
+        # Ground layer assembly (append_ground_layer) is compiled from
+        # source_fidelity/ground_compiler.h.
+        ground_compiler = (Path(__file__).parent / "source_fidelity/ground_compiler.h").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("append_ground_layer(destination.river_vertices, 9.0f", ground_compiler)
         self.assertIn("views[79 + index] = river_surface_views[index]", renderer)
         self.assertIn("views[89 + index] = river_rock_texture_views[index]", renderer)
         self.assertIn("C3X_RENDERER_TILE_CUSTOM_RIVER_REPLACED", renderer + injected)
@@ -588,8 +598,13 @@ int main() {
         self.assertIn("evaluate_environment(", renderer)
         self.assertIn("frame.hour", runtime)
         self.assertIn("frame.season", runtime)
-        self.assertIn("append_ground_layer(shadow_vertices, 10.0f", renderer)
-        self.assertIn("cast_shadow_visibility", renderer)
+        # Shadow-layer assembly and its shadow-visibility ray-march are compiled
+        # from source_fidelity/ground_compiler.h.
+        ground_compiler = (Path(__file__).parent / "source_fidelity/ground_compiler.h").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("append_ground_layer(destination.shadow_vertices, 10.0f", ground_compiler)
+        self.assertIn("cast_shadow_visibility", ground_compiler)
         self.assertIn("append_object_shadow", renderer)
         self.assertIn("#define l13a_layout 1.0", shader)
         self.assertIn("frame_illumination", shader)
@@ -702,9 +717,15 @@ int main() {
         renderer = (Path(__file__).parent / "c3x_renderer.cpp").read_text(
             encoding="utf-8"
         )
-        self.assertIn("grid_vertices.resize(static_cast<std::size_t>(row_width) * row_width)", renderer)
-        self.assertIn("ground_point_cache.reserve(2048)", renderer)
-        self.assertIn("GroundPoint & point = ground_point_at(u, v)", renderer)
+        # Ground mesh assembly (grid/point cache, layer construction) is compiled
+        # from source_fidelity/ground_compiler.h; the cache-key/admission logic
+        # around it stays in c3x_renderer.cpp.
+        ground_compiler = (Path(__file__).parent / "source_fidelity/ground_compiler.h").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("grid_vertices.resize(static_cast<std::size_t>(row_width) * row_width)", ground_compiler)
+        self.assertIn("ground_point_cache.reserve(2048)", ground_compiler)
+        self.assertIn("GroundPoint & point = ground_point_at(u, v)", ground_compiler)
         self.assertIn("mix_tile(world_ground?96:frame.tile_width)", renderer)
         self.assertIn("mix_tile(world_ground?48:frame.tile_height)", renderer)
         self.assertIn("mix_tile(frame.hour)", renderer)
@@ -712,10 +733,10 @@ int main() {
         self.assertIn("auto const & dependency : cached.dependencies", renderer)
         self.assertIn("dependencies.try_emplace(key", renderer)
         self.assertNotIn("world_sample_cache_bytes", renderer)
-        self.assertIn("grid_v <= subdivisions", renderer)
-        self.assertIn("grid_u <= subdivisions", renderer)
-        self.assertIn("bool river_surface = layer > 8.5f", renderer)
-        self.assertIn("river_surface ? river_node_distance", renderer)
+        self.assertIn("grid_v <= subdivisions", ground_compiler)
+        self.assertIn("grid_u <= subdivisions", ground_compiler)
+        self.assertIn("bool river_surface = layer > 8.5f", ground_compiler)
+        self.assertIn("river_surface ? river_node_distance", ground_compiler)
         self.assertIn("draw_record_count <= 512", renderer)
         self.assertIn("? 16 : 8", renderer)
 
@@ -921,10 +942,15 @@ int main() {
         )
         api = (Path(__file__).parent / "c3x_renderer_api.h").read_text(encoding="utf-8")
         injected = (C3X_ROOT / "injected_code.c").read_text(encoding="utf-8")
+        # The per-point relief sample is taken inside ground_point_at, compiled
+        # from source_fidelity/ground_compiler.h.
+        ground_compiler = (Path(__file__).parent / "source_fidelity/ground_compiler.h").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("DXGI_FORMAT_R8_UNORM", native)
         self.assertIn("mountain_atlas", native)
         self.assertIn("record ? static_cast<float>(record->surface) : surface_slot", native)
-        self.assertIn("relief_sample", native)
+        self.assertIn("relief_sample", ground_compiler)
         self.assertIn("hill_compatibility", native)
         self.assertIn("hill_support", native)
         self.assertIn("CreateDepthStencilView", native)
@@ -1023,11 +1049,16 @@ int main() {
         self.assertIn("canonical_feature_x", native)
         self.assertIn("signed_shore_distance", native)
         self.assertIn("water_family_depth", native)
-        self.assertIn("append_ground_layer(underlay_vertices, 0.5f,", native)
-        self.assertIn("append_ground_layer(land_vertices, 1.0f,", native)
-        self.assertIn("append_ground_layer(bed_vertices, 4.0f,", native)
+        # Ground layer assembly (append_ground_layer) is compiled from
+        # source_fidelity/ground_compiler.h.
+        ground_compiler = (Path(__file__).parent / "source_fidelity/ground_compiler.h").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("append_ground_layer(destination.underlay_vertices, 0.5f,", ground_compiler)
+        self.assertIn("append_ground_layer(destination.land_vertices, 1.0f,", ground_compiler)
+        self.assertIn("append_ground_layer(destination.bed_vertices, 4.0f,", ground_compiler)
 
-        self.assertIn("append_ground_layer(water_vertices, 5.0f,", native)
+        self.assertIn("append_ground_layer(destination.water_vertices, 5.0f,", ground_compiler)
         self.assertIn("draw(geometry_underlay)", native)
         self.assertIn("draw(geometry_land)", native)
         self.assertIn("draw(geometry_bed)", native)
@@ -1080,10 +1111,15 @@ int main() {
         adapter = (Path(__file__).parent / "integrated_terrain.hlsl").read_text(
             encoding="utf-8"
         )
-        self.assertIn("static_cast<float>(tile.terrain_type)", native)
-        self.assertIn("static_cast<float>(tile.real_terrain_type)", native)
-        self.assertIn("normal_x, normal_y, normal_z", native)
-        self.assertIn("relief_sample[1], relief_sample[2], signed_shore", native)
+        # Vertex construction (make_ground_vertex) is compiled from
+        # source_fidelity/ground_compiler.h.
+        ground_compiler = (Path(__file__).parent / "source_fidelity/ground_compiler.h").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("static_cast<float>(tile.terrain_type)", ground_compiler)
+        self.assertIn("static_cast<float>(tile.real_terrain_type)", ground_compiler)
+        self.assertIn("normal_x, normal_y, normal_z", ground_compiler)
+        self.assertIn("relief_sample[1], relief_sample[2], signed_shore", ground_compiler)
         self.assertIn("float authored_height = 0.0f", native)
         self.assertIn("float authored_blend = 0.0f", native)
         self.assertIn("float3 geometry_normal : NORMAL0", adapter)

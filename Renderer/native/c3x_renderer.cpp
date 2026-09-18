@@ -72,6 +72,7 @@
 #include "source_fidelity/light_frame.h"
 #include "source_fidelity/terrain_compiler.h"
 #include "source_fidelity/cliff_compiler.h"
+#include "source_fidelity/ground_compiler.h"
 #include "source_fidelity/surface_query_scratch.h"
 #include "environment_refresh/reflection.h"
 #include "unit_body_renderer.h"
@@ -373,54 +374,12 @@ struct NaturalTile {
 using VertexHash=c3x_renderer::render_core::VertexHash;
 using VertexEqual=c3x_renderer::render_core::VertexEqual;
 
-struct GroundPoint {
-    float u = 0.0f, v = 0.0f;
-    float world_u = 0.0f, world_v = 0.0f;
-    float local_ground_x = 0.0f, local_ground_y = 0.0f;
-    float material_u = 0.0f, material_v = 0.0f;
-    float material_weights[5] = {};
-    float signed_shore = 0.0f;
-    c3x_renderer::render_core::ShoreSample shore;
-    float surface_coordinate = 0.0f;
-    float relief[3] = {};
-    float normal[3] = {0.0f, 0.0f, 1.0f};
-    float normal_delta[2] = {};
-    bool terrain_ready = false;
-};
-
-struct CachedGroundGrid {
-    int divisions=0;
-    float layer=0;
-    std::vector<Vertex> vertices;
-    // Preserve raw height and normal numerators; recovering these from packed
-    // world Z or normalized normals would introduce zoom-dependent rounding.
-    std::vector<std::array<float,3>> samples;
-    int sample_stride(int requested) const {
-        if(requested<=0 || divisions<requested || divisions%requested!=0)return 0;
-        int stride=divisions/requested;
-        // Only reuse genuinely identical sampling coordinates, including the
-        // floating-point division. Never interpolate a coarser approximation.
-        for(int i=0;i<=requested;++i)
-            if(float(i*stride)/divisions!=float(i)/requested)return 0;
-        return stride;
-    }
-    Vertex project(std::size_t index,int width,int height) const {
-        Vertex out=vertices[index];
-        float u=float(index%std::size_t(divisions+1))/divisions;
-        float v=float(index/std::size_t(divisions+1))/divisions;
-        float half_w=float(width)*.5f,half_h=float(height)*.5f;
-        float h=samples[index][0]*(float(width)/224.f*.82f);
-        float base=(u+v)*half_h;
-        out.x=half_w+(u-v)*half_w;out.y=base-h;out.z=base+h*.75f;
-        if(layer==1.f || layer==9.f){
-            float su=samples[index][1]/(2.f*.006f*float(width));
-            float sv=samples[index][2]*-1.f/(2.f*.006f*float(width));
-            float length=std::sqrt(su*su+sv*sv+1.f);
-            out.normal_x=-su/length;out.normal_y=-sv/length;out.normal_z=1.f/length;
-        }
-        return out;
-    }
-};
+// GroundPoint/CachedGroundGrid now live in source_fidelity/ground_compiler.h,
+// the single definition shared with compile_ground_surfaces; alias both
+// names here since the rest of this file (CachedGroundTile, cache eviction)
+// still refers to them unqualified.
+using GroundPoint = c3x_renderer::fidelity::GroundPoint;
+using CachedGroundGrid = c3x_renderer::fidelity::CachedGroundGrid;
 struct CachedGroundTile {
     std::uint64_t signature=0,used=0;
     int x=0,y=0;
@@ -7076,6 +7035,9 @@ public:
                 }
                 return key;
             };
+            // Ground generation always immediately reads the record it just
+            // recorded as a dependency; combine both steps into one lookup.
+            auto topology_lookup = [&](int x, int y) { return topology_cache.current(observed_coordinate_key(x, y)); };
             float left = 0.0f; // mesh origin is local; Civ III supplies the draw anchor
             float top = 0.0f;
             // The source terrain materials are detail textures, not one enormous
@@ -7353,26 +7315,6 @@ public:
                 if ((mask & 128u) != 0)
                     distance = std::min(distance, river_edge_distance(
                         river_tile, u, v, 0.0f, 0.0f, 0.0f, 1.0f, 128u));
-                return distance;
-            };
-            auto river_node_distance = [&](float u, float v, unsigned node_kind) {
-                if(fidelity_profile && node_kind!=1){auto sample=natural.river_sample({(tile.tile_x+tile.tile_y)*.5+u,(tile.tile_x-tile.tile_y)*.5+1-v});return float(node_kind==0?sample.source:sample.mouth);}
-                float point_x = static_cast<float>(tile.tile_x) + u - v;
-                float point_y = static_cast<float>(tile.tile_y) + u + v - 1.0f;
-                float distance = 1000.0f;
-                for (auto node_pointer : local_river_nodes) {
-                    RiverNode const & node = *node_pointer;
-                    bool selected = node_kind == 0u
-                        ? node.degree == 1u && !node.touches_water
-                        : (node_kind == 1u ? node.degree >= 3u
-                                          : node.degree == 1u && node.touches_water);
-                    if (!selected)
-                        continue;
-                    float delta_x = (point_x - static_cast<float>(node.lattice_x)) * (world_ground?64.f:half_w);
-                    float delta_y = (point_y - static_cast<float>(node.lattice_y)) * (world_ground?32.f:half_h);
-                    distance = std::min(distance,
-                        std::sqrt(delta_x * delta_x + delta_y * delta_y));
-                }
                 return distance;
             };
             auto center_material_weights = [&](int lattice_u, int lattice_v) {
@@ -7887,175 +7829,6 @@ public:
                 }
                 return std::array<float, 3>{height, authored_height, authored_blend};
             };
-            auto cast_shadow_visibility = [&](float world_u, float world_v,
-                                              float origin_height) {
-                float horizontal = std::sqrt(key_light[0] * key_light[0] +
-                                             key_light[1] * key_light[1]);
-                if (horizontal < 0.001f) {
-                    return 1.0f;
-                }
-                float direction_u = key_light[0] / horizontal;
-                float direction_v = -key_light[1] / horizontal;
-                float perpendicular_u = -direction_v;
-                float perpendicular_v = direction_u;
-                float occlusion = 0.0f;
-                for (int lane = -1; lane <= 1; ++lane) {
-                    float greatest_obstruction = 0.0f;
-                    float lane_offset = static_cast<float>(lane) * 0.075f;
-                    for (int step = 1; step <= 48; ++step) {
-                        float distance = static_cast<float>(step) * 0.12f;
-                        float sample_u = world_u + direction_u * distance +
-                                         perpendicular_u * lane_offset;
-                        float sample_v = world_v + direction_v * distance +
-                                         perpendicular_v * lane_offset;
-                        float ray_height = origin_height + 96.0f * distance + 0.8f;
-                        // The frozen production height path is bounded: normalized
-                        // relief <=104, smooth maximum adds <=3, dunes <=18.6;
-                        // hill height <=52 and river carving only lowers it.
-                        // Above 128 no later sample can obstruct this rising ray.
-                        // This preserves the 48-step result without sampling the
-                        // far-away terrain that cannot contribute to its shadow.
-                        if (ray_height >= 128.0f) break;
-                        float sample_height = relief_at_world(sample_u, sample_v)[0];
-                        greatest_obstruction = std::max(
-                            greatest_obstruction, sample_height - ray_height);
-                        // The lane's final occlusion is already saturated;
-                        // subsequent maxima cannot change the result.
-                        if (greatest_obstruction >= 10.0f) break;
-                    }
-                    occlusion += std::clamp(
-                        (greatest_obstruction - 0.5f) / 12.0f, 0.0f, 0.78f);
-                }
-                float visibility = 1.0f - occlusion / 3.0f;
-                return visibility;
-            };
-            std::unordered_map<std::uint64_t, GroundPoint> ground_point_cache;
-            ground_point_cache.reserve(2048);
-            auto ground_point_key = [](float u, float v) {
-                std::uint32_t u_bits = 0, v_bits = 0;
-                std::memcpy(&u_bits, &u, sizeof(u_bits));
-                std::memcpy(&v_bits, &v, sizeof(v_bits));
-                return (static_cast<std::uint64_t>(u_bits) << 32) | v_bits;
-            };
-            auto ground_point_at = [&](float u, float v) -> GroundPoint & {
-                std::uint64_t key = ground_point_key(u, v);
-                auto found = ground_point_cache.find(key);
-                if (found != ground_point_cache.end())
-                    return found->second;
-                GroundPoint point = {};
-                point.u = u;
-                point.v = v;
-                point.world_u =
-                    (static_cast<float>(tile.tile_x + tile.tile_y) * 0.5f) + u;
-                point.world_v =
-                    (static_cast<float>(tile.tile_x - tile.tile_y) * 0.5f) + (1.0f - v);
-                point.local_ground_x = half_w + (u - v) * half_w;
-                point.local_ground_y = (u + v) * half_h;
-                std::array<float, 2> material_uv =
-                    periodic_surface_uv(point.world_u, point.world_v, uv_scale);
-                point.material_u = material_uv[0];
-                point.material_v = material_uv[1];
-                std::array<float, 5> weights =
-                    material_weights_for(point.world_u, point.world_v);
-                std::copy(weights.begin(), weights.end(), point.material_weights);
-                point.signed_shore = signed_shore_distance(
-                    point.world_u, point.world_v, u, v);
-                if (pickup_profile) point.shore = shore_sample_at(point.world_u,point.world_v);
-                point.surface_coordinate = point.signed_shore <= 0.0f
-                    ? point.signed_shore
-                    : std::sqrt(smoothstep01(point.signed_shore)) *
-                        water_family_depth(point.world_u, point.world_v);
-                return ground_point_cache.emplace(key, point).first->second;
-            };
-            auto make_ground_vertex = [&](float u, float v, float layer) {
-                GroundPoint & point = ground_point_at(u, v);
-                float world_u = point.world_u;
-                float world_v = point.world_v;
-                bool land_surface = layer > 0.75f && layer < 1.25f;
-                bool terrain_conforming_surface = land_surface ||
-                    (layer > 8.5f && layer < 10.5f);
-                if (terrain_conforming_surface && !point.terrain_ready) {
-                    std::array<float, 3> sampled = relief_at_world(world_u, world_v);
-                    std::copy(sampled.begin(), sampled.end(), point.relief);
-                    constexpr float normal_step = 0.006f;
-                    float left_height = pickup_profile ? pickup_height_at(world_u - normal_step, world_v) : relief_at_world(world_u - normal_step, world_v)[0];
-                    float right_height = pickup_profile ? pickup_height_at(world_u + normal_step, world_v) : relief_at_world(world_u + normal_step, world_v)[0];
-                    float down_height = pickup_profile ? pickup_height_at(world_u, world_v - normal_step) : relief_at_world(world_u, world_v - normal_step)[0];
-                    float up_height = pickup_profile ? pickup_height_at(world_u, world_v + normal_step) : relief_at_world(world_u, world_v + normal_step)[0];
-                    point.normal_delta[0]=right_height-left_height;
-                    point.normal_delta[1]=up_height-down_height;
-                    float slope_u = (right_height - left_height) * (pickup_profile ? 1.0f : relief_projection_scale) /
-                        (2.0f * normal_step * static_cast<float>(frame.tile_width));
-                    float slope_v = (up_height - down_height) * (pickup_profile ? -1.0f : relief_projection_scale) /
-                        (2.0f * normal_step * static_cast<float>(frame.tile_width));
-                    float length = std::sqrt(slope_u * slope_u + slope_v * slope_v + 1.0f);
-                    point.normal[0] = -slope_u / length;
-                    point.normal[1] = -slope_v / length;
-                    point.normal[2] = 1.0f / length;
-                    point.terrain_ready = true;
-                }
-                std::array<float, 3> relief_sample = terrain_conforming_surface
-                    ? std::array<float, 3>{point.relief[0], point.relief[1], point.relief[2]} :
-                      std::array<float, 3>{0.0f, 0.0f, 0.0f};
-                float h = relief_sample[0] * relief_projection_scale;
-                float signed_shore = point.signed_shore;
-                if (!pickup_profile && land_surface && h > 0.0f) {
-                    float shore_envelope = smoothstep01((-signed_shore - 0.02f) / 0.42f);
-                    h *= shore_envelope;
-                    relief_sample[1] *= shore_envelope;
-                    relief_sample[2] *= shore_envelope;
-                }
-                float ground_x = left + point.local_ground_x;
-                float ground_y = top + point.local_ground_y;
-                // Elevation moves toward the isometric camera as well as up on
-                // screen.  Keeping flat-ground depth made steep micro-quads
-                // fold over one another and appear as bright contour seams.
-                float depth = ground_y + h * 0.75f;
-                float normal_x = terrain_conforming_surface ? point.normal[0] : 0.0f;
-                float normal_y = terrain_conforming_surface ? point.normal[1] : 0.0f;
-                float normal_z = terrain_conforming_surface ? point.normal[2] : 1.0f;
-                float surface_coordinate = point.surface_coordinate;
-                float shadow_visibility = !pickup_profile && layer > 9.5f
-                    ? cast_shadow_visibility(world_u, world_v, relief_sample[0]) : 1.0f;
-                // River topology is consumed only by the river surface pass.
-                // Computing its curved-edge and global node distances for the
-                // four terrain passes and the shadow pass was pure discarded
-                // work, and scaled especially badly with a full Civ III view.
-                bool river_surface = layer > 8.5f && layer < 9.5f;
-                float river_surface_distance = river_surface
-                    ? river_distance(tile, u, v) : 1000.0f;
-                auto owner_material = pickup_profile && terrain_conforming_surface
-                    ? pickup_ground_at(world_u,world_v).owner : std::array<float,4>{};
-                Vertex vertex{
-                    ndc_x(ground_x), ndc_y(ground_y - h), depth,
-                    point.material_u, point.material_v,
-                    1.0f, normal_x, normal_y, normal_z,
-                    shadow_visibility, 1.0f, world_u * 0.5f, world_v * 0.5f,
-                    layer, surface_coordinate,
-                    static_cast<float>(tile.terrain_type),
-                    static_cast<float>(tile.real_terrain_type),
-                    point.material_weights[0], point.material_weights[1],
-                    point.material_weights[2], point.material_weights[3],
-                    relief_sample[1], relief_sample[2], signed_shore,
-                    river_surface_distance,
-                    river_surface ? river_node_distance(u, v, 1u) : 1000.0f,
-                    river_surface ? river_node_distance(u, v, 2u) : 1000.0f,
-                    river_surface ? river_node_distance(u, v, 0u) : 1000.0f,
-                    tile.has_effect != 0 ? 1.0f : 0.0f,
-                    point.material_weights[4],
-                    world_u, world_v, (relief_sample[0]+2.5f)/112.0f, layer<9.5f ? 1.0f : 0.0f,
-                    static_cast<float>(point.shore.distance), static_cast<float>(point.shore.beach_width),
-                    static_cast<float>(point.shore.rocky), static_cast<float>(point.shore.depth),
-                    owner_material[0], owner_material[1], owner_material[2], owner_material[3]
-                };
-                if(world_ground){
-                    float elevation=relief_sample[0]*(128.f/224.f*.82f),base=(u+v)*32.f;
-                    vertex.x=64.f+(u-v)*64.f;vertex.y=base-elevation;vertex.z=base+elevation*.75f;
-                    if(terrain_conforming_surface){vertex.normal_x=-point.normal_delta[0]/.012f;
-                        vertex.normal_y=point.normal_delta[1]/.012f;vertex.normal_z=1;}
-                }
-                return vertex;
-            };
             // Retain the actual wrapped occurrence: vertices contain raw world
             // coordinates/UVs, not just canonical gameplay identity.
             auto ground_key=(std::uint64_t(std::uint32_t(tile.tile_x))<<32)|std::uint32_t(tile.tile_y);
@@ -8091,70 +7864,6 @@ public:
                 ground_grid_cache_bytes-=retained_ground->second.bytes;ground_grid_cache.erase(retained_ground);
             }
             std::vector<CachedGroundGrid> pending_ground_grids;
-            auto append_ground_layer = [&](std::vector<Vertex> & target, float layer,
-                                           int subdivisions, std::vector<UINT>* indices=nullptr) {
-                // Adjacent cells share grid corners. Build and upload each
-                // corner once, then preserve the original triangle-list order.
-                // This avoids repeated terrain/shadow evaluation for a point.
-                int const row_width = subdivisions + 1;
-                std::vector<Vertex> expanded_corners;
-                auto& grid_vertices=indices?target:expanded_corners;
-                grid_vertices.resize(static_cast<std::size_t>(row_width) * row_width);
-                CachedGroundGrid const* cached_grid=nullptr;
-                int cached_stride=0;
-                if(ground_hit)for(auto const& grid:retained_ground->second.grids)
-                    if(grid.layer==layer && (grid.divisions==subdivisions || reuse_nested_ground_grids)){
-                        int stride=grid.sample_stride(subdivisions);
-                        if(stride){cached_grid=&grid;cached_stride=stride;break;}
-                    }
-                bool record=retain_ground_grids && !world_ground && !prewarming && indices && !cached_grid;
-                CachedGroundGrid pending;
-                if(record){pending.layer=layer;pending.divisions=subdivisions;pending.samples.resize(grid_vertices.size());}
-                if(cached_grid)++frame_ground_grid_hits;
-                for (int grid_v = 0; grid_v <= subdivisions; ++grid_v) {
-                    if (cancelled()) return;
-                    for (int grid_u = 0; grid_u <= subdivisions; ++grid_u) {
-                        float u = static_cast<float>(grid_u) / subdivisions;
-                        float v = static_cast<float>(grid_v) / subdivisions;
-                        auto at=static_cast<std::size_t>(grid_v)*row_width+grid_u;
-                        if(cached_grid){
-                            auto source_at=static_cast<std::size_t>(grid_v*cached_stride)*(cached_grid->divisions+1)+grid_u*cached_stride;
-                            auto vertex=cached_grid->project(source_at,frame.tile_width,frame.tile_height);
-                            if(layer==9.f)vertex.river_branch_count=river_node_distance(u,v,1u);
-                            grid_vertices[at]=vertex;
-                        }else{
-                            grid_vertices[at]=make_ground_vertex(u,v,layer);
-                            if(record){auto const& point=ground_point_at(u,v);
-                                pending.samples[at]={layer==1.f || layer==9.f?point.relief[0]:0.f,
-                                    point.normal_delta[0],point.normal_delta[1]};}
-                        }
-                    }
-                }
-                if(record){pending.vertices=grid_vertices;pending_ground_grids.push_back(std::move(pending));}
-                if(indices){
-                    indices->clear();indices->reserve(std::size_t(subdivisions)*subdivisions*6);
-                    for(int y=0;y<subdivisions;++y)for(int x=0;x<subdivisions;++x){
-                        UINT a=UINT(y*row_width+x),b=a+1,c=b+UINT(row_width),d=a+UINT(row_width);
-                        UINT triangles[]={a,b,c,a,c,d};
-                        indices->insert(indices->end(),std::begin(triangles),std::end(triangles));
-                    }
-                    return;
-                }
-                for (int grid_v = 0; grid_v < subdivisions; ++grid_v) {
-                    for (int grid_u = 0; grid_u < subdivisions; ++grid_u) {
-                        auto vertex_at = [&](int x, int y) -> Vertex const & {
-                            return grid_vertices[
-                                static_cast<std::size_t>(y) * row_width + x];
-                        };
-                        Vertex const & a = vertex_at(grid_u, grid_v);
-                        Vertex const & b0 = vertex_at(grid_u + 1, grid_v);
-                        Vertex const & c = vertex_at(grid_u + 1, grid_v + 1);
-                        Vertex const & d = vertex_at(grid_u, grid_v + 1);
-                        Vertex triangles[] = {a, b0, c, a, c, d};
-                        target.insert(target.end(), std::begin(triangles), std::end(triangles));
-                    }
-                }
-            };
             auto append_feature_instance = [&](c3x_renderer::FeatureBundle const & bundle,
                                                c3x_renderer::FeaturePlacement const & placement,
                                                float local_u, float local_v, float rotation,
@@ -8373,25 +8082,45 @@ public:
             }
             QueryPerformanceCounter(&phase_time);
             if(!world_ground || !shared_hit){
-            append_ground_layer(underlay_vertices, 0.5f, flat_grid, &ground_indices[geometry_underlay]);
-            if (ground < 11 && (!fidelity_profile || draw_marsh))
-                append_ground_layer(land_vertices, 1.0f, tile_ground_grid, &ground_indices[geometry_land]);
-            if(!pickup_profile) {
-                append_ground_layer(bed_vertices, 4.0f, flat_grid, &ground_indices[geometry_bed]);
-                append_ground_layer(water_vertices, 5.0f, flat_grid, &ground_indices[geometry_water]);
-            }
-            if (river_assets_ready && ((tile.river_code & 170u) != 0 || (fidelity_profile && natural.river_affects((tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2))))
-                append_ground_layer(river_vertices, 9.0f,
-                                    frame.tile_width >= 96 ? 32 : 16, &ground_indices[geometry_river]);
-            if (!pickup_profile && ground < 11) {
-                // Cast-shadow visibility ray-marches the authored relief field.
-                // Retain the approved 16x16 near grid for canonical fixtures,
-                // but use the already-approved reduced grid when a live m19
-                // capture contains hundreds of companion records.  The shader
-                // interpolates visibility across the unchanged terrain body.
-                append_ground_layer(shadow_vertices, 10.0f,
-                                    shadow_grid);
-            }
+            c3x_renderer::fidelity::GroundCompileInput ground_compile_input;
+            ground_compile_input.tile = tile;
+            ground_compile_input.world_ground = world_ground;
+            ground_compile_input.pickup_profile = pickup_profile;
+            ground_compile_input.fidelity_profile = fidelity_profile;
+            ground_compile_input.draw_marsh = draw_marsh;
+            ground_compile_input.river_assets_ready = river_assets_ready;
+            ground_compile_input.retain_ground_grids = retain_ground_grids;
+            ground_compile_input.reuse_nested_ground_grids = reuse_nested_ground_grids;
+            ground_compile_input.prewarming = prewarming;
+            ground_compile_input.ground = ground;
+            ground_compile_input.half_w = half_w;
+            ground_compile_input.half_h = half_h;
+            ground_compile_input.uv_scale = uv_scale;
+            ground_compile_input.relief_projection_scale = relief_projection_scale;
+            std::copy(key_light, key_light + 3, ground_compile_input.key_light);
+            ground_compile_input.left = left;
+            ground_compile_input.top = top;
+            ground_compile_input.flat_grid = flat_grid;
+            ground_compile_input.tile_ground_grid = tile_ground_grid;
+            ground_compile_input.shadow_grid = shadow_grid;
+            c3x_renderer::fidelity::GroundSurfaces ground_surfaces;
+            c3x_renderer::fidelity::compile_ground_surfaces(ground_compile_input, frame, natural, local_river_nodes,
+                ground_hit ? &retained_ground->second.grids : nullptr, frame_ground_grid_hits,
+                relief_at_world, pickup_height_at, pickup_ground_at, river_distance, material_weights_for,
+                signed_shore_distance, water_family_depth, periodic_surface_uv, shore_sample_at,
+                ndc_x, ndc_y, cancelled, ground_surfaces);
+            underlay_vertices = std::move(ground_surfaces.underlay_vertices);
+            land_vertices = std::move(ground_surfaces.land_vertices);
+            bed_vertices = std::move(ground_surfaces.bed_vertices);
+            water_vertices = std::move(ground_surfaces.water_vertices);
+            river_vertices = std::move(ground_surfaces.river_vertices);
+            shadow_vertices = std::move(ground_surfaces.shadow_vertices);
+            ground_indices[geometry_underlay] = std::move(ground_surfaces.underlay_indices);
+            ground_indices[geometry_land] = std::move(ground_surfaces.land_indices);
+            ground_indices[geometry_bed] = std::move(ground_surfaces.bed_indices);
+            ground_indices[geometry_water] = std::move(ground_surfaces.water_indices);
+            ground_indices[geometry_river] = std::move(ground_surfaces.river_indices);
+            pending_ground_grids = std::move(ground_surfaces.pending_grids);
             } // complete world-ground hit
             if(!pending_ground_grids.empty()){
                 CachedGroundTile incoming;
