@@ -67,7 +67,7 @@ def main():
     settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'1',
         'C3X_RENDERER_REFLECTION_CONTROL':'1','C3X_RENDERER_WAVES':'0','C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
         'C3X_RENDERER_PROFILE':'1' if args.profile else '0','C3X_RENDERER_GROUND_WORKERS':args.ground_workers,'C3X_RENDERER_OBJECT_WORKERS':args.object_workers,
-        'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
+        'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_MIB':'32','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
         'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':r'..\..\Renderer\custom.custom_rendering.txt',
         'C3X_RENDERER_PREVIEW_OBJECTS':'1','C3X_RENDERER_PREVIEW_CITY':'0,3,1,1',
         'C3X_RENDERER_PREVIEW_DENSE_SCENE':'1' if args.dense_scene else '',
@@ -118,7 +118,9 @@ def main():
         map_draws=max((int(m.group(1)) for line in direct if (m:=re.search(r'\bmap_draws=(\d+)',line))),default=0)
         region_peak=max((int(m.group(1)) for line in direct if (m:=re.search(r'\bregion_bytes=(\d+)',line))),default=0)
         work_peak=max((int(m.group(1)) for line in direct if (m:=re.search(r'\bwork_bytes=(\d+)',line))),default=0)
-        receipt['direct_unit_scene_proof'].update(map_color_depth_draws=map_draws,maximum_reported_region_bytes=region_peak,maximum_reported_work_bytes=work_peak)
+        content_peak=max((int(m.group(1)) for line in direct if (m:=re.search(r'\bgpu_content_bytes=(\d+)',line))),default=0)
+        passed=passed and content_peak<=192*1024*1024
+        receipt['direct_unit_scene_proof'].update(maximum_reported_gpu_content_bytes=content_peak,map_color_depth_draws=map_draws,maximum_reported_region_bytes=region_peak,maximum_reported_work_bytes=work_peak)
         passed=passed and work_peak<=96*1024*1024
         if args.unit_scene=='1' and not args.visibility and (args.benchmark or args.visual_only):
             passed=passed and map_draws>0 and region_peak<=64*1024*1024
@@ -150,7 +152,7 @@ def main():
         receipt['whole_frame_comparison']={'groups':groups,'samples':samples,'parse_errors':parse_errors,'control':'same candidate DLL using native CPU publication, blit, units, JGL UI and native GDI final transfer','capture_outside_timing':True,'desktop_completion_is_not_physical_scanout':True}
         if direct:
             import bisect
-            fields=('map_draws','compatibility_builds','compatibility_hits','region_captures','region_evictions')
+            fields=('map_draws','compatibility_builds','compatibility_hits','region_captures','region_evictions','region_reuses','gpu_content_builds','gpu_content_hits','gpu_content_reuses')
             rows=[]
             for line in direct:
                 values=dict(re.findall(r'(\w+)=(\d+)',line))

@@ -68,6 +68,42 @@ void gpu_unit_contract(WorkerClient& gpu,HMODULE module,c3x_renderer_gpu_frame_v
             gpu.readback(detail,actual.data(),actual.size());
             for(unsigned i=0;i<n;++i)if((actual[i]&0xffffff)!=(static_cast<unsigned*>(full.pixels)[i]&0xffffff)){std::fprintf(stderr,"unit detail mismatch format=%u phase=%u i=%u expected=%x actual=%x\n",format,phase,i,static_cast<unsigned*>(full.pixels)[i],actual[i]);verify(false,"GPU unit exact full-color composition");}
         }
+        // Production direct-scene oracle: real map provenance, cropped working
+        // surfaces, cold/warm GPU content, placement, clipping, light and zoom.
+        // Both outputs must match the independently rendered CPU body exactly.
+        if(view.width>=int(w)&&view.height>=int(h))for(unsigned phase=0;phase<64;++phase){
+            unsigned pose_index=(phase/2)%24;
+            Rect area={0,0,int(w),int(h)};
+            Command map[]={ {Kind::quantize,d,Id(view.map_image),area,area},
+                {Kind::quantize,b,Id(view.map_image),area,area},
+                {Kind::copy,detail,Id(view.map_image),area,area},
+                {Kind::copy,bd,Id(view.map_image),area,area} };
+            verify(gpu.submit(map,4),"scene unit oracle map underlay");
+            gpu.readback(d,actual.data(),actual.size());
+            for(unsigned i=0;i<n;++i)static_cast<unsigned short*>(packed.pixels)[i]=static_cast<unsigned short>(actual[i]);
+            gpu.readback(b,actual.data(),actual.size());
+            for(unsigned i=0;i<n;++i)static_cast<unsigned short*>(under.pixels)[i]=static_cast<unsigned short>(actual[i]);
+            gpu.readback(detail,actual.data(),actual.size());std::copy(actual.begin(),actual.end(),static_cast<unsigned*>(full.pixels));
+            gpu.readback(bd,actual.data(),actual.size());std::copy(actual.begin(),actual.end(),static_cast<unsigned*>(full_under.pixels));
+            auto pose=unit;pose.direction=1+pose_index%8;pose.action_cursor=pose_index%12;
+            pose.body_x=phase%2?128:173;pose.body_y=phase%2?96:141;
+            pose.hour=pose_index%4==1?0:12;pose.projection_scale_milli=pose_index%4<2?1000:750;
+            RECT clip={9,7,361,373};SelectClipRgn(packed.dc,nullptr);SelectClipRgn(full.dc,nullptr);
+            IntersectClipRect(packed.dc,clip.left,clip.top,clip.right,clip.bottom);IntersectClipRect(full.dc,clip.left,clip.top,clip.right,clip.bottom);
+            int expected[4]={},bounds[4]={};
+            verify(native(&pose,packed.dc,under.dc,expected)==C3X_RENDERER_RESULT_OK,"scene unit native oracle");
+            verify(native(&pose,full.dc,full_under.dc,expected)==C3X_RENDERER_RESULT_OK,"scene unit full-color oracle");
+            c3x_renderer_gpu_unit_v1 target={sizeof(target),view.ticket,std::int64_t(d),std::int64_t(b),std::int64_t(detail),std::int64_t(bd),{clip.left,clip.top,clip.right,clip.bottom},0};
+            verify(draw(&pose,&target,bounds)==C3X_RENDERER_RESULT_OK,"direct scene unit draw");GdiFlush();
+            verify(std::equal(bounds,bounds+4,expected),"scene native erase bounds");
+            gpu.readback(d,actual.data(),actual.size());
+            for(unsigned i=0;i<n;++i)verify(actual[i]==static_cast<unsigned short*>(packed.pixels)[i],"scene exact native words");
+            gpu.readback(detail,actual.data(),actual.size());
+            for(unsigned i=0;i<n;++i)if((actual[i]&0xffffff)!=(static_cast<unsigned*>(full.pixels)[i]&0xffffff)){
+                std::fprintf(stderr,"scene unit detail mismatch format=%u phase=%u pixel=%u expected=%x actual=%x\n",format,phase,i,static_cast<unsigned*>(full.pixels)[i],actual[i]);
+                verify(false,"scene exact full-color pixels");
+            }
+        }
         // Authoritative fog hides the entire body on both GPU and CPU routes.
         gpu.upload(d,17,words.data(),words.size());
         c3x_renderer_gpu_unit_v1 hidden={sizeof(hidden),view.ticket,std::int64_t(d),std::int64_t(b),0,0,{0,0,int(w),int(h)},
@@ -80,6 +116,7 @@ void gpu_unit_contract(WorkerClient& gpu,HMODULE module,c3x_renderer_gpu_frame_v
         verify(std::equal(original.begin(),original.end(),static_cast<unsigned short*>(packed.pixels)),"hidden unit CPU unchanged");
         for(auto id:{d,b,detail,bd,source})gpu.destroy(id);
     }
+    if(view.width>=int(w)&&view.height>=int(h))std::puts("PASS real-map unit oracle: 128 exact 555/565 and full-color cases, cold/warm inputs, placement, clipping, light and zoom");
     std::puts("PASS fogged units: GPU and CPU invisible, empty body bounds");
     std::puts("PASS GPU unit composition: native 555/565, full-color map, all alpha values, keyed/aliased underlays, optional color layers, clipping, cold/warm resident units across anchors/direction/time/zoom; zero background readback");
 }

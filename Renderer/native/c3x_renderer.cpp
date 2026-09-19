@@ -456,8 +456,8 @@ public:
     std::vector<std::uint32_t> visibility_pixels;
     ID3D11Texture2D* gpu_map_texture=nullptr;
     bool gpu_map_valid=false;
-    std::uint64_t scene_generation=0,unit_scene_captures=0,unit_scene_rejections=0,unit_scene_evictions=0;
-    std::vector<std::weak_ptr<c3x_renderer::UnitSceneRegion>> unit_scene_regions;
+    std::uint64_t scene_generation=0,unit_scene_captures=0,unit_scene_reuses=0,unit_scene_rejections=0,unit_scene_evictions=0;
+    std::vector<std::shared_ptr<c3x_renderer::UnitSceneRegion>> unit_scene_regions;
     std::shared_ptr<std::size_t> unit_scene_bytes=std::make_shared<std::size_t>(0);
     c3x_renderer::render_core::LinearTarget unit_scene_work;
     unsigned frame_output_readbacks=0;
@@ -931,7 +931,7 @@ public:
 
     void reset_targets() {
         scene_restore.reset();
-        ++scene_generation;unit_scene_work.reset();scene_scratch.reset();scene_guard.reset();scene_guard_context.clear();scene_guard_pad=0;scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
+        ++scene_generation;clear_unit_scene_regions();unit_scene_work.reset();scene_scratch.reset();scene_guard.reset();scene_guard_context.clear();scene_guard_pad=0;scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         cancel_pixel_preparation();
         linear_frame.reset(); linear_block.reset(); reflection.linear.reset();region_reflection.linear.reset();region_glow.linear.reset();
         pixel_blocks.clear();
@@ -952,7 +952,7 @@ public:
     }
 
     void clear_resource_backdrops() {
-        ++scene_generation;unit_scene_work.reset();scene_scratch.reset();scene_guard.reset();scene_guard_context.clear();scene_guard_pad=0;scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
+        ++scene_generation;clear_unit_scene_regions();unit_scene_work.reset();scene_scratch.reset();scene_guard.reset();scene_guard_context.clear();scene_guard_pad=0;scene_dynamic_damage.clear();scene_static_signature=0;scene_overlap=false;scene_damage.clear();
         for(auto & block:resource_backdrops){release(block.color);release(block.depth);}
         resource_backdrops.clear();resource_backdrop_epoch=0;resource_backdrop_bytes=0;
     }
@@ -4141,6 +4141,10 @@ public:
         trace.write("scene-guard-prepared",detail,true);return ok;
     }
 
+    void clear_unit_scene_regions(){
+        for(auto& region:unit_scene_regions){region->base.reset();*region->charge-=region->bytes;region->bytes=0;}
+        unit_scene_regions.clear();
+    }
     std::shared_ptr<c3x_renderer::UnitSceneSource> unit_scene_source(){
         // Raw color/depth precede fog. Final composition uses the published
         // full-color underlay, preserving its coverage; hidden units are already
@@ -4153,9 +4157,17 @@ public:
             if(generation!=scene_generation||!scene_static_signature||w<1||h<1||w>1024||h>1024||
                r.right<=0||r.bottom<=0||r.left>=width||r.top>=height||bytes>budget){++unit_scene_rejections;return {};}
             auto region=std::make_shared<c3x_renderer::UnitSceneRegion>();
-            unit_scene_regions.erase(std::remove_if(unit_scene_regions.begin(),unit_scene_regions.end(),[](auto const& p){return p.expired();}),unit_scene_regions.end());
+            // Idle captures retain reusable allocations inside the same 64 MiB
+            // allowance. Never overwrite a region still leased by a native front.
+            auto idle=std::find_if(unit_scene_regions.begin(),unit_scene_regions.end(),[&](auto const& p){
+                return p.use_count()==1 && p->base.width==unsigned(w)*2 && p->base.height==unsigned(h)*2;});
+            if(idle!=unit_scene_regions.end()){
+                region=std::move(*idle);unit_scene_regions.erase(idle);*region->charge-=region->bytes;region->bytes=0;++unit_scene_reuses;
+            }
             while(bytes>budget-*unit_scene_bytes&&!unit_scene_regions.empty()){
-                auto old=unit_scene_regions.front().lock();unit_scene_regions.erase(unit_scene_regions.begin());
+                auto unused=std::find_if(unit_scene_regions.begin(),unit_scene_regions.end(),[](auto const& p){return p.use_count()==1;});
+                if(unused==unit_scene_regions.end())unused=unit_scene_regions.begin();
+                auto old=std::move(*unused);unit_scene_regions.erase(unused);
                 if(!old||!old->bytes)continue;
                 // Finished native fronts retain their pixels. These raw inputs
                 // are a replaceable cache; eviction selects the exact compatible
@@ -4181,16 +4193,20 @@ public:
         auto definition=std::find_if(unit_bodies.units.begin(),unit_bodies.units.end(),[&](auto const& model){
             return std::find(model.keys.begin(),model.keys.end(),unit.unit_key)!=model.keys.end();});
         if(definition==unit_bodies.units.end())return false;
-        unsigned scale=unsigned(definition->sample_scale),projection=unit.projection_scale_milli?unit.projection_scale_milli:(unit.reduced?500:1000);
+        unsigned scale=unsigned(definition->sample_scale);
+        if(scale!=1&&scale!=2&&scale!=4)return false;
+        unsigned projection=unit.projection_scale_milli?unit.projection_scale_milli:(unit.reduced?500:1000);
         unsigned w=unsigned(unit.sprite_width)*projection/1000,h=unsigned(unit.sprite_height)*projection/1000;
-        if((scale!=1&&scale!=2&&scale!=4)||std::size_t(w)*h*scale*scale*48>96u*1024u*1024u){
-            ++unit_scene_rejections;return false;
-        }
+        if(std::size_t(w)*h*scale*scale*48>96u*1024u*1024u){++unit_scene_rejections;return false;}
         if(!work.ensure(device,w*scale,h*scale,true,false)||!scene_restore.ensure(device))return false;
+        // Keep the native raster viewport: moving its origin changes floating
+        // interpolation by a color LSB on some drivers. Touch only this region.
+        D3D11_RECT raster={offset_x*LONG(scale),offset_y*LONG(scale),
+            (offset_x+region.width)*LONG(scale),(offset_y+region.height)*LONG(scale)};
         if(!scene_restore.draw(context,work,region.base.samples,region.base.depth_samples,offset_x,offset_y,{},nullptr,
-            region.base.width,region.base.height,false,true,int(scale)))return false;
+            region.base.width,region.base.height,false,true,int(scale),false,&raster))return false;
         if(!unit_bodies.render(device,context,unit,[&](auto const& action){return prepare_unit_action(action);},
-            nullptr,predict,true,&work))return false;
+            nullptr,predict,true,&work,&raster))return false;
         // Native composition resolves the changed samples straight into the
         // resident map/UI chain. Only bounded conversion scratch is used; no
         // finished pose cache, CPU readback, or static geometry submission.
@@ -11814,9 +11830,9 @@ private:
                         auto const& pose=body.resident_pose;result=renderer_state.gpu_composition->compose_resident_unit(gpu_unit,pose.texture.Get(),unsigned(pose.width),unsigned(pose.height),job_unit.body_x,job_unit.body_y,retain_visual_unit(pose.texture));
                     }else result=C3X_RENDERER_RESULT_ERROR;
                     gpu_unit_output_readbacks=body.output_readbacks-reads;gpu_unit_composition_uploads=renderer_state.gpu_composition->upload_count()-uploads;
-                    if(body.direct_scene){char detail[512];sprintf_s(detail,"map_draws=%llu region_captures=%llu region_rejections=%llu region_evictions=%llu region_bytes=%zu work_bytes=%zu finished_pose_bytes=%zu compatibility_builds=%llu compatibility_hits=%llu body_readbacks=%llu composition_uploads=%llu",
-                        body.map_scene_draws,renderer_state.unit_scene_captures,renderer_state.unit_scene_rejections,renderer_state.unit_scene_evictions,*renderer_state.unit_scene_bytes,renderer_state.unit_scene_work.bytes(),
-                        body.resident_pose_bytes,body.resident_pose_builds,body.resident_pose_hits,gpu_unit_output_readbacks,gpu_unit_composition_uploads);
+                    if(body.direct_scene){char detail[512];sprintf_s(detail,"map_draws=%llu region_captures=%llu region_reuses=%llu region_rejections=%llu region_evictions=%llu region_bytes=%zu work_bytes=%zu finished_pose_bytes=%zu gpu_content_bytes=%zu gpu_content_builds=%llu gpu_content_hits=%llu gpu_content_reuses=%llu compatibility_builds=%llu compatibility_hits=%llu body_readbacks=%llu composition_uploads=%llu",
+                        body.map_scene_draws,renderer_state.unit_scene_captures,renderer_state.unit_scene_reuses,renderer_state.unit_scene_rejections,renderer_state.unit_scene_evictions,*renderer_state.unit_scene_bytes,renderer_state.unit_scene_work.bytes(),
+                        body.resident_pose_bytes,body.gpu_content_bytes,body.gpu_content_builds,body.gpu_content_hits,body.gpu_content_reuses,body.resident_pose_builds,body.resident_pose_hits,gpu_unit_output_readbacks,gpu_unit_composition_uploads);
                         renderer_state.trace.write("unit-scene",detail,true);}
                 }
             }else if(command==Command::visual_frame){

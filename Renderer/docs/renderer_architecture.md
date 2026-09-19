@@ -141,8 +141,12 @@ Civ III's authority. Directed-motion interpolation is a separate integration tas
 
 The [direct unit scene contract](direct_unit_scene_contract.md) carries raw map
 color/depth provenance through native composition. Eligible unit geometry draws
-into bounded scene attachments; conversion scratch bridges the existing native
-formats without finished CPU poses. Intervening native content uses the retained
+into bounded scene attachments. Its existing pose-content owner reuses GPU vertex
+buffers and exact shadow inputs; matching allocations are recycled after their
+old identity retires. Region restoration, extraction and native composition follow
+the changed footprint while preserving the exact native raster coordinates.
+Separate scene/compatibility scratch avoids route-switch reallocations. This
+bridges the native formats without finished CPU poses. Intervening native content uses the retained
 GPU compatibility path. Shared world-depth occlusion and shadow receivers remain
 the next responsibility; current native painter order is preserved explicitly.
 

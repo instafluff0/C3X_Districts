@@ -476,7 +476,7 @@ Texture2D<uint> input_image:register(t0);Texture2D<uint> text_curves:register(t1
                 changed=c3x_renderer::UnitSceneProvenance::intersect(r,{op.area.left+(*coverage)[0],op.area.top+(*coverage)[1],
                     op.area.left+(*coverage)[2],op.area.top+(*coverage)[3]});
             scene_write(op,changed);
-            if(op.kind==Kind::unit_over){unit_over(op,r,scene);continue;}
+            if(op.kind==Kind::unit_over){if(changed.left<changed.right&&changed.top<changed.bottom)unit_over(op,changed,scene);continue;}
             if(op.kind==Kind::native_image){native_image(op,r);continue;}
             if(op.kind==Kind::native_blend){native_blend(op,r);continue;}
             if(op.kind==Kind::native_lookup){native_lookup(op,r);continue;}

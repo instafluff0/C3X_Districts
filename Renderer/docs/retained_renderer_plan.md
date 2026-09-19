@@ -10,10 +10,10 @@ Full detail, authored animation and Civ III's gameplay/state authority remain
 unchanged. The zoom-owned map-overlay extension below is a planned rendering
 ownership change, not a second visibility, selection, or pathfinding system.
 
-**Current technical checkpoint: 1.6, 2.1 and 2.2 implemented.** Eligible unit
-geometry now draws over valid resident map color/depth. **The complete workload
-regresses against the preserved pose-cache control; this is architectural delivery,
-not Milestone 2 performance acceptance.** Visual acceptance and the strategic
+**Current technical checkpoint: 1.6, 2.1 and 2.2 implemented; the 2.2 regression
+has been substantially reduced by bounded GPU-input and allocation reuse.** The
+complete workload still costs more than the pre-2.2 pose-cache control; Milestone 2
+performance acceptance is not claimed. Visual acceptance and the strategic
 live-game check remain pending. **Next: 2.3, shadows, occlusion and composition.**
 [Architecture](renderer_architecture.md) owns the design;
 [validation](benchmark_workflow.md) owns measurement and acceptance.
@@ -226,80 +226,84 @@ move deferred wonders or Districts forward.
 
 ## Current evidence and implementation handoff
 
-**2.2 is technically implemented; its measured performance regression remains
-unresolved. Milestone 2 acceptance is not claimed.** Visual acceptance and the
-strategic live-game checkpoint remain pending. Nothing was staged or installed;
-Civ III was not launched and reference images were not replaced.
+**2.2 optimization pass implemented; performance acceptance remains open.**
+The pre-optimization checkpoint is `5c48ea46` (committed on Mac, pushed from
+Windows). Current improvements are in the working tree. Nothing was staged or
+installed; Civ III was not launched and reference images were not replaced.
 
 1.6's static submissions/fog and 2.1's immutable inputs remain intact: hidden units
 are suppressed, explored resources/effects freeze, and Civ III owns actions,
 visibility and anchors. The [dynamic input contract](dynamic_scene_input_contract.md)
-and [patch ledger](civ3_patch_dependency_ledger.md) preserve those rules. Earlier
-measurements remain in Git and `native/build/visibility-checkpoint/`.
+and [patch ledger](civ3_patch_dependency_ledger.md) retain those contracts.
+No injected/CSV changes; `required_user_action: []`.
 
-**2.2:** map-source/coordinate provenance travels through native composition.
-Eligible prepared unit geometry draws over resident map color/depth without
-terrain submission or a finished CPU/GPU pose cache. Conservative body/shadow
-coverage preserves native erase bounds. Unchanged retained dependencies reuse
-completed composition; native overlap, stale samples, eviction or failed admission
-use the existing GPU pose cache. Raw regions are capped at **64 MiB**; the shared
-scene target at **96 MiB** accommodates authored 4× sampling (**75 MiB** in the
-witness). Hardware MSAA resolve and conversion scratch preserve exact native
-pixels. Shared world-depth occlusion and shadow receivers remain 2.3. See the
-[direct scene contract](direct_unit_scene_contract.md). No injected/CSV edits;
-`required_user_action: []`.
+**Work eliminated:** eligible unit geometry still executes over resident map
+color/depth, without finished CPU/GPU pose caching or terrain resubmission. Its
+existing pose owner now reuses exact GPU vertices and shadow inputs under a
+**192 MiB** combined input allowance. Matching retired allocations are recycled.
+Raw map captures retain reusable idle allocations within their existing **64 MiB**
+budget; active leases cannot be overwritten. Restoration, extraction, hardware
+resolve and native composition follow the body/shadow footprint. Scene and
+compatibility conversion scratch are separate, eliminating route-switch resize
+churn. The native raster viewport and erase bounds stay unchanged; the shared
+working attachment remains **75 MiB** in this witness (96 MiB admission cap).
+A cropped raster viewport was rejected after the new oracle found a one-channel
+rounding difference. See the [direct scene contract](direct_unit_scene_contract.md).
 
-**Verification:** **292 tests: 290 passed / two skipped**, plus scroll/reduced/wrap,
-resource playback and day/night unit replays. Each unit replay covers 288 body
-cases and 582 action/held-endpoint checks with unchanged terrain. GPU checks cover
-98,304 exact native/full-color pixels, all sample scales, clipped regions and
-circular raw color/depth transport. Final visible/fogged independent frames,
-timer transport, 555/565/UI ordering, config-off and CPU barriers pass.
-`lab/out/integration/units.json` and the combined receipts below retain details.
+**Verification:** **292 tests: 290 passed / two skipped**, plus all six production
+replays (scroll/reduced/wrap, resources, day/night units). Each unit replay covers
+288 body cases and 582 action/held-endpoint checks with unchanged terrain. Final
+visible/fogged independent frames and timer transport pass. The strengthened
+real-map oracle admits **all 128 cases directly** at 750/1000 projection, with exact
+555/565 and full-color pixels through clipping, placement, light/zoom changes,
+**56 GPU-input builds, 72 hits and 36 allocation reuses after eviction**. This
+post-measurement test strengthening uses the **same measured DLL**. Existing
+sample-scale, native ownership, config-off and CPU-barrier checks pass.
 
-**Complete workload:** serial preserved-control/candidate comparisons at
-1120×1192 include dense modern cities, native UI and final transfer. Each variant
-has **384 timed CPU/GPU requests**, 64 samples per route/workload. Source/DLL
-identities stayed fixed per run; **16,102 asset/input files** were unchanged across
-the final comparison. GPU whole-request mean / p95, milliseconds:
+**Complete workload:** serial 1120×1192 dense-modern-city comparisons include map,
+8/32 units, native UI and final transfer. Each run has **384 timed CPU/GPU requests**,
+64 samples per route/workload. All source/DLL identities stayed fixed per run and
+**16,102 asset/input files** were unchanged across the final comparison. GPU whole
+request mean / p95, milliseconds (the regression column preserves the earlier
+checkpoint measurements; the other two columns are a fresh paired comparison):
 
-| Units / workload | Preserved 2.1 control | 2.2 candidate |
-| --- | ---: | ---: |
-| 8 / stationary animation | 14.32 / 37.16 | 26.27 / 78.13 |
-| 8 / dense scrolling | 149.85 / 188.30 | 164.68 / 197.71 |
-| 8 / local changes | 18.90 / 63.03 | 39.33 / 103.11 |
-| 32 / stationary animation | 16.41 / 37.49 | 67.50 / 158.21 |
-| 32 / dense scrolling | 156.31 / 215.82 | 222.36 / 326.02 |
-| 32 / local changes | 27.00 / 65.66 | 89.46 / 206.90 |
+| Units / workload | Fresh pre-2.2 control | Recorded 2.2 regression | Optimized |
+| --- | ---: | ---: | ---: |
+| 8 / stationary animation | 13.92 / 37.29 | 26.27 / 78.13 | 18.32 / 44.04 |
+| 8 / dense scrolling | 145.26 / 170.49 | 164.68 / 197.71 | 153.20 / 182.11 |
+| 8 / local changes | 23.06 / 78.79 | 39.33 / 103.11 | 24.86 / 78.04 |
+| 32 / stationary animation | 19.30 / 52.77 | 67.50 / 158.21 | 23.89 / 55.14 |
+| 32 / dense scrolling | 150.70 / 180.57 | 222.36 / 326.02 | 160.36 / 188.52 |
+| 32 / local changes | 21.71 / 63.16 | 89.46 / 206.90 | 29.56 / 80.00 |
 
-This is a regression, especially at 32 units. Candidate mean desktop completion
-is **34.26 / 175.45 / 47.32 ms** at eight units and **75.40 / 231.46 / 98.33 ms**
-at 32. Capture is outside timing; desktop completion is not scanout or live-game
-FPS. Repeated supersampled scene execution/conversion is more expensive here than
-cached poses. Shared composition and dependency reuse must address it before
-Milestone 2 acceptance; do not promote this as a performance improvement.
+At 32 units this removes **65% / 28% / 67%** of recorded request time, but still
+adds **4.6 / 9.7 / 7.8 ms** against the fresh control. Optimized mean desktop
+completion is **26.50 / 162.94 / 34.02 ms** at eight units and
+**32.74 / 171.02 / 37.95 ms** at 32. This is not scanout or live-game FPS.
+An earlier repetition of the same optimized DLL averaged **27.59 / 172.01 / 27.28 ms**;
+four consecutive slow map-preparation frames raised its scroll p95 to **344.66 ms**.
+Keep that variability visible; the final comparison does not establish a tail budget.
 
-Eight-unit timed GPU intervals contain **1,048 direct draws**, 144 compatibility
-builds and 344 hits, with **zero region evictions**, body readbacks or composition
-uploads; raw regions peak at **21.0 MiB**. At 32 units, regions peak at **64.0 MiB**
-and at least 2,784 direct draws / 1,347 evictions were observed. Its detailed trace
-hit the existing 8 MiB limit: operation counts are lower bounds, while all 384
-frame timings are complete. Sampled contiguous VA stays above **837.9 MiB for the
-candidate / 654.5 MiB across the controls**, exceeding the 512 MiB floor;
-continuous transient peaks remain unmeasured.
+All optimized traces are complete, including every timed GPU interval. Final
+32-unit intervals contain **3,360 direct draws**, **432 GPU-input builds / 2,928
+hits**, **1,406 idle-region reuses**, and 336 compatibility builds / 2,448 hits;
+no unit-body readbacks or composition uploads. Admission mix varies with raw
+source-generation availability; the earlier repetition had 4,928 direct draws.
+Peak charged GPU inputs are **186.1 MiB**, raw regions **64.0 MiB**. Sampled minimum
+contiguous VA is **624.7 MiB** in the final optimized 32-unit run, **592.4 MiB** in
+its repetition, and **595.9 MiB** across final controls, above the 512 MiB floor.
+Transient peaks between samples remain unmeasured. The old control's 8 MiB trace
+still truncates detailed 32-unit diagnostics; its 384 frame timings are complete.
 
-[Combined receipts](../native/build/unit-scene-checkpoint/workload-comparison.json)
-retain run identities, distributions, memory and trace limits. Intermediate
-failures remain preserved: shader-only resolve lost exact pixels; whole-canvas
-proofs rejected valid draws; oversized captures churned; a 64 MiB work cap rejected
-authored sampling. The final path uses hardware resolve, tight regions and the
-measured 96 MiB work cap.
+[Combined receipts](../native/build/unit-scene-checkpoint/optimization/workload-comparison.json)
+preserve full distributions, run/binary identities, counters, rejected experiments,
+memory and trace limits. `lab/out/integration/units.json` holds full verification.
 
 **Next: 2.3 shadows, occlusion and composition.** Establish shared receiver/depth
-membership and compatible unit composition, explicitly fixing units appearing
-over foreground mountains/tall objects. Preserve native UI order, visibility and
-action authority. Address the measured conversion/replay/region costs without
-hiding them behind isolated timings. Scheduling/reuse remains 2.6, acceptance 2.7;
-shoreline waves start 2.4, tactical overlays including native-setting-driven
-gridlines 2.5, nonblocking publication milestone
-3, and wonders/Districts M9–M11.
+membership and compatible unit submissions, explicitly fixing units appearing
+over foreground mountains/tall objects. Replace the separate depth bands and
+reduce the remaining per-unit restore/draw/finish/composition work; retain the
+complete-workload control comparison and 512 MiB floor. Preserve native UI order,
+visibility and action authority. General scheduling/reuse remains 2.6, acceptance
+2.7; shoreline waves start 2.4, tactical overlays including native-setting-driven
+gridlines 2.5, nonblocking publication milestone 3, wonders/Districts M9–M11.

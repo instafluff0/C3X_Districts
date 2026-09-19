@@ -23,7 +23,9 @@ public:
     ResidentPose resident_pose;
     UnitSceneSample scene_sample;
     bool direct_scene=true;
-    std::uint64_t map_scene_draws=0;
+    std::uint64_t map_scene_draws=0,gpu_content_builds=0,gpu_content_hits=0,gpu_content_reuses=0;
+    std::size_t gpu_content_bytes=0;
+    int scene_output_width=0,scene_output_height=0,scene_output_scale=0;
     std::size_t resident_pose_bytes=0;
     std::uint64_t resident_pose_builds=0,resident_pose_hits=0,output_readbacks=0;
     std::uint64_t gpu_shadow_passes=0,gpu_shadow_input_bytes=0,cpu_shadow_upload_bytes=0;
@@ -77,6 +79,7 @@ public:
     template<class T> void release(T*& p) { if(p) {p->Release();p=nullptr;} }
     void reset_gpu() {
         reset_pose_preparation();
+        gpu_content.clear();gpu_content_bytes=0;scene_output_width=scene_output_height=scene_output_scale=0;
         scene_resolve.reset();resident_pose={};scene_sample={};resident_cache.clear();resident_pose_bytes=0;gpu_finish.reset();gpu_shadow.reset();
         for(auto & mesh:meshes) release(mesh.indices);
         for(auto & texture:textures) release(texture.view);
@@ -84,7 +87,8 @@ public:
         release(shadow_target);release(shadow_view);release(shadow_texture);
         for(auto & sampler:samplers)release(sampler);
         release(raster);release(output_view);release(target);release(output);release(readback);
-        linear.reset();transfer.reset(); capacity=0; image_width=image_height=0;target_width=target_height=0;
+        linear.reset();scene_linear.reset();release(scene_output);release(scene_target);release(scene_output_view);release(scene_readback);
+        scene_target_width=scene_target_height=0;transfer.reset(); capacity=0; image_width=image_height=0;target_width=target_height=0;
         {std::lock_guard<std::recursive_mutex> guard(cache_mutex);cache.clear();cache_bytes=0;}pixels.clear();release(batch_readback);
     }
     ~UnitBodyRenderer() {reset_gpu();reset_blit();}
@@ -183,13 +187,16 @@ public:
     bool scene_coverage(c3x_renderer_unit_v1 const& request,Prepare prepare,unsigned predict,std::array<int,4>& bounds){
         PoseSelection selected;if(!select_pose(request,selected))return false;
         for(auto const& saved:resident_cache)if(saved.key==selected.key){bounds=saved.pose.coverage;return true;}
+        for(auto const& saved:gpu_content)if(saved.key==selected.key){scene_prepared=saved.content;scene_prepared_key=selected.key;bounds=saved.content->coverage;return true;}
         if(!prepare(*selected.action))return false;
         scene_prepared=prepare_pose_content(request,*selected.unit,*selected.action,selected.pose,selected.key,predict,false,true);
         if(!scene_prepared)return false;scene_prepared_key=selected.key;bounds=scene_prepared->coverage;return true;
     }
 
     template<class Prepare>
-    bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare,PendingPose* deferred=nullptr,unsigned predict=1,bool resident=false,render_core::LinearTarget* destination=nullptr) {
+    bool render(ID3D11Device* device,ID3D11DeviceContext* context,c3x_renderer_unit_v1 const & request,Prepare prepare,PendingPose* deferred=nullptr,unsigned predict=1,bool resident=false,render_core::LinearTarget* destination=nullptr,D3D11_RECT const* region=nullptr) {
+        struct ScratchScope {UnitBodyRenderer& owner;bool direct;~ScratchScope(){if(direct)owner.swap_scene_scratch();}} scratch_scope{*this,destination!=nullptr};
+        if(destination)swap_scene_scratch();
         payload_ms=pose_ms=submission_ms=readback_ms=output_ms=0;
         LARGE_INTEGER stage_begin={},stage_end={},frequency={};QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&stage_begin);
         auto elapsed=[&](){QueryPerformanceCounter(&stage_end);double ms=1000.0*(stage_end.QuadPart-stage_begin.QuadPart)/frequency.QuadPart;stage_begin=stage_end;return ms;};
@@ -219,15 +226,25 @@ public:
         // Pack-selected material supersampling changes scratch resolution only.
         // Native placement, clipping, readback and cached sprite sizes stay exact.
         int samples=found->sample_scale;
-        if((samples!=1 && samples!=2 && samples!=4) || !ensure(device,w,h,samples,found->minimum_canvas?1536:128))return false;
+        int output_w=region?(region->right-region->left)/samples:w,output_h=region?(region->bottom-region->top)/samples:h;
+        if(samples!=1 && samples!=2 && samples!=4)return false;
+        if(destination){
+            if(scene_output_scale!=samples){scene_output_width=scene_output_height=0;scene_output_scale=samples;}
+            output_w=scene_output_width=std::min(w,std::max(output_w,scene_output_width));
+            output_h=scene_output_height=std::min(h,std::max(output_h,scene_output_height));
+        }
+        if(!ensure(device,output_w,output_h,samples,found->minimum_canvas?1536:128))return false;
         auto environment=evaluate_environment(float(request.hour),request.season);
-        if(resident){
+        auto ready=destination?find_gpu_content(key):nullptr;
+        if(resident && !ready){
             gpu_shadow.draw(device,context,shadow_target,unsigned(prepared->shadow.extent),prepared->shadow_triangles);
             ++gpu_shadow_passes;gpu_shadow_input_bytes+=prepared->shadow_triangles.size()*sizeof(prepared->shadow_triangles[0]);
-        }else{
+        }else if(!resident){
             context->UpdateSubresource(shadow_texture,0,nullptr,prepared->shadow.heights.data(),prepared->shadow.extent*4,0);
             cpu_shadow_upload_bytes+=prepared->shadow.heights.size()*sizeof(float);
         }
+        if(destination && !ready)ready=retain_gpu_content(device,context,key,prepared);
+        auto pose_shadow=ready?ready->shadow_view.Get():shadow_view;
         auto& attachment=destination?*destination:linear;
         context->OMSetRenderTargets(1,&attachment.target,attachment.depth);
         if(!destination){float clear_color[4]={};context->ClearRenderTargetView(attachment.target,clear_color);
@@ -238,6 +255,7 @@ public:
         D3D11_VIEWPORT vp=destination?D3D11_VIEWPORT{0,0,float(w*samples),float(h*samples),0,.5f}:
             D3D11_VIEWPORT{0,0,float(w*samples),float(h*samples),0,1};
         context->RSSetViewports(1,&vp);context->RSSetState(raster);
+        D3D11_RECT clip=region?*region:D3D11_RECT{0,0,LONG(w*samples),LONG(h*samples)};context->RSSetScissorRects(1,&clip);
         context->OMSetBlendState(nullptr,nullptr,0xffffffffu);context->OMSetDepthStencilState(nullptr,0);
         context->IASetInputLayout(layout);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context->VSSetShader(vertex,nullptr,0);context->PSSetShader(pixel,nullptr,0);
@@ -263,7 +281,7 @@ public:
         context->PSSetConstantBuffers(1,1,&beauty_frame);context->PSSetSamplers(1,1,&samplers[3]);
         pose_ms+=elapsed();
 
-        context->PSSetShaderResources(1,1,&shadow_view);
+        context->PSSetShaderResources(1,1,&pose_shadow);
         for(std::size_t part_index=0;part_index<action->parts.size();++part_index) {
             auto const& part=action->parts[part_index];
             failure_reason="missing-part-or-texture";
@@ -272,7 +290,7 @@ public:
             auto const& upload=prepared->uploads[part_index];
             failure_reason="gpu-geometry-upload";
             UINT bytes=UINT(upload.size()*sizeof(upload[0]));
-            if(bytes>capacity) {
+            if(!ready && bytes>capacity) {
                 release(vertices);capacity=0;
                 D3D11_BUFFER_DESC d={};d.ByteWidth=bytes;d.Usage=D3D11_USAGE_DYNAMIC;
                 d.BindFlags=D3D11_BIND_VERTEX_BUFFER;d.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;
@@ -283,9 +301,10 @@ public:
                 d.BindFlags=D3D11_BIND_INDEX_BUFFER;D3D11_SUBRESOURCE_DATA data={};data.pSysMem=mesh.animation->indices.data();
                 if(FAILED(device->CreateBuffer(&d,&data,&mesh.indices)))return false;
             }
-            D3D11_MAPPED_SUBRESOURCE mapped={};
-            if(FAILED(context->Map(vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
-            std::memcpy(mapped.pData,upload.data(),bytes);context->Unmap(vertices,0);
+            if(!ready){D3D11_MAPPED_SUBRESOURCE mapped={};
+                if(FAILED(context->Map(vertices,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)))return false;
+                std::memcpy(mapped.pData,upload.data(),bytes);context->Unmap(vertices,0);}
+            auto posed_vertices=ready?ready->vertices[part_index].Get():vertices;
             float values[32]={part.tint[0],part.tint[1],part.tint[2],part.mask};
             for(unsigned a=0;a<3;++a) {
                 float color=float((request.display_color_rgb>>(16-a*8))&255)/255;
@@ -304,7 +323,7 @@ public:
             context->PSSetShaderResources(2,4,extra);
             values[23]=part.material_model;
             context->UpdateSubresource(settings,0,nullptr,values,0,0);
-            UINT stride=68,offset=0;context->IASetVertexBuffers(0,1,&vertices,&stride,&offset);
+            UINT stride=68,offset=0;context->IASetVertexBuffers(0,1,&posed_vertices,&stride,&offset);
             context->IASetIndexBuffer(mesh.indices,DXGI_FORMAT_R32_UINT,0);
             context->PSSetShaderResources(0,1,&textures[part.texture].view);
             context->PSSetSamplers(0,1,&samplers[part.address]);
@@ -318,14 +337,15 @@ public:
             // the same hardware resolve/display conversion as the CPU control.
             // The geometry was drawn into map color/depth, not into this scratch.
             if(!scene_resolve.ensure(device)||!scene_resolve.draw(context,linear,destination->samples,
-                destination->depth_samples,0,0,{},nullptr,0,0,false,false,0,true))return false;
+                destination->depth_samples,-clip.left,-clip.top,{},nullptr,destination->width,destination->height,false,false,0,true,nullptr,1))return false;
             ++map_scene_draws;
         }
         failure_reason="gpu-body-transfer";
         transfer.draw(context,linear,target,environment.exposure,samples);
         context->OMSetRenderTargets(0,nullptr,nullptr);
         if(destination){
-            scene_sample={output_view,shadow_view,prepared->ground_projection,unsigned(w),unsigned(h)};
+            scene_sample={output_view,pose_shadow,prepared->ground_projection,unsigned(w),unsigned(h)};
+            scene_sample.origin={int(clip.left)/samples,int(clip.top)/samples};
             image_width=w;image_height=h;failure_reason="none";output_ms=elapsed();return true;
         }
         PendingPose pending;pending.key=key;pending.request=request;pending.pose=pose;
@@ -561,6 +581,50 @@ private:
         std::shared_ptr<UnitPoseContent const> content;float shadow_strength=0;bool speculative=false;};
     struct ResidentCached {Key key;std::uint64_t used;ResidentPose pose;};
     std::vector<ResidentCached> resident_cache;std::uint64_t resident_serial=0;
+    // GPU-ready pose inputs, not finished body images. Sharing is valid across
+    // instances/placements; the existing key owns pose, projection and lighting.
+    // Geometry still executes against each occurrence's current scene depth.
+    struct GpuContent {
+        Key key;std::uint64_t used=0;std::size_t bytes=0;
+        std::shared_ptr<UnitPoseContent const> content;
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> shadow;
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> shadow_view;
+        std::vector<Microsoft::WRL::ComPtr<ID3D11Buffer>> vertices;
+    };
+    std::vector<GpuContent> gpu_content;std::uint64_t gpu_content_serial=0;
+    GpuContent* find_gpu_content(Key const& key){
+        for(auto& saved:gpu_content)if(saved.key==key){saved.used=++gpu_content_serial;++gpu_content_hits;return &saved;}
+        return nullptr;
+    }
+    GpuContent* retain_gpu_content(ID3D11Device* device,ID3D11DeviceContext* context,Key const& key,std::shared_ptr<UnitPoseContent const> const& content){
+        constexpr std::size_t budget=192u*1024u*1024u;
+        std::size_t bytes=content->bytes()+std::size_t(content->shadow.extent)*content->shadow.extent*4;
+        for(auto const& part:content->uploads)bytes+=part.size()*sizeof(part[0]);
+        if(bytes>budget)return nullptr;
+        GpuContent saved;
+        while(!gpu_content.empty() && (gpu_content_bytes>budget-bytes||gpu_content.size()>=128)){
+            auto old=std::min_element(gpu_content.begin(),gpu_content.end(),[](auto const& a,auto const& b){return a.used<b.used;});
+            gpu_content_bytes-=old->bytes;
+            if(!saved.shadow && old->content->shadow.extent==content->shadow.extent){
+                saved.shadow=std::move(old->shadow);saved.shadow_view=std::move(old->shadow_view);saved.vertices=std::move(old->vertices);++gpu_content_reuses;
+            }
+            gpu_content.erase(old);
+        }
+        saved.key=key;saved.used=++gpu_content_serial;saved.bytes=bytes;saved.content=content;
+        D3D11_TEXTURE2D_DESC desc={};shadow_texture->GetDesc(&desc);desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        if(!saved.shadow && (FAILED(device->CreateTexture2D(&desc,nullptr,&saved.shadow))||
+           FAILED(device->CreateShaderResourceView(saved.shadow.Get(),nullptr,&saved.shadow_view))))return nullptr;
+        saved.vertices.resize(content->uploads.size());
+        for(std::size_t i=0;i<content->uploads.size();++i){auto const& part=content->uploads[i];
+            D3D11_BUFFER_DESC buffer={};buffer.ByteWidth=UINT(part.size()*sizeof(part[0]));buffer.Usage=D3D11_USAGE_DEFAULT;buffer.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+            D3D11_SUBRESOURCE_DATA data={};data.pSysMem=part.data();
+            if(saved.vertices[i]){D3D11_BUFFER_DESC existing={};saved.vertices[i]->GetDesc(&existing);if(existing.ByteWidth!=buffer.ByteWidth)saved.vertices[i].Reset();}
+            if(saved.vertices[i])context->UpdateSubresource(saved.vertices[i].Get(),0,nullptr,data.pSysMem,0,0);
+            else if(FAILED(device->CreateBuffer(&buffer,&data,&saved.vertices[i])))return nullptr;
+        }
+        context->CopyResource(saved.shadow.Get(),shadow_texture);
+        gpu_content.push_back(std::move(saved));gpu_content_bytes+=bytes;++gpu_content_builds;return &gpu_content.back();
+    }
     GpuUnitFinish gpu_finish;
     GpuUnitShadow gpu_shadow;
     ID3D11Texture2D* batch_readback=nullptr;
@@ -684,7 +748,16 @@ private:
     ID3D11SamplerState *samplers[4]={};ID3D11RasterizerState *raster=nullptr;
     ID3D11RenderTargetView* shadow_target=nullptr;
     int shadow_size=0;ID3D11Texture2D* shadow_texture=nullptr;ID3D11ShaderResourceView* shadow_view=nullptr;
-    render_core::LinearTarget linear;render_core::LinearOutput transfer;render_core::LinearRestore scene_resolve;
+    render_core::LinearTarget linear,scene_linear;
+    ID3D11Texture2D *scene_output=nullptr,*scene_readback=nullptr;
+    ID3D11RenderTargetView* scene_target=nullptr;ID3D11ShaderResourceView* scene_output_view=nullptr;
+    int scene_target_width=0,scene_target_height=0;
+    void swap_scene_scratch(){
+        linear.swap(scene_linear);std::swap(output,scene_output);std::swap(target,scene_target);
+        std::swap(output_view,scene_output_view);std::swap(readback,scene_readback);
+        std::swap(target_width,scene_target_width);std::swap(target_height,scene_target_height);
+    }
+    render_core::LinearOutput transfer;render_core::LinearRestore scene_resolve;
     ID3D11ShaderResourceView* output_view=nullptr;
     ID3D11Texture2D *output=nullptr,*readback=nullptr;ID3D11RenderTargetView *target=nullptr;
     int target_width=0,target_height=0;
@@ -729,7 +802,7 @@ private:
                 s.AddressW=D3D11_TEXTURE_ADDRESS_WRAP;s.MaxLOD=D3D11_FLOAT32_MAX;
                 hr=device->CreateSamplerState(&s,&samplers[mode]);
             }
-            D3D11_RASTERIZER_DESC r={};r.FillMode=D3D11_FILL_SOLID;r.CullMode=D3D11_CULL_NONE;r.DepthClipEnable=TRUE;r.MultisampleEnable=TRUE;
+            D3D11_RASTERIZER_DESC r={};r.FillMode=D3D11_FILL_SOLID;r.CullMode=D3D11_CULL_NONE;r.DepthClipEnable=TRUE;r.MultisampleEnable=TRUE;r.ScissorEnable=TRUE;
             if(SUCCEEDED(hr))hr=device->CreateRasterizerState(&r,&raster);
             if(FAILED(hr)){reset_gpu();return false;}
         }

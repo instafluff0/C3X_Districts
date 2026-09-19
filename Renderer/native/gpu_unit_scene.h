@@ -15,6 +15,7 @@ struct UnitSceneSample {
     std::array<float,16> ground{};
     unsigned width=0,height=0;
     std::array<int,4> coverage{};
+    std::array<int,2> origin{};
 };
 class GpuUnitScene {
     Microsoft::WRL::ComPtr<ID3D11ComputeShader> shader;
@@ -25,12 +26,12 @@ public:
         auto check=[](HRESULT hr){if(FAILED(hr))throw std::runtime_error("unit scene composition failed");};
         if(!shader){char const* source=R"(
 cbuffer Params:register(b0){int4 area;int2 offset;uint mode;uint color;};
-cbuffer Ground:register(b1){float4 pose,bounds,quality;};
+cbuffer Ground:register(b1){float4 pose,bounds,quality;int4 canvas;};
 Texture2D<float4> body:register(t0);Texture2D<uint> native_below:register(t1);Texture2D<uint> native_ground:register(t2);
 Texture2D<uint> detail_below:register(t3);Texture2D<uint> detail_ground:register(t4);Texture2D<float> heights:register(t5);
 RWTexture2D<uint> native_result:register(u0);RWTexture2D<uint> detail_result:register(u1);
 uint finished(int2 at){
- uint w,h;body.GetDimensions(w,h);uint4 c=uint4(round(saturate(body.Load(int3(at,0)))*255));
+ uint w=canvas.z,h=canvas.w;uint4 c=uint4(round(saturate(body.Load(int3(at-canvas.xy,0)))*255));
  precise float sx=(float(at.x)+.5f-pose.x)/(64*pose.z),sy=(float(at.y)+.5f-pose.y)/(32*pose.z);
  precise float x=(sx+sy)*.5f,y=(sy-sx)*.5f;
  precise float projected_x=(x-bounds.x)/bounds.z*quality.x,projected_y=(y-bounds.y)/bounds.w*quality.x;
@@ -71,9 +72,12 @@ uint blend(uint source,uint below,uint alpha){
                 D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_IEEE_STRICTNESS,0,&code,&error);
             if(error)OutputDebugStringA(static_cast<char const*>(error->GetBufferPointer()));check(hr);
             check(device->CreateComputeShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,&shader));
-            D3D11_BUFFER_DESC d={};d.ByteWidth=48;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;check(device->CreateBuffer(&d,nullptr,&projection));
+            D3D11_BUFFER_DESC d={};d.ByteWidth=64;d.BindFlags=D3D11_BIND_CONSTANT_BUFFER;check(device->CreateBuffer(&d,nullptr,&projection));
         }
-        context->UpdateSubresource(projection.Get(),0,nullptr,sample.ground.data(),0,0);
+        struct Constants {float ground[12];int canvas[4];} values;
+        std::memcpy(values.ground,sample.ground.data(),sizeof(values.ground));
+        values.canvas[0]=sample.origin[0];values.canvas[1]=sample.origin[1];values.canvas[2]=int(sample.width);values.canvas[3]=int(sample.height);
+        context->UpdateSubresource(projection.Get(),0,nullptr,&values,0,0);
         auto cb=projection.Get();context->CSSetConstantBuffers(1,1,&cb);
         context->CSSetShaderResources(0,1,&sample.body);context->CSSetShaderResources(5,1,&sample.heights);
         context->CSSetShader(shader.Get(),nullptr,0);context->Dispatch((width+7)/8,(height+7)/8,1);

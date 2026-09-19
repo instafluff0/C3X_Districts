@@ -26,6 +26,8 @@ struct RendererTrace {
             level = std::clamp(std::atoi(value), 0, 2);
         if (GetEnvironmentVariableA("C3X_RENDERER_REGION_DIAGNOSTICS", value, sizeof(value)) && std::strcmp(value,"1")==0)
             file_limit = 32u * 1024u * 1024u;
+        if(GetEnvironmentVariableA("C3X_RENDERER_TRACE_MIB",value,sizeof(value)))
+            file_limit=std::size_t(std::clamp(std::atoi(value),8,64))*1024u*1024u;
         buffered=GetEnvironmentVariableA("C3X_RENDERER_TRACE_BUFFERED",value,sizeof(value)) && std::strcmp(value,"1")==0;
         if(buffered)pending.reserve(file_limit);
         QueryPerformanceFrequency(&frequency);

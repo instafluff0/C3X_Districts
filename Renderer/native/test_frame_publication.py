@@ -253,7 +253,8 @@ std::atomic<bool> check_demand_priority{false},demand_executed{false};
 std::atomic<unsigned> priority_preparations{0};
 struct Bodies {
     template<class... T> bool scene_coverage(T&&...){return unexpected_gpu();}
-    bool direct_scene=false;std::uint64_t map_scene_draws=0;
+    bool direct_scene=false;std::uint64_t map_scene_draws=0,gpu_content_builds=0,gpu_content_hits=0,gpu_content_reuses=0;
+    std::size_t gpu_content_bytes=0;
     double payload_ms=0,pose_ms=0,submission_ms=0,readback_ms=0,output_ms=0;bool pose_content_hit=false;
     struct Stats {unsigned built=0,consumed=0,cancelled=0,evicted=0,rejected=0,active_peak=0;double cpu_ms=0,wait_ms=0;std::size_t bytes=0,peak_bytes=0;};
     Stats pose_preparation_statistics(){return {};}
@@ -286,7 +287,7 @@ struct Bodies {
 };
 struct D3D11_RECT {int left,top,right,bottom;};
 struct RendererState {
-    std::uint64_t unit_scene_captures=0,unit_scene_rejections=0,unit_scene_evictions=0;
+    std::uint64_t unit_scene_captures=0,unit_scene_reuses=0,unit_scene_rejections=0,unit_scene_evictions=0;
     struct {std::size_t bytes(){return 0;}} unit_scene_work;
     std::shared_ptr<std::size_t> unit_scene_bytes=std::make_shared<std::size_t>(0);
     std::shared_ptr<c3x_renderer::UnitSceneSource> unit_scene_source(){unexpected_gpu();return {};}
