@@ -655,7 +655,7 @@ int main() {
             "constexpr unsigned counts[] = {4u, 7u, 11u}",
             "C3X_RENDERER_CITY_WALLED", "city_emissive_views",
         ):
-            self.assertIn(implementation, renderer)
+            self.assertIn(implementation, renderer + (C3X_ROOT / "Renderer/native/object_compiler.h").read_text())
         for ownership in (
             "C3X_RENDERER_TILE_CUSTOM_ROAD_REPLACED",
             "C3X_RENDERER_TILE_CUSTOM_RAILROAD_REPLACED",
@@ -694,7 +694,7 @@ int main() {
         ).casefold()
         self.assertIn("mine_runtime.bin", renderer)
         self.assertIn("mine_vertices", renderer)
-        self.assertIn('"mine_" + std::to_string', renderer)
+        self.assertIn('"mine_" + std::to_string', (Path(__file__).parent / "object_compiler.h").read_text())
         self.assertIn("sample_reused_resource_slot", shader)
         self.assertIn("mine_emissive_code", shader)
         self.assertIn("C3X_RENDERER_TILE_CUSTOM_MINE_REPLACED", api)
@@ -702,7 +702,7 @@ int main() {
         self.assertIn("id = improvements_normalized", default_definition)
         self.assertIn("farm_runtime.bin", renderer)
         self.assertIn("farm_vertices", renderer)
-        self.assertIn('"farm_" + std::to_string', renderer)
+        self.assertIn('"farm_" + std::to_string', (Path(__file__).parent / "object_compiler.h").read_text())
         self.assertIn("C3X_RENDERER_TILE_CUSTOM_FARM_REPLACED", api)
         self.assertIn("irrigation_mask", api)
         from Renderer.renderer import source_inputs

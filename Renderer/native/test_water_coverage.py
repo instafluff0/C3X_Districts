@@ -45,7 +45,7 @@ int main() {
         coverage=cpp.index("bool water_coverage=")
         upload=cpp.index("if(!cache_geometry_layer(mesh_upload,part.vertices",coverage)
         self.assertLess(coverage,upload)
-        self.assertIn("if(!water_coverage)continue;",cpp[coverage:coverage+2600])
+        self.assertIn("if(!water_coverage)continue;",cpp[coverage:cpp.index("bool natural_layer=", coverage)])
 
 
 if __name__ == "__main__":

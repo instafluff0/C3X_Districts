@@ -23,10 +23,21 @@ def main():
     parser.add_argument('--jgl',type=Path,default=Path('Renderer/native/build/gpu-composition/audit/jgl.dll'))
     parser.add_argument('--benchmark',action='store_true',help='Compare complete native CPU/GPU frame requests and desktop completion')
     parser.add_argument('--profile',action='store_true',help='Enable existing phase and address-space samples; match this setting in both comparison arms')
+    parser.add_argument('--dense-scene',action='store_true',help='Use the existing world-fixed dense city/infrastructure/resource fixture in both comparison arms')
+    parser.add_argument('--dense-city-case',default='',help='Dense city culture,era,size,capital, for example 0,3,1,1; requires --dense-scene')
+    parser.add_argument('--object-workers',choices=('0','1'),default='1',help='Use the identical object compiler on the foreground (0) or bounded worker (1)')
     parser.add_argument('--ground-workers',choices=('0','1'),default='1',help='Run the production ground compiler serially (0) or on its bounded worker (1)')
     parser.add_argument("--visual-only",action="store_true",help="Use production rendering settings and validate independent visual frames without the 384-request comparison")
     parser.add_argument("--scroll-coverage",action="store_true",help="Exercise fine scrolling and guard coverage against missing map pixels")
     args=parser.parse_args()
+    if args.dense_city_case:
+        try:
+            fields=tuple(int(value) for value in args.dense_city_case.split(','))
+        except ValueError:
+            parser.error('dense city case requires four integer fields')
+        if not args.dense_scene or len(fields)!=4 or any(value<0 or value>limit for value,limit in zip(fields,(4,3,2,1))):
+            parser.error('dense city case requires --dense-scene and valid culture,era,size,capital')
+        args.dense_city_case=','.join(str(value) for value in fields)
     jgl=args.jgl.resolve()
     if digest(jgl)!='0b0cd514de0d95b93d20655f4b5194173fe257325af82e558a152305ff0dbdf2':parser.error('unrecognized JGL binary')
     native=ROOT/'Renderer/native';build=native/'build'
@@ -52,10 +63,12 @@ def main():
     win=windows_root();target=win/out.relative_to(ROOT)
     settings={'C3X_RENDERER_GPU_JGL_TEST':str(win/jgl.relative_to(ROOT)),'C3X_RENDERER_VISUAL_PROFILE':'city-fidelity','C3X_RENDERER_SHARED_SCENE_SURFACE':'1',
         'C3X_RENDERER_REFLECTION_CONTROL':'1','C3X_RENDERER_WAVES':'0','C3X_RENDERER_GPU_FRAME_TEST':'1','C3X_RENDERER_SCROLL_COVERAGE_TEST':'1' if args.scroll_coverage else '','C3X_RENDERER_NATIVE_FRAME_BENCHMARK':'1' if args.benchmark else '',
-        'C3X_RENDERER_PROFILE':'1' if args.profile else '0','C3X_RENDERER_GROUND_WORKERS':args.ground_workers,
+        'C3X_RENDERER_PROFILE':'1' if args.profile else '0','C3X_RENDERER_GROUND_WORKERS':args.ground_workers,'C3X_RENDERER_OBJECT_WORKERS':args.object_workers,
         'C3X_RENDERER_TRACE':'2','C3X_RENDERER_TRACE_BUFFERED':'1' if args.benchmark or args.visual_only else '', 'C3X_RENDERER_TRACE_FILE':str(target/'renderer.log'),
         'C3X_RENDERER_PREVIEW_CUSTOM_DEFINITIONS':r'..\..\Renderer\custom.custom_rendering.txt',
         'C3X_RENDERER_PREVIEW_OBJECTS':'1','C3X_RENDERER_PREVIEW_CITY':'0,3,1,1',
+        'C3X_RENDERER_PREVIEW_DENSE_SCENE':'1' if args.dense_scene else '',
+        'C3X_RENDERER_PREVIEW_DENSE_CITY_CASE':args.dense_city_case,
         'C3X_RENDERER_PREVIEW_SESSION':'','C3X_RENDERER_PREVIEW_REPLAY':'','C3X_RENDERER_PREVIEW_ANIMATION':''}
     if args.benchmark or args.visual_only or args.scroll_coverage:
         # Match configure_custom_renderer_effects with the shipped cache enabled.

@@ -17,7 +17,10 @@
     "Renderer/lab/shared/cities/assets.py",
     "Renderer/lab/shared/cities/growth.py",
     "Renderer/lab/shared/cities/ground.py",
-    "Renderer/lab/shared/cities/facades.py"
+    "Renderer/lab/shared/cities/facades.py",
+    "Renderer/native/object_compiler.h",
+    "Renderer/native/object_preparation.h",
+    "Renderer/native/city_fidelity/compiler.h"
   ],
   "recipe": {
     "terrain": 2,
@@ -41,7 +44,8 @@
     "Renderer.native.city_fidelity.test_pickup",
     "Renderer.lab.test_city_growth",
     "Renderer.lab.test_city_ground",
-    "Renderer.lab.test_city_facades"
+    "Renderer.lab.test_city_facades",
+    "Renderer.native.test_object_compiler"
   ],
   "references": {
     "d3d11": [

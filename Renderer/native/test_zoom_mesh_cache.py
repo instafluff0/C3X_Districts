@@ -368,7 +368,7 @@ int main(){
         ground_compiler = (ROOT / "Renderer/native/source_fidelity/ground_compiler.h").read_text()
         retained = "struct CachedGroundGrid {" + ground_compiler.split("struct CachedGroundGrid {", 1)[1].split("struct GroundCompileInput", 1)[0]
         ground_tile = "struct CachedGroundTile {" + source.split("struct CachedGroundTile {", 1)[1].split("using RiverNode=", 1)[0]
-        lookup = "auto ground_key=" + source.split("auto ground_key=", 1)[1].split("            auto append_feature_instance", 1)[0]
+        lookup = "auto ground_key=" + source.split("auto ground_key=", 1)[1].split("            object_projection.tile=", 1)[0]
         admission = "if(!pending_ground_grids.empty()){\n" + source.split("if(!pending_ground_grids.empty()){\n", 1)[1].split("            QueryPerformanceCounter(&phase_end);ground_ticks", 1)[0]
         program = r'''
 #include <array>

@@ -81,6 +81,7 @@
 #include "render_core/unit_instances.h"
 #include "city_fidelity/gpu.h"
 #include "city_fidelity/compiler.h"
+#include "object_preparation.h"
 #include "city_fidelity/glow.h"
 #include "../lab/shared/natural/ground.h"
 #include "../lab/shared/natural/queries.h"
@@ -4569,7 +4570,7 @@ public:
                               NaturalMesh* record=nullptr,NaturalMesh const* cached=nullptr,
                               c3x_renderer::fidelity::GroundProjection const* projection=nullptr,
                               std::vector<UINT> const* grid_indices=nullptr, unsigned projection_kind=0, c3x_renderer::render_core::PreparedMesh const* prepared=nullptr,
-                              ID3D11Buffer* prepared_buffer=nullptr, unsigned prepared_vertex_offset=0) {
+                              ID3D11Buffer* prepared_buffer=nullptr, unsigned prepared_vertex_offset=0, bool prepared_indices=false, unsigned prepared_index_offset=0) {
         if(vertices.empty() && (!cached || cached->vertices.empty()) && (!prepared || prepared->empty()))return true;
         c3x_renderer::render_core::PreparedMesh local;
         auto cancelled=[&]{return prefetch && foreground_pending->load(std::memory_order_relaxed);};
@@ -4652,7 +4653,9 @@ public:
             chunk.vertex_offset=prepared_vertex_offset;
         }else chunk.vertex_offset=upload.append(mesh.vertices.data(),mesh.vertices.size());
         auto shared=terrain_patch_indices.find(shared_grid);
-        if(shared_grid && shared!=terrain_patch_indices.end()){
+        if(prepared_indices){
+            chunk.indices=prepared_buffer;prepared_buffer->AddRef();chunk.index_offset=prepared_index_offset;
+        }else if(shared_grid && shared!=terrain_patch_indices.end()){
             chunk.indices=shared->second;chunk.indices->AddRef();++frame_patch_index_reuses;
         }else if(shared_grid){
             if(terrain_patch_index_bytes+index_bytes>4u*1024u*1024u || !make_tile_cache_room(chunk.byte_count+index_bytes))return false;
@@ -4667,7 +4670,7 @@ public:
         // regardless of upload path; frame_upload_bytes tracks only bytes this
         // call actually copied into the foreground per-tile upload buffer.
         auto foreground_bytes=upload.size()-before;
-        chunk.byte_count=foreground_bytes+(prepared_buffer?mesh.vertices.size():0);
+        chunk.byte_count=foreground_bytes+(prepared_buffer?mesh.vertices.size():0)+(prepared_indices?mesh.indices.size()+3u:0);
         tile_geometry_cache_bytes+=chunk.byte_count;frame_upload_bytes+=foreground_bytes;
         output.push_back(chunk);vertices.clear();return true;
     }
@@ -4845,6 +4848,20 @@ public:
         ID3D11Buffer* buffer=nullptr;
         if(!vertex_upload.create(device,&buffer))return false;
         if(buffer)surfaces.vertex_buffer=std::shared_ptr<void>(buffer,[](void* p){static_cast<ID3D11Buffer*>(p)->Release();});
+        return true;
+    }
+
+    bool attach_object_buffer(c3x_renderer::objects::PreparedObjects& result) {
+        c3x_renderer::render_core::ImmutableMeshUpload upload;
+        auto append=[&](auto& part){if(part.mesh.empty())return;
+            part.vertex_offset=upload.append(part.mesh.vertices.data(),part.mesh.vertices.size());
+            part.index_offset=upload.append(part.mesh.indices.data(),part.mesh.indices.size());};
+        for(auto& part:result.layers)append(part);
+        for(auto& part:result.city)append(part);
+        ID3D11Buffer* buffer=nullptr;
+        if(!upload.create(device,&buffer))return false;
+        result.gpu_bytes=upload.size();
+        if(buffer)result.buffer=std::shared_ptr<void>(buffer,[](void* p){static_cast<ID3D11Buffer*>(p)->Release();});
         return true;
     }
 
@@ -6537,6 +6554,7 @@ public:
         c3x_renderer::fidelity::SurfaceQueryScratch ground_compile_scratch;
         double ground_compile_ms=0,ground_join_ms=0;
         unsigned ground_jobs=0,ground_batch_jobs=0,ground_batch_fallbacks=0;
+        unsigned object_instances=0,object_routes=0,city_rigid_parts=0,city_deformed_parts=0,city_fallbacks_omitted=0;
         double ground_schedule_ms=0;
         c3x_renderer::fidelity::GroundPreparation::Statistics ground_batch_before=selected_ground_preparation.statistics();
         std::size_t ground_ready_peak=0;
@@ -6906,6 +6924,65 @@ public:
             });
             ground_schedule_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-schedule_started).count();
         }
+        c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle}};
+        bool const prepare_objects=fidelity_profile && world_objects;
+        char object_control[8]={};
+        bool const object_worker=prepare_objects && !prewarming &&
+            !(GetEnvironmentVariableA("C3X_RENDERER_OBJECT_WORKERS",object_control,sizeof(object_control)) && std::strcmp(object_control,"0")==0);
+        c3x_renderer::objects::PreparationLease object_lease;
+        c3x_renderer::fidelity::TerrainCompileScratch foreground_object_scratch;
+        unsigned object_jobs=0,object_recovery=0;double object_join_ms=0;
+        std::size_t object_gpu_bytes=0;
+        auto make_object_job=[&](c3x_renderer_tile_v1 const& tile){
+            c3x_renderer::objects::PreparationInput input;
+            auto& projection=input.projection;projection.tile=tile;
+            projection.tile_width=frame.tile_width;projection.content_view_height=frame.target_height;
+            projection.half_w=half_w;projection.half_h=half_h;
+            projection.relief_projection_scale=float(frame.tile_width)/224.f*.82f;
+            projection.feature_projection_scale=float(frame.tile_width)/224.f;
+            projection.pickup_profile=true;projection.world_objects=true;
+            input.ground=ground_type(tile);input.world_revision=frame.world_topology_revision;
+            input.river_ready=river_assets_ready;input.skip_flat_shore=skip_flat_shore;
+            input.separate_relief=separate_natural_relief;input.retain_height=retain_height_samples;
+            input.route_ready=route_assets_ready;input.mine_ready=mine_assets_ready;input.farm_ready=farm_assets_ready;
+            input.city_ready=city_assets_ready;input.composition_ready=cities.ready;
+#ifdef C3X_RENDERER_BENCHMARK_ORACLE
+            input.routes_enabled=diagnostic_routes!=2;
+#endif
+            return input;
+        };
+        auto compile_objects=[&](auto const& input,auto& scratch,auto stop,bool bounded=false){
+            auto result=c3x_renderer::objects::prepare(input,object_assets,cities.library,natural,terrain_textures,
+                world_coast,ground_observations,scratch,stop,bounded);
+            if(result && !stop() && !attach_object_buffer(*result))result.reset();
+            return result;
+        };
+        // The callback borrows compile_objects and frame sources. Join before
+        // those locals are destroyed, including every early return/exception.
+        struct ObjectJoin {
+            c3x_renderer::objects::Preparation& queue;
+            c3x_renderer::fidelity::GroundPreparation& ground;
+            ~ObjectJoin(){ground.set_ready_notification({});queue.set_ready_notification({});queue.clear();}
+        } object_join{object_lease.queue,selected_ground_preparation};
+        if(object_worker){
+            std::deque<c3x_renderer::objects::Preparation::Job> jobs;
+            for(unsigned index=0;index<frame.tile_count;++index){
+                if(!selected_tile(index))continue;
+                auto const& tile=frame.tiles[index];int ground=ground_type(tile);
+                if(ground<0 || ground>=c3x_renderer::terrain_type_count || !terrain_textures[ground].view)continue;
+                auto nodes=select_river_nodes(tile);auto expected=compile_context_for(tile,river_context_for(nodes));
+                auto instance=topology_cache.retained(coordinate_key(tile.tile_x,tile.tile_y));bool resident=false;
+                if(instance)for(auto handle:instance->compiled_views){auto cached=resident_content.resolve(handle);
+                    if(cached && cached->compile_context==expected && tile_content_valid(*cached,tile)){resident=true;break;}}
+                if(!resident)jobs.push_back({index,make_object_job(tile)});
+            }
+            object_jobs=unsigned(jobs.size());
+            if(object_jobs && active_terrain_workers>1)--active_terrain_workers;
+            object_lease.queue.configure(std::move(jobs),[&](auto const& input,auto const& stop,unsigned){
+                return compile_objects(input,object_lease.scratch,[&]{return stop.load(std::memory_order_relaxed) || cancelled();},true);
+            });
+            object_lease.queue.resume();
+        }
         if(cpu_terrain_enabled && !prewarming){
             using Preparation=c3x_renderer::fidelity::TerrainPreparation;
             try {
@@ -6932,6 +7009,23 @@ public:
                 },active_terrain_workers,std::move(needed),cpu_preparation_budget);
                 terrain_preparation.resume();
             }catch(...){terrain_preparation.clear();}
+        }
+        if(cpu_terrain_enabled && !prewarming && prepare_objects){
+            // Return finished lanes at producer completion. Waiting for the
+            // next foreground tile can park available workers behind a long
+            // terrain compile/join. Notifications touch only synchronized queue
+            // state; ObjectJoin unregisters and joins them before local owners
+            // disappear. The existing total worker allowance does not grow.
+            auto return_lanes=[this,&object_lease,total=cpu_terrain_workers]{
+                try {
+                auto ground=selected_ground_preparation.statistics();auto objects=object_lease.queue.statistics();
+                unsigned reserved=(ground.pending || ground.active?2u:0u)+(objects.pending || objects.active?1u:0u);
+                terrain_preparation.expand_workers(total>reserved?total-reserved:1u);
+                }catch(...){/* Optional expansion: existing workers and serial recovery remain available. */}
+            };
+            selected_ground_preparation.set_ready_notification(return_lanes);
+            object_lease.queue.set_ready_notification(return_lanes);
+            return_lanes(); // includes a producer that finished before registration
         }
         c3x_renderer::FeatureGroup broadleaf_forest;
         c3x_renderer::FeatureGroup const * forest_group =
@@ -6961,7 +7055,6 @@ public:
         object_projection.pickup_profile=pickup_profile;object_projection.world_objects=world_objects;
         std::copy(key_light,key_light+3,object_projection.key_light.begin());
         c3x_renderer::objects::Surfaces object_output;
-        c3x_renderer::objects::Assets object_assets{{&bridge_bundle,&site_bundle,&mine_bundle,&farm_bundle,&city_bundle,&wall_bundle}};
         auto append_object_shadow=[&](auto const& asset,float scale,float x,float y,float h){
             c3x_renderer::objects::append_shadow(object_projection,asset,scale,x,y,h,shadow_vertices);
         };
@@ -6979,10 +7072,10 @@ public:
             if (cancelled()) return false;
             if(active_terrain_workers<cpu_terrain_workers){
                 auto ground_work=selected_ground_preparation.statistics();
-                if(!ground_work.pending && !ground_work.active){
-                    terrain_preparation.expand_workers(cpu_terrain_workers);
-                    active_terrain_workers=cpu_terrain_workers;
-                }
+                auto object_work=object_lease.queue.statistics();
+                unsigned reserved=(ground_work.pending || ground_work.active?2u:0u)+(object_work.pending || object_work.active?1u:0u);
+                unsigned available=cpu_terrain_workers>reserved?cpu_terrain_workers-reserved:1u;
+                if(available>active_terrain_workers){terrain_preparation.expand_workers(available);active_terrain_workers=available;}
             }
             int ground = ground_type(tile);
             int relief = relief_type(tile);
@@ -8014,8 +8107,33 @@ public:
 
             if (cancelled()) return false;
             if(world_objects){if(shared_hit)++frame_world_object_hits;else ++frame_world_object_builds;}
+            c3x_renderer::city_fidelity::Composition const* tile_city_composition=nullptr;
+            std::unique_ptr<c3x_renderer::objects::PreparedObjects> prepared_objects;
+            if(prepare_objects && !shared_hit){
+                auto begin=std::chrono::steady_clock::now();
+                if(object_worker)prepared_objects=object_lease.queue.take(index);
+                if(!prepared_objects){
+                    if(object_worker)++object_recovery;
+                    prepared_objects=compile_objects(make_object_job(tile),foreground_object_scratch,cancelled);
+                }
+                object_join_ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+                if(!prepared_objects || cancelled())return false;
+                // Results never outlive this immutable frame lease. All reads,
+                // including absent route neighbors, become resident proofs.
+                dependencies.insert(prepared_objects->topology.begin(),prepared_objects->topology.end());
+                world_dependencies.insert(prepared_objects->world.begin(),prepared_objects->world.end());
+                coast_dependencies.insert(prepared_objects->coast.begin(),prepared_objects->coast.end());
+                river_dependencies.insert(prepared_objects->rivers.begin(),prepared_objects->rivers.end());
+                object_instances+=prepared_objects->instances;object_routes+=prepared_objects->routes;
+                object_gpu_bytes+=prepared_objects->gpu_bytes;
+                if(prepared_objects->composition!=~0u){
+                    tile_city_composition=&cities.library.compositions[prepared_objects->composition];
+                    if(city_assets_ready && ground<11)++city_fallbacks_omitted;
+                }
+                for(auto const& part:prepared_objects->city){if(part.terrain_conforming)++city_deformed_parts;else ++city_rigid_parts;}
+            }
             if(!world_objects || !shared_hit){
-            {
+            if(!prepared_objects){
                 c3x_renderer::objects::Plan plan;
                 bool routes_enabled=true;
 #ifdef C3X_RENDERER_BENCHMARK_ORACLE
@@ -8023,6 +8141,7 @@ public:
 #endif
                 c3x_renderer::objects::select_routes(tile,object_assets,route_assets_ready,routes_enabled,
                     [&](int x,int y){return topology_cache.current(observed_coordinate_key(x,y));},plan);
+                object_instances+=unsigned(plan.instances.size());object_routes+=unsigned(plan.routes.size());
                 c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,natural_height_at,object_output);
                 adopt_objects(object_output);
             }
@@ -8343,10 +8462,16 @@ public:
                     }
                 }
             }
-            {
+            if(!prepared_objects){
                 c3x_renderer::objects::Plan plan;
+                if(fidelity_profile && city_profile && cities.ready)
+                    tile_city_composition=c3x_renderer::city_fidelity::select(cities.library,tile,
+                        (tile.tile_x+tile.tile_y)/2,(tile.tile_x-tile.tile_y)/2,world_lookup,shore_sample_at,
+                        [&](float x,float y){return natural.river_sample({x,y}).distance;},natural_height_at);
+                if(tile_city_composition && city_assets_ready && ground<11)++city_fallbacks_omitted;
                 if(!c3x_renderer::objects::select_improvements(tile,object_assets,ground,site_flags,
-                        mine_assets_ready,farm_assets_ready,city_assets_ready,plan))return false;
+                        mine_assets_ready,farm_assets_ready,city_assets_ready,tile_city_composition!=nullptr,plan))return false;
+                object_instances+=unsigned(plan.instances.size());object_routes+=unsigned(plan.routes.size());
                 c3x_renderer::objects::compile(plan,object_projection,object_assets,relief_at_world,natural_height_at,object_output);
                 adopt_objects(object_output);
             }
@@ -8588,6 +8713,10 @@ public:
             if(!city_chunks.empty())metadata_bytes+=sizeof(c3x_renderer::city_fidelity::Lighting)+
                 city_chunks.front().lighting->lights.capacity()*sizeof(c3x_renderer::city_fidelity::Light)+
                 city_chunks.front().lighting->blockers.capacity()*sizeof(c3x_renderer::city_fidelity::Lighting::Box);
+            if(prepared_objects && !prepared_objects->city.empty()){
+                auto const& lighting=*prepared_objects->city.front().lighting;
+                metadata_bytes+=sizeof(lighting)+lighting.lights.capacity()*sizeof(lighting.lights[0])+lighting.blockers.capacity()*sizeof(lighting.blockers[0]);
+            }
             if (!make_tile_cache_room(metadata_bytes)) return false;
             tile_geometry_cache_bytes += metadata_bytes;
             compiled.byte_count = metadata_bytes;
@@ -8602,6 +8731,29 @@ public:
             for (std::size_t layer = 0; layer < geometry_layer_count; ++layer) {
                 auto& mesh_upload=mesh_uploads[layer>=shared_start?1:0];
                 if(world_ground && shared_hit)continue;
+                if(prepared_objects){
+                    auto adopt=[&](auto const& part,unsigned projection){
+                        if(part.mesh.empty())return true;
+                        std::vector<Vertex> empty;
+                        if(!cache_geometry_layer(mesh_upload,empty,compiled.buffers[layer],prewarming,compiled.byte_count,foreground_pending,
+                            false,false,nullptr,nullptr,nullptr,nullptr,projection,&part.mesh,
+                            static_cast<ID3D11Buffer*>(prepared_objects->buffer.get()),part.vertex_offset,true,part.index_offset))return false;
+                        compiled.byte_count+=compiled.buffers[layer].back().byte_count;return true;
+                    };
+                    if(layer==geometry_city && !prepared_objects->city.empty()){
+                        for(auto const& part:prepared_objects->city){
+                            if(part.mesh.empty())continue;
+                            if(!adopt(part,4)){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                            auto& chunk=compiled.buffers[layer].back();chunk.city_material=part.material;chunk.city_environment=part.environment;
+                            std::copy(part.atlas.begin(),part.atlas.end(),chunk.city_atlas);chunk.city_lighting=part.lighting;
+                        }
+                        continue;
+                    }
+                    unsigned const layers[]={geometry_route,geometry_feature,geometry_city,geometry_wall,geometry_mine,geometry_farm,geometry_site};
+                    for(unsigned i=0;i<c3x_renderer::objects::layer_count;++i)if(layer==layers[i]){
+                        if(!adopt(prepared_objects->layers[i],2)){tile_geometry_cache_bytes-=compiled.byte_count;return false;}
+                    }
+                }
                 if(layer==geometry_city && !city_chunks.empty()){
                     for(auto&part:city_chunks){
                         if(part.vertices.empty())continue;
@@ -8646,6 +8798,7 @@ public:
                 auto* record_mesh=natural_layer && cache_natural && !natural_hit && !retain_ground_grids?&pending_natural.layers[layer-geometry_natural_terrain]:nullptr;
                 bool reproject=natural_hit && (natural_found->second.tile_width!=frame.tile_width ||
                     natural_found->second.tile_height!=frame.tile_height || natural_found->second.target_height!=content_view_height);
+                auto prior_chunks=compiled.buffers[layer].size();
                 if (!cache_geometry_layer(mesh_upload,*tile_layers[layer], compiled.buffers[layer], prewarming, compiled.byte_count, foreground_pending, layer>=geometry_feature && layer<geometry_natural_terrain, natural_layer,
                         record_mesh,cached_mesh,reproject?&natural_projection:nullptr,
                         layer<=geometry_river?&ground_indices[layer]:
@@ -8666,7 +8819,7 @@ public:
                     release_geometry_vertex_buffers(compiled.buffers);
                     return false;
                 }
-                for (auto const & chunk : compiled.buffers[layer]) compiled.byte_count += chunk.byte_count;
+                for(auto i=prior_chunks;i<compiled.buffers[layer].size();++i)compiled.byte_count+=compiled.buffers[layer][i].byte_count;
             }
             // Keep allocation boundaries equal to residency/eviction owners:
             // camera-specific layers and shared world content can retire alone.
@@ -8816,12 +8969,21 @@ public:
         }
         auto ground_drain_started=std::chrono::steady_clock::now();
         ground_batch_lease.finish();
+        object_lease.queue.clear();
         double ground_drain_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-ground_drain_started).count();
         if(pickup_profile && !prewarming) {
             char detail[512];sprintf_s(detail,"built=%u reused=%u ground_ms=%.3f features_ms=%.3f cliffs_ms=%.3f terrain_prep_ms=%.3f upload_ms=%.3f bytes=%llu natural_hits=%u natural_bytes=%zu ground_grid_hits=%u ground_grid_bytes=%zu",
                 frame_tiles_built,frame_tiles_reused,trace.milliseconds(ground_ticks),trace.milliseconds(feature_ticks),
                 trace.milliseconds(cliff_ticks),trace.milliseconds(terrain_prep_ticks),trace.milliseconds(upload_ticks),static_cast<unsigned long long>(tile_geometry_cache_bytes),frame_natural_hits,natural_mesh_cache_bytes,frame_ground_grid_hits,ground_grid_cache_bytes);
             trace.write("mesh-phases",detail,true);
+            sprintf_s(detail,"rigid_instances=%u terrain_routes=%u city_rigid_parts=%u city_deformed_parts=%u city_fallbacks_omitted=%u",
+                object_instances,object_routes,city_rigid_parts,city_deformed_parts,city_fallbacks_omitted);
+            trace.write("object-descriptions",detail,true);
+            auto object_stats=object_lease.queue.statistics();
+            sprintf_s(detail,"scheduled=%u consumed=%llu rejected=%llu evicted=%llu recovery=%u worker_ms=%.3f join_ms=%.3f queue_peak_bytes=%zu gpu_bytes=%zu workers=%u",
+                object_jobs,object_stats.consumed,object_stats.rejected,object_stats.evicted,object_recovery,
+                object_stats.cpu_ms,object_join_ms,object_stats.peak_bytes,object_gpu_bytes,object_worker?1u:0u);
+            trace.write("object-preparation",detail,true);
             sprintf_s(detail,"jobs=%u concurrent=%u compile_ms=%.3f join_ms=%.3f ready_peak_bytes=%zu",
                 ground_jobs,unsigned(ground_concurrent),ground_compile_ms,ground_join_ms,ground_ready_peak);
             trace.write("ground-preparation",detail,true);

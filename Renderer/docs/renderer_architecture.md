@@ -91,11 +91,49 @@ Cancellation, exceptions and ordinary completion join before observation mutatio
 or source destruction. No prepared ground job survives the frame. This preserves
 exact queried dependencies without copying the world. Reduced/diagnostic paths
 retain their scoped cached-grid compiler; legacy analytic ground remains serial.
-Other object meshes use the same CPU packer, but their assembly/packing still
-runs on the render owner.
-Compilation may finish available content before joining active helpers; final
-occurrence/pass order remains native capture order. Workers acquire neither GPU
-nor native-game ownership.
+City and infrastructure preparation uses the same CPU packer as terrain.
+`object_compiler.h` separates route and repeated-part selection from CPU geometry.
+Its plans contain pack-family/asset IDs, destination layers, placement, material
+and owner parameters. Its output owns layer vectors and legacy analytic shadows;
+adoption preserves existing pass order and immutable GPU owners. City compilation
+similarly returns owned material chunks, lighting/blockers, source model/part IDs
+and placements through `city_fidelity/compiler.h`. A legal composition suppresses
+discarded fallback-body construction; walls and constrained-site fallback remain.
+
+| Object representation | Sharing boundary |
+| --- | --- |
+| City building bodies | Library model/part plus uniform placement; per-city lighting/blocker ownership remains separate |
+| Bridges, mines, farm parts, huts/camps, fallback cities and walls | Pack-family/asset plus placement/material parameters; retain exact grounding and layer order |
+| Routes and railroads | Connectivity-selected, subdivided terrain-conforming strips; site-specific geometry |
+| City source ground and paving | Terrain-conforming vertices, atlas/coverage and ordered material chunks; site-specific geometry |
+| Resources and natural vegetation | Existing animated anchors/shared natural representations; not folded into a static object plan |
+
+`object_preparation.h` consumes these descriptions in the production retained
+world path. A frame-scoped lane owns its river, coast and height-query scratch,
+selects legal cities and connected infrastructure, constructs and packs meshes,
+and creates an immutable buffer containing both vertex and index ranges. Adoption
+retains that buffer directly; the render owner still controls admission, cache
+handles, material bindings, draw order and publication. Per-city lighting and
+blockers retain their existing ownership; forests use the same legal selector.
+The exact world/coast/river reads and absent route neighbors become resident
+invalidation proofs. Assets and observations stay immutable until every reader
+joins, including cancellation and exception exits. Ready results cannot survive
+the frame. The 16 MiB queue accounts for packed CPU data, GPU storage and proofs;
+estimated expanded geometry is checked against 32 MiB before generation
+(container growth and packing transients are additional),
+and each private river cache permits two pages. Oversized work recovers through
+the same foreground compiler. One object lane shares the existing
+terrain-worker allowance with the two ground lanes; completed lanes return to
+terrain from producer-completion notifications, even while the foreground is
+blocked compiling or joining another tile. Notifications use synchronized queue
+state and are unregistered/joined before local owners disappear; the source read
+lease stays intact. `C3X_RENDERER_OBJECT_WORKERS=0` uses the
+same compiler and GPU adoption synchronously. Frozen/legacy paths retain their
+existing analytic behavior. Rigid source instancing remains a possible later
+representation choice; the current implementation prepares exact retained meshes.
+Final occurrence/pass order remains native capture order. Helpers use only the
+thread-safe D3D device for immutable allocation, never the immediate context or
+native-game surfaces.
 
 Explicit passes name inputs, outputs and dependencies for static/dynamic geometry,
 shadows, reflections, water, finishing and composition. This is not a replacement

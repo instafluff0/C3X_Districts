@@ -310,6 +310,13 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
     char object_option[8]={};bool objects=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_OBJECTS",object_option,sizeof(object_option))!=0;
     char animation_option[8]={};bool animate=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_ANIMATION",animation_option,sizeof(animation_option))!=0;
     char dense_option[8]={};bool dense_scene=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DENSE_SCENE",dense_option,sizeof(dense_option))!=0;
+    // Optional dense-city case uses the same four fields as the ordinary city
+    // witness. Default dense capture retains its existing industrial fixture.
+    char dense_city_option[80]={};int dense_city[4]={};
+    bool dense_city_case=GetEnvironmentVariableA("C3X_RENDERER_PREVIEW_DENSE_CITY_CASE",dense_city_option,sizeof(dense_city_option)) &&
+        sscanf_s(dense_city_option,"%d,%d,%d,%d",&dense_city[0],&dense_city[1],&dense_city[2],&dense_city[3])==4 &&
+        dense_city[0]>=0 && dense_city[0]<=4 && dense_city[1]>=0 && dense_city[1]<=3 &&
+        dense_city[2]>=0 && dense_city[2]<=2 && dense_city[3]>=0 && dense_city[3]<=1;
     std::vector<std::array<int,2>> resource_sites;
     std::vector<std::array<int,2>> city_object_sites;
     char prepared_area_option[8]={};
@@ -418,6 +425,8 @@ int run_preview_case(int argc, char ** argv, HMODULE shared_module=nullptr, bool
                 tile.city_id=1+(y*map_width+x)/2;tile.city_owner_id=1;
                 tile.city_size=int(seed%3);tile.city_population=8+int(seed%12);
                 tile.city_culture_group=0;tile.city_era=2;
+                if(dense_city_case){tile.city_culture_group=dense_city[0];tile.city_era=dense_city[1];
+                    tile.city_size=dense_city[2];tile.city_flags=dense_city[3]?C3X_RENDERER_CITY_CAPITAL:0;}
             } else if(seed%41==0) {
                 tile.improvement_flags=C3X_RENDERER_IMPROVEMENT_BARBARIAN_CAMP;
                 tile.barbarian_tribe_id=7;

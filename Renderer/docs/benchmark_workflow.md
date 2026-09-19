@@ -72,6 +72,19 @@ A `--benchmark` receipt's CPU/GPU arms compare routes within the supplied DLL;
 comparing old/new implementations additionally requires separate preserved DLL
 runs with equivalent settings. Capture is outside that harness's timed requests;
 its receipt states this limit. Do not label the result complete input-to-display.
+`--dense-scene` enables the existing world-fixed city/infrastructure/resource
+stress fixture; match it in both arms when measuring missing-object construction.
+The ordinary fixture's few central objects can stay resident throughout scrolling.
+`--object-workers 0` runs the identical GPU-ready object compiler synchronously;
+keep source/DLL identity, budgets and instrumentation matched when using it as a
+scheduling control. Also measure a flat dense-city scene and verify nonzero legal
+city part counts: the mixed-terrain fixture can contain only fallback buildings.
+`--dense-city-case 0,3,1,1` selects the supported modern medium capital case at
+every dense city site, exercising source ground and paving as well as rigid
+bodies. It changes only the explicit stress fixture; match it in both arms.
+The `object-preparation` trace reports worker/join time, queued memory, rejected or
+evicted jobs, recovery and adopted GPU bytes. Its worker time overlaps terrain,
+ground and foreground work; do not add it to whole-request time.
 `FRAME_SAMPLE` QPC boundaries locate the corresponding aggregate renderer trace.
 `geometry_ms` includes content assembly, uploads and possible driver waits;
 `draw_ms` excludes later shared-scene composition and is not total GPU time.
